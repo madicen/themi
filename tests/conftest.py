@@ -9,6 +9,9 @@ import pytest
 
 from themi import clock
 
+# Shared fixtures every layer can use.
+pytest_plugins = ["tests.fixtures.family"]
+
 # Folder -> marker, so a test's layer is decided by where it lives.
 LAYER_MARKERS = {
     "integration": "integration",
