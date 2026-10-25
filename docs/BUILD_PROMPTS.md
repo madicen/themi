@@ -19,7 +19,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 02 | Settings, storage, migrations, encryption | 1 Foundation | [x] |
 | 03 | Family and member data model | 1 Foundation | [x] |
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [x] |
-| 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [ ] |
+| 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [x] |
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [ ] |
 | 07 | Telegram channel | 1 Foundation | [ ] |
 | 08 | Outbox and PDA shield | 1 Foundation | [ ] |
@@ -270,7 +270,7 @@ Notes:
   op=)`. Every call is recorded in `.requests`. An empty queue raises `AssertionError`.
 
 ### 05 · AI layer: Claude, Gemini, OpenAI-compatible adapters
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 04
 Read first: "AI backend" → Providers, Weaker local models. Before writing the Claude adapter,
 load the `claude-api` skill and follow it (current model IDs, adaptive thinking, effort,
@@ -300,6 +300,38 @@ Tests (integration, against the fakes over real HTTP):
 - Live smoke tests in `tests/live/` (skipped by default), one per provider, reading keys from env.
 
 Done when: all three adapters pass against the fakes, and everything is committed.
+
+Notes:
+- SDK versions tested: anthropic 2.3.0, google-genai 2.33.0, openai 3.37.0.
+- Claude:
+    - Default `claude-opus-5-5` with `effort` sent explicitly (default `medium`). No sampling
+      parameters, no `thinking` field (adaptive by default) and no forced `tool_choice`.
+    - On Opus 5.5, Opus 5, Fable 5.1 and Sonnet 5.5 it adds `fallbacks: "default"` with beta
+      `server-side-fallback-2026-07-01`.
+    - Tools get `strict: true` only when the schema sets `additionalProperties: false`.
+      Prompt 09 should write closed schemas for every tool.
+    - SDK 2.x sends the key as `Authorization: Bearer`, not `x-api-key`, with
+      `anthropic-version: 2026-10-21`.
+- Gemini, checked against ai.google.dev on 2026-10-24:
+    - The default chat model is `gemini-3.8-flash`, which has a free tier.
+    - For transcription, `gemini-3.5-flash-lite` is explicitly priced for audio input and is
+      the suggested default for the `transcription` task in prompt 06.
+    - `gemini-4-argon` has no free tier. Gemini 2.0 is shut down.
+    - The pricing page confirms free-tier content is used to improve Google's products.
+- The google-genai SDK sends some fields in snake_case (`parameters_json_schema`, `mime_type`).
+  Google's JSON parser accepts both, and the fake tests accept either.
+- OpenAI-compatible: capabilities are per configuration (`supports_tools`, `supports_structured`,
+  `supports_audio` on `AdapterConfig`). Tools on a model marked `tools=False` raise
+  `CapabilityError` before any request is sent, which is the router's cue for JSON action mode.
+- New `MalformedOutputError` covers non-JSON structured output, truncated structured output and
+  unparseable tool arguments. The retry policy doesn't retry it. Prompt 06's JSON mode decides
+  whether to retry once.
+- `tests/fakes/http_ai.py` (`fake_ai` fixture) replies to any POST from a FIFO queue, so a test
+  queues replies in the order of its calls. It returns 599 when nothing is queued. Builders:
+  `anthropic_text`/`_tool_use`/`_error`, `gemini_text`/`_function_call`/`_error`,
+  `openai_completion`/`_tool_call`/`_error`.
+- Live tests (`make test-live`) need `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` and/or
+  `THEMI_LIVE_OLLAMA_MODEL`. They haven't been run yet because no keys are available here.
 
 ### 06 · AI layer: per-person routing, fallback, breaker, JSON mode
 Status: [ ]
