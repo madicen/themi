@@ -40,7 +40,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 23 | Email triage | 4 Gmail and pantry | [x] |
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [x] |
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [x] |
-| 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [ ] |
+| 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [ ] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [ ] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [ ] |
@@ -1700,7 +1700,7 @@ Notes (2026-10-25):
     - Expiry dates come only from what people say, not from receipts.
 
 ### 26 · Google Calendar for Cozyla
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 21, 20
 Read first: "Integrations" → Google Calendar row and the calendar note.
 
@@ -1719,6 +1719,55 @@ Tests:
 - Errors are retried via the job queue.
 
 Done when: tasks with dates appear on the fake calendar. Commit.
+
+Notes (2026-10-25):
+- Scopes: `calendar.events` alone can't list or create calendars, so linking now also asks
+  for `calendar.calendarlist.readonly` (to find "Themi") and `calendar.app.created` (to make
+  it if missing). Granted scopes are recorded on `linked_accounts.scopes` (migration 0022).
+  An account linked earlier has to be linked again, and the Family page says so.
+- Migration 0022:
+    - `family.calendar_account_id` and `family.calendar_name` (default "Themi").
+    - `calendars`: the found or made calendar id per account and name, looked up once.
+    - `calendar_events`: source and source id (just `task` for now; prompt 33 adds
+      maintenance), a deterministic `event_id`, where it was written, and its state
+      (approved, synced or deleted).
+- `themi.connectors.gcal`:
+    - `CalendarClient` over httpx: calendar list, create calendar, and update, insert and
+      delete events. A 401 refreshes the token once.
+    - `CalendarSync` picks the target: the account chosen on the Family page, else the first
+      admin's first enabled account with the calendar scopes. It finds or makes the calendar.
+    - `upsert()` updates first, then inserts on a 404, then updates again on a 409, so a
+      deleted event is restored rather than duplicated.
+    - `event_id()` is base32hex: "themi", a hash of the family's creation time, the source
+      letter and the id.
+- `themi.core.calendar.TaskCalendar`:
+    - It listens to the new `TaskBoard.change_listeners`.
+    - A task that gets a date stages `calendar_write` ("Put <title> on the family calendar
+      for Fri Oct 30") for whoever created it. It's interactive when it came from chat, and
+      nothing is staged if no account can take it.
+    - Approving runs `calendar.write_task`, which records the event and queues
+      `calendar.sync`. The write is a job-queue job, so errors retry with the scheduler's
+      back-off.
+    - Once approved, an event follows its task without asking again: a new date moves it,
+      done renames it "Done: ...", and cancelling or removing the date deletes it. My
+      reading is that the yes covers keeping that event accurate.
+    - Events are all-day and marked "transparent" (free).
+- Tasks:
+    - `complete()` is now async.
+    - New `cancel()` and `reschedule()`, with the tools `cancel_task` and
+      `reschedule_task`.
+    - `Task.created_by` is now exposed.
+- The job queue is wired in: `build_app` creates the `Scheduler`, `App.scheduler` holds it,
+  the Runtime adds the periodic tasks to it, and the scenario harness has `run_jobs()`.
+- Website: the Family page has a "Family calendar" section (account, name, and any
+  problem).
+- Fakes: `tests/fakes/gcal_api.py` is an HTTP fake that checks event ids, keeps deleted
+  events (insert gives 409, update restores, a second delete gives 410), and scripts
+  failures. The harness turns it on with `fake_gcal`.
+- Setup for the user:
+    - Add the two new scopes in Google Cloud (README step 4).
+    - Link the admin's account again.
+    - Add the "Themi" calendar to Cozyla.
 
 ### 27 · Meal suggestions and vendor call scripts
 Status: [ ]
