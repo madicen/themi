@@ -46,6 +46,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [~] |
 | D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
 | D2 | Simulator: copy a test session | Dev tooling | [x] |
+| F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2140,6 +2141,55 @@ Notes (2026-10-25):
   badge on Themi's message, the reaction button in use is solid (it had been stuck at
   45% opacity under its row), the click shows at once, and the "You reacted" line quotes
   the message it was on.
+
+### F1 · Feedback from chat: /bug and /idea
+Status: [x] (2026-10-25)
+Depends on: 09, 17
+Read first: "How the family uses Themi" (chat commands). The plan has no feedback feature yet;
+this adds one at the user's request, so family testing turns into work items.
+
+Build:
+- `/bug <what happened>` and `/idea <what you'd like>`, plus a `log_feedback` tool for the same
+  thing in plain words ("that's a bug: ...", "it'd be nice if ..."). With no text, the command
+  explains itself and saves nothing.
+- Each report keeps a context snapshot: the message the person replied to (Telegram's Reply),
+  the recent conversation, what's waiting on them, their settings and pauses, their AI backend
+  (never keys), Themi's recent log lines (redacted) and its version. No energy numbers.
+- `themi feedback` prints the new reports as one Markdown block to paste into a Claude session;
+  `--all` includes reviewed ones; `--done <id>...` marks them reviewed.
+- The simulator gets a Reply option on Themi's messages, so `make dev` can test it.
+
+Tests:
+- Scenarios: /bug and /idea with and without Reply, the empty command, the tool.
+- The snapshot's contents, the report, marking reviewed, the CLI.
+- Reply parsing in the channel; recent log lines redacted.
+
+Done when: a /bug sent from Telegram shows up in `themi feedback` with its context. Commit.
+
+Notes (2026-10-25):
+- `themi.core.feedback`: `FeedbackBook` (storage and the Markdown report; needs only the
+  database, so the CLI uses it) and `FeedbackChat` (commands, snapshot, `services.feedback`).
+  Migration 0025 adds `feedback` (kind bug/idea, text, JSON context, status new/reviewed).
+- Commands that need the whole message register with `services.add_event_command`; the agent
+  checks those first. `InboundEvent.reply_to_message_id` carries Telegram's Reply, and
+  `FakeTelegram.send_text(reply_to=)` and `Scenario.say(reply_to_text=)` send one.
+- `themi.logs.RecentLogs` keeps recent log lines, redacted. `configure_logging` attaches the
+  shared `recent_logs` (500 lines), and a report keeps the last 60. The simulator's session
+  buffer is now a `RecentLogs` too.
+- The snapshot holds the last 30 messages, the open items, settings and pauses, the conversation
+  chain's backends (label, kind, model, whether a key is set), the version and the log tail.
+  No energy numbers.
+- The reply target is the newest `message_log` row with that Telegram id, because dev runs
+  reused ids (see the next note).
+- Dev fixes found while testing live:
+    - The simulator now continues Telegram message ids after the dev data's highest
+      (`runner.continue_numbering`). Before, each run restarted at 100, so ids repeated.
+    - `make dev`'s website moved to port 8081 (`THEMI_DEV_HTTP_PORT`), so it can run next to
+      a real `themi run` on 8080.
+- The simulator has a Reply button on Themi's messages, and its report shows
+  "(replying to #N)".
+- Not in the plan yet. If the user wants it there, add `/bug` and `/idea` to its chat commands.
+- A running `themi run` picks this up only after a restart.
 
 ---
 
