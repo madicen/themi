@@ -28,6 +28,7 @@ from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolRegistry
+from themi.energy import EnergyModel
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 
@@ -77,6 +78,7 @@ def build_app(
         calibrator=PdaCalibrator(store),
         tools=ToolRegistry(list(STARTER_TOOLS)),
         autonomy=Autonomy(store, ExecutorRegistry()),
+        energy=EnergyModel(store),
     )
     approvals = ApprovalsUI(services.autonomy, outbox)
     approvals.install(services)

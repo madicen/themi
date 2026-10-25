@@ -232,3 +232,26 @@ async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None
     assert "Always keep in mind: The cat's vet is on Tuesdays." in scenario.app.services.rules()
     (listing,) = await scenario.say("Erin", "/rules")
     assert "Keep in mind: vet" in listing
+
+
+async def test_a_draining_remark_changes_how_themi_reads_erin(scenario: Scenario) -> None:
+    import re
+
+    scenario.primary.queue_text("Morning!")
+    await scenario.say("Erin", "morning")
+    assert "How Erin seems: steady" in scenario.primary.last_request.messages[0].text
+
+    scenario.primary.queue_tool_call("log_energy_note", {"effect": -3, "note": "long client call"})
+    scenario.primary.queue_text("That sounds like a lot. Go gently.")
+    await scenario.say("Erin", "that client call took a lot out of me")
+
+    scenario.primary.queue_text("Toast or soup?")
+    await scenario.say("Erin", "lunch ideas?")
+    turn = scenario.primary.last_request.messages[0].text
+    line = next(row for row in turn.splitlines() if row.startswith("How Erin seems:"))
+    assert line == "How Erin seems: seems like a low stretch"
+    assert not re.search(r"\d", line)
+
+    scenario.primary.queue_text("Hey!")
+    await scenario.say("Husband", "hi")
+    assert "How Husband seems: steady" in scenario.primary.last_request.messages[0].text

@@ -111,6 +111,7 @@ class Agent:
                 await handler(member, argument.strip())
                 return
         self.services.calibrator.observe_text(member, text)
+        self.services.energy.observe_inbound(member)
         if await self._fast_path(member, text):
             return
         async with channel.typing(member):

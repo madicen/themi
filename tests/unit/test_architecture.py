@@ -51,3 +51,28 @@ def test_only_the_outbox_sends_messages() -> None:
             ):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
     assert offenders == [], "send through themi.channels.outbox:\n" + "\n".join(offenders)
+
+
+# Energy is only ever shown as words. Nothing outside themi.energy may read the
+# number (capacity()/combine()) to put it in front of anyone.
+def test_capacity_numbers_stay_inside_the_energy_package() -> None:
+    offenders = []
+    for path in SRC.rglob("*.py"):
+        if (SRC / "energy") in path.parents:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("capacity", "combine", "baseline")
+            ):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert offenders == [], "use EnergyModel.label() for anything people see:\n" + "\n".join(
+        offenders
+    )
+
+
+def test_templates_never_mention_capacity_scores() -> None:
+    for template in (SRC / "web" / "templates").glob("*.html"):
+        text = template.read_text().lower()
+        assert "capacity" not in text and "score" not in text, template.name

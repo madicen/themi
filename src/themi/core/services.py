@@ -31,12 +31,22 @@ Decision = Literal["yes", "no", "later"]
 class EnergyLabeler(Protocol):
     def label(self, member: Member) -> str: ...
 
+    def observe_inbound(self, member: Member) -> None: ...
+
+    def record(self, member: Member, source: str, value: float, note: str = "") -> bool: ...
+
 
 class NoEnergyReadYet:
-    """Until the energy model exists (prompt 18)."""
+    """For tests and tools that run without the energy model."""
 
     def label(self, member: Member) -> str:
         return "no read yet"
+
+    def observe_inbound(self, member: Member) -> None:
+        return None
+
+    def record(self, member: Member, source: str, value: float, note: str = "") -> bool:
+        return False
 
 
 @dataclass(frozen=True)

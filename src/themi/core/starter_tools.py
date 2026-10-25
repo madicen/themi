@@ -7,9 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from themi import clock
 from themi.core.tools import Tool, ToolContext, dumps, tool
-from themi.localtime import to_utc_iso
 
 
 @tool(
@@ -77,13 +75,8 @@ async def report_forgotten_context(ctx: ToolContext, args: dict[str, Any]) -> st
     },
 )
 async def log_energy_note(ctx: ToolContext, args: dict[str, Any]) -> str:
-    if not ctx.member.tracks("text_notes"):
+    if not ctx.services.energy.record(ctx.member, "text_note", float(args["effect"]), args["note"]):
         return "This person has turned off energy notes; nothing was recorded."
-    ctx.services.store.db.execute(
-        "INSERT INTO energy_signals (member_id, source, value, note, created_at) "
-        "VALUES (?, 'text_note', ?, ?, ?)",
-        (ctx.member.id, float(args["effect"]), args["note"][:200], to_utc_iso(clock.now())),
-    )
     return "Noted."
 
 
