@@ -17,7 +17,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | --- | --- | --- | --- |
 | 01 | Repository bootstrap and test harness | 1 Foundation | [x] |
 | 02 | Settings, storage, migrations, encryption | 1 Foundation | [x] |
-| 03 | Family and member data model | 1 Foundation | [ ] |
+| 03 | Family and member data model | 1 Foundation | [x] |
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [ ] |
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [ ] |
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [ ] |
@@ -168,7 +168,7 @@ Notes:
   3.12 and 3.13; consider adding 3.15 to the matrix.
 
 ### 03 · Family and member data model
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 02
 Read first: "Accounts and data model", "How the family uses Themi" (management website bullets).
 
@@ -194,6 +194,27 @@ Tests:
 - `themi init` end to end against a temp DB.
 
 Done when: the fixtures exist and are used by tests, and everything is committed.
+
+Notes:
+- Everything goes through `themi.accounts.AccountStore(db, cipher)`. Changes take an `actor`:
+  a `Member`, or `SYSTEM` for the CLI. Admin checks re-read the actor's role from the database,
+  so a stale `Member` object can't keep rights it has lost.
+- Rules enforced: admins manage members, roles, invites, devices and family settings. Members
+  change only their own personal settings and linked accounts. The last admin can't be demoted
+  or deleted.
+- The family has no AI settings. The plan's per-member backend paragraph supersedes the
+  entity table, so prompt 06 adds `member_ai_settings` instead.
+- Invites: 8-character codes shown as `XXXX-XXXX`, without 0/O/1/I/L. Only a SHA-256 hash is
+  stored. Codes are case- and spacing-tolerant, single-use and last 24 hours, and a new code
+  replaces any unused one. A Telegram id can't be paired with two members.
+- Gmail addresses are stored lowercase and are unique across the family. Refresh tokens and
+  device credentials are encrypted.
+- Money is stored as integer cents (`takeout_budget_cents`). Quiet hours are `HH:MM` in the
+  family's timezone.
+- Test fixtures: `store` (empty, migrated) and `family` (a `SeededFamily` with `.erin`,
+  `.husband` and `.store`, both paired with Telegram ids 1001 and 1002) are available to every
+  test through `pytest_plugins`. For harnesses, use `seed_family(make_store())`. The husband's
+  fixture name is just "Husband".
 
 ### 04 · AI layer: interface, scripted provider, retry policy
 Status: [ ]
