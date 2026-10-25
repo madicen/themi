@@ -139,6 +139,10 @@ class AccountStore:
         self.db = db
         self._cipher = cipher
 
+    @property
+    def cipher(self) -> Cipher:
+        return self._cipher
+
     # ----- permission helpers -------------------------------------------------
 
     def _require_admin(self, actor: Actor) -> None:

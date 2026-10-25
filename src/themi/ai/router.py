@@ -123,14 +123,14 @@ class AIRouter:
         sleep: Sleep = asyncio.sleep,
         rng: random.Random | None = None,
         breakers: BreakerBoard | None = None,
-        factory: ProviderFactory = build_provider,
+        factory: ProviderFactory | None = None,
     ) -> None:
         self.settings = settings
         self.policy = policy
         self.breakers = breakers or BreakerBoard()
         self._sleep = sleep
         self._rng = rng or random.Random()
-        self._factory = factory
+        self._factory = factory or build_provider
 
     def client_for(self, member_id: int, task: AITask) -> TaskClient:
         return TaskClient(self, member_id, AITask(task))

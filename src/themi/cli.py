@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser(
-        "bot", help="run the Telegram bot on its own (echo mode until the agent exists)"
+        "bot", help="run the Telegram bot and agent on their own (themi run replaces this)"
     )
     return parser
 
@@ -46,36 +46,37 @@ def _store() -> AccountStore:
 def _run_bot() -> None:
     import asyncio
 
-    from themi.accounts import AccountStore
-    from themi.ai.router import AIRouter
-    from themi.ai.settings import AISettingsStore
-    from themi.channels.events import EchoHandler
-    from themi.channels.outbox import Outbox
-    from themi.channels.pda import AIRewriter, PdaShield
+    from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.logs import configure_logging
     from themi.settings import Settings, SettingsError
     from themi.storage import open_database
 
     settings = Settings.load()
-    if settings.telegram_bot_token is None:
+    token = settings.telegram_bot_token
+    if token is None:
         raise SettingsError(
             "TELEGRAM_BOT_TOKEN is required to run the bot (get one from @BotFather)"
         )
     configure_logging(settings.log_level)
-    db = open_database(settings.db_path)
-    store = AccountStore(db, settings.cipher())
-    router = AIRouter(AISettingsStore(db, settings.cipher()))
-    channel = TelegramChannel.from_token(settings.telegram_bot_token, store, None)
-    channel.handler = EchoHandler(Outbox(store, channel, PdaShield(AIRewriter(router))))
+    app = build_app(
+        open_database(settings.db_path),
+        settings.cipher(),
+        lambda store: TelegramChannel.from_token(token, store, None),
+    )
+
+    async def flush_forever() -> None:
+        while True:
+            await app.outbox.flush()
+            await asyncio.sleep(30)
 
     async def run() -> None:
-        await channel.start()
-        print("Themi bot is running (echo mode). Ctrl+C to stop.")
+        await app.channel.start()
+        print("Themi bot is running. Ctrl+C to stop.")
         try:
-            await channel.run()
+            await asyncio.gather(app.channel.run(), flush_forever())
         finally:
-            await channel.stop()
+            await app.channel.stop()
 
     asyncio.run(run())
 

@@ -393,12 +393,16 @@ class TelegramChannel:
         """Show "typing…" for as long as the block runs."""
         chat_id = _chat_id(member)
 
+        async def show() -> None:
+            with suppress(TelegramError):
+                await self.bot.send_chat_action(chat_id, ChatAction.TYPING)
+
         async def keep_typing() -> None:
             while True:
-                with suppress(TelegramError):
-                    await self.bot.send_chat_action(chat_id, ChatAction.TYPING)
                 await asyncio.sleep(TYPING_REFRESH_SECONDS)
+                await show()
 
+        await show()  # right away, not after the first refresh interval
         task = asyncio.create_task(keep_typing())
         try:
             yield
