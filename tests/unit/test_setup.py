@@ -3,7 +3,13 @@ from collections.abc import Iterator
 import pytest
 
 from themi.accounts import AccountsError, AccountStore, InvalidValue, Role
-from themi.accounts.setup import parse_money_to_cents, run_init, run_invite
+from themi.accounts.setup import (
+    pairing_instructions,
+    parse_money_to_cents,
+    run_init,
+    run_invite,
+    start_link,
+)
 
 
 def make_io(answers: list[str]):
@@ -85,3 +91,28 @@ def test_invite_new_and_unpaired_members(store: AccountStore) -> None:
         run_invite(store, "Husband")
     helper, _ = run_invite(store, "Helper", Role.ADMIN)
     assert helper.is_admin
+
+
+def test_pairing_instructions_add_a_tap_to_start_link_when_the_bot_is_known(
+    store: AccountStore,
+) -> None:
+    _, code = run_init(store, *make_io(["Household", "", "0", "Erin"])[:2])
+    erin = store.member_by_name("Erin")
+    assert erin is not None
+    plain = pairing_instructions(erin, code)
+    assert f"/start {code}" in plain and "t.me" not in plain
+
+    linked = pairing_instructions(erin, code, "themi_ai_bot")
+    assert f"https://t.me/themi_ai_bot?start={code}" in linked
+    assert f"/start {code}" in linked  # typing it still works
+
+
+def test_start_link_shape() -> None:
+    assert start_link("themi_ai_bot", "HA99-GJ6N") == "https://t.me/themi_ai_bot?start=HA99-GJ6N"
+    assert start_link("@themi_ai_bot", "HA99-GJ6N") == "https://t.me/themi_ai_bot?start=HA99-GJ6N"
+
+
+def test_init_shows_the_link_too(store: AccountStore) -> None:
+    ask, say, _asked, said = make_io(["Household", "", "0", "Erin"])
+    _, code = run_init(store, ask, say, bot_username="themi_ai_bot")
+    assert any(f"https://t.me/themi_ai_bot?start={code}" in line for line in said)

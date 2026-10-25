@@ -188,3 +188,24 @@ async def test_proposals_need_content(scenario: Scenario) -> None:
         await scenario.app.rulebook.propose(scenario.member("Erin"), " ", "text")
     with pytest.raises(RuleError):
         await scenario.app.rulebook.propose(scenario.member("Erin"), "x", "y", "standing_reminder")
+
+
+async def test_yes_to_a_question_asked_after_the_proposal_doesnt_lock_it(
+    scenario: Scenario,
+) -> None:
+    scenario.primary.queue_tool_call(
+        "propose_rule",
+        {
+            "summary": "Archive store promos",
+            "text": RULE_TEXT,
+            "kind": "policy",
+            "category": "",
+            "rule_id": 0,
+        },
+    )
+    scenario.primary.queue_text("Drafted. Want me to look at the bins schedule too?")
+    await scenario.say("Erin", "store promo emails could just be archived")
+
+    scenario.primary.queue_text("Sure, which day do the bins go out?")
+    assert await scenario.say("Erin", "yes") == ["Sure, which day do the bins go out?"]
+    assert scenario.app.rulebook.locked() == []

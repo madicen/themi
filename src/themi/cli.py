@@ -191,6 +191,24 @@ def _restore(name: str, dry_run: bool, yes: bool) -> None:
     print("Start Themi again; any newer migrations run on startup.")
 
 
+def _bot_username() -> str | None:
+    """The bot's username (Telegram's getMe), for tap-to-start invite links.
+    None without a token, or if Telegram can't be reached: the code still works."""
+    import httpx
+
+    from themi.settings import Settings
+
+    settings = Settings.load()
+    if settings.telegram_bot_token is None:
+        return None
+    base = settings.telegram_api_url or "https://api.telegram.org"
+    try:
+        response = httpx.get(f"{base}/bot{settings.telegram_bot_token.reveal()}/getMe", timeout=5)
+        return str(response.json()["result"]["username"])
+    except Exception:  # never show the request: its URL holds the token
+        return None
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -209,11 +227,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "keygen":
             print(generate_key())
         elif args.command == "init":
-            run_init(_store(), _ask, print)
+            run_init(_store(), _ask, print, _bot_username())
         elif args.command == "invite":
             role = Role.ADMIN if args.admin else Role.MEMBER
             member, code = run_invite(_store(), args.name, role)
-            print(pairing_instructions(member, code))
+            print(pairing_instructions(member, code, _bot_username()))
         elif args.command == "run":
             _run()
         elif args.command == "login-link":

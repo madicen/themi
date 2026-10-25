@@ -36,6 +36,8 @@ opens the management site signed in as that person.
   on their default AI backend. Without a key, Themi replies that setup is needed. You can also
   add a key on the website's AI page.
 - To try pairing: `make dev-invite NAME=Sam`, then send the `/start` code as *Someone new*.
+- *Copy session* copies the conversations and Themi's log as text, to paste into a Claude
+  session. *New session* marks where the next copy starts.
 - Only Telegram is simulated. Replies use real Gemini, and Google and OurGroceries are off.
 
 ### Rules worth knowing
@@ -50,7 +52,9 @@ opens the management site signed in as that person.
    `TELEGRAM_BOT_TOKEN` (from @BotFather). Back up the secret key: without it, stored tokens
    and keys can't be decrypted.
 2. Run `themi init` once to create the family and its first admin. Then send the bot
-   `/start <code>` from Telegram.
+   `/start <code>` from Telegram. `themi init` and `themi invite <name>` also print a
+   `https://t.me/<bot>?start=<code>` link: opening it on a phone and pressing Start sends
+   the code, so you can text the link to the person you're inviting.
 3. Run `themi run`. This starts the bot, the scheduler and the website (`/health` on
    port 8080).
 

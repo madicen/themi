@@ -60,6 +60,20 @@
   .person .bubble { background: var(--me); border-bottom-right-radius: 4px; }
   .bot .bubble { background: var(--bot); border-bottom-left-radius: 4px; }
   .notice .bubble { background: var(--notice); font-size: 13px; box-shadow: none; }
+  .row.action { align-self: flex-end; color: var(--muted); font-size: 12px; font-style: italic; }
+  #toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  #toast.on { opacity: 0.92; }
+  dialog {
+    width: min(760px, calc(100vw - 32px)); background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+  }
+  dialog textarea { width: 100%; height: 50vh; height: 50dvh; font: 12px/1.4 ui-monospace, monospace; }
+  dialog p { margin: 0 0 8px; }
+  dialog div { display: flex; justify-content: flex-end; margin-top: 8px; }
   .edited { color: var(--muted); font-size: 11px; margin-left: 6px; }
   .badge {
     position: absolute; bottom: -10px; left: -6px; background: var(--panel);
@@ -67,10 +81,21 @@
   }
   .keys { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .keys button { background: var(--chip-on); border-color: transparent; }
-  .reacts { display: flex; gap: 4px; margin-top: 4px; opacity: 0.45; }
-  .row:hover .reacts, .reacts .on { opacity: 1; }
-  .reacts button { padding: 0 6px; font-size: 13px; border-radius: 10px; }
-  .reacts button.on { background: var(--chip-on); border-color: var(--accent); }
+  .badge.mine {
+    left: auto; right: -8px; bottom: -13px; padding: 1px 7px; font-size: 15px;
+    border: 2px solid var(--accent); background: var(--chip-on);
+  }
+  .bubble.has-badge { margin-bottom: 13px; }
+  .badge.pop { animation: pop 0.35s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.4); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .reacts { display: flex; gap: 4px; margin-top: 4px; }
+  /* Faded until hovered, except the one in use (opacity on the buttons, so "on" stays solid). */
+  .reacts button { padding: 0 6px; font-size: 13px; border-radius: 10px; opacity: 0.45; }
+  .row:hover .reacts button, .reacts button.on { opacity: 1; }
+  .reacts button.on {
+    background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+    font-weight: 600;
+  }
   #typing { color: var(--muted); font-style: italic; padding: 0 16px 6px; min-height: 22px; }
   form {
     display: flex; gap: 8px; padding: 10px 16px 14px; background: var(--panel);
@@ -100,7 +125,15 @@
   <button data-skip="240">4 hours</button>
   <button data-skip="1440">1 day</button>
   <a id="website" target="_blank" rel="noopener">Website ↗</a>
+  <button id="copy" title="Copy the conversations and Themi's log, to paste into Claude">Copy session</button>
+  <button id="session" title="Start a new test session: later copies begin here">New session</button>
 </header>
+<div id="toast" role="status"></div>
+<dialog id="report">
+  <p>The browser blocked the clipboard. Select all and copy:</p>
+  <textarea readonly></textarea>
+  <div><button id="close-report">Close</button></div>
+</dialog>
 <nav id="people"></nav>
 <main>
   <div id="log"></div>
@@ -123,6 +156,7 @@ let lastVersion = -1;
 let lastTyping = null;
 let people = [];
 const seen = {};  // chat id -> newest bot message seen there
+const shownReactions = {};  // bot message id -> your reaction as last drawn
 
 try { chat = Number(localStorage.getItem("themi-sim-chat")) || chat; } catch {}
 
@@ -165,11 +199,34 @@ function renderEntries(entries) {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.replaceChildren();
   if (!entries.length) log.append(el("p", "empty", "No messages yet. Say hello."));
+  const texts = {};  // message id -> its text, to say what a tap or reaction was on
+  for (const e of entries) if (e.message_id) texts[e.message_id] = e.text;
   for (const e of entries) {
     const row = el("div", "row " + e.sender);
+    if (e.sender === "action") {
+      const match = e.text.match(/^(.*) on message (\d+)$/);
+      const what = (match ? match[1] : e.text).replace("their reaction", "your reaction");
+      const on = match && texts[match[2]];
+      const quote = on ? ` on “${on.split("\n")[0].slice(0, 60)}${on.length > 60 ? "…" : ""}”` : "";
+      row.textContent = "You " + what + quote;
+      log.append(row);
+      continue;
+    }
     const bubble = el("div", "bubble", e.text);
     if (e.edited) bubble.append(el("span", "edited", "edited"));
     if (e.bot_reactions.length) bubble.append(el("span", "badge", e.bot_reactions.join("")));
+    if (e.sender === "bot" && e.reactions.length) {
+      // Your reaction, on the message as Telegram shows it; it pops when it changes.
+      const mine = e.reactions.join("");
+      const badge = el("span", "badge mine", mine);
+      badge.title = "Your reaction";
+      if (shownReactions[e.message_id] !== undefined && shownReactions[e.message_id] !== mine) {
+        badge.classList.add("pop");
+      }
+      bubble.classList.add("has-badge");
+      bubble.append(badge);
+    }
+    if (e.sender === "bot") shownReactions[e.message_id] = e.reactions.join("");
     row.append(bubble);
     if (e.sender === "bot" && e.buttons.length) {
       const keys = el("div", "keys");
@@ -183,9 +240,15 @@ function renderEntries(entries) {
     if (e.sender === "bot") {
       const reacts = el("div", "reacts");
       for (const emoji of ["✅", "💤"]) {
-        const b = el("button", e.reactions.includes(emoji) ? "on" : "", emoji);
-        b.title = emoji === "✅" ? "Done" : "Not now";
-        b.onclick = () => post("/sim/react", {user_id: chat, message_id: e.message_id, emoji});
+        const on = e.reactions.includes(emoji);
+        const b = el("button", on ? "on" : "", emoji);
+        b.title = on ? `Remove your ${emoji}` : emoji === "✅" ? "React ✅ (approves an approval card)" : "React 💤 (snoozes an approval card)";
+        b.onclick = () => {
+          // Show it at once; the next poll confirms what Telegram recorded.
+          for (const other of reacts.children) if (other !== b) other.classList.remove("on");
+          b.classList.toggle("on");
+          post("/sim/react", {user_id: chat, message_id: e.message_id, emoji});
+        };
         reacts.append(b);
       }
       row.append(reacts);
@@ -247,6 +310,34 @@ document.getElementById("text").onkeydown = (event) => {
 for (const b of document.querySelectorAll("[data-skip]")) {
   b.onclick = () => post("/sim/skip", {minutes: Number(b.dataset.skip)});
 }
+
+let toastTimer;
+function toast(text) {
+  const box = document.getElementById("toast");
+  box.textContent = text;
+  box.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.classList.remove("on"), 2500);
+}
+
+document.getElementById("copy").onclick = async () => {
+  const text = await (await fetch("/sim/report")).text();
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`Copied the session (${text.split("\n").length} lines)`);
+  } catch {
+    const dialog = document.getElementById("report");
+    const area = dialog.querySelector("textarea");
+    area.value = text;
+    dialog.showModal();
+    area.select();
+  }
+};
+document.getElementById("close-report").onclick = () => document.getElementById("report").close();
+document.getElementById("session").onclick = async () => {
+  await post("/sim/session", {});
+  toast("New session started: copies begin here");
+};
 
 poll();
 setInterval(poll, 700);

@@ -327,9 +327,23 @@ class Rulebook:
             return resolve
 
         return [
-            AwaitingItem(f"rule:{r.id}", f"Proposed rule: {r.summary}", resolver(r.id))
+            AwaitingItem(
+                f"rule:{r.id}",
+                f"Proposed rule: {r.summary}",
+                resolver(r.id),
+                self._asked_in(r.id, member.id),
+            )
             for r in self.drafts(member)
         ]
+
+    def _asked_in(self, rule_id: int, member_id: int) -> tuple[int, ...]:
+        rows = self.db.query(
+            "SELECT o.telegram_message_id FROM rule_messages m JOIN outbox o "
+            "ON o.id = m.outbox_id WHERE m.rule_id = ? AND m.member_id = ? "
+            "AND o.telegram_message_id IS NOT NULL",
+            (rule_id, member_id),
+        )
+        return tuple(r["telegram_message_id"] for r in rows)
 
     async def on_rules_command(self, member: Member, argument: str) -> None:
         locked = self.locked()
