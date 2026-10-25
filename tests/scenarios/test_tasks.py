@@ -14,7 +14,13 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
             ("log_energy_note", {"effect": -3, "note": "the call with the bank drained her"}, None),
             (
                 "create_task",
-                {"title": "text the plumber back", "kind": "text", "effort": 2, "due_date": ""},
+                {
+                    "title": "text the plumber back",
+                    "kind": "text",
+                    "effort": 2,
+                    "due_date": "",
+                    "assign_to": "anyone",
+                },
                 None,
             ),
         ]
@@ -76,3 +82,82 @@ async def test_later_brings_a_task_back(scenario: Scenario) -> None:
     await scenario.advance(hours=10)
     assert board.get(task.id).status == "open"
     assert any("Book the dentist" in t for t in scenario.inbox("Erin")[sent_before:])
+
+
+def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
+    """Erin is worn out, so matching alone would hand her usual tasks to her husband."""
+    return [
+        ("log_energy_note", {"effect": -3, "note": "the call with the bank drained her"}, None),
+        (
+            "create_task",
+            {"title": title, "kind": kind, "effort": 2, "due_date": "", "assign_to": assign_to},
+            None,
+        ),
+    ]
+
+
+def task_results(scenario: Scenario) -> list[str]:
+    return [
+        block.content
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult) and block.content.startswith(("Task", "Not created"))
+    ]
+
+
+async def test_a_task_someone_takes_on_stays_theirs(scenario: Scenario) -> None:
+    """Feedback bug #2: "I want to process the cardboard" went to the partner."""
+    scenario.primary.queue_tool_calls(drained_erin_then("text the plumber back", "text", "me"))
+    scenario.primary.queue_text("On your list.")
+    await scenario.say("Erin", "I'm wiped, but I'll text the plumber back later")
+
+    task = scenario.app.db.one("SELECT * FROM tasks")
+    assert task is not None
+    assert task["assignee"] == scenario.member("Erin").id
+    assert task["assign_reason"] == "Erin said they'd do it."
+    (result,) = task_results(scenario)
+    assert "assigned to Erin (the person asking)" in result
+    # She's worn out, so the nudge may wait for a better moment; it's hers, in her words.
+    (nudge,) = scenario.app.db.query(
+        "SELECT member_id, text FROM outbox WHERE kind = 'task' AND text LIKE '%plumber%'"
+    )
+    assert nudge["member_id"] == scenario.member("Erin").id
+    assert nudge["text"].startswith("On the list for you, whenever it suits:")
+
+
+async def test_a_task_for_a_named_person_says_who_added_it(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_calls(
+        drained_erin_then("pick up the dry cleaning", "errand", "husband")
+    )
+    scenario.primary.queue_text("Passed to him.")
+    await scenario.say("Erin", "can you ask Husband to pick up the dry cleaning?")
+
+    task = scenario.app.db.one("SELECT * FROM tasks")
+    assert task is not None and task["assignee"] == scenario.member("Husband").id
+    assert task["assign_reason"] == "Erin asked for Husband to do it."
+    (result,) = task_results(scenario)
+    assert "assigned to Husband" in result and "Let Erin know it went to Husband." in result
+    await scenario.advance(hours=10)
+    assert any(
+        t.startswith("Erin added this for you, whenever it suits: pick up the dry cleaning.")
+        for t in scenario.inbox("Husband")
+    )
+
+
+async def test_an_unknown_name_is_refused(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_calls(drained_erin_then("water the plants", "physical", "Bob"))
+    scenario.primary.queue_text("Who's Bob?")
+    await scenario.say("Erin", "Bob should water the plants")
+    (result,) = task_results(scenario)
+    assert result.startswith("Not created:") and "Bob" in result
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM tasks") == 0
+
+
+async def test_matching_still_hands_off_tasks_for_anyone(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_calls(drained_erin_then("text the plumber back", "text", "anyone"))
+    scenario.primary.queue_text("Husband has it.")
+    await scenario.say("Erin", "can someone text the plumber back?")
+    task = scenario.app.db.one("SELECT * FROM tasks")
+    assert task is not None and task["assignee"] == scenario.member("Husband").id
+    await scenario.advance(hours=10)
+    assert any(t.startswith("Erin added this for you") for t in scenario.inbox("Husband"))

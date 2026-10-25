@@ -68,7 +68,13 @@ async def test_tasks_with_dates_appear_on_the_calendar(
 ) -> None:
     scenario.primary.queue_tool_call(
         "create_task",
-        {"title": "Call the plumber", "kind": "call", "effort": 2, "due_date": "2026-10-30"},
+        {
+            "title": "Call the plumber",
+            "kind": "call",
+            "effort": 2,
+            "due_date": "2026-10-30",
+            "assign_to": "anyone",
+        },
     )
     scenario.primary.queue_text("Added, for Friday.")
     await scenario.say("Erin", "remind us to call the plumber on Friday")

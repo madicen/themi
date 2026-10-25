@@ -49,6 +49,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
 | F2 | Personal rules | Feedback | [x] |
 | F3 | Busy times | Feedback | [x] |
+| F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2281,6 +2282,44 @@ Notes (2026-10-25):
 - The plan's quiet-hours mentions now include busy times.
 - For the user: add Mon-Fri 09:00-17:00 under My settings, then retire rule 5 on the Rules
   page. It's a household rule that never changed timing.
+
+### F4 · Tasks someone takes on stay theirs
+Status: [x] (2026-10-25)
+Depends on: 20
+Read first: "Shadow Calendar" → Task matching. From feedback bug #2: Michael said "I want to
+process the cardboard", matching gave the task to Erin ("seems to have more room"), and Erin
+got a nudge with no idea where it came from. The user chose these two fixes (2026-10-25).
+
+Build:
+- `create_task` gets `assign_to`: "me" (the person asking: "I'll...", "remind me to..."), a
+  family member's name, or "anyone". Only "anyone" goes through matching.
+- When a task lands with someone other than the person who asked, the nudge says who added it,
+  and the tool result tells the model to let the asker know who it went to.
+- The plan's matching rule says a task someone takes on, or gives to a named person, isn't
+  matched.
+
+Tests:
+- "me" stays with the asker even when the partner has more room; a named person gets it;
+  "anyone" still matches; an unknown name is refused.
+- The nudge names who added it only when that's someone else.
+
+Done when: "I want to process the cardboard" stays Michael's. Commit.
+
+Notes (2026-10-25):
+- `create_task` requires `assign_to`: "me" (also "myself"), a member's name (any case), or
+  "anyone" ("someone" or empty mean the same). An unknown name is refused, and the refusal
+  lists the family's names. `TaskBoard.create(..., assignee=)` skips the matcher. The reasons
+  read "<asker> said they'd do it." or "<asker> asked for <name> to do it."
+- `prompt()` uses `ADDED_BY_TEXT` ("<who> added this for you, whenever it suits: ...") when the
+  task's `created_by` isn't the assignee, including matched hand-offs and call tasks. The tool
+  result adds "Let <asker> know it went to <assignee>."
+- The plan's Task matching bullet now says self-assigned and named tasks aren't matched.
+- Real data: task 5 (the cardboard) moved from Erin to Michael with a plain SQL update; there's
+  no reassign function yet. Erin's earlier nudge for it still has Done/Later buttons that
+  act on the task.
+- Not done (the user didn't pick them): skipping the instant nudge for your own new task (Erin's
+  rule 2 asks for it, but rules can't change it), and catching duplicate tasks (Erin has
+  "Clean upstairs bathroom" twice).
 
 ---
 
