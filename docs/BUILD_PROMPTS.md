@@ -21,7 +21,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [x] |
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [x] |
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [x] |
-| 07 | Telegram channel | 1 Foundation | [ ] |
+| 07 | Telegram channel | 1 Foundation | [x] |
 | 08 | Outbox and PDA shield | 1 Foundation | [ ] |
 | 09 | Agent core and scenario harness | 1 Foundation | [ ] |
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [ ] |
@@ -393,7 +393,7 @@ Notes:
   `openai`, `google.genai` or `themi.ai.adapters`.
 
 ### 07 · Telegram channel
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 03
 Read first: "How the family uses Themi" → In Telegram, Chat commands; "Integrations" (Telegram
 row); "Security and privacy" (who can talk to the bot).
@@ -426,6 +426,34 @@ Tests:
 
 Done when: a member can pair and get echoes back against the fake, and a manual run with a real
 bot token works. Commit.
+
+Notes:
+- Not yet verified against real Telegram: there's no bot token here. To try it, set
+  `TELEGRAM_BOT_TOKEN` in `.env`, run `themi init` (or `themi invite <name>`), start `themi bot`,
+  and send `/start <code>` to the bot. It echoes back what you send.
+- python-telegram-bot 22.8. Themi uses PTB's `Bot` with its own polling loop, not PTB's
+  `Application`. The offset is stored in `meta` (`telegram.offset`) once each update is handled,
+  so it's at-least-once with a tiny window. An update whose handler raises is logged and skipped.
+- The channel sets `PTB_TIMEDELTA=1` (PTB's future default) before importing `telegram`.
+  `_seconds()` accepts either form.
+- Privacy fix found by the tests: PTB logs whole updates at DEBUG, and httpx logs URLs containing
+  the bot token at INFO. `themi.logs.quiet_chatty_libraries()` caps telegram, httpx, httpx2,
+  httpcore and hpack at WARNING. The channel and `configure_logging()` both call it.
+- Pairing: `/start <code>`. Wrong codes get a generic reply, and after 5 in an hour that Telegram
+  account is ignored (in memory). Already-paired members get "you're already connected".
+- Buttons: `Button(label, kind, payload)`. Only a random token goes to Telegram; `kind` and
+  `payload` live in `callback_tokens` (7-day TTL). A tap retires every button on that keyboard,
+  and only the member the message was sent to can tap. The agent (prompt 09) and approvals
+  (prompt 12) dispatch on `ButtonPress.kind`.
+- Reactions: `ReactionTypeEmoji` only, reporting newly added emoji. Telegram's docs say reaction
+  updates need `allowed_updates`, which is sent, and admin rights in groups. Check during the
+  real-bot test that private-chat reactions arrive.
+- Outbound: `send_text`, `edit_text`, `react`, and `async with channel.typing(member)`. Flood
+  control (429 with retry_after) and network errors are retried up to 3 times. Prompt 08's outbox
+  must be the only caller of `send_text` outside pairing.
+- New dev dependency: python-multipart, which the fake needs to parse PTB's form posts. The
+  website (prompt 15) will need it at runtime.
+- `themi bot` runs the channel on its own in echo mode. Prompt 10 replaces it with `themi run`.
 
 ### 08 · Outbox and PDA shield
 Status: [ ]
