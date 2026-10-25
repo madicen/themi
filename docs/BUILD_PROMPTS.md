@@ -16,7 +16,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | # | Prompt | Milestone | Status |
 | --- | --- | --- | --- |
 | 01 | Repository bootstrap and test harness | 1 Foundation | [x] |
-| 02 | Settings, storage, migrations, encryption | 1 Foundation | [ ] |
+| 02 | Settings, storage, migrations, encryption | 1 Foundation | [x] |
 | 03 | Family and member data model | 1 Foundation | [ ] |
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [ ] |
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [ ] |
@@ -122,7 +122,7 @@ Notes:
   `make` targets.
 
 ### 02 · Settings, storage, migrations, encryption
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 01
 Read first: "Accounts and data model" (storage bullet), "Security and privacy" (secrets at rest),
 "Deployment and hosting" (backups and updates).
@@ -148,6 +148,24 @@ Tests:
   plaintext is absent.
 
 Done when: all tests pass and the storage layer is committed.
+
+Notes:
+- Migration SQL files live in `src/themi/storage/schema/` rather than `migrations/`, so they
+  don't share a name with the `themi.storage.migrations` module. New migrations are
+  `000N_name.sql` there, numbered with no gaps.
+- `themi.storage.open_database(path)` opens the database and migrates it. Use it everywhere.
+  Migration 0001 creates `meta` (key/value) and `app_secrets` (household-level encrypted
+  credentials, via `SecretStore`).
+- `Secret.reveal()` is the only way to read a secret's value. Secrets can't be hashed or pickled.
+- `TELEGRAM_BOT_TOKEN` is optional in `Settings` for now. Prompt 07 should require it when the
+  bot starts. `Settings.load()` reads `.env` from the working directory, and real environment
+  variables win.
+- `themi.logs.configure_logging()` exists, but nothing calls it yet. `themi run` (prompt 10)
+  should call it.
+- Environment: a Homebrew upgrade (3.14 to 3.15) broke the venv mid-session. It's rebuilt on
+  `make venv VENV_PYTHON=/home/linuxbrew/.linuxbrew/opt/python@3.15/bin/python3.15`. System
+  Python 3.12 can't create venvs without `sudo apt install python3.12-venv`. CI still tests
+  3.12 and 3.13; consider adding 3.15 to the matrix.
 
 ### 03 · Family and member data model
 Status: [ ]

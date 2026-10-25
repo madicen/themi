@@ -13,7 +13,7 @@ energy for it, and phrases prompts so they never feel like demands.
 Needs Python 3.12+ and [jj](https://jj-vcs.github.io/jj/) (the repo is a colocated jj/git repo).
 
 ```sh
-make venv        # create .venv
+make venv        # create .venv (pin an interpreter with VENV_PYTHON=/path/to/python3.x)
 make install     # editable install with dev tools
 make test        # unit tests, the fast loop while coding
 make test-all    # unit + integration + scenarios (what CI runs)
