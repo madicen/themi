@@ -12,8 +12,9 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from themi.accounts import Member
 from themi.localtime import to_local
-from themi.web.auth import COOKIE_NAME, Session, WebAuth
+from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
 HERE = Path(__file__).parent
 FLASH_COOKIE = "themi_flash"
@@ -75,9 +76,27 @@ class Kit:
             raise PermissionError("missing or wrong CSRF token")
         return session, form
 
+    def signed_in(self, member: Member, to: str = "/") -> RedirectResponse:
+        """Start a session for `member` and send them on to `to`."""
+        response = RedirectResponse(to, status_code=303)
+        response.set_cookie(
+            COOKIE_NAME,
+            self.auth.start_session(member),
+            max_age=int(SESSION_TTL.total_seconds()),
+            httponly=True,
+            samesite="lax",
+            secure=self.ctx.secure_cookies,
+        )
+        return response
+
+    @property
+    def google_signin(self) -> bool:
+        return self.app.services.google is not None
+
     # ----- rendering ----------------------------------------------------------------
 
     def page(self, request: Request, name: str, status: int = 200, **values: Any) -> HTMLResponse:
+        values.setdefault("google_signin", self.google_signin)
         response = self.templates.TemplateResponse(request, name, values, status_code=status)
         response.headers["Cache-Control"] = "no-store"
         return response

@@ -20,6 +20,7 @@ from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.commands import Commands
@@ -69,6 +70,7 @@ def build_app(
     *,
     provider_factory: ProviderFactory | None = None,
     sleep: Sleep = asyncio.sleep,
+    google: GoogleConfig | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -94,6 +96,8 @@ def build_app(
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
     services.memory = Memory(db, rulebook)
+    if google is not None:
+        services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
     habits = HabitReserve(services)
@@ -111,6 +115,14 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
     ]
+    if services.google is not None:
+        periodic.append(
+            PeriodicTask(
+                "google.forget_states",
+                timedelta(days=1),
+                _async(services.google.oauth.forget_expired_states),
+            )
+        )
     return App(
         db,
         store,

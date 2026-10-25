@@ -66,6 +66,7 @@ def _run() -> None:
         open_database(settings.db_path),
         settings.cipher(),
         lambda store: TelegramChannel.from_token(token, store, None),
+        google=settings.google(),
     )
     runtime = Runtime(
         app,

@@ -7,7 +7,8 @@ Server-rendered HTML with a little HTMX (vendored, no CDN). Every page works
 without JavaScript; HTMX just swaps a card in place instead of reloading.
 
 Security:
-- Sign-in by one-time link only (Google sign-in arrives in prompt 21).
+- Sign-in by one-time link from the bot, or with Google for members' addresses
+  (google_pages).
 - Sessions are server-side; the cookie is HttpOnly and SameSite=Lax, and
   Secure when the site is on HTTPS.
 - Every POST needs the session's CSRF token (form field or X-CSRF-Token header).
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -27,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 
 from themi.accounts import TRACKING_INPUTS, InvalidValue, Member
 from themi.autonomy import Decision
-from themi.web.auth import COOKIE_NAME, SESSION_TTL
+from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
 
 __all__ = ["SiteContext", "install_site"]
@@ -57,10 +59,12 @@ STRENGTH_LABELS = {
 EXPIRED_LINK = "Sign-in links work once, for 10 minutes. Sending /site to Themi gets a fresh one."
 
 
-def security_headers(response: Response) -> None:
+def security_headers(response: Response, form_targets: str = "") -> None:
+    """`form_targets`: extra origins a form may lead to (Google's sign-in page, via redirect)."""
+    form_action = f"'self' {form_targets}".strip()
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-        "frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+        f"frame-ancestors 'none'; form-action {form_action}; base-uri 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -69,9 +73,12 @@ def security_headers(response: Response) -> None:
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import admin_pages, ai_pages, knowledge_pages
+    from themi.web import admin_pages, ai_pages, google_pages, knowledge_pages
 
     kit = Kit(ctx)
+    google = ctx.app.services.google
+    # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
+    form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
     web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @web.middleware("http")
@@ -79,7 +86,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         response = await call_next(request)
-        security_headers(response)
+        security_headers(response, form_targets)
         return response
 
     @web.exception_handler(NotSignedIn)
@@ -112,6 +119,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(admin_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
+    web.include_router(google_pages.routes(kit))
 
 
 def core_routes(kit: Kit) -> APIRouter:
@@ -124,7 +132,12 @@ def core_routes(kit: Kit) -> APIRouter:
     def login_page(request: Request, token: str) -> HTMLResponse:
         if not kit.auth.link_is_valid(token):
             return kit.page(
-                request, "message.html", 410, title="That link has expired", body=EXPIRED_LINK
+                request,
+                "message.html",
+                410,
+                title="That link has expired",
+                body=EXPIRED_LINK,
+                offer_google=True,
             )
         return kit.page(request, "login.html", token=token)
 
@@ -135,16 +148,7 @@ def core_routes(kit: Kit) -> APIRouter:
             return kit.page(
                 request, "message.html", 410, title="That link has expired", body=EXPIRED_LINK
             )
-        response = RedirectResponse("/", status_code=303)
-        response.set_cookie(
-            COOKIE_NAME,
-            kit.auth.start_session(member),
-            max_age=int(SESSION_TTL.total_seconds()),
-            httponly=True,
-            samesite="lax",
-            secure=kit.ctx.secure_cookies,
-        )
-        return response
+        return kit.signed_in(member)
 
     @router.get("/signed-out", response_class=HTMLResponse)
     def signed_out(request: Request) -> HTMLResponse:
@@ -153,6 +157,7 @@ def core_routes(kit: Kit) -> APIRouter:
             "message.html",
             title="You're signed out",
             body="Sending /site to Themi in Telegram gets you a sign-in link.",
+            offer_google=True,
         )
 
     @router.post("/logout")
@@ -259,6 +264,11 @@ def core_routes(kit: Kit) -> APIRouter:
         return kit.redirect("/settings", "Saved.")
 
     return router
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def as_int(value: Any) -> int | None:

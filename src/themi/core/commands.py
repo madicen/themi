@@ -42,7 +42,11 @@ PAUSE_HELP = (
     "/pause everything tonight. Topics: {topics}. Replies and urgent alerts always come "
     "through."
 )
-LINK_SOON = "Linking Gmail arrives with the email features, soon. Nothing to set up yet."
+LINK_NOT_SET_UP = (
+    "Linking Gmail isn't set up on this server yet. An admin adds the Google keys first "
+    "(the README's Google Cloud setup)."
+)
+LINK_ONLY_GMAIL = "Gmail is the one kind of account that can be linked for now: /link gmail."
 
 
 def _when(services: Services, moment: Any) -> str:
@@ -167,7 +171,24 @@ class Commands:
         )
 
     async def on_link(self, member: Member, argument: str) -> None:
-        await self._reply(member, LINK_SOON)
+        kind = argument.strip().lower() or "gmail"
+        if kind not in ("gmail", "google", "email"):
+            await self._reply(member, LINK_ONLY_GMAIL)
+            return
+        google, base = self.services.google, self.services.site_url
+        if google is None or not base:
+            await self._reply(member, LINK_NOT_SET_UP)
+            return
+        url = google.oauth.authorization_url("link", google.redirect_uri(base), member)
+        linked = [a.address for a in self.services.store.linked_accounts(member.id)]
+        already = f" Already linked: {', '.join(linked)}." if linked else ""
+        await self._reply(
+            member,
+            "Here's the Google page for linking a Gmail account. It works once, within 10 "
+            f"minutes, and you can link as many accounts as you like.{already}\n{url}",
+            kind="system",
+            link_preview=False,
+        )
 
     async def on_help(self, member: Member, argument: str) -> None:
         lines = ["You can just talk to Themi. A few shortcuts, too:"]

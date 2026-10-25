@@ -83,6 +83,19 @@ def routes(kit: Kit) -> APIRouter:
         code = store.create_invite(session.member, member.id)
         return kit.redirect("/family", pairing_instructions(member, code))
 
+    @router.post("/family/members/{member_id}/email")
+    async def set_email(request: Request, member_id: int) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        try:
+            member = store.set_email(session.member, member_id, str(form.get("email", "")))
+        except AccountsError as exc:
+            return kit.redirect("/family", str(exc))
+        if member.email:
+            return kit.redirect(
+                "/family", f"{member.name} can sign in with Google as {member.email}."
+            )
+        return kit.redirect("/family", f"{member.name} no longer signs in with Google.")
+
     @router.post("/family/members/{member_id}/role")
     async def change_role(request: Request, member_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
@@ -101,10 +114,16 @@ def routes(kit: Kit) -> APIRouter:
         member = store.get_member(member_id)
         if form.get("confirm_name", "").strip().lower() != member.name.lower():
             return kit.redirect("/family", f"To remove {member.name}, type their name to confirm.")
+        # Their Gmail tokens are revoked at Google once they're removed here.
+        tokens = [store.refresh_token(a.id) for a in store.linked_accounts(member_id)]
         try:
             store.delete_member(session.member, member_id)
         except InvalidValue as exc:
             return kit.redirect("/family", str(exc))
+        google = kit.app.services.google
+        if google is not None:
+            for token in tokens:
+                await google.revoke_quietly(token)
         return kit.redirect("/family", f"{member.name} has been removed, with their data.")
 
     # ----- trust tiers ------------------------------------------------------------

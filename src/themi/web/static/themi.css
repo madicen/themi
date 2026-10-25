@@ -25,10 +25,11 @@ nav { display: flex; gap: 1rem; align-items: center; }
 .muted { color: var(--muted); font-size: .95rem; }
 .buttons { display: flex; flex-wrap: wrap; gap: .5rem; }
 .buttons form, form.inline { display: inline; margin: 0; }
-button { font: inherit; padding: .55rem 1rem; border-radius: 999px; border: 1px solid var(--line);
+button, a.button { font: inherit; padding: .55rem 1rem; border-radius: 999px; border: 1px solid var(--line);
   background: var(--soft); color: var(--fg); cursor: pointer; min-height: 44px; }
-button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button.primary, a.button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 button.quiet { background: transparent; }
+a.button { display: inline-block; text-decoration: none; }
 button.link { border: none; background: none; color: var(--accent); padding: 0; min-height: auto; }
 .flash { background: var(--soft); border-radius: 8px; padding: .6rem .9rem; }
 .alert { background: var(--alert); border-radius: 8px; padding: .6rem .9rem; margin: .5rem 0; }
