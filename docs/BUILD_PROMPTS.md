@@ -34,7 +34,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [x] |
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [x] |
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [x] |
-| 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [ ] |
+| 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [x] |
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [ ] |
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [ ] |
 | 23 | Email triage | 4 Gmail and pantry | [ ] |
@@ -1232,7 +1232,7 @@ Notes:
 - `app.py` has a small `_async()` wrapper for synchronous periodic jobs.
 
 ### 20 · Tasks, matching, habit reserve
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 19
 Read first: "Module behaviour" → B (task matching, reserve habits); "Testing" → scenario 1.
 
@@ -1259,6 +1259,47 @@ Tests:
 - Habit offering conditions and retirement.
 
 Done when: the scenarios pass. This is the milestone 3 gate. Commit.
+
+Notes (2026-10-24):
+- Migration `0016_tasks_habits.sql`:
+    - Adds `family.task_owners` (kind → member id; the seed has text → Erin, call →
+      husband) and `family.handover_cost` (default 10, 0–50).
+    - Adds `members.kind_costs` (kind → multiplier, 0.25–4).
+    - Adds the `tasks` and `habits` tables.
+    - `update_family` and `update_settings` validate the new fields.
+- `themi.energy.matching`:
+    - Cost = effort × 8 × kind multiplier × recovery factor.
+    - Recovery factor = 1 + (half-life − 6 h)/24, clamped to 0.75–1.5.
+    - Spare = capacity − cost.
+    - A swap needs spare(partner) − handover > spare(default).
+    - Kinds with no owner go to the requester.
+    - If the default owner has every energy input off, the task never swaps (the reason says
+      so). Untracked partners are never swapped to.
+    - Reasons are words only, e.g. "Usually Erin's (texting), but Husband seems to have more
+      room right now."
+- `themi.core.tasks.TaskBoard`:
+    - The tools tell the model who got the task and why.
+    - Nudges are NORMAL `kind="task"` messages with Done / Later buttons. The deadline is
+      09:00 local on the due date.
+    - Later snoozes for 4 h; the periodic job `tasks.resurface` (15 min) brings it back.
+    - Completing or snoozing withdraws a nudge that hasn't gone out yet.
+    - Open tasks are listed among the person's open items.
+    - Prompt texts never open a sentence with the title, because titles are usually commands.
+- `themi.core.habits.HabitReserve`:
+    - Four seed ideas per member.
+    - `habits.offer` (6 h) offers only when all of these hold:
+        - no offer is open
+        - nothing was offered in the last 14 days
+        - there are at least 5 resolved outcomes in the last 14 days, and at least 70% were acted on
+    - Offers are staged through `habit_trial` with the executor `habits.activate`.
+      Declined or lapsed offers are settled as declined and never made again.
+    - `habits.send` (1 h) sends one LOW `kind="habit"` message a day. It waits until the
+      previous message is resolved, and retires the habit silently after 3 ignored in a row.
+- `OutcomeTracker` gains `recent()` and `outcome_of(outbox_id)`.
+- The architecture guard flags any `.combine(` call outside `themi.energy`, so
+  `datetime.combine` is avoided elsewhere.
+- Follow-up: task owners, hand-over cost and per-person kind costs can only be set in code or
+  by the store for now. They belong on the website's family and personal settings pages.
 
 ---
 
