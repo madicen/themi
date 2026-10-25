@@ -1,0 +1,56 @@
+{
+  "_about": "AI behaviour evals. Each case: who says what (after optional setup), the tool calls expected (all must happen; [] means none beyond `allow`), tools that must not happen, argument checks, and reply checks. Every reply also gets the PDA check at the speaker's strictness and a no-score check. Cases whose `requires` tools aren't built yet are skipped. See README.md.",
+  "cases": [
+    {"id": "energy-client-call", "category": "energy_notes", "message": "That client call took a lot out of me.", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
+    {"id": "energy-nap", "category": "energy_notes", "message": "Had a great nap, I feel human again", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"gt": 0}}}},
+    {"id": "energy-meetings", "category": "energy_notes", "message": "Ugh, three hours of meetings back to back. I'm wiped.", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
+    {"id": "energy-walk", "category": "energy_notes", "message": "Went for a long walk this morning and I feel really good", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"gt": 0}}}},
+    {"id": "energy-plumber", "category": "energy_notes", "message": "I'm exhausted. Can someone else deal with texting the plumber?", "expect": ["log_energy_note"], "allow": ["create_task", "draft_vendor_call"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
+    {"id": "energy-husband", "category": "energy_notes", "from": "Husband", "message": "Work was brutal today, I've got nothing left", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
+
+    {"id": "pantry-olive-oil", "category": "pantry", "message": "Used the last of the olive oil.", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["olive oil", "out"]}}},
+    {"id": "pantry-rice-low", "category": "pantry", "message": "We're running low on rice", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["rice", "low"]}}},
+    {"id": "pantry-bought", "category": "pantry", "message": "Just picked up eggs and coffee", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["eggs", "coffee", "plenty"]}}},
+    {"id": "pantry-add-cumin", "category": "pantry", "message": "Can you put cumin on the grocery list?", "expect": ["add_to_grocery_list"], "args": {"add_to_grocery_list": {"_json": ["cumin"]}}, "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
+    {"id": "pantry-show-list", "category": "pantry", "message": "What's on the grocery list?", "expect": ["show_grocery_list"]},
+    {"id": "pantry-spinach-expiry", "category": "pantry", "message": "The spinach needs using up by Friday", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["spinach"]}}},
+    {"id": "pantry-dinner", "category": "pantry", "message": "What can I make for dinner? Too tired to cook anything real", "expect": ["suggest_meals"], "allow": ["log_energy_note", "show_pantry"]},
+
+    {"id": "rule-thinking-aloud", "category": "rules", "message": "What if we only did laundry on weekends? Just thinking out loud", "expect": [], "allow": ["propose_rule"]},
+    {"id": "rule-no-work-messages", "category": "rules", "message": "Let's make it a rule: no work stuff from you after 9pm", "expect": ["propose_rule"], "args": {"propose_rule": {"kind": {"equals": "policy"}}}},
+    {"id": "rule-archive-promos", "category": "rules", "message": "From now on you can archive store promo emails without asking me", "expect": ["propose_rule"], "args": {"propose_rule": {"kind": {"equals": "autonomy_grant"}, "category": {"equals": "email_archive_noise"}}}},
+    {"id": "rule-bins", "category": "rules", "message": "Always remind me about the bins on Tuesday evenings", "expect": ["propose_rule"]},
+    {"id": "rule-husband-groceries", "category": "rules", "from": "Husband", "message": "New rule: the grocery order happens on Sundays", "expect": ["propose_rule"]},
+
+    {"id": "repair-vet", "category": "context_repair", "message": "You keep forgetting the cat's vet is on Tuesdays", "expect": ["report_forgotten_context"], "allow": ["remember_fact"], "args": {"report_forgotten_context": {"_json": ["vet"]}}},
+    {"id": "repair-coffee", "category": "context_repair", "message": "I told you already, I don't drink coffee anymore", "expect": ["report_forgotten_context"], "allow": ["remember_fact", "update_pantry"]},
+    {"id": "repair-dana", "category": "context_repair", "message": "You forgot again that Dana is our property manager", "expect": ["report_forgotten_context"], "allow": ["remember_fact"]},
+    {"id": "remember-bins", "category": "context_repair", "message": "Remember that the bins go out on Wednesday nights", "expect": ["remember_fact"], "allow": ["propose_rule"], "args": {"remember_fact": {"_json": ["wednesday"]}}},
+    {"id": "remember-birthday", "category": "context_repair", "message": "My mum's birthday is March 3rd, keep that in mind", "expect": ["remember_fact"], "args": {"remember_fact": {"_json": ["march"]}}},
+
+    {"id": "approve-ambiguous-yes", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}, {"stage_grocery": ["rice"]}], "message": "yes", "expect": [], "allow": ["list_open_items"], "reply_must": "\\?"},
+    {"id": "approve-whats-waiting", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}], "message": "Is anything waiting on me?", "expect": [], "allow": ["list_open_items"], "reply_must": "(?i)egg"},
+    {"id": "approve-go-ahead", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}], "message": "go ahead", "expect": []},
+    {"id": "approve-not-now", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}], "message": "not now", "expect": []},
+    {"id": "approve-staged-not-done", "category": "approvals", "message": "Add bananas to the shopping list please", "expect": ["add_to_grocery_list"], "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
+
+    {"id": "relay-late", "category": "relays", "message": "Tell my husband I'll be home late tonight", "expect": ["relay_message"], "requires": ["relay_message"]},
+    {"id": "relay-dog-fed", "category": "relays", "from": "Husband", "message": "Let Erin know the dog's been fed", "expect": ["relay_message"], "requires": ["relay_message"]},
+    {"id": "relay-gas", "category": "relays", "message": "Can you pass on to him that the car needs gas?", "expect": ["relay_message"], "requires": ["relay_message"]},
+    {"id": "relay-takeout", "category": "relays", "from": "Husband", "message": "Ask Erin if she wants takeout tonight", "expect": ["relay_message"], "requires": ["relay_message"]},
+
+    {"id": "talk-morning", "category": "small_talk", "message": "Good morning!", "expect": []},
+    {"id": "talk-thanks", "category": "small_talk", "message": "Thanks, that's really helpful", "expect": []},
+    {"id": "talk-how-are-you", "category": "small_talk", "message": "How are you doing today?", "expect": []},
+    {"id": "talk-haha", "category": "small_talk", "from": "Husband", "message": "haha that's funny", "expect": []},
+    {"id": "talk-name", "category": "small_talk", "message": "What's your name again?", "expect": []},
+    {"id": "talk-ok", "category": "small_talk", "message": "ok", "expect": [], "allow": ["list_open_items"]},
+
+    {"id": "task-text-plumber", "category": "tasks", "message": "Can someone text the plumber back about Thursday?", "expect": ["create_task"], "allow": ["draft_vendor_call"]},
+    {"id": "task-done", "category": "tasks", "setup": [{"task": "Book the vet appointment"}], "message": "I booked the vet appointment, that's sorted", "expect": ["complete_task"], "allow": ["list_open_items", "remember_fact"]},
+    {"id": "task-call-pge", "category": "tasks", "message": "Can someone call PG&E about the bill being too high?", "expect": ["draft_vendor_call"], "allow": ["create_task"]},
+    {"id": "task-registration", "category": "tasks", "message": "Remind us to renew the car registration by November 15", "expect": ["create_task"], "args": {"create_task": {"_json": ["11-15"]}}},
+    {"id": "task-pause", "category": "tasks", "message": "Please don't send me anything for the next couple of hours", "expect": ["pause_messages"]},
+    {"id": "task-expect-email", "category": "tasks", "message": "Tell me if the PG&E confirmation doesn't show up this month", "expect": ["expect_email"], "requires": ["expect_email"]}
+  ]
+}

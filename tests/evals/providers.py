@@ -1,0 +1,84 @@
+"""Which real backend the evals run against, from the environment.
+
+| PROVIDER      | Needs                                    | Optional                     |
+| ------------- | ---------------------------------------- | ---------------------------- |
+| gemini        | GEMINI_API_KEY (free tier is fine)       | THEMI_EVAL_MODEL             |
+| claude        | ANTHROPIC_API_KEY                        | THEMI_EVAL_MODEL             |
+| ollama        | THEMI_EVAL_OLLAMA_MODEL                  | THEMI_EVAL_OLLAMA_URL        |
+| openai_compat | THEMI_EVAL_OPENAI_URL, _MODEL            | THEMI_EVAL_OPENAI_KEY        |
+
+THEMI_EVAL_PACE (seconds between cases) keeps free tiers under their rate
+limits: 6 by default for Gemini, 0 for the rest.
+
+These are read from the environment, then from `.env` (the environment wins),
+so a test key can sit in `.env` instead of a shell history.
+"""
+
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+from themi.settings import read_dotenv
+from themi.storage.secrets import Secret
+
+
+@dataclass(frozen=True)
+class EvalBackend:
+    name: str
+    kind: str
+    model: str = ""
+    base_url: str | None = None
+    api_key: Secret | None = None
+    pace: float = 0.0
+
+
+def backend(name: str) -> EvalBackend | str:
+    """The backend, or why it can't run (a skip reason)."""
+    env = {**read_dotenv(Path(".env")), **os.environ}
+    model = env.get("THEMI_EVAL_MODEL", "")
+    pace = env.get("THEMI_EVAL_PACE")
+    if name == "gemini":
+        if not env.get("GEMINI_API_KEY"):
+            return "set GEMINI_API_KEY to run the evals against Gemini"
+        return EvalBackend(
+            "gemini",
+            "gemini",
+            model,
+            api_key=Secret(env["GEMINI_API_KEY"]),
+            pace=float(pace or 6),
+        )
+    if name == "claude":
+        if not env.get("ANTHROPIC_API_KEY"):
+            return "set ANTHROPIC_API_KEY to run the evals against Claude"
+        return EvalBackend(
+            "claude",
+            "anthropic",
+            model,
+            api_key=Secret(env["ANTHROPIC_API_KEY"]),
+            pace=float(pace or 0),
+        )
+    if name == "ollama":
+        if not env.get("THEMI_EVAL_OLLAMA_MODEL"):
+            return "set THEMI_EVAL_OLLAMA_MODEL to run the evals against Ollama"
+        return EvalBackend(
+            "ollama",
+            "ollama",
+            env["THEMI_EVAL_OLLAMA_MODEL"],
+            base_url=env.get("THEMI_EVAL_OLLAMA_URL"),
+            pace=float(pace or 0),
+        )
+    if name == "openai_compat":
+        if not (env.get("THEMI_EVAL_OPENAI_URL") and env.get("THEMI_EVAL_OPENAI_MODEL")):
+            return "set THEMI_EVAL_OPENAI_URL and THEMI_EVAL_OPENAI_MODEL"
+        key = env.get("THEMI_EVAL_OPENAI_KEY")
+        return EvalBackend(
+            "openai_compat",
+            "openai_compat",
+            env["THEMI_EVAL_OPENAI_MODEL"],
+            base_url=env["THEMI_EVAL_OPENAI_URL"],
+            api_key=Secret(key) if key else None,
+            pace=float(pace or 0),
+        )
+    return f"unknown provider {name!r}: gemini, claude, ollama or openai_compat"

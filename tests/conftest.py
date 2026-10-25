@@ -34,6 +34,11 @@ LAYER_MARKERS = {
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--run-live", action="store_true", help="run tests that hit real services")
     parser.addoption("--run-evals", action="store_true", help="run AI behaviour evals")
+    parser.addoption(
+        "--provider",
+        default="gemini",
+        help="for --run-evals: gemini, claude, ollama or openai_compat (see tests/evals/README.md)",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:

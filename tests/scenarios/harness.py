@@ -16,6 +16,7 @@ Every member's chain for every AI task is primary, then fallback.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -75,7 +76,11 @@ class Scenario:
         gmail: FakeGmail | None = None,
         ourgroceries: FakeOurGroceries | None = None,
         gcal: FakeGcal | None = None,
+        *,
+        real_models: bool = False,
     ) -> None:
+        """`real_models`: the router builds real adapters from each member's AI settings and
+        retries with real waits (the evals); otherwise every model is a ScriptedProvider."""
         self.family = family
         self.telegram = telegram
         self.google = google
@@ -92,13 +97,14 @@ class Scenario:
                 poll_timeout=0,
                 sleep=_no_sleep,
             ),
-            provider_factory=self.models,
-            sleep=_no_sleep,
+            provider_factory=None if real_models else self.models,
+            sleep=asyncio.sleep if real_models else _no_sleep,
             google=_google_config(google, gmail, gcal),
             grocery_list=ourgroceries,
         )
-        for member in (family.erin, family.husband):
-            self.use_scripted_models(member)
+        if not real_models:
+            for member in (family.erin, family.husband):
+                self.use_scripted_models(member)
         self.app.services.site_url = "http://themi.test"
 
     # ----- setup --------------------------------------------------------------

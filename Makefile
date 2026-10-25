@@ -31,9 +31,12 @@ test-all:
 test-live:
 	$(PYTEST) tests/live --run-live
 
+# make evals PROVIDER=gemini (or claude, ollama, openai_compat); see tests/evals/README.md
+PROVIDER ?= gemini
 evals:
-	$(PYTEST) tests/evals --run-evals
+	$(PYTEST) tests/evals --run-evals --provider $(PROVIDER)
 
 cov:
 	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios
 	$(PYTHON) -m coverage report
+	$(PYTHON) tools/check_coverage.py
