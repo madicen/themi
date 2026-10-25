@@ -2,6 +2,7 @@
 
 from themi.accounts.models import (
     TRACKING_INPUTS,
+    BusyTime,
     Device,
     Family,
     LinkedAccount,
@@ -28,6 +29,7 @@ __all__ = [
     "AccountStore",
     "AccountsError",
     "Actor",
+    "BusyTime",
     "Device",
     "Family",
     "InvalidValue",

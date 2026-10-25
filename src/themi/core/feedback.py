@@ -266,6 +266,7 @@ class FeedbackChat:
                 f"{p.topic} until {to_local(p.until, timezone):%a %H:%M}" for p in pauses
             )
             or "none",
+            "busy times": "; ".join(b.label() for b in member.busy_times) or "none",
             "timezone": timezone,
         }
 

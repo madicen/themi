@@ -326,3 +326,25 @@ def test_permissions_use_current_role_not_a_stale_object(family: SeededFamily) -
     store.set_role(family.husband, family.erin.id, Role.MEMBER)
     with pytest.raises(PermissionDenied):
         store.create_member(stale_erin, "Guest")
+
+
+def test_busy_times_are_saved_and_checked(family: SeededFamily) -> None:
+    from datetime import time
+
+    from themi.accounts import BusyTime
+
+    work = BusyTime((0, 1, 2, 3, 4), time(9), time(17))
+    erin = family.store.update_settings(SYSTEM, family.erin.id, busy_times=[work])
+    assert family.store.get_member(erin.id).busy_times == (work,)
+    assert family.husband.busy_times == ()
+    for bad, message in (
+        (BusyTime((), time(9), time(17)), "at least one day"),
+        (BusyTime((7,), time(9), time(17)), "days of the week"),
+        (BusyTime((0,), time(17), time(9)), "end after it starts"),
+    ):
+        with pytest.raises(InvalidValue, match=message):
+            family.store.update_settings(SYSTEM, family.erin.id, busy_times=[bad])
+    with pytest.raises(InvalidValue, match="at most 10"):
+        family.store.update_settings(SYSTEM, family.erin.id, busy_times=[work] * 11)
+    with pytest.raises(PermissionDenied):
+        family.store.update_settings(family.husband, family.erin.id, busy_times=[])

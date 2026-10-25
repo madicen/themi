@@ -3,7 +3,8 @@
 Priorities:
 - `reply`: answers to something the person just said. Sent now, not counted.
 - `urgent`: sent now, even in quiet hours (a tenant emergency, a missing bill).
-- `normal`, `low`: Themi starting a conversation. These wait out quiet hours,
+- `normal`, `low`: Themi starting a conversation. These wait out quiet hours
+  and busy times,
   respect the member's daily limit, and ask the receptivity provider whether
   now is a good moment. `low` is for things that can wait for a strong window
   (the energy engine tells them apart from prompt 19).
@@ -34,8 +35,8 @@ from themi.channels.events import Button
 from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
 from themi.localtime import (
+    free_from,
     next_waking_start,
-    quiet_hours_end,
     start_of_local_day,
     to_utc_iso,
 )
@@ -292,7 +293,7 @@ class Outbox:
             return now
         tz = self._tz
         overdue = deadline is not None and deadline <= now
-        when = quiet_hours_end(member, now, tz)
+        when = free_from(member, now, tz)
         if not overdue and self.sent_today(member.id, now) >= member.daily_limit:
             when = max(when, next_waking_start(member, now, tz))
         if not overdue:
@@ -302,8 +303,8 @@ class Outbox:
         held = self.pauses.held_until(member, kind)  # the person asked: outranks a deadline
         if held is not None:
             when = max(when, held)
-        # Whatever was chosen, it can't land inside quiet hours.
-        return quiet_hours_end(member, when, tz)
+        # Whatever was chosen, it can't land inside quiet hours or a busy time.
+        return free_from(member, when, tz)
 
     def release_held(self, member: Member) -> int:
         """After a pause ends early, let held messages be reconsidered at the next flush."""

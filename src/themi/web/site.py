@@ -20,6 +20,7 @@ Security:
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import time
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -27,7 +28,8 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from themi.accounts import TRACKING_INPUTS, InvalidValue, Member
+from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
+from themi.accounts.models import DAY_NAMES
 from themi.autonomy import Decision
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
@@ -239,6 +241,7 @@ def core_routes(kit: Kit) -> APIRouter:
 
     def settings_values(member: Member, **extra: Any) -> dict[str, Any]:
         return {
+            "day_names": DAY_NAMES,
             "tracking": [
                 (name, TRACKING_LABELS[name], member.tracks(name)) for name in TRACKING_INPUTS
             ],
@@ -277,7 +280,46 @@ def core_routes(kit: Kit) -> APIRouter:
             )
         return kit.redirect("/settings", "Saved.")
 
+    @router.post("/settings/busy")
+    async def add_busy_time(request: Request) -> Response:
+        session, form = await kit.checked(request)
+        member = app.store.get_member(session.member.id)
+        try:
+            busy = BusyTime(
+                tuple(d for d in range(7) if form.get(f"day_{d}") == "on"),
+                _parse_time(str(form.get("start", ""))),
+                _parse_time(str(form.get("end", ""))),
+            )
+            app.store.update_settings(member, member.id, busy_times=[*member.busy_times, busy])
+        except InvalidValue as exc:
+            return kit.page(
+                request,
+                "settings.html",
+                400,
+                member=member,
+                csrf=session.csrf_token,
+                **settings_values(member, error=str(exc)),
+            )
+        return kit.redirect("/settings", f"Busy time added: {busy.label()}.")
+
+    @router.post("/settings/busy/{index}/remove")
+    async def remove_busy_time(request: Request, index: int) -> Response:
+        session, _ = await kit.checked(request)
+        member = app.store.get_member(session.member.id)
+        if 0 <= index < len(member.busy_times):
+            kept = [b for i, b in enumerate(member.busy_times) if i != index]
+            app.store.update_settings(member, member.id, busy_times=kept)
+        return kit.redirect("/settings", "Busy time removed.")
+
     return router
+
+
+def _parse_time(text: str) -> time:
+    try:
+        hours, minutes = text.split(":")
+        return time(int(hours), int(minutes))
+    except ValueError as exc:
+        raise InvalidValue("a busy time needs a start and an end, like 09:00") from exc
 
 
 def _origin(url: str) -> str:

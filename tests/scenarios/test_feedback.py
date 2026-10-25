@@ -147,3 +147,16 @@ async def test_reports_never_keep_sign_in_links(scenario: Scenario) -> None:
     assert token not in item.text and token not in str(item.context)
     assert "/login/[redacted]" in item.text
     assert any("/login/[redacted]" in m["text"] for m in item.context["conversation"])
+
+
+async def test_busy_times_are_in_the_snapshot(scenario: Scenario) -> None:
+    from datetime import time
+
+    from themi.accounts import SYSTEM, BusyTime
+
+    scenario.app.store.update_settings(
+        SYSTEM, scenario.member("Erin").id, busy_times=[BusyTime((5, 6), time(10), time(12))]
+    )
+    await scenario.say("Erin", "/bug test")
+    (item,) = book(scenario).items()
+    assert item.context["settings"]["busy times"] == "Sat, Sun 10:00-12:00"

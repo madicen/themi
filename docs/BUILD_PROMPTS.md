@@ -48,7 +48,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D2 | Simulator: copy a test session | Dev tooling | [x] |
 | F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
 | F2 | Personal rules | Feedback | [x] |
-| F3 | Busy times | Feedback | [ ] |
+| F3 | Busy times | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2247,7 +2247,7 @@ Notes (2026-10-25):
 - The system prompt changed again: re-run the evals when there's quota.
 
 ### F3 · Busy times
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 08, 15, F2
 Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From feedback bug #1:
 "no notifications during work hours (9-5 weekdays)" can't be a rule, because rules don't change
@@ -2264,6 +2264,23 @@ Tests:
   on other days don't apply; the settings form adds and removes windows; validation.
 
 Done when: a Mon-Fri 9-5 busy window holds a nudge until 5 pm. Commit.
+
+Notes (2026-10-25):
+- Migration 0027 adds `members.busy_times` (JSON). `BusyTime(days, start, end)` (0 is Monday,
+  same-day windows; nights are quiet hours) with `covers()` and `label()` ("Mon-Fri
+  09:00-17:00"). `update_settings(busy_times=...)` validates: at least one day, end after
+  start, at most 10.
+- `localtime.free_from()` steps past quiet hours and busy times, including one running into
+  the other. The outbox uses it where it used `quiet_hours_end`. The energy windows treat
+  busy times like quiet hours.
+- Website: a Busy times section on My settings, with `POST /settings/busy` and
+  `/settings/busy/{index}/remove`. Mon-Fri 09:00-17:00 is filled in by default.
+- Each turn's context now says "Themi's own messages wait for: quiet hours ...; busy ...", so
+  the model answers timing questions from the real settings. In bug #1 it made up "Monday
+  afternoons". The system prompt mentions busy times too; re-run the evals.
+- The plan's quiet-hours mentions now include busy times.
+- For the user: add Mon-Fri 09:00-17:00 under My settings, then retire rule 5 on the Rules
+  page. It's a household rule that never changed timing.
 
 ---
 

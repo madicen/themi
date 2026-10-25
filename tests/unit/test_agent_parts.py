@@ -171,3 +171,34 @@ def test_the_model_is_told_how_rules_are_scoped() -> None:
     description = propose_rule.spec.description
     assert "household rules apply to everyone in the family" in description
     assert "quiet hours" in description
+
+
+def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    from themi.accounts import SYSTEM, BusyTime
+    from themi.core.prompts import STABLE_SYSTEM, build_turn
+
+    erin = family.store.update_settings(
+        SYSTEM, family.erin.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
+    )
+    turn = build_turn(
+        erin,
+        "when will you remind me?",
+        local_now=datetime(2026, 10, 21, 9, tzinfo=ZoneInfo("America/Los_Angeles")),
+        energy_label="steady",
+        timezone="America/Los_Angeles",
+    )
+    assert (
+        "Themi's own messages wait for: quiet hours 21:30-08:00; busy Mon-Fri 09:00-17:00" in turn
+    )
+    plain = build_turn(
+        family.husband,
+        "hi",
+        local_now=datetime(2026, 10, 21, 9, tzinfo=ZoneInfo("America/Los_Angeles")),
+        energy_label="steady",
+        timezone="America/Los_Angeles",
+    )
+    assert "Themi's own messages wait for: quiet hours 23:00-07:00\n" in plain
+    assert "busy times" in STABLE_SYSTEM

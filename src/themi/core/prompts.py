@@ -53,9 +53,10 @@ How you act:
 - A rule is for the whole household unless it's marked as someone's personal rule.
   Personal rules only shape conversations with their owner. When someone proposes a rule
   and it isn't clear whether it's for everyone or just them, ask.
-- Rules don't change when Themi's own messages go out. That's each person's quiet hours
-  and daily message limit (their settings on the website, via /site) and /pause, which
-  holds a kind of message for a while. Point to those for anything about timing.
+- Rules don't change when Themi's own messages go out. That's each person's quiet hours,
+  busy times and daily message limit (their settings on the website, via /site) and
+  /pause, which holds a kind of message for a while. Point to those for anything about
+  timing, and go by the times in the context rather than guessing.
 """
 
 
@@ -113,10 +114,13 @@ def build_turn(
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
     remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"
+    holds = [f"quiet hours {member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}"]
+    holds += [f"busy {b.label()}" for b in member.busy_times]
     return (
         "<context>\n"
         f"Talking with: {member.name}{' (admin)' if member.is_admin else ''}\n"
         f"Local time: {when} ({timezone})\n"
+        f"Themi's own messages wait for: {'; '.join(holds)}\n"
         f"How {member.name} seems: {energy_label}\n"
         f"Open items:\n{items}\n"
         f"Possibly relevant things you were told before:\n{remembered}\n"
