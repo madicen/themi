@@ -43,7 +43,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [x] |
-| 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [ ] |
+| 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [~] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -1944,7 +1944,7 @@ Notes (2026-10-25):
       this key 20 requests a day, which can't carry a household. The flash-lite models did
       fine here, so the default model probably needs to change. That's the user's call.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
-Status: [ ]
+Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28
 Read first: "Deployment and hosting"; "Setup checklists" (hosting, backups).
 
@@ -1972,6 +1972,56 @@ Tests:
 
 Done when: the deploy guide has been followed for real and Themi runs in the cloud. Gate: two
 weeks of daily use by both of you before starting Phase 2. Commit.
+
+Notes (2026-10-25):
+- `themi.backup`:
+    - `S3Client` is an httpx client with AWS SigV4 and path-style addresses, which R2 and
+      B2 both accept. The signer is pinned to AWS's published test vector.
+    - `Backups.create` makes a snapshot: the SQLite online backup (`Database.backup_to`),
+      gzipped, then Fernet-encrypted with `THEMI_SECRET_KEY` (`Cipher.encrypt_bytes`).
+      Names are `<prefix>themi-<UTC stamp>.sqlite.gz.enc`.
+    - `prune` deletes snapshots older than `THEMI_BACKUP_KEEP_DAYS` (30) but always keeps
+      the newest. Other files under the prefix are left alone.
+    - `restore` decrypts and decompresses, runs `PRAGMA integrity_check`, reads the schema
+      version, and refuses a snapshot from a newer Themi. With `--yes` it moves the current
+      database aside (`.before-restore-<stamp>`), drops the old `-wal` and `-shm` files,
+      and puts the snapshot in place. With `--dry-run` it only reports.
+- `BackupJob` (`backup.nightly`, an hourly check) backs up when the last good backup is
+  more than 23 hours old, so restarts don't skip or double a night. Each attempt goes in
+  `backup_runs` (migration 0024). If the last good backup is over 2 days old, admins get
+  one Telegram message a day.
+- CLI: `themi backup [--list]`, and `themi restore <snapshot|latest> [--dry-run] [--yes]`.
+- Settings: `THEMI_BACKUP_ENDPOINT`, `_BUCKET`, `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KEY`
+  (all four), plus `_REGION` (default `auto`), `_PREFIX` and `_KEEP_DAYS`. The endpoint
+  must be https, except localhost for the fakes.
+- Tests: `tests/fakes/s3_api.py` is an HTTP fake that checks every signature. Covered:
+  the round trip (secrets come back, decryptable with the same key), no plaintext in the
+  snapshot, wrong key or tampered data, a newer schema refused, the old database kept,
+  retention including list paging, the job's once-a-day timing and failure warnings, and
+  the CLI.
+- `.github/workflows/release.yml` publishes to GHCR on `v*` tags (`ghcr.io/<owner>/<repo>`,
+  semver tags and latest), after the container smoke test. `deploy/compose.yml` runs the
+  published image (`THEMI_IMAGE`, `THEMI_VERSION`, a 700 MB memory limit).
+- `docs/DEPLOY.md` covers the host choice, the server, Docker, getting the image, Funnel,
+  backups (R2 and B2), secrets, upgrades, the restore drill and troubleshooting. Free-tier
+  terms were checked on 2026-10-25, with sources cited. Corrections to the plan:
+    - **The e2-micro isn't free.** Its external IPv4 costs $0.005 an hour (about $3.65 a
+      month) under Google's VPC pricing, and the console's default balanced disk isn't
+      covered. The guide says to use a standard disk and budget for the IP.
+    - Oracle's A1 allowance was reportedly halved in June 2026, and Hetzner's entry VM is
+      now about €5.49 a month.
+- A slowdown found while testing: `themi.settings` imported `themi.backup.job`, and through
+  it the outbox. That made every `themi` command take 2.8 s, against 0.35 s. The
+  package's `__init__` no longer imports the job, and
+  `test_architecture.test_reading_settings_stays_light` guards it.
+- Not run here: there's no Docker on this machine, so the image build and smoke test first
+  run in CI. The repo has no GitHub remote yet, so the GHCR publishing waits until it's
+  pushed.
+- Still to do before `[x]`, for the user:
+    1. Push the repo to GitHub and tag a release, or build on the server.
+    2. Follow `docs/DEPLOY.md` for real.
+    3. Run the restore drill.
+    4. The gate: two weeks of daily use by both before Phase 2 (prompt 30).
 
 ---
 

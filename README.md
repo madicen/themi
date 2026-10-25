@@ -93,6 +93,11 @@ OurGroceries app as well, put the account's login in `.env` as `OURGROCERIES_USE
 `pip install -e '.[ourgroceries]'`. It's unofficial, so if OurGroceries changes, the mirror
 logs the problem and keeps retrying while Themi's own list carries on.
 
+### In the cloud
+
+`docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly
+encrypted backups (`themi backup`, `themi restore`), upgrades and a restore drill.
+
 ### With Docker
 
 ```sh
