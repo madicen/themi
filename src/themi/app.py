@@ -27,10 +27,12 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
+from themi.core.calls import VendorCalls
 from themi.core.commands import Commands
 from themi.core.expected import ExpectedEmails
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
+from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.pantry import Pantry
 from themi.core.rules import Rulebook
@@ -120,6 +122,8 @@ def build_app(
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    Meals(services, pantry).install()
+    VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
     if services.google is not None:
         services.calendar = CalendarSync(store, services.google)

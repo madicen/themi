@@ -35,6 +35,9 @@ SNOOZE_FOR = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
 # Titles are often commands ("Call the vet"), so they never open a sentence here.
 PROMPT_TEXT = "On the list for you, whenever it suits: {title}. Done already, or later?"
+PROMPT_WITH_DETAILS = (
+    "On the list for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
+)
 DONE_TEXT = "Marked done: {title}. Thank you."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
@@ -60,6 +63,8 @@ class Task:
 TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
+# Extra text to send with a task's nudge (a call script, say), or None.
+TaskDetails = Callable[[Task], str | None]
 
 
 def _task_from_row(row: dict[str, Any]) -> Task:
@@ -84,6 +89,7 @@ class TaskBoard:
         self.store = services.store
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
+        self.details: list[TaskDetails] = []
 
     @property
     def outbox(self) -> Outbox:
@@ -134,7 +140,10 @@ class TaskBoard:
         due_on: date | None = None,
         *,
         interactive: bool = False,
+        nudge: bool = True,
     ) -> Task:
+        """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
+        (after attaching details, like a call script)."""
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
@@ -154,7 +163,8 @@ class TaskBoard:
                 to_utc_iso(clock.now()),
             ),
         )
-        await self.prompt(self.get(task_id))
+        if nudge:
+            await self.prompt(self.get(task_id))
         task = self.get(task_id)
         await self._changed(task, "created", interactive)
         return task
@@ -170,9 +180,15 @@ class TaskBoard:
         if task.assignee is None:
             return
         member = self.store.get_member(task.assignee)
+        details = "\n\n".join(d for source in self.details if (d := source(task)))
+        text = (
+            PROMPT_WITH_DETAILS.format(title=task.title, details=details)
+            if details
+            else PROMPT_TEXT.format(title=task.title)
+        )
         result = await self.outbox.send(
             member,
-            PROMPT_TEXT.format(title=task.title),
+            text,
             priority=Priority.NORMAL,
             kind="task",
             buttons=[
