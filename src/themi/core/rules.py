@@ -377,7 +377,10 @@ class Rulebook:
     "Capture a household rule as a draft for this person to lock in. Use it when they're "
     "settling how something should work from now on ('always archive store promos', "
     "'remind me about bins on Tuesday evenings'). It sends them the proposal; nothing takes "
-    "effect until they lock it in. To refine an earlier draft, pass its rule_id (else 0).",
+    "effect until they lock it in. A locked rule applies to everyone in the family; there "
+    "are no personal rules. It can't change when Themi's own messages go out: that's quiet "
+    "hours and the daily limit in their website settings, or /pause. To refine an earlier "
+    "draft, pass its rule_id (else 0).",
     {
         "summary": {
             "type": "string",

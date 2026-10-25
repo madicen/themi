@@ -2191,6 +2191,18 @@ Notes (2026-10-25):
 - The plan's chat commands table lists `/bug` and `/idea` (added 2026-10-25, at the user's
   request).
 - A running `themi run` picks this up only after a restart.
+- From the first real report (bug #1, 2026-10-25), failing tests first:
+    - Sign-in links (`/login/<token>`) and Google's OAuth `state=` are now in
+      `themi.logs.redact`, which also covers each line of chat history sent to the model and
+      feedback snapshots. Before, a live /site link went to the AI provider with the next few
+      turns, and reports kept the links.
+    - The model claimed a locked rule was "just for you". Rules are household-wide (the plan:
+      "sent to the AI model with every request"), and nothing in the prompt said so. The
+      system prompt and `propose_rule` now say there are no personal rules, and that quiet
+      hours, the daily limit (website settings) and /pause control when Themi's messages go
+      out. Re-run the evals when there's quota, since the prompt changed.
+    - Memories already have a personal scope (`remember_fact` with `about: personal`); the
+      report's "extra spoon" fact was stored for that person only.
 
 ---
 

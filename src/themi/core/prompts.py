@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from themi.accounts.models import LoggedMessage, Member
+from themi.logs import redact
 
 STABLE_SYSTEM = """\
 You are Themi, a household assistant for one family, talking with them over Telegram.
@@ -49,6 +50,11 @@ How you act:
 - When someone is settling how something should work from now on, capture it with
   propose_rule. A draft has no effect until they lock it in themselves; never treat a
   draft as agreed, and never lock one on anyone's behalf.
+- There are no personal rules: every locked rule applies to everyone in the family, and
+  is shown to everyone. If someone asks for a rule just for themselves, say so plainly.
+- Rules don't change when Themi's own messages go out. That's each person's quiet hours
+  and daily message limit (their settings on the website, via /site) and /pause, which
+  holds a kind of message for a while. Point to those for anything about timing.
 """
 
 
@@ -60,7 +66,10 @@ class OpenItem:
 def build_system(rules: Sequence[str] = (), facts: Sequence[str] = ()) -> str:
     parts = [STABLE_SYSTEM]
     if rules:
-        parts.append("Locked household rules:\n" + "\n".join(f"- {r}" for r in rules))
+        parts.append(
+            "Locked household rules (they apply to everyone in the family):\n"
+            + "\n".join(f"- {r}" for r in rules)
+        )
     if facts:
         parts.append("Things to keep in mind:\n" + "\n".join(f"- {f}" for f in facts))
     return "\n\n".join(parts)
@@ -88,7 +97,7 @@ def build_turn(
     lines = []
     for logged in history:
         speaker = member.name if logged.direction == "in" else "Themi"
-        lines.append(f"{speaker}: {logged.text}")
+        lines.append(f"{speaker}: {redact(logged.text)}")  # no live sign-in links to the model
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
     remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"

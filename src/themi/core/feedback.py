@@ -29,7 +29,7 @@ from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
-from themi.logs import recent_logs
+from themi.logs import recent_logs, redact
 from themi.storage.db import Database
 
 if TYPE_CHECKING:
@@ -199,7 +199,7 @@ class FeedbackChat:
         reply_to_message_id: int | None = None,
     ) -> int:
         context = self.snapshot(member, via, reply_to_message_id)
-        return self.book.record(member.id, kind, text, context)
+        return self.book.record(member.id, kind, redact(text), context)
 
     def snapshot(
         self, member: Member, via: str, reply_to_message_id: int | None = None
@@ -216,7 +216,7 @@ class FeedbackChat:
                 "at": to_local(m.created_at, timezone).strftime("%a %H:%M"),
                 "direction": m.direction,
                 "kind": m.kind,
-                "text": m.text,
+                "text": redact(m.text),  # no sign-in links or keys in a report
             }
             for m in s.store.recent_messages(member.id, CONVERSATION_MESSAGES)
         ]
@@ -250,7 +250,7 @@ class FeedbackChat:
         return {
             "at": moment.strftime("%a %H:%M"),
             "kind": f"{'from Themi' if row['direction'] == 'out' else 'their own'} {row['kind']}",
-            "text": row["text"],
+            "text": redact(row["text"]),
         }
 
     def _settings(self, member: Member, timezone: str) -> dict[str, str]:

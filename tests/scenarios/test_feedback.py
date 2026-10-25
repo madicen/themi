@@ -134,3 +134,16 @@ async def test_a_reused_message_number_points_at_the_newest_message(scenario: Sc
     await scenario.say("Erin", "/bug wrong", reply_to_text="The list is empty.")
     (item,) = book(scenario).items()
     assert item.context["replied_to"]["text"] == "The list is empty."
+
+
+async def test_reports_never_keep_sign_in_links(scenario: Scenario) -> None:
+    from tests.fixtures.web import web_client
+
+    async with web_client(scenario):
+        (reply,) = await scenario.say("Erin", "/site")
+    token = reply.splitlines()[-1].rsplit("/", 1)[-1]
+    await scenario.say("Erin", f"/bug the link {reply.splitlines()[-1]} looked odd")
+    (item,) = book(scenario).items()
+    assert token not in item.text and token not in str(item.context)
+    assert "/login/[redacted]" in item.text
+    assert any("/login/[redacted]" in m["text"] for m in item.context["conversation"])
