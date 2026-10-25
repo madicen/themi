@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
 from datetime import datetime, time, timedelta
 from typing import Any
@@ -49,6 +50,7 @@ PROVIDERS = ("gmail",)
 DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie")
 APPLIANCES = ("washer", "dryer", "dishwasher", "feeder", "litter_box")
 TASK_KINDS = ("text", "call", "physical", "errand")
+EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 class AccountsError(Exception):
@@ -109,6 +111,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         tracking={name: json.loads(row["tracking"]).get(name, True) for name in TRACKING_INPUTS},
         created_at=_parse_dt(row["created_at"]),
         kind_costs={k: float(v) for k, v in json.loads(row["kind_costs"]).items()},
+        email=row["email"],
     )
 
 
@@ -270,6 +273,27 @@ class AccountStore:
     def member_by_telegram(self, telegram_user_id: int) -> Member | None:
         row = self.db.one("SELECT * FROM members WHERE telegram_user_id = ?", (telegram_user_id,))
         return _member_from_row(row) if row else None
+
+    def member_by_email(self, email: str) -> Member | None:
+        row = self.db.one("SELECT * FROM members WHERE lower(email) = ?", (email.strip().lower(),))
+        return _member_from_row(row) if row else None
+
+    def set_email(self, actor: Actor, member_id: int, email: str | None) -> Member:
+        """The Google address a member signs in with. Admins set it (and SYSTEM, at setup)."""
+        self._require_admin(actor)
+        self.get_member(member_id)
+        address = (email or "").strip().lower() or None
+        if address is not None:
+            if not EMAIL_PATTERN.fullmatch(address):
+                raise InvalidValue(f"{address!r} doesn't look like an email address")
+            other = self.member_by_email(address)
+            if other is not None and other.id != member_id:
+                raise InvalidValue(f"{address} already belongs to {other.name}")
+        self.db.execute(
+            "UPDATE members SET email = ?, updated_at = ? WHERE id = ?",
+            (address, _iso(clock.now()), member_id),
+        )
+        return self.get_member(member_id)
 
     def create_member(self, actor: Actor, name: str, role: Role = Role.MEMBER) -> Member:
         if self.get_family() is None:
@@ -458,6 +482,20 @@ class AccountStore:
         self.db.execute(
             "UPDATE linked_accounts SET refresh_token = ? WHERE id = ?",
             (self._cipher.encrypt(refresh_token), account_id),
+        )
+
+    def linked_account_by_address(self, provider: str, address: str) -> LinkedAccount | None:
+        row = self.db.one(
+            "SELECT * FROM linked_accounts WHERE provider = ? AND address = ?",
+            (provider, address.strip().lower()),
+        )
+        return _account_from_row(row) if row else None
+
+    def set_linked_account_enabled(self, account_id: int, enabled: bool) -> None:
+        """Off when Google stops accepting the token; on again after a fresh link."""
+        self.get_linked_account(account_id)
+        self.db.execute(
+            "UPDATE linked_accounts SET enabled = ? WHERE id = ?", (int(enabled), account_id)
         )
 
     def remove_linked_account(self, actor: Actor, account_id: int) -> None:

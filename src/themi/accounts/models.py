@@ -45,6 +45,7 @@ class Member:
     tracking: dict[str, bool] = field(hash=False)
     created_at: datetime
     kind_costs: dict[str, float] = field(default_factory=dict, hash=False)
+    email: str | None = None  # Google sign-in address for the website
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)
