@@ -1,11 +1,13 @@
 # Uses .venv if present, otherwise the python on PATH (as in CI).
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTEST := $(PYTHON) -m pytest
+# Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
+VENV_PYTHON ?= python3
 
 .PHONY: venv install fmt lint test test-all test-live evals cov
 
 venv:
-	python3 -m venv .venv
+	$(VENV_PYTHON) -m venv .venv
 
 install:
 	$(PYTHON) -m pip install -e '.[dev]'
