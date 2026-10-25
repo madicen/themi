@@ -18,7 +18,8 @@ import uvicorn
 from themi import clock
 from themi.app import App
 from themi.scheduler import Scheduler
-from themi.web import HealthSources, create_app
+from themi.web import HealthSources, create_app, site_base_url
+from themi.web.site import SiteContext
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class Runtime:
         port: int,
         telegram_enabled: bool = True,
         scheduler_tick: timedelta = SCHEDULER_TICK,
+        public_url: str = "",
     ) -> None:
         self.app = app
         self.telegram_enabled = telegram_enabled
@@ -44,7 +46,12 @@ class Runtime:
         for task in app.periodic:
             self.scheduler.every(task.name, task.every, task.run)
         self.web = create_app(
-            HealthSources(app.db, app.channel if telegram_enabled else None, clock.now())
+            HealthSources(app.db, app.channel if telegram_enabled else None, clock.now()),
+            SiteContext(
+                app,
+                base_url=site_base_url(public_url, host, port),
+                secure_cookies=public_url.startswith("https://"),
+            ),
         )
         self.server = uvicorn.Server(
             uvicorn.Config(

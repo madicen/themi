@@ -14,6 +14,7 @@ pytest_plugins = [
     "tests.fixtures.family",
     "tests.fakes.http_ai",
     "tests.fakes.telegram_api",
+    "tests.scenarios.harness",
 ]
 
 # Folder -> marker, so a test's layer is decided by where it lives.

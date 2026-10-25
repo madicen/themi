@@ -15,9 +15,11 @@ Every member's chain for every AI task is primary, then fallback.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
@@ -200,3 +202,12 @@ class Scenario:
     def typing_shown(self, name: str) -> bool:
         chat = self.member(name).telegram_user_id
         return any(int(p["chat_id"]) == chat for p in self.telegram.calls("sendChatAction"))
+
+
+@pytest.fixture
+async def scenario(family: SeededFamily, fake_telegram: FakeTelegram) -> AsyncIterator[Scenario]:
+    """The full app, started, for any test layer that wants it."""
+    s = Scenario(family, fake_telegram)
+    await s.start()
+    yield s
+    await s.stop()

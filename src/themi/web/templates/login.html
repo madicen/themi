@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Themi{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Sign in to Themi</h1>
+  <p>This link signs you in once. Continue whenever you're ready.</p>
+  <form method="post" action="/login/{{ token }}">
+    <button class="primary">Continue</button>
+  </form>
+</section>
+{% endblock %}

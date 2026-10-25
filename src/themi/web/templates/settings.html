@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My settings · Themi{% endblock %}
+{% block content %}
+<h1>My settings</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/settings" class="card settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+
+  <fieldset>
+    <legend>Quiet hours</legend>
+    <p class="muted">Nothing that can wait reaches you between these times.</p>
+    <label>From <input type="time" name="quiet_start" value="{{ member.quiet_start.strftime('%H:%M') }}" required></label>
+    <label>Until <input type="time" name="quiet_end" value="{{ member.quiet_end.strftime('%H:%M') }}" required></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>How often Themi starts a conversation</legend>
+    <label>At most <input type="number" name="daily_limit" min="0" max="50" value="{{ member.daily_limit }}" required> messages a day</label>
+    <p class="muted">Replies to you and urgent alerts don't count.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Gentle phrasing</legend>
+    <label class="check"><input type="checkbox" name="pda_enabled" {% if member.pda_enabled %}checked{% endif %}> Soften anything that reads like an instruction</label>
+    <label>How much
+      <select name="pda_strength">
+        {% for level, words in strengths.items() %}
+        <option value="{{ level }}" {% if level == member.pda_strength %}selected{% endif %}>{{ words }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="muted">Telling Themi "that was too pushy" or "just tell me" adjusts this too.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>What Themi notices about you</legend>
+    {% for name, words, on in tracking %}
+    <label class="check"><input type="checkbox" name="track_{{ name }}" {% if on %}checked{% endif %}> {{ words }}</label>
+    {% endfor %}
+    <p class="muted">Only you see these. Your partner never sees what's noticed about you.</p>
+  </fieldset>
+
+  <button class="primary">Save</button>
+</form>
+{% endblock %}

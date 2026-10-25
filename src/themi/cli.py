@@ -28,6 +28,10 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
+    login = commands.add_parser(
+        "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
+    )
+    login.add_argument("name")
     return parser
 
 
@@ -68,6 +72,7 @@ def _run() -> None:
         host=settings.http_host,
         port=settings.http_port,
         telegram_enabled=settings.telegram_enabled,
+        public_url=settings.public_url,
     )
 
     async def main() -> None:
@@ -75,6 +80,21 @@ def _run() -> None:
         await runtime.run()
 
     asyncio.run(main())
+
+
+def _login_link(name: str) -> str:
+    from themi.accounts import AccountsError
+    from themi.settings import Settings
+    from themi.web import site_base_url
+    from themi.web.auth import WebAuth
+
+    store = _store()
+    member = store.member_by_name(name)
+    if member is None:
+        raise AccountsError(f"there's no member called {name}")
+    settings = Settings.load()
+    base = site_base_url(settings.public_url, settings.http_host, settings.http_port)
+    return f"{base}/login/{WebAuth(store).create_link_token(member)}"
 
 
 def _ask(question: str, default: str | None) -> str:
@@ -100,6 +120,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(pairing_instructions(member, code))
         elif args.command == "run":
             _run()
+        elif args.command == "login-link":
+            print(_login_link(args.name))
         else:
             parser.print_help()
     except (SettingsError, AccountsError) as exc:

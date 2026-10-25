@@ -88,3 +88,23 @@ def test_run_requires_a_telegram_token(tmp_path) -> None:
     )
     assert result.returncode == 1
     assert "TELEGRAM_BOT_TOKEN" in result.stderr and "Traceback" not in result.stderr
+
+
+def test_login_link_prints_a_working_url(tmp_path) -> None:
+    env = _env(tmp_path)
+    run = {"capture_output": True, "text": True, "env": env, "cwd": tmp_path}
+    subprocess.run(
+        [sys.executable, "-m", "themi", "init"],
+        input="Household\nUTC\n0\nErin\n",
+        check=True,
+        **run,
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "themi", "login-link", "Erin"], check=True, **run
+    )
+    url = result.stdout.strip()
+    assert url.startswith("http://127.0.0.1:8080/login/")
+    missing = subprocess.run(
+        [sys.executable, "-m", "themi", "login-link", "Nobody"], check=False, **run
+    )
+    assert missing.returncode == 1 and "no member called Nobody" in missing.stderr

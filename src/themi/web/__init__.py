@@ -1,10 +1,10 @@
-"""Themi's HTTP side: the health check now, the management website from prompt 15."""
+"""Themi's HTTP side: the health check and the management website."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 from themi import clock
 from themi.storage import migrations
 from themi.storage.db import Database
+
+if TYPE_CHECKING:
+    from themi.web.site import SiteContext
 
 PollerState = Literal["alive", "stalled", "starting", "disabled"]
 # A healthy long poll returns at least every poll_timeout seconds; allow slack.
@@ -39,7 +42,7 @@ def poller_state(sources: HealthSources, now: datetime) -> PollerState:
     return "alive" if now - last < STALL_AFTER else "stalled"
 
 
-def create_app(sources: HealthSources) -> FastAPI:
+def create_app(sources: HealthSources, site: SiteContext | None = None) -> FastAPI:
     app = FastAPI(title="Themi", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/health")
@@ -66,4 +69,16 @@ def create_app(sources: HealthSources) -> FastAPI:
         }
         return JSONResponse(body, status_code=200 if ok else 503)
 
+    if site is not None:
+        from themi.web.site import install_site
+
+        install_site(app, site)
     return app
+
+
+def site_base_url(public_url: str, host: str, port: int) -> str:
+    """Where people reach the website: the public URL if set, else the local address."""
+    if public_url:
+        return public_url.rstrip("/")
+    shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    return f"http://{shown}:{port}"

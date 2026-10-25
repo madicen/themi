@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Hi {{ member.name }}</h1>
+
+{% if alerts %}
+<section class="alerts">
+  {% for alert in alerts %}<p class="alert">{{ alert }}</p>{% endfor %}
+</section>
+{% endif %}
+
+<section>
+  <h2>Waiting on you</h2>
+  {% for action in actions %}
+    {% include "_action_card.html" %}
+  {% else %}
+    <p class="muted">Nothing is waiting on you at the moment.</p>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Recently</h2>
+  {% if activity %}
+  <ul class="activity">
+    {% for item in activity %}
+    <li><span class="when">{{ item.created_at | local_time }}</span> {{ item.words }}: {{ item.summary }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

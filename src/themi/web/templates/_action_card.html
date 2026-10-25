@@ -1,0 +1,28 @@
+<article class="card action" id="action-{{ action.id }}">
+  <p class="summary">{{ action.summary }}</p>
+  {% if result %}
+  <p class="result">{{ result }}</p>
+  {% elif action.status in ("pending", "snoozed", "failed") %}
+  {% if action.status == "snoozed" %}<p class="muted">Put off until {{ action.snoozed_until | local_time }}</p>{% endif %}
+  {% if action.status == "failed" %}<p class="muted">This didn't go through last time.</p>{% endif %}
+  <div class="buttons">
+    <form method="post" action="/actions/{{ action.id }}/approve"
+          hx-post="/actions/{{ action.id }}/approve" hx-target="#action-{{ action.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary">{% if action.status == "failed" %}Try again{% else %}Go ahead{% endif %}</button>
+    </form>
+    {% if action.status != "failed" %}
+    <form method="post" action="/actions/{{ action.id }}/snooze"
+          hx-post="/actions/{{ action.id }}/snooze" hx-target="#action-{{ action.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Not now</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/actions/{{ action.id }}/decline"
+          hx-post="/actions/{{ action.id }}/decline" hx-target="#action-{{ action.id }}" hx-swap="outerHTML">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="quiet">Leave it</button>
+    </form>
+  </div>
+  {% endif %}
+</article>
