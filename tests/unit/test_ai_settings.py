@@ -69,8 +69,7 @@ def test_defaults_are_gemini_free_tier(family: SeededFamily, ai: AISettingsStore
     assert backend.supports_audio and not backend.has_key
     for task in AITask:
         (entry,) = ai.resolve(family.erin.id, task)
-        expected = "gemini-3.5-flash-lite" if task is AITask.TRANSCRIPTION else "gemini-3.8-flash"
-        assert entry.config.resolved_model == expected
+        assert entry.config.resolved_model == "gemini-3.5-flash-lite"
     assert ai.backends(family.husband.id) == []
 
 
@@ -95,7 +94,7 @@ def test_chains_resolve_in_order_with_keys_and_model_overrides(
         "claude-sonnet-5-5",
     )
     assert first.config.api_key == Secret("k1") and first.config.effort == "low"
-    assert (second.label, second.config.resolved_model) == ("Gemini", "gemini-3.8-flash")
+    assert (second.label, second.config.resolved_model) == ("Gemini", "gemini-3.5-flash-lite")
     assert ai.resolve(erin.id, AITask.EMAIL_TRIAGE) == []
 
 

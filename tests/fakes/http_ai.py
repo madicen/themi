@@ -229,7 +229,7 @@ def gemini_response(
             }
         ],
         "usageMetadata": {"promptTokenCount": 12, "candidatesTokenCount": 7, "totalTokenCount": 19},
-        "modelVersion": "gemini-3.8-flash",
+        "modelVersion": "gemini-3.5-flash-lite",
     }
     if prompt_feedback is not None:
         response = {"promptFeedback": prompt_feedback, "usageMetadata": response["usageMetadata"]}

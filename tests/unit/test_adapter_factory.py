@@ -20,7 +20,7 @@ def test_defaults_per_kind() -> None:
 
     gemini = build_provider(AdapterConfig("gemini", api_key=Secret("k")))
     assert isinstance(gemini, GeminiProvider)
-    assert gemini.model == "gemini-3.8-flash" and gemini.capabilities.audio
+    assert gemini.model == "gemini-3.5-flash-lite" and gemini.capabilities.audio
 
 
 def test_claude_effort_is_configurable() -> None:

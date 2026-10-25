@@ -70,6 +70,9 @@ and record the change here.
 - Tests: pytest, pytest-asyncio, Hypothesis, coverage.py. Lint/format: ruff. Types: pyright.
 - Version control: jj (colocated with git). Each major change is its own `jj commit`.
 - One process runs the bot, scheduler and website on one asyncio loop.
+- The default AI backend is Gemini's free tier on `gemini-3.5-flash-lite` for every task.
+  Changed from the plan's `gemini-3.8-flash` with the user's agreement on 2026-10-25: that
+  model allowed 20 free requests a day, and flash-lite scored well in prompt 28's evals.
 
 ---
 
@@ -1944,6 +1947,8 @@ Notes (2026-10-25):
     - The default backend: the plan's default, Gemini free tier on `gemini-3.8-flash`, gave
       this key 20 requests a day, which can't carry a household. The flash-lite models did
       fine here, so the default model probably needs to change. That's the user's call.
+      Decided 2026-10-25: the default is now `gemini-3.5-flash-lite` (see "Fixed technical
+      choices").
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28
@@ -2074,8 +2079,8 @@ Notes (2026-10-25):
 - `FakeTelegram(port=)` and `BackgroundServer(app, port=)` can bind a fixed port.
 - Tested live on 2026-10-25: the chat, a skip and the website link all work. The one Gemini
   call hit the key's free-tier daily limit (20 requests a day for `gemini-3.8-flash`), and
-  Themi sent its "busy" reply. Real replies need quota: wait for the daily reset, or choose a
-  model with more free quota on the website's AI page.
+  Themi sent its "busy" reply. The default model is now `gemini-3.5-flash-lite`, which has
+  more free quota.
 - Found while setting up: the local `.venv` still had an editable install pointing at the
   repo's old `working-memory` path, so `python -m themi` failed outside the repo. Running
   `make install` fixed it.
