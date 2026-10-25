@@ -221,6 +221,10 @@ Notes:
   `.husband` and `.store`, both paired with Telegram ids 1001 and 1002) are available to every
   test through `pytest_plugins`. For harnesses, use `seed_family(make_store())`. The husband's
   fixture name is just "Husband".
+- Added 2026-10-25: `themi init` and `themi invite` also print a tap-to-start link,
+  `https://t.me/<bot>?start=<code>` (`setup.start_link`). The CLI looks up the bot's username
+  with Telegram's `getMe` (`TELEGRAM_API_URL` is honoured, so tests use the fake). Without a
+  token, or if Telegram can't be reached, the link is left out and the code prints as before.
 
 ### 04 · AI layer: interface, scripted provider, retry policy
 Status: [x] (2026-10-24)

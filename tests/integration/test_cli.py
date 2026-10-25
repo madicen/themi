@@ -108,3 +108,35 @@ def test_login_link_prints_a_working_url(tmp_path) -> None:
         [sys.executable, "-m", "themi", "login-link", "Nobody"], check=False, **run
     )
     assert missing.returncode == 1 and "no member called Nobody" in missing.stderr
+
+
+def test_invite_prints_a_tap_to_start_link_for_the_bot(tmp_path, fake_telegram) -> None:
+    from tests.fakes.telegram_api import BOT_TOKEN, BOT_USER
+
+    env = {**_env(tmp_path), "TELEGRAM_BOT_TOKEN": BOT_TOKEN}
+    run = {"capture_output": True, "text": True, "cwd": tmp_path}
+    subprocess.run(
+        [sys.executable, "-m", "themi", "init"],
+        input="The Household\nAmerica/Chicago\n0\nErin\n",
+        check=True,
+        env={**env, "TELEGRAM_API_URL": fake_telegram.base_url.removesuffix("/bot")},
+        **run,
+    )
+    linked = subprocess.run(
+        [sys.executable, "-m", "themi", "invite", "Husband"],
+        check=True,
+        env={**env, "TELEGRAM_API_URL": fake_telegram.base_url.removesuffix("/bot")},
+        **run,
+    )
+    code = linked.stdout.split("Invite code for Husband: ")[1].split()[0]
+    assert f"https://t.me/{BOT_USER['username']}?start={code}" in linked.stdout
+    assert BOT_TOKEN not in linked.stdout + linked.stderr
+
+    # Telegram unreachable: the code still prints, just without the link.
+    offline = subprocess.run(
+        [sys.executable, "-m", "themi", "invite", "Husband"],
+        check=True,
+        env={**env, "TELEGRAM_API_URL": "http://127.0.0.1:9"},
+        **run,
+    )
+    assert "Invite code for Husband:" in offline.stdout and "t.me" not in offline.stdout

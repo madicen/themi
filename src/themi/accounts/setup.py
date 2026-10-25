@@ -40,15 +40,27 @@ def _ask_until_valid[T](
             say(f"  {exc}")
 
 
-def pairing_instructions(member: Member, code: str) -> str:
-    return (
-        f"Invite code for {member.name}: {code}\n"
-        f"Open the Themi bot in Telegram and send:  /start {code}\n"
-        "The code works once and expires in 24 hours."
-    )
+def start_link(bot_username: str, code: str) -> str:
+    """A t.me link that opens the bot with a Start button which sends `/start <code>`."""
+    return f"https://t.me/{bot_username.lstrip('@')}?start={code}"
 
 
-def run_init(store: AccountStore, ask: Ask, say: Say) -> tuple[Member, str]:
+def pairing_instructions(member: Member, code: str, bot_username: str | None = None) -> str:
+    lines = [
+        f"Invite code for {member.name}: {code}",
+        f"Open the Themi bot in Telegram and send:  /start {code}",
+    ]
+    if bot_username:
+        lines.append(
+            f"Or tap this link on their phone and press Start:  {start_link(bot_username, code)}"
+        )
+    lines.append("The code works once and expires in 24 hours.")
+    return "\n".join(lines)
+
+
+def run_init(
+    store: AccountStore, ask: Ask, say: Say, bot_username: str | None = None
+) -> tuple[Member, str]:
     """Create the family and its first admin. Returns the admin and their invite code."""
     if store.get_family() is not None:
         raise AccountsError("this server already has a family; use `themi invite` to add people")
@@ -71,7 +83,7 @@ def run_init(store: AccountStore, ask: Ask, say: Say) -> tuple[Member, str]:
         store.create_family(family_name, timezone, takeout_budget_cents=budget)
         admin = store.create_member(SYSTEM, admin_name, Role.ADMIN)
         code = store.create_invite(SYSTEM, admin.id)
-    say(pairing_instructions(admin, code))
+    say(pairing_instructions(admin, code, bot_username))
     return admin, code
 
 
