@@ -36,7 +36,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [x] |
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [x] |
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [x] |
-| 22 | Gmail connector and polling | 4 Gmail and pantry | [ ] |
+| 22 | Gmail connector and polling | 4 Gmail and pantry | [x] |
 | 23 | Email triage | 4 Gmail and pantry | [ ] |
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [ ] |
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [ ] |
@@ -1401,7 +1401,7 @@ Notes (2026-10-24):
     - Locally, use `THEMI_PUBLIC_URL=http://localhost:8080`.
 
 ### 22 · Gmail connector and polling
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 21, 10
 Read first: "Integrations" → Gmail; "Testing" → Gmail row.
 
@@ -1423,6 +1423,59 @@ Tests:
 - Executors call the right endpoints.
 
 Done when: new mail in the fake reaches an internal `EmailReceived` event. Commit.
+
+Notes (2026-10-25):
+- `themi.connectors.gmail`:
+    - `client.GmailClient` covers profile, messages list and get, history (messageAdded,
+      INBOX), labels list and create, modify and send.
+    - A 401 drops the cached access token and retries once. 429s (and 403
+      `rateLimitExceeded`) raise `RateLimited` with Retry-After. A 404 on history raises
+      `HistoryExpired`.
+    - The base URL is `GoogleConfig.gmail_url` (env override `GOOGLE_GMAIL_URL`, for fakes).
+- `parse.parse_message`:
+    - Reads From (name and address), To and Cc, Subject, Message-ID and References.
+    - The body is the first text/plain part, otherwise the text/html part with tags,
+      scripts and styles stripped. Charsets are honoured, and bodies are capped at 20,000
+      characters.
+    - Attachments are listed only (name, type, size).
+- `sync.GmailSync`, run by the periodic job `gmail.poll` (every minute; each account is due
+  every 3 min):
+    - First sync: the profile's history id is read before listing, then up to 200 INBOX
+      messages from `newer_than:7d`, oldest first.
+    - After that, `history.list` with every page read. The stored history id moves only
+      after the last page, so an interrupted sync resumes without announcing anything
+      twice (`emails` is unique per account and Gmail id).
+    - Expired history means a fresh first sync.
+    - Each account is polled independently. Errors back off 5 min, 15 min, 1 h, 3 h, and
+      Retry-After is honoured.
+    - Only accounts that are watched and enabled are polled.
+- Lost access:
+    - A dead token (refresh `invalid_grant` or a persistent 401) disables the account and
+      sends one NORMAL `kind="system"` alert through the outbox ("/link gmail ... would fix
+      it").
+    - `alerted_at` stops repeats. Linking again clears it, along with the backoff
+      (`set_linked_account_enabled(True)`).
+- Storage: migration 0018 adds sync columns on `linked_accounts`, the `emails` table
+  (removed with the account) and `email_sends`.
+- `EmailReceived(account, email_id, message, initial)` is passed to `GmailSync.listeners`.
+  `initial=True` marks mail found by a first sync or resync, not newly arrived. Triage
+  (prompt 23) should register here and probably shouldn't alert on `initial` mail.
+- Executors (`gmail.mark_read`, `gmail.archive`, `gmail.label`, `gmail.send_reply`):
+    - Their payload is `{"email_id"}` (plus `label`, or `body` for replies), and they refuse
+      mail from someone else's account.
+    - Archive removes INBOX only; nothing is ever deleted.
+    - Label creates the label once.
+    - Send reply threads with In-Reply-To and References, and records the action's
+      idempotency key in `email_sends`, so a retried action never sends twice.
+    - Categories: mark read and archive map to the existing `email_mark_read` and
+      `email_archive_noise` categories, and send reply to `email_reply` (capped). Labels
+      have no category yet; prompt 23 should pick one.
+- Labels to watch: only INBOX is watched for now. `linked_accounts.labels` isn't used yet.
+- Fakes:
+    - `tests/fakes/gmail_api.py` has a mailbox per address and accepts only access tokens
+      issued by the fake Google (so revoking really produces 401s).
+    - It supports history ids with expiry, paging, `newer_than:Nd` and scripted failures.
+    - The `scenario` fixture wires it in when a test uses `fake_gmail`.
 
 ### 23 · Email triage
 Status: [ ]
