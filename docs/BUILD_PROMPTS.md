@@ -38,7 +38,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [x] |
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [x] |
 | 23 | Email triage | 4 Gmail and pantry | [x] |
-| 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [ ] |
+| 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [x] |
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [ ] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [ ] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [ ] |
@@ -1557,7 +1557,7 @@ Notes (2026-10-25):
     - `gmail.label` still has no category.
 
 ### 24 · Expected emails and anomaly detection
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 23
 Read first: "Module behaviour" → E (missing-email detection); "Trust tiers" → Tier 3; "Testing"
 → scenario 4.
@@ -1579,6 +1579,45 @@ Tests:
 - Resume restores Tier 2.
 
 Done when: the scenarios pass. Commit.
+
+Notes (2026-10-25):
+- Migration 0020:
+    - The `expected_emails` table: account, name, sender pattern (an address or `@domain`,
+      which covers subdomains), an optional subject substring, cadence and grace days, the
+      category it protects (default `email_mark_read`; capped categories are refused),
+      `known_senders`, `last_seen_at` and `last_alerted_at`. Rows are deleted with their
+      account.
+    - `emails.amount_cents`.
+- The sender-pattern helpers moved to `themi.accounts` (`sender_pattern`,
+  `sender_matches`) and are shared with urgent senders, which now cover subdomains too.
+- `themi.core.expected.ExpectedEmails`:
+    - It's a `GmailSync` listener, so `last_seen_at` updates on sync, for unwatched inboxes
+      and first-sync mail too. Adding an expected email scans stored mail for the baseline.
+    - The periodic job `email.expected` runs hourly. A missed period starts at last seen
+      (or created) plus cadence plus grace, and repeats every cadence. Each period gets one
+      alert (`last_alerted_at` plus a per-period dedupe key).
+    - Unknown sender: a matching email from an address in the pattern's domain that hasn't
+      been seen for that expected email before. It's checked at sync, before triage, so that
+      email's own action asks first. The new address is then remembered, so it alerts once.
+      Exact-address patterns can't hit this.
+    - Amount: triage's new `verdict_listeners` hook runs before acting. For confirmations,
+      the amount is parsed from the text (the dollar figure next to "total" or "paid",
+      otherwise the largest). It's unusual when it's more than 1.5 times the median of that
+      sender's last 6 confirmations, and at least $20 above it, given at least 3 earlier
+      ones. The model's output isn't used for amounts.
+- Escalation only acts on a Tier 2 category: `autonomy.escalate`, and the alert ends with
+  '"<label>" is back to asking first'. A Tier 1 category just gets the alert. The alert
+  carries a [Resume automatic] button for admins, since `Autonomy.resume` is admin-only.
+  Non-admins are told an admin can resume it from the Trust page.
+- Chat: the tools `expect_email`, `list_expected_emails` and `forget_expected_email`.
+  `expect_email` takes a sender name like "PG&E" and looks up its domain from stored mail,
+  and it takes the only linked inbox when none is named.
+- Website: My accounts lists each inbox's expected emails, with add and remove forms.
+- Follow-ups:
+    - Nothing is said when a late email finally arrives; it just resets the clock.
+    - Lookalike senders outside the pattern (the right subject from another domain) aren't
+      flagged, to avoid false alarms from ordinary merchants.
+    - Grouped approvals from prompt 23 are still open.
 
 ### 25 · Pantry and grocery list (OurGroceries)
 Status: [ ]
