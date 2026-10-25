@@ -26,7 +26,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 09 | Agent core and scenario harness | 1 Foundation | [x] |
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [x] |
 | 11 | Trust tiers engine | 2 Trust and memory | [x] |
-| 12 | Approvals in Telegram | 2 Trust and memory | [ ] |
+| 12 | Approvals in Telegram | 2 Trust and memory | [x] |
 | 13 | Rules: drafts and locking | 2 Trust and memory | [ ] |
 | 14 | Memory and context repair | 2 Trust and memory | [ ] |
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [ ] |
@@ -745,7 +745,7 @@ Notes:
   source, reactions, /pending, stale-approval expiry, and scheduling `resurface_snoozed()`.
 
 ### 12 · Approvals in Telegram
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 11
 Read first: "How the family uses Themi" → In Telegram (approvals, reactions); "Testing" →
 Telegram row.
@@ -765,6 +765,45 @@ Tests (scenarios):
 - `/pending` with several items.
 
 Done when: the scenarios pass. Commit.
+
+Notes:
+- `themi.core.approvals.ApprovalsUI(autonomy, outbox, ttl=3 days)`. `install(services)` adds:
+    - an autonomy pending listener,
+    - `button_handlers["approval"]`,
+    - a reaction handler: ✅ 👍 👌 approve, 💤 ⏰ snooze,
+    - an awaiting source for the yes/no fast path,
+    - the `/pending` command.
+
+  `ApprovalsUI.resolve(action_id, decision, by)` is the one entry point. It edits every
+  approval message for that action to show the result. The website (prompt 15) should call it
+  too, so Telegram messages get tidied when someone approves on the site.
+- "Not now" and 💤 snooze, which is gentler than declining. "no", "nope", "skip it" and
+  "leave it" decline. The agent now has `LATER_WORDS`, and `services.Decision` is
+  yes/no/later.
+- Priority: `autonomy.stage(..., interactive=True)` is set by staged tools during a
+  conversation, and sends the approval as `Priority.REPLY` even in quiet hours. Background
+  staging uses `NORMAL`. An approval answered before its queued message went out has that
+  message withdrawn (`outbox.cancel`).
+- Messages: approval messages are tracked in `approval_messages` (action to outbox row), and the
+  Telegram message id comes from the outbox once sent. Edits go through `outbox.edit()`, which
+  is shielded. The architecture test still forbids `edit_text` anywhere else.
+- Commands: `services.commands["/name"] = async (member, argument) -> None`. Commands never go
+  to the model; unknown ones fall through to it. Prompt 13 adds `/rules` and prompt 17 adds
+  `/pause`, `/tracking` and `/site`.
+- Periodic work is now declared on the App as `app.periodic: list[PeriodicTask]`, which the
+  runtime registers:
+    - `outbox.flush` every 30 s
+    - `approvals.resurface` every 5 min
+    - `approvals.expire` hourly
+
+  Later prompts append to this list in `build_app`. The harness `run_periodic(name)` runs one
+  by hand.
+- Text gotcha found by the tests: "Nothing is waiting on you right now" was softened by the
+  shield, because "right now" is a level-0 demand phrase. Canned texts must avoid demand
+  phrases even when they're neutral. `test_approval_texts_pass_the_strictest_pda_check` guards
+  this.
+- Family-scope approvals go to the member who triggered them. Admins see them in `/pending`, and
+  answering from there edits the owner's message too.
 
 ### 13 · Rules: drafts and locking
 Status: [ ]
