@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from themi import __version__
 from themi.storage.secrets import generate_key
@@ -13,6 +13,7 @@ from themi.storage.secrets import generate_key
 if TYPE_CHECKING:
     from themi.accounts import AccountStore
     from themi.backup import Backups
+    from themi.runtime import Runtime
     from themi.settings import Settings
 
 
@@ -59,39 +60,54 @@ def _store() -> AccountStore:
     return AccountStore(open_database(settings.db_path), settings.cipher())
 
 
-def _run() -> None:
-    import asyncio
-
+def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
+    """Wire Themi from its settings, as `themi run` (and `make dev`) runs it."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.connectors.ourgroceries import OurGroceriesClient
-    from themi.logs import configure_logging
     from themi.runtime import Runtime
-    from themi.settings import Settings, SettingsError
+    from themi.settings import SettingsError
     from themi.storage import open_database
     from themi.storage.secrets import Secret
 
-    settings = Settings.load()
     if settings.telegram_enabled and settings.telegram_bot_token is None:
         raise SettingsError("TELEGRAM_BOT_TOKEN is required to run Themi (get one from @BotFather)")
-    configure_logging(settings.log_level)
     # With Telegram disabled the channel is never started; sends simply queue.
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
+    api = settings.telegram_api_url  # set only for the simulator
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
-        lambda store: TelegramChannel.from_token(token, store, None),
+        lambda store: TelegramChannel.from_token(
+            token,
+            store,
+            None,
+            base_url=f"{api}/bot" if api else None,
+            base_file_url=f"{api}/file/bot" if api else None,
+        ),
         google=settings.google(),
         backup=settings.backup,
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
     )
-    runtime = Runtime(
+    return Runtime(
         app,
         host=settings.http_host,
         port=settings.http_port,
         telegram_enabled=settings.telegram_enabled,
         public_url=settings.public_url,
+        **runtime_options,
     )
+
+
+def _run() -> None:
+    import asyncio
+
+    from themi.logs import configure_logging
+    from themi.settings import Settings
+
+    settings = Settings.load()
+    configure_logging(settings.log_level)
+    runtime = build_runtime(settings)
 
     async def main() -> None:
         runtime.install_signal_handlers()

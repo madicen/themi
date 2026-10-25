@@ -43,6 +43,8 @@ class Settings(BaseModel):
     secret_key: Secret
     public_url: str = ""
     telegram_bot_token: Secret | None = None
+    # Another Bot API server, only for the local Telegram simulator (`make dev`).
+    telegram_api_url: str = ""
     log_level: LogLevel = "INFO"
     http_host: str = "127.0.0.1"
     http_port: int = 8080
@@ -139,6 +141,10 @@ class Settings(BaseModel):
         keep_text = get("THEMI_BACKUP_KEEP_DAYS") or "30"
         if not keep_text.isdigit() or not 1 <= int(keep_text) <= 365:
             problems.append(f"THEMI_BACKUP_KEEP_DAYS must be 1 to 365 days, not {keep_text}")
+        telegram_url = get("TELEGRAM_API_URL")
+        if telegram_url and not telegram_url.startswith(("http://", "https://")):
+            problems.append(f"TELEGRAM_API_URL must be an http(s):// address, not {telegram_url}")
+
         endpoint = get("THEMI_BACKUP_ENDPOINT")
         local = endpoint.startswith(("http://127.0.0.1", "http://localhost"))  # test fakes
         if endpoint and not (endpoint.startswith("https://") or local):
@@ -158,6 +164,7 @@ class Settings(BaseModel):
             secret_key=Secret(key),
             public_url=get("THEMI_PUBLIC_URL").rstrip("/"),
             telegram_bot_token=Secret(token) if token else None,
+            telegram_api_url=telegram_url.rstrip("/"),
             log_level=level,  # type: ignore[arg-type]  # validated above
             http_host=get("THEMI_HTTP_HOST") or "127.0.0.1",
             http_port=int(port_text),

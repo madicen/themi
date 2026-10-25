@@ -50,3 +50,34 @@ def test_unfreeze_returns_to_real_time(frozen_clock: datetime) -> None:
     clock.unfreeze()
     assert not clock.is_frozen()
     assert clock.now() > frozen_clock
+
+
+def test_shift_moves_real_time_ahead_and_keeps_it_ticking() -> None:
+    before = clock.now()
+    clock.shift(timedelta(hours=3))
+    shifted = clock.now()
+    assert shifted - before >= timedelta(hours=3)
+    assert shifted - before < timedelta(hours=3, minutes=1)
+    assert clock.shifted_by() == timedelta(hours=3)
+    assert not clock.is_frozen()
+    assert clock.now() >= shifted
+
+
+def test_shifts_add_up_and_never_go_backwards() -> None:
+    clock.shift(timedelta(minutes=30))
+    clock.shift(timedelta(minutes=30))
+    assert clock.shifted_by() == timedelta(hours=1)
+    with pytest.raises(ValueError):
+        clock.shift(timedelta(minutes=-1))
+
+
+def test_shift_is_for_real_time_only(frozen_clock: datetime) -> None:
+    with pytest.raises(RuntimeError, match="advance"):
+        clock.shift(timedelta(hours=1))
+
+
+def test_unfreeze_clears_a_shift() -> None:
+    clock.shift(timedelta(days=1))
+    clock.unfreeze()
+    assert clock.shifted_by() == timedelta(0)
+    assert clock.now() - datetime.now(UTC) < timedelta(seconds=5)
