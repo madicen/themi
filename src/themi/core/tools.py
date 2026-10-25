@@ -142,7 +142,12 @@ class ToolRegistry:
         if not isinstance(proposal, Proposal):
             raise TypeError("a staged tool must return a Proposal")
         outcome = await ctx.services.autonomy.stage(
-            proposal.category, ctx.member, proposal.summary, proposal.payload, proposal.executor
+            proposal.category,
+            ctx.member,
+            proposal.summary,
+            proposal.payload,
+            proposal.executor,
+            interactive=True,  # tools run inside a conversation
         )
         action = outcome.action
         if action.status == "pending":

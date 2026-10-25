@@ -115,6 +115,8 @@ class ExecutionContext:
 
 
 Executor = Callable[[dict[str, Any], ExecutionContext], Awaitable[str]]
+# Called when an action starts waiting on someone: (action, someone is in the chat now).
+PendingListener = Callable[["Action", bool], Awaitable[None]]
 
 
 class ExecutorRegistry:
@@ -183,6 +185,7 @@ class Autonomy:
         self.store = store
         self.db = store.db
         self.executors = executors
+        self.pending_listeners: list[PendingListener] = []
 
     # ----- categories ---------------------------------------------------------
 
@@ -245,8 +248,14 @@ class Autonomy:
         summary: str,
         payload: dict[str, Any],
         executor: str,
+        *,
+        interactive: bool = False,
     ) -> Outcome:
-        """Run now (Tier 2) or wait for approval (Tier 1)."""
+        """Run now (Tier 2) or wait for approval (Tier 1).
+
+        `interactive` says the person is in the conversation right now (so an
+        approval request can go out as a reply rather than wait for a good moment).
+        """
         cat = self.category(category)
         if executor not in self.executors:
             raise AutonomyError(f"no executor called {executor!r}")
@@ -269,7 +278,13 @@ class Autonomy:
         )
         self._audit(action_id, category, member.id, "staged", member, summary)
         if not automatic:
-            return Outcome(self.action(action_id), f"Waiting on your yes: {summary}")
+            pending = self.action(action_id)
+            for listener in self.pending_listeners:
+                try:
+                    await listener(pending, interactive)
+                except Exception:
+                    log.exception("A pending-action listener failed for action %s", action_id)
+            return Outcome(pending, f"Waiting on your yes: {summary}")
         self._audit(action_id, category, member.id, "auto_approved", "system", "Tier 2")
         return await self._execute(action_id, member)
 
@@ -296,7 +311,12 @@ class Autonomy:
             self._audit(action_id, action.category, action.member_id, "approved", by, None)
             return await self._execute(action_id, self.store.get_member(action.member_id))
 
-        if action.status not in ("pending", "snoozed"):
+        allowed = (
+            ("pending", "snoozed", "failed")
+            if decision is Decision.DECLINE
+            else ("pending", "snoozed")
+        )
+        if action.status not in allowed:
             raise InvalidTransition(f"action {action_id} is already {action.status}")
         if decision is Decision.DECLINE:
             self.db.execute(
@@ -387,6 +407,22 @@ class Autonomy:
                 (now, row["id"]),
             )
             self._audit(row["id"], row["category"], row["member_id"], "resurfaced", "system", None)
+        return [self.action(r["id"]) for r in rows]
+
+    def expire_stale(self, older_than: timedelta) -> list[Action]:
+        """Pending or snoozed actions nobody answered in time lapse quietly."""
+        now = clock.now()
+        rows = self.db.query(
+            "SELECT * FROM pending_actions WHERE status IN ('pending', 'snoozed') "
+            "AND created_at <= ?",
+            (to_utc_iso(now - older_than),),
+        )
+        for row in rows:
+            self.db.execute(
+                "UPDATE pending_actions SET status = 'expired', updated_at = ? WHERE id = ?",
+                (to_utc_iso(now), row["id"]),
+            )
+            self._audit(row["id"], row["category"], row["member_id"], "expired", "system", None)
         return [self.action(r["id"]) for r in rows]
 
     def audit_trail(self, action_id: int | None = None, category: str | None = None) -> list[dict]:

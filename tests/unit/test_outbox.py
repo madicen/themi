@@ -25,6 +25,7 @@ class FakeSender:
     def __init__(self) -> None:
         self.sent: list[tuple[str, str, tuple[Button, ...], str]] = []
         self.failures = 0
+        self.edited: list[tuple[int, str, tuple[Button, ...]]] = []
         self._ids = iter(range(500, 10_000))
 
     async def send_text(
@@ -38,6 +39,14 @@ class FakeSender:
 
     def texts(self) -> list[str]:
         return [text for _, text, _, _ in self.sent]
+
+    async def edit_text(
+        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+    ) -> None:
+        if self.failures:
+            self.failures -= 1
+            raise ConnectionError("telegram unreachable")
+        self.edited.append((message_id, text, tuple(buttons)))
 
 
 class LaterBy:
@@ -258,3 +267,28 @@ def test_stored_times_are_utc(family: SeededFamily, outbox: Outbox) -> None:
     assert row is not None
     assert datetime.fromisoformat(row["send_after"]).utcoffset() == timedelta(0)
     assert datetime.fromisoformat(row["send_after"]) == at(22, 8).astimezone(UTC)
+
+
+async def test_edits_are_shielded_and_failures_are_harmless(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 10))
+    assert await outbox.edit(family.erin, 501, "Don't forget the vet.")
+    assert sender.edited == [(501, "In case it's handy, there's the vet.", ())]
+    sender.failures = 1
+    assert not await outbox.edit(family.erin, 501, "anything")
+
+
+async def test_cancel_withdraws_only_unsent_messages(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 23))
+    queued = await outbox.send(family.erin, "later", priority=Priority.NORMAL)
+    assert queued.outbox_id is not None and outbox.message_id(queued.outbox_id) is None
+    assert outbox.cancel(queued.outbox_id)
+    clock.freeze(at(22, 9))
+    assert await outbox.flush() == 0
+    sent = await outbox.send(family.erin, "now", priority=Priority.NORMAL)
+    assert sent.outbox_id is not None
+    assert not outbox.cancel(sent.outbox_id)
+    assert outbox.message_id(sent.outbox_id) == sent.message_id

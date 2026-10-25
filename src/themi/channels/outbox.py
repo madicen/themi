@@ -68,6 +68,10 @@ class Sender(Protocol):
         self, member: Member, text: str, buttons: Sequence[Button] = (), *, kind: str = "chat"
     ) -> int: ...
 
+    async def edit_text(
+        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+    ) -> None: ...
+
 
 class ReceptivityProvider(Protocol):
     def not_before(self, member: Member, priority: Priority, now: datetime) -> datetime:
@@ -192,6 +196,38 @@ class Outbox:
             (to_utc_iso(clock.now()), shielded.text, message_id, row["id"]),
         )
         return OutboxResult("sent", row["id"], message_id)
+
+    async def edit(
+        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+    ) -> bool:
+        """Change a message already sent (e.g. to show an approval's result).
+
+        Edits are shielded like any message. A failed edit is logged and
+        reported as False; it's never worth retrying.
+        """
+        try:
+            shielded = await self.shield.apply(text, member, buttons=buttons)
+            await self.sender.edit_text(member, message_id, shielded.text, shielded.buttons)
+        except Exception as exc:
+            log.info("Couldn't edit message %s (%s)", message_id, type(exc).__name__)
+            return False
+        return True
+
+    def cancel(self, outbox_id: int) -> bool:
+        """Withdraw a message that hasn't gone out yet. False if it already went."""
+        return bool(
+            self.store.db.update(
+                "DELETE FROM outbox WHERE id = ? AND status = 'queued'", (outbox_id,)
+            )
+        )
+
+    def message_id(self, outbox_id: int) -> int | None:
+        """The Telegram message id of a sent outbox message (None if not sent yet)."""
+        row = self.store.db.one(
+            "SELECT telegram_message_id FROM outbox WHERE id = ? AND status = 'sent'",
+            (outbox_id,),
+        )
+        return row["telegram_message_id"] if row else None
 
     def _record_failure(self, row: dict[str, Any], exc: Exception) -> OutboxResult:
         attempts = row["attempts"] + 1
