@@ -23,7 +23,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [x] |
 | 07 | Telegram channel | 1 Foundation | [x] |
 | 08 | Outbox and PDA shield | 1 Foundation | [x] |
-| 09 | Agent core and scenario harness | 1 Foundation | [ ] |
+| 09 | Agent core and scenario harness | 1 Foundation | [x] |
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [ ] |
 | 11 | Trust tiers engine | 2 Trust and memory | [ ] |
 | 12 | Approvals in Telegram | 2 Trust and memory | [ ] |
@@ -528,7 +528,7 @@ Notes:
   `send_text`, `send_message` or `edit_text`.
 
 ### 09 · Agent core and scenario harness
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 06, 08
 Read first: "Architecture"; "AI backend"; "Security and privacy" (email content is data);
 "Testing" → Scenarios and Tooling.
@@ -566,6 +566,47 @@ Tests:
 
 Done when: Erin and her husband can chat with Themi through the fake end to end, and a manual
 run with real Telegram and Gemini keys works. Commit.
+
+Notes:
+- Not yet run against real Telegram and Gemini, since there are no keys here. To try it:
+    1. Put `TELEGRAM_BOT_TOKEN` and `THEMI_SECRET_KEY` in `.env`.
+    2. Run `themi init` and pair with `/start <code>`.
+    3. Add a Gemini key to the default backend. There's no website yet (prompt 16), so use a
+       Python shell: `AISettingsStore(db, cipher).update_backend(SYSTEM, <backend id>,
+       api_key=Secret("..."))`. The default backend is created on first use; until a key is
+       added, the bot replies with SETUP_NEEDED_TEXT.
+    4. Run `themi bot`.
+- `themi.app.build_app(db, cipher, make_channel, provider_factory=, sleep=)` builds the whole
+  graph and sets `channel.handler = agent`. Prompt 10's `themi run` should use it.
+- Services (`themi.core.services.Services`) are where later prompts plug in:
+    - `awaiting_sources`: callables returning `AwaitingItem(key, summary, resolve)`, used by the
+      yes/no fast path (prompts 12 and 13).
+    - `button_handlers[kind]` for button taps (`approval` in prompt 12, `rule` in prompt 13).
+    - `reaction_handlers` for ✅ and 💤 (prompt 12).
+    - `open_item_sources`.
+    - `rules()` (prompt 13) and `facts_for(member)` (prompt 14). For now `facts_for` returns the
+      last 20 `scratch_facts`.
+    - `energy.label(member)` (prompt 18).
+- Migration 0006 already creates `energy_signals` (source, value from -3 to +3, note).
+  Prompt 18 should add to that table, not create it.
+- `scratch_facts` is temporary; prompt 14 migrates its rows into the memory store.
+- `list_open_items` includes queued outbox messages.
+- The yes/no fast path only fires when exactly one item is waiting on that member. Otherwise
+  "yes" goes to the model.
+- Fix found by the scenarios: `channel.typing()` now sends the first chat action right away.
+  Before, a fast reply cancelled the indicator before it ever showed.
+- The router's `factory` now defaults to `build_provider` when given `None`, so `app.py` doesn't
+  import adapters, which the architecture test forbids.
+- Every canned reply (`SETUP_NEEDED_TEXT`, `BUSY_TEXT`, `DECLINED_TEXT`, `TANGLED_TEXT`,
+  `VOICE_FAILED_TEXT`) passes the PDA checker at strictness 3.
+- `tests/scenarios/harness.py`:
+    - The `scenario` fixture gives every member the chain primary then fallback, for every task,
+      using `ScriptedProvider`s at `scenario.primary` and `scenario.fallback`.
+    - Helpers: `say`, `voice`, `tap(label)`, `advance(hours=, minutes=)`, `inbox`,
+      `typing_shown`, and `clear_ai_settings(member)` to simulate a brand-new member.
+    - The clock starts at Wed 21 Oct 2026, 09:00 Pacific.
+- Prompt caching isn't explicitly enabled yet. The system prompt and the sorted tool list are
+  stable, so adding `cache_control` to the Claude adapter later is cheap.
 
 ### 10 · Process runtime, scheduler, Docker
 Status: [ ]
