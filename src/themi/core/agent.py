@@ -157,7 +157,8 @@ class Agent:
         services = self.services
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
-        system = build_system(services.rules(), services.facts_for(member))
+        pinned, notes = services.facts_for(member, text)
+        system = build_system(services.rules(), pinned)
         turn = build_turn(
             member,
             text,
@@ -165,6 +166,7 @@ class Agent:
             energy_label=services.energy.label(member),
             open_items=services.open_items(member),
             history=self._history(member, event),
+            notes=notes,
             timezone=timezone,
         )
         messages = [Message.user(turn)]

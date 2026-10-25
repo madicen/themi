@@ -22,10 +22,10 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
+    from themi.core.memory import Memory
     from themi.core.rules import Rulebook
 
 Decision = Literal["yes", "no", "later"]
-SCRATCH_FACTS_IN_PROMPT = 20
 
 
 class EnergyLabeler(Protocol):
@@ -70,6 +70,7 @@ class Services:
     reaction_handlers: list[EventHandler] = field(default_factory=list)
     commands: dict[str, CommandHandler] = field(default_factory=dict)
     rulebook: Rulebook | None = None
+    memory: Memory | None = None
 
     def awaiting(self, member: Member) -> list[AwaitingItem]:
         return [item for source in self.awaiting_sources for item in source(member)]
@@ -86,9 +87,9 @@ class Services:
         """Locked household rules, for the system prompt."""
         return self.rulebook.locked_texts() if self.rulebook is not None else []
 
-    def facts_for(self, member: Member) -> list[str]:
-        """Facts to keep in mind. Until prompt 14: the most recent remembered facts."""
-        rows = self.store.db.query(
-            "SELECT fact FROM scratch_facts ORDER BY id DESC LIMIT ?", (SCRATCH_FACTS_IN_PROMPT,)
-        )
-        return [r["fact"] for r in reversed(rows)]
+    def facts_for(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
+        """(pinned facts for the system prompt, notes retrieved for this message)."""
+        if self.memory is None:
+            return [], []
+        pinned, retrieved = self.memory.for_prompt(member, message)
+        return [f.fact for f in pinned], [f.fact for f in retrieved]

@@ -81,6 +81,7 @@ def build_turn(
     energy_label: str,
     open_items: Sequence[OpenItem] = (),
     history: Sequence[LoggedMessage] = (),
+    notes: Sequence[str] = (),
     timezone: str,
 ) -> str:
     items = "\n".join(f"- {i.summary}" for i in open_items) if open_items else "none"
@@ -90,12 +91,14 @@ def build_turn(
         lines.append(f"{speaker}: {logged.text}")
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
+    remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"
     return (
         "<context>\n"
         f"Talking with: {member.name}{' (admin)' if member.is_admin else ''}\n"
         f"Local time: {when} ({timezone})\n"
         f"How {member.name} seems: {energy_label}\n"
         f"Open items:\n{items}\n"
+        f"Possibly relevant things you were told before:\n{remembered}\n"
         f"Recent conversation:\n{recent}\n"
         "</context>\n\n"
         f"{member.name} says:\n{message}"

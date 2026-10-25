@@ -48,7 +48,12 @@ async def test_an_unreadable_voice_note_gets_a_gentle_reply(scenario: Scenario) 
 
 async def test_tool_call_then_reply(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call(
-        "remember_fact", {"subject": "vet", "fact": "Luna's vet appointments are on Tuesdays."}
+        "remember_fact",
+        {
+            "subject": "vet",
+            "fact": "Luna's vet appointments are on Tuesdays.",
+            "about": "household",
+        },
     )
     scenario.primary.queue_text("Got it, Tuesdays for Luna's vet.")
     assert await scenario.say("Erin", "the vet is always on tuesdays for Luna") == [
@@ -58,11 +63,12 @@ async def test_tool_call_then_reply(scenario: Scenario) -> None:
     tool_result = second.messages[2].content[0]
     assert isinstance(tool_result, ToolResult)
     assert tool_result.content == "Remembered: Luna's vet appointments are on Tuesdays."
-    assert scenario.app.db.scalar("SELECT COUNT(*) FROM scratch_facts") == 1
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 1
 
     scenario.primary.queue_text("Tuesday it is.")
     await scenario.say("Husband", "when is the vet?")
-    assert "Luna's vet appointments are on Tuesdays." in scenario.primary.last_request.system
+    turn = scenario.primary.last_request.messages[0].text
+    assert "- Luna's vet appointments are on Tuesdays." in turn  # retrieved for this message
 
 
 async def test_bad_tool_arguments_go_back_to_the_model(scenario: Scenario) -> None:
@@ -186,3 +192,43 @@ async def test_strangers_never_reach_the_agent(scenario: Scenario) -> None:
     scenario.telegram.send_text(4242, "hello")
     await scenario.app.channel.poll_once()
     assert scenario.primary.requests == []
+
+
+async def test_plan_scenario_5_a_forgotten_fact_is_pinned_and_used(scenario: Scenario) -> None:
+    """Erin says "you keep forgetting the cat's vet is on Tuesdays". The fact gets pinned
+    and appears in the next request."""
+    scenario.primary.queue_tool_call(
+        "report_forgotten_context",
+        {
+            "what_was_forgotten": "the cat's vet is on Tuesdays",
+            "correct_version": "The cat's vet appointments are on Tuesdays.",
+        },
+    )
+    scenario.primary.queue_text("Sorry about that. It's saved now and I'll keep it in mind.")
+    await scenario.say("Erin", "you keep forgetting the cat's vet is on Tuesdays")
+    result = scenario.primary.last_request.messages[2].content[0]
+    assert isinstance(result, ToolResult) and result.content.startswith("Diagnosis: never_stored")
+
+    scenario.primary.queue_text("Morning!")
+    await scenario.say("Erin", "good morning")
+    assert "The cat's vet appointments are on Tuesdays." in scenario.primary.last_request.system
+    (repair,) = scenario.app.services.memory.repairs()  # type: ignore[union-attr]
+    assert repair["diagnosis"] == "never_stored"
+
+
+async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None:
+    memory = scenario.app.services.memory
+    assert memory is not None
+    memory.remember(scenario.member("Erin"), "vet", "The cat's vet is on Tuesdays.", pinned=True)
+    scenario.primary.queue_tool_call(
+        "report_forgotten_context",
+        {
+            "what_was_forgotten": "cat vet Tuesdays",
+            "correct_version": "The cat's vet is on Tuesdays.",
+        },
+    )
+    scenario.primary.queue_text("I'm sorry. It's a standing reminder now.")
+    await scenario.say("Erin", "you forgot the vet AGAIN")
+    assert "Always keep in mind: The cat's vet is on Tuesdays." in scenario.app.services.rules()
+    (listing,) = await scenario.say("Erin", "/rules")
+    assert "Keep in mind: vet" in listing
