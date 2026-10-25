@@ -810,6 +810,14 @@ Notes:
   this.
 - Family-scope approvals go to the member who triggered them. Admins see them in `/pending`, and
   answering from there edits the owner's message too.
+- Fix (2026-10-25, found in a `make dev` session, failing scenarios first): a bare "yes" went to
+  the one waiting card even when Themi had asked a different question after it, so "yes, add it
+  to my tasks" approved a grocery item the person had just turned down. `AwaitingItem` now
+  carries the Telegram ids of the messages that asked it (`message_ids`, from
+  `approval_messages` and `rule_messages`). The fast path skips an item if any later outbound
+  message (not an edit) contains a "?"; the model gets the "yes" with the item still listed
+  as waiting. The model has no tool to answer cards, so in that case the person uses the
+  buttons or a reaction. That includes a card whose same-turn reply ends in a question.
 
 ### 13 · Rules: drafts and locking
 Status: [x] (2026-10-24)

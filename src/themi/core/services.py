@@ -68,6 +68,9 @@ class AwaitingItem:
     key: str
     summary: str
     resolve: Callable[[Decision], Awaitable[str]]  # returns what to tell the person
+    # The Telegram messages that asked this person, once sent. A bare "yes" only answers
+    # the item if Themi hasn't asked anything else since.
+    message_ids: tuple[int, ...] = ()
 
 
 AwaitingSource = Callable[[Member], list[AwaitingItem]]

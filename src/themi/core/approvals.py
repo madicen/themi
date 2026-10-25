@@ -170,9 +170,20 @@ class ApprovalsUI:
             return resolve
 
         return [
-            AwaitingItem(f"action:{a.id}", a.summary, resolver(a.id))
+            AwaitingItem(
+                f"action:{a.id}", a.summary, resolver(a.id), self._asked_in(a.id, member.id)
+            )
             for a in self.autonomy.awaiting(member)
         ]
+
+    def _asked_in(self, action_id: int, member_id: int) -> tuple[int, ...]:
+        rows = self.db.query(
+            "SELECT o.telegram_message_id FROM approval_messages m JOIN outbox o "
+            "ON o.id = m.outbox_id WHERE m.action_id = ? AND m.member_id = ? "
+            "AND o.telegram_message_id IS NOT NULL",
+            (action_id, member_id),
+        )
+        return tuple(r["telegram_message_id"] for r in rows)
 
     async def on_pending_command(self, member: Member, argument: str) -> None:
         actions = self.autonomy.open_for(member)

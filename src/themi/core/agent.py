@@ -6,7 +6,8 @@ For each inbound event:
   (two-option choices) count as if the person typed the option.
 - Voice notes are transcribed first, then treated like text.
 - Text feeds PDA calibration, then a bare yes/no/not-now resolves the one
-  item waiting on this person, if there's exactly one. Otherwise the model
+  item waiting on this person, if there's exactly one and Themi hasn't asked
+  them another question since that item's message. Otherwise the model
   runs a tool loop (at most `max_steps` model calls) and the final text goes
   out through the outbox as a reply.
 
@@ -27,7 +28,7 @@ from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
-from themi.core.services import Decision, Services
+from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.tools import ToolContext
 from themi.localtime import to_local
 
@@ -150,11 +151,23 @@ class Agent:
         if decision is None:
             return False
         waiting = self.services.awaiting(member)
-        if len(waiting) != 1:
+        if len(waiting) != 1 or self._asked_since(member, waiting[0]):
             return False
         outcome = await waiting[0].resolve(decision)
         await self._reply(member, outcome)
         return True
+
+    def _asked_since(self, member: Member, item: AwaitingItem) -> bool:
+        """Has Themi asked this person a question since the item's own message?
+        Then a bare "yes" may answer that question, so the model decides."""
+        if not item.message_ids:
+            return False
+        row = self.services.store.db.one(
+            "SELECT 1 FROM message_log WHERE member_id = ? AND direction = 'out' "
+            "AND kind != 'edit' AND telegram_message_id > ? AND text LIKE '%?%' LIMIT 1",
+            (member.id, max(item.message_ids)),
+        )
+        return row is not None
 
     async def _converse(self, member: Member, text: str, event: InboundEvent) -> str:
         services = self.services

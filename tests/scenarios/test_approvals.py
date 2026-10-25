@@ -246,3 +246,37 @@ async def test_approvals_raised_in_conversation_go_out_straight_away(
     scenario.primary.queue_tool_call("archive_promos", {"count": 4})
     scenario.primary.queue_text("Lined up for your okay.")
     assert await scenario.say("Erin", "archive the promos") == [ask(4), "Lined up for your okay."]
+
+
+async def test_yes_after_themi_asked_something_else_goes_to_the_model(
+    scenario: Scenario, gmail: Gmail
+) -> None:
+    """From a dev session: a card, then Themi asked a different question, and the
+    person's "yes" (to that question) approved the card instead."""
+    from themi.channels.outbox import Priority
+
+    action = await stage(scenario, "Erin")
+    erin = scenario.member("Erin")
+    await scenario.app.outbox.send(
+        erin, "Shall we add them to your tasks instead?", priority=Priority.REPLY
+    )
+    scenario.primary.queue_text("Great, I'll put it on your tasks.")
+
+    assert await scenario.say("Erin", "yes") == ["Great, I'll put it on your tasks."]
+    assert scenario.app.services.autonomy.action(action.id).status == "pending"
+    assert gmail.archived == []
+    turn = scenario.primary.last_request.messages[0].text
+    assert "Waiting on you: Archive 3 promo emails" in turn  # the model still knows about it
+
+
+async def test_yes_still_answers_the_card_after_a_remark_that_isnt_a_question(
+    scenario: Scenario, gmail: Gmail
+) -> None:
+    from themi.channels.outbox import Priority
+
+    await stage(scenario, "Erin")
+    await scenario.app.outbox.send(
+        scenario.member("Erin"), "That one's up for your OK.", priority=Priority.REPLY
+    )
+    assert await scenario.say("Erin", "yes") == ["Archived 3 promos."]
+    assert gmail.archived == [{"count": 3}] and scenario.primary.requests == []
