@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -115,6 +115,8 @@ class Outbox:
         self.shield = shield
         self.receptivity = receptivity or AlwaysReceptive()
         self.pauses = pauses or PauseBook(store.db)
+        # Called after each successful delivery with (outbox row, telegram message id).
+        self.sent_listeners: list[Callable[[dict[str, Any], int | None], None]] = []
 
     @property
     def _tz(self) -> str:
@@ -210,6 +212,11 @@ class Outbox:
             "telegram_message_id = ?, attempts = attempts + 1 WHERE id = ?",
             (to_utc_iso(clock.now()), shielded.text, message_id, row["id"]),
         )
+        for listener in self.sent_listeners:
+            try:
+                listener(row, message_id)
+            except Exception:
+                log.exception("An outbox sent-listener failed for message %s", row["id"])
         return OutboxResult("sent", row["id"], message_id)
 
     async def edit(

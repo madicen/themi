@@ -29,6 +29,8 @@ from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolRegistry
 from themi.energy import EnergyModel
+from themi.energy.outcomes import OutcomeTracker
+from themi.energy.windows import EnergyReceptivity
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 
@@ -69,7 +71,10 @@ def build_app(
     ai_settings = AISettingsStore(db, cipher)
     router = AIRouter(ai_settings, factory=provider_factory, sleep=sleep)
     channel = make_channel(store)
-    outbox = Outbox(store, channel, PdaShield(AIRewriter(router)))
+    energy = EnergyModel(store)
+    outbox = Outbox(store, channel, PdaShield(AIRewriter(router)), EnergyReceptivity(energy))
+    outcomes = OutcomeTracker(store)
+    outbox.sent_listeners.append(outcomes.on_sent)
     services = Services(
         store=store,
         ai_settings=ai_settings,
@@ -78,7 +83,8 @@ def build_app(
         calibrator=PdaCalibrator(store),
         tools=ToolRegistry(list(STARTER_TOOLS)),
         autonomy=Autonomy(store, ExecutorRegistry()),
-        energy=EnergyModel(store),
+        energy=energy,
+        outcomes=outcomes,
     )
     approvals = ApprovalsUI(services.autonomy, outbox)
     approvals.install(services)
@@ -93,6 +99,7 @@ def build_app(
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
+        PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
     ]
     return App(
         db,
@@ -107,3 +114,12 @@ def build_app(
         rulebook,
         periodic,
     )
+
+
+def _async(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
+    """Wrap a quick synchronous job so the scheduler can await it."""
+
+    async def run() -> object:
+        return fn()
+
+    return run

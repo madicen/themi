@@ -255,3 +255,18 @@ async def test_a_draining_remark_changes_how_themi_reads_erin(scenario: Scenario
     scenario.primary.queue_text("Hey!")
     await scenario.say("Husband", "hi")
     assert "How Husband seems: steady" in scenario.primary.last_request.messages[0].text
+
+
+async def test_replies_to_themis_nudges_teach_the_shadow_calendar(scenario: Scenario) -> None:
+    from themi.channels.outbox import Priority
+
+    erin = scenario.member("Erin")
+    tracker = scenario.app.services.outcomes
+    assert tracker is not None
+    await scenario.app.outbox.send(erin, "The feeders are getting low.", priority=Priority.NORMAL)
+    scenario.primary.queue_text("Thanks for topping them up!")
+    await scenario.say("Erin", "just refilled them")
+    await scenario.app.outbox.send(erin, "The filter change is due.", priority=Priority.NORMAL)
+    await scenario.advance(hours=3)
+    assert await scenario.run_periodic("energy.expire_outcomes") == 1
+    assert [r["outcome"] for r in tracker.history(erin.id)] == ["acted", "ignored"]

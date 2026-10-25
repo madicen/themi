@@ -77,6 +77,8 @@ class Agent:
 
     async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
+        if self.services.outcomes is not None:
+            self.services.outcomes.observe(member, event)
         if event.kind == "reaction" and event.reaction is not None:
             self.services.calibrator.observe_reaction(member, event.reaction.added)
             for handler in self.services.reaction_handlers:

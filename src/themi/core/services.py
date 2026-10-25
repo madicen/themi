@@ -24,6 +24,7 @@ from themi.core.tools import ToolRegistry
 if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.rules import Rulebook
+    from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
 
@@ -83,6 +84,7 @@ class Services:
     site_url: str = ""  # the website's base address, for /site links
     rulebook: Rulebook | None = None
     memory: Memory | None = None
+    outcomes: OutcomeTracker | None = None
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
