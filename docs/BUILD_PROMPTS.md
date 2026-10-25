@@ -42,7 +42,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [x] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
-| 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [ ] |
+| 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [~] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
@@ -1821,7 +1821,7 @@ Notes (2026-10-25):
   moment" instead.
 
 ### 28 · Evals, live smoke tests, coverage gates
-Status: [ ]
+Status: [~] (built 2026-10-25; waiting on the Gemini run)
 Depends on: 27
 Read first: "Testing" (layers, workflow, live test accounts).
 
@@ -1837,6 +1837,45 @@ Build:
   `themi.autonomy` and `themi.energy`, and at least 75% overall.
 
 Done when: evals run against Gemini's free tier and the results are recorded in Notes. Commit.
+
+Notes (2026-10-25):
+- Evals:
+    - `tests/evals/cases.json` has 44 cases: energy notes 6, pantry 7, rules 5, context
+      repair 5, approvals 5, relays 4, small talk 6, tasks 6.
+    - Each case sets the expected tools, the allowed and forbidden extras, argument checks,
+      and reply regexes. Every reply also gets the PDA check at the speaker's strictness
+      and a no-score check, with `> ` quotes exempt.
+    - Cases whose `requires` tools don't exist are skipped: the 4 relay cases wait for
+      prompt 34, and `expect_email` needs Google configured.
+    - The runner (`tests/evals/runner.py`) runs each case through the full app in a fresh
+      household. `Scenario(real_models=True)` lets the router build real adapters from the
+      members' AI settings, with real retry waits. It records `ToolRegistry.run` calls and
+      reads the raw replies (before shielding) from the outbox.
+    - `make evals PROVIDER=gemini|claude|ollama|openai_compat` prints pass rates by category
+      and saves JSON in `tests/evals/results/`, which git ignores.
+    - Keys come from the environment or `.env`. `THEMI_EVAL_PACE` defaults to 6 seconds for
+      Gemini's free tier.
+    - Dry run in the default suite: `tests/integration/test_eval_runner.py` drives the
+      real Gemini adapter against the fake Gemini over HTTP.
+- Live tests (`make test-live`), each skipped without its variables:
+    - Telegram: send with a button, edit, and one poll.
+    - Gmail: profile, list, get and labels.
+    - Calendar: calendar list.
+    - The existing AI provider smoke tests.
+    - The variables are listed in each file's docstring.
+- `.github/workflows/nightly.yml` runs the live tests and the evals nightly, and on demand
+  with a provider input. The evals job is `continue-on-error`, and its results are uploaded
+  as an artifact. Secrets go in the repository's settings.
+- Coverage:
+    - `tools/check_coverage.py` enforces the gates after `make cov`, counting lines and
+      branches together. CI now runs `make cov`.
+    - Today: overall 91.6%, `themi.ai` 96.1%, outbox 97.1%, PDA 100%, autonomy 95.7%,
+      energy 97.1%.
+- Still to do before `[x]`:
+    - Put a Gemini free-tier test key in `.env` (`GEMINI_API_KEY=...`, or export it).
+    - Run `make evals`, and record the pass rates here.
+    - No key was available in this session, so the evals haven't run against a real model
+      yet.
 
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [ ]
