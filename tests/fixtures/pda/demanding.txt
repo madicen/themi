@@ -1,0 +1,63 @@
+# Messages that read as demands. Every line must be flagged at the default strictness (2).
+You need to move the laundry to the dryer.
+You have to call the vet today.
+You must reply to the landlord.
+You'll need to sign the lease renewal.
+You really need to eat something.
+You've got to pay the water bill.
+You gotta refill the feeders.
+Move the laundry to the dryer.
+Move the wet clothes now.
+Call the plumber about the leak.
+Reply to the tenant's email.
+Pay the electricity bill.
+Feed the cats.
+Refill the feeders this afternoon.
+Empty the litter box.
+Take out the recycling.
+Unload the dishwasher.
+Text your sister back.
+Email the property manager.
+Book the furnace service.
+Schedule the dentist appointment.
+Order more cat food.
+Buy olive oil on the way home.
+Check the mail.
+Clean the kitchen counters.
+Water the tomatoes.
+Please move the laundry.
+Please call the insurance company.
+Please reply when you can.
+Don't forget to take your meds.
+Don't forget the vet appointment at 3.
+Do not forget the rent is due.
+Remember to buy eggs.
+Remember to text the babysitter.
+Make sure the door is locked.
+Make sure to call the bank.
+You should eat lunch.
+You'd better call them back.
+You should really reply to Mom.
+The laundry needs moving right now.
+Please handle this immediately.
+Reply ASAP.
+The bill is due, pay it right away.
+Call the vet straight away.
+Hurry, the washer is done.
+Stop what you're doing and check the oven.
+Go move the laundry.
+Get the clothes into the dryer before they smell.
+Put the leftovers in the fridge.
+Grab the mail on your way in.
+Fix the leaky faucet this weekend.
+Submit the HOA form by Friday.
+Renew the car registration.
+Start the dishwasher before bed.
+Turn off the oven.
+Throw the wet towels in the dryer.
+Hang up the laundry.
+Wash the cat bowls.
+Fill out the school form.
+Sign the permission slip.
+Answer the plumber's text.
+Finish the grocery order.

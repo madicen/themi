@@ -1,0 +1,62 @@
+# Messages that should pass unflagged at the default strictness (2).
+The washer finished a few minutes ago.
+Whenever you have a spare moment, the laundry is ready for the dryer.
+Dryer now, or later tonight?
+The vet called back about Luna's appointment.
+If it helps, the plumber has openings on Tuesday or Thursday.
+Tuesday or Thursday for the plumber?
+The feeders are getting a little low.
+No rush at all, but the litter box is close to full.
+I added olive oil to the grocery list.
+The water bill confirmation came in, all paid.
+Nothing needs doing right this second.
+The landlord sent a note about the lease renewal.
+Would a quick lunch idea help? Toast with eggs, or soup?
+Toast with eggs, or soup from the pantry?
+The rent reminder is on the calendar for the 1st.
+I can draft a reply to the tenant whenever you like.
+Want me to stage the Safeway order?
+Here's the order I put together, ready when you are.
+Your sister texted earlier this afternoon.
+The property manager replied about the gutters.
+The furnace service is usually due around now.
+There's an opening for the furnace service next week.
+The dishwasher finished its cycle.
+The recycling goes out tomorrow morning.
+The tomatoes look like they could use some water.
+It's been a while since lunch, so here are two easy options.
+Leftover pasta, or a cheese sandwich?
+I can hold this note until later today.
+He mentioned the vet called.
+The oven timer went off a minute ago.
+Thanks, that's all logged.
+Got it, I'll remember that.
+The insurance company sent their renewal letter.
+When it suits you, the bank's form is in your inbox.
+I noticed the door sensor shows unlocked.
+Your meds are usually around this time, just as a heads up.
+The eggs are on the list now.
+The babysitter confirmed for Saturday.
+The HOA form is due Friday, if that's useful to know.
+The car registration renewal notice arrived.
+The cat bowls are in the dishwasher.
+The school form came home today.
+The permission slip is on the counter.
+The plumber texted to confirm Tuesday.
+The grocery order is saved as a draft.
+Proposed rule: auto-archive store promotions. A YES locks this in, or we keep brainstorming.
+Go ahead, or not now?
+Do you want me to add rice too?
+Could I put that on the list for you?
+Would tonight or tomorrow be better?
+Is the dryer free yet?
+All set, the reminder is cancelled.
+That's done, nothing else on my side.
+Good morning! Today looks quiet.
+The maintenance guide for the filter is ready if you'd like it.
+Last time the filter change took about ten minutes.
+Recycling, or the compost bin first?
+I'm happy to wait on this.
+That can wait until the weekend.
+It's raining, so the garden is watered for today.
+Everything is up to date.
