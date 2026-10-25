@@ -99,3 +99,23 @@ def test_google_settings_and_endpoint_overrides() -> None:
     assert google.client_secret.reveal() == "shh" and "shh" not in repr(google)
     assert google.token_url == "http://127.0.0.1:8765/token"
     assert google.auth_url == "https://accounts.google.com/o/oauth2/v2/auth"  # default kept
+
+
+def test_ourgroceries_is_off_until_both_login_parts_are_set() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).ourgroceries() is None
+    with pytest.raises(SettingsError, match="OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "OURGROCERIES_USERNAME": "us@x.example"})
+    config = Settings.from_mapping(
+        {
+            "THEMI_SECRET_KEY": KEY,
+            "OURGROCERIES_USERNAME": "us@x.example",
+            "OURGROCERIES_PASSWORD": "pw",
+        }
+    ).ourgroceries()
+    assert config is not None
+    assert (config.username, config.password.reveal(), config.list_name) == (
+        "us@x.example",
+        "pw",
+        "Groceries",
+    )
+    assert "pw" not in repr(config)

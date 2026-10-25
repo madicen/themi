@@ -33,7 +33,7 @@ def gmail(scenario: Scenario) -> Gmail:
     gmail = Gmail()
     executors = scenario.app.services.autonomy.executors
     executors.register("gmail.archive")(gmail.archive)
-    executors.register("groceries.add")(gmail.archive)
+    executors.register("test.family_archive")(gmail.archive)  # any family-wide category
     return gmail
 
 
@@ -41,7 +41,7 @@ async def stage(
     scenario: Scenario, name: str, count: int = 3, category: str = "email_archive_noise"
 ) -> Action:
     """Stage an action the way background work would (not mid-conversation)."""
-    executor = "groceries.add" if category == "grocery_list_add" else "gmail.archive"
+    executor = "test.family_archive" if category == "grocery_list_add" else "gmail.archive"
     outcome = await scenario.app.services.autonomy.stage(
         category, scenario.member(name), f"Archive {count} promo emails", {"count": count}, executor
     )

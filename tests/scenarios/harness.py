@@ -25,6 +25,7 @@ import pytest
 
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fixtures.family import SeededFamily
@@ -70,6 +71,7 @@ class Scenario:
         telegram: FakeTelegram,
         google: FakeGoogle | None = None,
         gmail: FakeGmail | None = None,
+        ourgroceries: FakeOurGroceries | None = None,
     ) -> None:
         self.family = family
         self.telegram = telegram
@@ -90,6 +92,7 @@ class Scenario:
             provider_factory=self.models,
             sleep=_no_sleep,
             google=gmail.config() if gmail else google.config() if google else None,
+            grocery_list=ourgroceries,
         )
         for member in (family.erin, family.husband):
             self.use_scripted_models(member)
@@ -225,13 +228,20 @@ async def scenario(
     """The full app, started, for any test layer that wants it.
 
     Google sign-in and linking are configured when the test also uses `fake_google`, and
-    Gmail too when it uses `fake_gmail`.
+    Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
+    `fake_ourgroceries`.
     """
 
     def optional(name: str) -> Any:
         return request.getfixturevalue(name) if name in request.fixturenames else None
 
-    s = Scenario(family, fake_telegram, optional("fake_google"), optional("fake_gmail"))
+    s = Scenario(
+        family,
+        fake_telegram,
+        optional("fake_google"),
+        optional("fake_gmail"),
+        optional("fake_ourgroceries"),
+    )
     await s.start()
     yield s
     await s.stop()
