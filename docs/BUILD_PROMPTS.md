@@ -28,7 +28,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 11 | Trust tiers engine | 2 Trust and memory | [x] |
 | 12 | Approvals in Telegram | 2 Trust and memory | [x] |
 | 13 | Rules: drafts and locking | 2 Trust and memory | [x] |
-| 14 | Memory and context repair | 2 Trust and memory | [ ] |
+| 14 | Memory and context repair | 2 Trust and memory | [x] |
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [ ] |
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [ ] |
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [ ] |
@@ -855,7 +855,7 @@ Notes:
 - New statuses: `discarded` (said no), `expired` (lapsed) and `unlocked` (retired later).
 
 ### 14 · Memory and context repair
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 13
 Read first: "Trust tiers, rules and context repair" → Context repair; "Testing" → Context
 repair row and scenario 5.
@@ -880,6 +880,37 @@ Tests:
 - Repairs are logged.
 
 Done when: the scenarios pass. Commit.
+
+Notes:
+- Facts have scope `family` (shared) or `member` (only in that member's conversations).
+  `remember_fact` now takes `about: household|personal`. Migration 0011 moved `scratch_facts`
+  rows in as household facts and dropped the table.
+- Where facts go in the prompt, for caching: pinned facts go in the system prompt. The top 5
+  full-text matches for the incoming message go in the user turn under "Possibly relevant
+  things you were told before". `Services.facts_for(member, message)` returns `(pinned,
+  notes)`.
+- `last_shown_at` is stamped whenever a fact is placed in a prompt, pinned or retrieved. Context
+  repair counts a fact as "included" if it's pinned or was shown in the last 2 days.
+- Repair diagnosis:
+    1. FTS-match the complaint plus the correction (top 3, pinned included).
+    2. No match means `never_stored`: save it pinned.
+    3. A correction whose word overlap with the stored fact is under 0.6 (Jaccard, stopwords
+       removed) means `stored_wrong`: correct the fact and pin it.
+    4. A match that wasn't recently shown means `not_retrieved`: pin it.
+    5. Otherwise `ignored`: `rulebook.add_standing_reminder(...)` creates a locked rule
+       "Always keep in mind: ...".
+
+  The tool returns the diagnosis plus a message for the model to relay in its own words. All
+  repairs are logged in `context_repairs`.
+- Search uses FTS5 with the porter tokenizer, so "refilling" finds "refilled". Query terms are
+  meaningful words joined with OR and ranked by bm25. FTS5 is confirmed available in Python
+  3.12 (SQLite 3.45) and 3.15 (SQLite 3.54).
+- `Memory` methods for the website (prompt 16): `visible(member)`, `pin(id, pinned)`,
+  `correct(id, text)`, `forget(id)` and `repairs(member_id)`. None of these check permissions
+  yet; the website should only let members edit household facts and their own personal facts.
+- Tooling: ruff's SIM905 autofix had flattened word lists (`"""...""".split()`) into
+  one-word-per-line lists. It's now ignored in `pyproject.toml`, and the PDA verb list is
+  restored.
 
 ### 15 · Website v1: sign-in, dashboard, personal settings
 Status: [ ]
