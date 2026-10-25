@@ -22,7 +22,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [x] |
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [x] |
 | 07 | Telegram channel | 1 Foundation | [x] |
-| 08 | Outbox and PDA shield | 1 Foundation | [ ] |
+| 08 | Outbox and PDA shield | 1 Foundation | [x] |
 | 09 | Agent core and scenario harness | 1 Foundation | [ ] |
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [ ] |
 | 11 | Trust tiers engine | 2 Trust and memory | [ ] |
@@ -456,7 +456,7 @@ Notes:
 - `themi bot` runs the channel on its own in echo mode. Prompt 10 replaces it with `themi run`.
 
 ### 08 · Outbox and PDA shield
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 06, 07
 Read first: "Module behaviour" → A (PDA shielding); "How the family uses Themi" (quiet by
 default); "Testing" → PDA shield and Outbox rows.
@@ -495,6 +495,37 @@ Tests:
   counted, dedupe.
 
 Done when: every outgoing message in the codebase goes through the outbox. Commit.
+
+Notes:
+- Usage: `Outbox(store, sender=channel, shield=PdaShield(AIRewriter(router)), receptivity)`,
+  then `await outbox.send(member, text, priority=Priority.X, buttons=, kind=, dedupe_key=,
+  deadline=)`. The scheduler (prompt 10) must call `await outbox.flush()` every minute or so.
+- Deadline semantics, a refinement of the plan: once a deadline passes, the receptivity hook and
+  the daily limit stop holding a message, but quiet hours still do. `urgent` is the only way
+  through quiet hours. Urgent messages count toward the daily limit but are never held by it.
+  A daily limit of 0 means only urgent messages and messages past a deadline get through.
+- Shielding runs at delivery time, not at queue time. `outbox.text` keeps the original and
+  `outbox.sent_text` records what actually went out. Replies and urgent messages rewrite as
+  interactive AI calls, the rest as background calls.
+- PDA strictness levels are cumulative:
+    - 0: "you need to/must/have to", "right now", "ASAP"
+    - 1: adds "don't forget", "remember to", "make sure", "you should"
+    - 2 (the default): adds a command verb opening a sentence
+    - 3: adds must/should/needs to/required with any subject
+
+  Sentences ending in "?" are never treated as commands. A verb followed by you/we/I is
+  treated as a question.
+- When the AI rewrite suggests two options and the caller passed no buttons, the options become
+  `Button(label, "reply", {"text": option})`. The agent (prompt 09) must handle
+  `ButtonPress.kind == "reply"` as if the person had typed `payload["text"]`.
+- `PdaCalibrator.observe_text` and `observe_reaction` exist, but nothing calls them yet. The
+  agent (prompt 09) should run them on every inbound text and reaction.
+- `themi.localtime` holds the family's timezone helpers. Timestamps are always stored as UTC ISO
+  strings via `to_utc_iso()`, so SQL string comparisons work.
+- The channel's handler can now be set after construction (`channel.handler = ...`), because
+  the handler's outbox needs the channel.
+- `tests/unit/test_architecture.py` fails if anything outside `outbox.py` and `telegram.py` calls
+  `send_text`, `send_message` or `edit_text`.
 
 ### 09 · Agent core and scenario harness
 Status: [ ]
