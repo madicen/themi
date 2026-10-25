@@ -122,6 +122,10 @@ class GoogleAccounts:
 
     # ----- access tokens ------------------------------------------------------
 
+    def forget_access_token(self, account_id: int) -> None:
+        """Drop a cached token Google just refused (a 401), so the next call refreshes."""
+        self._tokens.pop(account_id, None)
+
     async def access_token(self, account_id: int) -> Secret:
         """A current access token for a linked account, refreshing it when needed."""
         cached = self._tokens.get(account_id)

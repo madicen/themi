@@ -52,6 +52,7 @@ class GoogleConfig:
     token_url: str = "https://oauth2.googleapis.com/token"
     revoke_url: str = "https://oauth2.googleapis.com/revoke"
     userinfo_url: str = "https://openidconnect.googleapis.com/v1/userinfo"
+    gmail_url: str = "https://gmail.googleapis.com"
 
 
 class OAuthError(Exception):

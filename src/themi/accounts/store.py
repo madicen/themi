@@ -492,11 +492,19 @@ class AccountStore:
         return _account_from_row(row) if row else None
 
     def set_linked_account_enabled(self, account_id: int, enabled: bool) -> None:
-        """Off when Google stops accepting the token; on again after a fresh link."""
+        """Off when Google stops accepting the token; on again after a fresh link.
+
+        Turning it back on clears the sync's backoff and its "link again" alert.
+        """
         self.get_linked_account(account_id)
-        self.db.execute(
-            "UPDATE linked_accounts SET enabled = ? WHERE id = ?", (int(enabled), account_id)
-        )
+        if enabled:
+            self.db.execute(
+                "UPDATE linked_accounts SET enabled = 1, alerted_at = NULL, poll_after = NULL, "
+                "poll_failures = 0 WHERE id = ?",
+                (account_id,),
+            )
+        else:
+            self.db.execute("UPDATE linked_accounts SET enabled = 0 WHERE id = ?", (account_id,))
 
     def remove_linked_account(self, actor: Actor, account_id: int) -> None:
         account = self.get_linked_account(account_id)

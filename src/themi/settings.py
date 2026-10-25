@@ -24,6 +24,7 @@ GOOGLE_ENDPOINT_VARIABLES = {
     "token_url": "GOOGLE_TOKEN_URL",
     "revoke_url": "GOOGLE_REVOKE_URL",
     "userinfo_url": "GOOGLE_USERINFO_URL",
+    "gmail_url": "GOOGLE_GMAIL_URL",
 }
 
 

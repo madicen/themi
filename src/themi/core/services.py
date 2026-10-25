@@ -22,6 +22,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
+    from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.core.habits import HabitReserve
     from themi.core.memory import Memory
@@ -91,6 +92,7 @@ class Services:
     taskboard: TaskBoard | None = None
     habits: HabitReserve | None = None
     google: GoogleAccounts | None = None
+    gmail: GmailSync | None = None
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

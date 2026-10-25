@@ -20,6 +20,7 @@ from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
@@ -98,6 +99,8 @@ def build_app(
     services.memory = Memory(db, rulebook)
     if google is not None:
         services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
+        services.gmail = GmailSync(store, services.google, outbox)
+        install_executors(services.autonomy.executors, services.gmail)
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
     habits = HabitReserve(services)
@@ -115,6 +118,8 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
     ]
+    if services.gmail is not None:
+        periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if services.google is not None:
         periodic.append(
             PeriodicTask(
