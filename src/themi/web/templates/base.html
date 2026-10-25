@@ -15,6 +15,10 @@
     <nav>
       <a href="/">Home</a>
       <a href="/settings">My settings</a>
+      <a href="/ai">My AI</a>
+      <a href="/knowledge">Rules &amp; memory</a>
+      <a href="/tiers">What Themi does alone</a>
+      {% if member.is_admin %}<a href="/family">Family</a>{% endif %}
       <form method="post" action="/logout" class="inline">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="link">Sign out</button>

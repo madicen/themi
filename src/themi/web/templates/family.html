@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Family · Themi{% endblock %}
+{% block content %}
+<h1>Family</h1>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<form method="post" action="/family" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Family name <input name="name" value="{{ family.name }}" required></label>
+  <label>Timezone <input name="timezone" value="{{ family.timezone }}" required></label>
+  <label>Monthly takeout budget ($) <input name="budget" inputmode="decimal" value="{{ budget }}"></label>
+  <label>Staples (one per line)
+    <textarea name="staples" rows="5">{{ family.staples | join("\n") }}</textarea>
+  </label>
+  <button class="primary">Save</button>
+</form>
+
+<h2>People</h2>
+{% for person in members %}
+<article class="card">
+  <p class="summary">{{ person.name }} · {{ "admin" if person.is_admin else "member" }}
+    · {{ "connected to Telegram" if person.telegram_user_id else "not connected yet" }}</p>
+  <div class="buttons">
+    <form method="post" action="/family/members/{{ person.id }}/role">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="role" value="{{ 'member' if person.is_admin else 'admin' }}">
+      <button>{{ "Make a member" if person.is_admin else "Make an admin" }}</button>
+    </form>
+    {% if not person.telegram_user_id %}
+    <form method="post" action="/family/members/{{ person.id }}/invite">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>New invite code</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if person.id != member.id %}
+  <details>
+    <summary>Remove {{ person.name }}</summary>
+    <form method="post" action="/family/members/{{ person.id }}/remove">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">This deletes their settings, messages and linked accounts.</p>
+      <label>Type their name to confirm <input name="confirm_name" autocomplete="off"></label>
+      <button class="quiet">Remove</button>
+    </form>
+  </details>
+  {% endif %}
+</article>
+{% endfor %}
+
+<form method="post" action="/family/members" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="summary">Add someone</p>
+  <label>Name <input name="name" required></label>
+  <label>Role
+    <select name="role"><option value="member">Member</option><option value="admin">Admin</option></select>
+  </label>
+  <button class="primary">Add and get an invite code</button>
+</form>
+{% endblock %}

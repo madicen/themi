@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}My AI · Themi{% endblock %}
+{% block content %}
+<h1>My AI</h1>
+<p class="muted">These are yours alone: your keys are used only for your conversations, and
+nobody else (admins included) can see or change them. Keys are never shown again after saving.</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+
+<h2>Where each job goes</h2>
+{% for task, slots in chains.items() %}
+<form method="post" action="/ai/chains/{{ task.value }}" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="summary">{{ task_labels[task] }}</p>
+  {% for backend_id, model in slots %}
+  <div class="slot">
+    <label>{{ "First choice" if loop.first else "If that fails" }}
+      <select name="backend_{{ loop.index0 }}">
+        <option value="">{{ "Choose…" if loop.first else "(none)" }}</option>
+        {% for b in backends %}
+        <option value="{{ b.id }}" {% if b.id == backend_id %}selected{% endif %}>{{ b.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Model (optional) <input name="model_{{ loop.index0 }}" value="{{ model }}" placeholder="backend default"></label>
+  </div>
+  {% endfor %}
+  <div class="buttons">
+    <button class="primary">Save order</button>
+    <button formaction="/ai/test/{{ task.value }}" hx-post="/ai/test/{{ task.value }}"
+            hx-target="#test-{{ task.value }}" hx-swap="innerHTML">Test the first choice</button>
+  </div>
+  <div id="test-{{ task.value }}"></div>
+</form>
+{% endfor %}
+
+<h2>My backends</h2>
+{% for b in backends %}
+<form method="post" action="/ai/backends/{{ b.id }}" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="summary">{{ b.label }} · {{ kind_labels[b.kind] }}</p>
+  {% if b.kind == "gemini" %}<p class="muted">On Gemini's free tier, Google may use what's sent to improve its products.</p>{% endif %}
+  <label>Label <input name="label" value="{{ b.label }}" required></label>
+  <label>Default model <input name="model" value="{{ b.model }}" placeholder="provider default"></label>
+  <label>Address (for local or custom servers) <input name="base_url" value="{{ b.base_url or '' }}"></label>
+  <label>API key <input type="password" name="api_key" autocomplete="new-password"
+         placeholder="{{ 'saved (leave blank to keep)' if b.has_key else 'not set' }}"></label>
+  {% if b.has_key %}<label class="check"><input type="checkbox" name="remove_key"> Remove saved key</label>{% endif %}
+  <details>
+    <summary>More</summary>
+    <label>Timeout (seconds) <input type="number" name="timeout" min="1" max="600" value="{{ b.timeout | int }}"></label>
+    <label class="check"><input type="checkbox" name="supports_tools" {% if b.supports_tools %}checked{% endif %}> Can use tools</label>
+    <label class="check"><input type="checkbox" name="supports_structured" {% if b.supports_structured %}checked{% endif %}> Can answer in JSON</label>
+    <label class="check"><input type="checkbox" name="supports_audio" {% if b.supports_audio %}checked{% endif %}> Can hear voice notes</label>
+    {% if b.kind == "anthropic" %}
+    <label>Thinking effort
+      <select name="effort">
+        {% for level in ["", "low", "medium", "high", "xhigh", "max"] %}
+        <option value="{{ level }}" {% if (b.effort or "") == level %}selected{% endif %}>{{ level or "default (medium)" }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </details>
+  <div class="buttons">
+    <button class="primary">Save</button>
+    <button class="quiet" formaction="/ai/backends/{{ b.id }}/remove">Remove backend</button>
+  </div>
+</form>
+{% endfor %}
+
+<form method="post" action="/ai/backends" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="summary">Add a backend</p>
+  <label>Label <input name="label" required placeholder="e.g. Claude, or Laptop Ollama"></label>
+  <label>Provider
+    <select name="kind">{% for value, words in kinds %}<option value="{{ value }}">{{ words }}</option>{% endfor %}</select>
+  </label>
+  <label>Model <input name="model" placeholder="provider default"></label>
+  <label>Address (local or custom servers) <input name="base_url"></label>
+  <label>API key <input type="password" name="api_key" autocomplete="new-password"></label>
+  <input type="hidden" name="supports_tools" value="on">
+  <input type="hidden" name="supports_structured" value="on">
+  <button class="primary">Add</button>
+</form>
+{% endblock %}

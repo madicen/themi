@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}What Themi does alone · Themi{% endblock %}
+{% block content %}
+<h1>What Themi does on its own</h1>
+<p class="muted">Everything starts by asking first. Some kinds of action can become automatic;
+the rest always need a yes.{% if not member.is_admin %} Admins can change these.{% endif %}</p>
+{% for category in categories %}
+<article class="card">
+  <p class="summary">{{ category.label }}</p>
+  {% if category.escalated %}
+    <p class="alert">Asking again because: {{ category.escalation_reason }}</p>
+  {% endif %}
+  {% if category.capped %}
+    <p class="muted">Always asks first. This can't become automatic.</p>
+  {% elif category.tier == 2 %}
+    <p class="muted">Automatic{% if category.escalated %} (paused){% endif %}.</p>
+  {% else %}
+    <p class="muted">Asks first.</p>
+  {% endif %}
+  {% if member.is_admin %}
+  <div class="buttons">
+    {% if category.escalated %}
+    <form method="post" action="/tiers/{{ category.name }}/resume">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">Resume automatic</button>
+    </form>
+    {% endif %}
+    {% if not category.capped %}
+      {% if category.tier == 2 %}
+      <form method="post" action="/tiers/{{ category.name }}/supervised">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button>Ask first again</button>
+      </form>
+      {% else %}
+      <form method="post" action="/tiers/{{ category.name }}/automatic">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button>Make automatic</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+</article>
+{% endfor %}
+{% endblock %}

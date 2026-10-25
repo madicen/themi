@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Rules &amp; memory · Themi{% endblock %}
+{% block content %}
+<h1>Rules &amp; memory</h1>
+
+<h2>Household rules</h2>
+{% for rule in locked %}
+<article class="card">
+  <p class="summary">{{ rule.summary }}</p>
+  <p class="muted">{{ rule.text }}</p>
+  {% if member.is_admin or rule.affects == member.id %}
+  <form method="post" action="/rules/{{ rule.id }}/retire">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Retire</button>
+  </form>
+  {% endif %}
+</article>
+{% else %}
+<p class="muted">No household rules yet.</p>
+{% endfor %}
+
+{% if drafts %}
+<h2>Your drafts</h2>
+{% for rule in drafts %}
+<article class="card">
+  <p class="summary">{{ rule.summary }}</p>
+  <p class="muted">{{ rule.text }}</p>
+  <div class="buttons">
+    <form method="post" action="/rules/{{ rule.id }}/lock">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">Lock it in</button>
+    </form>
+    <form method="post" action="/rules/{{ rule.id }}/discard">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Set aside</button>
+    </form>
+  </div>
+</article>
+{% endfor %}
+{% endif %}
+
+<h2>What Themi remembers</h2>
+<p class="muted">Pinned facts are always in front of Themi; the rest come up when they're relevant.
+Household facts are shared; personal ones only appear in your own conversations.</p>
+{% for fact in facts %}
+<article class="card">
+  <form method="post" action="/facts/{{ fact.id }}/edit">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="muted">{{ "Personal" if fact.scope == "member" else "Household" }} · {{ fact.subject }}{% if fact.pinned %} · pinned{% endif %}
+      <input name="fact" value="{{ fact.fact }}" required>
+    </label>
+    <button>Save</button>
+  </form>
+  <div class="buttons">
+    <form method="post" action="/facts/{{ fact.id }}/{{ 'unpin' if fact.pinned else 'pin' }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button>{{ "Unpin" if fact.pinned else "Pin" }}</button>
+    </form>
+    <form method="post" action="/facts/{{ fact.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Forget</button>
+    </form>
+  </div>
+</article>
+{% else %}
+<p class="muted">Nothing remembered yet.</p>
+{% endfor %}
+
+{% if repairs %}
+<h2>Times Themi forgot something</h2>
+<ul class="activity">
+  {% for repair in repairs %}
+  <li><span class="when">{{ repair.created_at | local_time }}</span> "{{ repair.complaint }}": {{ repair.fix }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

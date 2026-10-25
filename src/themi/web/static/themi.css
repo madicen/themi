@@ -44,3 +44,11 @@ input[type=time], input[type=number], select { font: inherit; padding: .4rem; bo
   border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 input[type=number] { width: 5rem; }
 select { max-width: 100%; }
+.flash { white-space: pre-line; }
+textarea, input:not([type=checkbox]):not([type=hidden]) { font: inherit; padding: .4rem; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%; max-width: 100%; }
+input[type=number] { width: 6rem; }
+details { margin: .5rem 0; }
+summary { cursor: pointer; color: var(--accent); }
+.slot { border-left: 3px solid var(--line); padding-left: .75rem; margin: .5rem 0; }
+nav { flex-wrap: wrap; }

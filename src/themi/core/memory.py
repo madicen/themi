@@ -163,6 +163,11 @@ class Memory:
     def forget(self, fact_id: int) -> None:
         self.db.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
 
+    @staticmethod
+    def can_edit(member: Member, fact: Fact) -> bool:
+        """Anyone may edit household facts; personal facts only by their owner."""
+        return fact.scope == "family" or fact.member_id == member.id
+
     # ----- reading ------------------------------------------------------------
 
     def get(self, fact_id: int) -> Fact:

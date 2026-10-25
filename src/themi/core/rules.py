@@ -240,6 +240,47 @@ class Rulebook:
         self._set_status(rule_id, "unlocked")
         return self.get(rule_id)
 
+    def grant_automatic(self, admin: Member, category: str) -> Rule:
+        """An admin turning on "automatic" on the website: a rule locked by that action.
+
+        Ticking the switch is the explicit confirmation, so the rule is locked at once
+        (and shows in /rules like any other).
+        """
+        self._check_grant_possible(admin, category)
+        cat = self.autonomy.category(category)
+        now = to_utc_iso(clock.now())
+        label = cat.label[:1].lower() + cat.label[1:]
+        rule_id = self.db.execute(
+            "INSERT INTO rules (summary, text, kind, category, status, proposed_by, affects, "
+            "created_at, updated_at, locked_at, locked_by) "
+            "VALUES (?, ?, 'autonomy_grant', ?, 'locked', ?, ?, ?, ?, ?, ?)",
+            (
+                f"Automatic: {cat.label}",
+                f"Themi may {label} without asking first.",
+                category,
+                admin.id,
+                admin.id,
+                now,
+                now,
+                now,
+                f"member:{admin.id}",
+            ),
+        )
+        self.autonomy.grant_tier2(category, via_rule_id=rule_id, by=admin)
+        return self.get(rule_id)
+
+    def revoke_automatic(self, admin: Member, category: str) -> None:
+        """Turn "automatic" off: retire the rule that granted it (or just the grant)."""
+        row = self.db.one(
+            "SELECT id FROM rules WHERE kind = 'autonomy_grant' AND category = ? "
+            "AND status = 'locked' ORDER BY id DESC LIMIT 1",
+            (category,),
+        )
+        if row is not None:
+            self.unlock(row["id"], admin)
+        else:
+            self.autonomy.revoke_tier2(category, by=admin)
+
     def add_standing_reminder(self, member: Member, summary: str, text: str) -> Rule:
         """Lock a reminder straight away. Used by context repair, which the person asked for."""
         now = to_utc_iso(clock.now())
