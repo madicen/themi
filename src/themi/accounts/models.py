@@ -26,6 +26,8 @@ class Family:
     takeout_budget_cents: int
     staples: tuple[str, ...]
     created_at: datetime
+    task_owners: dict[str, int] = field(default_factory=dict, hash=False)  # kind -> member id
+    handover_cost: float = 10.0
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,10 @@ class Member:
     recovery_hours: float
     tracking: dict[str, bool] = field(hash=False)
     created_at: datetime
+    kind_costs: dict[str, float] = field(default_factory=dict, hash=False)
+
+    def kind_cost(self, kind: str) -> float:
+        return self.kind_costs.get(kind, 1.0)
 
     @property
     def is_admin(self) -> bool:

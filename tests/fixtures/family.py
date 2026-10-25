@@ -71,9 +71,13 @@ def seed_family(store: AccountStore) -> SeededFamily:
         pda_strength=1,
         recovery_hours=4,
     )
+    # The plan's defaults: text tasks to Erin, calls to her husband.
+    store.update_family(SYSTEM, task_owners={"text": erin.id, "call": husband.id})
     store.redeem_invite(store.create_invite(SYSTEM, erin.id), ERIN_TELEGRAM_ID)
     store.redeem_invite(store.create_invite(SYSTEM, husband.id), HUSBAND_TELEGRAM_ID)
-    return SeededFamily(store, family, store.get_member(erin.id), store.get_member(husband.id))
+    return SeededFamily(
+        store, store.get_family() or family, store.get_member(erin.id), store.get_member(husband.id)
+    )
 
 
 def make_store() -> AccountStore:

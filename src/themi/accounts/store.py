@@ -48,6 +48,7 @@ INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 PROVIDERS = ("gmail",)
 DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie")
 APPLIANCES = ("washer", "dryer", "dishwasher", "feeder", "litter_box")
+TASK_KINDS = ("text", "call", "physical", "errand")
 
 
 class AccountsError(Exception):
@@ -107,6 +108,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         recovery_hours=row["recovery_hours"],
         tracking={name: json.loads(row["tracking"]).get(name, True) for name in TRACKING_INPUTS},
         created_at=_parse_dt(row["created_at"]),
+        kind_costs={k: float(v) for k, v in json.loads(row["kind_costs"]).items()},
     )
 
 
@@ -172,6 +174,8 @@ class AccountStore:
             takeout_budget_cents=row["takeout_budget_cents"],
             staples=tuple(json.loads(row["staples"])),
             created_at=_parse_dt(row["created_at"]),
+            task_owners={k: int(v) for k, v in json.loads(row["task_owners"]).items()},
+            handover_cost=float(row["handover_cost"]),
         )
 
     def create_family(
@@ -207,6 +211,8 @@ class AccountStore:
         timezone: str | None = None,
         takeout_budget_cents: int | None = None,
         staples: tuple[str, ...] | None = None,
+        task_owners: dict[str, int | None] | None = None,
+        handover_cost: float | None = None,
     ) -> Family:
         self._require_admin(actor)
         if self.get_family() is None:
@@ -225,6 +231,19 @@ class AccountStore:
             changes["takeout_budget_cents"] = takeout_budget_cents
         if staples is not None:
             changes["staples"] = json.dumps([s.strip() for s in staples if s.strip()])
+        if task_owners is not None:
+            owners = {}
+            for kind, member_id in task_owners.items():
+                if kind not in TASK_KINDS:
+                    raise InvalidValue(f"unknown task kind {kind!r}")
+                if member_id is not None:
+                    self.get_member(member_id)
+                    owners[kind] = member_id
+            changes["task_owners"] = json.dumps(owners)
+        if handover_cost is not None:
+            if not 0 <= handover_cost <= 50:
+                raise InvalidValue("the hand-over cost must be between 0 and 50")
+            changes["handover_cost"] = float(handover_cost)
         if changes:
             changes["updated_at"] = _iso(clock.now())
             assignments = ", ".join(f"{column} = :{column}" for column in changes)
@@ -286,6 +305,7 @@ class AccountStore:
         pda_strength: int | None = None,
         recovery_hours: float | None = None,
         tracking: dict[str, bool] | None = None,
+        kind_costs: dict[str, float] | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -314,6 +334,13 @@ class AccountStore:
             if unknown:
                 raise InvalidValue(f"unknown tracking inputs: {', '.join(sorted(unknown))}")
             changes["tracking"] = json.dumps({**member.tracking, **tracking})
+        if kind_costs is not None:
+            for kind, multiplier in kind_costs.items():
+                if kind not in TASK_KINDS:
+                    raise InvalidValue(f"unknown task kind {kind!r}")
+                if not 0.25 <= multiplier <= 4:
+                    raise InvalidValue("a task-kind cost must be between 0.25 and 4")
+            changes["kind_costs"] = json.dumps({**member.kind_costs, **kind_costs})
         if changes:
             changes["updated_at"] = _iso(clock.now())
             changes["id"] = member_id
