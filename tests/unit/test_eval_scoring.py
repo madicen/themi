@@ -80,3 +80,32 @@ def test_a_case_the_ai_never_answered_is_unavailable_not_passed() -> None:
     assert summary["cases"] == 1 and summary["pass_rate"] == 100.0  # only answered cases count
     assert "pantry" not in summary["categories"]
     assert "1 couldn't run" in format_summary("gemini", summary)
+
+
+def test_read_only_lookups_are_always_allowed() -> None:
+    c = case(expect=("create_task",))
+    calls = [("list_open_items", {}), ("show_pantry", {}), ("create_task", {})]
+    assert score(c, calls, ["On it."], 2).passed
+
+
+def test_either_of_two_tools_can_satisfy_a_case() -> None:
+    c = case(expect_any=("remember_fact", "propose_rule"))
+    assert score(c, [("propose_rule", {})], ["Noted."], 2).passed
+    assert score(c, [("remember_fact", {})], ["Noted."], 2).passed
+    assert score(c, [], ["Noted."], 2).problems == ["expected one of remember_fact, propose_rule"]
+    assert score(c, [("create_task", {})], ["Noted."], 2).problems == [
+        "expected one of remember_fact, propose_rule",
+        "unexpected create_task call",
+    ]
+
+
+def test_only_the_models_own_replies_are_scored() -> None:
+    from tests.evals.scoring import model_replies
+
+    sent = [
+        ("approval", "Add eggs to the grocery list\nGo ahead, or not now?"),
+        ("chat", "Asked about eggs."),
+    ]
+    assert model_replies(sent) == ["Asked about eggs."]
+    # Saved runs from before kinds were recorded: approval cards are recognised by their ask.
+    assert model_replies(["Add eggs\nGo ahead, or not now?", "Asked."]) == ["Asked."]

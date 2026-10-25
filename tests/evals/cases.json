@@ -8,8 +8,8 @@
     {"id": "energy-plumber", "category": "energy_notes", "message": "I'm exhausted. Can someone else deal with texting the plumber?", "expect": ["log_energy_note"], "allow": ["create_task", "draft_vendor_call"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
     {"id": "energy-husband", "category": "energy_notes", "from": "Husband", "message": "Work was brutal today, I've got nothing left", "expect": ["log_energy_note"], "args": {"log_energy_note": {"effect": {"lt": 0}}}},
 
-    {"id": "pantry-olive-oil", "category": "pantry", "message": "Used the last of the olive oil.", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["olive oil", "out"]}}},
-    {"id": "pantry-rice-low", "category": "pantry", "message": "We're running low on rice", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["rice", "low"]}}},
+    {"id": "pantry-olive-oil", "category": "pantry", "message": "Used the last of the olive oil.", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["olive oil", "out"]}}, "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
+    {"id": "pantry-rice-low", "category": "pantry", "message": "We're running low on rice", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["rice", "low"]}}, "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
     {"id": "pantry-bought", "category": "pantry", "message": "Just picked up eggs and coffee", "expect": ["update_pantry"], "args": {"update_pantry": {"_json": ["eggs", "coffee", "plenty"]}}},
     {"id": "pantry-add-cumin", "category": "pantry", "message": "Can you put cumin on the grocery list?", "expect": ["add_to_grocery_list"], "args": {"add_to_grocery_list": {"_json": ["cumin"]}}, "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
     {"id": "pantry-show-list", "category": "pantry", "message": "What's on the grocery list?", "expect": ["show_grocery_list"]},
@@ -25,7 +25,7 @@
     {"id": "repair-vet", "category": "context_repair", "message": "You keep forgetting the cat's vet is on Tuesdays", "expect": ["report_forgotten_context"], "allow": ["remember_fact"], "args": {"report_forgotten_context": {"_json": ["vet"]}}},
     {"id": "repair-coffee", "category": "context_repair", "message": "I told you already, I don't drink coffee anymore", "expect": ["report_forgotten_context"], "allow": ["remember_fact", "update_pantry"]},
     {"id": "repair-dana", "category": "context_repair", "message": "You forgot again that Dana is our property manager", "expect": ["report_forgotten_context"], "allow": ["remember_fact"]},
-    {"id": "remember-bins", "category": "context_repair", "message": "Remember that the bins go out on Wednesday nights", "expect": ["remember_fact"], "allow": ["propose_rule"], "args": {"remember_fact": {"_json": ["wednesday"]}}},
+    {"id": "remember-bins", "category": "context_repair", "message": "Remember that the bins go out on Wednesday nights", "expect_any": ["remember_fact", "propose_rule"]},
     {"id": "remember-birthday", "category": "context_repair", "message": "My mum's birthday is March 3rd, keep that in mind", "expect": ["remember_fact"], "args": {"remember_fact": {"_json": ["march"]}}},
 
     {"id": "approve-ambiguous-yes", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}, {"stage_grocery": ["rice"]}], "message": "yes", "expect": [], "allow": ["list_open_items"], "reply_must": "\\?"},

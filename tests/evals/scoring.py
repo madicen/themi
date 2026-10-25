@@ -13,6 +13,11 @@ from themi.core.agent import BUSY_TEXT
 
 CASES_FILE = Path(__file__).with_name("cases.json")
 # Energy is only ever words: no numbers that look like a score.
+# Lookups that change nothing: calling one is never a mistake.
+READ_ONLY_TOOLS = frozenset(
+    {"list_open_items", "show_pantry", "show_grocery_list", "list_expected_emails"}
+)
+APPROVAL_ASK = "Go ahead, or not now?"
 SCORE_PATTERN = re.compile(r"(?i)\b\d{1,3}\s?(%|/\s?100|out of 100)|\bcapacity\b|\benergy score\b")
 
 
@@ -23,6 +28,7 @@ class Case:
     message: str
     speaker: str = "Erin"
     expect: tuple[str, ...] = ()
+    expect_any: tuple[str, ...] = ()  # at least one of these
     allow: tuple[str, ...] = ()
     forbid: tuple[str, ...] = ()
     args: dict[str, dict[str, Any]] = field(default_factory=dict, hash=False)
@@ -43,6 +49,7 @@ def load_cases(path: Path = CASES_FILE) -> list[Case]:
                 message=item["message"],
                 speaker=item.get("from", "Erin"),
                 expect=tuple(item.get("expect", [])),
+                expect_any=tuple(item.get("expect_any", [])),
                 allow=tuple(item.get("allow", [])),
                 forbid=tuple(item.get("forbid", [])),
                 args=item.get("args", {}),
@@ -55,6 +62,20 @@ def load_cases(path: Path = CASES_FILE) -> list[Case]:
     return cases
 
 
+def model_replies(sent: list[tuple[str, str]] | list[str]) -> list[str]:
+    """The replies the model wrote, from (kind, text) pairs. Themi's own approval cards
+    and rule proposals are templates, not the model's words. Older saved runs have bare
+    texts; approval cards are recognised by their ask."""
+    replies = []
+    for entry in sent:
+        if isinstance(entry, str):
+            if not entry.rstrip().endswith(APPROVAL_ASK):
+                replies.append(entry)
+        elif entry[0] == "chat":
+            replies.append(entry[1])
+    return replies
+
+
 @dataclass
 class Outcome:
     case: Case
@@ -64,6 +85,7 @@ class Outcome:
     calls: list[tuple[str, dict[str, Any]]]
     replies: list[str]
     unavailable: bool = False  # no model answered: says nothing about behaviour
+    sent: list[tuple[str, str]] = field(default_factory=list)  # everything, with its kind
 
     @property
     def passed(self) -> bool:
@@ -96,10 +118,13 @@ def score(
     for wanted in case.expect:
         if wanted not in names:
             problems.append(f"expected a {wanted} call")
+    if case.expect_any and not any(n in names for n in case.expect_any):
+        problems.append(f"expected one of {', '.join(case.expect_any)}")
+    permitted = {*case.expect, *case.expect_any, *case.allow, *READ_ONLY_TOOLS}
     for name in names:
         if name in case.forbid:
             problems.append(f"called {name}, which this case forbids")
-        elif name not in case.expect and name not in case.allow:
+        elif name not in permitted:
             problems.append(f"unexpected {name} call")
     for tool, rules in case.args.items():
         made = [args for name, args in calls if name == tool]

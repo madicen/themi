@@ -1,10 +1,12 @@
 name: Nightly
 
-# Live smoke tests and AI behaviour evals, with test-account secrets kept in
-# the repository's settings. Never the family's real accounts.
+# Live smoke tests nightly; AI behaviour evals weekly (they use up free-tier
+# quota), or by hand. Test-account secrets live in the repository's settings,
+# never the family's real accounts.
 on:
   schedule:
-    - cron: "17 10 * * *"   # 10:17 UTC, early morning in California
+    - cron: "17 10 * * *"   # live tests: 10:17 UTC, early morning in California
+    - cron: "47 10 * * 0"   # evals: Sundays
   workflow_dispatch:
     inputs:
       provider:
@@ -13,6 +15,7 @@ on:
 
 jobs:
   live:
+    if: github.event_name != 'schedule' || github.event.schedule == '17 10 * * *'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +37,7 @@ jobs:
         run: make test-live PYTHON=python
 
   evals:
+    if: github.event_name != 'schedule' || github.event.schedule == '47 10 * * 0'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +51,8 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THEMI_EVAL_MODEL: gemini-3.5-flash-lite
+          THEMI_EVAL_FALLBACK_MODEL: gemini-3.1-flash-lite
         # A low pass rate is information, not a broken build: the results are uploaded.
         continue-on-error: true
         run: make evals PYTHON=python PROVIDER=${{ inputs.provider || 'gemini' }}

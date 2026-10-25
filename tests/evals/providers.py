@@ -2,7 +2,7 @@
 
 | PROVIDER      | Needs                                    | Optional                     |
 | ------------- | ---------------------------------------- | ---------------------------- |
-| gemini        | GEMINI_API_KEY (free tier is fine)       | THEMI_EVAL_MODEL             |
+| gemini        | GEMINI_API_KEY (free tier is fine)       | THEMI_EVAL_MODEL (and below) |
 | claude        | ANTHROPIC_API_KEY                        | THEMI_EVAL_MODEL             |
 | ollama        | THEMI_EVAL_OLLAMA_MODEL                  | THEMI_EVAL_OLLAMA_URL        |
 | openai_compat | THEMI_EVAL_OPENAI_URL, _MODEL            | THEMI_EVAL_OPENAI_KEY        |
@@ -11,6 +11,10 @@ THEMI_EVAL_PACE (seconds between cases) keeps free tiers under their rate
 limits: 30 by default for Gemini (its free tier allowed 5 requests a minute and
 20 a day for gemini-3.8-flash in October 2026; a case makes two or three), 0 for
 the rest.
+
+THEMI_EVAL_FALLBACK_MODEL adds a second backend after the first (the router
+falls back to it, as in real use). THEMI_EVAL_RPM caps calls per minute for each
+model: 10 by default for Gemini, unlimited otherwise.
 
 These are read from the environment, then from `.env` (the environment wins),
 so a test key can sit in `.env` instead of a shell history.
@@ -34,6 +38,8 @@ class EvalBackend:
     base_url: str | None = None
     api_key: Secret | None = None
     pace: float = 0.0
+    fallback_model: str = ""
+    rpm: int = 0  # calls per minute per model; 0 is unlimited
 
 
 def backend(name: str) -> EvalBackend | str:
@@ -49,7 +55,9 @@ def backend(name: str) -> EvalBackend | str:
             "gemini",
             model,
             api_key=Secret(env["GEMINI_API_KEY"]),
-            pace=float(pace or 30),
+            pace=float(pace or 0),
+            fallback_model=env.get("THEMI_EVAL_FALLBACK_MODEL", ""),
+            rpm=int(env.get("THEMI_EVAL_RPM") or 10),
         )
     if name == "claude":
         if not env.get("ANTHROPIC_API_KEY"):

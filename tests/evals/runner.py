@@ -5,28 +5,33 @@ from __future__ import annotations
 from typing import Any
 
 from tests.evals.providers import EvalBackend
-from tests.evals.scoring import Case, Outcome, score
+from tests.evals.scoring import Case, Outcome, model_replies, score
 from tests.scenarios.harness import Scenario
 from themi.ai.settings import AITask, RouteEntry
+from themi.core.groceries import list_summary
 
 
 def use_backend(scenario: Scenario, chosen: EvalBackend) -> None:
     ai = scenario.app.ai_settings
     for name in ("Erin", "Husband"):
         member = scenario.member(name)
-        added = ai.add_backend(
-            member,
-            member.id,
-            f"Eval {chosen.name}",
-            chosen.kind,
-            model=chosen.model,
-            base_url=chosen.base_url,
-            api_key=chosen.api_key,
-            supports_audio=False,
-        )
+        models = [chosen.model] + ([chosen.fallback_model] if chosen.fallback_model else [])
+        chain = []
+        for n, model in enumerate(models, start=1):
+            added = ai.add_backend(
+                member,
+                member.id,
+                f"Eval {chosen.name} {n}",
+                chosen.kind,
+                model=model,
+                base_url=chosen.base_url,
+                api_key=chosen.api_key,
+                supports_audio=False,
+            )
+            chain.append(RouteEntry(added.id))
         for task in AITask:
             if task is not AITask.TRANSCRIPTION:
-                ai.set_chain(member, member.id, task, [RouteEntry(added.id)])
+                ai.set_chain(member, member.id, task, chain)
 
 
 async def apply_setup(scenario: Scenario, case: Case) -> None:
@@ -38,7 +43,7 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
             await services.autonomy.stage(
                 "grocery_list_add",
                 member,
-                f"Add {' and '.join(items)} to the grocery list",
+                list_summary(items),
                 {"items": items},
                 "groceries.add",
             )
@@ -71,14 +76,16 @@ async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outco
         member = scenario.member(case.speaker)
         mark = scenario.app.db.scalar("SELECT COALESCE(MAX(id), 0) FROM outbox")
         await scenario.say(case.speaker, case.message)
-        replies = [
-            r["text"]
+        sent = [
+            (r["kind"], r["text"])
             for r in scenario.app.db.query(
-                "SELECT text FROM outbox WHERE id > ? AND member_id = ? AND priority = 'reply' "
-                "ORDER BY id",
+                "SELECT kind, text FROM outbox WHERE id > ? AND member_id = ? "
+                "AND priority = 'reply' ORDER BY id",
                 (mark, member.id),
             )
         ]
-        return score(case, calls, replies, member.pda_strength)
+        outcome = score(case, calls, model_replies(sent), member.pda_strength)
+        outcome.sent = sent
+        return outcome
     finally:
         await scenario.stop()

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend, backend
 from tests.evals.scoring import Outcome, format_summary, summarise
 
@@ -21,6 +22,12 @@ def eval_backend(request: pytest.FixtureRequest) -> EvalBackend:
     if isinstance(chosen, str):
         pytest.skip(chosen)
     return chosen
+
+
+@pytest.fixture(scope="session")
+def eval_factory(eval_backend: EvalBackend) -> PacedFactory:
+    """Shared by every case, so the per-minute limits span the whole run."""
+    return PacedFactory(eval_backend.rpm)
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus: int, config: pytest.Config) -> None:
@@ -50,6 +57,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus: int, config: pytest.Co
                         "problems": o.problems,
                         "calls": o.calls,
                         "replies": o.replies,
+                        "sent": o.sent,
                     }
                     for o in OUTCOMES
                 ],

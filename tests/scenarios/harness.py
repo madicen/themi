@@ -35,6 +35,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.ai import Capabilities, PermanentError
 from themi.ai.adapters import AdapterConfig
+from themi.ai.router import ProviderFactory
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
@@ -78,6 +79,7 @@ class Scenario:
         gcal: FakeGcal | None = None,
         *,
         real_models: bool = False,
+        provider_factory: ProviderFactory | None = None,
     ) -> None:
         """`real_models`: the router builds real adapters from each member's AI settings and
         retries with real waits (the evals); otherwise every model is a ScriptedProvider."""
@@ -97,7 +99,7 @@ class Scenario:
                 poll_timeout=0,
                 sleep=_no_sleep,
             ),
-            provider_factory=None if real_models else self.models,
+            provider_factory=(provider_factory if real_models else self.models),
             sleep=asyncio.sleep if real_models else _no_sleep,
             google=_google_config(google, gmail, gcal),
             grocery_list=ourgroceries,
