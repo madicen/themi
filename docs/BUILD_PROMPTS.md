@@ -1871,11 +1871,23 @@ Notes (2026-10-25):
       branches together. CI now runs `make cov`.
     - Today: overall 91.6%, `themi.ai` 96.1%, outbox 97.1%, PDA 100%, autonomy 95.7%,
       energy 97.1%.
-- Still to do before `[x]`:
-    - Put a Gemini free-tier test key in `.env` (`GEMINI_API_KEY=...`, or export it).
-    - Run `make evals`, and record the pass rates here.
-    - No key was available in this session, so the evals haven't run against a real model
-      yet.
+- First Gemini run (2026-10-25, `gemini-3.8-flash`, free tier): no results.
+    - Google answered `429 RESOURCE_EXHAUSTED` (`generate_content_free_tier_requests`,
+      limits 5 and 20) after the first few cases, plus some 503s and 504s. Not one model
+      call succeeded. The only real replies were the 2 approval cases Themi answers without
+      a model.
+    - Fixed a scorer bug found by the run (failing test first): Themi's "AI service is busy"
+      fallback had counted as a pass for no-tool cases (9/39 "passed").
+    - Such cases are now "couldn't run" and kept out of the rates. The run stops after 3 in
+      a row, the Gemini pace is 30 s for 5 requests a minute, and
+      `make evals EVAL_ARGS='-k energy'` runs one slice.
+    - A full run needs about 100 requests, against the 20 a day this key's free tier allows
+      for this model.
+- Noise in eval runs: "Task exception was never retrieved ... Event loop is closed", from
+  google-genai closing its httpx client after each test's event loop has ended. It's
+  harmless, and only happens with per-test loops.
+- Still to do before `[x]`: a complete Gemini run. That needs either a model or key with
+  enough free quota (`THEMI_EVAL_MODEL`), or slices over several days.
 
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [ ]
