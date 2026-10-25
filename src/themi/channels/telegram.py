@@ -34,9 +34,11 @@ os.environ.setdefault("PTB_TIMEDELTA", "1")
 
 import telegram
 from telegram import (
+    BotCommand,
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    LinkPreviewOptions,
     Message,
     MessageReactionUpdated,
     ReactionTypeEmoji,
@@ -365,11 +367,23 @@ class TelegramChannel:
     # ----- outbound -----------------------------------------------------------
 
     async def send_text(
-        self, member: Member, text: str, buttons: Sequence[Button] = (), *, kind: str = "chat"
+        self,
+        member: Member,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        kind: str = "chat",
+        link_preview: bool = True,
     ) -> int:
         """Send a message (with up to a few buttons on one row). Returns its message id."""
         chat_id = _chat_id(member)
-        return await self._send_raw(member, chat_id, text, buttons, kind=kind)
+        return await self._send_raw(
+            member, chat_id, text, buttons, kind=kind, link_preview=link_preview
+        )
+
+    async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
+        """Show the commands in Telegram's menu: (name without slash, description)."""
+        await self.bot.set_my_commands([BotCommand(name, words) for name, words in commands])
 
     async def _send_raw(
         self,
@@ -379,10 +393,14 @@ class TelegramChannel:
         buttons: Sequence[Button] = (),
         *,
         kind: str = "chat",
+        link_preview: bool = True,
     ) -> int:
         group_id, markup = self._keyboard(member, buttons)
+        preview = None if link_preview else LinkPreviewOptions(is_disabled=True)
         sent = await self._with_flood_retry(
-            lambda: self.bot.send_message(chat_id, text, reply_markup=markup)
+            lambda: self.bot.send_message(
+                chat_id, text, reply_markup=markup, link_preview_options=preview
+            )
         )
         if group_id is not None:
             self.store.db.execute(

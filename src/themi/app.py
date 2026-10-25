@@ -22,6 +22,7 @@ from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.commands import Commands
 from themi.core.memory import Memory
 from themi.core.rules import Rulebook
 from themi.core.services import Services
@@ -82,6 +83,7 @@ def build_app(
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
     services.memory = Memory(db, rulebook)
+    Commands(services).install()
     agent = Agent(services)
     channel.handler = agent
     periodic = [

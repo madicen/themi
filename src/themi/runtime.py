@@ -42,6 +42,7 @@ class Runtime:
         self.telegram_enabled = telegram_enabled
         self.scheduler_tick = scheduler_tick
         self.stop_event = asyncio.Event()
+        app.services.site_url = site_base_url(public_url, host, port)
         self.scheduler = Scheduler(app.db)
         for task in app.periodic:
             self.scheduler.every(task.name, task.every, task.run)
@@ -83,6 +84,10 @@ class Runtime:
     async def run(self) -> None:
         if self.telegram_enabled:
             await self.app.channel.start()
+            try:
+                await self.app.channel.publish_commands(self.app.services.command_menu())
+            except Exception:
+                log.warning("Couldn't publish the command menu to Telegram", exc_info=True)
         else:
             log.warning("Telegram is disabled (THEMI_DISABLE_TELEGRAM); not polling")
         tasks = [

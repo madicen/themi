@@ -134,3 +134,18 @@ def test_rule_texts_pass_the_strictest_pda_check() -> None:
     for template in templates:
         text = template.format(summary="Archive store promos")
         assert find_demands(text, 3) == [], text
+
+
+def test_command_texts_pass_the_strictest_pda_check(family) -> None:
+    from themi.core import commands
+
+    texts = [
+        commands.PAUSE_HELP.format(topics="meals, laundry"),
+        commands.LINK_SOON,
+        commands.tracking_message(family.erin)[0],
+        "Okay, holding meal reminders until 9:00 PM. /resume brings them back sooner.",
+        "Back to normal. Anything that was held will come through.",
+        "Here's a sign-in link for the Themi website. It works once, within 10 minutes:",
+    ]
+    for text in texts:
+        assert find_demands(text, 3) == [], text

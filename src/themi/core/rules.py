@@ -98,7 +98,7 @@ class Rulebook:
         services.rulebook = self
         services.button_handlers["rule"] = self.on_button
         services.awaiting_sources.append(self.awaiting_items)
-        services.commands["/rules"] = self.on_rules_command
+        services.add_command("/rules", self.on_rules_command, "See household rules and your drafts")
         services.tools.register(propose_rule_tool)
 
     # ----- reading ------------------------------------------------------------

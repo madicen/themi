@@ -69,8 +69,18 @@ class Services:
     button_handlers: dict[str, EventHandler] = field(default_factory=dict)
     reaction_handlers: list[EventHandler] = field(default_factory=list)
     commands: dict[str, CommandHandler] = field(default_factory=dict)
+    command_help: dict[str, str] = field(default_factory=dict)
+    site_url: str = ""  # the website's base address, for /site links
     rulebook: Rulebook | None = None
     memory: Memory | None = None
+
+    def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
+        self.commands[name] = handler
+        self.command_help[name] = description
+
+    def command_menu(self) -> list[tuple[str, str]]:
+        """For Telegram's command menu: (name without the slash, description)."""
+        return [(name.lstrip("/"), words) for name, words in self.command_help.items()]
 
     def awaiting(self, member: Member) -> list[AwaitingItem]:
         return [item for source in self.awaiting_sources for item in source(member)]

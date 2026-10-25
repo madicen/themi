@@ -81,6 +81,7 @@ class Scenario:
         )
         for member in (family.erin, family.husband):
             self.use_scripted_models(member)
+        self.app.services.site_url = "http://themi.test"
 
     # ----- setup --------------------------------------------------------------
 
@@ -99,6 +100,7 @@ class Scenario:
     async def start(self) -> None:
         clock.freeze(START)
         await self.app.channel.start()
+        await self.app.channel.publish_commands(self.app.services.command_menu())
 
     async def stop(self) -> None:
         await self.app.channel.stop()

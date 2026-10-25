@@ -77,7 +77,7 @@ class ApprovalsUI:
         services.button_handlers["approval"] = self.on_button
         services.reaction_handlers.append(self.on_reaction)
         services.awaiting_sources.append(self.awaiting_items)
-        services.commands["/pending"] = self.on_pending_command
+        services.add_command("/pending", self.on_pending_command, "See what's waiting on you")
 
     # ----- asking ---------------------------------------------------------------
 
