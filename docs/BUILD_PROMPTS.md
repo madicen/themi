@@ -20,7 +20,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 03 | Family and member data model | 1 Foundation | [x] |
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [x] |
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [x] |
-| 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [ ] |
+| 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [x] |
 | 07 | Telegram channel | 1 Foundation | [ ] |
 | 08 | Outbox and PDA shield | 1 Foundation | [ ] |
 | 09 | Agent core and scenario harness | 1 Foundation | [ ] |
@@ -334,7 +334,7 @@ Notes:
   `THEMI_LIVE_OLLAMA_MODEL`. They haven't been run yet because no keys are available here.
 
 ### 06 · AI layer: per-person routing, fallback, breaker, JSON mode
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 03, 05
 Read first: "AI backend" → Routing per task, the per-member backend paragraph, Weaker local
 models, Retries and backoff.
@@ -363,6 +363,34 @@ Tests:
 
 Done when: the router is the only way the rest of the code reaches a model, and everything is
 committed.
+
+Notes:
+- Schema: two tables instead of one per task. `ai_backends` holds a provider a member sets up
+  once, with its encrypted key. `ai_routes` holds an ordered list of backend ids per (member,
+  task), with an optional model override. A key is entered once rather than per task.
+  `AISettingsStore` is self-service only: not even admins can see or edit another member's AI
+  settings.
+- Defaults: `ensure_defaults()` runs lazily on first use. It gives the member a keyless
+  "Gemini (free tier)" backend: `gemini-3.8-flash` for every task, `gemini-3.5-flash-lite` for
+  transcription. Until a key is added, calls raise `AllProvidersFailed` with
+  `needs_setup == True`. Prompts 09 and 16 should turn that into "add your Gemini key on the
+  website".
+- Usage: `router.client_for(member_id, AITask.X).chat/structured/transcribe(...)`, which accepts
+  `on_retry=` (use it for Telegram's "typing" indicator). For shared tasks, the caller passes the
+  owning member's id.
+- Failure handling:
+    - Interactive calls that fail everywhere raise `AllProvidersFailed`. Background calls raise
+      `Deferred`, whose `.retry_after` is the largest provider hint, for the scheduler.
+    - A refusal moves to the next backend, since a different model isn't a repeat as-is. If every
+      backend refuses, the `RefusalError` itself is raised.
+    - Permanent, capability and malformed-output errors skip to the next backend.
+- The breaker counts each failed attempt, not each failed call, so 5 failures can open it in the
+  middle of retries. Once open, the remaining attempts stop and the chain moves on.
+- JSON mode turns on automatically when tools are passed to a backend with
+  `supports_tools=False`. It needs `supports_structured`. Actions come back as normal
+  `ToolCall`s with ids `json_N`, so the agent loop doesn't need to know which mode ran.
+- `tests/unit/test_architecture.py` fails if anything outside `themi.ai` imports `anthropic`,
+  `openai`, `google.genai` or `themi.ai.adapters`.
 
 ### 07 · Telegram channel
 Status: [ ]
