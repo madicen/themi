@@ -32,7 +32,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [x] |
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [x] |
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [x] |
-| 18 | Energy signals and capacity model | 3 Shadow Calendar | [ ] |
+| 18 | Energy signals and capacity model | 3 Shadow Calendar | [x] |
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [ ] |
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [ ] |
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [ ] |
@@ -1109,7 +1109,7 @@ Notes:
 ## Milestone 3: Shadow Calendar
 
 ### 18 · Energy signals and capacity model
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 09, 17
 Read first: "Module behaviour" → B; "Testing" → Energy engine row.
 
@@ -1134,6 +1134,42 @@ Tests:
 - No scores in output.
 
 Done when: capacity is computed for both members and is visible only as words. Commit.
+
+Notes:
+- `themi.energy.model.EnergyModel(store)` is `services.energy` in `build_app`.
+    - `capacity(member, at=)` is the number, for `themi.energy` only.
+    - `label(member)` gives the words.
+    - `baseline(member, at=)` and `signals(member, at=)`.
+    - `record(member, source, value, note)` returns False if the input is switched off.
+    - `observe_inbound(member)` and `observe_device_activity(member, value, note)`.
+- Maths:
+    - capacity = clamp(baseline + Σ value × 8 × 0.5^(age h / recovery_hours)).
+    - Signals older than 72 h are ignored.
+    - Baseline = n/(n+3) × learned mean + 3/(n+3) × prior, where the prior is `PRIOR_CURVE` by
+      local hour.
+    - Hour of week runs 0–167 from Monday 00:00 local.
+- Reply latency is measured against the latest sent normal or low outbox message:
+    - within 10 min: +0.5
+    - within 2 h: 0 (recorded, so it isn't counted twice)
+    - within 12 h: -0.5
+    - later: nothing
+
+  Notes look like `outbox:<id>`, one per message.
+- Labels:
+
+  | Capacity | Label |
+  | --- | --- |
+  | under 25 | "running low today, it seems" |
+  | 25 to 45 | "seems like a low stretch" |
+  | 45 to 65 | "steady" |
+  | 65 to 80 | "seems to have some energy" |
+  | 80 and up | "seems to be in a good stretch" |
+  | every input off | "no read (they've turned energy tracking off)" |
+- Structural guards in `test_architecture.py`:
+    - No `.capacity(`, `.combine(` or `.baseline(` calls outside `themi/energy`. Prompts 19 and
+      20 (windows, matching) should live in `themi/energy` too.
+    - Templates never contain "capacity" or "score".
+- `energy_baseline` exists, but nothing writes to it yet; prompt 19's outcome learning fills it.
 
 ### 19 · Good windows and outcome learning
 Status: [ ]
