@@ -1,4 +1,4 @@
-"""Run a FastAPI app on a random local port in a background thread (for HTTP fakes)."""
+"""Run a FastAPI app on a local port (random by default) in a background thread."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from fastapi import FastAPI
 
 
 class BackgroundServer:
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: FastAPI, port: int = 0) -> None:
         self.app = app
-        self.port = 0
+        self.port = port
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
 
@@ -22,7 +22,7 @@ class BackgroundServer:
 
     def start(self) -> None:
         config = uvicorn.Config(
-            self.app, host="127.0.0.1", port=0, log_level="warning", lifespan="off"
+            self.app, host="127.0.0.1", port=self.port, log_level="warning", lifespan="off"
         )
         self._server = uvicorn.Server(config)
         self._thread = threading.Thread(target=self._server.run, daemon=True)
