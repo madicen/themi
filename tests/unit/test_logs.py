@@ -64,3 +64,16 @@ def test_filter_redacts_message_arguments() -> None:
     )
     assert RedactingFilter().filter(record)
     assert SAMPLES["telegram"] not in record.getMessage()
+
+
+def test_configure_logging_quiets_libraries_that_log_contents() -> None:
+    from themi.logs import CHATTY_LIBRARIES, configure_logging
+
+    configure_logging("DEBUG")
+    try:
+        assert logging.getLogger().level == logging.DEBUG
+        for name in CHATTY_LIBRARIES:
+            assert logging.getLogger(name).level == logging.WARNING
+    finally:
+        logging.getLogger().handlers.clear()
+        logging.getLogger().setLevel(logging.WARNING)

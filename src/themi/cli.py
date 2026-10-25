@@ -27,6 +27,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
+    commands.add_parser(
+        "bot", help="run the Telegram bot on its own (echo mode until the agent exists)"
+    )
     return parser
 
 
@@ -38,6 +41,36 @@ def _store() -> AccountStore:
 
     settings = Settings.load()
     return AccountStore(open_database(settings.db_path), settings.cipher())
+
+
+def _run_bot() -> None:
+    import asyncio
+
+    from themi.accounts import AccountStore
+    from themi.channels.events import EchoHandler
+    from themi.channels.telegram import TelegramChannel
+    from themi.logs import configure_logging
+    from themi.settings import Settings, SettingsError
+    from themi.storage import open_database
+
+    settings = Settings.load()
+    if settings.telegram_bot_token is None:
+        raise SettingsError(
+            "TELEGRAM_BOT_TOKEN is required to run the bot (get one from @BotFather)"
+        )
+    configure_logging(settings.log_level)
+    store = AccountStore(open_database(settings.db_path), settings.cipher())
+    channel = TelegramChannel.from_token(settings.telegram_bot_token, store, EchoHandler())
+
+    async def run() -> None:
+        await channel.start()
+        print("Themi bot is running (echo mode). Ctrl+C to stop.")
+        try:
+            await channel.run()
+        finally:
+            await channel.stop()
+
+    asyncio.run(run())
 
 
 def _ask(question: str, default: str | None) -> str:
@@ -61,6 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             role = Role.ADMIN if args.admin else Role.MEMBER
             member, code = run_invite(_store(), args.name, role)
             print(pairing_instructions(member, code))
+        elif args.command == "bot":
+            _run_bot()
         else:
             parser.print_help()
     except (SettingsError, AccountsError) as exc:

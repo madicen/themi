@@ -72,3 +72,18 @@ def test_missing_secret_key_gives_a_clear_error(tmp_path) -> None:
     )
     assert result.returncode == 1
     assert "THEMI_SECRET_KEY" in result.stderr and "Traceback" not in result.stderr
+
+
+def test_bot_requires_a_telegram_token(tmp_path) -> None:
+    env = _env(tmp_path)
+    env.pop("TELEGRAM_BOT_TOKEN", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "themi", "bot"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "TELEGRAM_BOT_TOKEN" in result.stderr and "Traceback" not in result.stderr

@@ -60,9 +60,19 @@ class RedactingFilter(logging.Filter):
         return True
 
 
+# Libraries that log message contents or credentials-in-URLs below WARNING.
+CHATTY_LIBRARIES = ("telegram", "httpx", "httpx2", "httpcore", "hpack")
+
+
+def quiet_chatty_libraries() -> None:
+    for name in CHATTY_LIBRARIES:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    quiet_chatty_libraries()
