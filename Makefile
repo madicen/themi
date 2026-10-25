@@ -1,0 +1,37 @@
+# Uses .venv if present, otherwise the python on PATH (as in CI).
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+PYTEST := $(PYTHON) -m pytest
+
+.PHONY: venv install fmt lint test test-all test-live evals cov
+
+venv:
+	python3 -m venv .venv
+
+install:
+	$(PYTHON) -m pip install -e '.[dev]'
+
+fmt:
+	$(PYTHON) -m ruff format .
+	$(PYTHON) -m ruff check --fix .
+
+lint:
+	$(PYTHON) -m ruff format --check .
+	$(PYTHON) -m ruff check .
+	$(PYTHON) -m pyright --pythonpath $(PYTHON)
+	$(PYTHON) tools/check_clock.py
+
+test:
+	$(PYTEST) tests/unit
+
+test-all:
+	$(PYTEST) tests/unit tests/integration tests/scenarios
+
+test-live:
+	$(PYTEST) tests/live --run-live
+
+evals:
+	$(PYTEST) tests/evals --run-evals
+
+cov:
+	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios
+	$(PYTHON) -m coverage report

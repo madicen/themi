@@ -1,0 +1,58 @@
+[project]
+name = "themi"
+version = "0.1.0"
+description = "Themi: a household assistant for one family, PDA-sensitive and energy-aware"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.100",
+    "coverage[toml]>=7.6",
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+]
+
+[project.scripts]
+themi = "themi.cli:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["themi"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "DTZ", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["themi", "tools", "tests"]
+
+[tool.pyright]
+include = ["src", "tests", "tools"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
