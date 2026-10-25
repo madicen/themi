@@ -4,6 +4,7 @@ The whole app is built with `build_app`, exactly as in production, against:
 - a seeded family (Erin and her husband, both paired with Telegram),
 - the fake Telegram Bot API,
 - scripted AI models (`scenario.primary`, `scenario.fallback`),
+- the fake Google OAuth endpoints (`scenario.google`), when the test asks for them,
 - a frozen clock starting Wednesday 21 October 2026, 09:00 Pacific.
 
     async def test_hello(scenario):
@@ -21,6 +22,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fixtures.family import SeededFamily
@@ -60,9 +62,12 @@ class ModelBank:
 
 
 class Scenario:
-    def __init__(self, family: SeededFamily, telegram: FakeTelegram) -> None:
+    def __init__(
+        self, family: SeededFamily, telegram: FakeTelegram, google: FakeGoogle | None = None
+    ) -> None:
         self.family = family
         self.telegram = telegram
+        self.google = google
         self.models = ModelBank()
         self.app: App = build_app(
             family.db,
@@ -78,6 +83,7 @@ class Scenario:
             ),
             provider_factory=self.models,
             sleep=_no_sleep,
+            google=google.config() if google is not None else None,
         )
         for member in (family.erin, family.husband):
             self.use_scripted_models(member)
@@ -207,9 +213,17 @@ class Scenario:
 
 
 @pytest.fixture
-async def scenario(family: SeededFamily, fake_telegram: FakeTelegram) -> AsyncIterator[Scenario]:
-    """The full app, started, for any test layer that wants it."""
-    s = Scenario(family, fake_telegram)
+async def scenario(
+    family: SeededFamily, fake_telegram: FakeTelegram, request: pytest.FixtureRequest
+) -> AsyncIterator[Scenario]:
+    """The full app, started, for any test layer that wants it.
+
+    Google sign-in and linking are configured when the test also uses `fake_google`.
+    """
+    google = (
+        request.getfixturevalue("fake_google") if "fake_google" in request.fixturenames else None
+    )
+    s = Scenario(family, fake_telegram, google)
     await s.start()
     yield s
     await s.stop()

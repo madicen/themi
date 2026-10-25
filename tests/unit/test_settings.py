@@ -76,3 +76,26 @@ def test_read_dotenv_handles_comments_quotes_and_export(tmp_path: Path) -> None:
     dotenv.write_text("# comment\n\nA=1\nexport B='two words'\nC=\"3\"\nnot a pair\nD = spaced \n")
     assert read_dotenv(dotenv) == {"A": "1", "B": "two words", "C": "3", "D": "spaced"}
     assert read_dotenv(tmp_path / "absent.env") == {}
+
+
+def test_google_is_off_until_both_keys_are_set() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).google() is None
+    with pytest.raises(SettingsError, match="GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "GOOGLE_CLIENT_ID": "abc"})
+
+
+def test_google_settings_and_endpoint_overrides() -> None:
+    settings = Settings.from_mapping(
+        {
+            "THEMI_SECRET_KEY": KEY,
+            "GOOGLE_CLIENT_ID": "abc.apps.googleusercontent.com",
+            "GOOGLE_CLIENT_SECRET": "shh",
+            "GOOGLE_TOKEN_URL": "http://127.0.0.1:8765/token",
+        }
+    )
+    google = settings.google()
+    assert google is not None
+    assert google.client_id == "abc.apps.googleusercontent.com"
+    assert google.client_secret.reveal() == "shh" and "shh" not in repr(google)
+    assert google.token_url == "http://127.0.0.1:8765/token"
+    assert google.auth_url == "https://accounts.google.com/o/oauth2/v2/auth"  # default kept

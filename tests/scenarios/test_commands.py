@@ -6,7 +6,7 @@ import httpx
 
 from tests.scenarios.harness import Scenario
 from themi.channels.outbox import Priority
-from themi.core.commands import LINK_SOON
+from themi.core.commands import LINK_ONLY_GMAIL
 
 
 async def queue_meal_nudge(scenario: Scenario, text: str = "Lunch idea: soup?") -> None:
@@ -113,8 +113,8 @@ async def test_site_sends_a_one_time_link_without_a_preview(
     assert (await site.post(path)).status_code == 410  # exactly once
 
 
-async def test_link_is_a_gentle_stub_for_now(scenario: Scenario) -> None:
-    assert await scenario.say("Erin", "/link gmail") == [LINK_SOON]
+async def test_link_only_knows_gmail_for_now(scenario: Scenario) -> None:
+    assert await scenario.say("Erin", "/link dropbox") == [LINK_ONLY_GMAIL]
 
 
 async def test_help_lists_the_commands(scenario: Scenario) -> None:

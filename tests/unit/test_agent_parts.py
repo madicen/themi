@@ -141,7 +141,10 @@ def test_command_texts_pass_the_strictest_pda_check(family) -> None:
 
     texts = [
         commands.PAUSE_HELP.format(topics="meals, laundry"),
-        commands.LINK_SOON,
+        commands.LINK_NOT_SET_UP,
+        commands.LINK_ONLY_GMAIL,
+        "Here's the Google page for linking a Gmail account. It works once, within 10 minutes, "
+        "and you can link as many accounts as you like. Already linked: erin@example.com.",
         commands.tracking_message(family.erin)[0],
         "Okay, holding meal reminders until 9:00 PM. /resume brings them back sooner.",
         "Back to normal. Anything that was held will come through.",
