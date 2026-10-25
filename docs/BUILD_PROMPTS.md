@@ -71,8 +71,9 @@ and record the change here.
 - Version control: jj (colocated with git). Each major change is its own `jj commit`.
 - One process runs the bot, scheduler and website on one asyncio loop.
 - The default AI backend is Gemini's free tier on `gemini-3.5-flash-lite` for every task.
-  Changed from the plan's `gemini-3.8-flash` with the user's agreement on 2026-10-25: that
-  model allowed 20 free requests a day, and flash-lite scored well in prompt 28's evals.
+  Changed from prompt 05's `gemini-3.8-flash` with the user's agreement on 2026-10-25: that
+  model allowed 20 free requests a day, and flash-lite scored well in prompt 28's evals. The
+  plan named no Gemini model before; its provider table now lists flash-lite.
 
 ---
 
