@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from themi import __version__
 from themi.storage.secrets import generate_key
+
+if TYPE_CHECKING:
+    from themi.accounts import AccountStore
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,14 +21,52 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "keygen", help="print a new secret key for THEMI_SECRET_KEY (keep it safe and backed up)"
     )
+    commands.add_parser("init", help="first-run setup: create the family and its first admin")
+    invite = commands.add_parser(
+        "invite", help="add a member (or re-issue a code) and print their Telegram invite code"
+    )
+    invite.add_argument("name")
+    invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     return parser
 
 
+def _store() -> AccountStore:
+    # Imported here so `themi keygen` works before any settings exist.
+    from themi.accounts import AccountStore
+    from themi.settings import Settings
+    from themi.storage import open_database
+
+    settings = Settings.load()
+    return AccountStore(open_database(settings.db_path), settings.cipher())
+
+
+def _ask(question: str, default: str | None) -> str:
+    suffix = f" [{default}]" if default else ""
+    return input(f"{question}{suffix}: ")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    from themi.accounts import AccountsError, Role
+    from themi.accounts.setup import pairing_instructions, run_init, run_invite
+    from themi.settings import SettingsError
+
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "keygen":
-        print(generate_key())
-        return 0
-    parser.print_help()
+    try:
+        if args.command == "keygen":
+            print(generate_key())
+        elif args.command == "init":
+            run_init(_store(), _ask, print)
+        elif args.command == "invite":
+            role = Role.ADMIN if args.admin else Role.MEMBER
+            member, code = run_invite(_store(), args.name, role)
+            print(pairing_instructions(member, code))
+        else:
+            parser.print_help()
+    except (SettingsError, AccountsError) as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    except (EOFError, KeyboardInterrupt):
+        print("\nCancelled; nothing was saved.", file=sys.stderr)
+        return 1
     return 0
