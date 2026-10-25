@@ -2123,6 +2123,11 @@ Notes (2026-10-25):
   offset in the database, but each run's simulator numbers updates from 1, so after a restart
   Themi skipped messages until the numbers passed the old offset. `runner.seed` now
   clears the offset at every start.
+- Reactions are easier to see (after the user found they "didn't work"; Themi had received
+  them, but on a plain question, where reactions do nothing). Your reaction shows as a
+  badge on Themi's message, the reaction button in use is solid (it had been stuck at
+  45% opacity under its row), the click shows at once, and the "You reacted" line quotes
+  the message it was on.
 
 ---
 

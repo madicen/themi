@@ -81,10 +81,21 @@
   }
   .keys { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
   .keys button { background: var(--chip-on); border-color: transparent; }
-  .reacts { display: flex; gap: 4px; margin-top: 4px; opacity: 0.45; }
-  .row:hover .reacts, .reacts .on { opacity: 1; }
-  .reacts button { padding: 0 6px; font-size: 13px; border-radius: 10px; }
-  .reacts button.on { background: var(--chip-on); border-color: var(--accent); }
+  .badge.mine {
+    left: auto; right: -8px; bottom: -13px; padding: 1px 7px; font-size: 15px;
+    border: 2px solid var(--accent); background: var(--chip-on);
+  }
+  .bubble.has-badge { margin-bottom: 13px; }
+  .badge.pop { animation: pop 0.35s ease-out; }
+  @keyframes pop { 0% { transform: scale(0.4); } 70% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .reacts { display: flex; gap: 4px; margin-top: 4px; }
+  /* Faded until hovered, except the one in use (opacity on the buttons, so "on" stays solid). */
+  .reacts button { padding: 0 6px; font-size: 13px; border-radius: 10px; opacity: 0.45; }
+  .row:hover .reacts button, .reacts button.on { opacity: 1; }
+  .reacts button.on {
+    background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+    font-weight: 600;
+  }
   #typing { color: var(--muted); font-style: italic; padding: 0 16px 6px; min-height: 22px; }
   form {
     display: flex; gap: 8px; padding: 10px 16px 14px; background: var(--panel);
@@ -145,6 +156,7 @@ let lastVersion = -1;
 let lastTyping = null;
 let people = [];
 const seen = {};  // chat id -> newest bot message seen there
+const shownReactions = {};  // bot message id -> your reaction as last drawn
 
 try { chat = Number(localStorage.getItem("themi-sim-chat")) || chat; } catch {}
 
@@ -187,16 +199,34 @@ function renderEntries(entries) {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.replaceChildren();
   if (!entries.length) log.append(el("p", "empty", "No messages yet. Say hello."));
+  const texts = {};  // message id -> its text, to say what a tap or reaction was on
+  for (const e of entries) if (e.message_id) texts[e.message_id] = e.text;
   for (const e of entries) {
     const row = el("div", "row " + e.sender);
     if (e.sender === "action") {
-      row.textContent = "You " + e.text.replace(/ on message \d+$/, "");
+      const match = e.text.match(/^(.*) on message (\d+)$/);
+      const what = (match ? match[1] : e.text).replace("their reaction", "your reaction");
+      const on = match && texts[match[2]];
+      const quote = on ? ` on “${on.split("\n")[0].slice(0, 60)}${on.length > 60 ? "…" : ""}”` : "";
+      row.textContent = "You " + what + quote;
       log.append(row);
       continue;
     }
     const bubble = el("div", "bubble", e.text);
     if (e.edited) bubble.append(el("span", "edited", "edited"));
     if (e.bot_reactions.length) bubble.append(el("span", "badge", e.bot_reactions.join("")));
+    if (e.sender === "bot" && e.reactions.length) {
+      // Your reaction, on the message as Telegram shows it; it pops when it changes.
+      const mine = e.reactions.join("");
+      const badge = el("span", "badge mine", mine);
+      badge.title = "Your reaction";
+      if (shownReactions[e.message_id] !== undefined && shownReactions[e.message_id] !== mine) {
+        badge.classList.add("pop");
+      }
+      bubble.classList.add("has-badge");
+      bubble.append(badge);
+    }
+    if (e.sender === "bot") shownReactions[e.message_id] = e.reactions.join("");
     row.append(bubble);
     if (e.sender === "bot" && e.buttons.length) {
       const keys = el("div", "keys");
@@ -210,9 +240,15 @@ function renderEntries(entries) {
     if (e.sender === "bot") {
       const reacts = el("div", "reacts");
       for (const emoji of ["✅", "💤"]) {
-        const b = el("button", e.reactions.includes(emoji) ? "on" : "", emoji);
-        b.title = emoji === "✅" ? "Done" : "Not now";
-        b.onclick = () => post("/sim/react", {user_id: chat, message_id: e.message_id, emoji});
+        const on = e.reactions.includes(emoji);
+        const b = el("button", on ? "on" : "", emoji);
+        b.title = on ? `Remove your ${emoji}` : emoji === "✅" ? "React ✅ (approves an approval card)" : "React 💤 (snoozes an approval card)";
+        b.onclick = () => {
+          // Show it at once; the next poll confirms what Telegram recorded.
+          for (const other of reacts.children) if (other !== b) other.classList.remove("on");
+          b.classList.toggle("on");
+          post("/sim/react", {user_id: chat, message_id: e.message_id, emoji});
+        };
         reacts.append(b);
       }
       row.append(reacts);
