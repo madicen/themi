@@ -39,7 +39,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [x] |
 | 23 | Email triage | 4 Gmail and pantry | [x] |
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [x] |
-| 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [ ] |
+| 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [x] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [ ] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [ ] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [ ] |
@@ -1620,7 +1620,7 @@ Notes (2026-10-25):
     - Grouped approvals from prompt 23 are still open.
 
 ### 25 · Pantry and grocery list (OurGroceries)
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 23
 Read first: "Module behaviour" → D (Inventory); "Integrations" → OurGroceries row and receipts note.
 
@@ -1643,6 +1643,61 @@ Tests:
 - The mirror is exercised with a fake OurGroceries client, including failure and retry.
 
 Done when: a pantry text ends up on the grocery list after approval. Commit.
+
+Notes (2026-10-25):
+- Migration 0021:
+    - `pantry_items`: name (lowercase, single-spaced, unique), status plenty, low or out,
+      `status_source` (new, said, receipt, predicted or list), staple, expiry.
+    - `purchases`: item, email (SET NULL if the mail is forgotten), vendor, quantity,
+      price, date.
+    - `grocery_list`: needed, bought or removed, with mirror state, attempts, error and
+      retry time. A unique index allows only one needed row per name.
+    - `emails.receipt_parsed_at` and `emails.receipt_attempts`.
+- `themi.core.groceries.GroceryList`:
+    - Adding goes through `grocery_list_add` and the `groceries.add` executor, which is
+      idempotent by name.
+    - The tools are `add_to_grocery_list` (a staged tool) and `show_grocery_list`.
+    - `finish()` marks an item bought or removed.
+- `themi.core.pantry.Pantry`:
+    - The family's staples are always pantry items, and the staple flag follows the
+      family settings.
+    - `update_pantry` records statuses. Low or out staples are staged for the list in the
+      same conversation; other items aren't (the tool says so, and
+      `add_to_grocery_list` can add them). Marking an item plenty takes it off the list.
+      `show_pantry` lists the pantry.
+    - Receipts: a `ReceiptFound` listener calls a `structured_misc` model call on the
+      receipt owner's backend, with the email in a data block and the pantry's names given
+      outside it. Only `grocery` receipts become purchases (takeout and other don't). The
+      purchase date is the email's received time. A purchase newer than anything said
+      since makes the item plenty and takes it off the list.
+    - If the AI is unavailable, the `pantry.receipts` job (every 10 minutes) retries, up to
+      3 attempts. The job also reads first-sync receipts, since they're history.
+    - Prediction: the `pantry.predict` job runs every 6 hours. A staple is probably low once
+      the median gap between purchases (on different days, at least 3 purchases) has
+      passed since the last purchase, or since someone last said it was restocked. It's
+      marked low (source `predicted`) and staged once, for the errand owner or else an
+      admin.
+- `themi.connectors.ourgroceries`:
+    - `GroceryListClient` interface (items, add, remove).
+    - `OurGroceriesClient` wraps the unofficial library (optional extra
+      `themi[ourgroceries]`, imported lazily; the Docker image installs it). It finds the
+      list by name, maps errors to `MirrorError`, and signs in again after a failure.
+    - `GroceryMirror.sync()` is the `groceries.mirror` job (every minute, only when
+      configured). It's one way and matches by name, so a retry never adds twice. A failure
+      backs off per row (1, 2, 4... minutes, up to an hour) and never touches the local list.
+    - Settings: `OURGROCERIES_USERNAME` and `OURGROCERIES_PASSWORD` (set together), and
+      `OURGROCERIES_LIST` (default "Groceries").
+    - `tests/fakes/ourgroceries.py` fakes the client interface, since the library hides
+      the HTTP.
+- The website dashboard shows the list, and each item has a "Got it" button (bought, so the
+  pantry item goes to plenty).
+- The stand-in executor in `test_approvals.py` was renamed from `groceries.add` to
+  `test.family_archive`, since the real one now exists.
+- Setup for the user: put the OurGroceries login and list name in `.env`.
+- Follow-ups:
+    - Items crossed off in the OurGroceries app aren't read back.
+    - Takeout receipts aren't totalled yet; prompt 35 needs them for the budget.
+    - Expiry dates come only from what people say, not from receipts.
 
 ### 26 · Google Calendar for Cozyla
 Status: [ ]

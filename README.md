@@ -76,6 +76,15 @@ To try the flow without a Google project, run the fake Google with
 `.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.
 Its sign-in page asks which address to pretend to be.
 
+### OurGroceries (optional)
+
+Themi keeps its own grocery list, and the website's dashboard shows it. To see it in the
+OurGroceries app as well, put the account's login in `.env` as `OURGROCERIES_USERNAME` and
+`OURGROCERIES_PASSWORD`, and the shared list's name as `OURGROCERIES_LIST` (default
+"Groceries"), then restart. Outside Docker, install the library first with
+`pip install -e '.[ourgroceries]'`. It's unofficial, so if OurGroceries changes, the mirror
+logs the problem and keeps retrying while Themi's own list carries on.
+
 ### With Docker
 
 ```sh
