@@ -14,6 +14,7 @@ from themi.accounts import AccountStore
 from themi.ai.retry import Sleep
 from themi.ai.router import AIRouter, ProviderFactory
 from themi.ai.settings import AISettingsStore
+from themi.autonomy import Autonomy, ExecutorRegistry
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
@@ -60,6 +61,7 @@ def build_app(
         outbox=outbox,
         calibrator=PdaCalibrator(store),
         tools=ToolRegistry(list(STARTER_TOOLS)),
+        autonomy=Autonomy(store, ExecutorRegistry()),
     )
     agent = Agent(services)
     channel.handler = agent

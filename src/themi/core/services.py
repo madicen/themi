@@ -14,6 +14,7 @@ from typing import Literal, Protocol
 from themi.accounts import AccountStore, Member
 from themi.ai.router import AIRouter
 from themi.ai.settings import AISettingsStore
+from themi.autonomy import Autonomy
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Outbox
@@ -57,6 +58,7 @@ class Services:
     outbox: Outbox
     calibrator: PdaCalibrator
     tools: ToolRegistry
+    autonomy: Autonomy
     energy: EnergyLabeler = field(default_factory=NoEnergyReadYet)
     awaiting_sources: list[AwaitingSource] = field(default_factory=list)
     open_item_sources: list[OpenItemSource] = field(default_factory=list)
