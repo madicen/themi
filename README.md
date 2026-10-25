@@ -36,6 +36,8 @@ opens the management site signed in as that person.
   on their default AI backend. Without a key, Themi replies that setup is needed. You can also
   add a key on the website's AI page.
 - To try pairing: `make dev-invite NAME=Sam`, then send the `/start` code as *Someone new*.
+- *Copy session* copies the conversations and Themi's log as text, to paste into a Claude
+  session. *New session* marks where the next copy starts.
 - Only Telegram is simulated. Replies use real Gemini, and Google and OurGroceries are off.
 
 ### Rules worth knowing

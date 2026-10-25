@@ -45,6 +45,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [x] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [~] |
 | D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
+| D2 | Simulator: copy a test session | Dev tooling | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2085,6 +2086,43 @@ Notes (2026-10-25):
 - Found while setting up: the local `.venv` still had an editable install pointing at the
   repo's old `working-memory` path, so `python -m themi` failed outside the repo. Running
   `make install` fixed it.
+
+### D2 · Simulator: copy a test session
+Status: [x] (2026-10-25)
+Depends on: D1
+Read first: nothing in the plan (dev tooling).
+
+Build:
+- A *Copy session* button on the simulator page. It copies a plain-text report to the
+  clipboard, to paste into a Claude session:
+    - each person's conversation, in order: messages, button taps, reactions, edits (with the
+      earlier text), button answers, and time skips, each with its time
+    - Themi's log lines (redacted, as on the console)
+- A *New session* button marks a start, so a copy covers only the current test.
+- If the browser blocks clipboard access, show the report in a box to copy by hand.
+
+Tests:
+- The report has each part above, leaves out chats with nothing new, and starts at the mark.
+- Log lines are captured and redacted.
+
+Done when: a test session in `make dev` can be copied and pasted as one block. Commit.
+
+Notes (2026-10-25):
+- `Simulator.report()` (`GET /sim/report`) builds the text, and `new_session()`
+  (`POST /sim/session`) sets the mark. Entries now record taps and reactions (`action`),
+  edits keep their earlier text (`previous`), and skips and session marks are chat 0 entries,
+  shown in every chat. An old message edited after the mark still counts.
+- Each entry has the wall-clock time, to match the log, and Themi's clock, which the report
+  shows only when the two differ by a minute or more.
+- `LogBuffer` keeps the last 5,000 log lines, formatted and redacted as on the console. The
+  dev runner adds it to the root logger, so the report has Themi's lines at the configured
+  level. `google_genai` logs "AFC is enabled" at INFO on every call.
+- The page copies with `navigator.clipboard` (allowed on localhost). If that fails, a dialog
+  shows the report to copy by hand.
+- A D1 bug found while testing live (failing test first): the channel stores its update
+  offset in the database, but each run's simulator numbers updates from 1, so after a restart
+  Themi skipped messages until the numbers passed the old offset. `runner.seed` now
+  clears the offset at every start.
 
 ---
 
