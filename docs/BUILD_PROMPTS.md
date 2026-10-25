@@ -41,7 +41,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [x] |
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [x] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
-| 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [ ] |
+| 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [ ] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
@@ -1770,7 +1770,7 @@ Notes (2026-10-25):
     - Add the "Themi" calendar to Cozyla.
 
 ### 27 · Meal suggestions and vendor call scripts
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 25, 20
 Read first: "Module behaviour" → D (zero-effort meals) and E (vendor calls); "Integrations" →
 vendor phone calls row.
@@ -1788,6 +1788,37 @@ Tests:
 - The outcome is logged.
 
 Done when: the scenarios pass. Commit.
+
+Notes (2026-10-25):
+- Migration 0023: `meal_suggestions` (options JSON, chosen, chosen_at) and `call_scripts`
+  (task, vendor, objective, script JSON, outcome, who logged it, when).
+- `themi.core.meals.Meals`, with the `suggest_meals` tool:
+    - It makes one `structured_misc` call (interactive) on the asker's backend.
+    - The pantry list in the prompt comes from `pantry_lines()`: use-soon items first
+      (within 3 days of their use-by date, soonest first), then staples, then the rest.
+      Items that are out are left out.
+    - The two options go out as a REPLY with two buttons, and tapping one records the
+      choice and edits the message to show the steps. The steps are quoted (`> `), so the
+      PDA shield keeps them as written.
+    - Only on request for now. "When a missed meal is likely" needs meal logging, which is
+      prompt 35, and `meal_suggestions.chosen_at` is there for it.
+- `themi.core.calls.VendorCalls`, with the `draft_vendor_call` and `log_call_outcome` tools:
+    - The script (objective, opening line, questions, acceptable outcomes, fallback, and an
+      effort from 1 to 5) comes from one structured call. The family's details go in a data
+      block.
+    - It creates a `call` task through `TaskBoard.create`, so the matcher picks the person.
+      The task's effort comes from the script.
+    - The script travels with the task's nudge. The new `TaskBoard.details` hook adds text
+      to `prompt()`, and `create(nudge=False)` lets the script be attached first. It's all
+      `> ` quotes, so it's kept word for word.
+    - When the task is done, a `change_listeners` hook asks "How did it go with <vendor>?".
+      An open item tells the model the outcome is still missing, for 3 days.
+      `log_call_outcome` records it, and marks the task done if it isn't yet; in that case
+      nobody is asked afterwards.
+    - Nothing is staged. A person makes the call, and the capped `vendor_call` category is
+      for the automated calls researched in prompt 36.
+- Wording: "right now" trips the PDA check, so the "AI unavailable" texts say "at the
+  moment" instead.
 
 ### 28 · Evals, live smoke tests, coverage gates
 Status: [ ]
