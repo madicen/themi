@@ -28,3 +28,25 @@ they never run by default.
 - Read time only through `themi.clock` (`tools/check_clock.py` enforces it), so tests can
   freeze and advance it.
 - The default test run makes no real network calls; fakes live in `tests/fakes`.
+
+## Running Themi
+
+1. Copy `.env.example` to `.env`. Fill in `THEMI_SECRET_KEY` (from `themi keygen`) and
+   `TELEGRAM_BOT_TOKEN` (from @BotFather). Back up the secret key: without it, stored tokens
+   and keys can't be decrypted.
+2. Run `themi init` once to create the family and its first admin. Then send the bot
+   `/start <code>` from Telegram.
+3. Run `themi run`. This starts the bot, the scheduler and the website (`/health` on
+   port 8080).
+
+### With Docker
+
+```sh
+docker compose run --rm themi init     # first time only
+docker compose up --build -d           # start
+docker compose run --rm themi invite <name>
+```
+
+The database lives in the `themi-data` volume. `docker compose down` stops Themi gracefully:
+the message or job in progress finishes first. `tools/smoke_container.sh` builds the image and
+checks it starts, reports healthy, and stops cleanly. CI runs it on every push.

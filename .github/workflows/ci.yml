@@ -23,3 +23,11 @@ jobs:
         run: make lint PYTHON=python
       - name: Unit, integration and scenario tests
         run: make test-all PYTHON=python
+
+  container:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image and smoke-test it
+        run: tools/smoke_container.sh themi:ci

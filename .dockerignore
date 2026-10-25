@@ -1,0 +1,13 @@
+.venv/
+.jj/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+**/__pycache__/
+data/
+.env
+tests/
+docs/
+tools/

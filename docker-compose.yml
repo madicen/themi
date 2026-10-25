@@ -1,0 +1,22 @@
+# Local run:      docker compose up --build
+# First-time:     docker compose run --rm themi init
+# Add a member:   docker compose run --rm themi invite <name>
+services:
+  themi:
+    build: .
+    image: themi:local
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      THEMI_DB_PATH: /data/themi.db
+      THEMI_HTTP_HOST: 0.0.0.0
+      THEMI_HTTP_PORT: "8080"
+    volumes:
+      - themi-data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Give an in-flight message or job time to finish on shutdown.
+    stop_grace_period: 45s
+
+volumes:
+  themi-data:
