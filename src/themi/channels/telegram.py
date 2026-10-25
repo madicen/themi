@@ -81,7 +81,7 @@ class TelegramChannel:
         self,
         bot: telegram.Bot,
         store: AccountStore,
-        handler: InboundHandler,
+        handler: InboundHandler | None,
         *,
         poll_timeout: int = 30,
         sleep: Any = asyncio.sleep,
@@ -103,7 +103,7 @@ class TelegramChannel:
         cls,
         token: Secret,
         store: AccountStore,
-        handler: InboundHandler,
+        handler: InboundHandler | None,
         *,
         base_url: str | None = None,
         base_file_url: str | None = None,
@@ -231,6 +231,11 @@ class TelegramChannel:
             )
         else:
             return  # stickers, photos and the like aren't handled yet
+        await self._dispatch(event)
+
+    async def _dispatch(self, event: InboundEvent) -> None:
+        if self.handler is None:
+            raise RuntimeError("TelegramChannel.handler must be set before polling")
         await self.handler.handle(event, self)
 
     async def _download_voice(self, message: Message) -> VoiceNote | None:
@@ -298,7 +303,7 @@ class TelegramChannel:
         event = InboundEvent(
             "button", member, chat_id or 0, message_id, clock.now(), update_id, button=press
         )
-        await self.handler.handle(event, self)
+        await self._dispatch(event)
 
     async def _answer(self, query: CallbackQuery, text: str | None = None) -> None:
         # Always answer, or the button keeps spinning on the person's phone.
@@ -327,7 +332,7 @@ class TelegramChannel:
             update_id,
             reaction=Reaction(added, reaction.message_id),
         )
-        await self.handler.handle(event, self)
+        await self._dispatch(event)
 
     # ----- outbound -----------------------------------------------------------
 

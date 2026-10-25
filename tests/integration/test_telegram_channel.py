@@ -12,6 +12,8 @@ from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fixtures.family import ERIN_TELEGRAM_ID, HUSBAND_TELEGRAM_ID, SeededFamily
 from themi.accounts import SYSTEM
 from themi.channels.events import Button, EchoHandler, InboundEvent
+from themi.channels.outbox import Outbox
+from themi.channels.pda import PdaShield
 from themi.channels.telegram import (
     ALREADY_HANDLED_TEXT,
     NOT_YOURS_TEXT,
@@ -341,7 +343,8 @@ async def test_run_recovers_from_polling_errors(
 
 
 async def test_echo_handler_round_trip(family: SeededFamily, fake_telegram: FakeTelegram) -> None:
-    ch = make_channel(family, fake_telegram, EchoHandler())
+    ch = make_channel(family, fake_telegram, None)
+    ch.handler = EchoHandler(Outbox(family.store, ch, PdaShield(None)))
     await ch.start()
     fake_telegram.send_text(ERIN_TELEGRAM_ID, "hello")
     await ch.poll_once()

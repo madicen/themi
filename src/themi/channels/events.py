@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from themi.accounts.models import Member
 
 if TYPE_CHECKING:
+    from themi.channels.outbox import Outbox
     from themi.channels.telegram import TelegramChannel
 
 EventKind = Literal["text", "voice", "button", "reaction"]
@@ -65,12 +66,18 @@ class InboundHandler(Protocol):
 class EchoHandler:
     """Stand-in until the agent core exists (prompt 09): proves the plumbing end to end."""
 
+    def __init__(self, outbox: Outbox) -> None:
+        self.outbox = outbox
+
     async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+        from themi.channels.outbox import Priority
+
         if event.kind == "text":
-            await channel.send_text(event.member, f"You said: {event.text}")
+            reply = f"You said: {event.text}"
         elif event.kind == "voice" and event.voice is not None:
-            await channel.send_text(
-                event.member, f"Got a {event.voice.duration_seconds}s voice note."
-            )
+            reply = f"Got a {event.voice.duration_seconds}s voice note."
         elif event.kind == "button" and event.button is not None:
-            await channel.send_text(event.member, f"You chose: {event.button.label}")
+            reply = f"You chose: {event.button.label}"
+        else:
+            return
+        await self.outbox.send(event.member, reply, priority=Priority.REPLY)

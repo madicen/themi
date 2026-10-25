@@ -47,7 +47,11 @@ def _run_bot() -> None:
     import asyncio
 
     from themi.accounts import AccountStore
+    from themi.ai.router import AIRouter
+    from themi.ai.settings import AISettingsStore
     from themi.channels.events import EchoHandler
+    from themi.channels.outbox import Outbox
+    from themi.channels.pda import AIRewriter, PdaShield
     from themi.channels.telegram import TelegramChannel
     from themi.logs import configure_logging
     from themi.settings import Settings, SettingsError
@@ -59,8 +63,11 @@ def _run_bot() -> None:
             "TELEGRAM_BOT_TOKEN is required to run the bot (get one from @BotFather)"
         )
     configure_logging(settings.log_level)
-    store = AccountStore(open_database(settings.db_path), settings.cipher())
-    channel = TelegramChannel.from_token(settings.telegram_bot_token, store, EchoHandler())
+    db = open_database(settings.db_path)
+    store = AccountStore(db, settings.cipher())
+    router = AIRouter(AISettingsStore(db, settings.cipher()))
+    channel = TelegramChannel.from_token(settings.telegram_bot_token, store, None)
+    channel.handler = EchoHandler(Outbox(store, channel, PdaShield(AIRewriter(router))))
 
     async def run() -> None:
         await channel.start()

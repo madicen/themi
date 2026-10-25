@@ -31,3 +31,23 @@ def test_only_the_ai_package_reaches_model_sdks() -> None:
             if any(module == m or module.startswith(f"{m}.") for m in AI_INTERNALS):
                 offenders.append(f"{path.relative_to(REPO_ROOT)} imports {module}")
     assert offenders == [], "use themi.ai.router instead:\n" + "\n".join(offenders)
+
+
+# Every message to a person goes through the outbox (quiet hours, limits, PDA
+# shielding). Only the outbox and the channel itself may call send_text.
+SEND_TEXT_ALLOWED = {SRC / "channels" / "outbox.py", SRC / "channels" / "telegram.py"}
+
+
+def test_only_the_outbox_sends_messages() -> None:
+    offenders = []
+    for path in SRC.rglob("*.py"):
+        if path in SEND_TEXT_ALLOWED:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("send_text", "send_message", "edit_text")
+            ):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{node.lineno}")
+    assert offenders == [], "send through themi.channels.outbox:\n" + "\n".join(offenders)
