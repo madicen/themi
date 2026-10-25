@@ -21,8 +21,8 @@ jobs:
         run: make install PYTHON=python
       - name: Lint and type check
         run: make lint PYTHON=python
-      - name: Unit, integration and scenario tests
-        run: make test-all PYTHON=python
+      - name: Unit, integration and scenario tests, with the coverage gates
+        run: make cov PYTHON=python
 
   container:
     runs-on: ubuntu-latest
