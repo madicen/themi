@@ -94,6 +94,7 @@ class TelegramChannel:
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._pairing_failures: dict[int, list[datetime]] = {}
+        self.last_poll_at: datetime | None = None  # for /health
         # PTB logs whole updates (what people write) at DEBUG, and httpx logs
         # request URLs, which contain the bot token, at INFO.
         quiet_chatty_libraries()
@@ -135,12 +136,20 @@ class TelegramChannel:
         await self.bot.shutdown()
 
     async def run(self, stop: asyncio.Event | None = None) -> None:
-        """Poll until `stop` is set, backing off after errors."""
+        """Poll until `stop` is set, backing off after errors.
+
+        Stopping during a long poll returns at once: nothing was handled yet,
+        and the stored offset means Telegram redelivers those updates later.
+        Stopping while a batch is being handled lets the batch finish.
+        """
         stop = stop or asyncio.Event()
         failures = 0
         while not stop.is_set():
             try:
-                await self.poll_once()
+                updates = await self._fetch_unless_stopped(stop)
+                if updates is None:
+                    return
+                await self._handle_batch(updates)
                 failures = 0
             except RetryAfter as exc:
                 await self._sleep(_seconds(exc))
@@ -155,10 +164,29 @@ class TelegramChannel:
 
     async def poll_once(self) -> int:
         """Fetch and handle one batch of updates. Returns how many were handled."""
-        offset = self._offset()
+        return await self._handle_batch(await self._fetch())
+
+    async def _fetch(self) -> tuple[Update, ...]:
         updates = await self.bot.get_updates(
-            offset=offset, timeout=self.poll_timeout, allowed_updates=ALLOWED_UPDATES
+            offset=self._offset(), timeout=self.poll_timeout, allowed_updates=ALLOWED_UPDATES
         )
+        self.last_poll_at = clock.now()
+        return updates
+
+    async def _fetch_unless_stopped(self, stop: asyncio.Event) -> tuple[Update, ...] | None:
+        fetch = asyncio.ensure_future(self._fetch())
+        stopped = asyncio.ensure_future(stop.wait())
+        done, _ = await asyncio.wait({fetch, stopped}, return_when=asyncio.FIRST_COMPLETED)
+        if fetch in done:
+            stopped.cancel()
+            return fetch.result()
+        fetch.cancel()
+        with suppress(asyncio.CancelledError, TelegramError):
+            await fetch
+        return None
+
+    async def _handle_batch(self, updates: tuple[Update, ...]) -> int:
+        offset = self._offset()
         for update in updates:
             if offset is not None and update.update_id < offset:
                 continue

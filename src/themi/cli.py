@@ -27,9 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
-    commands.add_parser(
-        "bot", help="run the Telegram bot and agent on their own (themi run replaces this)"
-    )
+    commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
     return parser
 
 
@@ -43,42 +41,40 @@ def _store() -> AccountStore:
     return AccountStore(open_database(settings.db_path), settings.cipher())
 
 
-def _run_bot() -> None:
+def _run() -> None:
     import asyncio
 
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.logs import configure_logging
+    from themi.runtime import Runtime
     from themi.settings import Settings, SettingsError
     from themi.storage import open_database
+    from themi.storage.secrets import Secret
 
     settings = Settings.load()
-    token = settings.telegram_bot_token
-    if token is None:
-        raise SettingsError(
-            "TELEGRAM_BOT_TOKEN is required to run the bot (get one from @BotFather)"
-        )
+    if settings.telegram_enabled and settings.telegram_bot_token is None:
+        raise SettingsError("TELEGRAM_BOT_TOKEN is required to run Themi (get one from @BotFather)")
     configure_logging(settings.log_level)
+    # With Telegram disabled the channel is never started; sends simply queue.
+    token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
         lambda store: TelegramChannel.from_token(token, store, None),
     )
+    runtime = Runtime(
+        app,
+        host=settings.http_host,
+        port=settings.http_port,
+        telegram_enabled=settings.telegram_enabled,
+    )
 
-    async def flush_forever() -> None:
-        while True:
-            await app.outbox.flush()
-            await asyncio.sleep(30)
+    async def main() -> None:
+        runtime.install_signal_handlers()
+        await runtime.run()
 
-    async def run() -> None:
-        await app.channel.start()
-        print("Themi bot is running. Ctrl+C to stop.")
-        try:
-            await asyncio.gather(app.channel.run(), flush_forever())
-        finally:
-            await app.channel.stop()
-
-    asyncio.run(run())
+    asyncio.run(main())
 
 
 def _ask(question: str, default: str | None) -> str:
@@ -102,8 +98,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             role = Role.ADMIN if args.admin else Role.MEMBER
             member, code = run_invite(_store(), args.name, role)
             print(pairing_instructions(member, code))
-        elif args.command == "bot":
-            _run_bot()
+        elif args.command == "run":
+            _run()
         else:
             parser.print_help()
     except (SettingsError, AccountsError) as exc:

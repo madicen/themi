@@ -30,6 +30,10 @@ class Settings(BaseModel):
     public_url: str = ""
     telegram_bot_token: Secret | None = None
     log_level: LogLevel = "INFO"
+    http_host: str = "127.0.0.1"
+    http_port: int = 8080
+    # Off only for smoke tests and diagnostics: the process runs without polling Telegram.
+    telegram_enabled: bool = True
 
     def cipher(self) -> Cipher:
         return Cipher(self.secret_key)
@@ -70,6 +74,10 @@ class Settings(BaseModel):
         if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
             problems.append(f"THEMI_LOG_LEVEL must be DEBUG, INFO, WARNING or ERROR, not {level}")
 
+        port_text = get("THEMI_HTTP_PORT") or "8080"
+        if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
+            problems.append(f"THEMI_HTTP_PORT must be a port number, not {port_text}")
+
         if problems:
             raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
 
@@ -80,6 +88,9 @@ class Settings(BaseModel):
             public_url=get("THEMI_PUBLIC_URL").rstrip("/"),
             telegram_bot_token=Secret(token) if token else None,
             log_level=level,  # type: ignore[arg-type]  # validated above
+            http_host=get("THEMI_HTTP_HOST") or "127.0.0.1",
+            http_port=int(port_text),
+            telegram_enabled=get("THEMI_DISABLE_TELEGRAM").lower() not in ("1", "true", "yes"),
         )
 
 
