@@ -10,7 +10,7 @@ import pytest
 from themi import clock
 
 # Shared fixtures every layer can use.
-pytest_plugins = ["tests.fixtures.family"]
+pytest_plugins = ["tests.fixtures.family", "tests.fakes.http_ai"]
 
 # Folder -> marker, so a test's layer is decided by where it lives.
 LAYER_MARKERS = {

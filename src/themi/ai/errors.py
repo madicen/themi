@@ -47,6 +47,10 @@ class CapabilityError(AIError):
     pass
 
 
+class MalformedOutputError(AIError):
+    """The model answered, but not in the shape asked for (bad JSON, truncated output)."""
+
+
 class RetriesExhausted(AIError):
     """Raised by the retry policy when it gives up; `last_error` says why."""
 
