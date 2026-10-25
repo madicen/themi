@@ -24,7 +24,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 07 | Telegram channel | 1 Foundation | [x] |
 | 08 | Outbox and PDA shield | 1 Foundation | [x] |
 | 09 | Agent core and scenario harness | 1 Foundation | [x] |
-| 10 | Process runtime, scheduler, Docker | 1 Foundation | [ ] |
+| 10 | Process runtime, scheduler, Docker | 1 Foundation | [x] |
 | 11 | Trust tiers engine | 2 Trust and memory | [ ] |
 | 12 | Approvals in Telegram | 2 Trust and memory | [ ] |
 | 13 | Rules: drafts and locking | 2 Trust and memory | [ ] |
@@ -609,7 +609,7 @@ Notes:
   stable, so adding `cache_control` to the Claude adapter later is cheap.
 
 ### 10 · Process runtime, scheduler, Docker
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 09
 Read first: "Deployment and hosting"; "Testing" → container smoke test.
 
@@ -633,6 +633,45 @@ Tests:
 
 Done when: `docker compose up` runs Themi locally against real Telegram. This is the milestone 1
 gate: both of you chatting with Themi on a local machine. Commit.
+
+Notes:
+- Not verified here:
+    - Docker isn't installed on this machine, so the Dockerfile, compose file and
+      `tools/smoke_container.sh` have only been syntax-checked. CI's `container` job will be the
+      first real build.
+    - The same check without Docker does pass:
+      `tests/integration/test_runtime.py::test_themi_run_as_a_process_starts_and_stops_on_sigterm`
+      runs `themi run`, waits for `/health` to return 200, sends SIGTERM and expects exit 0.
+    - Real Telegram is still untested, since there's no token. The milestone 1 gate needs the
+      user to run `docker compose up` with their bot token and a Gemini key.
+- `themi run` replaces `themi bot`. `THEMI_DISABLE_TELEGRAM=1` runs it without polling, and
+  `/health` then reports `telegram_poller: "disabled"`. This is used by the smoke tests. New
+  settings: `THEMI_HTTP_HOST` (default 127.0.0.1, 0.0.0.0 in the image) and `THEMI_HTTP_PORT`
+  (8080).
+- `Runtime(app, host, port, telegram_enabled, scheduler_tick)` owns `.scheduler` and `.web` (the
+  FastAPI app). Prompt 15 should add the website routes to `themi.web.create_app`, which takes
+  `HealthSources` for now. Expect to widen it to the whole App.
+- Scheduler: `scheduler.every(name, interval, fn, jitter=)` for periodic work.
+  `@scheduler.handler(kind)` plus `scheduler.enqueue(kind, payload, run_after=, dedupe_key=)` for
+  durable jobs.
+    - A handler that raises the router's `Deferred` is re-queued after `retry_after` (default
+      5 min). Deferrals never count as failures.
+    - Other exceptions back off (1 min, 5 min, 30 min, 2 h) and fail after 8 attempts.
+    - Registered periodic jobs: `outbox.flush` every 30 s. Later prompts register theirs in
+      `Runtime.__init__`, or better, in a registration hook.
+- Shutdown order:
+    1. The stop event is set.
+    2. The poller abandons a long poll (safe, because the offset is unchanged), and a batch
+       being handled finishes.
+    3. The scheduler finishes its current tick and HTTP stops.
+    4. The Telegram client closes, the outbox flushes once more, and the database closes.
+
+  There's a 30 s grace period before tasks are cancelled; compose allows 45 s.
+- Image: `python:3.13-slim`, non-root uid 10001, `/data` volume, a HEALTHCHECK using
+  urllib. Compose uses the named volume `themi-data`, not a bind mount, so the non-root user
+  can write to it.
+- `TelegramChannel.last_poll_at` feeds `/health`. A poller counts as stalled after 2 minutes
+  without a completed poll.
 
 ---
 
