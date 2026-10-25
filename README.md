@@ -39,6 +39,43 @@ they never run by default.
 3. Run `themi run`. This starts the bot, the scheduler and the website (`/health` on
    port 8080).
 
+### Google sign-in and Gmail (Google Cloud setup)
+
+Each family uses its own Google Cloud project. It's free, and takes about 15 minutes.
+
+1. **Project.** At <https://console.cloud.google.com>, create a project (for example
+   "Themi Household").
+2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API** and the
+   **Google Calendar API**.
+3. **Consent screen.** Under *Google Auth Platform → Branding*, give the app a name
+   ("Themi") and a support email. Under *Audience*, choose **External**.
+4. **Scopes.** Under *Data Access*, add `openid`, `.../auth/userinfo.email`,
+   `https://www.googleapis.com/auth/gmail.modify` and
+   `https://www.googleapis.com/auth/calendar.events`.
+5. **Publish, unverified.** Under *Audience*, press **Publish app** and don't submit it
+   for verification. Google shows an "unverified app" warning at sign-in ("Advanced", then
+   "Go to Themi" continues). `gmail.modify` is a restricted scope, so an unverified app can
+   be used by at most 100 accounts over the project's life. That's far more than one family
+   needs. Leaving the app in **Testing** instead works too, but then Google expires the
+   Gmail tokens every 7 days, and everyone has to link again.
+6. **Client.** Under *Clients*, create an OAuth client of type **Web application**. Add the
+   authorized redirect URI `<THEMI_PUBLIC_URL>/auth/google/callback`. When testing on your
+   own machine, set `THEMI_PUBLIC_URL=http://localhost:8080` and use
+   `http://localhost:8080/auth/google/callback`. Google only accepts plain `http` for
+   `localhost`, not for `127.0.0.1` or other addresses.
+7. **Keys.** Put the client id and secret in `.env` as `GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET`, then restart Themi.
+8. **Sign-in addresses.** On the website's *Family* page, an admin enters each person's Google
+   address. Only those addresses can use "Sign in with Google". A person's first linked
+   Gmail becomes their sign-in address if they don't have one yet.
+9. **Linking.** Each person sends `/link gmail` to the bot, or uses *My accounts → Link a Gmail
+   account* on the website. They can link as many accounts as they like. *Unlink* revokes
+   Themi's access at Google too.
+
+To try the flow without a Google project, run the fake Google with
+`.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.
+Its sign-in page asks which address to pretend to be.
+
 ### With Docker
 
 ```sh

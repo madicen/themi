@@ -35,7 +35,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [x] |
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [x] |
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [x] |
-| 21 | Google sign-in and account linking | 4 Gmail and pantry | [ ] |
+| 21 | Google sign-in and account linking | 4 Gmail and pantry | [x] |
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [ ] |
 | 23 | Email triage | 4 Gmail and pantry | [ ] |
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [ ] |
@@ -1306,7 +1306,7 @@ Notes (2026-10-24):
 ## Milestone 4: Gmail and pantry
 
 ### 21 · Google sign-in and account linking
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 16
 Read first: "Integrations" → Gmail row and the Gmail sign-in note; "Setup checklists" (Google
 Cloud items); "Security and privacy".
@@ -1333,6 +1333,72 @@ Tests:
 - Revocation is called on unlink.
 
 Done when: both members can link several Gmail accounts locally. Commit.
+
+Notes (2026-10-24):
+- Google's current rules, checked 2026-10-24:
+    - Endpoints: `accounts.google.com/o/oauth2/v2/auth`, `oauth2.googleapis.com/token` and
+      `/revoke` (form POST `token=`), and `openidconnect.googleapis.com/v1/userinfo`.
+    - Exact scopes: `openid email`, `https://www.googleapis.com/auth/gmail.modify` (restricted)
+      and `https://www.googleapis.com/auth/calendar.events`.
+    - A refresh token needs `access_type=offline`. `prompt=consent` is forced, so a re-link
+      always gets a new one.
+    - A dead refresh token returns `invalid_grant`.
+    - Unverified "in production" apps show a warning screen and have a lifetime cap of 100
+      users for unapproved restricted scopes. Tokens don't expire.
+    - Apps in "Testing" lose their refresh tokens 7 days after consent, unless they request
+      only `openid email profile`.
+    - Plain `http` redirect URIs are accepted only for `localhost`.
+- `themi.connectors.google`:
+    - `GoogleOAuth`:
+        - Authorization-code flow with S256 PKCE.
+        - The state is kept hashed in `oauth_states` (migration 0017), with the verifier
+          encrypted, for 10 minutes, and is single use.
+        - The callback must come back to the redirect URI the state was issued for.
+    - `GoogleAccounts`:
+        - Sign-in needs a verified address that is a member's sign-in address.
+        - Linking needs the `gmail.modify` scope (people can untick it) and a refresh token.
+          A refused grant is revoked, never left dangling.
+        - A member can link any number of accounts. Re-linking an address replaces the token
+          and re-enables the account. An address already linked by another member is
+          refused.
+        - Access tokens are cached in memory and refreshed a minute before they expire.
+        - `invalid_grant` on refresh disables the account (`enabled = 0`) and raises
+          `TokenRevoked`. Prompt 22 should turn that into a gentle "link again" message.
+- Sign-in addresses:
+    - Members gain `email` (unique, case-insensitive).
+    - Admins set it on the Family page (`store.set_email`).
+    - A member's first linked Gmail becomes their sign-in address if they have none, since
+      linking proves they own it.
+- Website:
+    - "Sign in with Google" appears on the signed-out and expired-link pages.
+    - `/auth/google/callback` finishes both flows. A link started in Telegram works in a
+      browser that isn't signed in, because the state carries the member.
+    - The new *My accounts* page (`/accounts`) has link (a CSRF-checked POST that redirects
+      to Google) and unlink.
+    - The CSP `form-action` now includes Google's authorize origin, because browsers check
+      redirects that follow a form POST.
+- Unlinking:
+    - It deletes the account first, then revokes at Google.
+    - If Google can't be reached, the account is still forgotten, and the page tells the
+      person where to finish revoking.
+    - Removing a member on the Family page revokes all of their tokens.
+- `/link gmail` replies with the Google consent URL, with no link preview, and lists accounts
+  already linked. With no Google keys, it and the website say linking isn't set up yet.
+- Settings:
+    - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` must be set together.
+    - `GOOGLE_AUTH_URL`, `GOOGLE_TOKEN_URL`, `GOOGLE_REVOKE_URL` and `GOOGLE_USERINFO_URL`
+      only exist for pointing at a fake.
+    - `httpx` is now a declared dependency.
+- Tests:
+    - `tests/fakes/google_oauth.py` checks the client, the registered redirect, single-use
+      codes, the PKCE S256 verifier and revocation. It can be run by hand (`python -m
+      tests.fakes.google_oauth`), with a small consent form, for local trials.
+    - The `scenario` fixture configures Google only when a test also asks for `fake_google`.
+- Setup the user must do:
+    - Follow the README's "Google Cloud setup" (project, APIs, consent screen published and
+      unverified, web client with redirect `<THEMI_PUBLIC_URL>/auth/google/callback`) and put
+      the keys in `.env`.
+    - Locally, use `THEMI_PUBLIC_URL=http://localhost:8080`.
 
 ### 22 · Gmail connector and polling
 Status: [ ]
