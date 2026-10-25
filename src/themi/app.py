@@ -32,6 +32,7 @@ from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
+from themi.core.triage import EmailTriage
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
@@ -101,6 +102,7 @@ def build_app(
         services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
         services.gmail = GmailSync(store, services.google, outbox)
         install_executors(services.autonomy.executors, services.gmail)
+        EmailTriage(services, services.gmail).install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
     habits = HabitReserve(services)
@@ -120,6 +122,8 @@ def build_app(
     ]
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
+    if services.triage is not None:
+        periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
     if services.google is not None:
         periodic.append(
             PeriodicTask(

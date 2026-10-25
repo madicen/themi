@@ -222,7 +222,7 @@ class GmailSync:
         if raw is None:  # deleted before we got to it
             return 0
         message = parse_message(raw)
-        email_id = self._store(account, message)
+        email_id = self._store(account, message, initial)
         if email_id is None:
             return 0
         event = EmailReceived(account, email_id, message, initial)
@@ -233,13 +233,13 @@ class GmailSync:
                 log.exception("An EmailReceived listener failed for email %s", email_id)
         return 1
 
-    def _store(self, account: LinkedAccount, m: GmailMessage) -> int | None:
+    def _store(self, account: LinkedAccount, m: GmailMessage, initial: bool) -> int | None:
         before = self.db.scalar("SELECT total_changes()")
         email_id = self.db.execute(
             "INSERT OR IGNORE INTO emails (account_id, gmail_id, thread_id, message_id_header, "
             "from_address, from_name, to_addresses, subject, snippet, body_text, labels, "
-            "attachments, received_at, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "attachments, received_at, created_at, initial) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 account.id,
                 m.id,
@@ -260,6 +260,7 @@ class GmailSync:
                 ),
                 to_utc_iso(m.received_at),
                 to_utc_iso(clock.now()),
+                int(initial),
             ),
         )
         if self.db.scalar("SELECT total_changes()") == before:

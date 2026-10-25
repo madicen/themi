@@ -11,6 +11,14 @@ and it only sends after you say yes. You can link as many as you like.</p>
   {% if not account.enabled %}
   <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
   {% endif %}
+  <form method="post" action="/accounts/{{ account.id }}/settings" class="settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>
+    <label>Senders that always count as urgent (one per line: an address, or @domain)
+      <textarea name="urgent_senders" rows="3">{{ account.urgent_senders | join("\n") }}</textarea>
+    </label>
+    <button>Save</button>
+  </form>
   <form method="post" action="/accounts/{{ account.id }}/unlink">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="quiet">Unlink</button>

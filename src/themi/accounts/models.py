@@ -68,6 +68,16 @@ class LinkedAccount:
     labels: tuple[str, ...]
     enabled: bool
     created_at: datetime
+    urgent_senders: tuple[str, ...] = ()  # addresses or @domains that always count as urgent
+
+    def is_urgent_sender(self, address: str) -> bool:
+        address = address.lower()
+        for pattern in self.urgent_senders:
+            if pattern.startswith("@") and address.endswith(pattern):
+                return True
+            if address == pattern:
+                return True
+        return False
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -47,6 +48,8 @@ class GoogleAccounts:
         self.store = store
         self.oauth = oauth
         self._tokens: dict[int, AccessToken] = {}
+        # Called after a link succeeds: (account, newly linked rather than re-linked).
+        self.link_listeners: list[Callable[[LinkedAccount, bool], Awaitable[None]]] = []
 
     @staticmethod
     def redirect_uri(site_url: str) -> str:
@@ -98,6 +101,11 @@ class GoogleAccounts:
         if member.email is None and self.store.member_by_email(grant.email) is None:
             self.store.set_email(SYSTEM, member.id, grant.email)
         log.info("Linked a Gmail account (%s) for member %s", account.id, member.id)
+        for listener in self.link_listeners:
+            try:
+                await listener(account, existing is None)
+            except Exception:
+                log.exception("A link listener failed for account %s", account.id)
         return account
 
     async def unlink(self, actor: Actor, account_id: int) -> Unlinked:

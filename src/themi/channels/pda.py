@@ -205,25 +205,68 @@ class PdaShield:
         if not member.pda_enabled:
             return Shielded(text, tuple(buttons))
         strength = member.pda_strength
-        flags = find_demands(text, strength)
+        own, quotes = split_quotes(text)
+        flags = find_demands(own, strength)
         if not flags:
             return Shielded(text, tuple(buttons))
         if self.rewriter is not None:
             try:
-                rewrite = await self.rewriter.rewrite(text, member, flags, kind)
+                rewrite = await self.rewriter.rewrite(own, member, flags, kind)
             except Exception as exc:  # the AI being down must never block a message
                 log.info("PDA rewrite unavailable (%s); softening instead", type(exc).__name__)
             else:
-                if rewrite.text.strip() and not find_demands(rewrite.text, strength):
+                rewritten = join_quotes(rewrite.text, quotes)
+                if rewrite.text.strip() and not find_demands(rewrite.text, strength) and rewritten:
                     extra = () if buttons else _option_buttons(rewrite.options)
                     return Shielded(
-                        rewrite.text, tuple(buttons) or extra, True, "rewritten", tuple(flags)
+                        rewritten, tuple(buttons) or extra, True, "rewritten", tuple(flags)
                     )
                 log.info("PDA rewrite still read as a demand; softening instead")
-        softened = soften(text)
+        softened = soften(own)
         if find_demands(softened, strength):  # pragma: no cover - soften() guarantees this
             log.warning("softener left a demand in place: %s", find_demands(softened, strength))
-        return Shielded(softened, tuple(buttons), True, "softened", tuple(flags))
+        restored = join_quotes(softened, quotes) or softened
+        return Shielded(restored, tuple(buttons), True, "softened", tuple(flags))
+
+
+# ----- quotes -----------------------------------------------------------------
+#
+# Lines starting with "> " quote someone else's words verbatim (an email draft
+# awaiting approval, say). They're not Themi asking anything of the reader, so
+# they're never checked or rewritten; the text around them still is.
+
+QUOTE_PREFIX = "> "
+_PLACEHOLDER = "⟦quote {n}⟧"
+
+
+def split_quotes(text: str) -> tuple[str, list[str]]:
+    """The text with each run of quote lines replaced by a placeholder, and the runs."""
+    out: list[str] = []
+    quotes: list[str] = []
+    run: list[str] = []
+    for line in text.split("\n"):
+        if line.startswith(QUOTE_PREFIX) or line == ">":
+            run.append(line)
+            continue
+        if run:
+            quotes.append("\n".join(run))
+            out.append(_PLACEHOLDER.format(n=len(quotes)))
+            run = []
+        out.append(line)
+    if run:
+        quotes.append("\n".join(run))
+        out.append(_PLACEHOLDER.format(n=len(quotes)))
+    return "\n".join(out), quotes
+
+
+def join_quotes(text: str, quotes: Sequence[str]) -> str | None:
+    """Put the quotes back. None if a placeholder went missing (so the caller can fall back)."""
+    for n, quote in enumerate(quotes, start=1):
+        marker = _PLACEHOLDER.format(n=n)
+        if marker not in text:
+            return None
+        text = text.replace(marker, quote)
+    return text
 
 
 def _option_buttons(options: Sequence[str]) -> tuple[Button, ...]:
@@ -243,7 +286,8 @@ deadlines or pressure. Use indirect, low-key phrasing ("whenever you have a
 moment", "if it helps"). When the message implies a decision, you may offer
 exactly two short options instead of an instruction. Keep facts, names,
 numbers and times exactly as given. Add nothing new. Keep it as short as the
-original or shorter. Never use "you need to", "you must", "you should",
+original or shorter. Keep placeholders such as ⟦quote 1⟧ exactly as they are, on
+their own line. Never use "you need to", "you must", "you should",
 "don't forget", "remember to", "make sure", "right now" or a sentence that
 starts with a command verb.
 """

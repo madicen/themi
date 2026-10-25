@@ -102,6 +102,24 @@ def routes(kit: Kit) -> APIRouter:
         url = accounts.oauth.authorization_url("link", redirect_uri(), session.member)
         return RedirectResponse(url, status_code=303)
 
+    @router.post("/accounts/{account_id}/settings")
+    async def account_settings(request: Request, account_id: int) -> Response:
+        session, form = await kit.checked(request)
+        senders = str(form.get("urgent_senders", "")).replace(",", "\n").splitlines()
+        try:
+            account = app.store.update_linked_account(
+                session.member,
+                account_id,
+                watched=form.get("watched") == "on",
+                urgent_senders=senders,
+            )
+        except AccountsError as exc:
+            message = (
+                str(exc) if "isn't an email" in str(exc) else "That account isn't one of yours."
+            )
+            return kit.redirect("/accounts", message)
+        return kit.redirect("/accounts", f"Saved the settings for {account.address}.")
+
     @router.post("/accounts/{account_id}/unlink")
     async def unlink(request: Request, account_id: int) -> Response:
         session, _ = await kit.checked(request)

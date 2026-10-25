@@ -125,6 +125,7 @@ def _account_from_row(row: dict[str, Any]) -> LinkedAccount:
         labels=tuple(json.loads(row["labels"])),
         enabled=bool(row["enabled"]),
         created_at=_parse_dt(row["created_at"]),
+        urgent_senders=tuple(json.loads(row["urgent_senders"])),
     )
 
 
@@ -483,6 +484,43 @@ class AccountStore:
             "UPDATE linked_accounts SET refresh_token = ? WHERE id = ?",
             (self._cipher.encrypt(refresh_token), account_id),
         )
+
+    def update_linked_account(
+        self,
+        actor: Actor,
+        account_id: int,
+        *,
+        watched: bool | None = None,
+        urgent_senders: list[str] | None = None,
+    ) -> LinkedAccount:
+        """A member's own inbox settings: whether it's watched, and its urgent senders."""
+        account = self.get_linked_account(account_id)
+        self._require_self(actor, account.member_id)
+        if watched is not None:
+            self.db.execute(
+                "UPDATE linked_accounts SET watched = ? WHERE id = ?", (int(watched), account_id)
+            )
+        if urgent_senders is not None:
+            patterns = []
+            for raw in urgent_senders:
+                pattern = raw.strip().lower()
+                if not pattern:
+                    continue
+                if not (pattern.startswith("@") or "@" in pattern):
+                    pattern = f"@{pattern}"  # "bank.example" means the whole domain
+                if pattern.startswith("@"):
+                    valid = "." in pattern and " " not in pattern
+                else:
+                    valid = bool(EMAIL_PATTERN.fullmatch(pattern))
+                if not valid:
+                    raise InvalidValue(f"{raw.strip()!r} isn't an email address or domain")
+                if pattern not in patterns:
+                    patterns.append(pattern)
+            self.db.execute(
+                "UPDATE linked_accounts SET urgent_senders = ? WHERE id = ?",
+                (json.dumps(patterns), account_id),
+            )
+        return self.get_linked_account(account_id)
 
     def linked_account_by_address(self, provider: str, address: str) -> LinkedAccount | None:
         row = self.db.one(

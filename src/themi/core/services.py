@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.rules import Rulebook
     from themi.core.tasks import TaskBoard
+    from themi.core.triage import EmailTriage
     from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
@@ -93,6 +94,7 @@ class Services:
     habits: HabitReserve | None = None
     google: GoogleAccounts | None = None
     gmail: GmailSync | None = None
+    triage: EmailTriage | None = None
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
