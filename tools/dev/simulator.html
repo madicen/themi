@@ -60,6 +60,20 @@
   .person .bubble { background: var(--me); border-bottom-right-radius: 4px; }
   .bot .bubble { background: var(--bot); border-bottom-left-radius: 4px; }
   .notice .bubble { background: var(--notice); font-size: 13px; box-shadow: none; }
+  .row.action { align-self: flex-end; color: var(--muted); font-size: 12px; font-style: italic; }
+  #toast {
+    position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 6px 14px; border-radius: 8px;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  #toast.on { opacity: 0.92; }
+  dialog {
+    width: min(760px, calc(100vw - 32px)); background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+  }
+  dialog textarea { width: 100%; height: 50vh; height: 50dvh; font: 12px/1.4 ui-monospace, monospace; }
+  dialog p { margin: 0 0 8px; }
+  dialog div { display: flex; justify-content: flex-end; margin-top: 8px; }
   .edited { color: var(--muted); font-size: 11px; margin-left: 6px; }
   .badge {
     position: absolute; bottom: -10px; left: -6px; background: var(--panel);
@@ -100,7 +114,15 @@
   <button data-skip="240">4 hours</button>
   <button data-skip="1440">1 day</button>
   <a id="website" target="_blank" rel="noopener">Website ↗</a>
+  <button id="copy" title="Copy the conversations and Themi's log, to paste into Claude">Copy session</button>
+  <button id="session" title="Start a new test session: later copies begin here">New session</button>
 </header>
+<div id="toast" role="status"></div>
+<dialog id="report">
+  <p>The browser blocked the clipboard. Select all and copy:</p>
+  <textarea readonly></textarea>
+  <div><button id="close-report">Close</button></div>
+</dialog>
 <nav id="people"></nav>
 <main>
   <div id="log"></div>
@@ -167,6 +189,11 @@ function renderEntries(entries) {
   if (!entries.length) log.append(el("p", "empty", "No messages yet. Say hello."));
   for (const e of entries) {
     const row = el("div", "row " + e.sender);
+    if (e.sender === "action") {
+      row.textContent = "You " + e.text.replace(/ on message \d+$/, "");
+      log.append(row);
+      continue;
+    }
     const bubble = el("div", "bubble", e.text);
     if (e.edited) bubble.append(el("span", "edited", "edited"));
     if (e.bot_reactions.length) bubble.append(el("span", "badge", e.bot_reactions.join("")));
@@ -247,6 +274,34 @@ document.getElementById("text").onkeydown = (event) => {
 for (const b of document.querySelectorAll("[data-skip]")) {
   b.onclick = () => post("/sim/skip", {minutes: Number(b.dataset.skip)});
 }
+
+let toastTimer;
+function toast(text) {
+  const box = document.getElementById("toast");
+  box.textContent = text;
+  box.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.classList.remove("on"), 2500);
+}
+
+document.getElementById("copy").onclick = async () => {
+  const text = await (await fetch("/sim/report")).text();
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`Copied the session (${text.split("\n").length} lines)`);
+  } catch {
+    const dialog = document.getElementById("report");
+    const area = dialog.querySelector("textarea");
+    area.value = text;
+    dialog.showModal();
+    area.select();
+  }
+};
+document.getElementById("close-report").onclick = () => document.getElementById("report").close();
+document.getElementById("session").onclick = async () => {
+  await post("/sim/session", {});
+  toast("New session started: copies begin here");
+};
 
 poll();
 setInterval(poll, 700);

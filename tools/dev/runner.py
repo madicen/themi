@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import shutil
 from collections.abc import Mapping, Sequence
@@ -29,6 +30,7 @@ from tests.fixtures.family import ERIN_TELEGRAM_ID, seed_family
 from themi.accounts import SYSTEM, AccountStore
 from themi.accounts.setup import run_invite
 from themi.ai.settings import AISettingsStore
+from themi.channels.telegram import OFFSET_KEY
 from themi.settings import Settings, read_dotenv
 from themi.storage import open_database
 from themi.storage.secrets import Secret, generate_key
@@ -69,9 +71,13 @@ def _store(settings: Settings) -> AccountStore:
 
 
 def seed(settings: Settings, gemini_key: str) -> SeedResult:
-    """Create the test family once, with the Gemini key on everyone's default backend."""
+    """Ready the dev data for a run: the test family (made once, with the Gemini key on
+    everyone's default backend), and no Telegram offset from the last run."""
     store = _store(settings)
     try:
+        # Each run's simulator numbers updates from 1, so an offset stored by the last
+        # run would make Themi skip that many messages.
+        store.db.execute("DELETE FROM meta WHERE key = ?", (OFFSET_KEY,))
         if store.get_family() is not None:
             return SeedResult(seeded=False, key_set=_has_key(store, settings))
         family = seed_family(store)
@@ -130,6 +136,7 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
         settings = dev_settings(dev_dir, simulator.url, env)
         result = seed(settings, env.get("GEMINI_API_KEY", "").strip())
         configure_logging(settings.log_level)
+        logging.getLogger().addHandler(simulator.logs)  # for the page's Copy session
         runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK)
         simulator.login = lambda telegram_user_id: login_link(settings, telegram_user_id)
         print(_banner(simulator.url, login_link(settings) or "", result, dev_dir), flush=True)

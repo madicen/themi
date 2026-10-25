@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import stat
 from collections.abc import Iterator
 from datetime import timedelta
@@ -24,6 +25,8 @@ from themi.storage import open_database
 from tools.dev import runner
 from tools.dev.simulator import NEWCOMER_ID, Simulator
 
+FAKE_GEMINI_KEY = "AIza" + "x" * 35
+
 
 @pytest.fixture
 def simulator() -> Iterator[Simulator]:
@@ -31,6 +34,18 @@ def simulator() -> Iterator[Simulator]:
     sim.start()
     yield sim
     sim.stop()
+
+
+@pytest.fixture
+def themi_log(simulator: Simulator) -> Iterator[logging.Logger]:
+    """The `themi` logger at INFO, feeding the simulator's log buffer."""
+    logger = logging.getLogger("themi")
+    level = logger.level
+    logger.setLevel(logging.INFO)
+    logger.addHandler(simulator.logs)
+    yield logger
+    logger.removeHandler(simulator.logs)
+    logger.setLevel(level)
 
 
 def bot_call(sim: Simulator, method: str, **params: Any) -> Any:
@@ -183,7 +198,7 @@ def test_the_banner_says_when_there_is_no_ai_key(tmp_path: Path) -> None:
 
 
 async def test_a_message_from_the_simulator_gets_a_reply(
-    simulator: Simulator, tmp_path: Path
+    simulator: Simulator, themi_log: logging.Logger, tmp_path: Path
 ) -> None:
     settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_HTTP_PORT": "0"})
     runner.seed(settings, "")  # no key: Themi answers that setup is needed, with no network
@@ -197,6 +212,120 @@ async def test_a_message_from_the_simulator_gets_a_reply(
             ),
             timeout=10,
         )
+        report = simulator.report()
+        assert "Erin #" in report and SETUP_NEEDED_TEXT in report
+        assert "INFO themi.runtime: Themi is running" in report
+    finally:
+        runtime.stop()
+        await asyncio.wait_for(task, timeout=10)
+
+
+def test_the_report_tells_the_whole_session(
+    simulator: Simulator, themi_log: logging.Logger
+) -> None:
+    simulator.send_text(ERIN_TELEGRAM_ID, "add eggs")
+    asked = bot_call(
+        simulator,
+        "sendMessage",
+        chat_id=ERIN_TELEGRAM_ID,
+        text="Eggs for the grocery list?\nSay the word.",
+        reply_markup={"inline_keyboard": [[{"text": "Yes", "callback_data": "t1"}]]},
+    )["message_id"]
+    httpx.post(
+        f"{simulator.url}/sim/tap", json={"user_id": 1001, "message_id": asked, "data": "t1"}
+    )
+    query = bot_call(simulator, "getUpdates")[-1]["callback_query"]["id"]
+    bot_call(simulator, "answerCallbackQuery", callback_query_id=query, text="Added")
+    bot_call(simulator, "editMessageText", chat_id=1001, message_id=asked, text="Eggs: added.")
+    httpx.post(
+        f"{simulator.url}/sim/react", json={"user_id": 1001, "message_id": asked, "emoji": "✅"}
+    )
+    httpx.post(f"{simulator.url}/sim/skip", json={"minutes": 75})
+    bot_call(simulator, "sendMessage", chat_id=1002, text="Washer's done.")
+    themi_log.info("Sent with key %s", FAKE_GEMINI_KEY)
+
+    report = httpx.get(f"{simulator.url}/sim/report").text
+    erin, husband = (
+        report.index("## Erin (Telegram 1001)"),
+        report.index("## Husband (Telegram 1002)"),
+    )
+    log = report.index("## Themi log (1 lines)")
+    assert erin < husband < log
+    assert "Someone new" not in report
+    erin_part = report[erin:husband]
+    for expected in (
+        "Erin #",
+        ": add eggs",
+        f'Themi #{asked} (edited; earlier: "Eggs for the grocery list? / Say the word."): '
+        "Eggs: added.",
+        f'Erin tapped "Yes" on message {asked}',
+        'Themi answered the tap: "Added"',
+        f"Erin reacted ✅ on message {asked}",
+        "-- Skipped ahead 1h 15m --",
+    ):
+        assert expected in erin_part, expected
+    husband_part = report[husband:log]
+    assert "-- Skipped ahead 1h 15m --" in husband_part  # skips show in every conversation
+    assert (
+        ", Themi " in husband_part
+        and "Themi #" in husband_part
+        and "Washer's done." in husband_part
+    )
+    assert "Themi's clock:" in report and "(skipped ahead 1h 15m)" in report
+    assert FAKE_GEMINI_KEY not in report and "[redacted]" in report[log:]
+
+
+def test_the_reports_buttons_and_multiline_text(simulator: Simulator) -> None:
+    bot_call(
+        simulator,
+        "sendMessage",
+        chat_id=ERIN_TELEGRAM_ID,
+        text="Two things:\n- the vet\n- the bins",
+        reply_markup={"inline_keyboard": [[{"text": "Yes", "callback_data": "a"},
+                                           {"text": "Not now", "callback_data": "b"}]]},
+    )  # fmt: skip
+    report = simulator.report()
+    assert ": Two things:\n    - the vet\n    - the bins\n    buttons: [Yes] [Not now]" in report
+    assert "## Themi log (0 lines)\n\n(nothing logged)" in report
+
+
+def test_a_new_session_starts_the_report_over(
+    simulator: Simulator, themi_log: logging.Logger
+) -> None:
+    simulator.send_text(ERIN_TELEGRAM_ID, "before the mark")
+    old = bot_call(simulator, "sendMessage", chat_id=ERIN_TELEGRAM_ID, text="old reply")
+    themi_log.info("logged before the mark")
+
+    assert httpx.post(f"{simulator.url}/sim/session", json={}).status_code == 200
+    simulator.send_text(1002, "after the mark")
+    bot_call(simulator, "editMessageText", chat_id=1001, message_id=old["message_id"], text="new")
+    themi_log.info("logged after the mark")
+
+    report = simulator.report()
+    assert "before the mark" not in report and "after the mark" in report
+    assert "-- New test session --" in report
+    assert 'earlier: "old reply"): new' in report  # an old message edited since counts
+    assert "logged after the mark" in report and "## Themi log (1 lines)" in report
+    page = state(simulator, ERIN_TELEGRAM_ID)["entries"]
+    assert page[-1]["text"] == "New test session"  # and the page shows the mark
+
+
+async def test_a_restart_with_old_dev_data_still_gets_replies(
+    simulator: Simulator, tmp_path: Path
+) -> None:
+    """A new simulator numbers updates from 1, below the offset the last run stored."""
+    settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_HTTP_PORT": "0"})
+    runner.seed(settings, "")
+    store = AccountStore(open_database(settings.db_path), settings.cipher())
+    store.db.execute("INSERT INTO meta (key, value) VALUES ('telegram.offset', '50')")
+    store.db.close()
+
+    runner.seed(settings, "")  # the next `make dev`
+    runtime = build_runtime(settings, scheduler_tick=timedelta(milliseconds=50))
+    task = asyncio.create_task(runtime.run())
+    try:
+        simulator.send_text(ERIN_TELEGRAM_ID, "hello again")
+        await wait_for(lambda: len(simulator.transcript(ERIN_TELEGRAM_ID)) == 2, timeout=5)
     finally:
         runtime.stop()
         await asyncio.wait_for(task, timeout=10)
