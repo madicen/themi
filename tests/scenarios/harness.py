@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.ourgroceries import FakeOurGroceries
@@ -36,6 +37,7 @@ from themi.ai.adapters import AdapterConfig
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.google import GoogleConfig
 from themi.storage.secrets import Secret
 
 START = datetime(2026, 10, 21, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
@@ -72,6 +74,7 @@ class Scenario:
         google: FakeGoogle | None = None,
         gmail: FakeGmail | None = None,
         ourgroceries: FakeOurGroceries | None = None,
+        gcal: FakeGcal | None = None,
     ) -> None:
         self.family = family
         self.telegram = telegram
@@ -91,7 +94,7 @@ class Scenario:
             ),
             provider_factory=self.models,
             sleep=_no_sleep,
-            google=gmail.config() if gmail else google.config() if google else None,
+            google=_google_config(google, gmail, gcal),
             grocery_list=ourgroceries,
         )
         for member in (family.erin, family.husband):
@@ -187,6 +190,12 @@ class Scenario:
         message_id = target["telegram_message_id"]
         return await self._collect(name, lambda c: self.telegram.react(c, message_id, [emoji]))
 
+    async def run_jobs(self) -> list[int]:
+        """Run the queued background jobs that are due, as the scheduler would."""
+        assert self.app.scheduler is not None
+        report = await self.app.scheduler.run_due()
+        return report.queued
+
     async def run_periodic(self, task_name: str) -> object:
         """Run one of the app's periodic tasks now, as the scheduler would."""
         task = next(t for t in self.app.periodic if t.name == task_name)
@@ -221,6 +230,13 @@ class Scenario:
         return any(int(p["chat_id"]) == chat for p in self.telegram.calls("sendChatAction"))
 
 
+def _google_config(
+    google: FakeGoogle | None, gmail: FakeGmail | None, gcal: FakeGcal | None
+) -> GoogleConfig | None:
+    config = gmail.config() if gmail else google.config() if google else None
+    return gcal.config(config) if gcal else config
+
+
 @pytest.fixture
 async def scenario(
     family: SeededFamily, fake_telegram: FakeTelegram, request: pytest.FixtureRequest
@@ -229,7 +245,7 @@ async def scenario(
 
     Google sign-in and linking are configured when the test also uses `fake_google`, and
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
-    `fake_ourgroceries`.
+    `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`.
     """
 
     def optional(name: str) -> Any:
@@ -241,6 +257,7 @@ async def scenario(
         optional("fake_google"),
         optional("fake_gmail"),
         optional("fake_ourgroceries"),
+        optional("fake_gcal"),
     )
     await s.start()
     yield s

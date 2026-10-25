@@ -14,6 +14,7 @@ from themi import clock
 from themi.accounts import SYSTEM, PermissionDenied
 from themi.connectors.google import (
     CALENDAR_SCOPE,
+    CALENDAR_SCOPES,
     GMAIL_SCOPE,
     GoogleAccounts,
     GoogleOAuth,
@@ -55,7 +56,7 @@ def test_the_authorize_url_asks_for_the_right_things(
 ) -> None:
     link = query(oauth.authorization_url("link", REDIRECT_URI, family.erin))
     assert link["client_id"] == CLIENT_ID and link["redirect_uri"] == REDIRECT_URI
-    assert link["scope"].split() == ["openid", "email", GMAIL_SCOPE, CALENDAR_SCOPE]
+    assert link["scope"].split() == ["openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES]
     assert GMAIL_SCOPE == "https://www.googleapis.com/auth/gmail.modify"
     assert CALENDAR_SCOPE == "https://www.googleapis.com/auth/calendar.events"
     assert (link["access_type"], link["prompt"]) == ("offline", "consent")
