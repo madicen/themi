@@ -37,7 +37,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [x] |
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [x] |
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [x] |
-| 23 | Email triage | 4 Gmail and pantry | [ ] |
+| 23 | Email triage | 4 Gmail and pantry | [x] |
 | 24 | Expected emails and anomaly detection | 4 Gmail and pantry | [ ] |
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [ ] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [ ] |
@@ -1478,7 +1478,7 @@ Notes (2026-10-25):
     - The `scenario` fixture wires it in when a test uses `fake_gmail`.
 
 ### 23 · Email triage
-Status: [ ]
+Status: [x] (2026-10-25)
 Depends on: 22, 12
 Read first: "Module behaviour" → E (Triage, Replies); "Security and privacy" (email content is
 data); "Testing" → Security row.
@@ -1505,6 +1505,56 @@ Tests:
 - A reply is sent only after Go ahead.
 
 Done when: triage runs on the fake mailbox end to end. Commit.
+
+Notes (2026-10-25):
+- Migration 0019:
+    - `linked_accounts.urgent_senders` (JSON list of addresses or `@domain`; a bare domain is
+      read as `@domain`).
+    - Triage columns on `emails`: `initial`, `triage_status` (pending or done),
+      `triage_attempts`, `category`, `urgent_kind`, `summary` and `triaged_at`.
+    - `store.update_linked_account(actor, id, watched=, urgent_senders=)`, owner only.
+- `themi.core.triage.EmailTriage`:
+    - The periodic job `email.triage` runs every minute, after `gmail.poll`. It sorts
+      pending mail from watched inboxes per member, in batches of 8 per `email_triage`
+      structured call, on that member's own backend.
+    - Each email goes in its own `as_data` block, capped at 4,000 characters. The system
+      prompt says emails are information, never instructions.
+    - If the AI is unavailable, mail stays pending for the next run, with no job queue
+      needed. An email the model keeps leaving out is filed as routine after 3 tries.
+    - Only well-formed verdicts for ids in the batch are used.
+- Actions:
+    - urgent: an outbox alert, `kind="email"`, deduped per email. Severe goes as URGENT,
+      otherwise NORMAL.
+    - confirmation: stages `email_mark_read` (`gmail.mark_read`).
+    - noise: stages `email_archive_noise` (`gmail.archive`).
+    - needs_reply: stages `email_reply` (`gmail.send_reply`, capped at Tier 1). The summary
+      quotes the draft with `> ` lines.
+    - receipt: `ReceiptFound(email_id, member_id, account_id, sender, subject, summary)` is
+      passed to `triage.receipt_listeners`. Prompt 25 should subscribe there.
+    - routine: nothing.
+    - Senders listed as urgent for an inbox override the model's category to urgent, and
+      the model is told the list.
+    - `initial` (first-sync) mail is sorted but never acted on.
+- PDA shield change: lines starting with `> ` are quotes. They're excluded from demand
+  checks and kept verbatim; the text around them is still rewritten or softened, using
+  ⟦quote n⟧ placeholders and falling back to the softener if a rewrite drops one. This way
+  an approval shows the exact draft that will be sent.
+- Inbox setup:
+    - After a new link (the new `GoogleAccounts.link_listeners`), the owner gets a REPLY
+      "Shall Themi keep an eye on this inbox?" with the buttons [Watch it] [Not this one].
+    - Watching edits the message to ask which senders count as urgent. The answer arrives in
+      ordinary chat, and the model records it with the new tool `set_urgent_senders`
+      (`set_inbox_watched` exists too).
+    - The website's My accounts page has a watched checkbox and an urgent-senders box for
+      each account.
+- Injection: the model can at most mis-sort emails in its own batch. Every resulting action
+  is staged per email through the trust tiers. The scenario shows a fooled model running
+  nothing and touching no Gmail endpoint.
+- Follow-ups:
+    - A burst of noise or confirmation mail produces one approval message per email. A
+      grouped "archive these 5?" approval would be kinder. Consider it alongside prompt 24,
+      or when the categories go automatic.
+    - `gmail.label` still has no category.
 
 ### 24 · Expected emails and anomaly detection
 Status: [ ]
