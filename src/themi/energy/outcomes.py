@@ -142,17 +142,28 @@ class OutcomeTracker:
             (member_id,),
         )
 
-    def recent_rate(self, member_id: int, days: int = 14) -> float | None:
-        """Share of recent proactive messages acted on (None if there aren't any)."""
+    def recent(self, member_id: int, days: int = 14) -> list[Outcome]:
+        """Resolved outcomes of proactive messages sent in the last `days` days."""
         since = to_utc_iso(clock.now() - timedelta(days=days))
         rows = self.db.query(
             "SELECT outcome FROM prompt_outcomes WHERE member_id = ? AND outcome IS NOT NULL "
             "AND sent_at >= ?",
             (member_id, since),
         )
-        if not rows:
+        return [r["outcome"] for r in rows]
+
+    def recent_rate(self, member_id: int, days: int = 14) -> float | None:
+        """Share of recent proactive messages acted on (None if there aren't any)."""
+        outcomes = self.recent(member_id, days)
+        if not outcomes:
             return None
-        return sum(1 for r in rows if r["outcome"] == "acted") / len(rows)
+        return outcomes.count("acted") / len(outcomes)
+
+    def outcome_of(self, outbox_id: int) -> Outcome | None:
+        """How a particular sent message turned out (None: unsent or still open)."""
+        return self.db.scalar(
+            "SELECT outcome FROM prompt_outcomes WHERE outbox_id = ?", (outbox_id,)
+        )
 
 
 def _is_snooze(event: InboundEvent) -> bool:

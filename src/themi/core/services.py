@@ -22,8 +22,10 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
+    from themi.core.habits import HabitReserve
     from themi.core.memory import Memory
     from themi.core.rules import Rulebook
+    from themi.core.tasks import TaskBoard
     from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
@@ -85,6 +87,8 @@ class Services:
     rulebook: Rulebook | None = None
     memory: Memory | None = None
     outcomes: OutcomeTracker | None = None
+    taskboard: TaskBoard | None = None
+    habits: HabitReserve | None = None
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

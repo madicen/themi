@@ -23,12 +23,15 @@ from themi.channels.telegram import TelegramChannel
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.commands import Commands
+from themi.core.habits import HabitReserve
 from themi.core.memory import Memory
 from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.energy import EnergyModel
+from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
 from themi.storage.db import Database
@@ -91,6 +94,10 @@ def build_app(
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
     services.memory = Memory(db, rulebook)
+    tasks = TaskBoard(services, Matcher(store, energy))
+    tasks.install()
+    habits = HabitReserve(services)
+    habits.install()
     Commands(services).install()
     agent = Agent(services)
     channel.handler = agent
@@ -100,6 +107,9 @@ def build_app(
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
+        PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
+        PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
+        PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
     ]
     return App(
         db,
