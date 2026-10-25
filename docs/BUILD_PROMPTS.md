@@ -30,7 +30,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 13 | Rules: drafts and locking | 2 Trust and memory | [x] |
 | 14 | Memory and context repair | 2 Trust and memory | [x] |
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [x] |
-| 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [ ] |
+| 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [x] |
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [ ] |
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [ ] |
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [ ] |
@@ -985,7 +985,7 @@ Notes:
   prompt 16.
 
 ### 16 · Website v1: admin, tiers, rules, AI backend pages
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 06, 13, 14, 15
 Read first: "How the family uses Themi" → management website; "AI backend" (per-member backend
 paragraph).
@@ -1006,6 +1006,42 @@ Tests:
 - Connection test success and failure against the scripted provider.
 
 Done when: every setting named in the plan's website section exists. Commit.
+
+Notes:
+- Pages:
+    - `/family`: admins only (403 "Admins only" for members).
+    - `/tiers`: everyone can see it; only admins can change it.
+    - `/knowledge`: rules and memory.
+    - `/ai`: self-service AI settings.
+    - The nav shows Family only to admins.
+- Page modules (`admin_pages.py`, `knowledge_pages.py`, `ai_pages.py`) each expose
+  `routes(kit) -> APIRouter`. `Kit` (in `themi.web.kit`) provides:
+    - `current(request)` and `admin(request)`
+    - `await checked(request, admin=)`, which checks CSRF and returns `(session, form)`
+    - `page(...)`, `with_flash(request, template, session, ...)` and `redirect(url, message)`
+
+  New pages should follow the same pattern.
+- Tiers:
+    - "Make automatic" calls `rulebook.grant_automatic(admin, category)`. That creates a locked
+      autonomy-grant rule ("Automatic: <label>") in the admin's name; ticking the switch counts
+      as the explicit confirmation.
+    - "Ask first again" calls `revoke_automatic`, which retires that rule.
+    - Capped categories render no button, and a forged POST gets the "always needs a yes"
+      explanation.
+- My AI:
+    - Keys are write-only. The form shows "saved (leave blank to keep)" or "not set", and never
+      any characters of the key.
+    - A blank key keeps the saved one; ticking "Remove saved key" clears it.
+    - Chains have up to 3 slots, each with an optional model override.
+    - "Test the first choice" calls `router.test_connection` (HTMX-friendly).
+    - Gemini backends show the free-tier data-use note.
+    - The page calls `ensure_defaults`, so new members see the keyless free-tier backend.
+- Memory edits go through `Memory.can_edit`: household facts can be edited by anyone, personal
+  facts only by their owner. Forged POSTs for someone else's personal fact are refused.
+- Flash messages are URL-encoded in the cookie, because invite instructions contain line
+  breaks. `.flash` uses `white-space: pre-line`.
+- Test helpers: `tests/fixtures/web.py` (a plugin) provides the `site` fixture plus
+  `web_client`, `sign_in` and `csrf_of`.
 
 ### 17 · Chat commands: /pause, /tracking, /site
 Status: [ ]
