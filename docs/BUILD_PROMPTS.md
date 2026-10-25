@@ -31,7 +31,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 14 | Memory and context repair | 2 Trust and memory | [x] |
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [x] |
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [x] |
-| 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [ ] |
+| 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [x] |
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [ ] |
 | 19 | Good windows and outcome learning | 3 Shadow Calendar | [ ] |
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [ ] |
@@ -1044,7 +1044,7 @@ Notes:
   `web_client`, `sign_in` and `csrf_of`.
 
 ### 17 · Chat commands: /pause, /tracking, /site
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 15
 Read first: "How the family uses Themi" → Chat commands; "Security and privacy" → Transparency.
 
@@ -1063,6 +1063,46 @@ Tests:
 - The /site link works exactly once.
 
 Done when: the commands work end to end in scenarios. This is the milestone 2 gate. Commit.
+
+Notes:
+- Pause topics map to outbox `kind`s (`themi.channels.pauses.TOPICS`):
+
+  | Topic | Kinds |
+  | --- | --- |
+  | meals | meal |
+  | laundry | laundry |
+  | maintenance | maintenance |
+  | tasks | task |
+  | habits | habit |
+  | approvals | approval, rule |
+  | notes | relay |
+  | everything | every proactive message |
+
+  Later prompts must send their proactive messages with these kinds: prompt 20 uses `task` and
+  `habit`, 31 `laundry`, 33 `maintenance`, 34 `relay`, 35 `meal`.
+- How pauses behave:
+    - A pause holds normal and low messages of matching kinds until it ends. Nothing is dropped.
+    - A pause outranks a deadline, because the person explicitly asked.
+    - Replies and urgent messages are never held.
+    - `/resume` calls `outbox.release_held(member)`, so held messages are re-evaluated at the
+      next flush (quiet hours and limits still apply).
+- Durations: today (until local midnight, the default), tonight (until the end of quiet hours),
+  tomorrow, Nh/Nd/Nw/Nm, "a week", "an hour". The maximum is 30 days. Plain-words equivalents
+  are the `pause_messages` and `resume_messages` tools.
+- Commands:
+    - Register with `services.add_command(name, handler, description)`. `/pending` and `/rules`
+      were moved onto it.
+    - `services.command_menu()` feeds `TelegramChannel.publish_commands`, which is called after
+      start in the runtime and the harness.
+    - `/help` lists `services.command_help`.
+- `/tracking` shows only the asker's own inputs. Its buttons (`kind="tracking"`) toggle a setting
+  and edit the list in place. The website's settings page reflects the change.
+- `/site` sends `{services.site_url}/login/{token}` with `link_preview=False`, which becomes
+  Telegram's `link_preview_options.is_disabled`. `Runtime` sets `services.site_url` from
+  `THEMI_PUBLIC_URL`, or the local address. Outbox rows have a new `link_preview` column.
+- `/link` is a stub (`LINK_SOON`). Prompt 21 replaces the handler with the Google flow.
+- Milestone 2 gate: the code is complete. Real-world use waits on the milestone 1 setup (bot
+  token, Gemini key).
 
 ---
 
