@@ -73,8 +73,11 @@ async def test_tasks_with_dates_appear_on_the_calendar(
     scenario.primary.queue_text("Added, for Friday.")
     await scenario.say("Erin", "remind us to call the plumber on Friday")
     (action,) = calendar_actions(scenario)
-    assert action["summary"] == "Put Call the plumber on the family calendar for Fri Oct 30"
-    assert any("Call the plumber on the family calendar" in t for t in scenario.inbox("Erin"))
+    assert action["summary"] == "For the family calendar: Call the plumber, Fri Oct 30"
+    assert (
+        "For the family calendar: Call the plumber, Fri Oct 30\nGo ahead, or not now?"
+        in scenario.inbox("Erin")
+    )
     await scenario.run_jobs()
     assert linked.events(ERIN) == []  # nothing before the yes
 

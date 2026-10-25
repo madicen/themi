@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.tools import Proposal, ToolContext, staged_tool, tool
+from themi.core.tools import Proposal, ToolContext, ToolDeclined, staged_tool, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -150,10 +150,15 @@ class GroceryList:
         return f"Added {and_list(added)} to the grocery list."
 
 
+def list_summary(names: list[str]) -> str:
+    """How an approval reads: an offer ("Eggs for the grocery list"), never an order, so the
+    PDA shield never has to rewrite it."""
+    text = and_list(names)
+    return f"{text[:1].upper()}{text[1:]} for the grocery list"
+
+
 def proposal(names: list[str]) -> Proposal:
-    return Proposal(
-        CATEGORY, f"Add {and_list(names)} to the grocery list", EXECUTOR, {"items": names}
-    )
+    return Proposal(CATEGORY, list_summary(names), EXECUTOR, {"items": names})
 
 
 @staged_tool(
@@ -168,12 +173,24 @@ def proposal(names: list[str]) -> Proposal:
     },
 )
 async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
-    names = []
+    groceries = ctx.services.groceries
+    assert groceries is not None
+    waiting = groceries.awaiting_approval()
+    names, skipped = [], []
     for raw in args["items"]:
         name = item_name(str(raw))
-        if name not in names:
+        if name in names or name in skipped:
+            continue
+        if name in waiting or groceries.is_needed(name):
+            skipped.append(name)
+        else:
             names.append(name)
     if not names:
+        if skipped:
+            raise ToolDeclined(
+                f"Nothing new to ask about: already on the list or already waiting on a yes: "
+                f"{and_list(skipped)}. No new approval was sent."
+            )
         raise InvalidValue("no items to add")
     return proposal(names)
 

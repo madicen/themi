@@ -46,6 +46,12 @@ def event_body(task: Task, assignee_name: str | None) -> dict[str, Any]:
     }
 
 
+def approval_summary(task: Task) -> str:
+    """An offer, not an order, so the PDA shield never has to rewrite it."""
+    assert task.due_on is not None
+    return f"For the family calendar: {task.title}, {task.due_on.strftime('%a %b %-d')}"
+
+
 class TaskCalendar:
     def __init__(
         self, services: Services, board: TaskBoard, sync: CalendarSync, jobs: Scheduler
@@ -95,7 +101,7 @@ class TaskCalendar:
         await self.services.autonomy.stage(
             CATEGORY,
             member,
-            f"Put {task.title} on the family calendar for {task.due_on.strftime('%a %b %-d')}",
+            approval_summary(task),
             {"task_id": task.id},
             EXECUTOR,
             interactive=interactive,

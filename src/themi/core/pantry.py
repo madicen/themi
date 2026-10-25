@@ -26,7 +26,14 @@ from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.autonomy import Outcome
-from themi.core.groceries import CATEGORY, EXECUTOR, GroceryList, and_list, item_name
+from themi.core.groceries import (
+    CATEGORY,
+    EXECUTOR,
+    GroceryList,
+    and_list,
+    item_name,
+    list_summary,
+)
 from themi.core.prompts import as_data
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
@@ -251,7 +258,7 @@ class Pantry:
         return await self.services.autonomy.stage(
             CATEGORY,
             member,
-            f"Add {and_list(wanted)} to the grocery list",
+            list_summary(wanted),
             {"items": wanted},
             EXECUTOR,
             interactive=interactive,

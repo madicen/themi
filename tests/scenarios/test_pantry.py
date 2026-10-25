@@ -63,7 +63,8 @@ async def test_a_pantry_text_ends_up_on_the_grocery_list_after_approval(
     await scenario.say("Erin", "used the last olive oil")
     assert pantry(scenario).item("olive oil").status == "out"  # type: ignore[union-attr]
     assert "Staged for approval" in tool_result(scenario)
-    assert any("add olive oil to the grocery list" in t for t in scenario.inbox("Erin"))
+    # The approval is already an offer, so it goes out exactly as written.
+    assert "Olive oil for the grocery list\nGo ahead, or not now?" in scenario.inbox("Erin")
     assert scenario.last_buttons("Erin") == ["Go ahead", "Not now"]
     assert on_list(scenario) == []
     await scenario.run_periodic("groceries.mirror")
@@ -223,7 +224,7 @@ async def test_staples_running_low_are_offered_for_the_list(scenario: Scenario) 
     item = pantry(scenario).item("coffee")
     assert item is not None and (item.status, item.status_source) == ("low", "predicted")
     (action,) = actions(scenario)
-    assert action["summary"] == "Add coffee to the grocery list"
+    assert action["summary"] == "Coffee for the grocery list"
     assert action["member_id"] == scenario.member("Erin").id  # no errand owner: an admin
     assert await scenario.run_periodic("pantry.predict") == 0  # asked once
 
@@ -250,3 +251,18 @@ async def test_the_dashboard_shows_the_list(
     assert "already off the list" in await flash(site, "/")
     await scenario.run_periodic("groceries.mirror")
     assert fake_ourgroceries.values() == ["cat food"]
+
+
+async def test_items_waiting_on_a_yes_are_not_staged_again(scenario: Scenario) -> None:
+    pantry_says(scenario, ("eggs", "out"))
+    await scenario.say("Erin", "out of eggs")  # eggs now wait on a yes
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["Eggs"]})
+    scenario.primary.queue_text("Eggs are already waiting on your yes.")
+    await scenario.say("Erin", "can you put eggs on the list")  # no duplicate approval
+    assert len([a for a in actions(scenario) if a["status"] == "pending"]) == 1
+    assert "already waiting on a yes: eggs" in tool_result(scenario)
+
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["eggs", "limes"]})
+    scenario.primary.queue_text("Asked about limes.")
+    await scenario.say("Erin", "and limes")
+    assert actions(scenario)[-1]["summary"] == "Limes for the grocery list"  # just the new one

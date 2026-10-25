@@ -52,6 +52,11 @@ class Proposal:
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
 
 
+class ToolDeclined(Exception):
+    """A tool has nothing to do (already done, already waiting...). The message goes
+    back to the model as the tool's result; nothing was changed or staged."""
+
+
 @dataclass(frozen=True)
 class Tool:
     spec: ToolSpec
@@ -127,6 +132,8 @@ class ToolRegistry:
                 output = await self._stage(output, ctx)
             elif not isinstance(output, str):
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
+        except ToolDeclined as exc:
+            return ToolResult(call.id, str(exc))
         except Exception as exc:
             log.exception("Tool %s failed for member %s", call.name, ctx.member.id)
             return ToolResult(
