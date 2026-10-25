@@ -2188,7 +2188,8 @@ Notes (2026-10-25):
       a real `themi run` on 8080.
 - The simulator has a Reply button on Themi's messages, and its report shows
   "(replying to #N)".
-- Not in the plan yet. If the user wants it there, add `/bug` and `/idea` to its chat commands.
+- The plan's chat commands table lists `/bug` and `/idea` (added 2026-10-25, at the user's
+  request).
 - A running `themi run` picks this up only after a restart.
 
 ---
