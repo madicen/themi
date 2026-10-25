@@ -153,6 +153,8 @@ class ReceiptFound:
 
 
 ReceiptListener = Callable[[ReceiptFound], Awaitable[None]]
+# Told about every sorted email before Themi acts on it (anomaly checks escalate here).
+VerdictListener = Callable[[Member, LinkedAccount, dict[str, Any], Verdict], Awaitable[None]]
 
 
 def _sender(row: dict[str, Any]) -> str:
@@ -185,6 +187,7 @@ class EmailTriage:
         self.store = services.store
         self.db = services.store.db
         self.receipt_listeners: list[ReceiptListener] = []
+        self.verdict_listeners: list[VerdictListener] = []
 
     def install(self) -> None:
         s = self.services
@@ -289,6 +292,11 @@ class EmailTriage:
                     "",
                 )
             self._record(row, verdict)
+            for listener in self.verdict_listeners:
+                try:
+                    await listener(member, account, row, verdict)
+                except Exception:
+                    log.exception("A verdict listener failed for email %s", row["id"])
             if not row["initial"]:
                 await self._act(member, account, row, verdict)
             settled += 1

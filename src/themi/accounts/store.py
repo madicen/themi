@@ -503,17 +503,9 @@ class AccountStore:
         if urgent_senders is not None:
             patterns = []
             for raw in urgent_senders:
-                pattern = raw.strip().lower()
-                if not pattern:
+                if not raw.strip():
                     continue
-                if not (pattern.startswith("@") or "@" in pattern):
-                    pattern = f"@{pattern}"  # "bank.example" means the whole domain
-                if pattern.startswith("@"):
-                    valid = "." in pattern and " " not in pattern
-                else:
-                    valid = bool(EMAIL_PATTERN.fullmatch(pattern))
-                if not valid:
-                    raise InvalidValue(f"{raw.strip()!r} isn't an email address or domain")
+                pattern = sender_pattern(raw)
                 if pattern not in patterns:
                     patterns.append(pattern)
             self.db.execute(
@@ -639,6 +631,20 @@ class AccountStore:
             )
             for r in rows
         ]
+
+
+def sender_pattern(raw: str) -> str:
+    """An address, or `@domain` ("bank.example" means the whole domain)."""
+    pattern = raw.strip().lower()
+    if not (pattern.startswith("@") or "@" in pattern):
+        pattern = f"@{pattern}"
+    if pattern.startswith("@"):
+        valid = "." in pattern and " " not in pattern and pattern.count("@") == 1
+    else:
+        valid = bool(EMAIL_PATTERN.fullmatch(pattern))
+    if not valid:
+        raise InvalidValue(f"{raw.strip()!r} isn't an email address or domain")
+    return pattern
 
 
 def _validate_timezone(name: str) -> None:

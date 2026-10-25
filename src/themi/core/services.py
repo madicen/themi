@@ -24,6 +24,7 @@ from themi.core.tools import ToolRegistry
 if TYPE_CHECKING:
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
+    from themi.core.expected import ExpectedEmails
     from themi.core.habits import HabitReserve
     from themi.core.memory import Memory
     from themi.core.rules import Rulebook
@@ -95,6 +96,7 @@ class Services:
     google: GoogleAccounts | None = None
     gmail: GmailSync | None = None
     triage: EmailTriage | None = None
+    expected: ExpectedEmails | None = None
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

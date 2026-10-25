@@ -53,3 +53,5 @@ details { margin: .5rem 0; }
 summary { cursor: pointer; color: var(--accent); }
 .slot { border-left: 3px solid var(--line); padding-left: .75rem; margin: .5rem 0; }
 nav { flex-wrap: wrap; }
+form.row { display: flex; gap: .75rem; align-items: center; justify-content: space-between;
+  padding: .4rem 0; border-bottom: 1px solid var(--line); }

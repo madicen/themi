@@ -19,6 +19,34 @@ and it only sends after you say yes. You can link as many as you like.</p>
     </label>
     <button>Save</button>
   </form>
+  <h2>Expected emails</h2>
+  <p class="muted">Recurring mail, like a bill confirmation. If one doesn't arrive on time,
+  Themi says so, and anything automatic it protects goes back to asking first.</p>
+  {% for item in expected.get(account.id, []) %}
+  <form method="post" action="/accounts/{{ account.id }}/expected/{{ item.id }}/remove" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span><strong>{{ item.name }}</strong>: from {{ item.sender_pattern }}{% if item.subject_pattern %}, subject has "{{ item.subject_pattern }}"{% endif %},
+    every {{ item.cadence_days }} days ({{ item.grace_days }} days' grace).
+    {% if item.last_seen_at %}Last seen {{ item.last_seen_at.date().isoformat() }}.{% else %}Not seen yet.{% endif %}</span>
+    <button class="quiet">Stop watching</button>
+  </form>
+  {% endfor %}
+  <form method="post" action="/accounts/{{ account.id }}/expected" class="settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>What it is <input name="name" placeholder="the PG&amp;E confirmation" required></label>
+    <label>From (an address, or @domain) <input name="sender" required></label>
+    <label>Subject has (optional) <input name="subject"></label>
+    <label>Comes every (days) <input name="cadence_days" type="number" min="1" max="400" value="30"></label>
+    <label>Grace (days) <input name="grace_days" type="number" min="0" max="60" value="3"></label>
+    <label>Protects
+      <select name="category">
+        {% for category in protectable %}
+        <option value="{{ category.name }}" {% if category.name == "email_mark_read" %}selected{% endif %}>{{ category.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button>Add</button>
+  </form>
   <form method="post" action="/accounts/{{ account.id }}/unlink">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <button class="quiet">Unlink</button>

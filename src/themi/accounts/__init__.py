@@ -8,6 +8,7 @@ from themi.accounts.models import (
     LoggedMessage,
     Member,
     Role,
+    sender_matches,
 )
 from themi.accounts.store import (
     SYSTEM,
@@ -18,6 +19,7 @@ from themi.accounts.store import (
     InviteError,
     NotFound,
     PermissionDenied,
+    sender_pattern,
 )
 
 __all__ = [
@@ -36,4 +38,6 @@ __all__ = [
     "NotFound",
     "PermissionDenied",
     "Role",
+    "sender_matches",
+    "sender_pattern",
 ]

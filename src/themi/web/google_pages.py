@@ -16,10 +16,18 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError
 from themi.connectors.google import GoogleAccounts, OAuthError
+from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import Kit
 
 NOT_SET_UP = "Google sign-in isn't set up on this server. /site in Telegram sends a sign-in link."
+
+
+def _sentence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("invalid literal for int"):
+        return "How often and the grace period are whole numbers of days."
+    return text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -91,6 +99,13 @@ def routes(kit: Kit) -> APIRouter:
             session,
             accounts=app.store.linked_accounts(session.member.id),
             can_link=google() is not None,
+            expected={
+                account.id: app.services.expected.for_account(account.id)
+                for account in app.store.linked_accounts(session.member.id)
+            }
+            if app.services.expected is not None
+            else {},
+            protectable=[c for c in app.services.autonomy.categories() if not c.capped],
         )
 
     @router.post("/accounts/link")
@@ -119,6 +134,41 @@ def routes(kit: Kit) -> APIRouter:
             )
             return kit.redirect("/accounts", message)
         return kit.redirect("/accounts", f"Saved the settings for {account.address}.")
+
+    @router.post("/accounts/{account_id}/expected")
+    async def add_expected(request: Request, account_id: int) -> Response:
+        session, form = await kit.checked(request)
+        expected = app.services.expected
+        if expected is None:
+            return kit.redirect("/accounts", "Email isn't set up on this server.")
+        try:
+            added = expected.add(
+                session.member,
+                account_id,
+                name=str(form.get("name", "")),
+                sender=str(form.get("sender", "")),
+                subject=str(form.get("subject", "")),
+                cadence_days=int(str(form.get("cadence_days", "30")) or 30),
+                grace_days=int(str(form.get("grace_days", "3")) or 3),
+                category=str(form.get("category") or DEFAULT_CATEGORY),
+            )
+        except ValueError as exc:
+            return kit.redirect("/accounts", _sentence(str(exc)))
+        except AccountsError:
+            return kit.redirect("/accounts", "That account isn't one of yours.")
+        return kit.redirect("/accounts", f"Watching for {added.name}.")
+
+    @router.post("/accounts/{account_id}/expected/{expected_id}/remove")
+    async def remove_expected(request: Request, account_id: int, expected_id: int) -> Response:
+        session, _ = await kit.checked(request)
+        expected = app.services.expected
+        try:
+            if expected is None or expected.get(expected_id).account_id != account_id:
+                raise AccountsError
+            removed = expected.remove(session.member, expected_id)
+        except AccountsError:
+            return kit.redirect("/accounts", "That account isn't one of yours.")
+        return kit.redirect("/accounts", f"No longer watching for {removed.name}.")
 
     @router.post("/accounts/{account_id}/unlink")
     async def unlink(request: Request, account_id: int) -> Response:

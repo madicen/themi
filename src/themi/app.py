@@ -25,6 +25,7 @@ from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.commands import Commands
+from themi.core.expected import ExpectedEmails
 from themi.core.habits import HabitReserve
 from themi.core.memory import Memory
 from themi.core.rules import Rulebook
@@ -103,6 +104,7 @@ def build_app(
         services.gmail = GmailSync(store, services.google, outbox)
         install_executors(services.autonomy.executors, services.gmail)
         EmailTriage(services, services.gmail).install()
+        ExpectedEmails(services, services.gmail).install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
     habits = HabitReserve(services)
@@ -124,6 +126,10 @@ def build_app(
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
+    if services.expected is not None:
+        periodic.append(
+            PeriodicTask("email.expected", timedelta(hours=1), services.expected.check_overdue)
+        )
     if services.google is not None:
         periodic.append(
             PeriodicTask(
