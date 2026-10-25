@@ -119,3 +119,40 @@ def test_ourgroceries_is_off_until_both_login_parts_are_set() -> None:
         "Groceries",
     )
     assert "pw" not in repr(config)
+
+
+BACKUP = {
+    "THEMI_BACKUP_ENDPOINT": "https://abc123.r2.cloudflarestorage.com/",
+    "THEMI_BACKUP_BUCKET": "themi-backups",
+    "THEMI_BACKUP_ACCESS_KEY_ID": "key-id",
+    "THEMI_BACKUP_SECRET_ACCESS_KEY": "shh",
+}
+
+
+def test_backups_are_off_until_all_four_settings_are_there() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).backup is None
+    partial = {"THEMI_SECRET_KEY": KEY, "THEMI_BACKUP_BUCKET": "b"}
+    with pytest.raises(SettingsError, match="missing THEMI_BACKUP_ENDPOINT"):
+        Settings.from_mapping(partial)
+    backup = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, **BACKUP}).backup
+    assert backup is not None
+    assert backup.s3.endpoint == "https://abc123.r2.cloudflarestorage.com"
+    assert (backup.s3.region, backup.prefix, backup.keep_days) == ("auto", "themi/", 30)
+    assert "shh" not in repr(backup)
+
+
+def test_backup_settings_are_checked() -> None:
+    plain = {**BACKUP, "THEMI_BACKUP_ENDPOINT": "http://storage.example"}
+    with pytest.raises(SettingsError, match="must be an https:// address"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, **plain})
+    with pytest.raises(SettingsError, match="1 to 365 days"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, **BACKUP, "THEMI_BACKUP_KEEP_DAYS": "0"})
+    b2 = Settings.from_mapping(
+        {
+            "THEMI_SECRET_KEY": KEY,
+            **BACKUP,
+            "THEMI_BACKUP_REGION": "us-west-004",
+            "THEMI_BACKUP_KEEP_DAYS": "14",
+        }
+    ).backup
+    assert b2 is not None and (b2.s3.region, b2.keep_days) == ("us-west-004", 14)

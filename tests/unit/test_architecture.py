@@ -76,3 +76,20 @@ def test_templates_never_mention_capacity_scores() -> None:
     for template in (SRC / "web" / "templates").glob("*.html"):
         text = template.read_text().lower()
         assert "capacity" not in text and "score" not in text, template.name
+
+
+# Every `themi` command reads the settings, so they must stay light: pulling in the
+# outbox or Telegram there once cost two seconds per command.
+def test_reading_settings_stays_light() -> None:
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, themi.settings, themi.cli; "
+        "heavy = [m for m in ('themi.channels.outbox', 'telegram', 'themi.app') "
+        "if m in sys.modules]; print(heavy)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=REPO_ROOT
+    )
+    assert result.stdout.strip() == "[]"
