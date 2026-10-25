@@ -31,6 +31,7 @@ from themi import clock
 from themi.accounts import AccountStore, Member
 from themi.ai.types import CallKind
 from themi.channels.events import Button
+from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
 from themi.localtime import (
     next_waking_start,
@@ -65,7 +66,13 @@ _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Pr
 
 class Sender(Protocol):
     async def send_text(
-        self, member: Member, text: str, buttons: Sequence[Button] = (), *, kind: str = "chat"
+        self,
+        member: Member,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        kind: str = "chat",
+        link_preview: bool = True,
     ) -> int: ...
 
     async def edit_text(
@@ -101,11 +108,13 @@ class Outbox:
         sender: Sender,
         shield: PdaShield,
         receptivity: ReceptivityProvider | None = None,
+        pauses: PauseBook | None = None,
     ) -> None:
         self.store = store
         self.sender = sender
         self.shield = shield
         self.receptivity = receptivity or AlwaysReceptive()
+        self.pauses = pauses or PauseBook(store.db)
 
     @property
     def _tz(self) -> str:
@@ -124,15 +133,16 @@ class Outbox:
         kind: str = "chat",
         dedupe_key: str | None = None,
         deadline: datetime | None = None,
+        link_preview: bool = True,
     ) -> OutboxResult:
         now = clock.now()
         priority = Priority(priority)
         if dedupe_key and self._is_duplicate(member.id, dedupe_key, now):
             return OutboxResult("duplicate", None)
-        when = self._earliest(member, priority, now, deadline)
+        when = self._earliest(member, priority, now, deadline, kind)
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
-            "send_after, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id,
                 text,
@@ -143,6 +153,7 @@ class Outbox:
                 to_utc_iso(when),
                 to_utc_iso(deadline) if deadline else None,
                 to_utc_iso(now),
+                int(link_preview),
             ),
         )
         if when > now:
@@ -168,7 +179,7 @@ class Outbox:
         for row in rows:
             member = self.store.get_member(row["member_id"])
             deadline = datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
-            when = self._earliest(member, Priority(row["priority"]), now, deadline)
+            when = self._earliest(member, Priority(row["priority"]), now, deadline, row["kind"])
             if when > now:
                 self.store.db.execute(
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
@@ -186,7 +197,11 @@ class Outbox:
         try:
             shielded = await self.shield.apply(row["text"], member, buttons=buttons, kind=kind)
             message_id = await self.sender.send_text(
-                member, shielded.text, shielded.buttons, kind=row["kind"]
+                member,
+                shielded.text,
+                shielded.buttons,
+                kind=row["kind"],
+                link_preview=bool(row["link_preview"]),
             )
         except Exception as exc:
             return self._record_failure(row, exc)
@@ -259,7 +274,12 @@ class Outbox:
     # ----- timing -------------------------------------------------------------
 
     def _earliest(
-        self, member: Member, priority: Priority, now: datetime, deadline: datetime | None
+        self,
+        member: Member,
+        priority: Priority,
+        now: datetime,
+        deadline: datetime | None,
+        kind: str = "chat",
     ) -> datetime:
         if priority in IMMEDIATE:
             return now
@@ -272,8 +292,19 @@ class Outbox:
             when = max(when, self.receptivity.not_before(member, priority, when))
             if deadline is not None and when > deadline:
                 when = max(deadline, now)
+        held = self.pauses.held_until(member, kind)  # the person asked: outranks a deadline
+        if held is not None:
+            when = max(when, held)
         # Whatever was chosen, it can't land inside quiet hours.
         return quiet_hours_end(member, when, tz)
+
+    def release_held(self, member: Member) -> int:
+        """After a pause ends early, let held messages be reconsidered at the next flush."""
+        return self.store.db.update(
+            "UPDATE outbox SET send_after = ? WHERE member_id = ? AND status = 'queued' "
+            "AND send_after > ? AND attempts = 0",
+            (to_utc_iso(clock.now()), member.id, to_utc_iso(clock.now())),
+        )
 
     def sent_today(self, member_id: int, now: datetime | None = None) -> int:
         """Proactive messages already sent to the member since local midnight."""

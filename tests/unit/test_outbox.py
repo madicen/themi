@@ -26,11 +26,19 @@ class FakeSender:
         self.sent: list[tuple[str, str, tuple[Button, ...], str]] = []
         self.failures = 0
         self.edited: list[tuple[int, str, tuple[Button, ...]]] = []
+        self.previews: list[bool] = []
         self._ids = iter(range(500, 10_000))
 
     async def send_text(
-        self, member: Member, text: str, buttons: Sequence[Button] = (), *, kind: str = "chat"
+        self,
+        member: Member,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        kind: str = "chat",
+        link_preview: bool = True,
     ) -> int:
+        self.previews.append(link_preview)
         if self.failures:
             self.failures -= 1
             raise ConnectionError("telegram unreachable")
