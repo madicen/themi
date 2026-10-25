@@ -22,12 +22,15 @@ from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
+from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.commands import Commands
 from themi.core.expected import ExpectedEmails
+from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.memory import Memory
+from themi.core.pantry import Pantry
 from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
@@ -74,6 +77,7 @@ def build_app(
     provider_factory: ProviderFactory | None = None,
     sleep: Sleep = asyncio.sleep,
     google: GoogleConfig | None = None,
+    grocery_list: GroceryListClient | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -105,6 +109,10 @@ def build_app(
         install_executors(services.autonomy.executors, services.gmail)
         EmailTriage(services, services.gmail).install()
         ExpectedEmails(services, services.gmail).install()
+    groceries = GroceryList(services)
+    groceries.install()
+    pantry = Pantry(services, groceries)
+    pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
     habits = HabitReserve(services)
@@ -121,11 +129,19 @@ def build_app(
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
+        PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
     ]
+    if grocery_list is not None:
+        mirror = GroceryMirror(db, grocery_list)
+        periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
+    if services.triage is not None:
+        periodic.append(
+            PeriodicTask("pantry.receipts", timedelta(minutes=10), pantry.read_pending_receipts)
+        )
     if services.expected is not None:
         periodic.append(
             PeriodicTask("email.expected", timedelta(hours=1), services.expected.check_overdue)

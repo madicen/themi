@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install .
+RUN pip install '.[ourgroceries]'
 
 # Run as an unprivileged user; the database lives on the /data volume.
 RUN useradd --create-home --uid 10001 themi \

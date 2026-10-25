@@ -18,6 +18,19 @@
 </section>
 
 <section>
+  <h2>Grocery list</h2>
+  {% for item in groceries %}
+  <form method="post" action="/groceries/{{ item.id }}/bought" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span>{{ item.name }}</span>
+    <button class="quiet">Got it</button>
+  </form>
+  {% else %}
+  <p class="muted">The list is empty.</p>
+  {% endfor %}
+</section>
+
+<section>
   <h2>Recently</h2>
   {% if activity %}
   <ul class="activity">

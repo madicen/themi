@@ -50,6 +50,7 @@ def _run() -> None:
 
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
+    from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.logs import configure_logging
     from themi.runtime import Runtime
     from themi.settings import Settings, SettingsError
@@ -67,6 +68,7 @@ def _run() -> None:
         settings.cipher(),
         lambda store: TelegramChannel.from_token(token, store, None),
         google=settings.google(),
+        grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
     )
     runtime = Runtime(
         app,

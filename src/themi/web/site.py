@@ -197,6 +197,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
+            "groceries": app.services.groceries.needed() if app.services.groceries else [],
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -205,6 +206,19 @@ def core_routes(kit: Kit) -> APIRouter:
         return kit.with_flash(
             request, "dashboard.html", session, **dashboard_values(session.member)
         )
+
+    @router.post("/groceries/{item_id}/bought")
+    async def grocery_bought(request: Request, item_id: int) -> Response:
+        await kit.checked(request)
+        groceries, pantry = app.services.groceries, app.services.pantry
+        item = groceries.get(item_id) if groceries else None
+        if item is None or item.status != "needed" or groceries is None:
+            return kit.redirect("/", "That one is already off the list.")
+        if pantry is not None:
+            pantry.set_status(item.name, "plenty", source="list")  # takes it off the list too
+        else:
+            groceries.finish(item.name)
+        return kit.redirect("/", f"Took {item.name} off the list.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:

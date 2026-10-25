@@ -14,6 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from themi.connectors.google.oauth import GoogleConfig
+from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -48,6 +49,9 @@ class Settings(BaseModel):
     google_client_secret: Secret | None = None
     # Endpoint overrides, only for pointing Themi at a local fake Google.
     google_endpoints: dict[str, str] = {}
+    ourgroceries_username: str = ""
+    ourgroceries_password: Secret | None = None
+    ourgroceries_list: str = "Groceries"
 
     def cipher(self) -> Cipher:
         return Cipher(self.secret_key)
@@ -58,6 +62,14 @@ class Settings(BaseModel):
             return None
         return GoogleConfig(
             self.google_client_id, self.google_client_secret, **self.google_endpoints
+        )
+
+    def ourgroceries(self) -> OurGroceriesConfig | None:
+        """The OurGroceries mirror, if a login is set."""
+        if not self.ourgroceries_username or self.ourgroceries_password is None:
+            return None
+        return OurGroceriesConfig(
+            self.ourgroceries_username, self.ourgroceries_password, self.ourgroceries_list
         )
 
     @classmethod
@@ -105,11 +117,17 @@ class Settings(BaseModel):
                 "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET go together; set both or neither"
             )
 
+        if bool(get("OURGROCERIES_USERNAME")) != bool(get("OURGROCERIES_PASSWORD")):
+            problems.append(
+                "OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD go together; set both or neither"
+            )
+
         if problems:
             raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
 
         token = get("TELEGRAM_BOT_TOKEN")
         google_secret = get("GOOGLE_CLIENT_SECRET")
+        grocery_password = get("OURGROCERIES_PASSWORD")
         endpoints = {
             field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
         }
@@ -125,6 +143,9 @@ class Settings(BaseModel):
             google_client_id=get("GOOGLE_CLIENT_ID"),
             google_client_secret=Secret(google_secret) if google_secret else None,
             google_endpoints=endpoints,
+            ourgroceries_username=get("OURGROCERIES_USERNAME"),
+            ourgroceries_password=Secret(grocery_password) if grocery_password else None,
+            ourgroceries_list=get("OURGROCERIES_LIST") or "Groceries",
         )
 
 
