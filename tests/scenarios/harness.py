@@ -18,10 +18,12 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
@@ -63,7 +65,11 @@ class ModelBank:
 
 class Scenario:
     def __init__(
-        self, family: SeededFamily, telegram: FakeTelegram, google: FakeGoogle | None = None
+        self,
+        family: SeededFamily,
+        telegram: FakeTelegram,
+        google: FakeGoogle | None = None,
+        gmail: FakeGmail | None = None,
     ) -> None:
         self.family = family
         self.telegram = telegram
@@ -83,7 +89,7 @@ class Scenario:
             ),
             provider_factory=self.models,
             sleep=_no_sleep,
-            google=google.config() if google is not None else None,
+            google=gmail.config() if gmail else google.config() if google else None,
         )
         for member in (family.erin, family.husband):
             self.use_scripted_models(member)
@@ -218,12 +224,14 @@ async def scenario(
 ) -> AsyncIterator[Scenario]:
     """The full app, started, for any test layer that wants it.
 
-    Google sign-in and linking are configured when the test also uses `fake_google`.
+    Google sign-in and linking are configured when the test also uses `fake_google`, and
+    Gmail too when it uses `fake_gmail`.
     """
-    google = (
-        request.getfixturevalue("fake_google") if "fake_google" in request.fixturenames else None
-    )
-    s = Scenario(family, fake_telegram, google)
+
+    def optional(name: str) -> Any:
+        return request.getfixturevalue(name) if name in request.fixturenames else None
+
+    s = Scenario(family, fake_telegram, optional("fake_google"), optional("fake_gmail"))
     await s.start()
     yield s
     await s.stop()
