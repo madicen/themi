@@ -46,7 +46,8 @@ from themi.ai.types import (
 )
 from themi.storage.secrets import Secret
 
-DEFAULT_MODEL = "gemini-3.8-flash"
+# gemini-3.8-flash allowed only 20 free requests a day; flash-lite has room for a household.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_TRANSCRIPTION_MODEL = "gemini-3.5-flash-lite"
 
 REFUSAL_FINISH_REASONS = frozenset(

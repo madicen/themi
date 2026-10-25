@@ -52,7 +52,7 @@ class FakeTelegramState:
 
 
 class FakeTelegram:
-    def __init__(self) -> None:
+    def __init__(self, port: int = 0) -> None:
         self.state = FakeTelegramState()
         self._lock = threading.Lock()
         self._update_ids = count(1)
@@ -61,7 +61,7 @@ class FakeTelegram:
         self.app = FastAPI()
         self.app.add_api_route("/bot{token}/{method}", self._api, methods=["POST", "GET"])
         self.app.add_api_route("/file/bot{token}/{path:path}", self._file, methods=["GET"])
-        self._background = BackgroundServer(self.app)
+        self._background = BackgroundServer(self.app, port)
 
     # ----- wiring -------------------------------------------------------------
 

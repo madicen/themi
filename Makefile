@@ -4,7 +4,7 @@ PYTEST := $(PYTHON) -m pytest
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals cov
+.PHONY: venv install fmt lint test test-all test-live evals cov dev dev-reset dev-invite
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -41,3 +41,16 @@ cov:
 	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios
 	$(PYTHON) -m coverage report
 	$(PYTHON) tools/check_coverage.py
+
+# Themi on this computer, chatting through the Telegram simulator at http://localhost:8090.
+# Dev data lives in data/dev/; see tools/dev/runner.py.
+dev:
+	$(PYTHON) -m tools.dev
+
+dev-reset:
+	$(PYTHON) -m tools.dev reset
+
+# make dev-invite NAME=Sam, then send /start <code> as "Someone new" in the simulator
+dev-invite:
+	$(PYTHON) -m tools.dev invite "$(NAME)"
+

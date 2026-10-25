@@ -53,11 +53,11 @@ async def test_plain_reply_and_request_shape(fake_ai: FakeAIServer) -> None:
 
     assert response.text == "Hi Erin"
     assert response.stop_reason is StopReason.END
-    assert (response.provider, response.model) == ("gemini", "gemini-3.8-flash")
+    assert (response.provider, response.model) == ("gemini", "gemini-3.5-flash-lite")
     assert response.usage.output_tokens == 7
 
     (request,) = fake_ai.requests
-    assert request.path.endswith("/models/gemini-3.8-flash:generateContent")
+    assert request.path.endswith("/models/gemini-3.5-flash-lite:generateContent")
     assert request.headers["x-goog-api-key"] == KEY
     body = request.json
     assert body["systemInstruction"]["parts"][0]["text"] == "Be warm."

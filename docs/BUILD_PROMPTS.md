@@ -44,6 +44,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [x] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [~] |
+| D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -69,6 +70,10 @@ and record the change here.
 - Tests: pytest, pytest-asyncio, Hypothesis, coverage.py. Lint/format: ruff. Types: pyright.
 - Version control: jj (colocated with git). Each major change is its own `jj commit`.
 - One process runs the bot, scheduler and website on one asyncio loop.
+- The default AI backend is Gemini's free tier on `gemini-3.5-flash-lite` for every task.
+  Changed from prompt 05's `gemini-3.8-flash` with the user's agreement on 2026-10-25: that
+  model allowed 20 free requests a day, and flash-lite scored well in prompt 28's evals. The
+  plan named no Gemini model before; its provider table now lists flash-lite.
 
 ---
 
@@ -1943,6 +1948,8 @@ Notes (2026-10-25):
     - The default backend: the plan's default, Gemini free tier on `gemini-3.8-flash`, gave
       this key 20 requests a day, which can't carry a household. The flash-lite models did
       fine here, so the default model probably needs to change. That's the user's call.
+      Decided 2026-10-25: the default is now `gemini-3.5-flash-lite` (see "Fixed technical
+      choices").
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28
@@ -1999,7 +2006,7 @@ Notes (2026-10-25):
   snapshot, wrong key or tampered data, a newer schema refused, the old database kept,
   retention including list paging, the job's once-a-day timing and failure warnings, and
   the CLI.
-- `.github/workflows/release.yml` publishes to GHCR on `v*` tags (`ghcr.io/<owner>/<repo>`,
+- `.github/workflows/release.yml` publishes to GHCR on `v*` tags (`ghcr.io/madicen/themi`,
   semver tags and latest), after the container smoke test. `deploy/compose.yml` runs the
   published image (`THEMI_IMAGE`, `THEMI_VERSION`, a 700 MB memory limit).
 - `docs/DEPLOY.md` covers the host choice, the server, Docker, getting the image, Funnel,
@@ -2015,13 +2022,69 @@ Notes (2026-10-25):
   package's `__init__` no longer imports the job, and
   `test_architecture.test_reading_settings_stays_light` guards it.
 - Not run here: there's no Docker on this machine, so the image build and smoke test first
-  run in CI. The repo has no GitHub remote yet, so the GHCR publishing waits until it's
-  pushed.
+  run in CI. The repo is now on GitHub (private, `madicen/themi`, 2026-10-25). The first CI
+  run there failed in lint, because `--pythonpath` got a bare `python`. The Makefile now
+  passes the interpreter's full path.
 - Still to do before `[x]`, for the user:
-    1. Push the repo to GitHub and tag a release, or build on the server.
+    1. Tag a release (the repo is on GitHub now), or build on the server.
     2. Follow `docs/DEPLOY.md` for real.
     3. Run the restore drill.
     4. The gate: two weeks of daily use by both before Phase 2 (prompt 30).
+
+### D1 · Local dev run and Telegram simulator
+Status: [x] (2026-10-25)
+Depends on: 07, 10
+Read first: nothing in the plan; this is dev tooling outside the numbered order. It's listed here
+so it gets the same tests and notes as everything else.
+
+Build:
+- A `TELEGRAM_API_URL` setting that points the channel at another Bot API server (the fake).
+- `clock.shift(delta)`: move the unfrozen clock ahead of real time, so a running Themi can skip
+  forward to a scheduled nudge. `unfreeze()` clears it.
+- A Telegram simulator: the existing fake Bot API plus a browser chat page on
+  `http://localhost:8090`. Pick a person (Erin, Husband, or an unpaired newcomer), send
+  messages, tap inline buttons, react with ✅ or 💤, see edits and "typing…", and skip time
+  ahead.
+- `make dev`: one process running the simulator and `themi run` against it, with its own
+  database and secret key under `data/dev/`. The first run seeds the test family (both people
+  paired) and puts `GEMINI_API_KEY` from `.env` on each person's default backend. It prints a
+  website sign-in link. `make dev-reset` wipes the dev data.
+
+Tests:
+- The setting, including validation.
+- `clock.shift`.
+- The simulator's page actions become Bot API updates, and the bot's sends, edits, reactions
+  and typing show up in its transcript.
+- The dev runner seeds once, sets the key, and a message typed into the simulator gets a reply.
+
+Done when: `make dev` starts Themi, and a person can chat with it from the browser. Commit.
+
+Notes (2026-10-25):
+- `TELEGRAM_API_URL` is the Bot API server's root. The channel gets `<url>/bot` and
+  `<url>/file/bot`.
+- `themi.cli.build_runtime(settings, **runtime_options)` now holds the wiring `themi run`
+  used. The dev runner calls it, so dev is wired exactly as production.
+- `clock.shift(delta)` adds a forward offset to the unfrozen clock, and `clock.shifted_by()`
+  reports it. It raises on a frozen clock, and `unfreeze()` clears it, so the autouse
+  test fixture resets it too.
+- `tools/dev/`:
+    - `simulator.py`: `Simulator(FakeTelegram)` keeps a transcript by hooking `_push` and
+      `_result`. The page (`simulator.html`, plain JS) polls `/sim/state`. It also has
+      `/sim/send`, `/tap`, `/react`, `/skip` and `/website`.
+    - `runner.py`: `make dev`, `make dev-reset` and `make dev-invite NAME=`. The simulator
+      and Themi share one process, so a skip reaches the scheduler, which ticks every 2 s
+      in dev. Website sign-in links come from the page for the same reason: a link made
+      by another process uses real time, which looks expired after a skip.
+    - It reuses `tests.fixtures.family.seed_family` and the fake's people (1001 Erin,
+      1002 Husband). 1003 is "Someone new", for testing `/start`.
+- `FakeTelegram(port=)` and `BackgroundServer(app, port=)` can bind a fixed port.
+- Tested live on 2026-10-25: the chat, a skip and the website link all work. The one Gemini
+  call hit the key's free-tier daily limit (20 requests a day for `gemini-3.8-flash`), and
+  Themi sent its "busy" reply. The default model is now `gemini-3.5-flash-lite`, which has
+  more free quota.
+- Found while setting up: the local `.venv` still had an editable install pointing at the
+  repo's old `working-memory` path, so `python -m themi` failed outside the repo. Running
+  `make install` fixed it.
 
 ---
 

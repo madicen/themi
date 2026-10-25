@@ -156,3 +156,13 @@ def test_backup_settings_are_checked() -> None:
         }
     ).backup
     assert b2 is not None and (b2.s3.region, b2.keep_days) == ("us-west-004", 14)
+
+
+def test_telegram_api_url_points_the_bot_at_another_server() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).telegram_api_url == ""
+    settings = Settings.from_mapping(
+        {"THEMI_SECRET_KEY": KEY, "TELEGRAM_API_URL": "http://127.0.0.1:8090/"}
+    )
+    assert settings.telegram_api_url == "http://127.0.0.1:8090"
+    with pytest.raises(SettingsError, match="TELEGRAM_API_URL must be an http"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "TELEGRAM_API_URL": "127.0.0.1:8090"})
