@@ -69,6 +69,10 @@ class LinkedAccount:
     enabled: bool
     created_at: datetime
     urgent_senders: tuple[str, ...] = ()  # addresses or @domains that always count as urgent
+    scopes: tuple[str, ...] = ()  # what Google granted at the latest link
+
+    def allows(self, *scopes: str) -> bool:
+        return all(scope in self.scopes for scope in scopes)
 
     def is_urgent_sender(self, address: str) -> bool:
         return any(sender_matches(pattern, address) for pattern in self.urgent_senders)

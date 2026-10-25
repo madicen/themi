@@ -5,11 +5,15 @@ two-option message ("done already, or later?") that waits for their good
 window, or goes by the due date's morning at the latest. "Later" snoozes it
 for a few hours, after which it's offered again. The model gets the reason
 for the assignment in words, so it can say who's taking what and why.
+
+Every change (created, rescheduled, done, cancelled) goes to
+`change_listeners`; the family calendar follows tasks that way.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -34,6 +38,9 @@ PROMPT_TEXT = "On the list for you, whenever it suits: {title}. Done already, or
 DONE_TEXT = "Marked done: {title}. Thank you."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
+CANCELLED_TEXT = "Taken off the list: {title}."
+RESCHEDULED_TEXT = "{title} is now due {due}."
+UNSCHEDULED_TEXT = "{title} no longer has a date."
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,12 @@ class Task:
     assign_reason: str
     status: str
     due_on: date | None
+    created_by: int | None = None
+
+
+TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
+# (task as it is now, what changed, whether whoever caused it is in the conversation)
+TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
 
 
 def _task_from_row(row: dict[str, Any]) -> Task:
@@ -60,6 +73,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         assign_reason=row["assign_reason"],
         status=row["status"],
         due_on=date.fromisoformat(row["due_on"]) if row["due_on"] else None,
+        created_by=row["created_by"],
     )
 
 
@@ -69,6 +83,7 @@ class TaskBoard:
         self.matcher = matcher
         self.store = services.store
         self.db = services.store.db
+        self.change_listeners: list[TaskListener] = []
 
     @property
     def outbox(self) -> Outbox:
@@ -79,6 +94,8 @@ class TaskBoard:
         s.taskboard = self
         s.tools.register(create_task)
         s.tools.register(complete_task)
+        s.tools.register(cancel_task)
+        s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
@@ -115,6 +132,8 @@ class TaskBoard:
         kind: str,
         effort: int,
         due_on: date | None = None,
+        *,
+        interactive: bool = False,
     ) -> Task:
         title = title.strip().rstrip(".")
         if not title:
@@ -136,7 +155,16 @@ class TaskBoard:
             ),
         )
         await self.prompt(self.get(task_id))
-        return self.get(task_id)
+        task = self.get(task_id)
+        await self._changed(task, "created", interactive)
+        return task
+
+    async def _changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
+        for listener in self.change_listeners:
+            try:
+                await listener(task, change, interactive)
+            except Exception:
+                log.exception("A task listener failed for task %s (%s)", task.id, change)
 
     async def prompt(self, task: Task) -> None:
         if task.assignee is None:
@@ -166,7 +194,7 @@ class TaskBoard:
         due = task.due_on
         return datetime(due.year, due.month, due.day, 9, 0, tzinfo=tz)
 
-    def complete(self, task_id: int, by: Member) -> str:
+    async def complete(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
@@ -175,7 +203,36 @@ class TaskBoard:
             (to_utc_iso(clock.now()), task_id),
         )
         self._withdraw_prompt(task)
+        await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
+
+    async def cancel(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
+        """Nobody needs to do it after all (deleting a task keeps its record)."""
+        task = self.get(task_id)
+        if task.status in ("done", "cancelled"):
+            return SETTLED_TEXT
+        self.db.execute(
+            "UPDATE tasks SET status = 'cancelled', completed_at = ? WHERE id = ?",
+            (to_utc_iso(clock.now()), task_id),
+        )
+        self._withdraw_prompt(task)
+        await self._changed(self.get(task_id), "cancelled", interactive)
+        return CANCELLED_TEXT.format(title=task.title)
+
+    async def reschedule(
+        self, task_id: int, due_on: date | None, *, interactive: bool = False
+    ) -> str:
+        task = self.get(task_id)
+        if task.status in ("done", "cancelled"):
+            return SETTLED_TEXT
+        self.db.execute(
+            "UPDATE tasks SET due_on = ? WHERE id = ?",
+            (due_on.isoformat() if due_on else None, task_id),
+        )
+        await self._changed(self.get(task_id), "rescheduled", interactive)
+        if due_on is None:
+            return UNSCHEDULED_TEXT.format(title=task.title)
+        return RESCHEDULED_TEXT.format(title=task.title, due=due_on.isoformat())
 
     def snooze(self, task_id: int, for_: timedelta = SNOOZE_FOR) -> str:
         task = self.get(task_id)
@@ -210,7 +267,10 @@ class TaskBoard:
         assert event.button is not None
         task_id = int(event.button.payload["task"])
         action = event.button.payload.get("action")
-        reply = self.complete(task_id, event.member) if action == "done" else self.snooze(task_id)
+        if action == "done":
+            reply = await self.complete(task_id, event.member, interactive=True)
+        else:
+            reply = self.snooze(task_id)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
 
@@ -248,7 +308,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             return "Not created: the due date should look like 2026-11-03."
     try:
         task = await _board(ctx).create(
-            ctx.member, args["title"], args["kind"], args["effort"], due
+            ctx.member, args["title"], args["kind"], args["effort"], due, interactive=True
         )
     except ValueError as exc:
         return f"Not created: {exc}"
@@ -267,7 +327,40 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
-        return _board(ctx).complete(args["task_id"], ctx.member)
+        return await _board(ctx).complete(args["task_id"], ctx.member, interactive=True)
+    except NotFound:
+        return "There's no task with that number."
+
+
+@tool(
+    "cancel_task",
+    "Take a task off the list when it no longer needs doing (not when it's done).",
+    {"task_id": {"type": "integer"}},
+)
+async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    try:
+        return await _board(ctx).cancel(args["task_id"], ctx.member, interactive=True)
+    except NotFound:
+        return "There's no task with that number."
+
+
+@tool(
+    "reschedule_task",
+    "Change when a task is due, or take its date away.",
+    {
+        "task_id": {"type": "integer"},
+        "due_date": {"type": "string", "description": "YYYY-MM-DD, or '' for no date."},
+    },
+)
+async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    due = None
+    if args["due_date"]:
+        try:
+            due = date.fromisoformat(args["due_date"])
+        except ValueError:
+            return "Not changed: the due date should look like 2026-11-03."
+    try:
+        return await _board(ctx).reschedule(args["task_id"], due, interactive=True)
     except NotFound:
         return "There's no task with that number."
 

@@ -97,6 +97,8 @@ class GoogleAccounts:
             account = self.store.add_linked_account(
                 member, member.id, "gmail", grant.email, grant.refresh_token
             )
+        self.store.set_linked_account_scopes(account.id, list(grant.scopes))
+        account = self.store.get_linked_account(account.id)
         self._tokens[account.id] = grant.access
         if member.email is None and self.store.member_by_email(grant.email) is None:
             self.store.set_email(SYSTEM, member.id, grant.email)

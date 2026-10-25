@@ -20,11 +20,13 @@ from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.gcal import CalendarSync
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.calendar import TaskCalendar
 from themi.core.commands import Commands
 from themi.core.expected import ExpectedEmails
 from themi.core.groceries import GroceryList
@@ -41,6 +43,7 @@ from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
+from themi.scheduler import Scheduler
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 
@@ -67,6 +70,8 @@ class App:
     approvals: ApprovalsUI
     rulebook: Rulebook
     periodic: list[PeriodicTask] = field(default_factory=list)
+    # Queued background work (the Runtime adds the periodic tasks to it too).
+    scheduler: Scheduler | None = None
 
 
 def build_app(
@@ -115,6 +120,10 @@ def build_app(
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    scheduler = Scheduler(db)
+    if services.google is not None:
+        services.calendar = CalendarSync(store, services.google)
+        TaskCalendar(services, tasks, services.calendar, scheduler).install()
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()
@@ -166,6 +175,7 @@ def build_app(
         approvals,
         rulebook,
         periodic,
+        scheduler,
     )
 
 

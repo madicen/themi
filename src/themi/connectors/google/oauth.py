@@ -37,9 +37,13 @@ log = logging.getLogger(__name__)
 Purpose = Literal["signin", "link"]
 
 GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify"
-CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"  # write events
+# Find the family's "Themi" calendar by name, or make it if there isn't one.
+CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+CALENDAR_CREATE_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
+CALENDAR_SCOPES = (CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, CALENDAR_CREATE_SCOPE)
 SIGNIN_SCOPES = ("openid", "email")
-LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, CALENDAR_SCOPE)
+LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES)
 STATE_TTL = timedelta(minutes=10)
 TIMEOUT = 20.0
 
@@ -53,6 +57,7 @@ class GoogleConfig:
     revoke_url: str = "https://oauth2.googleapis.com/revoke"
     userinfo_url: str = "https://openidconnect.googleapis.com/v1/userinfo"
     gmail_url: str = "https://gmail.googleapis.com"
+    calendar_url: str = "https://www.googleapis.com"
 
 
 class OAuthError(Exception):

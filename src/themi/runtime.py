@@ -43,7 +43,7 @@ class Runtime:
         self.scheduler_tick = scheduler_tick
         self.stop_event = asyncio.Event()
         app.services.site_url = site_base_url(public_url, host, port)
-        self.scheduler = Scheduler(app.db)
+        self.scheduler = app.scheduler or Scheduler(app.db)
         for task in app.periodic:
             self.scheduler.every(task.name, task.every, task.run)
         self.web = create_app(

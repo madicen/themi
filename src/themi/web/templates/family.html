@@ -15,6 +15,27 @@
   <button class="primary">Save</button>
 </form>
 
+{% if calendar %}
+<h2>Family calendar</h2>
+<form method="post" action="/family/calendar" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="muted">Tasks with dates go on this Google calendar (once someone says yes), so
+  Cozyla shows them. Themi finds the calendar by name, or makes it.</p>
+  {% if calendar.problem %}<p class="alert">{{ calendar.problem }}</p>
+  {% elif calendar.using %}<p>Writing to "{{ calendar.name }}" on {{ calendar.using }}.</p>{% endif %}
+  <label>Account
+    <select name="account">
+      <option value="" {% if calendar.chosen is none %}selected{% endif %}>The first admin's account that allows it</option>
+      {% for account in calendar.accounts %}
+      <option value="{{ account.id }}" {% if calendar.chosen == account.id %}selected{% endif %}>{{ account.address }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Calendar name <input name="name" value="{{ calendar.name }}"></label>
+  <button>Save</button>
+</form>
+{% endif %}
+
 <h2>People</h2>
 {% for person in members %}
 <article class="card">

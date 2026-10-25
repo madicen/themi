@@ -26,6 +26,7 @@ GOOGLE_ENDPOINT_VARIABLES = {
     "revoke_url": "GOOGLE_REVOKE_URL",
     "userinfo_url": "GOOGLE_USERINFO_URL",
     "gmail_url": "GOOGLE_GMAIL_URL",
+    "calendar_url": "GOOGLE_CALENDAR_URL",
 }
 
 

@@ -22,6 +22,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
+    from themi.connectors.gcal import CalendarSync
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.core.expected import ExpectedEmails
@@ -97,6 +98,7 @@ class Services:
     habits: HabitReserve | None = None
     google: GoogleAccounts | None = None
     gmail: GmailSync | None = None
+    calendar: CalendarSync | None = None
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     groceries: GroceryList | None = None

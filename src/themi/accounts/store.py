@@ -126,6 +126,7 @@ def _account_from_row(row: dict[str, Any]) -> LinkedAccount:
         enabled=bool(row["enabled"]),
         created_at=_parse_dt(row["created_at"]),
         urgent_senders=tuple(json.loads(row["urgent_senders"])),
+        scopes=tuple(json.loads(row["scopes"])),
     )
 
 
@@ -483,6 +484,13 @@ class AccountStore:
         self.db.execute(
             "UPDATE linked_accounts SET refresh_token = ? WHERE id = ?",
             (self._cipher.encrypt(refresh_token), account_id),
+        )
+
+    def set_linked_account_scopes(self, account_id: int, scopes: list[str]) -> None:
+        """What Google granted at the latest link."""
+        self.db.execute(
+            "UPDATE linked_accounts SET scopes = ? WHERE id = ?",
+            (json.dumps(sorted(set(scopes))), account_id),
         )
 
     def update_linked_account(

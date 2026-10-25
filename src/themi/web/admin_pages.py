@@ -32,7 +32,22 @@ def routes(kit: Kit) -> APIRouter:
             "family": family,
             "budget": f"{family.takeout_budget_cents / 100:.2f}" if family else "0.00",
             "members": store.list_members(),
+            "calendar": calendar_values(),
             **extra,
+        }
+
+    def calendar_values() -> dict[str, Any] | None:
+        calendar = app.services.calendar
+        if calendar is None:
+            return None
+        chosen, name = calendar.settings()
+        account = calendar.account()
+        return {
+            "accounts": calendar.eligible_accounts(),
+            "chosen": chosen,
+            "name": name,
+            "using": account.address if account else None,
+            "problem": calendar.problem(),
         }
 
     @router.get("/family", response_class=HTMLResponse)
@@ -62,6 +77,19 @@ def routes(kit: Kit) -> APIRouter:
                 **family_values(error=str(exc)),
             )
         return kit.redirect("/family", "Saved.")
+
+    @router.post("/family/calendar")
+    async def save_calendar(request: Request) -> Response:
+        _session, form = await kit.checked(request, admin=True)
+        calendar = app.services.calendar
+        if calendar is None:
+            return kit.redirect("/family", "Google isn't set up on this server yet.")
+        account = str(form.get("account", ""))
+        try:
+            calendar.choose(int(account) if account.isdigit() else None, str(form.get("name", "")))
+        except ValueError as exc:
+            return kit.redirect("/family", f"Not saved: {exc}.")
+        return kit.redirect("/family", "Saved the calendar settings.")
 
     @router.post("/family/members")
     async def add_member(request: Request) -> Response:
