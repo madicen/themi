@@ -10,6 +10,7 @@ dependencies = [
     "anthropic>=2.3",
     "google-genai>=2.30",
     "openai>=3.30",
+    "jsonschema>=4.23",
 ]
 
 [project.optional-dependencies]
