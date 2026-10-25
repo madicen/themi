@@ -1,0 +1,24 @@
+# Themi on a server, using the published image (see docs/DEPLOY.md).
+#   docker compose up -d                       start (and after `docker compose pull`)
+#   docker compose run --rm themi init         first time only
+#   docker compose run --rm themi backup       a backup by hand
+services:
+  themi:
+    image: ${THEMI_IMAGE:?set THEMI_IMAGE in .env, e.g. ghcr.io/you/themi}:${THEMI_VERSION:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      THEMI_DB_PATH: /data/themi.db
+      THEMI_HTTP_HOST: 0.0.0.0
+      THEMI_HTTP_PORT: "8080"
+    volumes:
+      - themi-data:/data
+    ports:
+      # Only this machine can reach it; Tailscale Funnel publishes it over HTTPS.
+      - "127.0.0.1:8080:8080"
+    stop_grace_period: 45s
+    # An e2-micro has 1 GB; this keeps Themi from starving the host.
+    mem_limit: 700m
+
+volumes:
+  themi-data:
