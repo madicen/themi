@@ -23,6 +23,21 @@ make lint        # ruff, pyright, and the clock check
 `make test-live` and `make evals` talk to real services and need test-account keys;
 they never run by default.
 
+### Trying Themi on this computer
+
+`make dev` runs Themi against a Telegram simulator, so you can chat with it without a bot
+token. Open <http://localhost:8090>, pick a person and type. You can tap buttons, react with
+✅ or 💤, and skip Themi's clock ahead to see scheduled nudges. The header's *Website* link
+opens the management site signed in as that person.
+
+- Dev data lives in `data/dev/`, with its own secret key, apart from the real database.
+  `make dev-reset` starts over.
+- The first run seeds Erin and Husband, both paired, and puts `GEMINI_API_KEY` from `.env`
+  on their default AI backend. Without a key, Themi replies that setup is needed. You can also
+  add a key on the website's AI page.
+- To try pairing: `make dev-invite NAME=Sam`, then send the `/start` code as *Someone new*.
+- Only Telegram is simulated. Replies use real Gemini, and Google and OurGroceries are off.
+
 ### Rules worth knowing
 
 - Read time only through `themi.clock` (`tools/check_clock.py` enforces it), so tests can
