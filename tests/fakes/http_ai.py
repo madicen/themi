@@ -22,16 +22,16 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-import time
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
-import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
+
+from tests.fakes._server import BackgroundServer
 
 
 @dataclass
@@ -65,13 +65,11 @@ class FakeAIServer:
         self.app.add_api_route(
             "/{path:path}", self._handle, methods=["POST", "GET"], include_in_schema=False
         )
-        self._server: uvicorn.Server | None = None
-        self._thread: threading.Thread | None = None
-        self.port = 0
+        self._background = BackgroundServer(self.app)
 
     @property
     def url(self) -> str:
-        return f"http://127.0.0.1:{self.port}"
+        return self._background.url
 
     def queue(
         self,
@@ -117,24 +115,10 @@ class FakeAIServer:
         )
 
     def start(self) -> None:
-        config = uvicorn.Config(
-            self.app, host="127.0.0.1", port=0, log_level="warning", lifespan="off"
-        )
-        self._server = uvicorn.Server(config)
-        self._thread = threading.Thread(target=self._server.run, daemon=True)
-        self._thread.start()
-        deadline = time.monotonic() + 10
-        while not self._server.started:
-            if time.monotonic() > deadline:
-                raise RuntimeError("fake AI server didn't start")
-            time.sleep(0.01)
-        self.port = self._server.servers[0].sockets[0].getsockname()[1]
+        self._background.start()
 
     def stop(self) -> None:
-        if self._server is not None:
-            self._server.should_exit = True
-        if self._thread is not None:
-            self._thread.join(timeout=5)
+        self._background.stop()
 
 
 @pytest.fixture(scope="session")
