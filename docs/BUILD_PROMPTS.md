@@ -25,7 +25,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 08 | Outbox and PDA shield | 1 Foundation | [x] |
 | 09 | Agent core and scenario harness | 1 Foundation | [x] |
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [x] |
-| 11 | Trust tiers engine | 2 Trust and memory | [ ] |
+| 11 | Trust tiers engine | 2 Trust and memory | [x] |
 | 12 | Approvals in Telegram | 2 Trust and memory | [ ] |
 | 13 | Rules: drafts and locking | 2 Trust and memory | [ ] |
 | 14 | Memory and context repair | 2 Trust and memory | [ ] |
@@ -678,7 +678,7 @@ Notes:
 ## Milestone 2: Trust and memory
 
 ### 11 · Trust tiers engine
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 09
 Read first: "Trust tiers, rules and context repair"; "Testing" → Trust tiers row.
 
@@ -702,6 +702,47 @@ Tests:
 - Only the member an action belongs to (or an admin, for family-level categories) can resolve it.
 
 Done when: there's no path from a tool to a side effect that skips the tiers. Commit.
+
+Notes:
+- Category keys (migration 0008):
+    - Can become automatic: `email_mark_read`, `email_archive_noise`, `grocery_list_add`,
+      `calendar_write`.
+    - Capped at Tier 1: `email_reply`, `safeway_cart`, `doordash_order`, `vendor_call`,
+      `habit_trial`.
+
+  A CHECK constraint (`tier <= max_tier`) means even raw SQL can't make a capped category
+  automatic.
+- Scope, a refinement of the plan's "or an admin, for family-level categories": household
+  actions (`grocery_list_add`, `calendar_write`, `safeway_cart`, `doordash_order`) can be
+  answered by their owner or any admin. Personal ones (email, vendor calls, habits) only by
+  their owner, not even an admin, because they act on that person's inbox or behalf.
+  `open_for(member)` follows the same rule.
+- API: `Autonomy(store, executors)`.
+    - Staging and resolving: `await stage(category, member, summary, payload, executor)` and
+      `await resolve(action_id, Decision.APPROVE | DECLINE | SNOOZE, by=, snooze_for=)`. Both
+      return an `Outcome(action, message)`, where `message` is a short PDA-safe line for the
+      person.
+    - Tiers: `grant_tier2(name, via_rule_id=, by=)` and `revoke_tier2` (admin only, capped
+      categories raise `CappedCategory`). `escalate(name, reason)` (no actor; it's the system)
+      and `resume(name, by=)` (admin only).
+    - Escalation keeps the grant but makes `effective_tier` SUPERVISED until `resume`.
+    - Lookups: `open_for`, `awaiting` (pending only), `resurface_snoozed()` (call it from the
+      scheduler; it returns actions so prompt 12 can re-send them) and `audit_trail()`.
+- Executors: `executors.register("gmail.archive")(async fn(payload, ctx) -> str)`.
+  `ctx.idempotency_key == f"themi-action-{id}"`; pass it to any external API that supports
+  idempotency. A failed execution leaves the action `failed`, and approving it again retries.
+  Automatic actions that fail are left open the same way.
+- Tool side: `@staged_tool(name, description, properties)` handlers return
+  `Proposal(category, summary, executor, payload)`. The registry stages it and tells the model
+  either "Staged for approval (action N)... don't describe it as done", "Done automatically
+  ...", or that it failed. `ToolRegistry.register` refuses `side_effect` tools without
+  `proposes`, and the reverse. The old `side_effect=` argument on `@tool` is gone.
+- `Database.update()` returns a rowcount. Approval claims the action atomically
+  (`WHERE status IN (...)`), so a double tap can't execute twice.
+- `action_audit` has no foreign keys (it outlives member deletion) and triggers block UPDATE and
+  DELETE. Details are kept short (summaries, error class names).
+- Not done here, as planned for prompt 12: Telegram approval messages, the yes/no fast-path
+  source, reactions, /pending, stale-approval expiry, and scheduling `resurface_snoozed()`.
 
 ### 12 · Approvals in Telegram
 Status: [ ]
