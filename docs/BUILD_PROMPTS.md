@@ -29,7 +29,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 12 | Approvals in Telegram | 2 Trust and memory | [x] |
 | 13 | Rules: drafts and locking | 2 Trust and memory | [x] |
 | 14 | Memory and context repair | 2 Trust and memory | [x] |
-| 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [ ] |
+| 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [x] |
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [ ] |
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [ ] |
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [ ] |
@@ -913,7 +913,7 @@ Notes:
   restored.
 
 ### 15 · Website v1: sign-in, dashboard, personal settings
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 10, 11
 Read first: "How the family uses Themi" → The management website; "Security and privacy" →
 Website.
@@ -936,6 +936,53 @@ Tests (FastAPI TestClient):
 - An approval from the dashboard runs the executor.
 
 Done when: a member can sign in from a link and manage their own settings. Commit.
+
+Notes:
+- Login links:
+    - Opening `GET /login/{token}` only shows a Continue button. `POST /login/{token}` consumes
+      the token. That's deliberate: Telegram fetches link previews, which would otherwise burn
+      the link. Prompt 17's `/site` should still send with link previews disabled.
+    - `WebAuth(store).create_link_token(member)` makes a link (10 minutes, single use, stored as
+      a SHA-256 hash).
+    - `themi login-link <name>` prints `{base}/login/{token}`. `site_base_url()` uses
+      `THEMI_PUBLIC_URL` when set, otherwise `http://127.0.0.1:<port>`.
+- Sessions:
+    - `web_sessions` holds token hashes with a sliding 30-day expiry and a per-session CSRF
+      token.
+    - The cookie `themi_session` is HttpOnly and SameSite=Lax, and Secure only when
+      `THEMI_PUBLIC_URL` is https. Local http dev therefore works, while Tailscale Funnel gets
+      Secure cookies.
+- CSRF: every POST needs a `csrf` form field or an `X-CSRF-Token` header. `base.html` sets
+  `hx-headers` so HTMX requests carry the header automatically. A missing or wrong token
+  returns 403 with a friendly "page was out of date" message.
+- Pages:
+    - `/`: open actions with Go ahead, Not now and Leave it; the last 12 outcomes; admin
+      escalation alerts; and failed-action notes.
+    - `/settings`: personal settings only.
+    - `/signed-out`, `/logout` (POST).
+    - Approvals go through `app.approvals.resolve`, so the Telegram message gets edited too.
+
+  Routes never take a member id, so there's nothing to tamper with, and a `member_id` field
+  posted in a form is ignored.
+- Assets:
+    - HTMX 2.0.11 is vendored at `web/static/htmx.min.js`. Its SRI hash was checked against
+      htmx.org's published value; 2.0.4 is no longer shown in their docs.
+    - A strict CSP allows `'self'` only. The `htmx-config` meta tag turns off injected indicator
+      styles so the CSP holds.
+    - Templates and static files ship in the wheel (checked).
+- Structure:
+    - `install_site(web, SiteContext(app, base_url, secure_cookies))` is called from
+      `create_app` when a `SiteContext` is passed. Prompt 16 should add its pages in
+      `themi/web/site.py` or a sibling module, using the same `current`, `checked` and `page`
+      helpers. Consider moving them to a small module once there are more routers.
+    - `Runtime` now takes `public_url` and builds the `SiteContext`.
+- Tests: the `scenario` fixture moved into `tests/scenarios/harness.py`, which is registered as a
+  pytest plugin, so integration tests can use the full app too. Website tests drive the
+  FastAPI app over `httpx.ASGITransport` in the same event loop as the fakes; `TestClient`'s
+  separate loop would clash with the PTB client.
+- New runtime dependencies: jinja2 and python-multipart.
+- Not done here: Google sign-in is prompt 21, and the admin, tiers, rules and AI pages are
+  prompt 16.
 
 ### 16 · Website v1: admin, tiers, rules, AI backend pages
 Status: [ ]
