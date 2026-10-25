@@ -67,6 +67,8 @@ src = ["src", "tests", "tools"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "DTZ", "RUF"]
+# SIM905 rewrites """word list""".split() into a list literal that formats one word per line.
+ignore = ["SIM905"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["themi", "tools", "tests"]

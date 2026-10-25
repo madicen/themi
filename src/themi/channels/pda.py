@@ -72,65 +72,12 @@ PHRASE_RULES = [
 
 # Verbs that make a command when they open a sentence ("Move the laundry.").
 IMPERATIVE_VERBS = frozenset(
-    [
-        "add",
-        "answer",
-        "book",
-        "bring",
-        "buy",
-        "call",
-        "cancel",
-        "change",
-        "check",
-        "clean",
-        "clear",
-        "do",
-        "drop",
-        "email",
-        "empty",
-        "feed",
-        "fill",
-        "finish",
-        "fix",
-        "get",
-        "go",
-        "grab",
-        "hang",
-        "hurry",
-        "load",
-        "make",
-        "move",
-        "order",
-        "pay",
-        "pick",
-        "plan",
-        "put",
-        "read",
-        "refill",
-        "remove",
-        "renew",
-        "reply",
-        "respond",
-        "run",
-        "schedule",
-        "send",
-        "sign",
-        "start",
-        "stop",
-        "submit",
-        "switch",
-        "take",
-        "text",
-        "throw",
-        "tidy",
-        "turn",
-        "unload",
-        "update",
-        "wash",
-        "water",
-        "wipe",
-        "write",
-    ]
+    """
+    add answer book bring buy call cancel change check clean clear do drop email empty feed
+    fill finish fix get go grab hang hurry load make move order pay pick plan put read
+    refill remove renew reply respond run schedule send sign start stop submit switch take
+    text throw tidy turn unload update wash water wipe write
+    """.split()
 )
 # "Do you…", "Call me…" and friends are questions or offers, not commands.
 _NOT_A_COMMAND_NEXT = frozenset({"you", "we", "i", "they", "it", "me", "us", "anything"})
