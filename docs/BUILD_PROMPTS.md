@@ -18,7 +18,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 01 | Repository bootstrap and test harness | 1 Foundation | [x] |
 | 02 | Settings, storage, migrations, encryption | 1 Foundation | [x] |
 | 03 | Family and member data model | 1 Foundation | [x] |
-| 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [ ] |
+| 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [x] |
 | 05 | AI layer: Claude, Gemini, OpenAI-compatible adapters | 1 Foundation | [ ] |
 | 06 | AI layer: per-person routing, fallback, breaker, JSON mode | 1 Foundation | [ ] |
 | 07 | Telegram channel | 1 Foundation | [ ] |
@@ -217,7 +217,7 @@ Notes:
   fixture name is just "Husband".
 
 ### 04 · AI layer: interface, scripted provider, retry policy
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 01
 Read first: "AI backend" (all subsections), "Testing" → AI layer rows.
 
@@ -248,6 +248,26 @@ Tests:
 - The scripted provider's own behaviour (queueing, recording, failure injection).
 
 Done when: the AI interface is stable enough for adapters, and everything is committed.
+
+Notes:
+- The whole AI layer is async, because the Telegram bot and website run on asyncio.
+- `Message.raw` and `raw_provider` carry a provider's native assistant turn. Adapters must replay
+  `raw` unchanged when the same provider sees the conversation again, which matters for Claude's
+  thinking blocks in tool loops, and must rebuild from neutral blocks otherwise. `raw` doesn't
+  affect equality.
+- All tool results for one assistant turn go back in a single `Message.tool_results(...)`.
+- Retryable statuses are 408, 429, 500, 502, 503, 504 and 529. 408 was added as an HTTP
+  timeout. Every other status is a `PermanentError`. Bare `TimeoutError` and `ConnectionError`
+  are also retried.
+- Addition to the plan: `RetryPolicy.max_wait` (20 s interactive, 300 s background). If
+  `Retry-After` asks for longer, the policy gives up at once with `RetriesExhausted`, so the
+  router (prompt 06) can move to the next provider instead of blocking someone for, say, a
+  Gemini quota reset.
+- `RetriesExhausted.last_error` keeps the final `RetryableError`, with its status and
+  `retry_after`.
+- `tests/fakes/scripted_provider.py`: `queue_text`, `queue_tool_call(s)`, `queue_structured`,
+  `queue_transcription`, `queue_error`, `queue_refusal`, and `fail(n, status=, retry_after=,
+  op=)`. Every call is recorded in `.requests`. An empty queue raises `AssertionError`.
 
 ### 05 · AI layer: Claude, Gemini, OpenAI-compatible adapters
 Status: [ ]
