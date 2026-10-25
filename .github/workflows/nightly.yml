@@ -1,0 +1,59 @@
+name: Nightly
+
+# Live smoke tests and AI behaviour evals, with test-account secrets kept in
+# the repository's settings. Never the family's real accounts.
+on:
+  schedule:
+    - cron: "17 10 * * *"   # 10:17 UTC, early morning in California
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Eval provider (gemini, claude, ollama, openai_compat)"
+        default: gemini
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Live smoke tests
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THEMI_LIVE_TELEGRAM_TOKEN: ${{ secrets.THEMI_LIVE_TELEGRAM_TOKEN }}
+          THEMI_LIVE_TELEGRAM_CHAT_ID: ${{ secrets.THEMI_LIVE_TELEGRAM_CHAT_ID }}
+          THEMI_LIVE_GOOGLE_CLIENT_ID: ${{ secrets.THEMI_LIVE_GOOGLE_CLIENT_ID }}
+          THEMI_LIVE_GOOGLE_CLIENT_SECRET: ${{ secrets.THEMI_LIVE_GOOGLE_CLIENT_SECRET }}
+          THEMI_LIVE_GOOGLE_REFRESH_TOKEN: ${{ secrets.THEMI_LIVE_GOOGLE_REFRESH_TOKEN }}
+        run: make test-live PYTHON=python
+
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: AI behaviour evals
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        # A low pass rate is information, not a broken build: the results are uploaded.
+        continue-on-error: true
+        run: make evals PYTHON=python PROVIDER=${{ inputs.provider || 'gemini' }}
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: tests/evals/results/
+          if-no-files-found: ignore
