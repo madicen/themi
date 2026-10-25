@@ -47,6 +47,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
 | D2 | Simulator: copy a test session | Dev tooling | [x] |
 | F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
+| F2 | Personal rules | Feedback | [x] |
+| F3 | Busy times | Feedback | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2203,6 +2205,65 @@ Notes (2026-10-25):
       out. Re-run the evals when there's quota, since the prompt changed.
     - Memories already have a personal scope (`remember_fact` with `about: personal`); the
       report's "extra spoon" fact was stored for that person only.
+
+### F2 · Personal rules
+Status: [x] (2026-10-25)
+Depends on: 13, F1
+Read first: "Trust tiers, rules and context repair" → Rule locking. From feedback bug #1: a
+rule asked for "just for me" became a household rule. The user chose to add personal rules
+(2026-10-25); the plan is updated to match.
+
+Build:
+- Rules get a scope: `household` (the default; every existing rule) or `personal`. A locked
+  personal rule goes only into its owner's (`affects`) AI requests; household rules go into
+  everyone's.
+- `propose_rule` gets `applies_to` (household or personal); the model asks when it isn't clear.
+  A personal proposal reads "Proposed Rule (just for you): …". Autonomy grants stay household.
+- `/rules` and the website's Rules page show household rules plus your own personal ones;
+  someone else's personal rules aren't shown.
+
+Tests:
+- A personal rule is in its owner's prompt and not the partner's; household rules in both.
+- /rules and the website by scope; a personal autonomy grant is refused; refining a draft can
+  change its scope; existing rules migrate as household.
+
+Done when: "a rule just for me" locks as a personal rule that only shapes that person's chats.
+Commit.
+
+Notes (2026-10-25):
+- Migration 0026 adds `rules.scope` (household default). `Rulebook.household()`,
+  `personal(member)` and `prompt_rules(member)`; `services.rules(member)` now returns
+  (household, personal) and `build_system(..., personal_rules=, owner=)` adds
+  "<Name>'s personal rules (only in conversations with <Name>)".
+- `propose_rule` requires `applies_to`; a personal autonomy grant is refused
+  (`GRANTS_ARE_HOUSEHOLD`). Refining a draft can change its scope. Standing reminders from
+  context repair stay household.
+- `/rules` shows "Household rules", "Just for you" and drafts (marked "just for you"). The
+  website's Rules page has a "Just for you" section. Others' personal rules are never shown,
+  admins included.
+- The plan's rule-locking section and test table now describe personal rules.
+- Existing rules, including the user's rule 5, stay household. Turning one personal means
+  retiring it and proposing it again; there's no switch.
+- The system prompt changed again: re-run the evals when there's quota.
+
+### F3 · Busy times
+Status: [ ]
+Depends on: 08, 15, F2
+Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From feedback bug #1:
+"no notifications during work hours (9-5 weekdays)" can't be a rule, because rules don't change
+when messages go out. The user chose busy times in settings (2026-10-25).
+
+Build:
+- Each person can add busy windows on the website's settings page: days of the week and a time
+  range (e.g. Mon-Fri 09:00-17:00). The outbox holds Themi's own (non-reply, non-urgent)
+  messages during them, as it does in quiet hours, and sends them when the window ends.
+- The AI can tell people about busy times when asked about message timing.
+
+Tests:
+- Messages held in a busy window and sent after it; replies and urgent alerts not held; windows
+  on other days don't apply; the settings form adds and removes windows; validation.
+
+Done when: a Mon-Fri 9-5 busy window holds a nudge until 5 pm. Commit.
 
 ---
 

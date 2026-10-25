@@ -229,7 +229,8 @@ async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None
     )
     scenario.primary.queue_text("I'm sorry. It's a standing reminder now.")
     await scenario.say("Erin", "you forgot the vet AGAIN")
-    assert "Always keep in mind: The cat's vet is on Tuesdays." in scenario.app.services.rules()
+    household, _ = scenario.app.services.rules(scenario.member("Erin"))
+    assert "Always keep in mind: The cat's vet is on Tuesdays." in household
     (listing,) = await scenario.say("Erin", "/rules")
     assert "Keep in mind: vet" in listing
 

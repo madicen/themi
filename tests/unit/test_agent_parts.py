@@ -154,14 +154,20 @@ def test_command_texts_pass_the_strictest_pda_check(family) -> None:
         assert find_demands(text, 3) == [], text
 
 
-def test_the_model_is_told_rules_are_for_the_whole_household() -> None:
+def test_the_model_is_told_how_rules_are_scoped() -> None:
     from themi.core.prompts import build_system
     from themi.core.rules import propose_rule
 
-    system = build_system(rules=["No notifications during work hours."])
+    system = build_system(
+        rules=["Bins go out on Tuesdays."], personal_rules=["No chores at work."], owner="Erin"
+    )
     assert "Locked household rules (they apply to everyone in the family):" in system
-    assert "There are no personal rules" in system
+    assert (
+        "Erin's personal rules (only in conversations with Erin):\n- No chores at work." in system
+    )
+    assert "unless it's marked as someone's personal rule" in system
     assert "quiet hours" in system and "/pause" in system  # what actually controls timing
+    assert "Erin's personal rules" not in build_system(rules=["x"])
     description = propose_rule.spec.description
-    assert "applies to everyone in the family" in description
+    assert "household rules apply to everyone in the family" in description
     assert "quiet hours" in description

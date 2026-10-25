@@ -23,6 +23,7 @@ def queue_proposal(scenario: Scenario, kind: str = "policy", category: str = "")
             "kind": kind,
             "category": category,
             "rule_id": 0,
+            "applies_to": "household",
         },
     )
     scenario.primary.queue_text("Here's that as a draft rule.")
@@ -88,6 +89,7 @@ async def test_refining_a_draft_retires_the_old_proposal(scenario: Scenario) -> 
             "kind": "policy",
             "category": "",
             "rule_id": draft.id,
+            "applies_to": "household",
         },
     )
     scenario.primary.queue_text("Updated.")
@@ -141,7 +143,7 @@ async def test_drafts_lapse_quietly_after_two_weeks(scenario: Scenario) -> None:
 
 
 async def test_rules_command_lists_locked_rules_and_my_drafts(scenario: Scenario) -> None:
-    assert (await scenario.say("Erin", "/rules"))[0].startswith("No household rules yet.")
+    assert (await scenario.say("Erin", "/rules"))[0].startswith("No rules yet.")
     queue_proposal(scenario)
     await scenario.say("Erin", "archive promos")
     await scenario.say("Erin", "yes")
@@ -153,16 +155,17 @@ async def test_rules_command_lists_locked_rules_and_my_drafts(scenario: Scenario
             "kind": "policy",
             "category": "",
             "rule_id": 0,
+            "applies_to": "household",
         },
     )
     scenario.primary.queue_text("Drafted.")
     await scenario.say("Erin", "bins go out wednesday mornings")
     (listing,) = await scenario.say("Erin", "/rules")
     assert listing == (
-        "Locked rules:\n• Archive store promos\n\nYour drafts:\n• Bins reminder on Tuesdays"
+        "Household rules:\n• Archive store promos\n\nYour drafts:\n• Bins reminder on Tuesdays"
     )
     (his,) = await scenario.say("Husband", "/rules")
-    assert his == "Locked rules:\n• Archive store promos"  # Erin's drafts are hers
+    assert his == "Household rules:\n• Archive store promos"  # Erin's drafts are hers
 
 
 async def test_unlocking_an_autonomy_rule_takes_the_permission_back(scenario: Scenario) -> None:
@@ -180,7 +183,8 @@ async def test_standing_reminders_lock_straight_away(scenario: Scenario) -> None
         scenario.member("Erin"), "Vet is on Tuesdays", "Luna's vet visits are always on Tuesdays."
     )
     assert rule.status == "locked" and rule.kind == "standing_reminder"
-    assert "Luna's vet visits are always on Tuesdays." in scenario.app.services.rules()
+    household, _ = scenario.app.services.rules(scenario.member("Erin"))
+    assert "Luna's vet visits are always on Tuesdays." in household
 
 
 async def test_proposals_need_content(scenario: Scenario) -> None:
@@ -201,6 +205,7 @@ async def test_yes_to_a_question_asked_after_the_proposal_doesnt_lock_it(
             "kind": "policy",
             "category": "",
             "rule_id": 0,
+            "applies_to": "household",
         },
     )
     scenario.primary.queue_text("Drafted. Want me to look at the bins schedule too?")

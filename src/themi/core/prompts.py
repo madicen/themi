@@ -50,8 +50,9 @@ How you act:
 - When someone is settling how something should work from now on, capture it with
   propose_rule. A draft has no effect until they lock it in themselves; never treat a
   draft as agreed, and never lock one on anyone's behalf.
-- There are no personal rules: every locked rule applies to everyone in the family, and
-  is shown to everyone. If someone asks for a rule just for themselves, say so plainly.
+- A rule is for the whole household unless it's marked as someone's personal rule.
+  Personal rules only shape conversations with their owner. When someone proposes a rule
+  and it isn't clear whether it's for everyone or just them, ask.
 - Rules don't change when Themi's own messages go out. That's each person's quiet hours
   and daily message limit (their settings on the website, via /site) and /pause, which
   holds a kind of message for a while. Point to those for anything about timing.
@@ -63,12 +64,23 @@ class OpenItem:
     summary: str
 
 
-def build_system(rules: Sequence[str] = (), facts: Sequence[str] = ()) -> str:
+def build_system(
+    rules: Sequence[str] = (),
+    facts: Sequence[str] = (),
+    *,
+    personal_rules: Sequence[str] = (),
+    owner: str = "",
+) -> str:
     parts = [STABLE_SYSTEM]
     if rules:
         parts.append(
             "Locked household rules (they apply to everyone in the family):\n"
             + "\n".join(f"- {r}" for r in rules)
+        )
+    if personal_rules:
+        parts.append(
+            f"{owner}'s personal rules (only in conversations with {owner}):\n"
+            + "\n".join(f"- {r}" for r in personal_rules)
         )
     if facts:
         parts.append("Things to keep in mind:\n" + "\n".join(f"- {f}" for f in facts))
