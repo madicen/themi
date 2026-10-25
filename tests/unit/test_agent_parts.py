@@ -115,3 +115,22 @@ def test_approval_texts_pass_the_strictest_pda_check() -> None:
     for template in templates:
         text = template.format(summary="Archive 3 promo emails", message="Archived them.")
         assert find_demands(text, 3) == [], text
+
+
+def test_rule_texts_pass_the_strictest_pda_check() -> None:
+    from themi.core import rules
+
+    templates = [
+        rules.PROPOSAL_TEXT,
+        rules.LOCKED_TEXT,
+        rules.LOCKED_REPLY,
+        rules.SUPERSEDED_TEXT,
+        rules.DISCARDED_TEXT,
+        rules.LAPSED_TEXT,
+        rules.STILL_DRAFT_REPLY,
+        rules.NOT_YOURS_REPLY,
+        rules.NEEDS_ADMIN,
+    ]
+    for template in templates:
+        text = template.format(summary="Archive store promos")
+        assert find_demands(text, 3) == [], text

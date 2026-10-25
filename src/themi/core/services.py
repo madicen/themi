@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from themi.accounts import AccountStore, Member
 from themi.ai.router import AIRouter
@@ -20,6 +20,9 @@ from themi.channels.events import InboundEvent
 from themi.channels.outbox import Outbox
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
+
+if TYPE_CHECKING:
+    from themi.core.rules import Rulebook
 
 Decision = Literal["yes", "no", "later"]
 SCRATCH_FACTS_IN_PROMPT = 20
@@ -66,6 +69,7 @@ class Services:
     button_handlers: dict[str, EventHandler] = field(default_factory=dict)
     reaction_handlers: list[EventHandler] = field(default_factory=list)
     commands: dict[str, CommandHandler] = field(default_factory=dict)
+    rulebook: Rulebook | None = None
 
     def awaiting(self, member: Member) -> list[AwaitingItem]:
         return [item for source in self.awaiting_sources for item in source(member)]
@@ -79,8 +83,8 @@ class Services:
         return items
 
     def rules(self) -> list[str]:
-        """Locked household rules (prompt 13 fills this in)."""
-        return []
+        """Locked household rules, for the system prompt."""
+        return self.rulebook.locked_texts() if self.rulebook is not None else []
 
     def facts_for(self, member: Member) -> list[str]:
         """Facts to keep in mind. Until prompt 14: the most recent remembered facts."""

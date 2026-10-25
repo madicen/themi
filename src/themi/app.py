@@ -22,6 +22,7 @@ from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolRegistry
@@ -49,6 +50,7 @@ class App:
     services: Services
     agent: Agent
     approvals: ApprovalsUI
+    rulebook: Rulebook
     periodic: list[PeriodicTask] = field(default_factory=list)
 
 
@@ -76,13 +78,26 @@ def build_app(
     )
     approvals = ApprovalsUI(services.autonomy, outbox)
     approvals.install(services)
+    rulebook = Rulebook(services.autonomy, outbox)
+    rulebook.install(services)
     agent = Agent(services)
     channel.handler = agent
     periodic = [
         PeriodicTask("outbox.flush", timedelta(seconds=30), outbox.flush),
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
+        PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
     ]
     return App(
-        db, store, ai_settings, router, channel, outbox, services, agent, approvals, periodic
+        db,
+        store,
+        ai_settings,
+        router,
+        channel,
+        outbox,
+        services,
+        agent,
+        approvals,
+        rulebook,
+        periodic,
     )
