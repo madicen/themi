@@ -39,6 +39,11 @@ class Database:
         with self._lock:
             return self._conn.execute(sql, params).lastrowid or 0
 
+    def update(self, sql: str, params: Params = ()) -> int:
+        """Run an UPDATE/DELETE; returns how many rows it changed."""
+        with self._lock:
+            return self._conn.execute(sql, params).rowcount
+
     def executemany(self, sql: str, rows: Sequence[Params]) -> int:
         """Run a statement for each row; returns the number of rows changed."""
         with self._lock:
