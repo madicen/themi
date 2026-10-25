@@ -77,3 +77,18 @@ def test_configure_logging_quiets_libraries_that_log_contents() -> None:
     finally:
         logging.getLogger().handlers.clear()
         logging.getLogger().setLevel(logging.WARNING)
+
+
+def test_recent_logs_keep_the_tail_redacted() -> None:
+    import logging
+
+    from themi.logs import RecentLogs
+
+    recent = RecentLogs(capacity=3)
+    for n in range(5):
+        recent.emit(logging.makeLogRecord({"msg": f"line {n}", "levelname": "INFO"}))
+    recent.emit(logging.makeLogRecord({"msg": "key AIza" + "k" * 35, "levelname": "INFO"}))
+    assert recent.count == 6
+    assert [line.rsplit(": ", 1)[-1] for line in recent.tail(2)] == ["line 4", "key [redacted]"]
+    assert len(recent.tail(10)) == 3 and recent.tail(0) == []
+    assert [line.rsplit(": ", 1)[-1] for line in recent.since(5)] == ["key [redacted]"]

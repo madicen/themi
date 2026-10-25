@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from themi.connectors.google import GoogleAccounts
     from themi.core.calls import VendorCalls
     from themi.core.expected import ExpectedEmails
+    from themi.core.feedback import FeedbackChat
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.meals import Meals
@@ -77,6 +78,8 @@ AwaitingSource = Callable[[Member], list[AwaitingItem]]
 OpenItemSource = Callable[[Member], list[OpenItem]]
 EventHandler = Callable[[InboundEvent], Awaitable[None]]
 CommandHandler = Callable[[Member, str], Awaitable[None]]  # (member, text after the command)
+# For commands that need the whole message, such as what it replies to.
+EventCommandHandler = Callable[[InboundEvent, str], Awaitable[None]]
 
 
 @dataclass
@@ -94,6 +97,7 @@ class Services:
     button_handlers: dict[str, EventHandler] = field(default_factory=dict)
     reaction_handlers: list[EventHandler] = field(default_factory=list)
     commands: dict[str, CommandHandler] = field(default_factory=dict)
+    event_commands: dict[str, EventCommandHandler] = field(default_factory=dict)
     command_help: dict[str, str] = field(default_factory=dict)
     site_url: str = ""  # the website's base address, for /site links
     rulebook: Rulebook | None = None
@@ -106,6 +110,7 @@ class Services:
     calendar: CalendarSync | None = None
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
+    feedback: FeedbackChat | None = None
     groceries: GroceryList | None = None
     pantry: Pantry | None = None
     meals: Meals | None = None
@@ -113,6 +118,11 @@ class Services:
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
+        self.command_help[name] = description
+
+    def add_event_command(self, name: str, handler: EventCommandHandler, description: str) -> None:
+        """A command whose handler gets the whole message (for its Reply target, say)."""
+        self.event_commands[name] = handler
         self.command_help[name] = description
 
     def command_menu(self) -> list[tuple[str, str]]:

@@ -109,7 +109,11 @@ class Agent:
             return
         if text.startswith("/"):
             command, _, argument = text.partition(" ")
-            handler = self.services.commands.get(command.lower().split("@")[0])
+            name = command.lower().split("@")[0]
+            if (event_handler := self.services.event_commands.get(name)) is not None:
+                await event_handler(event, argument.strip())
+                return
+            handler = self.services.commands.get(name)
             if handler is not None:
                 await handler(member, argument.strip())
                 return

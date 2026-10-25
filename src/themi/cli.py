@@ -35,6 +35,13 @@ def build_parser() -> argparse.ArgumentParser:
         "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
     )
     login.add_argument("name")
+    feedback = commands.add_parser(
+        "feedback", help="print new /bug and /idea reports from the chat, to paste into Claude"
+    )
+    feedback.add_argument("--all", action="store_true", help="include reviewed reports")
+    feedback.add_argument(
+        "--done", type=int, nargs="+", metavar="ID", help="mark these reports reviewed"
+    )
     backup = commands.add_parser(
         "backup", help="take an encrypted backup now (or --list the ones in storage)"
     )
@@ -209,6 +216,17 @@ def _bot_username() -> str | None:
         return None
 
 
+def _feedback(include_reviewed: bool, done: list[int] | None) -> None:
+    from themi.core.feedback import FeedbackBook
+
+    book = FeedbackBook(_store().db)
+    if done:
+        marked = book.mark_reviewed(done)
+        print(f"Marked {marked} of {len(done)} as reviewed.")
+        return
+    print(book.report(book.items(include_reviewed)), end="")
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -236,6 +254,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _run()
         elif args.command == "login-link":
             print(_login_link(args.name))
+        elif args.command == "feedback":
+            _feedback(args.all, args.done)
         elif args.command == "backup":
             _backup(args.list)
         elif args.command == "restore":

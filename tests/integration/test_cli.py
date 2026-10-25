@@ -140,3 +140,42 @@ def test_invite_prints_a_tap_to_start_link_for_the_bot(tmp_path, fake_telegram) 
         **run,
     )
     assert "Invite code for Husband:" in offline.stdout and "t.me" not in offline.stdout
+
+
+def test_feedback_prints_new_reports_and_marks_them_done(tmp_path) -> None:
+    import json
+    import sqlite3
+
+    env = _env(tmp_path)
+    run = {"capture_output": True, "text": True, "env": env, "cwd": tmp_path}
+    subprocess.run(
+        [sys.executable, "-m", "themi", "init"],
+        input="The Household\nAmerica/Chicago\n0\nErin\n",
+        check=True,
+        **run,
+    )
+    empty = subprocess.run([sys.executable, "-m", "themi", "feedback"], check=True, **run)
+    assert empty.stdout == "No new feedback.\n"
+
+    db = sqlite3.connect(tmp_path / "themi.db")
+    context = json.dumps({"member": {"name": "Erin"}, "local_time": "Sun 25 Oct 2026 14:00 CDT"})
+    db.execute(
+        "INSERT INTO feedback (member_id, kind, text, context, created_at) "
+        "VALUES (1, 'bug', 'the list was wrong', ?, '2026-10-25T19:00:00+00:00')",
+        (context,),
+    )
+    db.commit()
+    db.close()
+
+    report = subprocess.run([sys.executable, "-m", "themi", "feedback"], check=True, **run)
+    assert "## Bug #1 from Erin, Sun 25 Oct 2026 14:00 CDT" in report.stdout
+    assert "> the list was wrong" in report.stdout
+
+    done = subprocess.run(
+        [sys.executable, "-m", "themi", "feedback", "--done", "1"], check=True, **run
+    )
+    assert done.stdout.strip() == "Marked 1 of 1 as reviewed."
+    after = subprocess.run([sys.executable, "-m", "themi", "feedback"], check=True, **run)
+    assert after.stdout == "No new feedback.\n"
+    every = subprocess.run([sys.executable, "-m", "themi", "feedback", "--all"], check=True, **run)
+    assert "## Bug #1 from Erin, Sun 25 Oct 2026 14:00 CDT (reviewed)" in every.stdout

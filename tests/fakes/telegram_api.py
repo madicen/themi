@@ -111,10 +111,24 @@ class FakeTelegram:
         }
 
     def send_text(
-        self, user_id: int, text: str, *, chat_id: int | None = None, chat_type: str = "private"
+        self,
+        user_id: int,
+        text: str,
+        *,
+        chat_id: int | None = None,
+        chat_type: str = "private",
+        reply_to: int | None = None,
     ) -> int:
         message = self._message(user_id, chat_id, chat_type)
         message["text"] = text
+        if reply_to is not None:  # Telegram's Reply, to one of the bot's messages
+            message["reply_to_message"] = {
+                "message_id": reply_to,
+                "date": next(self._dates),
+                "chat": message["chat"],
+                "from": BOT_USER,
+                "text": "(an earlier message)",
+            }
         if text.startswith("/"):
             command = text.split()[0]
             message["entities"] = [{"type": "bot_command", "offset": 0, "length": len(command)}]

@@ -258,6 +258,9 @@ class TelegramChannel:
                 clock.now(),
                 update_id,
                 text=text,
+                reply_to_message_id=(
+                    message.reply_to_message.message_id if message.reply_to_message else None
+                ),
             )
         else:
             return  # stickers, photos and the like aren't handled yet

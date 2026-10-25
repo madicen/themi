@@ -162,6 +162,17 @@ async def test_text_becomes_an_event_and_is_logged(
     )
 
 
+async def test_a_reply_carries_the_message_it_replies_to(
+    channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
+) -> None:
+    fake_telegram.send_text(ERIN_TELEGRAM_ID, "/bug this was wrong", reply_to=321)
+    fake_telegram.send_text(ERIN_TELEGRAM_ID, "plain message")
+    await channel.poll_once()
+    replying, plain = recorder.events
+    assert replying.reply_to_message_id == 321
+    assert plain.reply_to_message_id is None
+
+
 async def test_voice_note_is_downloaded(
     channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
 ) -> None:

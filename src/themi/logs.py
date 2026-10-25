@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import re
 import sys
+import threading
+from collections import deque
 
 REDACTED = "[redacted]"
 
@@ -60,6 +62,45 @@ class RedactingFilter(logging.Filter):
         return True
 
 
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+
+class RecentLogs(logging.Handler):
+    """The latest log lines in memory, formatted and redacted as on the console.
+
+    Feedback reports (/bug) attach the tail; the dev simulator's session report
+    reads everything `since` a mark.
+    """
+
+    def __init__(self, capacity: int = 5000) -> None:
+        super().__init__()
+        self.setFormatter(RedactingFormatter(LOG_FORMAT))
+        self._lines: deque[tuple[int, str]] = deque(maxlen=capacity)
+        self._lines_lock = threading.Lock()
+        self.count = 0  # lines seen so far, including any that fell off the end
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            line = self.format(record)
+        except Exception:
+            self.handleError(record)
+            return
+        with self._lines_lock:
+            self.count += 1
+            self._lines.append((self.count, line))
+
+    def since(self, count: int) -> list[str]:
+        with self._lines_lock:
+            return [line for n, line in self._lines if n > count]
+
+    def tail(self, lines: int) -> list[str]:
+        with self._lines_lock:
+            return [line for _, line in list(self._lines)[-lines:]] if lines > 0 else []
+
+
+# What `themi run` logged lately (configure_logging attaches it).
+recent_logs = RecentLogs(capacity=500)
+
 # Libraries that log message contents or credentials-in-URLs below WARNING.
 CHATTY_LIBRARIES = ("telegram", "httpx", "httpx2", "httpcore", "hpack")
 
@@ -71,8 +112,8 @@ def quiet_chatty_libraries() -> None:
 
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(RedactingFormatter(LOG_FORMAT))
     root = logging.getLogger()
-    root.handlers[:] = [handler]
+    root.handlers[:] = [handler, recent_logs]
     root.setLevel(level)
     quiet_chatty_libraries()
