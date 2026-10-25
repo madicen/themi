@@ -27,7 +27,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 10 | Process runtime, scheduler, Docker | 1 Foundation | [x] |
 | 11 | Trust tiers engine | 2 Trust and memory | [x] |
 | 12 | Approvals in Telegram | 2 Trust and memory | [x] |
-| 13 | Rules: drafts and locking | 2 Trust and memory | [ ] |
+| 13 | Rules: drafts and locking | 2 Trust and memory | [x] |
 | 14 | Memory and context repair | 2 Trust and memory | [ ] |
 | 15 | Website v1: sign-in, dashboard, personal settings | 2 Trust and memory | [ ] |
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [ ] |
@@ -806,7 +806,7 @@ Notes:
   answering from there edits the owner's message too.
 
 ### 13 · Rules: drafts and locking
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 11, 12
 Read first: "Trust tiers, rules and context repair" → Rule locking; "Testing" → Rules row and
 scenario 2.
@@ -829,6 +829,30 @@ Tests:
 - The scripted provider's recorded request contains the locked rule text.
 
 Done when: the scenarios pass. Commit.
+
+Notes:
+- Safety decision: the model can propose rules, but there's no lock tool. A rule locks only
+  when the affected member taps [Lock it in] or sends a bare YES while it's the only thing
+  waiting on them. If an approval and a draft are both waiting, "yes" goes to the model, which
+  can only point them at the button.
+- `affects` is always the proposer, for now. A household rule proposed by Erin is locked by
+  Erin. Prompt 34 (the family group) may want rules both partners agree to.
+- Autonomy-grant proposals are checked up front. A capped category or a non-admin proposer gets
+  a gentle "Not proposed: ..." tool result and no draft. Locking re-checks through
+  `grant_tier2`.
+- `Rulebook`:
+    - Lifecycle: `propose`, `lock(rule_id, by)` and `discard`. Each edits every proposal message
+      for that rule.
+    - `unlock(rule_id, by)` is for the website (prompt 16) and revokes an autonomy grant.
+    - `add_standing_reminder(member, summary, text)` creates a locked rule directly. It's for
+      context repair (prompt 14), which the person explicitly asked for.
+    - Lookups: `locked()`, `locked_texts()` and `drafts(member)`.
+- The system prompt now says to capture rules with `propose_rule` and never treat drafts as
+  agreed. Locked rule texts are appended in order (`Services.rules()` reads
+  `rulebook.locked_texts()`). This changes the cached system prefix only when a rule is locked
+  or unlocked.
+- Periodic: `rules.expire_drafts` runs hourly. A draft lapses 14 days after its last update.
+- New statuses: `discarded` (said no), `expired` (lapsed) and `unlocked` (retired later).
 
 ### 14 · Memory and context repair
 Status: [ ]
