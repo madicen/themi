@@ -33,7 +33,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 16 | Website v1: admin, tiers, rules, AI backend pages | 2 Trust and memory | [x] |
 | 17 | Chat commands: /pause, /tracking, /site | 2 Trust and memory | [x] |
 | 18 | Energy signals and capacity model | 3 Shadow Calendar | [x] |
-| 19 | Good windows and outcome learning | 3 Shadow Calendar | [ ] |
+| 19 | Good windows and outcome learning | 3 Shadow Calendar | [x] |
 | 20 | Tasks, matching, habit reserve | 3 Shadow Calendar | [ ] |
 | 21 | Google sign-in and account linking | 4 Gmail and pantry | [ ] |
 | 22 | Gmail connector and polling | 4 Gmail and pantry | [ ] |
@@ -1172,7 +1172,7 @@ Notes:
 - `energy_baseline` exists, but nothing writes to it yet; prompt 19's outcome learning fills it.
 
 ### 19 · Good windows and outcome learning
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: 18
 Read first: "Module behaviour" → B (learning); "How the family uses Themi" (quiet by default).
 
@@ -1192,6 +1192,44 @@ Tests:
 - Deadlines honoured.
 
 Done when: proactive messages are timed by the model. Commit.
+
+Notes:
+- `themi.energy.windows`:
+    - `windows(model, member, start, threshold=, horizon=)` and
+      `next_window(model, member, start, threshold=)`, using 15-minute steps over 24 h.
+    - Thresholds: `RECEPTIVE = 45` (steady) and `STRONG = 60`.
+    - If nothing clears the bar, `next_window` returns the best non-quiet moment in the
+      horizon, so nothing waits longer than a day.
+    - `EnergyReceptivity(model)` is the outbox's receptivity in `build_app`. Normal messages
+      use RECEPTIVE and low ones STRONG. A member with every input off is never held back.
+- `themi.energy.outcomes.OutcomeTracker`:
+    - Recording: `on_sent(row, message_id)` is an outbox `sent_listeners` hook for normal and
+      low messages.
+    - Resolving: `observe(member, event)` is called by the agent for every inbound event. A
+      button or reaction resolves its own message, anything else the latest open one. "not
+      now", 💤 and snooze buttons count as snoozed.
+    - Expiry: `expire()` is the periodic task `energy.expire_outcomes`, every 15 min.
+    - Learning: `learn(member_id, hour, outcome)` moves the baseline toward acted 75, snoozed
+      45, ignored 25, with step max(0.1, 1/(n+1)).
+    - `recent_rate(member_id, days=14)` returns the share acted on. Prompt 20's habit reserve
+      should use it.
+- Respond-by timeouts per kind:
+
+  | Kind | Respond by |
+  | --- | --- |
+  | approval | 6 h |
+  | rule | 12 h |
+  | meal | 2 h |
+  | laundry | 3 h |
+  | task | 8 h |
+  | maintenance | 24 h |
+  | habit | 12 h |
+  | relay | 8 h |
+  | anything else | 3 h |
+- Interaction with the prior: the first outcome sets that hour's learned mean to the target
+  outright (step 1), but `EnergyModel.baseline` still blends n/(n+3) with the prior. So one
+  outcome moves the effective baseline about a quarter of the way.
+- `app.py` has a small `_async()` wrapper for synchronous periodic jobs.
 
 ### 20 · Tasks, matching, habit reserve
 Status: [ ]
