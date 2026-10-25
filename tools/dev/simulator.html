@@ -92,6 +92,20 @@
   /* Faded until hovered, except the one in use (opacity on the buttons, so "on" stays solid). */
   .reacts button { padding: 0 6px; font-size: 13px; border-radius: 10px; opacity: 0.45; }
   .row:hover .reacts button, .reacts button.on { opacity: 1; }
+  .reply-btn { opacity: 0.45; }
+  .row:hover .reply-btn { opacity: 1; }
+  .quote {
+    font-size: 12px; color: var(--muted); border-left: 3px solid var(--accent);
+    padding-left: 6px; margin-bottom: 4px; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 360px;
+  }
+  #replying {
+    display: none; align-items: center; gap: 8px; padding: 6px 16px 0; font-size: 13px;
+    color: var(--muted);
+  }
+  #replying.on { display: flex; }
+  #replying span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #replying b { color: var(--accent); }
   .reacts button.on {
     background: var(--accent); color: var(--accent-text); border-color: var(--accent);
     font-weight: 600;
@@ -139,6 +153,8 @@
   <div id="log"></div>
   <div>
     <div id="typing"></div>
+    <div id="replying"><b>Replying to:</b> <span id="replying-text"></span>
+      <button type="button" id="cancel-reply" title="Don't reply">✕</button></div>
     <form id="composer">
       <textarea id="text" placeholder="Message Themi (Enter sends, Shift+Enter for a new line)"></textarea>
       <button type="submit">Send</button>
@@ -157,6 +173,14 @@ let lastTyping = null;
 let people = [];
 const seen = {};  // chat id -> newest bot message seen there
 const shownReactions = {};  // bot message id -> your reaction as last drawn
+let replyTo = null;  // {id, text}: the message your next one replies to
+
+function setReply(target) {
+  replyTo = target;
+  document.getElementById("replying").classList.toggle("on", !!target);
+  document.getElementById("replying-text").textContent = target ? target.text.split("\n")[0] : "";
+  if (target) document.getElementById("text").focus();
+}
 
 try { chat = Number(localStorage.getItem("themi-sim-chat")) || chat; } catch {}
 
@@ -188,6 +212,7 @@ function renderPeople(latest) {
       chat = p.id;
       try { localStorage.setItem("themi-sim-chat", String(chat)); } catch {}
       lastVersion = -1;
+      setReply(null);
       poll();
     };
     nav.append(b);
@@ -212,7 +237,11 @@ function renderEntries(entries) {
       log.append(row);
       continue;
     }
-    const bubble = el("div", "bubble", e.text);
+    const bubble = el("div", "bubble");
+    if (e.reply_to && texts[e.reply_to]) {
+      bubble.append(el("div", "quote", texts[e.reply_to].split("\n")[0]));
+    }
+    bubble.append(document.createTextNode(e.text));
     if (e.edited) bubble.append(el("span", "edited", "edited"));
     if (e.bot_reactions.length) bubble.append(el("span", "badge", e.bot_reactions.join("")));
     if (e.sender === "bot" && e.reactions.length) {
@@ -251,6 +280,10 @@ function renderEntries(entries) {
         };
         reacts.append(b);
       }
+      const reply = el("button", "reply-btn", "↩ Reply");
+      reply.title = "Reply to this message (for example with /bug)";
+      reply.onclick = () => setReply({id: e.message_id, text: e.text});
+      reacts.append(reply);
       row.append(reacts);
     }
     log.append(row);
@@ -299,7 +332,8 @@ document.getElementById("composer").onsubmit = (event) => {
   const text = box.value.trim();
   if (!text) return;
   box.value = "";
-  post("/sim/send", {user_id: chat, text});
+  post("/sim/send", {user_id: chat, text, reply_to: replyTo ? replyTo.id : null});
+  setReply(null);
 };
 document.getElementById("text").onkeydown = (event) => {
   if (event.key === "Enter" && !event.shiftKey) {
@@ -333,6 +367,7 @@ document.getElementById("copy").onclick = async () => {
     area.select();
   }
 };
+document.getElementById("cancel-reply").onclick = () => setReply(null);
 document.getElementById("close-report").onclick = () => document.getElementById("report").close();
 document.getElementById("session").onclick = async () => {
   await post("/sim/session", {});
