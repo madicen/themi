@@ -57,6 +57,7 @@ class InboundEvent:
     voice: VoiceNote | None = None
     button: ButtonPress | None = None
     reaction: Reaction | None = None
+    reply_to_message_id: int | None = None  # the message this one replies to (Telegram's Reply)
 
 
 class InboundHandler(Protocol):

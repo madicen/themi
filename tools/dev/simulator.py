@@ -5,7 +5,7 @@ exactly as it polls Telegram (point `TELEGRAM_API_URL` at it), and the page
 injects updates and shows everything the bot sends:
 
 - pick a person: Erin, Husband, or someone new who hasn't paired yet
-- send messages, tap inline buttons, react with ✅ or 💤
+- send messages (optionally as a Reply to one of Themi's), tap inline buttons, react
 - see edits, the bot's own reactions, button answers and "typing…"
 - skip Themi's clock ahead, so scheduled nudges fire now
 - open the website signed in as the chosen person (`login` makes the link)
@@ -17,13 +17,12 @@ The page polls `/sim/state` for one chat's transcript. Entries in chat 0
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
-from collections import deque
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +31,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 
 from tests.fakes.telegram_api import NAMES, FakeTelegram
 from themi import clock
-from themi.logs import RedactingFormatter
+from themi.logs import RecentLogs
 
 PAGE = Path(__file__).with_name("simulator.html")
 NEWCOMER_ID = 1003
@@ -42,7 +41,6 @@ PEOPLE = [
 ]
 TYPING_SECONDS = 6.0  # Telegram shows a chat action for about 5 seconds
 EVERY_CHAT = 0  # entries shown in all chats: skips and session marks
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"  # as on the console
 
 
 @dataclass
@@ -60,31 +58,7 @@ class Entry:
     at: str = ""  # wall-clock time, to match the log lines
     themi_at: str = ""  # Themi's clock, which runs ahead after a skip
     changed: int = 0  # the version of the last edit or reaction
-
-
-class LogBuffer(logging.Handler):
-    """Keeps the most recent log lines, redacted, for the session report."""
-
-    def __init__(self, capacity: int = 5000) -> None:
-        super().__init__()
-        self.setFormatter(RedactingFormatter(LOG_FORMAT))
-        self._lines: deque[tuple[int, str]] = deque(maxlen=capacity)
-        self._lines_lock = threading.Lock()
-        self.count = 0
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            line = self.format(record)
-        except Exception:
-            self.handleError(record)
-            return
-        with self._lines_lock:
-            self.count += 1
-            self._lines.append((self.count, line))
-
-    def since(self, count: int) -> list[str]:
-        with self._lines_lock:
-            return [line for n, line in self._lines if n > count]
+    reply_to: int | None = None  # the message this one replies to (Telegram's Reply)
 
 
 class Simulator(FakeTelegram):
@@ -94,7 +68,7 @@ class Simulator(FakeTelegram):
         self._typing_until: dict[int, float] = {}
         self._sim_lock = threading.Lock()
         self.version = 0
-        self.logs = LogBuffer()  # the dev runner adds it to the root logger
+        self.logs = RecentLogs()  # the dev runner adds it to the root logger
         self._session_seq = 0  # entries after this version are in the report
         self._session_log = 0
         self._session_at = _wall_clock()
@@ -109,6 +83,10 @@ class Simulator(FakeTelegram):
         self.app.add_api_route("/sim/website", self._website, methods=["GET"])
         self.app.add_api_route("/sim/report", self._report, methods=["GET"])
         self.app.add_api_route("/sim/session", self._new_session, methods=["POST"])
+
+    def number_messages_after(self, message_id: int) -> None:
+        """Continue Telegram message ids past an earlier run's, as Telegram itself would."""
+        self._message_ids = count(message_id + 1)
 
     @property
     def url(self) -> str:
@@ -154,7 +132,14 @@ class Simulator(FakeTelegram):
         update_id = super()._push(kind, payload)
         if kind == "message":
             text = payload.get("text") or "(voice note)"
-            self._add(payload["chat"]["id"], "person", text, message_id=payload["message_id"])
+            replied = payload.get("reply_to_message") or {}
+            self._add(
+                payload["chat"]["id"],
+                "person",
+                text,
+                message_id=payload["message_id"],
+                reply_to=replied.get("message_id"),
+            )
         elif kind == "message_reaction":
             chat_id, message_id = payload["chat"]["id"], payload["message_id"]
             emoji = [r["emoji"] for r in payload["new_reaction"]]
@@ -232,7 +217,10 @@ class Simulator(FakeTelegram):
         text = str(body.get("text", "")).strip()
         if not text:
             return JSONResponse({"ok": False, "error": "empty message"}, status_code=400)
-        self.send_text(int(body["user_id"]), text)
+        reply_to = body.get("reply_to")
+        self.send_text(
+            int(body["user_id"]), text, reply_to=int(reply_to) if reply_to is not None else None
+        )
         return JSONResponse({"ok": True})
 
     async def _tap(self, request: Request) -> JSONResponse:
@@ -334,6 +322,8 @@ def _report_lines(entry: Entry, name: str) -> list[str]:
     if entry.sender == "action":
         return [f"[{stamp}] {name} {entry.text}"]
     label = f"{name if entry.sender == 'person' else 'Themi'} #{entry.message_id}"
+    if entry.reply_to is not None:
+        label += f" (replying to #{entry.reply_to})"
     if entry.previous:
         earlier = (t.replace("\n", " / ") for t in entry.previous)  # one line each
         label += " (edited; earlier: " + " | ".join(f'"{t}"' for t in earlier) + ")"

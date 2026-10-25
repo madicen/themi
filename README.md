@@ -31,7 +31,8 @@ token. Open <http://localhost:8090>, pick a person and type. You can tap buttons
 opens the management site signed in as that person.
 
 - Dev data lives in `data/dev/`, with its own secret key, apart from the real database.
-  `make dev-reset` starts over.
+  `make dev-reset` starts over. Its website is on port 8081 (`THEMI_DEV_HTTP_PORT`), so it
+  can run alongside a real `themi run` on 8080.
 - The first run seeds Erin and Husband, both paired, and puts `GEMINI_API_KEY` from `.env`
   on their default AI backend. Without a key, Themi replies that setup is needed. You can also
   add a key on the website's AI page.
@@ -57,6 +58,19 @@ opens the management site signed in as that person.
    the code, so you can text the link to the person you're inviting.
 3. Run `themi run`. This starts the bot, the scheduler and the website (`/health` on
    port 8080).
+
+### Bug reports and ideas from the chat
+
+Anyone in the family can send `/bug <what happened>` or `/idea <what they'd like>`, or just
+say "that's a bug..." or "it'd be nice if...". Using Telegram's Reply on the message that went
+wrong marks it. Each report keeps the recent conversation, what was waiting on the person,
+their settings, their AI backend and Themi's recent log lines.
+
+```sh
+themi feedback              # new reports as Markdown, to paste into a Claude session
+themi feedback --done 3 4   # mark reports reviewed
+themi feedback --all        # include reviewed ones
+```
 
 ### Google sign-in and Gmail (Google Cloud setup)
 

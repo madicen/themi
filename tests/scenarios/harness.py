@@ -154,9 +154,21 @@ class Scenario:
         await self.app.channel.poll_once()
         return self.telegram.sent_texts(chat)[before:]
 
-    async def say(self, name: str, text: str) -> list[str]:
-        """Send a message as `name`; returns Themi's replies to it."""
-        return await self._collect(name, lambda chat: self.telegram.send_text(chat, text))
+    async def say(self, name: str, text: str, reply_to_text: str | None = None) -> list[str]:
+        """Send a message as `name`; returns Themi's replies to it. With `reply_to_text`, it
+        uses Telegram's Reply on Themi's latest message with exactly that text."""
+        reply_to = None
+        if reply_to_text is not None:
+            row = self.app.db.one(
+                "SELECT telegram_message_id FROM message_log WHERE member_id = ? "
+                "AND direction = 'out' AND text = ? ORDER BY id DESC LIMIT 1",
+                (self.member(name).id, reply_to_text),
+            )
+            assert row is not None, f"Themi never sent {reply_to_text!r} to {name}"
+            reply_to = row["telegram_message_id"]
+        return await self._collect(
+            name, lambda chat: self.telegram.send_text(chat, text, reply_to=reply_to)
+        )
 
     async def voice(self, name: str, audio: bytes = b"OggS-voice", seconds: int = 4) -> list[str]:
         return await self._collect(

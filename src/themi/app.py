@@ -32,6 +32,7 @@ from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.commands import Commands
 from themi.core.expected import ExpectedEmails
+from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.meals import Meals
@@ -134,6 +135,7 @@ def build_app(
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()
+    FeedbackChat(services).install()
     agent = Agent(services)
     channel.handler = agent
     periodic = [

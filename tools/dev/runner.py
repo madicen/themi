@@ -24,6 +24,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from tests.fakes.telegram_api import BOT_TOKEN
 from tests.fixtures.family import ERIN_TELEGRAM_ID, seed_family
@@ -35,8 +36,12 @@ from themi.settings import Settings, read_dotenv
 from themi.storage import open_database
 from themi.storage.secrets import Secret, generate_key
 
+if TYPE_CHECKING:
+    from tools.dev.simulator import Simulator
+
 DEV_DIR = Path("data/dev")
 SIMULATOR_PORT = 8090
+DEV_HTTP_PORT = "8081"  # the dev website; THEMI_DEV_HTTP_PORT changes it
 SCHEDULER_TICK = timedelta(seconds=2)  # skipped-ahead nudges show up quickly
 
 
@@ -47,7 +52,7 @@ class SeedResult:
 
 
 def dev_settings(dev_dir: Path, simulator_url: str, env: Mapping[str, str]) -> Settings:
-    """Settings for the dev process. Only the website's port and log level carry over."""
+    """Settings for the dev process. Only THEMI_DEV_HTTP_PORT and the log level carry over."""
     dev_dir.mkdir(parents=True, exist_ok=True)
     key_file = dev_dir / "secret.key"
     if not key_file.exists():
@@ -60,7 +65,8 @@ def dev_settings(dev_dir: Path, simulator_url: str, env: Mapping[str, str]) -> S
             "TELEGRAM_BOT_TOKEN": BOT_TOKEN,
             "TELEGRAM_API_URL": simulator_url,
             "THEMI_HTTP_HOST": "127.0.0.1",
-            "THEMI_HTTP_PORT": env.get("THEMI_HTTP_PORT", "8080"),
+            # Not THEMI_HTTP_PORT: a real `themi run` on this machine keeps 8080.
+            "THEMI_HTTP_PORT": env.get("THEMI_DEV_HTTP_PORT", DEV_HTTP_PORT),
             "THEMI_LOG_LEVEL": env.get("THEMI_LOG_LEVEL", "INFO"),
         }
     )
@@ -90,6 +96,16 @@ def seed(settings: Settings, gemini_key: str) -> SeedResult:
         return SeedResult(seeded=True, key_set=bool(gemini_key))
     finally:
         store.db.close()
+
+
+def continue_numbering(settings: Settings, simulator: Simulator) -> None:
+    """A new simulator would number messages from 100 again; carry on after the dev data's."""
+    store = _store(settings)
+    try:
+        highest = store.db.scalar("SELECT MAX(telegram_message_id) FROM message_log") or 0
+    finally:
+        store.db.close()
+    simulator.number_messages_after(int(highest))
 
 
 def _has_key(store: AccountStore, settings: Settings) -> bool:
@@ -135,6 +151,7 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
     try:
         settings = dev_settings(dev_dir, simulator.url, env)
         result = seed(settings, env.get("GEMINI_API_KEY", "").strip())
+        continue_numbering(settings, simulator)
         configure_logging(settings.log_level)
         logging.getLogger().addHandler(simulator.logs)  # for the page's Copy session
         runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK)

@@ -158,7 +158,9 @@ def test_dev_settings_keep_their_own_key_and_database(tmp_path: Path) -> None:
     assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
     assert settings.db_path == tmp_path / "dev" / "themi.db"
     assert settings.telegram_api_url == "http://127.0.0.1:9"
-    again = runner.dev_settings(tmp_path / "dev", "http://127.0.0.1:9", {"THEMI_HTTP_PORT": "0"})
+    again = runner.dev_settings(
+        tmp_path / "dev", "http://127.0.0.1:9", {"THEMI_DEV_HTTP_PORT": "0"}
+    )
     assert again.secret_key.reveal() == settings.secret_key.reveal()
     assert again.http_port == 0
 
@@ -171,7 +173,7 @@ def test_seeding_happens_once_and_sets_the_gemini_key(tmp_path: Path) -> None:
     assert runner.seed(settings, "AIza-test-key") == runner.SeedResult(seeded=True, key_set=True)
     assert runner.seed(settings, "") == runner.SeedResult(seeded=False, key_set=True)
 
-    assert (runner.login_link(settings) or "").startswith("http://127.0.0.1:8080/login/")
+    assert (runner.login_link(settings) or "").startswith("http://127.0.0.1:8081/login/")
     assert runner.login_link(settings, NEWCOMER_ID) is None
     assert runner.invite(settings, "Sam")
 
@@ -200,7 +202,7 @@ def test_the_banner_says_when_there_is_no_ai_key(tmp_path: Path) -> None:
 async def test_a_message_from_the_simulator_gets_a_reply(
     simulator: Simulator, themi_log: logging.Logger, tmp_path: Path
 ) -> None:
-    settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_HTTP_PORT": "0"})
+    settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_DEV_HTTP_PORT": "0"})
     runner.seed(settings, "")  # no key: Themi answers that setup is needed, with no network
     runtime = build_runtime(settings, scheduler_tick=timedelta(milliseconds=50))
     task = asyncio.create_task(runtime.run())
@@ -314,7 +316,7 @@ async def test_a_restart_with_old_dev_data_still_gets_replies(
     simulator: Simulator, tmp_path: Path
 ) -> None:
     """A new simulator numbers updates from 1, below the offset the last run stored."""
-    settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_HTTP_PORT": "0"})
+    settings = runner.dev_settings(tmp_path, simulator.url, {"THEMI_DEV_HTTP_PORT": "0"})
     runner.seed(settings, "")
     store = AccountStore(open_database(settings.db_path), settings.cipher())
     store.db.execute("INSERT INTO meta (key, value) VALUES ('telegram.offset', '50')")
@@ -329,3 +331,35 @@ async def test_a_restart_with_old_dev_data_still_gets_replies(
     finally:
         runtime.stop()
         await asyncio.wait_for(task, timeout=10)
+
+
+def test_a_reply_reaches_the_bot_and_shows_in_the_report(simulator: Simulator) -> None:
+    sent = bot_call(simulator, "sendMessage", chat_id=ERIN_TELEGRAM_ID, text="Added eggs.")
+    body = {"user_id": ERIN_TELEGRAM_ID, "text": "/bug not added", "reply_to": sent["message_id"]}
+    assert httpx.post(f"{simulator.url}/sim/send", json=body).status_code == 200
+
+    (update,) = bot_call(simulator, "getUpdates")
+    assert update["message"]["reply_to_message"]["message_id"] == sent["message_id"]
+    entry = state(simulator, ERIN_TELEGRAM_ID)["entries"][-1]
+    assert entry["reply_to"] == sent["message_id"]
+    assert f"(replying to #{sent['message_id']}): /bug not added" in simulator.report()
+
+
+def test_a_new_simulator_numbers_messages_after_the_old_ones(
+    simulator: Simulator, tmp_path: Path
+) -> None:
+    settings = runner.dev_settings(tmp_path, simulator.url, {})
+    runner.seed(settings, "")
+    store = AccountStore(open_database(settings.db_path), settings.cipher())
+    store.db.execute(
+        "INSERT INTO message_log (member_id, direction, text, kind, telegram_message_id, "
+        "created_at) VALUES (1, 'out', 'from the last run', 'chat', 500, "
+        "'2026-10-01T00:00:00+00:00')"
+    )
+    store.db.close()
+
+    runner.continue_numbering(settings, simulator)
+    sent = bot_call(simulator, "sendMessage", chat_id=ERIN_TELEGRAM_ID, text="hello")
+    assert sent["message_id"] > 500
+    simulator.send_text(ERIN_TELEGRAM_ID, "hi")
+    assert simulator.transcript(ERIN_TELEGRAM_ID)[-1].message_id > sent["message_id"]
