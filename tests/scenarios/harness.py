@@ -156,6 +156,32 @@ class Scenario:
         assert row is not None
         return row["telegram_message_id"]
 
+    async def react(self, name: str, emoji: str, to_text: str | None = None) -> list[str]:
+        """React to Themi's latest message to `name` (or the latest with exactly `to_text`)."""
+        member = self.member(name)
+        rows = self.app.db.query(
+            "SELECT text, telegram_message_id FROM message_log WHERE member_id = ? "
+            "AND direction = 'out' ORDER BY id DESC",
+            (member.id,),
+        )
+        target = next(r for r in rows if to_text is None or r["text"] == to_text)
+        message_id = target["telegram_message_id"]
+        return await self._collect(name, lambda c: self.telegram.react(c, message_id, [emoji]))
+
+    async def run_periodic(self, task_name: str) -> object:
+        """Run one of the app's periodic tasks now, as the scheduler would."""
+        task = next(t for t in self.app.periodic if t.name == task_name)
+        return await task.run()
+
+    def edits(self, name: str) -> list[dict]:
+        chat = self.member(name).telegram_user_id
+        return [p for p in self.telegram.calls("editMessageText") if int(p["chat_id"]) == chat]
+
+    def last_buttons(self, name: str) -> list[str]:
+        chat = self.member(name).telegram_user_id
+        assert chat is not None
+        return [b["text"] for b in self.telegram.last_keyboard(chat)]
+
     async def advance(self, *, hours: float = 0, minutes: float = 0) -> list[str]:
         """Let time pass and deliver whatever became due. Returns all texts sent meanwhile."""
         before = len(self.telegram.calls("sendMessage"))

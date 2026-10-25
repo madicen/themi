@@ -53,7 +53,8 @@ YES_WORDS = frozenset(
         "✅",
     }
 )
-NO_WORDS = frozenset({"no", "n", "nope", "nah", "not now", "later", "skip", "no thanks"})
+NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
+LATER_WORDS = frozenset({"not now", "later", "maybe later", "not yet", "💤"})
 
 SETUP_NEEDED_TEXT = (
     "I can't reach an AI service yet. Once an AI key is added in your Themi settings, "
@@ -103,6 +104,12 @@ class Agent:
 
         if not text.strip():
             return
+        if text.startswith("/"):
+            command, _, argument = text.partition(" ")
+            handler = self.services.commands.get(command.lower().split("@")[0])
+            if handler is not None:
+                await handler(member, argument.strip())
+                return
         self.services.calibrator.observe_text(member, text)
         if await self._fast_path(member, text):
             return
@@ -128,9 +135,15 @@ class Agent:
 
     async def _fast_path(self, member: Member, text: str) -> bool:
         normalised = text.strip().lower().rstrip("!. ")
-        decision: Decision | None = (
-            "yes" if normalised in YES_WORDS else "no" if normalised in NO_WORDS else None
-        )
+        decision: Decision | None
+        if normalised in YES_WORDS:
+            decision = "yes"
+        elif normalised in NO_WORDS:
+            decision = "no"
+        elif normalised in LATER_WORDS:
+            decision = "later"
+        else:
+            decision = None
         if decision is None:
             return False
         waiting = self.services.awaiting(member)

@@ -36,7 +36,10 @@ async def test_the_model_can_only_stage_and_nothing_happens_without_a_yes(
     scenario.primary.queue_tool_call("archive_promos", {"count": 5})
     scenario.primary.queue_text("I've lined up archiving 5 promo emails for your okay.")
     replies = await scenario.say("Erin", "clear out the store promos")
-    assert replies == ["I've lined up archiving 5 promo emails for your okay."]
+    assert replies == [
+        "Archive 5 promo emails\nGo ahead, or not now?",  # the approval request, with buttons
+        "I've lined up archiving 5 promo emails for your okay.",
+    ]
     assert executed == []
 
     result = scenario.primary.last_request.messages[2].content[0]

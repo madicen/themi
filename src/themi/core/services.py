@@ -21,7 +21,7 @@ from themi.channels.outbox import Outbox
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
-Decision = Literal["yes", "no"]
+Decision = Literal["yes", "no", "later"]
 SCRATCH_FACTS_IN_PROMPT = 20
 
 
@@ -48,6 +48,7 @@ class AwaitingItem:
 AwaitingSource = Callable[[Member], list[AwaitingItem]]
 OpenItemSource = Callable[[Member], list[OpenItem]]
 EventHandler = Callable[[InboundEvent], Awaitable[None]]
+CommandHandler = Callable[[Member, str], Awaitable[None]]  # (member, text after the command)
 
 
 @dataclass
@@ -64,6 +65,7 @@ class Services:
     open_item_sources: list[OpenItemSource] = field(default_factory=list)
     button_handlers: dict[str, EventHandler] = field(default_factory=dict)
     reaction_handlers: list[EventHandler] = field(default_factory=list)
+    commands: dict[str, CommandHandler] = field(default_factory=dict)
 
     def awaiting(self, member: Member) -> list[AwaitingItem]:
         return [item for source in self.awaiting_sources for item in source(member)]

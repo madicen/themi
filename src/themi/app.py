@@ -7,8 +7,9 @@ harness and `themi run` (prompt 10) all run the same wiring.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from datetime import timedelta
 
 from themi.accounts import AccountStore
 from themi.ai.retry import Sleep
@@ -20,6 +21,7 @@ from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.core.agent import Agent
+from themi.core.approvals import ApprovalsUI
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolRegistry
@@ -27,6 +29,13 @@ from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 
 ChannelFactory = Callable[[AccountStore], TelegramChannel]
+
+
+@dataclass(frozen=True)
+class PeriodicTask:
+    name: str
+    every: timedelta
+    run: Callable[[], Awaitable[object]]
 
 
 @dataclass
@@ -39,6 +48,8 @@ class App:
     outbox: Outbox
     services: Services
     agent: Agent
+    approvals: ApprovalsUI
+    periodic: list[PeriodicTask] = field(default_factory=list)
 
 
 def build_app(
@@ -63,6 +74,15 @@ def build_app(
         tools=ToolRegistry(list(STARTER_TOOLS)),
         autonomy=Autonomy(store, ExecutorRegistry()),
     )
+    approvals = ApprovalsUI(services.autonomy, outbox)
+    approvals.install(services)
     agent = Agent(services)
     channel.handler = agent
-    return App(db, store, ai_settings, router, channel, outbox, services, agent)
+    periodic = [
+        PeriodicTask("outbox.flush", timedelta(seconds=30), outbox.flush),
+        PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
+        PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
+    ]
+    return App(
+        db, store, ai_settings, router, channel, outbox, services, agent, approvals, periodic
+    )

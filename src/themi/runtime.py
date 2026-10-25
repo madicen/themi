@@ -22,7 +22,6 @@ from themi.web import HealthSources, create_app
 
 log = logging.getLogger(__name__)
 
-OUTBOX_FLUSH_EVERY = timedelta(seconds=30)
 SCHEDULER_TICK = timedelta(seconds=15)
 SHUTDOWN_GRACE_SECONDS = 30
 
@@ -42,7 +41,8 @@ class Runtime:
         self.scheduler_tick = scheduler_tick
         self.stop_event = asyncio.Event()
         self.scheduler = Scheduler(app.db)
-        self.scheduler.every("outbox.flush", OUTBOX_FLUSH_EVERY, app.outbox.flush)
+        for task in app.periodic:
+            self.scheduler.every(task.name, task.every, task.run)
         self.web = create_app(
             HealthSources(app.db, app.channel if telegram_enabled else None, clock.now())
         )

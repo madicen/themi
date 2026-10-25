@@ -100,3 +100,18 @@ async def test_registry_turns_problems_into_error_results(family: SeededFamily) 
 )
 def test_canned_replies_pass_the_strictest_pda_check(text: str) -> None:
     assert find_demands(text, 3) == []
+
+
+def test_approval_texts_pass_the_strictest_pda_check() -> None:
+    from themi.core import approvals
+
+    templates = [
+        approvals.ASK_TEXT,
+        approvals.RETRY_TEXT,
+        approvals.ALREADY_TEXT,
+        approvals.NOTHING_PENDING_TEXT,
+        *approvals.RESULT_TEXT.values(),
+    ]
+    for template in templates:
+        text = template.format(summary="Archive 3 promo emails", message="Archived them.")
+        assert find_demands(text, 3) == [], text
