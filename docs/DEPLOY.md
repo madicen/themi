@@ -102,20 +102,26 @@ Docker's install guide: <https://docs.docker.com/engine/install/debian/>
 ## 5. Get Themi onto the server
 
 Pushing a version tag (`git tag v1.0.0 && git push --tags`) makes the release workflow
-publish the image to `ghcr.io/<owner>/<repo>`. The repository has to be on GitHub first.
-If it's private, the image is private too. Create a GitHub token with `read:packages`, and
-log in once on the server:
+publish the image to `ghcr.io/madicen/themi`. The repository
+(<https://github.com/madicen/themi>) is private, so the image is private too. Create a
+GitHub token with `read:packages`, and log in once on the server:
 
 ```sh
-echo "<token>" | docker login ghcr.io -u <github-user> --password-stdin
+echo "<token>" | docker login ghcr.io -u madicen --password-stdin
 ```
 
-Then:
+Then make a folder on the server and copy the compose file into it from your machine.
+The repository is private, so it can't be downloaded without logging in:
 
 ```sh
-mkdir -p ~/themi && cd ~/themi
-curl -fsSLO https://raw.githubusercontent.com/<owner>/<repo>/main/deploy/compose.yml
-# (or copy deploy/compose.yml across with scp)
+ssh <server> 'mkdir -p ~/themi'
+scp deploy/compose.yml <server>:~/themi/
+```
+
+On the server:
+
+```sh
+cd ~/themi
 nano .env          # see below
 chmod 600 .env     # only you can read it
 ```
@@ -123,7 +129,7 @@ chmod 600 .env     # only you can read it
 `.env` needs at least these lines. `.env.example` lists everything else:
 
 ```sh
-THEMI_IMAGE=ghcr.io/<owner>/<repo>
+THEMI_IMAGE=ghcr.io/madicen/themi
 THEMI_VERSION=1.0.0            # or latest
 THEMI_SECRET_KEY=...           # the same key as before, if you're bringing data across
 TELEGRAM_BOT_TOKEN=...

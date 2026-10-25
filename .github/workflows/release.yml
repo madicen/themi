@@ -1,7 +1,7 @@
 name: Release
 
 # Pushing a version tag (v1.2.3) builds the image and publishes it to GitHub's
-# container registry as ghcr.io/<owner>/<repo>:1.2.3, :1.2 and :latest.
+# container registry as ghcr.io/madicen/themi:1.2.3, :1.2 and :latest.
 on:
   push:
     tags: ["v*"]
