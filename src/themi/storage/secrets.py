@@ -89,6 +89,18 @@ class Cipher:
                 "could not decrypt a stored secret: wrong THEMI_SECRET_KEY or corrupted data"
             ) from exc
 
+    def encrypt_bytes(self, data: bytes) -> bytes:
+        """For whole files (backups): the same key, Fernet's authenticated encryption."""
+        return self._fernet.encrypt(data)
+
+    def decrypt_bytes(self, token: bytes) -> bytes:
+        try:
+            return self._fernet.decrypt(token)
+        except InvalidToken as exc:
+            raise DecryptionError(
+                "could not decrypt: wrong THEMI_SECRET_KEY, or the file isn't a Themi backup"
+            ) from exc
+
 
 class SecretStore:
     """Named, encrypted values in the `app_secrets` table."""

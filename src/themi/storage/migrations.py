@@ -85,6 +85,12 @@ def current_version(db: Database) -> int:
     return db.scalar("SELECT COALESCE(MAX(version), 0) FROM schema_version")
 
 
+def latest_version() -> int:
+    """The newest schema this Themi knows."""
+    migrations = discover()
+    return migrations[-1].version if migrations else 0
+
+
 def apply(db: Database, migrations: list[Migration] | None = None) -> list[int]:
     """Apply pending migrations in order. Returns the versions applied."""
     migrations = discover() if migrations is None else migrations

@@ -16,6 +16,8 @@ from themi.ai.retry import Sleep
 from themi.ai.router import AIRouter, ProviderFactory
 from themi.ai.settings import AISettingsStore
 from themi.autonomy import Autonomy, ExecutorRegistry
+from themi.backup import BackupConfig, Backups
+from themi.backup.job import BackupJob
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
@@ -85,6 +87,7 @@ def build_app(
     sleep: Sleep = asyncio.sleep,
     google: GoogleConfig | None = None,
     grocery_list: GroceryListClient | None = None,
+    backup: BackupConfig | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -144,6 +147,9 @@ def build_app(
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
     ]
+    if backup is not None:
+        backups = BackupJob(store, Backups(backup, cipher), outbox)
+        periodic.append(PeriodicTask("backup.nightly", timedelta(hours=1), backups.run))
     if grocery_list is not None:
         mirror = GroceryMirror(db, grocery_list)
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))

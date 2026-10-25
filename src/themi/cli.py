@@ -12,6 +12,8 @@ from themi.storage.secrets import generate_key
 
 if TYPE_CHECKING:
     from themi.accounts import AccountStore
+    from themi.backup import Backups
+    from themi.settings import Settings
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +34,18 @@ def build_parser() -> argparse.ArgumentParser:
         "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
     )
     login.add_argument("name")
+    backup = commands.add_parser(
+        "backup", help="take an encrypted backup now (or --list the ones in storage)"
+    )
+    backup.add_argument("--list", action="store_true", help="list snapshots instead")
+    restore = commands.add_parser(
+        "restore", help="restore the database from a snapshot (stop Themi first)"
+    )
+    restore.add_argument("snapshot", help="a snapshot name from `themi backup --list`, or latest")
+    restore.add_argument(
+        "--dry-run", action="store_true", help="fetch, decrypt and check it, but change nothing"
+    )
+    restore.add_argument("--yes", action="store_true", help="really replace the database")
     return parser
 
 
@@ -68,6 +82,7 @@ def _run() -> None:
         settings.cipher(),
         lambda store: TelegramChannel.from_token(token, store, None),
         google=settings.google(),
+        backup=settings.backup,
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
     )
     runtime = Runtime(
@@ -100,6 +115,66 @@ def _login_link(name: str) -> str:
     return f"{base}/login/{WebAuth(store).create_link_token(member)}"
 
 
+def _backups() -> tuple[Settings, Backups]:
+    from themi.backup import Backups
+    from themi.settings import Settings, SettingsError
+
+    settings = Settings.load()
+    if settings.backup is None:
+        raise SettingsError(
+            "backups aren't set up: THEMI_BACKUP_ENDPOINT, _BUCKET, _ACCESS_KEY_ID and "
+            "_SECRET_ACCESS_KEY (see docs/DEPLOY.md)"
+        )
+    return settings, Backups(settings.backup, settings.cipher())
+
+
+def _backup(list_only: bool) -> None:
+    import asyncio
+
+    from themi.storage import open_database
+
+    settings, backups = _backups()
+    if list_only:
+        snapshots = asyncio.run(backups.snapshots())
+        for s in snapshots:
+            print(f"{s.key}  {s.taken_at.isoformat()}  {s.size:,} bytes")
+        keep = settings.backup.keep_days if settings.backup else 30
+        print(f"{len(snapshots)} snapshot(s); kept for {keep} days.")
+        return
+    from themi.accounts import AccountStore
+    from themi.backup.job import BackupJob
+
+    store = AccountStore(open_database(settings.db_path), settings.cipher())
+    # A by-hand run reports here, not in Telegram.
+    result = asyncio.run(BackupJob(store, backups, None).backup_now())
+    print(f"Backup {result}.")
+    if result == "failed":
+        raise SystemExit("The backup failed; the log above says why.")
+
+
+def _restore(name: str, dry_run: bool, yes: bool) -> None:
+    import asyncio
+    from pathlib import Path
+
+    settings, backups = _backups()
+    if not dry_run and not yes:
+        raise SystemExit(
+            "Restoring replaces the database (the current one is kept beside it). Stop Themi "
+            "first, then run again with --yes, or use --dry-run to only check the snapshot."
+        )
+    report = asyncio.run(backups.restore(name, Path(settings.db_path), dry_run=dry_run))
+    counts = ", ".join(f"{n} {t}" for t, n in report.counts.items())
+    print(f"Snapshot {report.snapshot.key} from {report.snapshot.taken_at.isoformat()}")
+    print(f"  integrity: {report.integrity}; schema {report.schema_version}; {counts}")
+    if dry_run:
+        print("Dry run: nothing was changed.")
+        return
+    print(f"Restored to {report.restored_to}.")
+    if report.previous_moved_to:
+        print(f"The previous database is kept at {report.previous_moved_to}.")
+    print("Start Themi again; any newer migrations run on startup.")
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -108,7 +183,9 @@ def _ask(question: str, default: str | None) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     from themi.accounts import AccountsError, Role
     from themi.accounts.setup import pairing_instructions, run_init, run_invite
+    from themi.backup import BackupError, S3Error
     from themi.settings import SettingsError
+    from themi.storage.secrets import DecryptionError
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -125,9 +202,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             _run()
         elif args.command == "login-link":
             print(_login_link(args.name))
+        elif args.command == "backup":
+            _backup(args.list)
+        elif args.command == "restore":
+            _restore(args.snapshot, args.dry_run, args.yes)
         else:
             parser.print_help()
-    except (SettingsError, AccountsError) as exc:
+    except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:
         print(exc, file=sys.stderr)
         return 1
     except (EOFError, KeyboardInterrupt):

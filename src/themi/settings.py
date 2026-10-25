@@ -13,6 +13,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from themi.backup.s3 import S3Config
+from themi.backup.snapshots import BackupConfig
 from themi.connectors.google.oauth import GoogleConfig
 from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
@@ -53,6 +55,7 @@ class Settings(BaseModel):
     ourgroceries_username: str = ""
     ourgroceries_password: Secret | None = None
     ourgroceries_list: str = "Groceries"
+    backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
         return Cipher(self.secret_key)
@@ -123,6 +126,24 @@ class Settings(BaseModel):
                 "OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD go together; set both or neither"
             )
 
+        backup_names = (
+            "THEMI_BACKUP_ENDPOINT",
+            "THEMI_BACKUP_BUCKET",
+            "THEMI_BACKUP_ACCESS_KEY_ID",
+            "THEMI_BACKUP_SECRET_ACCESS_KEY",
+        )
+        backup_set = [n for n in backup_names if get(n)]
+        if backup_set and len(backup_set) != len(backup_names):
+            missing = ", ".join(n for n in backup_names if not get(n))
+            problems.append(f"backups need all four THEMI_BACKUP_* settings; missing {missing}")
+        keep_text = get("THEMI_BACKUP_KEEP_DAYS") or "30"
+        if not keep_text.isdigit() or not 1 <= int(keep_text) <= 365:
+            problems.append(f"THEMI_BACKUP_KEEP_DAYS must be 1 to 365 days, not {keep_text}")
+        endpoint = get("THEMI_BACKUP_ENDPOINT")
+        local = endpoint.startswith(("http://127.0.0.1", "http://localhost"))  # test fakes
+        if endpoint and not (endpoint.startswith("https://") or local):
+            problems.append("THEMI_BACKUP_ENDPOINT must be an https:// address")
+
         if problems:
             raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
 
@@ -147,6 +168,19 @@ class Settings(BaseModel):
             ourgroceries_username=get("OURGROCERIES_USERNAME"),
             ourgroceries_password=Secret(grocery_password) if grocery_password else None,
             ourgroceries_list=get("OURGROCERIES_LIST") or "Groceries",
+            backup=BackupConfig(
+                S3Config(
+                    endpoint.rstrip("/"),
+                    get("THEMI_BACKUP_BUCKET"),
+                    get("THEMI_BACKUP_ACCESS_KEY_ID"),
+                    Secret(get("THEMI_BACKUP_SECRET_ACCESS_KEY")),
+                    get("THEMI_BACKUP_REGION") or "auto",
+                ),
+                prefix=(get("THEMI_BACKUP_PREFIX") or "themi/").lstrip("/"),
+                keep_days=int(keep_text),
+            )
+            if backup_set
+            else None,
         )
 
 

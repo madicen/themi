@@ -34,6 +34,15 @@ class Database:
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.execute("PRAGMA busy_timeout=5000")
 
+    def backup_to(self, path: str | Path) -> None:
+        """A consistent copy of the live database (SQLite's online backup), WAL included."""
+        target = sqlite3.connect(str(path))
+        try:
+            with self._lock:
+                self._conn.backup(target)
+        finally:
+            target.close()
+
     def execute(self, sql: str, params: Params = ()) -> int:
         """Run one write statement; returns the last inserted row id (0 if none)."""
         with self._lock:
