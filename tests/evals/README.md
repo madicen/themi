@@ -36,8 +36,18 @@ example, wait for prompt 34.
 
 Pass rates are printed by category, and the failing cases are listed with the
 reason. A JSON copy goes to `results/`, which git ignores. For Gemini's free
-tier, `THEMI_EVAL_PACE` (6 seconds by default) spaces the cases out to stay
-under the rate limit.
+tier, `THEMI_EVAL_PACE` (30 seconds by default) spaces the cases out to stay
+under the per-minute limit.
+
+Cases that no model answered are counted separately as "couldn't run", not as
+passes or failures. After three of those in a row the run stops, so it doesn't
+burn through a quota that's already used up.
+
+Free-tier daily quotas can be small. In October 2026, `gemini-3.8-flash`
+allowed 20 requests a day, and a full run needs about 100. Run it in slices
+across days (`make evals EVAL_ARGS='-k energy'`), or pick a model with a
+larger free quota with `THEMI_EVAL_MODEL`. The limits for a key are listed at
+<https://ai.dev/rate-limit>.
 
 The plumbing has its own dry run in the default test run,
 `tests/integration/test_eval_runner.py`. It uses the real Gemini adapter

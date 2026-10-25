@@ -67,3 +67,16 @@ def test_summary_by_category() -> None:
     assert summary["categories"]["pantry"] == {"cases": 2, "passed": 1, "tools": 2, "pda": 1}
     assert summary["pass_rate"] == 66.7
     assert "pantry" in format_summary("gemini", summary)
+
+
+def test_a_case_the_ai_never_answered_is_unavailable_not_passed() -> None:
+    from themi.core.agent import BUSY_TEXT
+
+    outcome = score(case(expect=()), [], [BUSY_TEXT], 2)
+    assert outcome.unavailable and not outcome.passed
+    assert outcome.problems == ["no AI backend answered (quota, outage or rate limit)"]
+    summary = summarise([outcome, score(case(category="rules"), [], ["ok"], 2)])
+    assert summary["unavailable"] == 1
+    assert summary["cases"] == 1 and summary["pass_rate"] == 100.0  # only answered cases count
+    assert "pantry" not in summary["categories"]
+    assert "1 couldn't run" in format_summary("gemini", summary)

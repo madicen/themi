@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from themi.channels.pda import find_demands, split_quotes
+from themi.core.agent import BUSY_TEXT
 
 CASES_FILE = Path(__file__).with_name("cases.json")
 # Energy is only ever words: no numbers that look like a score.
@@ -62,10 +63,11 @@ class Outcome:
     problems: list[str]
     calls: list[tuple[str, dict[str, Any]]]
     replies: list[str]
+    unavailable: bool = False  # no model answered: says nothing about behaviour
 
     @property
     def passed(self) -> bool:
-        return self.tools_ok and self.pda_ok
+        return self.tools_ok and self.pda_ok and not self.unavailable
 
 
 def _check_arg(value: Any, rule: dict[str, Any]) -> bool:
@@ -86,6 +88,9 @@ def score(
     replies: list[str],
     pda_strength: int,
 ) -> Outcome:
+    if any(BUSY_TEXT in reply for reply in replies):
+        problem = "no AI backend answered (quota, outage or rate limit)"
+        return Outcome(case, False, False, [problem], calls, replies, unavailable=True)
     problems: list[str] = []
     names = [name for name, _ in calls]
     for wanted in case.expect:
@@ -130,8 +135,10 @@ def score(
 
 
 def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
-    """Pass rates by category, and overall."""
+    """Pass rates by category, and overall, over the cases a model actually answered."""
     categories: dict[str, dict[str, int]] = {}
+    unavailable = sum(o.unavailable for o in outcomes)
+    outcomes = [o for o in outcomes if not o.unavailable]
     for o in outcomes:
         c = categories.setdefault(o.case.category, {"cases": 0, "passed": 0, "tools": 0, "pda": 0})
         c["cases"] += 1
@@ -142,6 +149,7 @@ def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
     return {
         "categories": categories,
         "cases": total,
+        "unavailable": unavailable,
         "passed": sum(o.passed for o in outcomes),
         "pass_rate": round(100 * sum(o.passed for o in outcomes) / total, 1) if total else 0.0,
         "pda_rate": round(100 * sum(o.pda_ok for o in outcomes) / total, 1) if total else 0.0,
@@ -153,6 +161,8 @@ def format_summary(provider: str, summary: dict[str, Any]) -> str:
         f"Evals for {provider}: {summary['passed']}/{summary['cases']} passed "
         f"({summary['pass_rate']}%), PDA-safe replies {summary['pda_rate']}%"
     ]
+    if summary.get("unavailable"):
+        lines.append(f"{summary['unavailable']} couldn't run: no AI backend answered (not counted)")
     lines.append(f"{'category':16} {'pass':>9} {'tools':>9} {'pda':>9}")
     for name, c in sorted(summary["categories"].items()):
         n = c["cases"]

@@ -22,12 +22,16 @@ from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 
 CASES = load_cases()
+GIVE_UP_AFTER = 3  # cases in a row with no AI answer: the quota is gone, stop spending it
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.id for c in CASES])
 async def test_case(
     case: Case, family: SeededFamily, fake_telegram: FakeTelegram, eval_backend: EvalBackend
 ) -> None:
+    recent = OUTCOMES[-GIVE_UP_AFTER:]
+    if len(recent) == GIVE_UP_AFTER and all(o.unavailable for o in recent):
+        pytest.skip(f"the last {GIVE_UP_AFTER} cases got no AI answer (quota used up?)")
     scenario = Scenario(family, fake_telegram, real_models=True)
     missing = missing_tools(scenario, case)
     if missing:
@@ -38,4 +42,6 @@ async def test_case(
         if eval_backend.pace:
             await asyncio.sleep(eval_backend.pace)  # opt-in evals only: free-tier rate limits
     OUTCOMES.append(outcome)
+    if outcome.unavailable:
+        pytest.skip("; ".join(outcome.problems))
     assert outcome.passed, "; ".join(outcome.problems)

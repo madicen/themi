@@ -8,7 +8,9 @@
 | openai_compat | THEMI_EVAL_OPENAI_URL, _MODEL            | THEMI_EVAL_OPENAI_KEY        |
 
 THEMI_EVAL_PACE (seconds between cases) keeps free tiers under their rate
-limits: 6 by default for Gemini, 0 for the rest.
+limits: 30 by default for Gemini (its free tier allowed 5 requests a minute and
+20 a day for gemini-3.8-flash in October 2026; a case makes two or three), 0 for
+the rest.
 
 These are read from the environment, then from `.env` (the environment wins),
 so a test key can sit in `.env` instead of a shell history.
@@ -47,7 +49,7 @@ def backend(name: str) -> EvalBackend | str:
             "gemini",
             model,
             api_key=Secret(env["GEMINI_API_KEY"]),
-            pace=float(pace or 6),
+            pace=float(pace or 30),
         )
     if name == "claude":
         if not env.get("ANTHROPIC_API_KEY"):

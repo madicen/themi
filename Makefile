@@ -32,9 +32,10 @@ test-live:
 	$(PYTEST) tests/live --run-live
 
 # make evals PROVIDER=gemini (or claude, ollama, openai_compat); see tests/evals/README.md
+# One slice at a time: make evals EVAL_ARGS='-k energy'
 PROVIDER ?= gemini
 evals:
-	$(PYTEST) tests/evals --run-evals --provider $(PROVIDER)
+	$(PYTEST) tests/evals --run-evals --provider $(PROVIDER) $(EVAL_ARGS)
 
 cov:
 	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios
