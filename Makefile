@@ -19,7 +19,7 @@ fmt:
 lint:
 	$(PYTHON) -m ruff format --check .
 	$(PYTHON) -m ruff check .
-	$(PYTHON) -m pyright --pythonpath $(PYTHON)
+	$(PYTHON) -m pyright --pythonpath "$$($(PYTHON) -c 'import sys; print(sys.executable)')"
 	$(PYTHON) tools/check_clock.py
 
 test:
