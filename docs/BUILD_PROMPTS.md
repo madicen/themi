@@ -15,7 +15,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 
 | # | Prompt | Milestone | Status |
 | --- | --- | --- | --- |
-| 01 | Repository bootstrap and test harness | 1 Foundation | [ ] |
+| 01 | Repository bootstrap and test harness | 1 Foundation | [x] |
 | 02 | Settings, storage, migrations, encryption | 1 Foundation | [ ] |
 | 03 | Family and member data model | 1 Foundation | [ ] |
 | 04 | AI layer: interface, scripted provider, retry policy | 1 Foundation | [ ] |
@@ -75,7 +75,7 @@ and record the change here.
 ## Milestone 1: Foundation
 
 ### 01 · Repository bootstrap and test harness
-Status: [ ]
+Status: [x] (2026-10-24)
 Depends on: none
 Read first: plan sections "Testing", "Architecture" (code package table).
 
@@ -107,6 +107,19 @@ Tests:
 
 Done when: `make lint`, `make test` and `make test-all` pass locally, CI config is valid YAML,
 and the bootstrap is committed with jj.
+
+Notes:
+- Every `tests/` layer folder is a package (`__init__.py`), so test files with the same name can
+  exist in different layers. The conftest applies each layer's marker from its folder. A layer
+  with no tests yet doesn't fail the run.
+- `frozen_clock` fixture: Wed 2026-10-21 16:00 UTC (09:00 Pacific). The clock unfreezes
+  automatically after every test. `clock.advance()` needs a frozen clock and refuses negative
+  deltas.
+- `make lint` also runs `tools/check_clock.py`. `time.monotonic()` stays allowed for durations.
+- pyright is pointed at the Makefile's interpreter (`--pythonpath`), so it works with `.venv`
+  locally and system Python in CI.
+- CI hasn't run on GitHub yet (no remote). The workflow is valid YAML and mirrors the local
+  `make` targets.
 
 ### 02 · Settings, storage, migrations, encryption
 Status: [ ]
