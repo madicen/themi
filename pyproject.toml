@@ -14,6 +14,8 @@ dependencies = [
     "python-telegram-bot>=22.0",
     "fastapi>=0.115",
     "uvicorn>=0.30",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
@@ -24,8 +26,6 @@ dev = [
     "coverage[toml]>=7.6",
     "ruff>=0.8",
     "pyright>=1.1.390",
-    # The HTTP fakes parse form posts.
-    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-themi = ["storage/schema/*.sql"]
+themi = ["storage/schema/*.sql", "web/templates/*.html", "web/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
