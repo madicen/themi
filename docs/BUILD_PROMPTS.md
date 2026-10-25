@@ -42,7 +42,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 25 | Pantry and grocery list (OurGroceries) | 4 Gmail and pantry | [x] |
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
-| 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [~] |
+| 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [x] |
 | 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
@@ -1821,7 +1821,7 @@ Notes (2026-10-25):
   moment" instead.
 
 ### 28 · Evals, live smoke tests, coverage gates
-Status: [~] (built 2026-10-25; waiting on the Gemini run)
+Status: [x] (2026-10-25)
 Depends on: 27
 Read first: "Testing" (layers, workflow, live test accounts).
 
@@ -1886,9 +1886,63 @@ Notes (2026-10-25):
 - Noise in eval runs: "Task exception was never retrieved ... Event loop is closed", from
   google-genai closing its httpx client after each test's event loop has ended. It's
   harmless, and only happens with per-test loops.
-- Still to do before `[x]`: a complete Gemini run. That needs either a model or key with
-  enough free quota (`THEMI_EVAL_MODEL`), or slices over several days.
+- Second run (2026-10-25, Gemini free tier): `gemini-3.5-flash-lite`, falling back to
+  `gemini-3.1-flash-lite`, at 10 calls a minute per model. It took 8 minutes with no quota
+  errors.
+    - Raw score: 27/39. Re-scored offline with the fixes below (`tests.evals.rescore`, no
+      new calls): 30/39 passed (76.9%), and 94.9% of the model's replies were PDA-safe.
+      5 cases were skipped (relays wait for prompt 34; `expect_email` needs Google).
 
+      | category       | pass | tools | PDA |
+      | -------------- | ---- | ----- | --- |
+      | approvals      | 3/5  | 3/5   | 5/5 |
+      | context_repair | 5/5  | 5/5   | 5/5 |
+      | energy_notes   | 2/6  | 3/6   | 5/6 |
+      | pantry         | 4/7  | 5/7   | 6/7 |
+      | rules          | 5/5  | 5/5   | 5/5 |
+      | small_talk     | 6/6  | 6/6   | 6/6 |
+      | tasks          | 5/5  | 5/5   | 5/5 |
+
+    - What the models get wrong:
+        - They miss energy notes (3 of 6 cases have no `log_energy_note`, and one called
+          `draft_vendor_call` for a text).
+        - They say "I've added X" when X was only staged, in 3 cases, even though the tool
+          result says not to. This is the one that matters most for trust.
+        - On an ambiguous "yes" with two approvals waiting, the model staged both again
+          instead of asking which.
+        - Two replies use "right now" ("the list is empty right now"), which the PDA check
+          flags. The shield softens it when sending, but the check may be over-strict
+          for that phrase.
+- Fixes from the run, each starting with a failing test:
+    - Grocery and calendar approvals were imperatives ("Add eggs to the grocery list",
+      "Put … on the family calendar"), so every one cost an AI rewrite in the shield. They
+      now read as offers ("Eggs for the grocery list", "For the family calendar: <title>,
+      Fri Oct 30") and go out unchanged.
+    - Duplicate approvals: `add_to_grocery_list` now leaves out items already on the list
+      or waiting on a yes. If nothing is left, it declines with a plain message, through
+      the new `ToolDeclined`, which a tool raises to answer without staging.
+    - Scorer:
+        - Only the model's own `chat` replies get the PDA check (approval cards are
+          templates).
+        - Read-only lookups are always allowed.
+        - `expect_any` lets a case accept either of two tools ("remember the bins" can be a
+          fact or a reminder rule).
+        - The claimed-done check now covers every pantry case that stages something.
+        - Runs save each reply's kind, and `python -m tests.evals.rescore <file>`
+          re-scores a saved run without calling a model.
+- Pacing: `tests/evals/pacing.py` gives each model its own rolling 60-second limiter
+  (`THEMI_EVAL_RPM`, default 10 for Gemini), shared across the run.
+  `THEMI_EVAL_FALLBACK_MODEL` adds the second backend.
+- Scheduling: CI runs the evals weekly (Sundays) with these two models. The live tests stay
+  nightly. The README asks for evals only when prompts or models change.
+- Follow-ups:
+    - Tune the conversation prompt and tool descriptions against these results: staged
+      actions are never "done", log energy remarks, and ask on an ambiguous yes. Then
+      re-run once.
+    - Decide whether the PDA detector should allow "right now" when it isn't urging.
+    - The default backend: the plan's default, Gemini free tier on `gemini-3.8-flash`, gave
+      this key 20 requests a day, which can't carry a household. The flash-lite models did
+      fine here, so the default model probably needs to change. That's the user's call.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [ ]
 Depends on: 10, 28
