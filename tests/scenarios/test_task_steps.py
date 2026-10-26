@@ -50,7 +50,9 @@ async def test_a_chore_keeps_its_steps(scenario: Scenario) -> None:
 
     await scenario.advance(hours=4, minutes=1)
     (nudge,) = [t for t in scenario.inbox("Erin") if "bird cage" in t]
-    assert "\n- Shake out the top tray\n" in nudge
+    assert (
+        "\n> - Shake out the top tray\n> - Refill the water dispenser\n" in nudge
+    )  # word for word
     assert nudge.endswith("Done already, or later?")
 
 

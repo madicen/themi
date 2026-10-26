@@ -18,7 +18,14 @@ from themi.autonomy import (
     Tier,
 )
 
-CAPPED = {"email_reply", "safeway_cart", "doordash_order", "vendor_call", "habit_trial"}
+CAPPED = {
+    "email_reply",
+    "safeway_cart",
+    "doordash_order",
+    "vendor_call",
+    "habit_trial",
+    "chore_step_up",  # F6b: Themi never changes a chore's schedule on its own
+}
 CAN_BE_AUTOMATIC = {"email_mark_read", "email_archive_noise", "grocery_list_add", "calendar_write"}
 
 

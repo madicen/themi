@@ -7,11 +7,13 @@ admin), whatever a form says.
 
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import NotFound, PermissionDenied
-from themi.core.tasks import TaskBoard
+from themi.core.tasks import TaskBoard, schedule_summary
 from themi.web.kit import Kit
 
 
@@ -34,7 +36,18 @@ def routes(kit: Kit) -> APIRouter:
             if t.assignee != member.id and t.id not in {m.id for m in mine}
         ]
         names = {m.id: m.name for m in app.store.list_members()}
-        return kit.with_flash(request, "tasks.html", session, mine=mine, added=added, names=names)
+        runs = {t.id: board().runs(t.id)[-5:] for t in [*mine, *added] if t.times_per_week}
+        return kit.with_flash(
+            request,
+            "tasks.html",
+            session,
+            mine=mine,
+            added=added,
+            names=names,
+            runs=runs,
+            schedule_summary=schedule_summary,
+            tz=ZoneInfo(family.timezone if (family := app.store.get_family()) else "UTC"),
+        )
 
     @router.post("/tasks/{task_id}/edit")
     async def edit_task(request: Request, task_id: int) -> Response:

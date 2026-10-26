@@ -145,6 +145,7 @@ def build_app(
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
+        PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),

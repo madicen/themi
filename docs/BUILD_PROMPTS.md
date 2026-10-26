@@ -52,7 +52,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
 | F6a | Chores: steps on tasks | Feedback | [x] |
-| F6b | Chores: repeating schedules and escalation | Feedback | [ ] |
+| F6b | Chores: repeating schedules and escalation | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2404,7 +2404,7 @@ Notes (2026-10-25):
 Status: split into F6a (steps) and F6b (schedules and escalation), approved 2026-10-25.
 - F6a · Steps on tasks: [x] (2026-10-25; data move waits for a restart). The Steps bullet below, `update_task`, the website task page, and
   moving steps into tasks 6 and 4 (and unlocking rule 3).
-- F6b · Repeating schedules and escalation: [ ]. Everything else below, plus the bird cage
+- F6b · Repeating schedules and escalation: [x] (2026-10-25; data move waits for a restart). Everything else below, plus the bird cage
   data.
 - The user's answers: escalation names who it goes to. "Top of both our lists" makes the chore
   shared at that point: it shows first for both, both are nudged, and either can mark it done.
@@ -2427,6 +2427,33 @@ Status: split into F6a (steps) and F6b (schedules and escalation), approved 2026
       steps for task 6 (kitchen, from its title plus draft 9's rescue spray as optional),
       task 4 (bathroom, rule 3's levels as tagged steps, then rule 3 unlocked) and task 7
       (bird cage, from draft 12). The bird cage schedule waits for F6b.
+- F6b notes (2026-10-25), failing tests first:
+    - Migration 0029: schedule columns on `tasks` (`times_per_week`, `minimum_days`,
+      `escalate_days`, `escalate_to`, `shared`, plus `overdue_notified_at`, `escalated_at` and
+      `step_up_offered_at`), a `task_runs` table, and the capped `chore_step_up` category.
+    - `set_task_schedule` (times a week, at least every N days, escalate after N days, to the
+      owner or both). Zero means none; times 0 stops repeating. Escalation must come after the
+      minimum. `schedule_summary()` reads "Repeats 2 times a week (at least every 7 days; after
+      14 days, both of you)".
+    - Marking a repeating task done records a run (on time if done by its due date) and opens
+      the next round, due in round(7 / times) days. Shared is cleared, so it goes back to its
+      owner. The next nudge waits for that date. The calendar gets a "rescheduled" change.
+    - `tasks.schedules` (hourly): past the minimum, one "Overdue: <title> (last done N days ago)"
+      to the owner. Past the escalation point, once: to the owner again, or with "both" the task
+      turns shared. It's first in everyone's `open_for`, every paired member gets "Overdue for
+      both of you: ...", and anyone can mark it done. A task's queued nudges are tagged
+      (`dedupe_key` "task-<id>-...") so all of them can be withdrawn.
+    - Step-up: after 6 on-time runs in a row since the last offer, a capped approval
+      "Step up: <title>, N+1 times a week instead of N". Only whole numbers below 7 a week.
+      Approving changes the schedule; nothing changes without a yes.
+    - Steps in nudges are now `> ` quotes, like call scripts. The PDA shield had been rewriting
+      Erin's command-style steps ("Refill the water" became "you could refill..."). The step-up
+      card opens with a "Step up:" label for the same reason.
+    - The Tasks page shows each schedule and the last few runs (late ones marked).
+      Screenshot-checked in `make dev`.
+    - The plan's Task matching bullet now describes chores.
+    - Data to move after the restart: the bird cage gets 2 times a week, at least every 7 days,
+      after 14 days both (from draft 11), plus its steps (from draft 12).
 Depends on: 20, F4, F5
 Read first: "Shadow Calendar" → tasks and matching; "Module behaviour" → C (Maintenance), whose
 interval, step-by-step guide and history this reuses. From feedback bug #5: Erin's chores
