@@ -175,3 +175,20 @@ async def test_the_tasks_page_shows_the_schedule_and_recent_runs(
     page = (await site.get("/tasks")).text
     assert "Twice a week, counted from the last time it was done; overdue after 7 days" in page
     assert "Last done: Wed 21 Oct by Erin" in page
+
+
+async def test_a_chore_for_either_of_you_isnt_called_overdue(scenario) -> None:  # type: ignore[no-untyped-def]
+    """From the reports of 2026-10-26: "Bring bins in", due Wednesday, was listed to the
+    model as "shared, overdue" on Monday."""
+    from datetime import date
+
+    from themi.core.repeat import parse
+
+    board = scenario.app.services.taskboard
+    erin = scenario.member("Erin")
+    bins = await board.create(erin, "Bring bins in", "physical", 1, assignee=erin)
+    await board.set_schedule(
+        bins.id, erin, repeat=parse("every Wednesday", date(2026, 10, 22)), either=True
+    )
+    (item,) = [i.summary for i in board.open_items(erin) if "Bring bins in" in i.summary]
+    assert "overdue" not in item and "either of you" in item

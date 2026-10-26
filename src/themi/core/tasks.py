@@ -237,7 +237,12 @@ class TaskBoard:
         items = []
         for t in self.open_for(member):
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
-            whose = "shared, overdue: either of you" if t.shared else "theirs"
+            if t.either:
+                whose = "either of you"
+            elif t.shared:
+                whose = "shared, overdue: either of you"
+            else:
+                whose = "theirs"
             steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
             if any(_step_level(step) for step in t.steps):
                 level = self.services.energy.suggested_level(member)
