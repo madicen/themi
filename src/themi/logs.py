@@ -27,6 +27,9 @@ PATTERNS = [
     # Google OAuth access and refresh tokens
     re.compile(r"\bya29\.[0-9A-Za-z_.-]{20,}"),
     re.compile(r"\b1//[0-9A-Za-z_-]{20,}"),
+    # One-time links: website sign-in (/site) and Google's OAuth state (/link gmail)
+    re.compile(r"(/login/)[A-Za-z0-9_-]{16,}"),
+    re.compile(r"([?&]state=)[^&\s]+"),
     # Fernet tokens (our own ciphertext; harmless but noisy)
     re.compile(r"\bgAAAAA[0-9A-Za-z_=-]{20,}"),
     # Authorization headers

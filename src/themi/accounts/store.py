@@ -15,6 +15,7 @@ import hashlib
 import json
 import re
 import secrets
+from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -22,6 +23,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from themi import clock
 from themi.accounts.models import (
     TRACKING_INPUTS,
+    BusyTime,
     Device,
     Direction,
     Family,
@@ -91,6 +93,23 @@ def _parse_hhmm(value: str | time) -> time:
         raise InvalidValue(f"expected a time like 21:30, got {value!r}") from exc
 
 
+MAX_BUSY_TIMES = 10
+
+
+def _busy_json(busy: BusyTime) -> dict[str, Any]:
+    if not busy.days:
+        raise InvalidValue("a busy time needs at least one day")
+    if any(day not in range(7) for day in busy.days):
+        raise InvalidValue("busy days must be days of the week (0 is Monday)")
+    if busy.end <= busy.start:
+        raise InvalidValue("a busy time has to end after it starts, on the same day")
+    return {
+        "days": sorted(set(busy.days)),
+        "start": busy.start.strftime("%H:%M"),
+        "end": busy.end.strftime("%H:%M"),
+    }
+
+
 def _hash_code(code: str) -> str:
     normalised = "".join(ch for ch in code.upper() if ch.isalnum())
     return hashlib.sha256(normalised.encode()).hexdigest()
@@ -112,6 +131,10 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         created_at=_parse_dt(row["created_at"]),
         kind_costs={k: float(v) for k, v in json.loads(row["kind_costs"]).items()},
         email=row["email"],
+        busy_times=tuple(
+            BusyTime(tuple(b["days"]), _parse_hhmm(b["start"]), _parse_hhmm(b["end"]))
+            for b in json.loads(row["busy_times"])
+        ),
     )
 
 
@@ -332,6 +355,7 @@ class AccountStore:
         recovery_hours: float | None = None,
         tracking: dict[str, bool] | None = None,
         kind_costs: dict[str, float] | None = None,
+        busy_times: Sequence[BusyTime] | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -367,6 +391,10 @@ class AccountStore:
                 if not 0.25 <= multiplier <= 4:
                     raise InvalidValue("a task-kind cost must be between 0.25 and 4")
             changes["kind_costs"] = json.dumps({**member.kind_costs, **kind_costs})
+        if busy_times is not None:
+            changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
+            if len(busy_times) > MAX_BUSY_TIMES:
+                raise InvalidValue(f"at most {MAX_BUSY_TIMES} busy times")
         if changes:
             changes["updated_at"] = _iso(clock.now())
             changes["id"] = member_id

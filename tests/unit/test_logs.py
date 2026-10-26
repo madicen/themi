@@ -92,3 +92,17 @@ def test_recent_logs_keep_the_tail_redacted() -> None:
     assert [line.rsplit(": ", 1)[-1] for line in recent.tail(2)] == ["line 4", "key [redacted]"]
     assert len(recent.tail(10)) == 3 and recent.tail(0) == []
     assert [line.rsplit(": ", 1)[-1] for line in recent.since(5)] == ["key [redacted]"]
+
+
+def test_one_time_links_are_redacted() -> None:
+    from themi.logs import redact
+
+    signin = (
+        "Here's a link:\nhttp://127.0.0.1:8080/login/j96M1IqgfuhGKiaGS1tjidlVnBksxWCr_v1dPGZD1yU"
+    )
+    assert redact(signin) == "Here's a link:\nhttp://127.0.0.1:8080/login/[redacted]"
+    google = "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc&state=Zq81_x-Yy2&scope=x"
+    assert redact(google) == (
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc&state=[redacted]&scope=x"
+    )
+    assert redact("log in at /login/ with your account") == "log in at /login/ with your account"

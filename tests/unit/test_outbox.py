@@ -300,3 +300,40 @@ async def test_cancel_withdraws_only_unsent_messages(
     assert sent.outbox_id is not None
     assert not outbox.cancel(sent.outbox_id)
     assert outbox.message_id(sent.outbox_id) == sent.message_id
+
+
+async def test_busy_times_hold_messages_until_they_end(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    from datetime import time
+
+    from themi.accounts import SYSTEM, BusyTime
+
+    erin = family.store.update_settings(
+        SYSTEM, family.erin.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
+    )
+    clock.freeze(at(21, 10))  # Wednesday morning, at work
+    held = await outbox.send(erin, "The washer finished.", priority=Priority.NORMAL)
+    assert (held.status, held.send_after) == ("queued", at(21, 17))
+    assert (await outbox.send(erin, "Sure, done.", priority=Priority.REPLY)).status == "sent"
+    assert (await outbox.send(erin, "Leak!", priority=Priority.URGENT)).status == "sent"
+    clock.freeze(at(21, 17))
+    assert await outbox.flush() == 1
+    assert sender.texts()[-1] == "The washer finished."
+
+
+async def test_not_before_holds_a_message_until_then(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    from datetime import timedelta
+
+    clock.freeze(at(21, 10))
+    later = at(21, 14)
+    held = await outbox.send(
+        family.erin, "On the list for you.", priority=Priority.NORMAL, not_before=later
+    )
+    assert (held.status, held.send_after) == ("queued", later)
+    reply = await outbox.send(family.erin, "Sure.", priority=Priority.REPLY, not_before=later)
+    assert reply.status == "sent"  # replies never wait
+    clock.advance(timedelta(hours=4))
+    assert await outbox.flush() == 1

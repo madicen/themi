@@ -178,7 +178,8 @@ class Agent:
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
         pinned, notes = services.facts_for(member, text)
-        system = build_system(services.rules(), pinned)
+        household, personal = services.rules(member)
+        system = build_system(household, pinned, personal_rules=personal, owner=member.name)
         turn = build_turn(
             member,
             text,

@@ -127,3 +127,15 @@ async def test_commands_are_published_to_telegram(scenario: Scenario) -> None:
     (published,) = scenario.telegram.calls("setMyCommands")
     names = [c["command"] for c in published["commands"]]
     assert {"pending", "rules", "pause", "resume", "tracking", "site", "link", "help"} <= set(names)
+
+
+async def test_a_sign_in_link_never_reaches_the_model(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    (reply,) = await scenario.say("Erin", "/site")
+    token = reply.splitlines()[-1].rsplit("/", 1)[-1]
+    scenario.primary.queue_text("Glad to help.")
+    await scenario.say("Erin", "thanks")
+    turn = scenario.primary.last_request.messages[0].text
+    assert token not in turn
+    assert "/login/[redacted]" in turn  # the model still sees that a link was sent

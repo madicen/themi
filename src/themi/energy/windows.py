@@ -2,7 +2,7 @@
 
 Capacity is projected forward in 15-minute steps (the baseline for each
 future hour plus today's signals, faded to that moment). A window is a run
-of steps at or above a threshold, outside quiet hours.
+of steps at or above a threshold, outside quiet hours and busy times.
 
 The outbox asks `EnergyReceptivity.not_before()`:
 - normal messages wait for a receptive window (steady or better);
@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.energy.model import SOURCE_INPUT, EnergyModel, combine, hour_of_week
-from themi.localtime import in_quiet_hours
+from themi.localtime import in_busy_time, in_quiet_hours
 
 STEP = timedelta(minutes=15)
 HORIZON = timedelta(hours=24)
@@ -51,7 +51,10 @@ class Projection:
         return combine(self._baselines[hour], self.signals, moment, self.member.recovery_hours)
 
     def quiet(self, moment: datetime) -> bool:
-        return in_quiet_hours(self.member, moment, self.timezone)
+        """No messages then: quiet hours or a busy time."""
+        return in_quiet_hours(self.member, moment, self.timezone) or in_busy_time(
+            self.member, moment, self.timezone
+        )
 
 
 def _steps(start: datetime, horizon: timedelta) -> list[datetime]:

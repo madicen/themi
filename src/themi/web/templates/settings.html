@@ -42,4 +42,31 @@
 
   <button class="primary">Save</button>
 </form>
+
+<section class="card settings">
+  <h2>Busy times</h2>
+  <p class="muted">Like quiet hours, for the week: work, school runs, appointments. Themi holds
+  anything that can wait until a busy time ends. Replies to you and urgent alerts still come
+  through.</p>
+  {% for busy in member.busy_times %}
+  <form method="post" action="/settings/busy/{{ loop.index0 }}/remove" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span>{{ busy.label() }}</span> <button class="quiet">Remove</button>
+  </form>
+  {% else %}
+  <p class="muted">None yet.</p>
+  {% endfor %}
+  <form method="post" action="/settings/busy">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <fieldset>
+      <legend>Add a busy time</legend>
+      {% for name in day_names %}
+      <label class="check"><input type="checkbox" name="day_{{ loop.index0 }}" {% if loop.index0 < 5 %}checked{% endif %}> {{ name }}</label>
+      {% endfor %}
+      <label>From <input type="time" name="start" value="09:00" required></label>
+      <label>Until <input type="time" name="end" value="17:00" required></label>
+    </fieldset>
+    <button>Add</button>
+  </form>
+</section>
 {% endblock %}

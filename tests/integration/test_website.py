@@ -251,3 +251,29 @@ async def test_vendored_assets_are_served(site: httpx.AsyncClient) -> None:
     assert htmx.status_code == 200 and htmx.text.startswith("var htmx=")
     css = await site.get("/static/themi.css")
     assert css.status_code == 200 and "prefers-color-scheme: dark" in css.text
+
+
+async def test_busy_times_can_be_added_and_removed(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    from datetime import time
+
+    from themi.accounts import BusyTime
+
+    csrf = await sign_in(scenario, site, "Erin")
+    form = {"csrf": csrf, "start": "09:00", "end": "17:00"}
+    form |= {f"day_{d}": "on" for d in range(5)}
+    response = await site.post("/settings/busy", data=form)
+    assert response.status_code == 303 and response.headers["location"] == "/settings"
+    erin = scenario.app.store.get_member(scenario.member("Erin").id)
+    assert erin.busy_times == (BusyTime((0, 1, 2, 3, 4), time(9), time(17)),)
+    assert "Mon-Fri 09:00-17:00" in (await site.get("/settings")).text
+
+    bad = await site.post("/settings/busy", data={"csrf": csrf, "start": "17:00", "end": "09:00"})
+    assert bad.status_code == 400 and "at least one day" in bad.text
+
+    removed = await site.post("/settings/busy/0/remove", data={"csrf": csrf})
+    assert removed.status_code == 303
+    assert scenario.app.store.get_member(erin.id).busy_times == ()
+    missing = await site.post("/settings/busy/5/remove", data={"csrf": csrf})
+    assert missing.status_code == 303  # already gone: nothing to do

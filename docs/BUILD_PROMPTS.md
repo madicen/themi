@@ -47,6 +47,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
 | D2 | Simulator: copy a test session | Dev tooling | [x] |
 | F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
+| F2 | Personal rules | Feedback | [x] |
+| F3 | Busy times | Feedback | [x] |
+| F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2191,6 +2194,148 @@ Notes (2026-10-25):
 - The plan's chat commands table lists `/bug` and `/idea` (added 2026-10-25, at the user's
   request).
 - A running `themi run` picks this up only after a restart.
+- From the first real report (bug #1, 2026-10-25), failing tests first:
+    - Sign-in links (`/login/<token>`) and Google's OAuth `state=` are now in
+      `themi.logs.redact`, which also covers each line of chat history sent to the model and
+      feedback snapshots. Before, a live /site link went to the AI provider with the next few
+      turns, and reports kept the links.
+    - The model claimed a locked rule was "just for you". Rules are household-wide (the plan:
+      "sent to the AI model with every request"), and nothing in the prompt said so. The
+      system prompt and `propose_rule` now say there are no personal rules, and that quiet
+      hours, the daily limit (website settings) and /pause control when Themi's messages go
+      out. Re-run the evals when there's quota, since the prompt changed.
+    - Memories already have a personal scope (`remember_fact` with `about: personal`); the
+      report's "extra spoon" fact was stored for that person only.
+
+### F2 · Personal rules
+Status: [x] (2026-10-25)
+Depends on: 13, F1
+Read first: "Trust tiers, rules and context repair" → Rule locking. From feedback bug #1: a
+rule asked for "just for me" became a household rule. The user chose to add personal rules
+(2026-10-25); the plan is updated to match.
+
+Build:
+- Rules get a scope: `household` (the default; every existing rule) or `personal`. A locked
+  personal rule goes only into its owner's (`affects`) AI requests; household rules go into
+  everyone's.
+- `propose_rule` gets `applies_to` (household or personal); the model asks when it isn't clear.
+  A personal proposal reads "Proposed Rule (just for you): …". Autonomy grants stay household.
+- `/rules` and the website's Rules page show household rules plus your own personal ones;
+  someone else's personal rules aren't shown.
+
+Tests:
+- A personal rule is in its owner's prompt and not the partner's; household rules in both.
+- /rules and the website by scope; a personal autonomy grant is refused; refining a draft can
+  change its scope; existing rules migrate as household.
+
+Done when: "a rule just for me" locks as a personal rule that only shapes that person's chats.
+Commit.
+
+Notes (2026-10-25):
+- Migration 0026 adds `rules.scope` (household default). `Rulebook.household()`,
+  `personal(member)` and `prompt_rules(member)`; `services.rules(member)` now returns
+  (household, personal) and `build_system(..., personal_rules=, owner=)` adds
+  "<Name>'s personal rules (only in conversations with <Name>)".
+- `propose_rule` requires `applies_to`; a personal autonomy grant is refused
+  (`GRANTS_ARE_HOUSEHOLD`). Refining a draft can change its scope. Standing reminders from
+  context repair stay household.
+- `/rules` shows "Household rules", "Just for you" and drafts (marked "just for you"). The
+  website's Rules page has a "Just for you" section. Others' personal rules are never shown,
+  admins included.
+- The plan's rule-locking section and test table now describe personal rules.
+- Existing rules, including the user's rule 5, stay household. Turning one personal means
+  retiring it and proposing it again; there's no switch.
+- The system prompt changed again: re-run the evals when there's quota.
+
+### F3 · Busy times
+Status: [x] (2026-10-25)
+Depends on: 08, 15, F2
+Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From feedback bug #1:
+"no notifications during work hours (9-5 weekdays)" can't be a rule, because rules don't change
+when messages go out. The user chose busy times in settings (2026-10-25).
+
+Build:
+- Each person can add busy windows on the website's settings page: days of the week and a time
+  range (e.g. Mon-Fri 09:00-17:00). The outbox holds Themi's own (non-reply, non-urgent)
+  messages during them, as it does in quiet hours, and sends them when the window ends.
+- The AI can tell people about busy times when asked about message timing.
+
+Tests:
+- Messages held in a busy window and sent after it; replies and urgent alerts not held; windows
+  on other days don't apply; the settings form adds and removes windows; validation.
+
+Done when: a Mon-Fri 9-5 busy window holds a nudge until 5 pm. Commit.
+
+Notes (2026-10-25):
+- Migration 0027 adds `members.busy_times` (JSON). `BusyTime(days, start, end)` (0 is Monday,
+  same-day windows; nights are quiet hours) with `covers()` and `label()` ("Mon-Fri
+  09:00-17:00"). `update_settings(busy_times=...)` validates: at least one day, end after
+  start, at most 10.
+- `localtime.free_from()` steps past quiet hours and busy times, including one running into
+  the other. The outbox uses it where it used `quiet_hours_end`. The energy windows treat
+  busy times like quiet hours.
+- Website: a Busy times section on My settings, with `POST /settings/busy` and
+  `/settings/busy/{index}/remove`. Mon-Fri 09:00-17:00 is filled in by default.
+- Each turn's context now says "Themi's own messages wait for: quiet hours ...; busy ...", so
+  the model answers timing questions from the real settings. In bug #1 it made up "Monday
+  afternoons". The system prompt mentions busy times too; re-run the evals.
+- The plan's quiet-hours mentions now include busy times.
+- For the user: add Mon-Fri 09:00-17:00 under My settings, then retire rule 5 on the Rules
+  page. It's a household rule that never changed timing.
+
+### F4 · Tasks someone takes on stay theirs
+Status: [x] (2026-10-25)
+Depends on: 20
+Read first: "Shadow Calendar" → Task matching. From feedback bug #2: Michael said "I want to
+process the cardboard", matching gave the task to Erin ("seems to have more room"), and Erin
+got a nudge with no idea where it came from. The user chose these two fixes (2026-10-25).
+
+Build:
+- `create_task` gets `assign_to`: "me" (the person asking: "I'll...", "remind me to..."), a
+  family member's name, or "anyone". Only "anyone" goes through matching.
+- When a task lands with someone other than the person who asked, the nudge says who added it,
+  and the tool result tells the model to let the asker know who it went to.
+- The plan's matching rule says a task someone takes on, or gives to a named person, isn't
+  matched.
+
+Tests:
+- "me" stays with the asker even when the partner has more room; a named person gets it;
+  "anyone" still matches; an unknown name is refused.
+- The nudge names who added it only when that's someone else.
+
+Done when: "I want to process the cardboard" stays Michael's. Commit.
+
+Notes (2026-10-25):
+- `create_task` requires `assign_to`: "me" (also "myself"), a member's name (any case), or
+  "anyone" ("someone" or empty mean the same). An unknown name is refused, and the refusal
+  lists the family's names. `TaskBoard.create(..., assignee=)` skips the matcher. The reasons
+  read "<asker> said they'd do it." or "<asker> asked for <name> to do it."
+- `prompt()` uses `ADDED_BY_TEXT` ("<who> added this for you, whenever it suits: ...") when the
+  task's `created_by` isn't the assignee, including matched hand-offs and call tasks. The tool
+  result adds "Let <asker> know it went to <assignee>."
+- The plan's Task matching bullet now says self-assigned and named tasks aren't matched.
+- Real data: task 5 (the cardboard) moved from Erin to Michael with a plain SQL update; there's
+  no reassign function yet. Erin's earlier nudge for it still has Done/Later buttons that
+  act on the task.
+- Follow-up the same day, at the user's request (failing tests first): adding a task for
+  yourself in chat sent an instant "Done already, or later?". Erin's rule 2 was a workaround for
+  that. Now the first nudge for your own interactively created task waits at least
+  `FIRST_NUDGE_AFTER` (4 hours) through the new `Outbox.send(not_before=)`. After that the usual
+  rules apply (quiet hours, busy times, daily limit, receptive window within a day). A due date
+  still wins (by 09:00 that day). A task for someone else still goes out promptly.
+- Real data, by plain SQL: rule 2 unlocked; duplicate task 3 ("Clean upstairs bathroom")
+  cancelled, keeping task 4 ("... (once a week)"). Tasks 1 and 2 still overlap (both change
+  the upstairs sheets), so ask the user.
+- Erin's rule 6 ("Start task prompts with 'Due today:'") is now code, and the rule is unlocked.
+  A nudge for a task due on the day it goes out reads "Due today: <title>. Done already, or
+  later?", with "(<who> added this for you)" when someone else added it. "Today" is judged at
+  the expected send time from the new `Outbox.send_time()`, so a nudge queued overnight still
+  says it. Tasks due another day keep the usual wording.
+- A slip caught by the real-clock tests: `send()` and `send_time()` read the clock separately,
+  so even replies were queued by a few microseconds. `send()` now passes its reading through.
+- Real data, by plain SQL: task 1 renamed to "Vacuum upstairs bedroom" (task 2 covers the
+  sheets); rule 6 unlocked.
+- Not done: catching near-duplicate tasks when they're created.
 
 ---
 

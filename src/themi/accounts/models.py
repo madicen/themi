@@ -30,6 +30,29 @@ class Family:
     handover_cost: float = 10.0
 
 
+DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+
+@dataclass(frozen=True)
+class BusyTime:
+    """A weekly window when Themi holds its own messages, like quiet hours (e.g. work)."""
+
+    days: tuple[int, ...]  # 0 is Monday
+    start: time
+    end: time  # same day, after start; nights are what quiet hours are for
+
+    def covers(self, local: datetime) -> bool:
+        return local.weekday() in self.days and self.start <= local.time() < self.end
+
+    def label(self) -> str:
+        days = sorted(self.days)
+        if len(days) > 2 and days == list(range(days[0], days[-1] + 1)):
+            named = f"{DAY_NAMES[days[0]]}-{DAY_NAMES[days[-1]]}"
+        else:
+            named = ", ".join(DAY_NAMES[d] for d in days)
+        return f"{named} {self.start:%H:%M}-{self.end:%H:%M}"
+
+
 @dataclass(frozen=True)
 class Member:
     id: int
@@ -46,6 +69,7 @@ class Member:
     created_at: datetime
     kind_costs: dict[str, float] = field(default_factory=dict, hash=False)
     email: str | None = None  # Google sign-in address for the website
+    busy_times: tuple[BusyTime, ...] = ()
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

@@ -1,4 +1,4 @@
-"""Household rules: brainstorm as drafts, lock in with an explicit yes.
+"""Rules: brainstorm as drafts, lock in with an explicit yes.
 
 - The model captures ideas with the `propose_rule` tool. That creates (or
   updates) a draft and sends: "Proposed Rule: … A YES locks this in, or we
@@ -11,7 +11,10 @@
   when the idea is proposed, so nobody is asked to lock something that
   can't happen.
 - Drafts lapse quietly after 14 days without changes.
-- Locked rules go into the system prompt of every AI request.
+- A rule is for the household (the default) or personal. Locked household
+  rules go into the system prompt of every AI request; a personal rule only
+  into its owner's (the person it affects). Autonomy grants change what
+  Themi does for everyone, so they're always household rules.
 """
 
 from __future__ import annotations
@@ -37,8 +40,12 @@ log = logging.getLogger(__name__)
 DRAFT_TTL = timedelta(days=14)
 RuleKind = Literal["policy", "autonomy_grant", "standing_reminder"]
 RuleStatus = Literal["draft", "locked", "expired", "discarded", "unlocked"]
+RuleScope = Literal["household", "personal"]
 
 PROPOSAL_TEXT = "Proposed Rule: {summary}. A YES locks this in, or we keep brainstorming."
+PERSONAL_PROPOSAL_TEXT = (
+    "Proposed Rule (just for you): {summary}. A YES locks this in, or we keep brainstorming."
+)
 LOCKED_TEXT = "Locked in: {summary}."
 LOCKED_REPLY = "Locked in. I'll follow that from now on."
 SUPERSEDED_TEXT = "Earlier version: {summary}. (Updated below.)"
@@ -46,6 +53,10 @@ DISCARDED_TEXT = "Set aside: {summary}."
 LAPSED_TEXT = "This idea lapsed: {summary}. Happy to pick it up again any time."
 STILL_DRAFT_REPLY = "It's still a draft. We can come back to it whenever."
 NOT_YOURS_REPLY = "That one is for the person it affects to lock in."
+GRANTS_ARE_HOUSEHOLD = (
+    "A rule that makes something automatic changes what Themi does for everyone, so it has "
+    "to be a household rule."
+)
 NEEDS_ADMIN = (
     "Making that automatic changes what Themi does for the household, so it takes an admin "
     "to lock in."
@@ -67,6 +78,7 @@ class Rule:
     proposed_by: int | None
     affects: int | None
     updated_at: datetime
+    scope: RuleScope = "household"
 
 
 def _rule_from_row(row: dict[str, Any]) -> Rule:
@@ -80,6 +92,7 @@ def _rule_from_row(row: dict[str, Any]) -> Rule:
         proposed_by=row["proposed_by"],
         affects=row["affects"],
         updated_at=datetime.fromisoformat(row["updated_at"]),
+        scope=row["scope"],
     )
 
 
@@ -98,7 +111,7 @@ class Rulebook:
         services.rulebook = self
         services.button_handlers["rule"] = self.on_button
         services.awaiting_sources.append(self.awaiting_items)
-        services.add_command("/rules", self.on_rules_command, "See household rules and your drafts")
+        services.add_command("/rules", self.on_rules_command, "See the rules and your drafts")
         services.tools.register(propose_rule_tool)
 
     # ----- reading ------------------------------------------------------------
@@ -113,8 +126,16 @@ class Rulebook:
         rows = self.db.query("SELECT * FROM rules WHERE status = 'locked' ORDER BY id")
         return [_rule_from_row(r) for r in rows]
 
-    def locked_texts(self) -> list[str]:
-        return [r.text for r in self.locked()]
+    def household(self) -> list[Rule]:
+        return [r for r in self.locked() if r.scope == "household"]
+
+    def personal(self, member: Member) -> list[Rule]:
+        """The member's own locked personal rules. Nobody else's are ever shown."""
+        return [r for r in self.locked() if r.scope == "personal" and r.affects == member.id]
+
+    def prompt_rules(self, member: Member) -> tuple[list[str], list[str]]:
+        """(household rule texts, this member's personal rule texts) for their AI requests."""
+        return [r.text for r in self.household()], [r.text for r in self.personal(member)]
 
     def drafts(self, member: Member) -> list[Rule]:
         rows = self.db.query(
@@ -134,6 +155,7 @@ class Rulebook:
         *,
         rule_id: int | None = None,
         priority: Priority = Priority.REPLY,
+        scope: RuleScope = "household",
     ) -> Rule:
         summary, text = summary.strip().rstrip("."), text.strip()
         if not summary or not text:
@@ -141,6 +163,8 @@ class Rulebook:
         if kind == "standing_reminder":
             raise RuleError("Standing reminders come from context repair, not proposals.")
         if kind == "autonomy_grant":
+            if scope == "personal":
+                raise RuleError(GRANTS_ARE_HOUSEHOLD)
             self._check_grant_possible(member, category)
         else:
             category = None
@@ -150,21 +174,23 @@ class Rulebook:
             if existing.status != "draft" or existing.affects != member.id:
                 raise RuleError("That draft isn't open for changes any more.")
             self.db.execute(
-                "UPDATE rules SET summary = ?, text = ?, kind = ?, category = ?, updated_at = ? "
-                "WHERE id = ?",
-                (summary, text, kind, category, now, rule_id),
+                "UPDATE rules SET summary = ?, text = ?, kind = ?, category = ?, scope = ?, "
+                "updated_at = ? WHERE id = ?",
+                (summary, text, kind, category, scope, now, rule_id),
             )
             await self._retire_messages(rule_id, SUPERSEDED_TEXT.format(summary=existing.summary))
         else:
             rule_id = self.db.execute(
-                "INSERT INTO rules (summary, text, kind, category, proposed_by, affects, "
-                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (summary, text, kind, category, member.id, member.id, now, now),
+                "INSERT INTO rules (summary, text, kind, category, scope, proposed_by, affects, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (summary, text, kind, category, scope, member.id, member.id, now, now),
             )
         rule = self.get(rule_id)
         result = await self.outbox.send(
             member,
-            PROPOSAL_TEXT.format(summary=rule.summary),
+            (PERSONAL_PROPOSAL_TEXT if rule.scope == "personal" else PROPOSAL_TEXT).format(
+                summary=rule.summary
+            ),
             priority=priority,
             buttons=[Button("Lock it in", "rule", {"rule": rule.id})],
             kind="rule",
@@ -346,16 +372,24 @@ class Rulebook:
         return tuple(r["telegram_message_id"] for r in rows)
 
     async def on_rules_command(self, member: Member, argument: str) -> None:
-        locked = self.locked()
+        household, personal = self.household(), self.personal(member)
         drafts = self.drafts(member)
-        if not locked and not drafts:
-            text = "No household rules yet. Ideas can start as drafts whenever you like."
+        if not household and not personal and not drafts:
+            text = "No rules yet. Ideas can start as drafts whenever you like."
         else:
             parts = []
-            if locked:
-                parts.append("Locked rules:\n" + "\n".join(f"• {r.summary}" for r in locked))
+            if household:
+                parts.append("Household rules:\n" + "\n".join(f"• {r.summary}" for r in household))
+            if personal:
+                parts.append("Just for you:\n" + "\n".join(f"• {r.summary}" for r in personal))
             if drafts:
-                parts.append("Your drafts:\n" + "\n".join(f"• {r.summary}" for r in drafts))
+                parts.append(
+                    "Your drafts:\n"
+                    + "\n".join(
+                        f"• {r.summary}{' (just for you)' if r.scope == 'personal' else ''}"
+                        for r in drafts
+                    )
+                )
             text = "\n\n".join(parts)
         await self.outbox.send(member, text, priority=Priority.REPLY)
 
@@ -377,7 +411,11 @@ class Rulebook:
     "Capture a household rule as a draft for this person to lock in. Use it when they're "
     "settling how something should work from now on ('always archive store promos', "
     "'remind me about bins on Tuesday evenings'). It sends them the proposal; nothing takes "
-    "effect until they lock it in. To refine an earlier draft, pass its rule_id (else 0).",
+    "effect until they lock it in. applies_to: household rules apply to everyone in the "
+    "family; personal ones only shape your conversations with this person. Ask if it isn't "
+    "clear which they mean. Rules can't change when Themi's own messages go out: that's "
+    "quiet hours and the daily limit in their website settings, or /pause. To refine an "
+    "earlier draft, pass its rule_id (else 0).",
     {
         "summary": {
             "type": "string",
@@ -399,6 +437,12 @@ class Rulebook:
             "Empty string otherwise.",
         },
         "rule_id": {"type": "integer", "description": "An existing draft to update, or 0."},
+        "applies_to": {
+            "type": "string",
+            "enum": ["household", "personal"],
+            "description": "household for everyone; personal for this person only. "
+            "Automatic-action rules are always household.",
+        },
     },
 )
 async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -412,6 +456,7 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
             args["kind"],
             args["category"] or None,
             rule_id=args["rule_id"] or None,
+            scope=args["applies_to"],
         )
     except RuleError as exc:
         return f"Not proposed: {exc}"

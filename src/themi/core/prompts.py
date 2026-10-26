@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from themi.accounts.models import LoggedMessage, Member
+from themi.logs import redact
 
 STABLE_SYSTEM = """\
 You are Themi, a household assistant for one family, talking with them over Telegram.
@@ -49,6 +50,13 @@ How you act:
 - When someone is settling how something should work from now on, capture it with
   propose_rule. A draft has no effect until they lock it in themselves; never treat a
   draft as agreed, and never lock one on anyone's behalf.
+- A rule is for the whole household unless it's marked as someone's personal rule.
+  Personal rules only shape conversations with their owner. When someone proposes a rule
+  and it isn't clear whether it's for everyone or just them, ask.
+- Rules don't change when Themi's own messages go out. That's each person's quiet hours,
+  busy times and daily message limit (their settings on the website, via /site) and
+  /pause, which holds a kind of message for a while. Point to those for anything about
+  timing, and go by the times in the context rather than guessing.
 """
 
 
@@ -57,10 +65,24 @@ class OpenItem:
     summary: str
 
 
-def build_system(rules: Sequence[str] = (), facts: Sequence[str] = ()) -> str:
+def build_system(
+    rules: Sequence[str] = (),
+    facts: Sequence[str] = (),
+    *,
+    personal_rules: Sequence[str] = (),
+    owner: str = "",
+) -> str:
     parts = [STABLE_SYSTEM]
     if rules:
-        parts.append("Locked household rules:\n" + "\n".join(f"- {r}" for r in rules))
+        parts.append(
+            "Locked household rules (they apply to everyone in the family):\n"
+            + "\n".join(f"- {r}" for r in rules)
+        )
+    if personal_rules:
+        parts.append(
+            f"{owner}'s personal rules (only in conversations with {owner}):\n"
+            + "\n".join(f"- {r}" for r in personal_rules)
+        )
     if facts:
         parts.append("Things to keep in mind:\n" + "\n".join(f"- {f}" for f in facts))
     return "\n\n".join(parts)
@@ -88,14 +110,17 @@ def build_turn(
     lines = []
     for logged in history:
         speaker = member.name if logged.direction == "in" else "Themi"
-        lines.append(f"{speaker}: {logged.text}")
+        lines.append(f"{speaker}: {redact(logged.text)}")  # no live sign-in links to the model
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
     remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"
+    holds = [f"quiet hours {member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}"]
+    holds += [f"busy {b.label()}" for b in member.busy_times]
     return (
         "<context>\n"
         f"Talking with: {member.name}{' (admin)' if member.is_admin else ''}\n"
         f"Local time: {when} ({timezone})\n"
+        f"Themi's own messages wait for: {'; '.join(holds)}\n"
         f"How {member.name} seems: {energy_label}\n"
         f"Open items:\n{items}\n"
         f"Possibly relevant things you were told before:\n{remembered}\n"

@@ -3,7 +3,8 @@
 Priorities:
 - `reply`: answers to something the person just said. Sent now, not counted.
 - `urgent`: sent now, even in quiet hours (a tenant emergency, a missing bill).
-- `normal`, `low`: Themi starting a conversation. These wait out quiet hours,
+- `normal`, `low`: Themi starting a conversation. These wait out quiet hours
+  and busy times,
   respect the member's daily limit, and ask the receptivity provider whether
   now is a good moment. `low` is for things that can wait for a strong window
   (the energy engine tells them apart from prompt 19).
@@ -34,8 +35,8 @@ from themi.channels.events import Button
 from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
 from themi.localtime import (
+    free_from,
     next_waking_start,
-    quiet_hours_end,
     start_of_local_day,
     to_utc_iso,
 )
@@ -136,12 +137,17 @@ class Outbox:
         dedupe_key: str | None = None,
         deadline: datetime | None = None,
         link_preview: bool = True,
+        not_before: datetime | None = None,
     ) -> OutboxResult:
+        """`not_before` holds a proactive message until then at the earliest (replies and
+        urgent messages never wait); after that, the usual timing rules apply."""
         now = clock.now()
         priority = Priority(priority)
         if dedupe_key and self._is_duplicate(member.id, dedupe_key, now):
             return OutboxResult("duplicate", None)
-        when = self._earliest(member, priority, now, deadline, kind)
+        when = self.send_time(
+            member, priority, deadline=deadline, kind=kind, not_before=not_before, now=now
+        )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -168,6 +174,24 @@ class Outbox:
             )
             return OutboxResult("queued", outbox_id, send_after=when)
         return await self._deliver(self._row(outbox_id))
+
+    def send_time(
+        self,
+        member: Member,
+        priority: Priority,
+        *,
+        deadline: datetime | None = None,
+        kind: str = "chat",
+        not_before: datetime | None = None,
+        now: datetime | None = None,
+    ) -> datetime:
+        """When a message queued now would go out, for wording that depends on the day."""
+        now = now or clock.now()  # send() passes its own reading, so "now" is one moment
+        priority = Priority(priority)
+        start = now
+        if not_before is not None and priority not in IMMEDIATE:
+            start = max(now, not_before)
+        return self._earliest(member, priority, start, deadline, kind)
 
     async def flush(self) -> int:
         """Send whatever is due. Returns how many went out. Run it from the scheduler."""
@@ -292,7 +316,7 @@ class Outbox:
             return now
         tz = self._tz
         overdue = deadline is not None and deadline <= now
-        when = quiet_hours_end(member, now, tz)
+        when = free_from(member, now, tz)
         if not overdue and self.sent_today(member.id, now) >= member.daily_limit:
             when = max(when, next_waking_start(member, now, tz))
         if not overdue:
@@ -302,8 +326,8 @@ class Outbox:
         held = self.pauses.held_until(member, kind)  # the person asked: outranks a deadline
         if held is not None:
             when = max(when, held)
-        # Whatever was chosen, it can't land inside quiet hours.
-        return quiet_hours_end(member, when, tz)
+        # Whatever was chosen, it can't land inside quiet hours or a busy time.
+        return free_from(member, when, tz)
 
     def release_held(self, member: Member) -> int:
         """After a pause ends early, let held messages be reconsidered at the next flush."""

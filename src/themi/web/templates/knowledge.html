@@ -18,11 +18,25 @@
 <p class="muted">No household rules yet.</p>
 {% endfor %}
 
+{% if personal %}
+<h2>Just for you</h2>
+<p class="muted">Personal rules only shape Themi's conversations with you. Nobody else sees them.</p>
+{% for rule in personal %}
+<article class="card">
+  <p class="summary">{{ rule.summary }}</p>
+  <p class="muted">{{ rule.text }}</p>
+  <form method="post" action="/rules/{{ rule.id }}/retire">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Retire</button>
+  </form>
+</article>
+{% endfor %}
+{% endif %}
+
 {% if drafts %}
 <h2>Your drafts</h2>
 {% for rule in drafts %}
 <article class="card">
-  <p class="summary">{{ rule.summary }}</p>
+  <p class="summary">{{ rule.summary }}{% if rule.scope == "personal" %} <span class="muted">(just for you)</span>{% endif %}</p>
   <p class="muted">{{ rule.text }}</p>
   <div class="buttons">
     <form method="post" action="/rules/{{ rule.id }}/lock">

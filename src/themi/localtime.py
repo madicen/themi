@@ -1,4 +1,4 @@
-"""The family's local time, and each member's quiet hours within it.
+"""The family's local time, and each member's quiet hours and busy times within it.
 
 Everything is stored in UTC; anything a person experiences (quiet hours,
 "today", dinner time) is decided in the family's timezone.
@@ -49,6 +49,29 @@ def quiet_hours_end(member: Member, moment: datetime, timezone: str) -> datetime
     local = to_local(moment, timezone)
     end_today = _at(local, member.quiet_end)
     return end_today if end_today > local else end_today + timedelta(days=1)
+
+
+def in_busy_time(member: Member, moment: datetime, timezone: str) -> bool:
+    local = to_local(moment, timezone)
+    return any(busy.covers(local) for busy in member.busy_times)
+
+
+def free_from(member: Member, moment: datetime, timezone: str) -> datetime:
+    """The first moment at or after `moment` outside quiet hours and busy times.
+
+    A busy time can run into quiet hours (or the other way round), so this keeps
+    stepping to the end of whatever covers the moment until nothing does.
+    """
+    when = moment
+    for _ in range(2 * len(member.busy_times) + 2):
+        after_quiet = quiet_hours_end(member, when, timezone)
+        local = to_local(after_quiet, timezone)
+        covering = [b for b in member.busy_times if b.covers(local)]
+        step = _at(local, max(b.end for b in covering)) if covering else after_quiet
+        if step == when:
+            return when
+        when = step
+    return when
 
 
 def next_waking_start(member: Member, moment: datetime, timezone: str) -> datetime:

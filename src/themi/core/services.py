@@ -140,9 +140,9 @@ class Services:
             items.append(OpenItem(f"Scheduled to send later: {row['text'][:80]}"))
         return items
 
-    def rules(self) -> list[str]:
-        """Locked household rules, for the system prompt."""
-        return self.rulebook.locked_texts() if self.rulebook is not None else []
+    def rules(self, member: Member) -> tuple[list[str], list[str]]:
+        """(locked household rules, the member's own personal rules), for the system prompt."""
+        return self.rulebook.prompt_rules(member) if self.rulebook is not None else ([], [])
 
     def facts_for(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
         """(pinned facts for the system prompt, notes retrieved for this message)."""

@@ -26,18 +26,28 @@ from themi.channels.outbox import Outbox, Priority
 from themi.core.prompts import OpenItem
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
-from themi.energy.matching import Matcher
+from themi.energy.matching import Assignment, Matcher
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+# A task someone just added for themselves in chat isn't asked about straight away.
+FIRST_NUDGE_AFTER = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
 # Titles are often commands ("Call the vet"), so they never open a sentence here.
 PROMPT_TEXT = "On the list for you, whenever it suits: {title}. Done already, or later?"
 PROMPT_WITH_DETAILS = (
     "On the list for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
 )
+# When someone else added it, the nudge says who, so it doesn't arrive out of nowhere.
+ADDED_BY_TEXT = "{who} added this for you, whenever it suits: {title}. Done already, or later?"
+ADDED_BY_WITH_DETAILS = (
+    "{who} added this for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
+)
+# A task due on the day the nudge goes out says so first (asked for by Erin's rule 6).
+DUE_TODAY_TEXT = "Due today: {title}. Done already, or later?"
+DUE_TODAY_WITH_DETAILS = "Due today: {title}.\n\n{details}\n\nDone already, or later?"
 DONE_TEXT = "Marked done: {title}. Thank you."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
@@ -141,13 +151,22 @@ class TaskBoard:
         *,
         interactive: bool = False,
         nudge: bool = True,
+        assignee: Member | None = None,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
-        (after attaching details, like a call script)."""
+        (after attaching details, like a call script). An `assignee` (someone took it on,
+        or was named) skips matching; without one, matching decides."""
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
-        assignment = self.matcher.assign(kind, effort, requester)
+        if assignee is None:
+            assignment = self.matcher.assign(kind, effort, requester)
+        elif assignee.id == requester.id:
+            assignment = Assignment(assignee, assignee, f"{requester.name} said they'd do it.")
+        else:
+            assignment = Assignment(
+                assignee, assignee, f"{requester.name} asked for {assignee.name} to do it."
+            )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
             "assign_reason, due_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -164,7 +183,11 @@ class TaskBoard:
             ),
         )
         if nudge:
-            await self.prompt(self.get(task_id))
+            # They just said it themselves: an instant "done already, or later?" is noise.
+            own = interactive and assignment.assignee.id == requester.id
+            await self.prompt(
+                self.get(task_id), not_before=clock.now() + FIRST_NUDGE_AFTER if own else None
+            )
         task = self.get(task_id)
         await self._changed(task, "created", interactive)
         return task
@@ -176,16 +199,40 @@ class TaskBoard:
             except Exception:
                 log.exception("A task listener failed for task %s (%s)", task.id, change)
 
-    async def prompt(self, task: Task) -> None:
+    async def prompt(self, task: Task, *, not_before: datetime | None = None) -> None:
         if task.assignee is None:
             return
+        deadline = self._deadline(task)
+        if not_before is not None and deadline is not None:
+            not_before = min(not_before, deadline)  # a due date still wins
         member = self.store.get_member(task.assignee)
         details = "\n\n".join(d for source in self.details if (d := source(task)))
-        text = (
-            PROMPT_WITH_DETAILS.format(title=task.title, details=details)
-            if details
-            else PROMPT_TEXT.format(title=task.title)
+        added_by = (
+            self.store.get_member(task.created_by)
+            if task.created_by is not None and task.created_by != member.id
+            else None
         )
+        goes_out = self.outbox.send_time(
+            member, Priority.NORMAL, deadline=deadline, kind="task", not_before=not_before
+        )
+        family = self.store.get_family()
+        local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        if task.due_on is not None and task.due_on == local_day:
+            who = f" ({added_by.name} added this for you)" if added_by is not None else ""
+            text = (
+                DUE_TODAY_WITH_DETAILS.format(title=f"{task.title}{who}", details=details)
+                if details
+                else DUE_TODAY_TEXT.format(title=f"{task.title}{who}")
+            )
+        elif added_by is not None:
+            template = ADDED_BY_WITH_DETAILS if details else ADDED_BY_TEXT
+            text = template.format(who=added_by.name, title=task.title, details=details)
+        else:
+            text = (
+                PROMPT_WITH_DETAILS.format(title=task.title, details=details)
+                if details
+                else PROMPT_TEXT.format(title=task.title)
+            )
         result = await self.outbox.send(
             member,
             text,
@@ -195,7 +242,8 @@ class TaskBoard:
                 Button("Done", "task", {"task": task.id, "action": "done"}),
                 Button("Later", "task", {"task": task.id, "action": "later"}),
             ],
-            deadline=self._deadline(task),
+            deadline=deadline,
+            not_before=not_before,
         )
         if result.outbox_id is not None:
             self.db.execute(
@@ -299,8 +347,10 @@ def _board(ctx: ToolContext) -> TaskBoard:
 
 @tool(
     "create_task",
-    "Add a household task. Themi works out who has room for it (usually the person who "
-    "normally does that kind of thing) and nudges them at a good moment.",
+    "Add a household task and nudge whoever does it at a good moment. assign_to says who: "
+    "'me' when the person asking will do it ('I want to...', 'I'll...', 'remind me to...'), "
+    "a family member's name when they name someone, or 'anyone' when it just needs doing "
+    "('can someone...', 'remind us...'); then Themi works out who has room for it.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},
@@ -313,6 +363,10 @@ def _board(ctx: ToolContext) -> TaskBoard:
             "type": "string",
             "description": "YYYY-MM-DD if it has a date, else an empty string.",
         },
+        "assign_to": {
+            "type": "string",
+            "description": "'me', a family member's name, or 'anyone'.",
+        },
     },
 )
 async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -322,17 +376,36 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             due = date.fromisoformat(args["due_date"])
         except ValueError:
             return "Not created: the due date should look like 2026-11-03."
+    target = args["assign_to"].strip()
+    chosen: Member | None = None
+    if target.lower() in ("me", "myself", "the person asking"):
+        chosen = ctx.member
+    elif target.lower() not in ("anyone", "someone", ""):
+        members = ctx.services.store.list_members()
+        chosen = next((m for m in members if m.name.lower() == target.lower()), None)
+        if chosen is None:
+            names = ", ".join(m.name for m in members)
+            return f"Not created: there's nobody called {target} in the family ({names})."
     try:
         task = await _board(ctx).create(
-            ctx.member, args["title"], args["kind"], args["effort"], due, interactive=True
+            ctx.member,
+            args["title"],
+            args["kind"],
+            args["effort"],
+            due,
+            interactive=True,
+            assignee=chosen,
         )
     except ValueError as exc:
         return f"Not created: {exc}"
     assignee = ctx.services.store.get_member(task.assignee) if task.assignee else ctx.member
-    who = f"{assignee.name} (the person asking)" if assignee.id == ctx.member.id else assignee.name
+    if assignee.id == ctx.member.id:
+        who, tell = f"{assignee.name} (the person asking)", ""
+    else:
+        who, tell = assignee.name, f" Let {ctx.member.name} know it went to {assignee.name}."
     return (
         f"Task {task.id} created and assigned to {who}. Why: {task.assign_reason} "
-        f"{assignee.name} gets a gentle nudge at a good moment."
+        f"{assignee.name} gets a gentle nudge at a good moment.{tell}"
     )
 
 

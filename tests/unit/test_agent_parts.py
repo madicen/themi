@@ -152,3 +152,53 @@ def test_command_texts_pass_the_strictest_pda_check(family) -> None:
     ]
     for text in texts:
         assert find_demands(text, 3) == [], text
+
+
+def test_the_model_is_told_how_rules_are_scoped() -> None:
+    from themi.core.prompts import build_system
+    from themi.core.rules import propose_rule
+
+    system = build_system(
+        rules=["Bins go out on Tuesdays."], personal_rules=["No chores at work."], owner="Erin"
+    )
+    assert "Locked household rules (they apply to everyone in the family):" in system
+    assert (
+        "Erin's personal rules (only in conversations with Erin):\n- No chores at work." in system
+    )
+    assert "unless it's marked as someone's personal rule" in system
+    assert "quiet hours" in system and "/pause" in system  # what actually controls timing
+    assert "Erin's personal rules" not in build_system(rules=["x"])
+    description = propose_rule.spec.description
+    assert "household rules apply to everyone in the family" in description
+    assert "quiet hours" in description
+
+
+def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    from themi.accounts import SYSTEM, BusyTime
+    from themi.core.prompts import STABLE_SYSTEM, build_turn
+
+    erin = family.store.update_settings(
+        SYSTEM, family.erin.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
+    )
+    turn = build_turn(
+        erin,
+        "when will you remind me?",
+        local_now=datetime(2026, 10, 21, 9, tzinfo=ZoneInfo("America/Los_Angeles")),
+        energy_label="steady",
+        timezone="America/Los_Angeles",
+    )
+    assert (
+        "Themi's own messages wait for: quiet hours 21:30-08:00; busy Mon-Fri 09:00-17:00" in turn
+    )
+    plain = build_turn(
+        family.husband,
+        "hi",
+        local_now=datetime(2026, 10, 21, 9, tzinfo=ZoneInfo("America/Los_Angeles")),
+        energy_label="steady",
+        timezone="America/Los_Angeles",
+    )
+    assert "Themi's own messages wait for: quiet hours 23:00-07:00\n" in plain
+    assert "busy times" in STABLE_SYSTEM
