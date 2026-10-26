@@ -71,6 +71,7 @@ NOT_TRACKED = "no read (they've turned energy tracking off)"
 
 SOURCE_INPUT = {  # signal source -> the tracking toggle that governs it
     "text_note": "text_notes",
+    "day_level": "text_notes",  # "it's a medium energy day": -1 low, 0 medium, 1 high
     "message_timing": "message_timing",
     "device_activity": "device_activity",
 }
@@ -100,10 +101,37 @@ def signal_effect(value: float, age: timedelta, recovery_hours: float) -> float:
     return value * SIGNAL_POINTS * 0.5**half_lives
 
 
+# A stated day level pulls that local day towards these, instead of adding points.
+DAY_LEVEL_TARGETS = {-1: 35.0, 0: 55.0, 1: 75.0}
+DAY_LEVEL_WEIGHT = 0.75
+
+
 def combine(
-    baseline: float, signals: Iterable[Signal], now: datetime, recovery_hours: float
+    baseline: float,
+    signals: Iterable[Signal],
+    now: datetime,
+    recovery_hours: float,
+    timezone: str | None = None,
 ) -> float:
-    total = baseline + sum(signal_effect(s.value, now - s.at, recovery_hours) for s in signals)
+    """Baseline plus fading signals. With `timezone`, the latest day level stated earlier
+    the same local day (if any) pulls the result towards its target."""
+    signals = list(signals)
+    total = baseline + sum(
+        signal_effect(s.value, now - s.at, recovery_hours)
+        for s in signals
+        if s.source != "day_level"
+    )
+    if timezone is not None:
+        today = to_local(now, timezone).date()
+        levels = [
+            s
+            for s in signals
+            if s.source == "day_level" and s.at <= now and to_local(s.at, timezone).date() == today
+        ]
+        if levels:
+            latest = sorted(levels, key=lambda s: s.at)[-1]  # stable: ties go to the last stored
+            target = DAY_LEVEL_TARGETS[round(latest.value)]
+            total = DAY_LEVEL_WEIGHT * target + (1 - DAY_LEVEL_WEIGHT) * total
     return max(0.0, min(100.0, total))
 
 
@@ -130,7 +158,8 @@ class EnergyModel:
         """Store a signal if the member allows that input. Returns whether it was stored."""
         if not member.tracks(SOURCE_INPUT[source]):
             return False
-        value = max(-3.0, min(3.0, value))
+        bound = 1.0 if source == "day_level" else 3.0
+        value = max(-bound, min(bound, value))
         self.db.execute(
             "INSERT INTO energy_signals (member_id, source, value, note, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -196,7 +225,7 @@ class EnergyModel:
         placeholders = ", ".join("?" for _ in allowed)
         rows = self.db.query(
             f"SELECT source, value, created_at FROM energy_signals WHERE member_id = ? "
-            f"AND source IN ({placeholders}) AND created_at > ? AND created_at <= ?",
+            f"AND source IN ({placeholders}) AND created_at > ? AND created_at <= ? ORDER BY id",
             (member.id, *allowed, to_utc_iso(now - SIGNAL_WINDOW), to_utc_iso(now)),
         )
         return [
@@ -207,7 +236,11 @@ class EnergyModel:
         now = at or clock.now()
         member = self.store.get_member(member.id)  # recovery speed and toggles may change
         return combine(
-            self.baseline(member, now), self.signals(member, now), now, member.recovery_hours
+            self.baseline(member, now),
+            self.signals(member, now),
+            now,
+            member.recovery_hours,
+            self.timezone,
         )
 
     def label(self, member: Member) -> str:

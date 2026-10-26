@@ -12,6 +12,7 @@ from themi.accounts import Member
 from themi.channels.outbox import Outbox, Priority
 from themi.channels.pda import PdaShield
 from themi.energy.model import (
+    DAY_LEVEL_TARGETS,
     LABELS,
     NOT_TRACKED,
     PRIOR_CURVE,
@@ -223,3 +224,34 @@ async def test_reply_timing_respects_its_toggle(model: EnergyModel, family: Seed
     await proactive(family, erin)
     model.observe_inbound(erin, at(21, 10, 2))
     assert family.db.scalar("SELECT COUNT(*) FROM energy_signals") == 0
+
+
+# ----- day levels ("it's a medium energy day") ----------------------------------------
+
+
+def test_a_day_level_pulls_today_towards_it(model: EnergyModel, family: SeededFamily) -> None:
+    clock.freeze(at(21, 10))
+    erin = family.erin
+    before = model.capacity(erin)
+    assert model.record(erin, "day_level", -1, "said it's a low energy day")
+    low = model.capacity(erin)
+    assert low < before and abs(low - DAY_LEVEL_TARGETS[-1]) < abs(before - DAY_LEVEL_TARGETS[-1])
+    assert model.record(erin, "day_level", 1, "now a high energy day")  # the latest one counts
+    assert model.capacity(erin) > before
+    clock.freeze(at(22, 10))  # the next day it's gone
+    assert model.capacity(erin) == pytest.approx(model.baseline(erin), abs=1)
+
+
+def test_a_day_level_isnt_an_extra_drain(model: EnergyModel, family: SeededFamily) -> None:
+    clock.freeze(at(21, 10))
+    model.record(family.erin, "day_level", 0, "medium energy day")
+    assert DAY_LEVEL_TARGETS[0] - 15 < model.capacity(family.erin) < DAY_LEVEL_TARGETS[0] + 15
+
+
+def test_day_levels_follow_the_energy_notes_switch(
+    model: EnergyModel, family: SeededFamily
+) -> None:
+    from themi.accounts import SYSTEM
+
+    erin = family.store.update_settings(SYSTEM, family.erin.id, tracking={"text_notes": False})
+    assert not model.record(erin, "day_level", -1, "low energy day")

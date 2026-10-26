@@ -32,6 +32,7 @@ from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.tools import ToolContext
+from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
 if TYPE_CHECKING:
@@ -151,8 +152,12 @@ class Agent:
         self.services.energy.observe_inbound(member)
         if await self._fast_path(member, text):
             return
+        energy_mark = self.services.store.db.scalar(
+            "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
+        )
         async with channel.typing(member):
             reply = await self._converse(member, text, event)
+        self._catch_energy(member, text, energy_mark)
         await self._reply(member, reply)
 
     # ----- steps --------------------------------------------------------------
@@ -196,6 +201,22 @@ class Agent:
         outcome = await waiting[0].resolve(decision)
         await self._reply(member, outcome)
         return True
+
+    def _catch_energy(self, member: Member, text: str, mark: int) -> None:
+        """If the turn recorded no energy remark but the message plainly has one, record it
+        (the person's privacy switch still decides; see themi.energy.remarks)."""
+        recorded = self.services.store.db.scalar(
+            "SELECT COUNT(*) FROM energy_signals WHERE id > ? AND member_id = ? "
+            "AND source IN ('text_note', 'day_level')",
+            (mark, member.id),
+        )
+        if recorded:
+            return
+        remark = energy_remark(text)
+        if remark is not None:
+            self.services.energy.record(
+                member, remark.source, remark.value, f"said: {remark.words}"
+            )
 
     def _waiting_since(self, member: Member, mark: int) -> list[str]:
         """Approvals created for this member after `mark` that are still waiting on a yes."""

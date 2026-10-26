@@ -48,7 +48,9 @@ class Projection:
         hour = hour_of_week(moment, self.timezone)
         if hour not in self._baselines:
             self._baselines[hour] = self.model.baseline(self.member, moment)
-        return combine(self._baselines[hour], self.signals, moment, self.member.recovery_hours)
+        return combine(
+            self._baselines[hour], self.signals, moment, self.member.recovery_hours, self.timezone
+        )
 
     def quiet(self, moment: datetime) -> bool:
         """No messages then: quiet hours or a busy time."""

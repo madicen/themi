@@ -54,6 +54,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F6a | Chores: steps on tasks | Feedback | [x] |
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
 | F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
+| S1 | Shadow Calendar: energy remarks recorded | Shadow Calendar review | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2621,6 +2622,34 @@ Later prompts (not part of F7, from the same roadmap):
 - Robustness: streaks and completion rates on the Tasks page; a check that the hourly job
   never double-nudges after a restart.
 - Prompt 33's maintenance (active months, one a day, notes per run) built on the same base.
+
+### S1 · Shadow Calendar: energy remarks recorded
+Status: [x] (2026-10-25)
+Depends on: 18, 19
+Read first: "B. Energy engine (Shadow Calendar)". From the user's question about the "hidden
+internal calendar": the live data had 6 message-timing signals, no energy remarks at all, and
+3 of 168 hour-of-week cells learned. Erin's "it's a medium energy day" left no trace.
+
+Notes (2026-10-25), failing tests first:
+- Causes:
+    - The system prompt never asked for energy remarks; only the tool's description did.
+    - Stated levels ("a medium energy day") had nowhere to go: the tool took only drains and
+      boosts, from -3 to +3, with no zero.
+    - Nothing caught a remark the model skipped.
+- Day levels: signal source `day_level` (-1 low, 0 medium, 1 high), governed by the
+  "energy notes" switch. `combine(..., timezone=)` leaves day levels out of the added points.
+  The latest level stated earlier the same local day pulls the result towards
+  `DAY_LEVEL_TARGETS` (35, 55, 75) with weight 0.75, and it's gone the next day. Projections
+  (the windows) pass the timezone too.
+- `log_energy_level` tool (low, medium or high), and a system-prompt line asking for both
+  energy tools alongside whatever else was asked.
+- Backstop: `themi.energy.remarks.energy_remark` catches only unmistakable first-person
+  patterns ("medium energy", "I'm wiped/exhausted/drained", "took a lot out of me", "I feel
+  really good/refreshed", but not "feel good about"). `Agent._catch_energy` records one after a
+  turn that recorded nothing, and the switch still applies.
+- Evals: new case `energy-medium-day`. The drain and boost cases now accept either tool in the
+  right direction (a drain or "low", a boost or "high"). Energy slice live: 6/7, then 7/7
+  re-scored (prompt 28 had 2/6).
 
 ---
 

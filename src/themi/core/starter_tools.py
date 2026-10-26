@@ -81,6 +81,23 @@ async def log_energy_note(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 @tool(
+    "log_energy_level",
+    "Record the energy level someone says their day is at ('it's a medium energy day', "
+    "'having a high energy day', 'low energy today'). It shapes today only. Use it alongside "
+    "anything else they asked for.",
+    {
+        "level": {"type": "string", "enum": ["low", "medium", "high"]},
+        "note": {"type": "string", "description": "A few words on what they said."},
+    },
+)
+async def log_energy_level(ctx: ToolContext, args: dict[str, Any]) -> str:
+    value = {"low": -1.0, "medium": 0.0, "high": 1.0}[args["level"]]
+    if not ctx.services.energy.record(ctx.member, "day_level", value, args["note"]):
+        return "This person has turned off energy notes; nothing was recorded."
+    return "Noted."
+
+
+@tool(
     "list_open_items",
     "List what's currently waiting for this person: approvals, scheduled messages and "
     "other open items.",
@@ -95,5 +112,6 @@ STARTER_TOOLS: list[Tool] = [
     remember_fact,
     report_forgotten_context,
     log_energy_note,
+    log_energy_level,
     list_open_items,
 ]
