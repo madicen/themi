@@ -1992,6 +1992,22 @@ Notes (2026-10-25):
     - Still failing: `pantry-rice-low` (an extra grocery call that's declined, harmless) and
       `approve-ambiguous-yes`. Schedules can't hold a weekday or time ("Tuesday evenings"), so
       the bins reply overstates it a little.
+- Fourth pass (same day), at the user's request, failing tests first:
+    - `approve-ambiguous-yes`: with several items waiting and no newer question, a bare
+      yes/no/later now gets `WHICH_TEXT` ("Which one did you mean: A or B? Each card above has
+      its own buttons.") without the model. That exposed a latent bug in the newer-question
+      check: the next waiting card ("Go ahead, or not now?") counted as a different question.
+      Waiting cards are now excluded.
+    - `pantry-rice-low`, found at the root with step numbers per call (eval results now save
+      `call_steps`). Two causes:
+        - Nothing said who adds low items. `add_to_grocery_list` now says it isn't for things
+          running low or out, and `update_pantry` says not to also call it.
+        - The honesty check only knew about approvals from staged tools; the pantry (and the
+          calendar) stage their own. It now asks the database for any approval created this
+          turn that's still waiting (`Agent._waiting_since`). `ToolContext.staged` is gone.
+    - Live: `approve-ambiguous-yes`, `pantry-rice-low`, `pantry-olive-oil` and
+      `pantry-add-cumin` pass 4/4. In two of them the model still claimed the item was on the
+      list, and the check replaced the claim with the waiting line.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28

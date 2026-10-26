@@ -173,15 +173,31 @@ async def test_no_declines(scenario: Scenario, gmail: Gmail) -> None:
     assert scenario.edits("Erin")[0]["text"].endswith("Left as is.")
 
 
-async def test_yes_with_two_waiting_asks_the_model(scenario: Scenario, gmail: Gmail) -> None:
+async def test_yes_with_two_waiting_asks_which_without_the_model(
+    scenario: Scenario, gmail: Gmail
+) -> None:
+    """Evals (approve-ambiguous-yes): the model tended to re-stage both instead of asking."""
     await stage(scenario, "Erin", 1)
     await stage(scenario, "Erin", 2)
-    scenario.primary.queue_text("Which one: the 1 or the 2 promo cleanup?")
-    await scenario.say("Erin", "yes")
-    assert gmail.archived == []
-    assert (
-        "Waiting on you: Archive 1 promo emails" in scenario.primary.last_request.messages[0].text
+    assert await scenario.say("Erin", "yes") == [
+        "Which one did you mean: Archive 1 promo emails or Archive 2 promo emails? "
+        "Each card above has its own buttons."
+    ]
+    assert gmail.archived == [] and scenario.primary.requests == []
+
+
+async def test_yes_with_two_waiting_after_another_question_goes_to_the_model(
+    scenario: Scenario, gmail: Gmail
+) -> None:
+    from themi.channels.outbox import Priority
+
+    await stage(scenario, "Erin", 1)
+    await stage(scenario, "Erin", 2)
+    await scenario.app.outbox.send(
+        scenario.member("Erin"), "Want the bins on your list too?", priority=Priority.REPLY
     )
+    scenario.primary.queue_text("Added the bins.")
+    assert await scenario.say("Erin", "yes") == ["Added the bins."]
 
 
 async def test_unanswered_approvals_lapse_quietly(scenario: Scenario, gmail: Gmail) -> None:
@@ -285,8 +301,9 @@ async def test_yes_still_answers_the_card_after_a_remark_that_isnt_a_question(
 async def test_a_reply_claiming_an_add_that_was_declined_is_replaced(
     scenario: Scenario,
 ) -> None:
-    """Evals (approve-ambiguous-yes): two grocery items waiting, a bare "yes", the model tried
-    to add them again (declined: already waiting) and replied "Added eggs and rice"."""
+    """Evals (approve-ambiguous-yes): with two grocery items waiting, the model tried to add
+    them again (declined: already waiting) and replied "Added eggs and rice". A bare "yes"
+    now gets "which one?" without the model, so this asks for them in words instead."""
     from themi.core.agent import DECLINED_TEXT, NOTHING_CHANGED_TEXT
 
     services = scenario.app.services
@@ -298,5 +315,5 @@ async def test_a_reply_claiming_an_add_that_was_declined_is_replaced(
         )  # fmt: skip
     scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["eggs", "rice"]})
     scenario.primary.queue_text("Added eggs and rice to the grocery list.")
-    assert await scenario.say("Erin", "yes") == [NOTHING_CHANGED_TEXT]
+    assert await scenario.say("Erin", "add eggs and rice please") == [NOTHING_CHANGED_TEXT]
     assert NOTHING_CHANGED_TEXT != DECLINED_TEXT  # the refusal message stays its own

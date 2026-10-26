@@ -63,14 +63,31 @@ async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outco
     use_backend(scenario, chosen)
     await scenario.start()
     calls: list[tuple[str, dict[str, Any]]] = []
+    steps: list[int] = []
+    model_steps = [0]
     registry = scenario.app.services.tools
     original = registry.run
+    router = scenario.app.services.router
+    original_client = router.client_for
 
     async def recording(call, ctx):  # type: ignore[no-untyped-def]
         calls.append((call.name, dict(call.arguments)))
+        steps.append(model_steps[0])
         return await original(call, ctx)
 
+    def counting_client(member_id, task):  # type: ignore[no-untyped-def]
+        client = original_client(member_id, task)
+        chat = client.chat
+
+        async def counted(*args, **kwargs):  # type: ignore[no-untyped-def]
+            model_steps[0] += 1
+            return await chat(*args, **kwargs)
+
+        client.chat = counted  # type: ignore[method-assign]
+        return client
+
     registry.run = recording  # type: ignore[method-assign]
+    router.client_for = counting_client  # type: ignore[method-assign]
     try:
         await apply_setup(scenario, case)
         member = scenario.member(case.speaker)
@@ -86,6 +103,7 @@ async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outco
         ]
         outcome = score(case, calls, model_replies(sent), member.pda_strength)
         outcome.sent = sent
+        outcome.call_steps = steps
         return outcome
     finally:
         await scenario.stop()

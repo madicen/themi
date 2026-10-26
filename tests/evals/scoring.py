@@ -86,6 +86,8 @@ class Outcome:
     replies: list[str]
     unavailable: bool = False  # no model answered: says nothing about behaviour
     sent: list[tuple[str, str]] = field(default_factory=list)  # everything, with its kind
+    # For each call, which model step asked for it (calls sharing a step came together).
+    call_steps: list[int] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:

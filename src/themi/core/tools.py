@@ -38,7 +38,6 @@ class ToolContext:
     member: Member
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
-    staged: list[str] = field(default_factory=list)  # actions left waiting on a yes this turn
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
 
@@ -175,7 +174,6 @@ class ToolRegistry:
         )
         action = outcome.action
         if action.status == "pending":
-            ctx.staged.append(proposal.summary)
             return (
                 f"Staged for approval (action {action.id}): {proposal.summary}. Nothing happens "
                 "until they say yes; don't describe it as done."

@@ -56,6 +56,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus: int, config: pytest.Co
                         "passed": o.passed,
                         "problems": o.problems,
                         "calls": o.calls,
+                        "call_steps": o.call_steps,
                         "replies": o.replies,
                         "sent": o.sent,
                     }
