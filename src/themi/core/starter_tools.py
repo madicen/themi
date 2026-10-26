@@ -1,13 +1,36 @@
-"""The first tools: remembering, context repair, noting energy, listing open items.
+"""The first tools: remembering, context repair, noting energy, open items and answering
+one in words.
 
 `log_energy_note` records a signal that the energy model (prompt 18) builds on.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from themi.core.tools import Tool, ToolContext, dumps, tool
+from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, tool
+
+# What the person must have said themselves before the model answers a card for them.
+_SAID = {
+    "yes": re.compile(
+        r"\b(?:yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|let'?s|sounds good|lock it in|"
+        r"give it a (?:go|try)|keep it)\b",
+        re.IGNORECASE,
+    ),
+    "no": re.compile(
+        r"\b(?:no|nope|nah|drop|skip|don'?t|not interested|leave it|set it aside)\b",
+        re.IGNORECASE,
+    ),
+    "later": re.compile(r"\b(?:later|not now|not yet)\b", re.IGNORECASE),
+}
+# A forgotten-context report needs them to say Themi forgot or was told before. A question
+# about why Themi did something isn't one (idea #8: that pinned a note about an offer).
+_FORGOT = re.compile(
+    r"\b(?:forg[eo]t\w*|remember\w*|told you|said (?:so|that|this|it)|again|already|"
+    r"keep (?:\w+ing)|wrong|not right|isn'?t right|mixed up)\b",
+    re.IGNORECASE,
+)
 
 
 @tool(
@@ -40,7 +63,8 @@ async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
     "report_forgotten_context",
     "Use when the person says you forgot, keep forgetting, or got something wrong that "
     "they'd told you before ('you keep forgetting the cat's vet is on Tuesdays'). It works "
-    "out why it was missed, fixes that, and returns what to tell them.",
+    "out why it was missed, fixes that, and returns what to tell them. Not for questions "
+    "about why Themi did or suggested something: just answer those.",
     {
         "what_was_forgotten": {
             "type": "string",
@@ -53,6 +77,11 @@ async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
     },
 )
 async def report_forgotten_context(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if not _FORGOT.search(ctx.request_text):
+        raise ToolFailed(
+            "Not recorded: they didn't say Themi forgot or got something wrong. Just answer "
+            "what they asked."
+        )
     memory = ctx.services.memory
     assert memory is not None
     repair = memory.repair(ctx.member, args["what_was_forgotten"], args["correct_version"])
@@ -108,10 +137,39 @@ async def list_open_items(ctx: ToolContext, args: dict[str, Any]) -> str:
     return dumps({"open_items": items}) if items else "Nothing is waiting right now."
 
 
+@tool(
+    "answer_waiting_item",
+    "Answer something waiting on this person (an approval card, a rule to lock, a habit to "
+    "try) when they answer it in words, like 'yes, let's give that one a try' or 'drop the "
+    "water one'. Only when their message this turn says so themselves: never answer for "
+    "them. item: its wording from the open items, or enough of it to tell which.",
+    {
+        "item": {"type": "string"},
+        "decision": {"type": "string", "enum": ["yes", "no", "later"]},
+    },
+)
+async def answer_waiting_item(ctx: ToolContext, args: dict[str, Any]) -> str:
+    decision = args["decision"]
+    if not _SAID[decision].search(ctx.request_text):
+        raise ToolFailed(
+            f"Not answered: they haven't said {decision} in their message. Ask them, or "
+            "point to the card's buttons."
+        )
+    wanted = args["item"].strip().lower()
+    waiting = ctx.services.awaiting(ctx.member)
+    matches = [i for i in waiting if wanted and wanted in i.summary.lower()]
+    if len(matches) != 1:
+        listed = "; ".join(i.summary for i in waiting) or "nothing"
+        raise ToolFailed(f"Not answered: say which item exactly. Waiting: {listed}.")
+    outcome = await matches[0].resolve(decision)
+    return f"Answered {decision}. Result: {outcome}"
+
+
 STARTER_TOOLS: list[Tool] = [
     remember_fact,
     report_forgotten_context,
     log_energy_note,
     log_energy_level,
     list_open_items,
+    answer_waiting_item,
 ]
