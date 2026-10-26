@@ -96,6 +96,7 @@ class Task:
     either: bool = False  # a chore either of you can do, every round (on both lists)
     importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
     due_time: time | None = None  # a time of day on the due date ("today around 2")
+    on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
 
     @property
     def repeats(self) -> bool:
@@ -111,7 +112,7 @@ class Run:
     missed: bool = False  # a round that passed without anyone doing it
 
 
-# "created", "rescheduled", "done", "cancelled", "reassigned" or "reopened"
+# "created", "rescheduled", "done", "cancelled", "reassigned", "reopened" or "moved"
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
@@ -144,6 +145,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         either=bool(row["either"]),
         importance=row["importance"],
         due_time=time.fromisoformat(row["due_time"]) if row["due_time"] else None,
+        on_chart=bool(row["on_chart"]),
     )
 
 
@@ -501,6 +503,17 @@ class TaskBoard:
         for person in people:
             await self.prompt(task, member=person)
         await self._changed(task, "reassigned", False)
+        return task
+
+    async def put_on_chart(self, task_id: int, by: Member, on: bool = True) -> Task:
+        """Put a one-off task on the wall's chore chart (or take it off, back to the to-do
+        list). Repeating chores are always on the chart."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        self.db.execute("UPDATE tasks SET on_chart = ? WHERE id = ?", (int(on), task_id))
+        task = self.get(task_id)
+        await self._changed(task, "moved", True)
         return task
 
     async def reopen(self, task_id: int) -> Task:

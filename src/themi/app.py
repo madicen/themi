@@ -183,6 +183,7 @@ def build_app(
         periodic.append(PeriodicTask("cozyla.sync", timedelta(minutes=1), wall.sync))
     if cozyla is not None and cozyla.config.chores:
         chart = CozylaChores(services, tasks, cozyla)
+        chart.install()
         periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
         routines = CozylaRoutines(services, tasks, cozyla)
         routines.install()

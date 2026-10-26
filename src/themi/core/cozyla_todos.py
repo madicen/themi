@@ -126,7 +126,7 @@ class CozylaTodos:
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
             return
-        if task.repeats and not self._link(task.id):
+        if (task.repeats or task.on_chart) and not self._link(task.id):
             return
         self._mark(task.id)
 
@@ -195,6 +195,7 @@ class CozylaTodos:
         return found[0] if found else None
 
     def put_on(self, task_id: int, list_id: str) -> None:
+        self.db.execute("UPDATE tasks SET on_chart = 0 WHERE id = ?", (task_id,))  # off the chart
         self.db.execute(
             "INSERT INTO cozyla_links (task_id, list_id) VALUES (?, ?) ON CONFLICT(task_id) "
             "DO UPDATE SET list_id = excluded.list_id, state = 'pending', "
@@ -231,7 +232,9 @@ class CozylaTodos:
             for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
                 task = self.board.get(row["id"])
                 link = self._link(task.id)
-                if not task.repeats and (link is None or link["todo_id"] is None):
+                if not (task.repeats or task.on_chart) and (
+                    link is None or link["todo_id"] is None
+                ):
                     self._mark(task.id)
 
     async def _maybe_bring_in(self, todo: Todo, before: Seen | None, *, first: bool) -> None:
@@ -335,7 +338,7 @@ class CozylaTodos:
                 log.warning("Cozyla sync of task %s waits: %s", task.id, exc)
                 self._failed(link, str(exc))
                 continue
-            if task.repeats:
+            if task.repeats or task.on_chart:
                 self.db.execute(
                     "DELETE FROM cozyla_links WHERE task_id = ? AND version = ?",
                     (task.id, link["version"]),
@@ -353,8 +356,8 @@ class CozylaTodos:
         self, link: dict[str, Any], task: Task, todo: Todo | None, current: dict[str, Todo]
     ) -> str | None:
         """Make the wall match the task; returns its to-do's id, if it still has one."""
-        if task.status == "cancelled" or task.repeats:
-            if todo is not None:
+        if task.status == "cancelled" or task.repeats or task.on_chart:
+            if todo is not None:  # gone, or a chore or on the chart: off the to-do lists
                 await self.client.delete(todo.id)
                 del current[todo.id]
             return None
@@ -418,7 +421,7 @@ class CozylaTodos:
         ):
             if _same(row["title"], title):
                 task = self.board.get(row["id"])
-                if not task.repeats:
+                if not task.repeats and not task.on_chart:
                     return task
         return None
 
@@ -507,7 +510,10 @@ def _named_list(wall: CozylaTodos, name: str) -> tuple[str, str]:
     found = wall.find_list(name)
     if found is None:
         names = ", ".join(sorted(wall.lists().values())) or "none yet"
-        raise ToolFailed(f"There's no list called {name!r} on the wall. Its lists: {names}.")
+        raise ToolFailed(
+            f"There's no list called {name!r} on the wall. Its lists: {names}. The chore chart "
+            "isn't a list: put_task_on_chore_chart puts a task there."
+        )
     return found
 
 
