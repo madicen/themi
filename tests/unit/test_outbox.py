@@ -307,7 +307,7 @@ async def test_shielding_happens_at_send_time(
     clock.freeze(at(22, 8))
     await outbox.flush()
     ((_name, text, buttons, kind),) = sender.sent
-    assert text == "If you're up for it, you could move the laundry to the dryer."
+    assert text == "Up next: move the laundry to the dryer."
     assert buttons == (Button("Done", "laundry", {"cycle": 3}),) and kind == "laundry"
     row = family.db.one("SELECT text, sent_text FROM outbox WHERE id = ?", (queued.outbox_id,))
     assert row == {"text": "Move the laundry to the dryer.", "sent_text": text}

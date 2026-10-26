@@ -165,6 +165,29 @@ async def answer_waiting_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     return f"Answered {decision}. Result: {outcome}"
 
 
+@tool(
+    "set_phrasing",
+    "How this person likes Themi to say things, when they tell you ('just say it plainly', "
+    "'softer please', 'questions are fine, never say should'): style plain (say it straight) "
+    "or gentle (indirect, low-key), and their own notes in their words (empty keeps them; "
+    "'-' clears them). It's theirs only.",
+    {
+        "style": {"type": "string", "enum": ["plain", "gentle"]},
+        "notes": {"type": "string"},
+    },
+)
+async def set_phrasing(ctx: ToolContext, args: dict[str, Any]) -> str:
+    notes = args["notes"].strip()
+    member = ctx.services.store.update_settings(
+        ctx.member,
+        ctx.member.id,
+        phrasing=args["style"],
+        phrasing_notes=("" if notes == "-" else notes) if notes else None,
+    )
+    saved = f" Notes: {member.phrasing_notes}" if member.phrasing_notes else ""
+    return f"Phrasing for {member.name}: {member.phrasing}.{saved}"
+
+
 STARTER_TOOLS: list[Tool] = [
     remember_fact,
     report_forgotten_context,
@@ -172,4 +195,5 @@ STARTER_TOOLS: list[Tool] = [
     log_energy_level,
     list_open_items,
     answer_waiting_item,
+    set_phrasing,
 ]

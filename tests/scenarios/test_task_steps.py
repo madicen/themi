@@ -22,6 +22,8 @@ def new_task(title: str, steps: list[str], assign_to: str = "me") -> dict:
         "assign_to": assign_to,
         "steps": steps,
         "check_in": False,
+        "due_time": "",
+        "from_time": "",
     }
 
 

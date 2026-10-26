@@ -43,6 +43,8 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+# One task nudge at a time (idea #11): the next waits while one is unanswered, this long.
+ONE_AT_A_TIME_FOR = timedelta(hours=2)
 # A task someone just added for themselves in chat isn't asked about straight away.
 FIRST_NUDGE_AFTER = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
@@ -50,7 +52,7 @@ TASK_KINDS = ["text", "call", "physical", "errand"]
 # (Erin's rules 6-8, bug #9). Titles are often commands ("Call the vet"), so they never
 # open a sentence; the label comes first.
 NUDGE_LEAD = "{label}: {title}{who}{whenever}"
-WHENEVER = ", whenever it suits"
+WHENEVER = ", whenever it suits"  # gentle phrasing only (idea #12)
 # When someone else added it, the nudge says who, so it doesn't arrive out of nowhere.
 ADDED_BY = " ({who} added this for you)"
 # Repeating chores (F6b).
@@ -95,6 +97,9 @@ class Task:
     check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
     either: bool = False  # a chore either of you can do, every round (on both lists)
     importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
+    due_time: time | None = None  # a time of day on the due date ("today around 2")
+    from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
+    on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
 
     @property
     def repeats(self) -> bool:
@@ -110,7 +115,7 @@ class Run:
     missed: bool = False  # a round that passed without anyone doing it
 
 
-# "created", "rescheduled", "done", "cancelled", "reassigned" or "reopened"
+# "created", "rescheduled", "done", "cancelled", "reassigned", "reopened" or "moved"
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
@@ -142,6 +147,9 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         check_in=bool(row["check_in"]),
         either=bool(row["either"]),
         importance=row["importance"],
+        due_time=time.fromisoformat(row["due_time"]) if row["due_time"] else None,
+        from_time=time.fromisoformat(row["from_time"]) if row["from_time"] else None,
+        on_chart=bool(row["on_chart"]),
     )
 
 
@@ -169,6 +177,9 @@ class TaskBoard:
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = []  # steps come first, from _steps_for
+        # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
+        # on Sunday 1 Nov."), so it answers with the day rather than guessing.
+        self.wall_notes: list[Callable[[Task], str | None]] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -188,6 +199,20 @@ class TaskBoard:
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
+        self.outbox.gates["task"] = self._one_at_a_time
+
+    def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
+        """While a task nudge sent to this person is unanswered (still open, not put off),
+        the next waits, for up to two hours (idea #11)."""
+        row = self.db.one(
+            "SELECT MAX(o.sent_at) AS sent_at FROM tasks t "
+            "JOIN outbox o ON o.id = t.prompt_outbox_id WHERE o.member_id = ? "
+            "AND o.status = 'sent' AND t.status = 'open' AND o.sent_at > ?",
+            (member.id, to_utc_iso(when - ONE_AT_A_TIME_FOR)),
+        )
+        if row is None or row["sent_at"] is None:
+            return None
+        return datetime.fromisoformat(row["sent_at"]) + ONE_AT_A_TIME_FOR
 
     # ----- reading ------------------------------------------------------------
 
@@ -233,7 +258,12 @@ class TaskBoard:
         items = []
         for t in self.open_for(member):
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
-            whose = "shared, overdue: either of you" if t.shared else "theirs"
+            if t.either:
+                whose = "either of you"
+            elif t.shared:
+                whose = "shared, overdue: either of you"
+            else:
+                whose = "theirs"
             steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
             if any(_step_level(step) for step in t.steps):
                 level = self.services.energy.suggested_level(member)
@@ -242,7 +272,8 @@ class TaskBoard:
                         f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
                     )
             schedule = f" {self.summary(t)}." if t.repeats else ""
-            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{steps}"))
+            wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
+            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{wall}{steps}"))
         return items
 
     # ----- changing -----------------------------------------------------------
@@ -260,6 +291,8 @@ class TaskBoard:
         assignee: Member | None = None,
         steps: Sequence[str] = (),
         check_in: bool = False,
+        due_time: time | None = None,
+        from_time: time | None = None,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -278,8 +311,8 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at, steps, check_in) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps, check_in, due_time, from_time) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -292,14 +325,21 @@ class TaskBoard:
                 to_utc_iso(clock.now()),
                 json.dumps(cleaned_steps),
                 int(check_in),
+                due_time.strftime("%H:%M") if due_on and due_time else None,
+                from_time.strftime("%H:%M") if due_on and from_time else None,
             ),
         )
         if nudge:
-            # They just said it themselves: an instant "done already, or later?" is noise.
-            own = interactive and assignment.assignee.id == requester.id
-            await self.prompt(
-                self.get(task_id), not_before=clock.now() + FIRST_NUDGE_AFTER if own else None
-            )
+            task = self.get(task_id)
+            if task.due_on is not None:
+                # Nothing is asked about before it's due (bug #14): its day, or its time.
+                not_before = self._round_starts(task)
+            elif interactive and assignment.assignee.id == requester.id:
+                # They just said it themselves: an instant "done already, or later?" is noise.
+                not_before = clock.now() + FIRST_NUDGE_AFTER
+            else:
+                not_before = None
+            await self.prompt(task, not_before=not_before)
         task = self.get(task_id)
         await self._changed(task, "created", interactive)
         return task
@@ -326,6 +366,10 @@ class TaskBoard:
         the opening line (an overdue reminder's, C2c)."""
         if task.assignee is None and member is None:
             return
+        if not_before is None and overdue is None and lead is None:
+            starts = self._round_starts(task)  # nothing is asked about before it's due (#14)
+            if starts is not None and starts > clock.now():
+                not_before = starts
         deadline = self._deadline(task)
         if not_before is not None and deadline is not None:
             not_before = min(not_before, deadline)  # a due date still wins
@@ -352,7 +396,11 @@ class TaskBoard:
                 label=_label(task, local_day),
                 title=task.title,
                 who=ADDED_BY.format(who=added_by.name) if added_by is not None else "",
-                whenever=WHENEVER if task.due_on is None and not task.check_in else "",
+                whenever=(
+                    WHENEVER
+                    if task.due_on is None and not task.check_in and member.phrasing == "gentle"
+                    else ""
+                ),
             )
         text = (
             f"{lead}.\n\n{details}\n\nDone already, or later?"
@@ -378,11 +426,16 @@ class TaskBoard:
             )
 
     def _deadline(self, task: Task) -> datetime | None:
-        """By when a nudge should go out: 9 am on the due date, or the chore's own time."""
+        """By when a nudge should go out: its time on the due date (the task's, or the
+        chore's), else 9 am."""
         if task.due_on is None:
             return None
-        at = task.repeat.at if task.repeat and task.repeat.at else time(9)
-        return _on(task.due_on, at, self._tz())
+        return _on(task.due_on, self._time_of(task) or time(9), self._tz())
+
+    @staticmethod
+    def _time_of(task: Task) -> time | None:
+        """When its nudge comes: a window's start, else its time, else the chore's."""
+        return task.from_time or task.due_time or (task.repeat.at if task.repeat else None)
 
     def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
@@ -392,9 +445,8 @@ class TaskBoard:
         """When this round's nudge may go: the chore's time on its due date, or that morning."""
         if task.due_on is None:
             return None
-        if task.repeat and task.repeat.at:
-            return _on(task.due_on, task.repeat.at, self._tz())
-        return self._day_start(task.due_on)
+        at = self._time_of(task)
+        return _on(task.due_on, at, self._tz()) if at else self._day_start(task.due_on)
 
     def _steps_for(self, task: Task, member: Member) -> str | None:
         """The steps for a nudge. With (Low)/(Medium)/(High) tags, only the level that suits
@@ -485,6 +537,17 @@ class TaskBoard:
         for person in people:
             await self.prompt(task, member=person)
         await self._changed(task, "reassigned", False)
+        return task
+
+    async def put_on_chart(self, task_id: int, by: Member, on: bool = True) -> Task:
+        """Put a one-off task on the wall's chore chart (or take it off, back to the to-do
+        list). Repeating chores are always on the chart."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        self.db.execute("UPDATE tasks SET on_chart = ? WHERE id = ?", (int(on), task_id))
+        task = self.get(task_id)
+        await self._changed(task, "moved", True)
         return task
 
     async def reopen(self, task_id: int) -> Task:
@@ -992,6 +1055,17 @@ def _board(ctx: ToolContext) -> TaskBoard:
             "type": "string",
             "description": "YYYY-MM-DD if it has a date, else an empty string.",
         },
+        "due_time": {
+            "type": "string",
+            "description": "HH:MM (24-hour) if they gave a time of day ('around 2' is 14:00), "
+            "or a window's end ('between 2 and 3' is 15:00), else an empty string. Nothing is "
+            "asked about before it's due.",
+        },
+        "from_time": {
+            "type": "string",
+            "description": "HH:MM for a window's start ('between 2 and 3' is 14:00; the "
+            "nudge comes then and it's overdue after due_time), else an empty string.",
+        },
         "assign_to": {
             "type": "string",
             "description": "'me', a family member's name, or 'anyone'.",
@@ -1016,6 +1090,15 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             due = date.fromisoformat(args["due_date"])
         except ValueError:
             return "Not created: the due date should look like 2026-11-03."
+    try:
+        due_time = time.fromisoformat(args["due_time"]) if args["due_time"] else None
+        from_time = time.fromisoformat(args["from_time"]) if args["from_time"] else None
+    except ValueError:
+        return "Not created: times should look like 14:30."
+    if from_time and (due_time is None or from_time >= due_time):
+        return "Not created: a window needs its start (from_time) before its end (due_time)."
+    if due_time and due is None:
+        due = _board(ctx)._today()  # a time with no date means today
     target = args["assign_to"].strip()
     chosen: Member | None = None
     if target.lower() in ("me", "myself", "the person asking"):
@@ -1037,6 +1120,8 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             assignee=chosen,
             steps=args["steps"],
             check_in=bool(args["check_in"]),
+            due_time=due_time,
+            from_time=from_time,
         )
     except ValueError as exc:
         return f"Not created: {exc}"

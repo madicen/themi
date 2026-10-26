@@ -32,6 +32,7 @@ from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
+from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
@@ -135,6 +136,8 @@ def build_app(
     tasks.install()
     reminders = Reminders(services, tasks)
     reminders.install()
+    reviews = CheckinReviews(services)
+    reviews.install()
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
@@ -161,6 +164,7 @@ def build_app(
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
         PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
+        PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
@@ -183,6 +187,7 @@ def build_app(
         periodic.append(PeriodicTask("cozyla.sync", timedelta(minutes=1), wall.sync))
     if cozyla is not None and cozyla.config.chores:
         chart = CozylaChores(services, tasks, cozyla)
+        chart.install()
         periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
         routines = CozylaRoutines(services, tasks, cozyla)
         routines.install()

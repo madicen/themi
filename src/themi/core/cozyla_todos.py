@@ -41,7 +41,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -64,6 +64,7 @@ WALL_KIND, WALL_EFFORT = "errand", 2
 ADD_CATEGORY = "wall_list_add"
 ADD_EXECUTOR = "cozyla.add"
 MAX_ITEM_LENGTH = 100
+END_OF_DAY = time(23, 59)
 
 
 def backoff(attempts: int) -> timedelta:
@@ -122,11 +123,23 @@ class CozylaTodos:
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         self.services.tools.register(put_task_on_wall_list)
         self.services.tools.register(add_to_wall_list)
+        self.board.wall_notes.append(self.where)
+
+    def where(self, task: Task) -> str | None:
+        """Which wall list a task is on, for the model."""
+        link = self._link(task.id)
+        if link is None or task.repeats or task.on_chart or task.status not in ("open", "snoozed"):
+            return None
+        lists = self.lists()
+        name = lists.get(link["list_id"] or "") or self.client.config.todo_list
+        if link["todo_id"] is None:
+            return f"On the wall's {name} list (being added now)."
+        return f"On the wall's {name} list."
 
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
             return
-        if task.repeats and not self._link(task.id):
+        if (task.repeats or task.on_chart) and not self._link(task.id):
             return
         self._mark(task.id)
 
@@ -195,6 +208,7 @@ class CozylaTodos:
         return found[0] if found else None
 
     def put_on(self, task_id: int, list_id: str) -> None:
+        self.db.execute("UPDATE tasks SET on_chart = 0 WHERE id = ?", (task_id,))  # off the chart
         self.db.execute(
             "INSERT INTO cozyla_links (task_id, list_id) VALUES (?, ?) ON CONFLICT(task_id) "
             "DO UPDATE SET list_id = excluded.list_id, state = 'pending', "
@@ -231,7 +245,9 @@ class CozylaTodos:
             for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
                 task = self.board.get(row["id"])
                 link = self._link(task.id)
-                if not task.repeats and (link is None or link["todo_id"] is None):
+                if not (task.repeats or task.on_chart) and (
+                    link is None or link["todo_id"] is None
+                ):
                     self._mark(task.id)
 
     async def _maybe_bring_in(self, todo: Todo, before: Seen | None, *, first: bool) -> None:
@@ -335,7 +351,7 @@ class CozylaTodos:
                 log.warning("Cozyla sync of task %s waits: %s", task.id, exc)
                 self._failed(link, str(exc))
                 continue
-            if task.repeats:
+            if task.repeats or task.on_chart:
                 self.db.execute(
                     "DELETE FROM cozyla_links WHERE task_id = ? AND version = ?",
                     (task.id, link["version"]),
@@ -353,8 +369,8 @@ class CozylaTodos:
         self, link: dict[str, Any], task: Task, todo: Todo | None, current: dict[str, Todo]
     ) -> str | None:
         """Make the wall match the task; returns its to-do's id, if it still has one."""
-        if task.status == "cancelled" or task.repeats:
-            if todo is not None:
+        if task.status == "cancelled" or task.repeats or task.on_chart:
+            if todo is not None:  # gone, or a chore or on the chart: off the to-do lists
                 await self.client.delete(todo.id)
                 del current[todo.id]
             return None
@@ -370,12 +386,12 @@ class CozylaTodos:
             del current[todo.id]
             todo = None
         assignee = self._assignee_for(task)
-        due = self._due_at(task.due_on)
+        due = self._due_at(task)
         if todo is None:
             todo_id = await self.client.create(target, task.title, assignee=assignee, due=due)
             current[todo_id] = Todo(todo_id, target, task.title, assignee, due, False)
             return todo_id
-        if (todo.title, todo.assignee, self._due_on(todo)) != (task.title, assignee, task.due_on):
+        if (todo.title, todo.assignee, todo.due) != (task.title, assignee, due):
             await self.client.update(todo, title=task.title, assignee=assignee, due=due)
             todo = current[todo.id] = replace(todo, title=task.title, assignee=assignee, due=due)
         if todo.completed:
@@ -418,7 +434,7 @@ class CozylaTodos:
         ):
             if _same(row["title"], title):
                 task = self.board.get(row["id"])
-                if not task.repeats:
+                if not task.repeats and not task.on_chart:
                     return task
         return None
 
@@ -476,11 +492,14 @@ class CozylaTodos:
     def _due_on(self, todo: Todo) -> date | None:
         return todo.due.astimezone(self._tz).date() if todo.due else None
 
-    def _due_at(self, due_on: date | None) -> datetime | None:
-        """Themi keeps a date; the wall a moment: the start of that day, locally."""
-        if due_on is None:
+    def _due_at(self, task: Task) -> datetime | None:
+        """The wall keeps a moment: the task's time on its day, else the end of the day
+        (23:59, the wall's own "no time"). Midnight showed as overdue all day."""
+        if task.due_on is None:
             return None
-        return datetime(due_on.year, due_on.month, due_on.day, tzinfo=self._tz)
+        at = task.due_time or END_OF_DAY
+        day = task.due_on
+        return datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=self._tz)
 
     def _admin(self) -> Member:
         return next(m for m in self.services.store.list_members() if m.is_admin)
@@ -507,7 +526,10 @@ def _named_list(wall: CozylaTodos, name: str) -> tuple[str, str]:
     found = wall.find_list(name)
     if found is None:
         names = ", ".join(sorted(wall.lists().values())) or "none yet"
-        raise ToolFailed(f"There's no list called {name!r} on the wall. Its lists: {names}.")
+        raise ToolFailed(
+            f"There's no list called {name!r} on the wall. Its lists: {names}. The chore chart "
+            "isn't a list: put_task_on_chore_chart puts a task there."
+        )
     return found
 
 

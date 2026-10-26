@@ -94,6 +94,8 @@ def _parse_hhmm(value: str | time) -> time:
 
 
 MAX_BUSY_TIMES = 10
+PHRASING_STYLES = ("plain", "gentle")
+MAX_PHRASING_NOTES = 500
 
 
 def _busy_json(busy: BusyTime) -> dict[str, Any]:
@@ -135,6 +137,9 @@ def _member_from_row(row: dict[str, Any]) -> Member:
             BusyTime(tuple(b["days"]), _parse_hhmm(b["start"]), _parse_hhmm(b["end"]))
             for b in json.loads(row["busy_times"])
         ),
+        phrasing=row["phrasing"],
+        phrasing_notes=row["phrasing_notes"],
+        checkin_reviews=bool(row["checkin_reviews"]),
     )
 
 
@@ -356,6 +361,9 @@ class AccountStore:
         tracking: dict[str, bool] | None = None,
         kind_costs: dict[str, float] | None = None,
         busy_times: Sequence[BusyTime] | None = None,
+        phrasing: str | None = None,
+        phrasing_notes: str | None = None,
+        checkin_reviews: bool | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -391,6 +399,16 @@ class AccountStore:
                 if not 0.25 <= multiplier <= 4:
                     raise InvalidValue("a task-kind cost must be between 0.25 and 4")
             changes["kind_costs"] = json.dumps({**member.kind_costs, **kind_costs})
+        if phrasing is not None:
+            if phrasing not in PHRASING_STYLES:
+                raise InvalidValue("phrasing is plain or gentle")
+            changes["phrasing"] = phrasing
+        if phrasing_notes is not None:
+            if len(phrasing_notes) > MAX_PHRASING_NOTES:
+                raise InvalidValue(f"phrasing notes are at most {MAX_PHRASING_NOTES} characters")
+            changes["phrasing_notes"] = phrasing_notes.strip()
+        if checkin_reviews is not None:
+            changes["checkin_reviews"] = int(checkin_reviews)
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

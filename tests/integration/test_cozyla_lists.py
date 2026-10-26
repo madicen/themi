@@ -141,6 +141,8 @@ async def test_a_task_can_be_put_on_a_named_list(
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "due_time": "",
+            "from_time": "",
         },
     )
     scenario.primary.queue_tool_call(
@@ -151,6 +153,8 @@ async def test_a_task_can_be_put_on_a_named_list(
     await sync(scenario)
     assert on(fake_cozyla, cook)["Make lasagna"]["assignMemberUid"] == "m-erin"
     assert "Make lasagna" not in on(fake_cozyla, scenario.cozyla_list)
+    (item,) = board(scenario).open_items(scenario.member("Erin"))
+    assert "On the wall's Things to Cook list." in item.summary  # where it is, for the model
 
     scenario.primary.queue_tool_call("put_task_on_wall_list", {"task_id": 1, "list": "Garden"})
     scenario.primary.queue_text("There's no Garden list.")

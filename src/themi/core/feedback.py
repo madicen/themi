@@ -258,7 +258,10 @@ class FeedbackChat:
         return {
             "quiet hours": f"{member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}",
             "daily message limit": str(member.daily_limit),
+            "phrasing": member.phrasing
+            + (f" ({member.phrasing_notes})" if member.phrasing_notes else ""),
             "gentle phrasing": f"strength {member.pda_strength}" if member.pda_enabled else "off",
+            "check-in reviews": "on" if member.checkin_reviews else "off",
             "tracking": ", ".join(
                 f"{k} {'on' if v else 'off'}" for k, v in member.tracking.items()
             ),

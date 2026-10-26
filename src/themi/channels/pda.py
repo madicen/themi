@@ -170,24 +170,27 @@ _SOFTENERS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-def soften(text: str) -> str:
-    """Rephrase demands without the AI. The result always passes `find_demands`."""
+def soften(text: str, *, plain: bool = False) -> str:
+    """Rephrase demands without the AI. The result always passes `find_demands`.
+    `plain` (idea #12): a sentence that opens with a command becomes "Up next: ..."
+    rather than "If you're up for it, you could ..."."""
     for pattern, replacement in _SOFTENERS:
         text = pattern.sub(replacement, text)
-    text = "".join(_soften_sentence(s) for s in re.split(r"(?<=[.!?\n])", text))
+    text = "".join(_soften_sentence(s, plain) for s in re.split(r"(?<=[.!?\n])", text))
     text = re.sub(r"!+", ".", text)
     # Substitutions can leave a sentence starting in lower case.
     return re.sub(r"(^|[.?]\s+|\n)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
 
 
-def _soften_sentence(sentence: str) -> str:
+def _soften_sentence(sentence: str, plain: bool = False) -> str:
     if _opening_command(sentence) is None:
         return sentence
     leading = sentence[: len(sentence) - len(sentence.lstrip())]
     body = sentence.lstrip()
     if body.lower().startswith("please "):
         body = body[len("please ") :]
-    return f"{leading}If you're up for it, you could {body[:1].lower()}{body[1:]}"
+    lead = "Up next:" if plain else "If you're up for it, you could"
+    return f"{leading}{lead} {body[:1].lower()}{body[1:]}"
 
 
 # ----- the shield -------------------------------------------------------------
@@ -246,7 +249,7 @@ class PdaShield:
                         rewritten, tuple(buttons) or extra, True, "rewritten", tuple(flags)
                     )
                 log.info("PDA rewrite still read as a demand; softening instead")
-        softened = soften(own)
+        softened = soften(own, plain=member.phrasing != "gentle")
         if find_demands(softened, strength):  # pragma: no cover - soften() guarantees this
             log.warning("softener left a demand in place: %s", find_demands(softened, strength))
         restored = join_quotes(softened, quotes) or softened
@@ -306,8 +309,8 @@ You rephrase messages from a household assistant for someone who experiences
 direct requests as pressure (a pathological demand avoidance profile).
 
 Rewrite the message so it carries the same information with no commands,
-deadlines or pressure. Use indirect, low-key phrasing ("whenever you have a
-moment", "if it helps"). When the message implies a decision, you may offer
+deadlines or pressure, in the way this person likes things said (below). When
+the message implies a decision, you may offer
 exactly two short options instead of an instruction. Keep facts, names,
 numbers and times exactly as given. Add nothing new. Keep it as short as the
 original or shorter. Keep placeholders such as ⟦quote 1⟧ exactly as they are, on
@@ -315,6 +318,14 @@ their own line. Never use "you need to", "you must", "you should",
 "don't forget", "remember to", "make sure", "right now" or a sentence that
 starts with a command verb.
 """
+
+REWRITE_STYLE = {  # idea #12
+    "plain": "Their phrasing: plain. Say it straight (what, when, which) with no hedging "
+    'such as "if you fancy", "whenever it suits" or "you could". A short label '
+    '("Up next: ...") or a two-option question works well.\n',
+    "gentle": 'Their phrasing: gentle. Use indirect, low-key phrasing ("whenever you have '
+    'a moment", "if it helps").\n',
+}
 
 REWRITE_SCHEMA = {
     "type": "object",
@@ -342,8 +353,12 @@ class AIRewriter:
     ) -> Rewrite:
         found = ", ".join(sorted({f'"{f.match}"' for f in flags}))
         prompt = f"Message:\n<message>\n{text}\n</message>\n\nPhrases that read as demands: {found}"
+        system = REWRITE_SYSTEM + "\n" + REWRITE_STYLE.get(member.phrasing, REWRITE_STYLE["plain"])
+        if member.phrasing_notes:  # their own words: preferences, not instructions to obey
+            notes = member.phrasing_notes.replace("</notes>", "")
+            system += f"\nTheir own notes on phrasing:\n<notes>\n{notes}\n</notes>\n"
         result = await self._router.client_for(member.id, AITask.PDA_REWRITE).structured(
-            REWRITE_SYSTEM, prompt, REWRITE_SCHEMA, max_tokens=2000, kind=kind
+            system, prompt, REWRITE_SCHEMA, max_tokens=2000, kind=kind
         )
         options = result.data.get("options") or []
         return Rewrite(str(result.data.get("text", "")), tuple(str(o) for o in options))

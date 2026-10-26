@@ -165,12 +165,13 @@ class HabitReserve:
             member = self.store.get_member(habit["member_id"])
             result = await self.services.outbox.send(
                 member,
-                CHECK_IN_TEXT.format(prompt=habit["prompt"]),
+                CHECK_IN_TEXT.format(prompt=_check_in_words(habit, member)),
                 priority=Priority.LOW,
                 kind="habit",
             )
             self.db.execute(
-                "UPDATE habits SET last_sent_on = ?, last_outbox_id = ? WHERE id = ?",
+                "UPDATE habits SET last_sent_on = ?, last_outbox_id = ?, check_ins = check_ins + 1 "
+                "WHERE id = ?",
                 (today, result.outbox_id, habit["id"]),
             )
             sent += 1
@@ -192,3 +193,12 @@ class HabitReserve:
             return True
         self.db.execute("UPDATE habits SET ignored_streak = ? WHERE id = ?", (streak, habit["id"]))
         return True
+
+
+def _check_in_words(habit: dict[str, Any], member: Member) -> str:
+    """Plain phrasing says what it is ("A glass of water mid-morning."); gentle phrasing
+    keeps the habit's own offer ("...might feel good about now, if you fancy one")."""
+    if member.phrasing == "gentle":
+        return str(habit["prompt"])
+    idea = str(habit["idea"])
+    return f"{idea[:1].upper()}{idea[1:]}."

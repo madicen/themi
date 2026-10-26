@@ -99,7 +99,7 @@ class Reminders:
                 member,
                 DAY_END_TEXT.format(items=and_list(left)),
                 priority=Priority.NORMAL,
-                kind="task",
+                kind="task_summary",  # not a nudge, so it doesn't wait its turn (idea #11)
                 deadline=quiet - timedelta(minutes=15),
                 dedupe_key=f"day-end-{today}",
             )
