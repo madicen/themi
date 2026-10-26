@@ -2797,7 +2797,12 @@ Build:
 - Changes made in Themi still go out as now, and win for that item if both sides changed it
   since the last sync (Themi's change is the newer one). Something needed again that's crossed
   off in the app gets un-crossed rather than added twice.
-- First sync: everything not crossed off comes into Themi. Crossed-off history is left alone.
+- First sync: items not crossed off come into Themi as needed. Crossed-off items (most of the
+  family's list) come in as already bought, with the time they were crossed off, so Themi
+  knows them as done and never treats them as new.
+- Crossed off means bought (the user, 2026-10-25: "We cross off items when we buy them").
+  OurGroceries marks it with a `crossedOffAt` timestamp; the library's own `crossedOff` is
+  always false (fixed in the adapter the same day).
 - Each row keeps its OurGroceries item id. Matching still falls back to the name (ignoring
   case), so nothing is doubled.
 - Only the configured list is read or changed; the account's other lists are never touched.
@@ -2811,6 +2816,23 @@ Tests (with the fake OurGroceries, which gains crossing off, deleting and adding
 
 Done when: an item added or crossed off in the OurGroceries app shows up correctly in Themi
 within a couple of minutes, and the family's existing list is in Themi. Commit.
+
+Fixes made first, found while setting it up (2026-10-25, failing tests first):
+- Crossed-off detection: the adapter read `crossedOff`, which the library always reports as
+  false, so all 106 items on the live list (103 crossed off) looked needed. It now treats an
+  item with `crossedOffAt` as crossed off.
+- The one-way mirror now follows how the family uses the list. A needed item that's crossed
+  off in the app is un-crossed instead of skipped (before, it stayed hidden). A bought item is
+  crossed off instead of deleted; removed items are still deleted. The client gained
+  `set_crossed_off`, using the library's `toggle_item_crossed_off`.
+- Installing the extra brings in aiohttp, and google-genai then uses it. Its timeouts surface
+  as the built-in `TimeoutError`, which `transport_exceptions()` didn't list, so a slow Gemini
+  reply skipped the retry and fallback. That's a real issue in the Docker image, which
+  installs the extra. `TimeoutError` and `aiohttp.ClientError` now count as transport errors.
+  The google-genai warnings about subclassing `aiohttp.ClientSession` come from inside that
+  library and are harmless.
+- `test_without_the_library_the_mirror_just_waits` simulated a missing library by depending on
+  what was installed; it now patches the import.
 
 ---
 
