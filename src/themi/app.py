@@ -22,6 +22,7 @@ from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.cozyla import CozylaClient
 from themi.connectors.gcal import CalendarSync
 from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
@@ -32,6 +33,7 @@ from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.commands import Commands
+from themi.core.cozyla_todos import CozylaTodos
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
@@ -89,6 +91,7 @@ def build_app(
     sleep: Sleep = asyncio.sleep,
     google: GoogleConfig | None = None,
     grocery_list: GroceryListClient | None = None,
+    cozyla: CozylaClient | None = None,
     backup: BackupConfig | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
@@ -164,6 +167,12 @@ def build_app(
             db, grocery_list, bought=lambda name: pantry.set_status(name, "plenty", source="list")
         )
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
+    if cozyla is not None and cozyla.config.todo_list:
+        family = store.get_family()
+        cozyla.timezone = family.timezone if family else cozyla.timezone
+        wall = CozylaTodos(services, tasks, cozyla)
+        wall.install()
+        periodic.append(PeriodicTask("cozyla.sync", timedelta(minutes=1), wall.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:

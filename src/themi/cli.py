@@ -79,6 +79,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     """Wire Themi from its settings, as `themi run` (and `make dev`) runs it."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
+    from themi.connectors.cozyla import CozylaClient
     from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.runtime import Runtime
     from themi.settings import SettingsError
@@ -103,6 +104,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         google=settings.google(),
         backup=settings.backup,
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
+        cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
     )
     return Runtime(
         app,
