@@ -33,6 +33,7 @@ from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.commands import Commands
+from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
@@ -167,12 +168,16 @@ def build_app(
             db, grocery_list, bought=lambda name: pantry.set_status(name, "plenty", source="list")
         )
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
-    if cozyla is not None and cozyla.config.todo_list:
+    if cozyla is not None:
         family = store.get_family()
         cozyla.timezone = family.timezone if family else cozyla.timezone
+    if cozyla is not None and cozyla.config.todo_list:
         wall = CozylaTodos(services, tasks, cozyla)
         wall.install()
         periodic.append(PeriodicTask("cozyla.sync", timedelta(minutes=1), wall.sync))
+    if cozyla is not None and cozyla.config.chores:
+        chart = CozylaChores(services, tasks, cozyla)
+        periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:

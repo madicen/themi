@@ -74,6 +74,25 @@ def _same(a: str, b: str) -> bool:
     return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
 
 
+def member_map(members: list[CozylaMember], themi: list[Member]) -> dict[str, int]:
+    """Cozyla member id -> Themi member id, by first name."""
+    firsts = {m.name.split()[0].casefold(): m.id for m in themi}
+    found = {}
+    for member in members:
+        first = member.name.split()[0].casefold() if member.name.split() else ""
+        if first in firsts:
+            found[member.id] = firsts[first]
+    return found
+
+
+def family_member(members: list[CozylaMember], mapped: dict[str, int]) -> str | None:
+    """The member that isn't a person: "Madicen Family". Assigned to it means both."""
+    for member in members:
+        if member.id not in mapped and "family" in member.name.casefold():
+            return member.id
+    return None
+
+
 @dataclass(frozen=True)
 class Seen:
     list_id: str
@@ -134,9 +153,9 @@ class CozylaTodos:
             return 0
         self._read_failures, self._read_after = 0, None
         self._default = default.id
-        self._to_member = self._member_map(members)
+        self._to_member = member_map(members, self.services.store.list_members())
         self._to_cozyla = {mid: uid for uid, mid in self._to_member.items()}
-        self._family = self._family_member(members)
+        self._family = family_member(members, self._to_member)
         titles = {t.id: t.title for t in lists}
         todos = [t for t in todos if t.list_id in titles]
         synced = {r["list_id"] for r in self.db.query("SELECT list_id FROM cozyla_sync")}
@@ -153,23 +172,6 @@ class CozylaTodos:
     @staticmethod
     def _find(lists: Iterable[TodoList], name: str) -> TodoList | None:
         return next((t for t in lists if _same(t.title, name)), None)
-
-    def _member_map(self, members: list[CozylaMember]) -> dict[str, int]:
-        """Cozyla member id -> Themi member id, by first name."""
-        themi = {m.name.split()[0].casefold(): m.id for m in self.services.store.list_members()}
-        found = {}
-        for member in members:
-            first = member.name.split()[0].casefold() if member.name.split() else ""
-            if first in themi:
-                found[member.id] = themi[first]
-        return found
-
-    def _family_member(self, members: list[CozylaMember]) -> str | None:
-        """The member that isn't a person: "Madicen Family". Assigned to it means both."""
-        for member in members:
-            if member.id not in self._to_member and "family" in member.name.casefold():
-                return member.id
-        return None
 
     def _assigned(self, assignee: str | None) -> bool:
         return assignee is not None and (assignee in self._to_member or assignee == self._family)

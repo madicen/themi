@@ -62,6 +62,7 @@ class Settings(BaseModel):
     cozyla_password: Secret | None = None
     cozyla_todo_list: str = ""
     cozyla_device_sn: str = "themi"
+    cozyla_chores: bool = False
     backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
@@ -88,7 +89,11 @@ class Settings(BaseModel):
         if not self.cozyla_email or self.cozyla_password is None:
             return None
         return CozylaConfig(
-            self.cozyla_email, self.cozyla_password, self.cozyla_todo_list, self.cozyla_device_sn
+            self.cozyla_email,
+            self.cozyla_password,
+            self.cozyla_todo_list,
+            self.cozyla_device_sn,
+            chores=self.cozyla_chores,
         )
 
     @classmethod
@@ -195,6 +200,7 @@ class Settings(BaseModel):
             cozyla_password=Secret(cozyla_password) if cozyla_password else None,
             cozyla_todo_list=get("COZYLA_TODO_LIST"),
             cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
+            cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),

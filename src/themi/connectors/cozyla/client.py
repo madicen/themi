@@ -70,6 +70,7 @@ class CozylaConfig:
     password: Secret
     todo_list: str = ""  # the list to sync; empty means no sync
     device_sn: str = "themi"  # how Themi appears among the account's devices; keep it the same
+    chores: bool = False  # Themi runs the wall's chore chart (C2b)
 
 
 @dataclass(frozen=True)

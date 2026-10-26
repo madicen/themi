@@ -93,6 +93,7 @@ class Task:
     missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
     due_before_task: int | None = None  # due the day before that chore's round
     check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
+    either: bool = False  # a chore either of you can do, every round (on both lists)
 
     @property
     def repeats(self) -> bool:
@@ -138,6 +139,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         missed=row["missed"],
         due_before_task=row["due_before_task"],
         check_in=bool(row["check_in"]),
+        either=bool(row["either"]),
     )
 
 
@@ -529,6 +531,7 @@ class TaskBoard:
         escalate_to: str = "owner",
         missed: str = "roll",
         due_before_task: int | None = None,
+        either: bool = False,
     ) -> Task:
         """Give a task a schedule, or take it away (no `repeat` and no `due_before_task`).
         Zeros mean "no minimum" or "no escalation". Anchored and deadline schedules get their
@@ -539,8 +542,8 @@ class TaskBoard:
         if repeat is None and due_before_task is None:
             self.db.execute(
                 "UPDATE tasks SET times_per_week = NULL, repeat = NULL, due_before_task = NULL, "
-                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0 "
-                "WHERE id = ?",
+                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0, "
+                "either = 0 WHERE id = ?",
                 (task_id,),
             )
             return self.get(task_id)
@@ -561,7 +564,8 @@ class TaskBoard:
         floating = repeat is not None and not repeat.anchored
         self.db.execute(
             "UPDATE tasks SET times_per_week = ?, repeat = ?, due_before_task = ?, missed = ?, "
-            "minimum_days = ?, escalate_days = ?, escalate_to = ? WHERE id = ?",
+            "minimum_days = ?, escalate_days = ?, escalate_to = ?, either = ?, shared = ? "
+            "WHERE id = ?",
             (
                 repeat.times_per_week if floating and repeat else None,
                 json.dumps(repeat.to_json()) if repeat and repeat.anchored else None,
@@ -570,6 +574,8 @@ class TaskBoard:
                 minimum_days or None,
                 escalate_days or None,
                 escalate_to if escalate_days else None,
+                int(either),
+                int(either),
                 task_id,
             ),
         )
@@ -603,6 +609,8 @@ class TaskBoard:
             parts.append(read_back(Repeat("floating", times_per_week=task.times_per_week)))
         else:
             return "Doesn't repeat"
+        if task.either:
+            parts.append("either of you")
         if task.minimum_days:
             parts.append(f"overdue after {_days(task.minimum_days)}")
         if task.escalate_days:
@@ -687,7 +695,7 @@ class TaskBoard:
             await self._finish_course(task, interactive)
             return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
         self.db.execute(  # the next round: back to its owner, nothing overdue
-            "UPDATE tasks SET status = 'open', due_on = ?, shared = 0, snoozed_until = NULL, "
+            "UPDATE tasks SET status = 'open', due_on = ?, shared = either, snoozed_until = NULL, "
             "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
@@ -1076,7 +1084,8 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "empty. at_least_every_days: overdue after that many days (0 for none). "
     "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
     "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
-    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. Use it after "
+    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. either: true "
+    "when either of them can do it each time (it's on both lists). Use it after "
     "create_task, also for repeating reminders ('always remind me about the bins on "
     "Tuesdays'). Themi reads the saved schedule back to them itself.",
     {
@@ -1087,6 +1096,7 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         "escalate_to": {"type": "string", "enum": ["owner", "both"]},
         "missed": {"type": "string", "enum": ["roll", "catch_up"]},
         "due_before_task": {"type": "integer"},
+        "either": {"type": "boolean"},
     },
 )
 async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1103,6 +1113,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
             escalate_to=args["escalate_to"],
             missed=args["missed"],
             due_before_task=args["due_before_task"] or None,
+            either=bool(args["either"]),
         )
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
