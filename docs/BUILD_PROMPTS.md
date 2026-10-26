@@ -71,6 +71,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [x] |
 | C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [x] |
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [x] |
+| F10 | Feedback: due times, one nudge at a time, plain phrasing, check-in reviews | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -3286,6 +3287,49 @@ Notes (2026-10-26):
   stay the wall's and are only read. At 10:58 nothing was due to be checked.
 - H1 (dishwasher): "Cycle Dishwasher" now feeds the energy model each evening; try that
   before any hardware.
+
+### F10 · Feedback: due times, one nudge at a time, plain phrasing, check-in reviews
+Status: [x] 2026-10-26
+Depends on: F8, C2b, C3
+From the family's reports of 2026-10-26 (bugs #14 and #15, ideas #11, #12 and #13), the
+first with the Cozyla sync on (`themi run` restarted at 11:10 with the to-do list and the
+chore chart).
+
+Done (failing tests first for the bugs):
+- Bug #14 ("do not prompt tasks until they're due"): "Today around 2, remind me to answer the
+  tutoring email" was asked about at 11:17. Tasks gain a due time (`tasks.due_time`, migration
+  0039; `create_task`'s `due_time`, and a time with no date means today), and no nudge goes
+  out before a task's day or time, whatever path sends it (the rule is in `TaskBoard.prompt`).
+  Labels for later days ("Due Sunday:") stay, for anything sent early another way.
+- Bug #15: "Move vacuum upstairs bedroom to chores in Cozyla" had Themi looking for a list
+  called Chores. `put_task_on_chore_chart` (`tasks.on_chart`, migration 0040) moves a one-off
+  task to the chart: the to-do sync takes it off the lists, the chore sync puts it on the
+  chart for its day, and a tick on either side closes it. The list tool's refusal points
+  there; `put_task_on_wall_list` brings it back.
+- A chore for either of you was listed to the model as "shared, overdue" (in the reports'
+  open items, "Bring bins in" due Wednesday on Monday); now "either of you".
+- Idea #11 ("only prompt one task at a time"): while a task nudge is unanswered (open, not put
+  off), the next waits, for up to two hours. The outbox gains per-kind gates, checked at each
+  flush rather than stored, so answering lets the next go at once. The end-of-day list is its
+  own kind (`task_summary`) and doesn't wait.
+- Idea #12 ("default to plain language; let each person customise phrasing for PDA"): a
+  per-person phrasing style, plain (default) or gentle, and notes in their own words
+  (migration 0041). It shapes the conversation prompt, task nudges ("whenever it suits" is
+  gentle only), habit check-ins, the softener ("Up next: ..." when plain) and the rewriter.
+  Set on the settings page or in chat (`set_phrasing`). Shielding's strictness stays.
+- Idea #13 (check-in reviews): after 4 check-ins, Themi asks whether one is helping (Helpful,
+  Not really, Let's talk later, Stop asking). Helpful doubles the wait; three of those end it;
+  Not really offers to stop it; Later keeps the wait. `set_check_in_reviews` changes it for one
+  check-in or all; a settings checkbox too (migration 0042, `themi.core.checkin_reviews`).
+
+Notes (2026-10-26):
+- Plain is the default for everyone, existing members included, as asked. Erin's gentle
+  phrasing strength (1) and shielding are unchanged: plain isn't demanding, and the checker
+  still runs.
+- Data left for after the restart: putting Erin's "Vacuum upstairs bedroom" on the chart
+  (ask Themi again, or `put_task_on_chore_chart` for task 1).
+- Still open from the reports: the near-duplicate chores ("Clean the kitchen" and the wall's
+  "Clean kitchen"; "Clean upstairs bathroom" and "Clean upstairs") now both exist in Themi.
 ---
 
 ## Milestone 5: Devices (Phase 2)
