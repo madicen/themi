@@ -101,9 +101,14 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
     return flags
 
 
+_LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
+
+
 def _opening_command(sentence: str) -> str | None:
     if sentence.rstrip().endswith("?"):
         return None  # "Dryer now, or later?" offers a choice; it isn't a command
+    if _LABEL.match(sentence):
+        return None  # "Check-in: ..." or "Due today: ..." labels the message
     words = _WORD.findall(sentence.lower())
     if not words:
         return None

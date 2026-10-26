@@ -17,6 +17,7 @@ Failures are said plainly and briefly, never as error dumps.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from themi import clock
@@ -54,6 +55,26 @@ YES_WORDS = frozenset(
         "✅",
     }
 )
+# A reply that says something was done while it's only waiting on a yes is replaced.
+WAITING_TEXT = "{summary}: that's waiting for a yes on the card above."
+CLAIMS_DONE = re.compile(
+    r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
+    r"created|removed|deleted|set up|made)\b"
+    r"|^(?:added|done|archived|booked|sent|ordered|scheduled)\b"
+    r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
+    r"sent|ordered|scheduled|on the list)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _honest(reply: str, waiting: list[str]) -> str:
+    """The model sometimes says "Added X" when X is only waiting on a yes (prompt 28's evals,
+    feedback bug #3). The approval card speaks for itself, so such a reply is replaced."""
+    if not waiting or not CLAIMS_DONE.search(reply):
+        return reply
+    return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
+
+
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
 LATER_WORDS = frozenset({"not now", "later", "maybe later", "not yet", "💤"})
 
@@ -193,13 +214,14 @@ class Agent:
         messages = [Message.user(turn)]
         tools = services.tools.specs()
         client = services.router.client_for(member.id, AITask.CONVERSATION)
-        ctx = ToolContext(member, services)
+        ctx = ToolContext(member, services, request_text=text)
         used_tools = False
         try:
             for _ in range(self.max_steps):
                 response = await client.chat(system, messages, tools)
                 if not response.tool_calls:
-                    return response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    return _honest(reply, ctx.staged)
                 used_tools = True
                 messages.append(response.message)
                 results = [await services.tools.run(call, ctx) for call in response.tool_calls]

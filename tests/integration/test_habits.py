@@ -112,7 +112,7 @@ async def test_an_ignored_habit_retires_quietly(
         outcomes.expire()  # nobody answered
         clock.advance(timedelta(hours=11))
 
-    assert sent[:3] == [[habit["prompt"]]] * 3
+    assert sent[:3] == [[f"Check-in: {habit['prompt']}"]] * 3  # Erin's rules 7 and 8, built in
     assert sent[3] == []  # retired, and nothing was said about it
     assert statuses(reserve, erin)[0] == "retired"
 

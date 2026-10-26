@@ -14,6 +14,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi import clock
 from themi.ai.errors import PermanentError
+from themi.core.agent import WAITING_TEXT
 from themi.core.groceries import GroceryList
 from themi.core.pantry import Pantry
 from themi.localtime import to_utc_iso
@@ -102,9 +103,8 @@ async def test_the_grocery_tool_and_buying_things(
     scenario: Scenario, fake_ourgroceries: FakeOurGroceries
 ) -> None:
     scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["Cumin", "cumin", "Limes"]})
-    scenario.primary.queue_text("Asked.")
-    await scenario.say("Husband", "put cumin and limes on the list")
-    await scenario.tap("Husband", "Go ahead")
+    scenario.primary.queue_text("On the list.")
+    await scenario.say("Husband", "put cumin and limes on the list")  # asked for: no card
     assert on_list(scenario) == ["cumin", "limes"]
     await scenario.run_periodic("groceries.mirror")
 
@@ -263,6 +263,35 @@ async def test_items_waiting_on_a_yes_are_not_staged_again(scenario: Scenario) -
     assert "already waiting on a yes: eggs" in tool_result(scenario)
 
     scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["eggs", "limes"]})
-    scenario.primary.queue_text("Asked about limes.")
+    scenario.primary.queue_text("Limes are on.")
     await scenario.say("Erin", "and limes")
     assert actions(scenario)[-1]["summary"] == "Limes for the grocery list"  # just the new one
+    assert on_list(scenario) == ["limes"]  # she asked for limes: added straight away
+
+
+# ----- asked for in their own words (F5, feedback bug #3) --------------------------
+
+
+async def test_items_someone_asks_for_go_straight_on_the_list(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["white miso"]})
+    scenario.primary.queue_text("Added white miso to the grocery list.")
+    replies = await scenario.say("Husband", "Add white miso to the grocery list")
+    assert replies == ["Added white miso to the grocery list."]  # no approval card
+    assert on_list(scenario) == ["white miso"]
+    assert [a["status"] for a in actions(scenario)] == ["done"]
+
+
+async def test_items_the_model_inferred_still_ask(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["taco shells"]})
+    scenario.primary.queue_text("Added taco shells to the grocery list.")  # not true yet
+    replies = await scenario.say("Husband", "we're having tacos tonight")
+    assert replies[0] == "Taco shells for the grocery list\nGo ahead, or not now?"
+    assert replies[1] == WAITING_TEXT.format(summary="Taco shells for the grocery list")
+    assert on_list(scenario) == []
+
+
+async def test_an_honest_reply_about_a_waiting_item_is_kept(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["taco shells"]})
+    scenario.primary.queue_text("Want taco shells too? The card above is ready when you are.")
+    replies = await scenario.say("Husband", "we're having tacos tonight")
+    assert replies[-1] == "Want taco shells too? The card above is ready when you are."

@@ -34,6 +34,8 @@ MIN_RECENT_OUTCOMES = 5
 MIN_ACTED_RATE = 0.7
 RETIRE_AFTER_IGNORED = 3
 CATEGORY = "habit_trial"
+# The daily message itself (not the offer) is labelled, as Erin asked in rules 7 and 8.
+CHECK_IN_TEXT = "Check-in: {prompt}"
 EXECUTOR = "habits.activate"
 
 # (idea, the daily message). Worded as offers, never as instructions.
@@ -162,7 +164,10 @@ class HabitReserve:
                 continue
             member = self.store.get_member(habit["member_id"])
             result = await self.services.outbox.send(
-                member, habit["prompt"], priority=Priority.LOW, kind="habit"
+                member,
+                CHECK_IN_TEXT.format(prompt=habit["prompt"]),
+                priority=Priority.LOW,
+                kind="habit",
             )
             self.db.execute(
                 "UPDATE habits SET last_sent_on = ?, last_outbox_id = ? WHERE id = ?",

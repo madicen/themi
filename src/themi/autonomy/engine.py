@@ -250,16 +250,21 @@ class Autonomy:
         executor: str,
         *,
         interactive: bool = False,
+        requested: bool = False,
     ) -> Outcome:
         """Run now (Tier 2) or wait for approval (Tier 1).
 
         `interactive` says the person is in the conversation right now (so an
         approval request can go out as a reply rather than wait for a good moment).
+        `requested` says they asked for exactly this in their own words: that counts as
+        their yes, but only for categories that may become automatic and aren't
+        escalated. Capped categories always ask.
         """
         cat = self.category(category)
         if executor not in self.executors:
             raise AutonomyError(f"no executor called {executor!r}")
         automatic = cat.effective_tier is Tier.AUTOMATIC
+        asked = requested and not automatic and not cat.capped and not cat.escalated
         now = to_utc_iso(clock.now())
         action_id = self.db.execute(
             "INSERT INTO pending_actions (category, member_id, summary, executor, payload, status,"
@@ -270,13 +275,16 @@ class Autonomy:
                 summary,
                 executor,
                 json.dumps(payload),
-                "executing" if automatic else "pending",
+                "executing" if automatic or asked else "pending",
                 int(automatic),
                 now,
                 now,
             ),
         )
         self._audit(action_id, category, member.id, "staged", member, summary)
+        if asked:
+            self._audit(action_id, category, member.id, "requested", member, "asked in chat")
+            return await self._execute(action_id, member)
         if not automatic:
             pending = self.action(action_id)
             for listener in self.pending_listeners:
