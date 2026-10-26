@@ -141,6 +141,7 @@ async def test_a_task_can_be_put_on_a_named_list(
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "due_time": "",
         },
     )
     scenario.primary.queue_tool_call(

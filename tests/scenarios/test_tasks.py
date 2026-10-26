@@ -22,6 +22,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
                     "assign_to": "anyone",
                     "steps": [],
                     "check_in": False,
+                    "due_time": "",
                 },
                 None,
             ),
@@ -100,6 +101,7 @@ def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
                 "assign_to": assign_to,
                 "steps": [],
                 "check_in": False,
+                "due_time": "",
             },
             None,
         ),
@@ -186,6 +188,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "due_time": "",
         },
     )
     scenario.primary.queue_text("Added to your list.")
@@ -210,6 +213,7 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
             "assign_to": "Husband",
             "steps": [],
             "check_in": False,
+            "due_time": "",
         },
     )
     scenario.primary.queue_text("Passed to him.")
@@ -231,7 +235,7 @@ async def test_a_task_due_today_says_so(scenario: Scenario) -> None:
     await scenario.advance(hours=1)
     inbox = scenario.inbox("Erin")
     assert "Due today: Book the dentist. Done already, or later?" in inbox
-    assert "Due 30 Oct: Return the library books. Done already, or later?" in inbox
+    assert not any("library books" in t for t in inbox)  # not until it's due (bug #14)
     assert any(
         t.startswith("Due today: Call the plumber (Erin added this for you).")
         for t in scenario.inbox("Husband")
@@ -248,3 +252,43 @@ async def test_due_today_is_judged_when_the_nudge_goes_out(scenario: Scenario) -
     await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 22))
     await scenario.advance(hours=10, minutes=1)  # 08:01 Thursday, the due date
     assert "Due today: Book the dentist. Done already, or later?" in scenario.inbox("Erin")
+
+
+async def test_a_task_for_later_today_waits_for_its_time(scenario: Scenario) -> None:
+    """Bug #14: "Today at around 2, remind me to answer the tutoring email" was asked
+    about straight away. The clock starts on Wednesday 21 October at 09:00."""
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Answer the tutoring email",
+            "kind": "text",
+            "effort": 1,
+            "due_date": "2026-10-21",
+            "due_time": "14:00",
+            "assign_to": "me",
+            "steps": [],
+            "check_in": False,
+        },
+    )
+    scenario.primary.queue_text("I'll remind you at 2.")
+    await scenario.say("Erin", "Today around 2, remind me to answer the tutoring email")
+    await scenario.advance(hours=4, minutes=59)  # 13:59
+    assert not any("tutoring" in t for t in scenario.inbox("Erin")[1:])
+    await scenario.advance(minutes=2)  # 14:01
+    assert any(t.startswith("Due today: Answer the tutoring email") for t in scenario.inbox("Erin"))
+
+
+async def test_a_task_isnt_prompted_before_its_day(scenario: Scenario) -> None:
+    """Bug #14: "do not prompt tasks until they're due"."""
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    await board.create(erin, "Return the library books", "errand", 1, date(2026, 10, 23))
+    for _ in range(46):  # hour by hour to Thursday 23:00
+        await scenario.advance(hours=1)
+    assert not any("library" in t for t in scenario.inbox("Erin"))
+    for _ in range(10):  # Friday 09:00
+        await scenario.advance(hours=1)
+    assert any(t.startswith("Due today: Return the library books") for t in scenario.inbox("Erin"))
