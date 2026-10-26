@@ -55,8 +55,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
 | F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
 | S1 | Shadow Calendar: energy remarks recorded | Shadow Calendar review | [x] |
-| S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [ ] |
-| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [ ] |
+| S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [x] |
+| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [~] |
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
@@ -2655,7 +2655,7 @@ Notes (2026-10-25), failing tests first:
   re-scored (prompt 28 had 2/6).
 
 ### S2 · Shadow Calendar: calendar, task load and busy times as inputs
-Status: [ ] (designed 2026-10-25; waiting for the user's choices below)
+Status: [x] (2026-10-25)
 Depends on: S1, 26, F3, F6b
 Read first: "B. Energy engine (Shadow Calendar)" → Inputs. The original spec said the hidden
 calendar is "updated based on all available data"; the plan narrowed that to three inputs.
@@ -2683,8 +2683,28 @@ Tests:
 - Task load caps; matching moves a task away from someone with a pile of overdue chores.
 - The wind-down dip after a long busy block, and not after short ones.
 
+Notes (2026-10-25), failing tests first:
+- `CalendarClient.list_events` (single instances; paged). `themi.connectors.gcal.busy.CalendarBusy`
+  refreshes every 15 minutes (`calendar.busy`, only when Google is set up). For each enabled
+  linked account with calendar access, it reads the primary calendar for the next 7 days and
+  keeps busy blocks only (migration 0031, `calendar_busy`: member, account, start, end; no
+  titles). Left out: all-day, "free", cancelled and self-declined events. An outage keeps the
+  last blocks.
+- A fourth privacy switch, "calendar" (`TRACKING_INPUTS`). Switching it off deletes the blocks
+  at the next refresh, and `blocks()` returns nothing. It's on the website and in `/tracking`.
+- Holding messages: `free_from(..., blocks)`, and `Outbox.calendar_blocks` (set by the app).
+  The energy windows treat blocks as quiet too.
+- Energy: `EnergyModel.load()` takes 8 points off inside a busy event, and in the hour after a
+  long event (2 hours or more) or a long busy time (4 hours or more). It applies to `capacity()`
+  and the projections. Words only, as always.
+- Task load: `Matcher.spare` subtracts `task_load` (2 per open task, overdue ones double,
+  capped at 15).
+- The plan's Inputs list now includes all three.
+- For the family: the calendar input does nothing until Google is set up (the README's Google
+  Cloud section) and each person links their account.
+
 ### S3 · Shadow Calendar: a private "how Themi sees my week" view
-Status: [ ] (designed 2026-10-25; waiting for the user's choices below)
+Status: [~]
 Depends on: S1, S2 (optional)
 
 Build:

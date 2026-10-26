@@ -16,7 +16,7 @@ class Role(StrEnum):
 
 
 # Inputs the energy engine may watch about a person. Each can be switched off.
-TRACKING_INPUTS = ("text_notes", "message_timing", "device_activity")
+TRACKING_INPUTS = ("text_notes", "message_timing", "device_activity", "calendar")
 
 
 @dataclass(frozen=True)

@@ -75,6 +75,22 @@ class CalendarClient:
         with contextlib.suppress(CalendarNotFound):
             await self._request("DELETE", f"{_events(calendar_id)}/{event_id}")
 
+    async def list_events(
+        self, calendar_id: str, time_min: str, time_max: str
+    ) -> list[dict[str, Any]]:
+        """Events (single instances of repeating ones) overlapping [time_min, time_max)."""
+        items: list[dict[str, Any]] = []
+        page: str | None = None
+        while True:
+            params = {"timeMin": time_min, "timeMax": time_max, "singleEvents": "true"}
+            if page:
+                params["pageToken"] = page
+            body = await self._request("GET", _events(calendar_id), params=params)
+            items.extend(body.get("items", []))
+            page = body.get("nextPageToken")
+            if not page:
+                return items
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         for attempt in (1, 2):
             token = await self.token()

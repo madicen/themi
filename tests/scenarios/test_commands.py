@@ -70,13 +70,19 @@ async def test_tracking_lists_your_inputs_with_toggles(scenario: Scenario) -> No
         "Stop energy notes",
         "Stop reply timing",
         "Stop device activity",
+        "Stop calendar",  # S2
     ]
     assert await scenario.tap("Erin", "Stop reply timing") == []  # the list is edited instead
     assert not scenario.app.store.get_member(scenario.member("Erin").id).tracks("message_timing")
     edited = scenario.edits("Erin")[-1]
     assert "• When you tend to reply, and how quickly: off" in edited["text"]
     labels = [b["text"] for b in edited["reply_markup"]["inline_keyboard"][0]]
-    assert labels == ["Stop energy notes", "Start reply timing", "Stop device activity"]
+    assert labels == [
+        "Stop energy notes",
+        "Start reply timing",
+        "Stop device activity",
+        "Stop calendar",
+    ]
 
 
 async def test_tracking_changes_show_on_the_website(

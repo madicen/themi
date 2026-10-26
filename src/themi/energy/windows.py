@@ -42,20 +42,24 @@ class Projection:
         self.member = model.store.get_member(member.id)
         self.timezone = model.timezone
         self.signals = model.signals(self.member, start)
+        self.blocks = model.blocks_around(self.member, start, start + HORIZON)
         self._baselines: dict[int, float] = {}
 
     def at(self, moment: datetime) -> float:
         hour = hour_of_week(moment, self.timezone)
         if hour not in self._baselines:
             self._baselines[hour] = self.model.baseline(self.member, moment)
-        return combine(
+        total = combine(
             self._baselines[hour], self.signals, moment, self.member.recovery_hours, self.timezone
         )
+        return max(0.0, total - self.model.load(self.member, moment, self.blocks))
 
     def quiet(self, moment: datetime) -> bool:
         """No messages then: quiet hours or a busy time."""
-        return in_quiet_hours(self.member, moment, self.timezone) or in_busy_time(
-            self.member, moment, self.timezone
+        return (
+            in_quiet_hours(self.member, moment, self.timezone)
+            or in_busy_time(self.member, moment, self.timezone)
+            or any(start <= moment < end for start, end in self.blocks)
         )
 
 
