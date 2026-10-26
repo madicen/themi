@@ -34,7 +34,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member
 from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
-from themi.connectors.cozyla.schedule import from_wall, to_wall
+from themi.connectors.cozyla.schedule import from_wall, to_wall, wall_can_say
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.reminders import MEDICINE
 from themi.core.services import Services
@@ -48,6 +48,11 @@ LOOK_BACK = timedelta(days=7)  # how far back a round's tick on the wall is look
 REPEATS = "(t.times_per_week IS NOT NULL OR t.repeat IS NOT NULL OR t.due_before_task IS NOT NULL)"
 SMALL_WORDS = frozenset({"the", "a", "an", "my", "our", "your"})
 Desired = tuple[str, list[str], str, WallSchedule]  # name, people, kind, schedule
+
+
+def is_routine(task: Task) -> bool:
+    """A check-in on fixed days: it lives on the wall as a routine (C3), not a chore."""
+    return task.check_in and wall_can_say(task.repeat)
 
 
 def title_key(title: str) -> str:
@@ -208,7 +213,8 @@ class CozylaChores:
             task = self.board.get(row["id"])
             link = self.db.one("SELECT * FROM cozyla_chores WHERE task_id = ?", (task.id,))
             chore = by_uid.get(link["chore_uid"]) if link else None
-            if task.status == "cancelled" or not task.repeats:
+            if task.status == "cancelled" or not task.repeats or is_routine(task):
+                # A check-in on fixed days is a routine on the wall (C3), not a chore.
                 if chore is not None:
                     await self.client.delete_chore(chore.uid)
                     changed += 1

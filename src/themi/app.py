@@ -34,6 +34,7 @@ from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.commands import Commands
 from themi.core.cozyla_chores import CozylaChores
+from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
@@ -183,6 +184,9 @@ def build_app(
     if cozyla is not None and cozyla.config.chores:
         chart = CozylaChores(services, tasks, cozyla)
         periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
+        routines = CozylaRoutines(services, tasks, cozyla)
+        routines.install()
+        periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), routines.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:
