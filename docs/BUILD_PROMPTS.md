@@ -53,7 +53,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
 | F6a | Chores: steps on tasks | Feedback | [x] |
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
-| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [ ] |
+| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [~] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2541,7 +2541,7 @@ Done when: Erin can describe a chore's steps and schedule in chat and it becomes
 repeats. Commit.
 
 ### F7 · Chores: anchored schedules, deadlines, read-back
-Status: [ ] (written 2026-10-25 at the user's request; waiting for the go-ahead to build)
+Status: [~] (go-ahead 2026-10-25)
 Depends on: F6b
 Read first: F6's notes. From the evals and Erin's chores: "bins on Tuesday evenings" and
 "cardboard before Tuesday (garbage day)" can't be expressed. F6b only knows "N times a week,
