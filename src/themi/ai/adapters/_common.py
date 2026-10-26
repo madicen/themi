@@ -21,18 +21,18 @@ def transport_exceptions() -> tuple[type[BaseException], ...]:
     TimeoutError, so that's always included.
     """
     found: list[type[BaseException]] = [TimeoutError]
-    try:
-        import aiohttp
-
-        found.append(aiohttp.ClientError)
-    except ImportError:
-        pass
-    for module_name in ("httpx", "httpx2"):
+    # Imported by name: none of these is a dependency of Themi's own (CI lacks aiohttp).
+    clients = {
+        "aiohttp": ("ClientError",),
+        "httpx": ("TimeoutException", "TransportError"),
+        "httpx2": ("TimeoutException", "TransportError"),
+    }
+    for module_name, attrs in clients.items():
         try:
             module = __import__(module_name)
         except ImportError:
             continue
-        for attr in ("TimeoutException", "TransportError"):
+        for attr in attrs:
             exc = getattr(module, attr, None)
             if isinstance(exc, type) and issubclass(exc, BaseException):
                 found.append(exc)

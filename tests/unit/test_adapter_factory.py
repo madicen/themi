@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 
 from themi.ai import PermanentError
@@ -60,7 +62,7 @@ def test_timeouts_and_aiohttp_errors_count_as_transport_errors() -> None:
     errors = transport_exceptions()
     assert TimeoutError in errors
     try:
-        import aiohttp
+        aiohttp = importlib.import_module("aiohttp")  # by name: CI doesn't install it
     except ImportError:
         return
     assert aiohttp.ClientError in errors
