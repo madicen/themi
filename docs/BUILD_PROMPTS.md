@@ -67,8 +67,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
-| C2 | Cozyla: chore chart and Themi's chores, both ways | Cozyla | [ ] |
-| C3 | Cozyla: routines and Themi's check-ins and habits | Cozyla | [ ] |
+| C2a | Cozyla: chore and routine client, schedules both ways | Cozyla | [~] |
+| C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [ ] |
+| C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [ ] |
+| C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -3104,12 +3106,9 @@ Notes (2026-10-26):
 - Unassigning on the wall is logged; the task keeps its person.
 - Setup: `COZYLA_TODO_LIST=To-do List` in `.env`, then restart `themi run`.
 
-### C2 · Cozyla: chore chart and Themi's chores, both ways
-Status: [ ]
-Depends on: C1c, F7
-Read first: `cozyla-sdk`'s docs/cozyla-cloud-api.md, "Chores" (paths under
-`/cal-server/rewards/chores/`: `myChoresV1`, `create/v1`, `update/v1`, `delete/v1`,
-`choreRecordByDay/v3`, `choreCheck/v1`).
+### C2 · Cozyla: chores and routines (split into C2a, C2b, C2c and C3)
+Read first: `cozyla-sdk`'s docs/cozyla-cloud-api.md, "Chores" and "Routines" (paths under
+`/cal-server/rewards/`).
 
 What's on the wall (read-only look, 2026-10-26): 16 chores, about half of them current.
 Cleaning (bathrooms every other Friday, kitchen Wednesdays, upstairs Thursdays, bird cage
@@ -3133,28 +3132,6 @@ How they map:
 | steps, energy levels, minimum, escalation, step-up | Themi only (steps can go in `description`) |
 | Themi's "twice a week" (floating) | no wall equivalent: stays off the chart, or pick days |
 
-Build:
-- A `cozyla.chores` job beside the to-do sync, with its own snapshot of definitions and of
-  the last few days' occurrences. First sync links wall chores to Themi chores by title with
-  small words ignored ("Clean bird cage" and "Clean the bird cage"); ended courses are left
-  alone; the rest come in quietly.
-- Either side's tick closes the round on both. A schedule edit on either side goes to the
-  other while the schedule is expressible on both; otherwise Themi keeps its own and logs it.
-- Themi keeps the nudging: wall reminders stay off, so nobody is told twice.
-- The fake gains chores and occurrences; tests for each row of the table, both directions.
-
-Questions for the family before building:
-- When the two disagree at the first link (the bird cage: Tue and Sat on the wall, "twice a
-  week, counted from the last time" in Themi), which wins?
-- Should medication courses be nudged by Themi, or stay wall-only?
-- Should Themi nudge for every chore, or only once one is overdue (the wall already shows
-  today's chores)?
-
-### C3 · Cozyla: routines and Themi's check-ins and habits
-Status: [ ]
-Depends on: C2, F8
-Read first: `cozyla-sdk`'s docs/cozyla-cloud-api.md, "Routines".
-
 What's on the wall: 4 routines, each one person's: Walk dog (Erin, mornings), Cycle Dishwasher
 (Michael, evenings), Take out bins (Michael, Tuesday evenings), Take Meds (Michael, evenings).
 
@@ -3165,13 +3142,78 @@ Themi's check-ins (Erin's run: Tue, Thu, Sat at 2 pm) would show as her Afternoo
 and the water habit as a daily one. A routine ticked on the wall closes Themi's round; a
 "Done" in Telegram ticks the routine.
 
-Also: "Cycle Dishwasher" being ticked, or not, is the "are we falling behind?" signal Erin
-asked for in idea #4, without any hardware. Feed routine completions into the Shadow
-Calendar as energy signals (people see words, never scores), and revisit H1 after this.
+The family's decisions (2026-10-26):
+1. Themi wins. Its calendar is the more flexible one, and it's in charge of the wall's chore
+   chart: it writes chores to match its own, and changes made on the wall to a chore Themi
+   keeps are put back. Chores only on the wall come into Themi first, then Themi owns them.
+2. If something is still open at the end of the day, a nudge goes out. And a check after the
+   morning if the whole morning routine isn't done, and in the evening for the evening one.
+3. Reminders follow how important the chore is, and get more specific as it becomes more
+   overdue.
 
-Build: a `cozyla.routines` job like C2's; routines for check-in tasks and active habits, and
-Themi check-ins for wall routines; habit tracking (`habitEnabled`) left to the wall. Tests as
-for C2.
+### C2a · Cozyla: chore and routine client, schedules both ways
+Status: [~]
+Depends on: C1c
+Build:
+- `CozylaClient`: `chores()`, `create_chore`, `update_chore` (every field re-sent, as the API
+  needs), `delete_chore`, `chore_records(day)`, `check_chore(uid, member, day, done)`;
+  `routines()`, `routine_records(day)`, `check_routine(id, day, done)`. The fake serves them.
+- Schedules both ways (`themi.connectors.cozyla.schedule`): a Themi `Repeat` to the wall's
+  fields and back, where both can say it (every N days; every N weeks on given days; given
+  days of the month; a time of day). Everything else ("twice a week, counted from the last
+  time", "the first Monday", deadline chores) is put on the wall one round at a time.
+- `Repeat.until`: a last day ("Mimi pill until 30 Oct"), parsed ("... until 30 Oct"), read
+  back, and honoured when working out rounds; after the last one, the chore is done.
+
+### C2b · Cozyla: Themi's chores on the chore chart, Themi in charge
+Status: [ ]
+Depends on: C2a
+Build:
+- A `cozyla.chores` job (every few minutes). Each Themi chore has one wall chore: repeating
+  with the same schedule when the wall can say it, otherwise a one-off for the current round
+  on its due day, moved when the round moves. Its name, people, time and schedule are made to
+  match Themi's every sync; edits on the wall are put back, and a deleted one is made again
+  (stop a chore in Themi).
+- People: a chore's person ("Everyone" with them); a chore for either of you ("AnyOne" with
+  both): a new `tasks.either`, kept every round, so either can tick it and both see it.
+- Chores only on the wall: active ones (forever, or ending today or later) come into Themi
+  with their schedule, people and end date, linked by title with small words ignored
+  ("Clean bird cage" and "Clean the bird cage"); ended ones are left alone. Where both have a
+  chore, Themi's schedule is written to the wall.
+- Ticks: a tick on the wall for the current round (or an earlier one still owed) closes it in
+  Themi as that person; a round done in Themi ticks the doer's occurrence. Processed ticks are
+  remembered, so none counts twice.
+- Wall reminders stay off; Themi does the reminding.
+
+### C2c · Reminders by importance: end of day, more specific when overdue
+Status: [ ]
+Depends on: C2b
+Build:
+- `tasks.importance`: low, normal or high. A tool sets it ("the meds really matter"); chores
+  that come from the wall default to normal, and medication-like ones (pill, meds, drops,
+  cream) to high.
+- End of day: in the early evening (two hours before quiet hours start), one message per
+  person listing what's due today and still open, low importance left out. Nothing open,
+  nothing sent.
+- Overdue reminders repeat by importance (high every day, normal every two days, low every
+  week) and grow more specific each time: first "Overdue: X (due Tuesday)"; then the
+  smallest version (the lightest steps); then a concrete suggestion, such as when today
+  looks lighter, and an offer to move it or hand it to the other person. Gentle wording
+  throughout (the PDA rules); never more demanding, only more concrete.
+- Tests with a frozen clock across several days, for each importance.
+
+### C3 · Cozyla: routines, and morning and evening routine checks
+Status: [ ]
+Depends on: C2a, C2c
+Build:
+- Wall routines stay the wall's: Themi reads each day's routine records. After the morning
+  (noon) and in the evening (two hours before quiet hours), if any of a person's routines for
+  that part of the day are still open, one message lists them, with a button per routine
+  that ticks it on the wall. All done: nothing sent.
+- Themi's check-ins (F8) appear on the wall as that person's routine for their part of the
+  day, kept by Themi as chores are; a tick on the wall closes Themi's round.
+- Routine ticks become energy signals for the Shadow Calendar ("Cycle Dishwasher" is Erin's
+  idea #4 signal, without hardware); people see words, never scores. Revisit H1 after this.
 ---
 
 ## Milestone 5: Devices (Phase 2)
