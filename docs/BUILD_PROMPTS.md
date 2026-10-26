@@ -53,6 +53,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
 | F6a | Chores: steps on tasks | Feedback | [x] |
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
+| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2490,8 +2491,16 @@ Status: split into F6a (steps) and F6b (schedules and escalation), approved 2026
     - The Tasks page shows each schedule and the last few runs (late ones marked).
       Screenshot-checked in `make dev`.
     - The plan's Task matching bullet now describes chores.
-    - Data to move after the restart: the bird cage gets 2 times a week, at least every 7 days,
-      after 14 days both (from draft 11), plus its steps (from draft 12).
+    - Data moved on 2026-10-25 after the user's restart (a guarded script, tested on a copy of
+      the database first):
+        - Bird cage (task 7): Erin's own 9 steps from her message (not draft 12's rewording),
+          plus 2 times a week, at least every 7 days, after 14 days both.
+        - Kitchen (task 6): renamed "Clean the kitchen", with her approved steps in rule 10's
+          format.
+        - Bathroom (task 4): renamed "Clean upstairs bathroom", with rule 3's levels as
+          (Low)/(Medium)/(High) steps, repeating once a week ("realistic", in her words).
+        - Rule 3 unlocked. The two nudges already queued for the next morning were rewritten
+          to the new wording.
 Depends on: 20, F4, F5
 Read first: "Shadow Calendar" → tasks and matching; "Module behaviour" → C (Maintenance), whose
 interval, step-by-step guide and history this reuses. From feedback bug #5: Erin's chores
@@ -2530,6 +2539,53 @@ Tests:
 
 Done when: Erin can describe a chore's steps and schedule in chat and it becomes one task that
 repeats. Commit.
+
+### F7 · Chores: anchored schedules, deadlines, read-back
+Status: [ ] (written 2026-10-25 at the user's request; waiting for the go-ahead to build)
+Depends on: F6b
+Read first: F6's notes. From the evals and Erin's chores: "bins on Tuesday evenings" and
+"cardboard before Tuesday (garbage day)" can't be expressed. F6b only knows "N times a week,
+counted from the last time it was done", so replies like "I'll remind you Tuesday evenings"
+overstate what's set.
+
+Build:
+- Schedules as RFC 5545 recurrence rules (`dateutil.rrule`), which also suit the calendar.
+  Two modes: anchored ("every Tuesday at 18:00", "first Monday of the month", "every 3 days
+  from Oct 26") and floating ("2 times a week after the last time", which is F6b's behaviour,
+  kept as is). Migration: an `rrule` column plus a mode; F6b's `times_per_week` maps onto
+  floating.
+- Anchored rounds: due on each occurrence, nudged in its window (the anchor's time, or the
+  family's daytime), still under quiet hours and busy times. A missed anchored round can be
+  caught up or skipped, per chore; the default is to roll on to the next occurrence.
+- Deadlines tied to another event: "by garbage day" means due the day before an anchored
+  household event (a chore can point at another chore's schedule, e.g. task 5's cardboard at
+  the bins).
+- Read-back: after any schedule change, Themi states it in plain words, built in code from what
+  was stored (e.g. "Every Tuesday at 6 pm; overdue after a week; after two weeks it's on both
+  your lists"), not from the model's own summary. A wrong read-back is then easy to correct.
+  Validation rejects impossible rules (an escalation before the minimum, an anchor with no
+  dates).
+- `set_task_schedule` gets `repeat` (anchored, as plain fields: weekdays, time, monthly
+  position, interval) and `due_before_task`. The Tasks page shows the next three occurrences.
+
+Tests:
+- Anchored next-occurrence across weeks, months and a daylight-saving change.
+- Floating behaviour unchanged (F6b's tests keep passing).
+- Missed rounds rolling on versus catching up; "by garbage day" deadlines.
+- The read-back text, built in code, for each kind of schedule.
+- The bins eval case expects an anchored weekly Tuesday schedule.
+
+Done when: "bins on Tuesday evenings" and "cardboard before garbage day" are stored, nudged and
+read back exactly. Commit.
+
+Later prompts (not part of F7, from the same roadmap):
+- Skip this round, or pause chores while away (holding overdue and escalation).
+- Fair rotation between partners ("alternate the bins"), using `task_runs`.
+- Energy-aware levels: offering a chore's (Low)/(Medium)/(High) steps to suit the day, in
+  words, never scores.
+- Robustness: streaks and completion rates on the Tasks page; a check that the hourly job
+  never double-nudges after a restart.
+- Prompt 33's maintenance (active months, one a day, notes per run) built on the same base.
 
 ---
 
