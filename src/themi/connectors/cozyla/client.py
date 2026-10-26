@@ -18,7 +18,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -26,6 +26,19 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 
 from themi import clock
+from themi.connectors.cozyla.chores import (
+    Chore,
+    ChoreRecord,
+    Routine,
+    RoutineRecord,
+    WallSchedule,
+    chore_body,
+    chore_from,
+    record_from,
+    routine_body,
+    routine_from,
+    routine_record_from,
+)
 from themi.storage.secrets import Secret
 
 BASE_URL = "https://api.cozylacal.com"
@@ -195,6 +208,89 @@ class CozylaClient:
 
     async def delete(self, todo_id: str) -> None:
         await self._call("rewards/todosInfo/delete", {"id": int(todo_id)})
+
+    # ----- the chore chart and routines (C2a) --------------------------------------------
+
+    async def chores(self) -> list[Chore]:
+        return [chore_from(c) for c in await self._call("rewards/chores/myChoresV1") or []]
+
+    async def create_chore(
+        self, name: str, members: list[str], kind: str, schedule: WallSchedule
+    ) -> Chore:
+        body = {**chore_body(name, members, kind, schedule, {}), "asATemplate": False}
+        return chore_from(await self._call("rewards/chores/create/v1", body))
+
+    async def update_chore(
+        self, chore: Chore, name: str, members: list[str], kind: str, schedule: WallSchedule
+    ) -> None:
+        body = {**chore_body(name, members, kind, schedule, chore.raw), "choreUid": chore.uid}
+        await self._call("rewards/chores/update/v1", body)
+
+    async def delete_chore(self, uid: str) -> None:
+        await self._call("rewards/chores/delete/v1", {"choreUid": uid})
+
+    async def chore_records(self, day: date) -> list[ChoreRecord]:
+        """One record per member per chore falling on `day`."""
+        body = {"selectDay": day.isoformat()}
+        return [
+            record_from(r)
+            for r in await self._call("rewards/chores/choreRecordByDay/v3", body) or []
+        ]
+
+    async def check_chore(self, uid: str, member: str, day: date, done: bool) -> None:
+        body = {
+            "choreUid": uid,
+            "memberUid": member,
+            "checkFrom": "widget",
+            "choreStatus": "completed" if done else "pending",
+            "checkDay": day.isoformat(),
+            "selectDay": day.isoformat(),
+        }
+        await self._call("rewards/chores/choreCheck/v1", body)
+
+    async def routines(self) -> list[Routine]:
+        body = {"memberUids": [], "routineType": ""}
+        result = await self._call("rewards/routineUser/getRoutineList/v1", body)
+        return [routine_from(r) for r in result or []]
+
+    async def create_routine(
+        self, member: str, title: str, part: str, schedule: WallSchedule
+    ) -> int:
+        body = {
+            **routine_body(title, part, schedule, {}),
+            "memberUids": [member],
+            "asATemplate": False,
+        }
+        result = await self._call("rewards/routineUser/createRoutine", body)
+        return int(result[0]["routineId"])
+
+    async def update_routine(
+        self, routine: Routine, title: str, part: str, schedule: WallSchedule, today: date
+    ) -> None:
+        body = {
+            **routine_body(title, part, schedule, routine.raw),
+            "id": routine.id,
+            "toDay": today.isoformat(),  # the edit applies from this day
+        }
+        await self._call("rewards/routineUser/updateRoutine", body)
+
+    async def delete_routine(self, routine_id: int, today: date) -> None:
+        body = {"id": routine_id, "toDay": today.isoformat()}
+        await self._call("rewards/routineUser/delRoutine", body)
+
+    async def routine_records(self, day: date) -> list[RoutineRecord]:
+        body = {"selectDay": day.isoformat(), "memberUids": []}
+        result = await self._call("rewards/routineUserRecord/getRoutineRecordByDay/v1", body)
+        return [routine_record_from(r) for r in result or []]
+
+    async def check_routine(self, routine_id: int, day: date, done: bool) -> None:
+        body = {
+            "routineId": routine_id,
+            "checkDay": day.isoformat(),
+            "status": "completed" if done else "pending",
+            "weekFirstDate": 0,
+        }
+        await self._call("rewards/routineUserRecord/checkUserRoutine", body)
 
     # ----- the wire ---------------------------------------------------------------------
 
