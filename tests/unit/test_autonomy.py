@@ -292,3 +292,31 @@ async def test_the_audit_log_is_append_only(autonomy: Autonomy, family: SeededFa
         family.db.execute("UPDATE action_audit SET event = 'forged'")
     with pytest.raises(sqlite3.DatabaseError, match="append-only"):
         family.db.execute("DELETE FROM action_audit")
+
+
+# ----- asked for in the person's own words --------------------------------------
+
+
+async def test_an_asked_for_action_counts_as_the_yes(
+    autonomy: Autonomy, family: SeededFamily, recorder: Recorder
+) -> None:
+    outcome = await autonomy.stage(
+        "grocery_list_add", family.erin, "White miso", {}, "groceries.add", requested=True
+    )
+    assert outcome.action.status == "done" and len(recorder.calls) == 1
+    assert "requested" in events(autonomy, outcome.action.id)
+    assert autonomy.category("grocery_list_add").tier is Tier.SUPERVISED  # nothing granted
+
+
+async def test_capped_or_escalated_categories_ask_even_when_asked_for(
+    autonomy: Autonomy, family: SeededFamily, recorder: Recorder
+) -> None:
+    capped = await autonomy.stage(
+        "vendor_call", family.erin, "Call the plumber", {}, "gmail.archive", requested=True
+    )
+    assert capped.action.status == "pending"
+    autonomy.escalate("grocery_list_add", "odd pattern of adds")
+    escalated = await autonomy.stage(
+        "grocery_list_add", family.erin, "White miso", {}, "groceries.add", requested=True
+    )
+    assert escalated.action.status == "pending" and recorder.calls == []

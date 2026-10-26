@@ -188,3 +188,10 @@ async def test_ai_rewriter_uses_the_members_pda_task(family: SeededFamily) -> No
     assert request.schema == REWRITE_SCHEMA
     assert "<message>\nMove the laundry.\n</message>" in request.prompt
     assert '"move"' in request.prompt
+
+
+def test_a_leading_label_isnt_an_opening_command() -> None:
+    """ "Check-in:" (Erin's rules 7 and 8) and "Due today:" label a message; they aren't orders."""
+    assert find_demands("Check-in: A glass of water might feel good about now.") == []
+    assert find_demands("Due today: Call the plumber. Done already, or later?") == []
+    assert [f.rule for f in find_demands("Check in with the vet.")] == ["imperative"]

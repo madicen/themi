@@ -50,6 +50,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F2 | Personal rules | Feedback | [x] |
 | F3 | Busy times | Feedback | [x] |
 | F4 | Tasks someone takes on stay theirs | Feedback | [x] |
+| F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2336,6 +2337,51 @@ Notes (2026-10-25):
 - Real data, by plain SQL: task 1 renamed to "Vacuum upstairs bedroom" (task 2 covers the
   sheets); rule 6 unlocked.
 - Not done: catching near-duplicate tasks when they're created.
+
+### F5 · Asked-for actions, honest replies, check-in wording
+Status: [x] (2026-10-25)
+Depends on: 11, 12, 20, 25
+Read first: "Trust tiers, rules and context repair". From feedback bug #3: "Add white miso to
+the grocery list" got an approval card, then "Added white miso to the grocery list" while it
+was still waiting. The user chose these (2026-10-25), plus Erin's rules 7 and 8 built in.
+
+Build:
+- An action the person asked for in their own words counts as their yes, for categories that
+  may become automatic and aren't escalated (never capped ones). For the grocery list, "asked
+  for" means every item name appears in what they wrote this turn; restocking suggestions,
+  receipts and items the model inferred still ask. The plan is updated to say so.
+- When a turn leaves an action waiting on a yes, a reply that claims it's done is replaced with
+  a plain line pointing to the card.
+- A habit's daily check-in starts with "Check-in:" (offers to try a habit don't). Rules 7 and 8
+  are unlocked.
+
+Tests:
+- Asked-for grocery adds go straight on; inferred ones still ask; capped or escalated categories
+  always ask, even when asked for.
+- A false "Added..." reply after staging is replaced; an honest reply is kept.
+- Check-ins carry the prefix; offers don't.
+
+Done when: "Add white miso to the grocery list" just adds it. Commit.
+
+Notes (2026-10-25):
+- `Autonomy.stage(..., requested=True)` runs the action as approved, with a `requested` audit
+  event, unless the category is automatic already, capped or escalated. `Proposal.requested`
+  carries it; only the tool sets it, from `ToolContext.request_text` (the person's message
+  this turn), never from model arguments. The category's tier doesn't change.
+- `add_to_grocery_list`: asked for when every new item name appears as whole words in what
+  they wrote, normalised like item names but without the length limit.
+- `ToolContext.staged` collects actions left waiting this turn. `agent._honest()` replaces a
+  reply matching `CLAIMS_DONE` ("I've added", "Added ...", "is on the list" and so on) with
+  `WAITING_TEXT` per waiting item. Honest replies pass through unchanged.
+- Habits: the daily message is `CHECK_IN_TEXT` ("Check-in: <prompt>"); offers aren't
+  prefixed. The PDA check now treats a leading label (up to three words and a colon) as no
+  opening command. Without that, "Check-in:" was softened to "you could check-in:".
+- The plan's trust-tier paragraph now covers asked-for actions.
+- Real data, by plain SQL: action 2 (white miso) approved and added to the list; rules 7 and 8
+  unlocked. Michael's approval card still shows its buttons; a tap now gets "already
+  answered".
+- Not done: an explicit request for an item already waiting on a yes (say, from restocking)
+  still says it's waiting, rather than approving that item.
 
 ---
 

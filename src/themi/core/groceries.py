@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -192,7 +192,11 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
                 f"{and_list(skipped)}. No new approval was sent."
             )
         raise InvalidValue("no items to add")
-    return proposal(names)
+    # Asked for, if every item is in what they just wrote ("add white miso", "out of eggs");
+    # restocking, receipts and items the model inferred still wait for a yes.
+    said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).lower()
+    asked = bool(said) and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
+    return replace(proposal(names), requested=asked)
 
 
 @tool("show_grocery_list", "What's on the family's grocery list right now.", {})

@@ -37,6 +37,8 @@ log = logging.getLogger(__name__)
 class ToolContext:
     member: Member
     services: Services
+    request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
+    staged: list[str] = field(default_factory=list)  # actions left waiting on a yes this turn
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,9 @@ class Proposal:
     summary: str
     executor: str
     payload: dict[str, Any] = field(default_factory=dict)
+    # The person asked for exactly this in their own words (checked by the tool against
+    # what they wrote, never the model's say-so). The trust tiers decide what that allows.
+    requested: bool = False
 
 
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
@@ -155,9 +160,11 @@ class ToolRegistry:
             proposal.payload,
             proposal.executor,
             interactive=True,  # tools run inside a conversation
+            requested=proposal.requested,
         )
         action = outcome.action
         if action.status == "pending":
+            ctx.staged.append(proposal.summary)
             return (
                 f"Staged for approval (action {action.id}): {proposal.summary}. Nothing happens "
                 "until they say yes; don't describe it as done."
