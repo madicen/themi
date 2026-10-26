@@ -59,6 +59,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [x] |
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
+| F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
+| F9 | Exercise schedules: either-day rounds, rest days, sunset, distance plans | Feedback | [ ] |
+| L1 | Lists on demand | Lists | [ ] |
+| L2 | A "things to buy" list sorted by store | Lists | [ ] |
+| H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2857,6 +2862,119 @@ Notes (2026-10-25):
 - Setup: restart `themi run` so the migration runs and the sync starts. The first sync
   imports the list.
 
+### F8 · Feedback fixes: nudge labels, check-ins, duplicate sends
+Status: [x] 2026-10-26
+Depends on: F5, F7
+From the family's reports of 2026-10-25 and 26 (`themi feedback`): bugs #9 and #10, and three
+problems found while reading them. Bug #5 (rules for chores) was already fixed by F6.
+
+Done (failing tests first):
+- Labels (bug #9): Erin's "Due today:" and "Check-in:" rules had been retired for built-in
+  labels, but those only covered tasks due that day and habits, so to her the rules looked
+  forgotten. Every task nudge now opens with a label for the day it goes out: "Due today:",
+  "Due tomorrow:", "Due Sunday:" (within a week), "Due 8 Nov:", "Was due ...", or "To do:"
+  without a date. Labels stay at three words or fewer so the phrasing check reads them as
+  labels. Migration 0033 adds `tasks.check_in`: `create_task` takes `check_in` ("check in with
+  me about running"), and those nudges open with "Check-in:". The system prompt says nudge
+  wording is Themi's own, so the model doesn't propose rules for it.
+- First nudge (bug #10): a new chore's first nudge now waits for its round. The nudge queued
+  when a task is made used to stay when its schedule was set, unless the schedule moved the due
+  date, so running (due Tuesday afternoon) and the bird cage (due Tuesday) went out Monday.
+- Duplicate sends: a flush running while a reply was still being sent (the PDA shield can call
+  a model) sent the same row again; idea #8's acknowledgement arrived twice. Rows on their way
+  out are tracked in memory and skipped. Failed replies now retry after 15 s, 30 s, 1, 2, 5 and
+  15 minutes, then hourly, for up to 8 tries; one reply had reached Erin 90 minutes late.
+- Answering in words: "Yes let's give that one a try" left the water check-in waiting, since
+  only a tap or a bare yes answered a card. New tool `answer_waiting_item`, which works only
+  when the person's own message says yes, no or later (a word list, checked in code).
+- Context repair: asking why Themi offered something was reported as forgotten context, which
+  pinned a note about the offer for the whole family. `report_forgotten_context` now needs the
+  person to say Themi forgot, was told before, or got something wrong.
+- New eval case `task-check-in-run`.
+
+Notes (2026-10-26):
+- Bug #10 was mostly old code: `themi run` had been started at 19:32 on 2026-10-25, before F7,
+  so "Tuesday, Thursday and Saturday or Sunday, afternoons" became "3 times a week" with no
+  days or time, and the model's "next one is Tuesday afternoon" had nothing behind it. Restart
+  `themi run` after each round of changes.
+- Data fixed with the app's own code (a copy first): task 8 "Go for a run" is now every
+  Tuesday, Thursday and Saturday at 2 pm, a check-in, with its first nudge queued for Tuesday
+  27 Oct at 2 pm; task 9 "Run 1.3 miles" is cancelled (the distance plan stays a remembered
+  fact); fact 1, the pinned note from the misfired repair, is deleted; Erin's water check-in
+  is accepted, as she said in chat. Migration 0033 was applied to the live database by that
+  script; it only adds a column, so the running process was unaffected.
+- Not done here, and moved to F9: "Saturday or Sunday", "never two days in a row", "if I miss
+  a day, the next day", "an hour before sunset", and the weekly distance step-up.
+- The water check-in's time is still the habit's fixed one; Erin asked for "partway through
+  the day", adjusted from her feedback. Habit timing that learns is a follow-up.
+- The Cozyla branch (C1) also used migration 0033; it was renumbered to 0034 when rebased.
+
+### F9 · Exercise schedules: either-day rounds, rest days, sunset, distance plans
+Status: [ ]
+Depends on: F7, F8
+From Erin's running set-up (bug #10): "Tuesday, Thursday, and Saturday or Sunday, an afternoon
+check-in at least an hour before sunset. If I miss a day, prompt me the next day. Never two
+days in a row. Next week is 1.3 miles, then 1.5, then up 0.25 a week, stepping up on Tuesdays."
+
+Build:
+- Either-day rounds in the schedule phrases: "Saturday or Sunday" is one round that's due
+  Saturday and still fine Sunday; done on either counts for the week's round.
+- A rest rule: "never two days in a row" means no nudge the day after it was done, and a missed
+  round moves to the next allowed day rather than the next listed day.
+- "If I miss a day, the next day": a `missed` choice that moves the round to tomorrow (if the
+  rest rule allows), alongside roll and catch_up.
+- Sunset-relative times ("an hour before sunset"): needs the family's location (a setting,
+  coarse is enough) and an offline sunset calculation (for example the `astral` library);
+  read back as "about 5:10 pm today".
+- A progression on a task: a quantity that steps on a weekday ("1.3 miles, then 1.5, then up
+  0.25 a week, on Tuesdays"), shown in the nudge ("Check-in: Go for a run (1.5 miles this
+  week)") and read back exactly, like schedules.
+- Read-backs for all of these, built from what was stored; tests with a frozen clock across
+  a week, including a missed Tuesday and a run on Sunday followed by Monday.
+
+### L1 · Lists on demand
+Status: [ ]
+Depends on: 25
+From Erin's idea #7: "Themi should be able to create new internal lists on demand."
+
+Build:
+- Named lists kept by Themi ("packing for the trip", "gift ideas"): create, add, tick off,
+  remove, show and delete from chat, with tools that check names against what they typed, as
+  F5 does for groceries. Each list is household or personal.
+- A Lists page on the website.
+- If the Cozyla to-do trial (C1) works out, a list can be mirrored to a Cozyla list the same
+  way; otherwise leave a seam for it.
+
+### L2 · A "things to buy" list sorted by store
+Status: [ ]
+Depends on: L1, 35
+From Erin's idea #6: non-food things to buy go on their own list, not the grocery list in
+OurGroceries ("body wash comes from Amazon"). Each item knows where the family usually buys
+it, and when a Safeway or Amazon order is put together (prompt 35's cart staging), the
+matching items are added to that cart.
+
+Build:
+- Food versus non-food when something is added: food goes to groceries as now; non-food goes
+  to "things to buy". Ask when it's unclear, and remember the answer for that item.
+- A usual store per item, learned from what people say and from receipts, editable on the
+  website.
+- When prompt 35 stages a cart, it offers the matching "things to buy" items as part of the
+  same approval.
+
+### H1 · Dishwasher: notice when the household is falling behind
+Status: [ ]
+Depends on: 18
+From Erin's idea #4, asking for this sooner than prompt 36's research. She wants Themi to
+notice, without being told, when the household may be running behind.
+
+Build:
+- First, ask the user for the dishwasher's make and model and whether it has an app. If it's an
+  LG ThinQ, use prompt 30's connector; otherwise a smart plug that reports power draw (Tuya,
+  prompt 32's work) can detect cycles on any dishwasher.
+- Cycles become energy signals for the Shadow Calendar: fewer runs than usual for the
+  household is a gentle "running behind" sign. The plan's rule holds: people see words, never
+  scores.
+
 ---
 
 ## Milestone 5: Devices (Phase 2)
@@ -3020,10 +3138,7 @@ Do:
   setup) in `docs/research/voice-calls.md`.
 - SMS as an extra channel: current Twilio pricing and US A2P 10DLC registration steps and costs,
   in `docs/research/sms.md`.
-- Dishwasher, from Erin's idea #4 (2026-10-25): she wants Themi to notice passively when the
-  household is falling behind. The dishwasher isn't known to be an LG ThinQ (prompt 30), so find
-  its make and any API. Also consider a smart plug that reports power use (the Tuya work in
-  prompt 32), which would detect cycles on any dishwasher.
+- Dishwasher: moved to its own prompt, H1 (2026-10-26), at Erin's request.
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.
