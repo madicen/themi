@@ -145,10 +145,9 @@ class Outbox:
         priority = Priority(priority)
         if dedupe_key and self._is_duplicate(member.id, dedupe_key, now):
             return OutboxResult("duplicate", None)
-        start = now
-        if not_before is not None and priority not in IMMEDIATE:
-            start = max(now, not_before)
-        when = self._earliest(member, priority, start, deadline, kind)
+        when = self.send_time(
+            member, priority, deadline=deadline, kind=kind, not_before=not_before, now=now
+        )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -175,6 +174,24 @@ class Outbox:
             )
             return OutboxResult("queued", outbox_id, send_after=when)
         return await self._deliver(self._row(outbox_id))
+
+    def send_time(
+        self,
+        member: Member,
+        priority: Priority,
+        *,
+        deadline: datetime | None = None,
+        kind: str = "chat",
+        not_before: datetime | None = None,
+        now: datetime | None = None,
+    ) -> datetime:
+        """When a message queued now would go out, for wording that depends on the day."""
+        now = now or clock.now()  # send() passes its own reading, so "now" is one moment
+        priority = Priority(priority)
+        start = now
+        if not_before is not None and priority not in IMMEDIATE:
+            start = max(now, not_before)
+        return self._earliest(member, priority, start, deadline, kind)
 
     async def flush(self) -> int:
         """Send whatever is due. Returns how many went out. Run it from the scheduler."""

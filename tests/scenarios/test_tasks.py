@@ -202,3 +202,35 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
     await scenario.say("Erin", "can Husband pick up the dry cleaning?")
     await scenario.advance(minutes=30)
     assert any("dry cleaning" in t for t in scenario.inbox("Husband"))
+
+
+async def test_a_task_due_today_says_so(scenario: Scenario) -> None:
+    """Erin's rule 6 asked for this; rules can't change nudge wording, so it's built in."""
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin, husband = scenario.member("Erin"), scenario.member("Husband")
+    await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))  # today
+    await board.create(erin, "Return the library books", "errand", 1, date(2026, 10, 30))
+    await board.create(erin, "Call the plumber", "call", 2, date(2026, 10, 21))  # his, from her
+    await scenario.advance(hours=1)
+    inbox = scenario.inbox("Erin")
+    assert "Due today: Book the dentist. Done already, or later?" in inbox
+    assert any(t.startswith("On the list for you, whenever it suits: Return") for t in inbox)
+    assert any(
+        t.startswith("Due today: Call the plumber (Erin added this for you).")
+        for t in scenario.inbox("Husband")
+    )
+    assert husband.id != erin.id
+
+
+async def test_due_today_is_judged_when_the_nudge_goes_out(scenario: Scenario) -> None:
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    await scenario.advance(hours=13)  # 22:00 Wednesday: Erin's quiet hours
+    await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 22))
+    await scenario.advance(hours=10, minutes=1)  # 08:01 Thursday, the due date
+    assert "Due today: Book the dentist. Done already, or later?" in scenario.inbox("Erin")

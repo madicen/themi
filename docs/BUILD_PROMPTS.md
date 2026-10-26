@@ -2326,8 +2326,16 @@ Notes (2026-10-25):
 - Real data, by plain SQL: rule 2 unlocked; duplicate task 3 ("Clean upstairs bathroom")
   cancelled, keeping task 4 ("... (once a week)"). Tasks 1 and 2 still overlap (both change
   the upstairs sheets), so ask the user.
-- Not done: catching near-duplicate tasks when they're created. New rule 6 ("Start task prompts
-  with 'Due today:'") can't take effect either, since nudge text is a code template.
+- Erin's rule 6 ("Start task prompts with 'Due today:'") is now code, and the rule is unlocked.
+  A nudge for a task due on the day it goes out reads "Due today: <title>. Done already, or
+  later?", with "(<who> added this for you)" when someone else added it. "Today" is judged at
+  the expected send time from the new `Outbox.send_time()`, so a nudge queued overnight still
+  says it. Tasks due another day keep the usual wording.
+- A slip caught by the real-clock tests: `send()` and `send_time()` read the clock separately,
+  so even replies were queued by a few microseconds. `send()` now passes its reading through.
+- Real data, by plain SQL: task 1 renamed to "Vacuum upstairs bedroom" (task 2 covers the
+  sheets); rule 6 unlocked.
+- Not done: catching near-duplicate tasks when they're created.
 
 ---
 

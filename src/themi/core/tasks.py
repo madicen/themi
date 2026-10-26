@@ -45,6 +45,9 @@ ADDED_BY_TEXT = "{who} added this for you, whenever it suits: {title}. Done alre
 ADDED_BY_WITH_DETAILS = (
     "{who} added this for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
 )
+# A task due on the day the nudge goes out says so first (asked for by Erin's rule 6).
+DUE_TODAY_TEXT = "Due today: {title}. Done already, or later?"
+DUE_TODAY_WITH_DETAILS = "Due today: {title}.\n\n{details}\n\nDone already, or later?"
 DONE_TEXT = "Marked done: {title}. Thank you."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
@@ -209,7 +212,19 @@ class TaskBoard:
             if task.created_by is not None and task.created_by != member.id
             else None
         )
-        if added_by is not None:
+        goes_out = self.outbox.send_time(
+            member, Priority.NORMAL, deadline=deadline, kind="task", not_before=not_before
+        )
+        family = self.store.get_family()
+        local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        if task.due_on is not None and task.due_on == local_day:
+            who = f" ({added_by.name} added this for you)" if added_by is not None else ""
+            text = (
+                DUE_TODAY_WITH_DETAILS.format(title=f"{task.title}{who}", details=details)
+                if details
+                else DUE_TODAY_TEXT.format(title=f"{task.title}{who}")
+            )
+        elif added_by is not None:
             template = ADDED_BY_WITH_DETAILS if details else ADDED_BY_TEXT
             text = template.format(who=added_by.name, title=task.title, details=details)
         else:
