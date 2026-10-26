@@ -74,6 +74,7 @@ async def test_tasks_with_dates_appear_on_the_calendar(
             "effort": 2,
             "due_date": "2026-10-30",
             "assign_to": "anyone",
+            "steps": [],
         },
     )
     scenario.primary.queue_text("Added, for Friday.")

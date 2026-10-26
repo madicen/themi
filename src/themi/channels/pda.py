@@ -85,13 +85,32 @@ _SENTENCE = re.compile(r"[^.!?\n]+[.!?]*")
 _WORD = re.compile(r"[a-z']+")
 
 
+# "The list is empty right now" describes how things are; "call right now" urges.
+_STATE_VERB = re.compile(
+    r"\b(?:is|are|was|were|isn't|aren't|wasn't|weren't|looks|seems|feels)\b|'s\b|'re\b",
+    re.IGNORECASE,
+)
+
+
+def _describes_a_state(text: str, start: int) -> bool:
+    """Is the "right now" at `start` part of a statement about how things are?"""
+    sentence_start = max(text.rfind(c, 0, start) for c in ".!?\n") + 1
+    return bool(_STATE_VERB.search(text[sentence_start:start]))
+
+
 def find_demands(text: str, strength: int = 2) -> list[Flag]:
     """Every demand in `text` at or below `strength`."""
     flags: list[Flag] = []
     for rule in PHRASE_RULES:
         if rule.level <= strength:
             flags.extend(
-                Flag(rule.name, rule.level, m.group(0)) for m in rule.pattern.finditer(text)
+                Flag(rule.name, rule.level, m.group(0))
+                for m in rule.pattern.finditer(text)
+                if not (
+                    rule.name == "right-now"
+                    and m.group(0).lower() == "right now"
+                    and _describes_a_state(text, m.start())
+                )
             )
     if strength >= 2:
         for sentence in _SENTENCE.findall(text):

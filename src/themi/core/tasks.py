@@ -12,20 +12,31 @@ Every change (created, rescheduled, done, cancelled) goes to
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Awaitable, Callable
+import re
+import secrets
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import Member, NotFound
+from themi.accounts import Member, NotFound, PermissionDenied
+from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core.prompts import OpenItem
+from themi.core.repeat import (
+    Repeat,
+    next_occurrences,
+    parse,
+    previous_occurrence,
+    read_back,
+)
 from themi.core.services import Services
-from themi.core.tools import ToolContext, tool
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import to_utc_iso
 
@@ -48,6 +59,13 @@ ADDED_BY_WITH_DETAILS = (
 # A task due on the day the nudge goes out says so first (asked for by Erin's rule 6).
 DUE_TODAY_TEXT = "Due today: {title}. Done already, or later?"
 DUE_TODAY_WITH_DETAILS = "Due today: {title}.\n\n{details}\n\nDone already, or later?"
+# Repeating chores (F6b).
+OVERDUE_TEXT = "Overdue: {title} (last done {ago})"
+SHARED_OVERDUE_TEXT = "Overdue for both of you: {title} (last done {ago})"
+NEXT_ROUND_TEXT = " Next round: {when}."
+STEP_UP_CATEGORY = "chore_step_up"
+STEP_UP_EXECUTOR = "tasks.step_up"
+STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
@@ -68,6 +86,30 @@ class Task:
     status: str
     due_on: date | None
     created_by: int | None = None
+    steps: tuple[str, ...] = ()  # in the person's words; tags like "(Optional/Bonus)" included
+    # A repeating chore's schedule (F6b); None when it doesn't repeat.
+    times_per_week: float | None = None
+    minimum_days: float | None = None  # overdue after this many days
+    escalate_days: float | None = None  # escalated after this many days
+    escalate_to: str | None = None  # "owner" or "both"
+    shared: bool = False  # escalated to both: on everyone's list, anyone can do it
+    # Anchored schedules (F7): fixed dates. Floating ones stay in times_per_week.
+    repeat: Repeat | None = None
+    missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
+    due_before_task: int | None = None  # due the day before that chore's round
+
+    @property
+    def repeats(self) -> bool:
+        return bool(self.times_per_week or self.repeat or self.due_before_task)
+
+
+@dataclass(frozen=True)
+class Run:
+    done_by: int | None
+    done_at: datetime
+    due_on: date | None
+    on_time: bool
+    missed: bool = False  # a round that passed without anyone doing it
 
 
 TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
@@ -89,7 +131,32 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         status=row["status"],
         due_on=date.fromisoformat(row["due_on"]) if row["due_on"] else None,
         created_by=row["created_by"],
+        steps=tuple(json.loads(row["steps"])),
+        times_per_week=row["times_per_week"],
+        minimum_days=row["minimum_days"],
+        escalate_days=row["escalate_days"],
+        escalate_to=row["escalate_to"],
+        shared=bool(row["shared"]),
+        repeat=Repeat.from_json(json.loads(row["repeat"])) if row["repeat"] else None,
+        missed=row["missed"],
+        due_before_task=row["due_before_task"],
     )
+
+
+MAX_STEPS = 30
+MAX_STEP_LENGTH = 200
+
+
+def clean_steps(steps: Sequence[str]) -> list[str]:
+    """Steps as given, trimmed, blanks dropped. The wording is the person's: never rewritten."""
+    cleaned = [" ".join(str(s).split()) for s in steps]
+    cleaned = [s.lstrip("-• ").strip() for s in cleaned]
+    cleaned = [s for s in cleaned if s]
+    if len(cleaned) > MAX_STEPS:
+        raise ValueError(f"a task can have at most {MAX_STEPS} steps")
+    if any(len(s) > MAX_STEP_LENGTH for s in cleaned):
+        raise ValueError(f"each step can be at most {MAX_STEP_LENGTH} characters")
+    return cleaned
 
 
 class TaskBoard:
@@ -99,7 +166,8 @@ class TaskBoard:
         self.store = services.store
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
-        self.details: list[TaskDetails] = []
+        self.details: list[TaskDetails] = []  # steps come first, from _steps_for
+        self._pending_prompts: list[int] = []
 
     @property
     def outbox(self) -> Outbox:
@@ -113,8 +181,11 @@ class TaskBoard:
         s.tools.register(cancel_task)
         s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
+        s.tools.register(update_task)
+        s.tools.register(set_task_schedule)
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
+        s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
 
     # ----- reading ------------------------------------------------------------
 
@@ -125,8 +196,32 @@ class TaskBoard:
         return _task_from_row(row)
 
     def open_for(self, member: Member) -> list[Task]:
+        rows = self.db.query(  # shared (escalated to both) chores come first, for everyone
+            "SELECT * FROM tasks WHERE (assignee = ? OR shared = 1) "
+            "AND status IN ('open', 'snoozed') ORDER BY shared DESC, due_on IS NULL, due_on, id",
+            (member.id,),
+        )
+        return [_task_from_row(r) for r in rows]
+
+    def runs(self, task_id: int) -> list[Run]:
         rows = self.db.query(
-            "SELECT * FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed') "
+            "SELECT * FROM task_runs WHERE task_id = ? ORDER BY done_at, id", (task_id,)
+        )
+        return [
+            Run(
+                r["done_by"],
+                datetime.fromisoformat(r["done_at"]),
+                date.fromisoformat(r["due_on"]) if r["due_on"] else None,
+                bool(r["on_time"]),
+                bool(r["missed"]),
+            )
+            for r in rows
+        ]
+
+    def added_by(self, member: Member) -> list[Task]:
+        """Open tasks this member added, whoever is doing them."""
+        rows = self.db.query(
+            "SELECT * FROM tasks WHERE created_by = ? AND status IN ('open', 'snoozed') "
             "ORDER BY due_on IS NULL, due_on, id",
             (member.id,),
         )
@@ -136,7 +231,16 @@ class TaskBoard:
         items = []
         for t in self.open_for(member):
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
-            items.append(OpenItem(f"Task {t.id} (theirs{due}): {t.title}"))
+            whose = "shared, overdue: either of you" if t.shared else "theirs"
+            steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
+            if any(_step_level(step) for step in t.steps):
+                level = self.services.energy.suggested_level(member)
+                if level is not None:
+                    steps += (
+                        f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
+                    )
+            schedule = f" {self.summary(t)}." if t.repeats else ""
+            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{steps}"))
         return items
 
     # ----- changing -----------------------------------------------------------
@@ -152,6 +256,7 @@ class TaskBoard:
         interactive: bool = False,
         nudge: bool = True,
         assignee: Member | None = None,
+        steps: Sequence[str] = (),
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -159,6 +264,7 @@ class TaskBoard:
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
+        cleaned_steps = clean_steps(steps)
         if assignee is None:
             assignment = self.matcher.assign(kind, effort, requester)
         elif assignee.id == requester.id:
@@ -169,7 +275,7 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -180,6 +286,7 @@ class TaskBoard:
                 assignment.reason,
                 due_on.isoformat() if due_on else None,
                 to_utc_iso(clock.now()),
+                json.dumps(cleaned_steps),
             ),
         )
         if nudge:
@@ -199,14 +306,25 @@ class TaskBoard:
             except Exception:
                 log.exception("A task listener failed for task %s (%s)", task.id, change)
 
-    async def prompt(self, task: Task, *, not_before: datetime | None = None) -> None:
-        if task.assignee is None:
+    async def prompt(
+        self,
+        task: Task,
+        *,
+        not_before: datetime | None = None,
+        member: Member | None = None,
+        overdue: str | None = None,
+    ) -> None:
+        """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording."""
+        if task.assignee is None and member is None:
             return
         deadline = self._deadline(task)
         if not_before is not None and deadline is not None:
             not_before = min(not_before, deadline)  # a due date still wins
-        member = self.store.get_member(task.assignee)
-        details = "\n\n".join(d for source in self.details if (d := source(task)))
+        if member is None:
+            assert task.assignee is not None
+            member = self.store.get_member(task.assignee)
+        parts = [self._steps_for(task, member), *(source(task) for source in self.details)]
+        details = "\n\n".join(d for d in parts if d)
         added_by = (
             self.store.get_member(task.created_by)
             if task.created_by is not None and task.created_by != member.id
@@ -217,7 +335,15 @@ class TaskBoard:
         )
         family = self.store.get_family()
         local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
-        if task.due_on is not None and task.due_on == local_day:
+        if overdue is not None:
+            template = SHARED_OVERDUE_TEXT if overdue == "shared" else OVERDUE_TEXT
+            lead = template.format(title=task.title, ago=self._last_done_words(task))
+            text = (
+                f"{lead}.\n\n{details}\n\nDone already, or later?"
+                if details
+                else f"{lead}. Done already, or later?"
+            )
+        elif task.due_on is not None and task.due_on == local_day:
             who = f" ({added_by.name} added this for you)" if added_by is not None else ""
             text = (
                 DUE_TODAY_WITH_DETAILS.format(title=f"{task.title}{who}", details=details)
@@ -244,6 +370,7 @@ class TaskBoard:
             ],
             deadline=deadline,
             not_before=not_before,
+            dedupe_key=f"task-{task.id}-{secrets.token_hex(4)}",  # tags it, for withdrawing
         )
         if result.outbox_id is not None:
             self.db.execute(
@@ -251,17 +378,80 @@ class TaskBoard:
             )
 
     def _deadline(self, task: Task) -> datetime | None:
+        """By when a nudge should go out: 9 am on the due date, or the chore's own time."""
         if task.due_on is None:
             return None
+        at = task.repeat.at if task.repeat and task.repeat.at else time(9)
+        return _on(task.due_on, at, self._tz())
+
+    def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
-        tz = ZoneInfo(family.timezone if family else "UTC")
-        due = task.due_on
-        return datetime(due.year, due.month, due.day, 9, 0, tzinfo=tz)
+        return ZoneInfo(family.timezone if family else "UTC")
+
+    def _round_starts(self, task: Task) -> datetime | None:
+        """When this round's nudge may go: the chore's time on its due date, or that morning."""
+        if task.due_on is None:
+            return None
+        if task.repeat and task.repeat.at:
+            return _on(task.due_on, task.repeat.at, self._tz())
+        return self._day_start(task.due_on)
+
+    def _steps_for(self, task: Task, member: Member) -> str | None:
+        """The steps for a nudge. With (Low)/(Medium)/(High) tags, only the level that suits
+        the person today (each level takes in the ones below it), in words (S4)."""
+        if not task.steps:
+            return None
+        levels = [_step_level(step) for step in task.steps]
+        if not any(levels):
+            return _quoted(task.steps)
+        level = self.services.energy.suggested_level(member)
+        if level is None:
+            return _quoted(task.steps)
+        keep = [
+            step
+            for step, tag in zip(task.steps, levels, strict=True)
+            if tag is None or _LEVEL_ORDER[tag] <= _LEVEL_ORDER[level]
+        ]
+        lines = [_LEVEL_LEAD[level], _quoted(keep)]
+        if any(tag and _LEVEL_ORDER[tag] > _LEVEL_ORDER[level] for tag in levels):
+            lines.append("The rest is there too if you feel like more.")
+        return "\n".join(lines)
+
+    def can_edit(self, task: Task, member: Member) -> bool:
+        return member.is_admin or member.id in (task.assignee, task.created_by)
+
+    async def update(
+        self,
+        task_id: int,
+        by: Member,
+        *,
+        title: str | None = None,
+        steps: Sequence[str] | None = None,
+        interactive: bool = False,
+    ) -> Task:
+        """Rename a task or replace its steps. The assignee, whoever added it, or an admin."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        changes: dict[str, Any] = {}
+        if title is not None and title.strip().rstrip("."):
+            changes["title"] = title.strip().rstrip(".")
+        if steps is not None:
+            changes["steps"] = json.dumps(clean_steps(steps))
+        if changes:
+            assignments = ", ".join(f"{c} = :{c}" for c in changes)
+            self.db.execute(
+                f"UPDATE tasks SET {assignments} WHERE id = :id", {**changes, "id": task_id}
+            )
+            await self._changed(self.get(task_id), "edited", interactive)
+        return self.get(task_id)
 
     async def complete(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        if task.repeats:
+            return await self._complete_round(task, by, interactive)
         self.db.execute(
             "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
             (to_utc_iso(clock.now()), task_id),
@@ -269,6 +459,317 @@ class TaskBoard:
         self._withdraw_prompt(task)
         await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
+
+    # ----- repeating chores (F6b) ------------------------------------------------
+
+    def _today(self) -> date:
+        family = self.store.get_family()
+        return clock.now().astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+
+    def _day_start(self, day: date) -> datetime:
+        family = self.store.get_family()
+        tz = ZoneInfo(family.timezone if family else "UTC")
+        return datetime(day.year, day.month, day.day, tzinfo=tz)
+
+    def _last_done(self, task: Task) -> datetime | None:
+        value = self.db.scalar(
+            "SELECT MAX(done_at) FROM task_runs WHERE task_id = ? AND missed = 0", (task.id,)
+        )
+        return datetime.fromisoformat(value) if value else None
+
+    def _last_done_words(self, task: Task) -> str:
+        last = self._last_done(task)
+        if last is None:
+            return "not yet"
+        days = int((clock.now() - last) / timedelta(days=1))
+        return "today" if days == 0 else f"{days} day{'s' if days != 1 else ''} ago"
+
+    async def set_schedule(
+        self,
+        task_id: int,
+        by: Member,
+        *,
+        repeat: Repeat | None,
+        minimum_days: float = 0,
+        escalate_days: float = 0,
+        escalate_to: str = "owner",
+        missed: str = "roll",
+        due_before_task: int | None = None,
+    ) -> Task:
+        """Give a task a schedule, or take it away (no `repeat` and no `due_before_task`).
+        Zeros mean "no minimum" or "no escalation". Anchored and deadline schedules get their
+        first due date and a nudge for it."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        if repeat is None and due_before_task is None:
+            self.db.execute(
+                "UPDATE tasks SET times_per_week = NULL, repeat = NULL, due_before_task = NULL, "
+                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0 "
+                "WHERE id = ?",
+                (task_id,),
+            )
+            return self.get(task_id)
+        if minimum_days < 0 or escalate_days < 0:
+            raise ValueError("days can't be negative")
+        if minimum_days and escalate_days and escalate_days < minimum_days:
+            raise ValueError("escalation has to come after the minimum, not before it")
+        if escalate_to not in ("owner", "both"):
+            raise ValueError("escalate_to is 'owner' or 'both'")
+        if missed not in ("roll", "catch_up"):
+            raise ValueError("missed is 'roll' or 'catch_up'")
+        if due_before_task is not None:
+            if due_before_task == task_id:
+                raise ValueError("a chore can't be due before itself")
+            target = self.get(due_before_task)  # NotFound if there's no such task
+            if target.repeat is None and target.due_on is None:
+                raise ValueError(f"'{target.title}' has no dates to be due before")
+        floating = repeat is not None and not repeat.anchored
+        self.db.execute(
+            "UPDATE tasks SET times_per_week = ?, repeat = ?, due_before_task = ?, missed = ?, "
+            "minimum_days = ?, escalate_days = ?, escalate_to = ? WHERE id = ?",
+            (
+                repeat.times_per_week if floating and repeat else None,
+                json.dumps(repeat.to_json()) if repeat and repeat.anchored else None,
+                due_before_task,
+                missed,
+                minimum_days or None,
+                escalate_days or None,
+                escalate_to if escalate_days else None,
+                task_id,
+            ),
+        )
+        task = self.get(task_id)
+        first = self._first_due(task)
+        if first is not None and first != task.due_on:
+            self.db.execute(
+                "UPDATE tasks SET due_on = ? WHERE id = ?", (first.isoformat(), task_id)
+            )
+            task = self.get(task_id)
+            self._withdraw_prompt(task)
+            await self.prompt(task, not_before=self._round_starts(task))
+            await self._changed(task, "rescheduled", True)
+        return task
+
+    def summary(self, task: Task) -> str:
+        """The schedule in plain words, from what's stored (the read-back)."""
+        parts = []
+        if task.due_before_task is not None:
+            try:
+                target = self.get(task.due_before_task)
+                parts.append(f"Due the day before {target.title} ({self.summary(target)})")
+            except NotFound:
+                parts.append("Due the day before another chore that's gone")
+        elif task.repeat is not None:
+            parts.append(read_back(task.repeat))
+        elif task.times_per_week:
+            parts.append(read_back(Repeat("floating", times_per_week=task.times_per_week)))
+        else:
+            return "Doesn't repeat"
+        if task.minimum_days:
+            parts.append(f"overdue after {_days(task.minimum_days)}")
+        if task.escalate_days:
+            who = "both of you" if task.escalate_to == "both" else "a reminder to its owner"
+            verb = "it goes to" if task.escalate_to == "both" else "comes"
+            parts.append(f"after {_days(task.escalate_days)} {verb} {who}")
+        if task.repeat is not None and task.missed == "catch_up":
+            parts.append("a missed round stays owed")
+        return "; ".join(parts)
+
+    def next_dates(self, task: Task, count: int = 3) -> list[datetime]:
+        """The coming rounds of an anchored chore, for the website."""
+        if task.repeat is None:
+            return []
+        start = self._round_starts(task)
+        upcoming = [start] if start else []
+        after = start or clock.now()
+        upcoming += next_occurrences(task.repeat, after, self._tz(), count)
+        return upcoming[:count]
+
+    def _first_due(self, task: Task) -> date | None:
+        """An anchored chore's next date (today counts if its time hasn't passed), or a
+        deadline chore's day-before date."""
+        if task.due_before_task is not None:
+            return self._deadline_due(task)
+        if task.repeat is None:
+            return None
+        now = clock.now()
+        if task.repeat.at is None:  # a date-only round today is still today's
+            now = self._day_start(self._today()) - timedelta(microseconds=1)
+        found = next_occurrences(task.repeat, now, self._tz())
+        return found[0].date() if found else None
+
+    def _deadline_due(self, task: Task) -> date | None:
+        """The day before the other chore's round, unless this chore was already done for
+        that round, in which case the day before its next one."""
+        assert task.due_before_task is not None
+        try:
+            target = self.get(task.due_before_task)
+        except NotFound:
+            return task.due_on
+        if target.due_on is None:
+            return task.due_on
+        tz = self._tz()
+        round_day = target.due_on
+        last = self._last_done(task)
+        if last is not None and target.repeat is not None:
+            previous = previous_occurrence(target.repeat, self._day_start(round_day), tz)
+            if last.astimezone(tz).date() > (previous.date() if previous else date.min):
+                end_of_round = self._day_start(round_day + timedelta(days=1))
+                following = next_occurrences(target.repeat, end_of_round, tz)
+                if following:
+                    round_day = following[0].date()
+        return round_day - timedelta(days=1)
+
+    def _next_due_after_done(self, task: Task, today: date) -> date:
+        if task.due_before_task is not None:
+            return self._deadline_due(task) or today + timedelta(days=7)
+        if task.repeat is not None:
+            # This round counts as done, early or late: the next one is after it.
+            last_day = max(today, task.due_on or today)
+            after = self._day_start(last_day + timedelta(days=1)) - timedelta(microseconds=1)
+            found = next_occurrences(task.repeat, after, self._tz())
+            return found[0].date() if found else today + timedelta(days=7)
+        assert task.times_per_week is not None
+        return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
+
+    async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
+        today = self._today()
+        on_time = task.due_on is None or today <= task.due_on
+        now = to_utc_iso(clock.now())
+        self.db.execute(
+            "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (task.id, by.id, now, task.due_on.isoformat() if task.due_on else None, int(on_time)),
+        )
+        next_due = self._next_due_after_done(task, today)
+        self.db.execute(  # the next round: back to its owner, nothing overdue
+            "UPDATE tasks SET status = 'open', due_on = ?, shared = 0, snoozed_until = NULL, "
+            "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
+            (next_due.isoformat(), task.id),
+        )
+        self._withdraw_prompt(task)
+        fresh = self.get(task.id)
+        await self.prompt(fresh, not_before=self._round_starts(fresh))
+        await self._changed(fresh, "rescheduled", interactive)
+        await self._maybe_offer_step_up(fresh)
+        return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
+            when=next_due.strftime("%a %d %b")
+        )
+
+    async def _settle_missed_round(self, task: Task) -> Task:
+        """An anchored round whose day has passed: roll on to the next date (recording a missed
+        run), or, for catch-up chores, leave it owed. Deadline chores follow their target."""
+        today = self._today()
+        if task.due_before_task is not None:
+            due = self._deadline_due(task)
+            if due is not None and task.due_on is not None and due > task.due_on and due > today:
+                # The other chore's round moved on; if this one wasn't done for it, it's missed.
+                last = self._last_done(task)
+                if last is None or last.astimezone(self._tz()).date() < task.due_on:
+                    self._record_missed(task)
+                self._move_round(task, due)
+            return self.get(task.id)
+        if task.repeat is None or task.due_on is None or task.due_on >= today:
+            return task
+        if task.missed == "catch_up":
+            return task
+        self._record_missed(task)
+        found = next_occurrences(task.repeat, clock.now(), self._tz())
+        if found:
+            self._move_round(task, found[0].date())
+        return self.get(task.id)
+
+    def _record_missed(self, task: Task) -> None:
+        self.db.execute(
+            "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time, missed) "
+            "VALUES (?, NULL, ?, ?, 0, 1)",
+            (task.id, to_utc_iso(clock.now()), task.due_on.isoformat() if task.due_on else None),
+        )
+
+    def _move_round(self, task: Task, due: date) -> None:
+        self.db.execute(
+            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL WHERE id = ?",
+            (due.isoformat(), task.id),
+        )
+        self._withdraw_prompt(task)
+        self._pending_prompts.append(task.id)
+
+    async def check_schedules(self) -> int:
+        """Scheduler job: settle missed anchored rounds, then overdue nudges past the minimum
+        and escalation past its point (each once per round). Returns how many were nudged."""
+        nudged = 0
+        now = clock.now()
+        self._pending_prompts = []
+        rows = self.db.query(
+            "SELECT * FROM tasks WHERE (times_per_week IS NOT NULL OR repeat IS NOT NULL "
+            "OR due_before_task IS NOT NULL) AND status IN ('open', 'snoozed')"
+        )
+        for row in rows:
+            task = await self._settle_missed_round(_task_from_row(row))
+            row = self.db.one("SELECT * FROM tasks WHERE id = ?", (task.id,)) or row
+            since = self._last_done(task) or datetime.fromisoformat(row["created_at"])
+            days = (now - since) / timedelta(days=1)
+            stamp = to_utc_iso(now)
+            if task.escalate_days and days >= task.escalate_days and not row["escalated_at"]:
+                both = task.escalate_to == "both"
+                self.db.execute(
+                    "UPDATE tasks SET escalated_at = ?, overdue_notified_at = ?, shared = ? "
+                    "WHERE id = ?",
+                    (stamp, row["overdue_notified_at"] or stamp, int(both), task.id),
+                )
+                task = self.get(task.id)
+                if both:
+                    for member in self.store.list_members():
+                        if member.telegram_user_id is not None:
+                            await self.prompt(task, member=member, overdue="shared")
+                else:
+                    await self.prompt(task, overdue="own")
+                nudged += 1
+            elif task.minimum_days and days >= task.minimum_days and not row["overdue_notified_at"]:
+                self.db.execute(
+                    "UPDATE tasks SET overdue_notified_at = ? WHERE id = ?", (stamp, task.id)
+                )
+                await self.prompt(task, overdue="own")
+                nudged += 1
+        for task_id in self._pending_prompts:  # rounds that moved on get their nudge
+            fresh = self.get(task_id)
+            await self.prompt(fresh, not_before=self._round_starts(fresh))
+        self._pending_prompts = []
+        return nudged
+
+    async def _maybe_offer_step_up(self, task: Task) -> None:
+        """After STEP_UP_AFTER on-time runs in a row, offer one more time a week, as an
+        approval. Nothing changes without a yes, and the next offer needs a new stretch."""
+        times = task.times_per_week
+        if times is None or times != int(times) or times >= 7 or task.assignee is None:
+            return
+        offered = self.db.scalar("SELECT step_up_offered_at FROM tasks WHERE id = ?", (task.id,))
+        rows = self.db.query(
+            "SELECT on_time FROM task_runs WHERE task_id = ? AND (? IS NULL OR done_at > ?) "
+            "ORDER BY done_at DESC, id DESC LIMIT ?",
+            (task.id, offered, offered, STEP_UP_AFTER),
+        )
+        if len(rows) < STEP_UP_AFTER or not all(r["on_time"] for r in rows):
+            return
+        current, more = int(times), int(times) + 1
+        self.db.execute(
+            "UPDATE tasks SET step_up_offered_at = ? WHERE id = ?",
+            (to_utc_iso(clock.now()), task.id),
+        )
+        await self.services.autonomy.stage(
+            STEP_UP_CATEGORY,
+            self.store.get_member(task.assignee),
+            f"Step up: {task.title}, {more} times a week instead of {current}",
+            {"task": task.id, "times": more},
+            STEP_UP_EXECUTOR,
+        )
+
+    async def _step_up(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        task_id, times = int(payload["task"]), float(payload["times"])
+        self.db.execute("UPDATE tasks SET times_per_week = ? WHERE id = ?", (times, task_id))
+        task = self.get(task_id)
+        return f"{task.title}: {self.summary(task)}, from now on."
 
     async def cancel(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
         """Nobody needs to do it after all (deleting a task keeps its record)."""
@@ -310,9 +811,15 @@ class TaskBoard:
         return LATER_TEXT.format(title=task.title)
 
     def _withdraw_prompt(self, task: Task) -> None:
+        """Take back any of the task's nudges that haven't gone out yet (shared ones too)."""
         row = self.db.one("SELECT prompt_outbox_id FROM tasks WHERE id = ?", (task.id,))
         if row and row["prompt_outbox_id"]:
-            self.outbox.cancel(row["prompt_outbox_id"])  # if it hasn't gone out yet
+            self.outbox.cancel(row["prompt_outbox_id"])
+        for queued in self.db.query(
+            "SELECT id FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
+            (f"task-{task.id}-%",),
+        ):
+            self.outbox.cancel(queued["id"])
 
     async def resurface(self) -> int:
         """Snoozed tasks whose time has come are offered again."""
@@ -337,6 +844,36 @@ class TaskBoard:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
+
+
+def _on(day: date, at: time, tz: ZoneInfo) -> datetime:
+    """That wall-clock time on that day, in the family's timezone."""
+    return datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
+
+
+def _days(value: float) -> str:
+    return f"{value:g} day{'s' if value != 1 else ''}"
+
+
+_LEVEL_TAG = re.compile(r"^\((low|medium|high)\)", re.IGNORECASE)
+_LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
+_LEVEL_LEAD = {
+    "low": "A lighter version for today:",
+    "medium": "A middle version for today:",
+    "high": "The full version for today:",
+}
+_LEVEL_WORD = {"low": "lighter", "medium": "middle", "high": "full"}
+
+
+def _step_level(step: str) -> str | None:
+    m = _LEVEL_TAG.match(step)
+    return m.group(1).lower() if m else None
+
+
+def _quoted(steps: Sequence[str]) -> str:
+    """Steps as `> ` quotes, so the PDA shield keeps them word for word (steps are usually
+    commands: "Wipe the counters")."""
+    return "\n".join(f"> - {step}" for step in steps)
 
 
 def _board(ctx: ToolContext) -> TaskBoard:
@@ -367,6 +904,12 @@ def _board(ctx: ToolContext) -> TaskBoard:
             "type": "string",
             "description": "'me', a family member's name, or 'anyone'.",
         },
+        "steps": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "The steps of the job, in their words and order (tags like "
+            "'(Optional/Bonus)' included), or an empty list.",
+        },
     },
 )
 async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -395,6 +938,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             due,
             interactive=True,
             assignee=chosen,
+            steps=args["steps"],
         )
     except ValueError as exc:
         return f"Not created: {exc}"
@@ -410,6 +954,104 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 @tool(
+    "update_task",
+    "Rename a task or replace its steps (the full new list, in their words), e.g. when someone "
+    "adds, removes or reorders steps of a chore. Empty title or steps keep what's there; "
+    "clear_steps removes them all.",
+    {
+        "task_id": {"type": "integer"},
+        "title": {"type": "string", "description": "A new title, or an empty string."},
+        "steps": {"type": "array", "items": {"type": "string"}},
+        "clear_steps": {"type": "boolean"},
+    },
+)
+async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    steps = [] if args["clear_steps"] else (args["steps"] or None)
+    try:
+        task = await _board(ctx).update(
+            args["task_id"], ctx.member, title=args["title"], steps=steps, interactive=True
+        )
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except PermissionDenied as exc:
+        raise ToolFailed("That task isn't theirs to change.") from exc
+    except ValueError as exc:
+        raise ToolFailed(str(exc)) from exc
+    steps_now = "; ".join(task.steps) if task.steps else "none"
+    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}"
+
+
+@tool(
+    "set_task_schedule",
+    "Make a chore repeat, change its schedule, or stop it. repeat is a short phrase in plain "
+    "words: 'every Tuesday at 6pm', 'every other Monday', 'every Tue and Fri', 'first Monday "
+    "of the month', 'the 1st of every month', 'every 3 days', or 'twice a week' (counted from "
+    "the last time it was done); empty to stop. Keep any time of day they gave ('Tuesday "
+    "evenings' is 'every Tuesday evening'). due_before_task: the id of another chore this "
+    "one is due the day before ('cardboard before garbage day'), else 0; repeat can then be "
+    "empty. at_least_every_days: overdue after that many days (0 for none). "
+    "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
+    "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
+    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. Use it after "
+    "create_task, also for repeating reminders ('always remind me about the bins on "
+    "Tuesdays'). Themi reads the saved schedule back to them itself.",
+    {
+        "task_id": {"type": "integer"},
+        "repeat": {"type": "string"},
+        "at_least_every_days": {"type": "number"},
+        "escalate_after_days": {"type": "number"},
+        "escalate_to": {"type": "string", "enum": ["owner", "both"]},
+        "missed": {"type": "string", "enum": ["roll", "catch_up"]},
+        "due_before_task": {"type": "integer"},
+    },
+)
+async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
+    phrase = args["repeat"].strip()
+    try:
+        repeat = parse(phrase, board._today()) if phrase else None
+        task = await board.set_schedule(
+            args["task_id"],
+            ctx.member,
+            repeat=repeat,
+            minimum_days=float(args["at_least_every_days"]),
+            escalate_days=float(args["escalate_after_days"]),
+            escalate_to=args["escalate_to"],
+            missed=args["missed"],
+            due_before_task=args["due_before_task"] or None,
+        )
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except PermissionDenied as exc:
+        raise ToolFailed("That task isn't theirs to change.") from exc
+    except ValueError as exc:  # RepeatError included: its message lists phrases that work
+        raise ToolFailed(str(exc)) from exc
+    if not task.repeats:
+        return f"Task {task.id} ({task.title}) doesn't repeat any more."
+    # The read-back is built here from what was stored, and sent as it is.
+    text = f"Saved: {board.summary(task)}."
+    upcoming = board.next_dates(task, 1) if task.repeat else []
+    if upcoming:
+        when = upcoming[0]
+        clock_time = f", {_clock_words(when)}" if task.repeat and task.repeat.at else ""
+        text += f" Next: {when:%a %d %b}{clock_time}."
+    elif task.due_on is not None and task.due_before_task is not None:
+        text += f" Next: {task.due_on:%a %d %b}."
+    await ctx.services.outbox.send(ctx.member, text, priority=Priority.REPLY)
+    return (
+        f"Task {task.id} ({task.title}) is scheduled, and it was read back to them already, "
+        f'word for word: "{text}". Don\'t restate the schedule; a short acknowledgement is '
+        "enough, or ask if anything sounds wrong."
+    )
+
+
+def _clock_words(moment: datetime) -> str:
+    hour = moment.hour % 12 or 12
+    suffix = "am" if moment.hour < 12 else "pm"
+    return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"
+
+
+@tool(
     "complete_task",
     "Mark a task done when someone says it's been taken care of.",
     {"task_id": {"type": "integer"}},
@@ -417,8 +1059,8 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return await _board(ctx).complete(args["task_id"], ctx.member, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -429,8 +1071,8 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return await _board(ctx).cancel(args["task_id"], ctx.member, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -450,8 +1092,8 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             return "Not changed: the due date should look like 2026-11-03."
     try:
         return await _board(ctx).reschedule(args["task_id"], due, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -462,5 +1104,5 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return _board(ctx).snooze(args["task_id"])
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc

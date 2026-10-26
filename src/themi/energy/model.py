@@ -19,7 +19,7 @@ stretch"); nobody is ever shown a score.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -71,6 +71,7 @@ NOT_TRACKED = "no read (they've turned energy tracking off)"
 
 SOURCE_INPUT = {  # signal source -> the tracking toggle that governs it
     "text_note": "text_notes",
+    "day_level": "text_notes",  # "it's a medium energy day": -1 low, 0 medium, 1 high
     "message_timing": "message_timing",
     "device_activity": "device_activity",
 }
@@ -100,10 +101,45 @@ def signal_effect(value: float, age: timedelta, recovery_hours: float) -> float:
     return value * SIGNAL_POINTS * 0.5**half_lives
 
 
+# Load (S2): inside a busy calendar event, and the hour after a long busy stretch (a long
+# event, or a busy time of 4 hours or more, like a workday), capacity sits a little lower.
+BUSY_EVENT_POINTS = 8.0
+WIND_DOWN_POINTS = 8.0
+WIND_DOWN = timedelta(hours=1)
+LONG_EVENT = timedelta(hours=2)
+LONG_BUSY_TIME = timedelta(hours=4)
+
+# A stated day level pulls that local day towards these, instead of adding points.
+DAY_LEVEL_TARGETS = {-1: 35.0, 0: 55.0, 1: 75.0}
+DAY_LEVEL_WEIGHT = 0.75
+
+
 def combine(
-    baseline: float, signals: Iterable[Signal], now: datetime, recovery_hours: float
+    baseline: float,
+    signals: Iterable[Signal],
+    now: datetime,
+    recovery_hours: float,
+    timezone: str | None = None,
 ) -> float:
-    total = baseline + sum(signal_effect(s.value, now - s.at, recovery_hours) for s in signals)
+    """Baseline plus fading signals. With `timezone`, the latest day level stated earlier
+    the same local day (if any) pulls the result towards its target."""
+    signals = list(signals)
+    total = baseline + sum(
+        signal_effect(s.value, now - s.at, recovery_hours)
+        for s in signals
+        if s.source != "day_level"
+    )
+    if timezone is not None:
+        today = to_local(now, timezone).date()
+        levels = [
+            s
+            for s in signals
+            if s.source == "day_level" and s.at <= now and to_local(s.at, timezone).date() == today
+        ]
+        if levels:
+            latest = sorted(levels, key=lambda s: s.at)[-1]  # stable: ties go to the last stored
+            target = DAY_LEVEL_TARGETS[round(latest.value)]
+            total = DAY_LEVEL_WEIGHT * target + (1 - DAY_LEVEL_WEIGHT) * total
     return max(0.0, min(100.0, total))
 
 
@@ -118,6 +154,11 @@ class EnergyModel:
     def __init__(self, store: AccountStore) -> None:
         self.store = store
         self.db = store.db
+        # Busy calendar events (S2): (member, start, end) -> [(starts, ends)]. None without
+        # Google, or before the calendar job has run.
+        self.calendar_blocks: (
+            Callable[[Member, datetime, datetime], list[tuple[datetime, datetime]]] | None
+        ) = None
 
     @property
     def timezone(self) -> str:
@@ -130,7 +171,8 @@ class EnergyModel:
         """Store a signal if the member allows that input. Returns whether it was stored."""
         if not member.tracks(SOURCE_INPUT[source]):
             return False
-        value = max(-3.0, min(3.0, value))
+        bound = 1.0 if source == "day_level" else 3.0
+        value = max(-bound, min(bound, value))
         self.db.execute(
             "INSERT INTO energy_signals (member_id, source, value, note, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -196,7 +238,7 @@ class EnergyModel:
         placeholders = ", ".join("?" for _ in allowed)
         rows = self.db.query(
             f"SELECT source, value, created_at FROM energy_signals WHERE member_id = ? "
-            f"AND source IN ({placeholders}) AND created_at > ? AND created_at <= ?",
+            f"AND source IN ({placeholders}) AND created_at > ? AND created_at <= ? ORDER BY id",
             (member.id, *allowed, to_utc_iso(now - SIGNAL_WINDOW), to_utc_iso(now)),
         )
         return [
@@ -206,9 +248,63 @@ class EnergyModel:
     def capacity(self, member: Member, at: datetime | None = None) -> float:
         now = at or clock.now()
         member = self.store.get_member(member.id)  # recovery speed and toggles may change
-        return combine(
-            self.baseline(member, now), self.signals(member, now), now, member.recovery_hours
+        total = combine(
+            self.baseline(member, now),
+            self.signals(member, now),
+            now,
+            member.recovery_hours,
+            self.timezone,
         )
+        return max(0.0, total - self.load(member, now, self.blocks_around(member, now)))
+
+    def blocks_around(
+        self, member: Member, start: datetime, end: datetime | None = None
+    ) -> list[tuple[datetime, datetime]]:
+        if self.calendar_blocks is None:
+            return []
+        return self.calendar_blocks(member, start - WIND_DOWN, (end or start) + WIND_DOWN)
+
+    def load(
+        self, member: Member, moment: datetime, blocks: list[tuple[datetime, datetime]]
+    ) -> float:
+        """Points off for being in a busy event, or just out of a long busy stretch."""
+        penalty = 0.0
+        for start, end in blocks:
+            if start <= moment < end:
+                penalty = max(penalty, BUSY_EVENT_POINTS)
+            elif end <= moment < end + WIND_DOWN and end - start >= LONG_EVENT:
+                penalty = max(penalty, WIND_DOWN_POINTS)
+        local = to_local(moment, self.timezone)
+        for busy in member.busy_times:
+            if local.weekday() not in busy.days:
+                continue
+            length = timedelta(
+                hours=busy.end.hour - busy.start.hour, minutes=busy.end.minute - busy.start.minute
+            )
+            ends = local.replace(
+                hour=busy.end.hour, minute=busy.end.minute, second=0, microsecond=0
+            )
+            if length >= LONG_BUSY_TIME and ends <= local < ends + WIND_DOWN:
+                penalty = max(penalty, WIND_DOWN_POINTS)
+        return penalty
+
+    def suggested_level(self, member: Member) -> str | None:
+        """ "low", "medium" or "high" for a chore's level today: a level they stated today wins,
+        else the estimate. None if they've switched every input off (no read)."""
+        member = self.store.get_member(member.id)
+        if not any(member.tracks(toggle) for toggle in SOURCE_INPUT.values()):
+            return None
+        now = clock.now()
+        today = to_local(now, self.timezone).date()
+        stated = [
+            s
+            for s in self.signals(member, now)
+            if s.source == "day_level" and to_local(s.at, self.timezone).date() == today
+        ]
+        if stated:
+            return {-1: "low", 0: "medium", 1: "high"}[round(stated[-1].value)]
+        capacity = self.capacity(member, now)
+        return "low" if capacity < 45 else "medium" if capacity < 65 else "high"
 
     def label(self, member: Member) -> str:
         member = self.store.get_member(member.id)

@@ -163,7 +163,9 @@ def proposal(names: list[str]) -> Proposal:
 
 @staged_tool(
     "add_to_grocery_list",
-    "Put items on the family's grocery list (it shows in OurGroceries too).",
+    "Put items on the family's grocery list (it shows in OurGroceries too) when someone asks "
+    "for that. It's not for things running low or out: update_pantry records those and offers "
+    "staples for the list itself.",
     {
         "items": {
             "type": "array",

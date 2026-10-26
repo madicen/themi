@@ -42,5 +42,5 @@ async def test_a_wrong_or_demanding_answer_fails(
     scenario = Scenario(family, fake_telegram, real_models=True)
     outcome = await run_case(scenario, CASES["energy-client-call"], fake_gemini(fake_ai))
     assert not outcome.tools_ok and not outcome.pda_ok
-    assert "expected a log_energy_note call" in outcome.problems
+    assert "expected one of log_energy_note, log_energy_level" in outcome.problems
     assert any(p.startswith("looks like a score") for p in outcome.problems)

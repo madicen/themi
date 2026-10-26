@@ -363,3 +363,11 @@ def test_a_new_simulator_numbers_messages_after_the_old_ones(
     assert sent["message_id"] > 500
     simulator.send_text(ERIN_TELEGRAM_ID, "hi")
     assert simulator.transcript(ERIN_TELEGRAM_ID)[-1].message_id > sent["message_id"]
+
+
+def test_the_energy_debug_page_shows_numbers_only_in_dev(simulator: Simulator) -> None:
+    missing = httpx.get(f"{simulator.url}/sim/energy", params={"person": ERIN_TELEGRAM_ID})
+    assert missing.status_code == 404
+    simulator.energy_debug = lambda person: f"hour 09:00  capacity 62.5 (person {person})"
+    page = httpx.get(f"{simulator.url}/sim/energy", params={"person": ERIN_TELEGRAM_ID})
+    assert page.status_code == 200 and "capacity 62.5" in page.text

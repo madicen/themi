@@ -51,6 +51,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F3 | Busy times | Feedback | [x] |
 | F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
+| F6a | Chores: steps on tasks | Feedback | [x] |
+| F6b | Chores: repeating schedules and escalation | Feedback | [x] |
+| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
+| S1 | Shadow Calendar: energy remarks recorded | Shadow Calendar review | [x] |
+| S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [x] |
+| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [x] |
+| S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -1963,11 +1970,49 @@ Notes (2026-10-25):
       actions are never "done", log energy remarks, and ask on an ambiguous yes. Then
       re-run once.
     - Decide whether the PDA detector should allow "right now" when it isn't urging.
+      Decided 2026-10-25: it's allowed when the sentence describes how things are ("the list
+      is empty right now"); "call right now" is still flagged.
     - The default backend: the plan's default, Gemini free tier on `gemini-3.8-flash`, gave
       this key 20 requests a day, which can't carry a household. The flash-lite models did
       fine here, so the default model probably needs to change. That's the user's call.
       Decided 2026-10-25: the default is now `gemini-3.5-flash-lite` (see "Fixed technical
       choices").
+- Third run (2026-10-25, after F1–F6, slices only at the user's request: rules, tasks,
+  approvals and pantry; the family shares this key's quota): 17/22, the same as the second run
+  for these categories, but approvals went up and rules went down.
+    - Two rules cases predated the day's decisions, so they were updated with the user's OK.
+      `rule-no-work-messages` also accepts pointing to quiet hours or busy times.
+      `rule-bins` now expects a repeating task (`create_task` plus `set_task_schedule`, once a
+      week), with a rule allowed.
+    - "Right now" is allowed when it describes a state (`pda._describes_a_state`), which fixed
+      `pantry-show-list`.
+    - Honesty: declined tool calls (nothing to do) now count as "nothing happened"
+      (`ToolContext.outcomes` holds "ok", "declined" or "failed"). A claim of success after
+      only declined or failed calls becomes `NOTHING_CHANGED_TEXT` or `FAILED_TEXT`. A live
+      re-run caught a name clash: my first constant was called `DECLINED_TEXT`, the existing
+      refusal message, and replaced it. It's renamed, and a test keeps the two apart.
+    - Re-scored offline: 20/22, PDA 100%. Live re-runs of the changed cases: `rule-bins` and
+      `rule-no-work-messages` pass. `approve-ambiguous-yes` is honest now ("Nothing changed
+      there...") but still fails: the model re-adds instead of asking which item was meant.
+    - Still failing: `pantry-rice-low` (an extra grocery call that's declined, harmless) and
+      `approve-ambiguous-yes`. Schedules can't hold a weekday or time ("Tuesday evenings"), so
+      the bins reply overstates it a little.
+- Fourth pass (same day), at the user's request, failing tests first:
+    - `approve-ambiguous-yes`: with several items waiting and no newer question, a bare
+      yes/no/later now gets `WHICH_TEXT` ("Which one did you mean: A or B? Each card above has
+      its own buttons.") without the model. That exposed a latent bug in the newer-question
+      check: the next waiting card ("Go ahead, or not now?") counted as a different question.
+      Waiting cards are now excluded.
+    - `pantry-rice-low`, found at the root with step numbers per call (eval results now save
+      `call_steps`). Two causes:
+        - Nothing said who adds low items. `add_to_grocery_list` now says it isn't for things
+          running low or out, and `update_pantry` says not to also call it.
+        - The honesty check only knew about approvals from staged tools; the pantry (and the
+          calendar) stage their own. It now asks the database for any approval created this
+          turn that's still waiting (`Agent._waiting_since`). `ToolContext.staged` is gone.
+    - Live: `approve-ambiguous-yes`, `pantry-rice-low`, `pantry-olive-oil` and
+      `pantry-add-cumin` pass 4/4. In two of them the model still claimed the item was on the
+      list, and the check replaced the claim with the waiting line.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28
@@ -2382,6 +2427,354 @@ Notes (2026-10-25):
   answered".
 - Not done: an explicit request for an item already waiting on a yes (say, from restocking)
   still says it's waiting, rather than approving that item.
+- Follow-up from feedback bug #5 (failing tests first): the model kept turning chores and their
+  steps into draft rules. When Erin said "delete the draft rules", it ran `cancel_task` with
+  rule numbers, which failed, and replied "I've cleared out those draft rules".
+    - `set_aside_draft_rule` (the person's own drafts only; never locked rules). Drafts now
+      show their number in open items ("Proposed rule 12: ...").
+    - `ToolFailed`: a tool raises it when it couldn't act, and the result goes back as an
+      error. The task tools' not-found cases use it. `ToolContext.outcomes` records each call;
+      if every call failed and the reply claims success, it's replaced with `FAILED_TEXT`.
+      `CLAIMS_DONE` also catches "cleared", "cancelled" and "set aside".
+    - The system prompt and `propose_rule` say rules are for how Themi behaves; chores,
+      schedules and the steps of a job are tasks, never rules. Re-run the evals.
+    - The deeper cause: tasks can't hold steps or a repeat schedule, so that detail had
+      nowhere else to go. That's F6.
+    - Real data, by plain SQL: Erin's drafts 9 (rescue spray), 11 (bird cage schedule) and 12
+      (bird cage steps) set aside. Their text is kept for F6.
+
+### F6 · Chores: steps and repeating schedules
+Status: split into F6a (steps) and F6b (schedules and escalation), approved 2026-10-25.
+- F6a · Steps on tasks: [x] (2026-10-25; data move waits for a restart). The Steps bullet below, `update_task`, the website task page, and
+  moving steps into tasks 6 and 4 (and unlocking rule 3).
+- F6b · Repeating schedules and escalation: [x] (2026-10-25; data move waits for a restart). Everything else below, plus the bird cage
+  data.
+- The user's answers: escalation names who it goes to. "Top of both our lists" makes the chore
+  shared at that point: it shows first for both, both are nudged, and either can mark it done.
+  When it's done, the next round goes back to its owner. Escalation that names only the owner
+  keeps it theirs. The step-up offer comes after 6 on-time runs in a row.
+- F6a notes (2026-10-25), failing tests first:
+    - Migration 0028 adds `tasks.steps` (JSON list of strings). The person's wording is kept as
+      is: `clean_steps` trims, drops blank lines and leading bullets, and allows at most 30
+      steps of 200 characters each. Tags such as "(Optional/Bonus)" are just text, so rule
+      10's format survives unchanged.
+    - `create_task` requires `steps` (an empty list is fine). `update_task` renames a task or
+      replaces its steps: empty values keep what's there, and `clear_steps` empties them.
+      `TaskBoard.update` limits edits to the assignee, whoever added the task, or an admin,
+      and sends an "edited" change, so the calendar keeps up.
+    - Nudges list the steps ("- step" lines) through the task-details hook. Open items show
+      "Steps: a; b; c", so the model can answer "what does the kitchen task involve?".
+    - Website: a Tasks page (nav "Tasks") lists your tasks and ones you added for others,
+      each with an editable title and steps (one per line).
+    - Data still to move after the user restarts `themi run` (the migration runs then):
+      steps for task 6 (kitchen, from its title plus draft 9's rescue spray as optional),
+      task 4 (bathroom, rule 3's levels as tagged steps, then rule 3 unlocked) and task 7
+      (bird cage, from draft 12). The bird cage schedule waits for F6b.
+- F6b notes (2026-10-25), failing tests first:
+    - Migration 0029: schedule columns on `tasks` (`times_per_week`, `minimum_days`,
+      `escalate_days`, `escalate_to`, `shared`, plus `overdue_notified_at`, `escalated_at` and
+      `step_up_offered_at`), a `task_runs` table, and the capped `chore_step_up` category.
+    - `set_task_schedule` (times a week, at least every N days, escalate after N days, to the
+      owner or both). Zero means none; times 0 stops repeating. Escalation must come after the
+      minimum. `schedule_summary()` reads "Repeats 2 times a week (at least every 7 days; after
+      14 days, both of you)".
+    - Marking a repeating task done records a run (on time if done by its due date) and opens
+      the next round, due in round(7 / times) days. Shared is cleared, so it goes back to its
+      owner. The next nudge waits for that date. The calendar gets a "rescheduled" change.
+    - `tasks.schedules` (hourly): past the minimum, one "Overdue: <title> (last done N days ago)"
+      to the owner. Past the escalation point, once: to the owner again, or with "both" the task
+      turns shared. It's first in everyone's `open_for`, every paired member gets "Overdue for
+      both of you: ...", and anyone can mark it done. A task's queued nudges are tagged
+      (`dedupe_key` "task-<id>-...") so all of them can be withdrawn.
+    - Step-up: after 6 on-time runs in a row since the last offer, a capped approval
+      "Step up: <title>, N+1 times a week instead of N". Only whole numbers below 7 a week.
+      Approving changes the schedule; nothing changes without a yes.
+    - Steps in nudges are now `> ` quotes, like call scripts. The PDA shield had been rewriting
+      Erin's command-style steps ("Refill the water" became "you could refill..."). The step-up
+      card opens with a "Step up:" label for the same reason.
+    - The Tasks page shows each schedule and the last few runs (late ones marked).
+      Screenshot-checked in `make dev`.
+    - The plan's Task matching bullet now describes chores.
+    - Data moved on 2026-10-25 after the user's restart (a guarded script, tested on a copy of
+      the database first):
+        - Bird cage (task 7): Erin's own 9 steps from her message (not draft 12's rewording),
+          plus 2 times a week, at least every 7 days, after 14 days both.
+        - Kitchen (task 6): renamed "Clean the kitchen", with her approved steps in rule 10's
+          format.
+        - Bathroom (task 4): renamed "Clean upstairs bathroom", with rule 3's levels as
+          (Low)/(Medium)/(High) steps, repeating once a week ("realistic", in her words).
+        - Rule 3 unlocked. The two nudges already queued for the next morning were rewritten
+          to the new wording.
+Depends on: 20, F4, F5
+Read first: "Shadow Calendar" → tasks and matching; "Module behaviour" → C (Maintenance), whose
+interval, step-by-step guide and history this reuses. From feedback bug #5: Erin's chores
+(bird cage, kitchen, bathroom) come with steps and schedules, and tasks couldn't hold either, so
+the model kept turning them into rules.
+
+Build:
+- Steps: a task keeps an ordered list of steps, each optionally tagged (e.g. "Optional/Bonus",
+  or an energy level like "Medium"). `create_task` and a new `update_task` take them. The nudge
+  shows them (the existing task-details hook), and so do `list_open_items` and the website.
+- Repeating schedule: a target ("2 times a week"), a minimum ("at least once a week") and an
+  escalation point ("over 2 weeks"). Marking a repeating task done records a run (when, who,
+  notes) and sets the next due date from the target.
+- Escalation: past the minimum, the nudge says it's overdue. Past the escalation point, the task
+  goes to the top of both partners' lists and both are nudged (still respecting quiet hours and
+  busy times; never any energy talk).
+- Growing the habit: after a steady stretch at the target (say 6 runs in a row on time), Themi
+  offers a step up ("try 3 times a week?"), as an approval. It never changes the schedule
+  itself.
+- Website: a task page with steps, schedule and recent runs, all editable.
+- Migration: step and schedule columns on tasks, plus `task_runs`. Prompt 33's maintenance items
+  can later build on the same base (adding active months, one a day, calendar).
+- Real data, once built: the bird cage (task 7) gets its steps and schedule from set-aside drafts
+  12 and 11. The kitchen (task 6) gets its steps out of its title, plus the optional rescue
+  spray (draft 9), in rule 10's format. The bathroom (task 4) gets rule 3's energy levels as
+  tagged steps, and then rule 3 can be unlocked.
+
+Tests:
+- Steps: create, update, shown in the nudge, tags kept, rule 10's style untouched (wording is
+  the person's).
+- Schedules: next due date from the target; overdue wording past the minimum; escalation to
+  both lists and both people; quiet hours still hold.
+- The step-up offer after a steady stretch, as an approval; nothing changes without a yes.
+- Scenario: Erin's bird cage conversation ends as one task with steps and a schedule, and no
+  rule proposals.
+
+Done when: Erin can describe a chore's steps and schedule in chat and it becomes one task that
+repeats. Commit.
+
+### F7 · Chores: anchored schedules, deadlines, read-back
+Status: [x] (2026-10-25)
+Depends on: F6b
+Read first: F6's notes. From the evals and Erin's chores: "bins on Tuesday evenings" and
+"cardboard before Tuesday (garbage day)" can't be expressed. F6b only knows "N times a week,
+counted from the last time it was done", so replies like "I'll remind you Tuesday evenings"
+overstate what's set.
+
+Build:
+- Schedules as RFC 5545 recurrence rules (`dateutil.rrule`), which also suit the calendar.
+  Two modes: anchored ("every Tuesday at 18:00", "first Monday of the month", "every 3 days
+  from Oct 26") and floating ("2 times a week after the last time", which is F6b's behaviour,
+  kept as is). Migration: an `rrule` column plus a mode; F6b's `times_per_week` maps onto
+  floating.
+- Anchored rounds: due on each occurrence, nudged in its window (the anchor's time, or the
+  family's daytime), still under quiet hours and busy times. A missed anchored round can be
+  caught up or skipped, per chore; the default is to roll on to the next occurrence.
+- Deadlines tied to another event: "by garbage day" means due the day before an anchored
+  household event (a chore can point at another chore's schedule, e.g. task 5's cardboard at
+  the bins).
+- Read-back: after any schedule change, Themi states it in plain words, built in code from what
+  was stored (e.g. "Every Tuesday at 6 pm; overdue after a week; after two weeks it's on both
+  your lists"), not from the model's own summary. A wrong read-back is then easy to correct.
+  Validation rejects impossible rules (an escalation before the minimum, an anchor with no
+  dates).
+- `set_task_schedule` gets `repeat` (anchored, as plain fields: weekdays, time, monthly
+  position, interval) and `due_before_task`. The Tasks page shows the next three occurrences.
+
+Tests:
+- Anchored next-occurrence across weeks, months and a daylight-saving change.
+- Floating behaviour unchanged (F6b's tests keep passing).
+- Missed rounds rolling on versus catching up; "by garbage day" deadlines.
+- The read-back text, built in code, for each kind of schedule.
+- The bins eval case expects an anchored weekly Tuesday schedule.
+
+Done when: "bins on Tuesday evenings" and "cardboard before garbage day" are stored, nudged and
+read back exactly. Commit.
+
+Notes (2026-10-25), failing tests first:
+- New dependency: `python-dateutil` (3.0 installed), plus `types-python-dateutil` for dev.
+- Deviation from the plan above: `set_task_schedule` takes a short `repeat` phrase instead of
+  separate rule fields. `themi.core.repeat.parse` reads it in code ("every Tuesday at 6pm",
+  "every other Monday", "every Tue and Fri", "first Monday of the month", "the 15th of every
+  month", "every 3 days", "twice a week", time words like "evening" = 6 pm). Anything else is
+  refused with examples. A schedule is stored as structured JSON (`tasks.repeat`, migration
+  0030) rather than a raw RRULE string, and turned into a `dateutil.rrule` when needed. That
+  keeps the read-back exact and the calendar export easy later. Floating schedules stay in
+  `times_per_week`, so F6b's data needed no change.
+- Occurrences are worked out on local wall-clock time and given the timezone afterwards, so
+  "6 pm" stays 6 pm across the Nov 1 change (tested).
+- Anchored rounds: the first due date is the next occurrence; a date-only round on today's
+  date counts as today. The nudge waits for the chore's time on its day (or the morning), and
+  the outbox deadline is that time too. Done (early or late) settles the round, and the next
+  is the first occurrence after it.
+- Missed rounds (`tasks.schedules`): with "roll" (the default), a passed date records a
+  missed run (`task_runs.missed`, ignored for "last done" and on-time streaks) and moves to
+  the next date. With "catch_up" the round stays owed.
+- `due_before_task`: due the day before the other chore's round, or the day before its
+  following round once this one is done for it. It follows the other chore when that rolls,
+  and records a miss if it wasn't done.
+- Read-back: the tool sends "Saved: <TaskBoard.summary>. Next: <date, time>." itself, and
+  tells the model it was read back word for word. The Tasks page shows the next three dates.
+- Live evals: `rule-bins` passes 3/3. At first the model sent "every Tuesday" for "Tuesday
+  evenings"; the read-back showed the gap ("Saved: Every Tuesday."), and the tool description
+  now asks it to keep the time of day. After that: "Saved: Every Tuesday at 6 pm".
+- The architecture guard flags any call named `combine` (an energy function), and
+  `datetime.combine` matched it. The code uses its own `_on()` helper instead of loosening the
+  guard.
+- The plan's Task matching bullet now covers fixed dates, deadlines, missed rounds and the
+  read-back.
+- Real data: migration 0030 runs on the next restart. Nothing else needs moving. Michael's
+  cardboard (task 5) could be "due before" a bins chore once one exists.
+
+Later prompts (not part of F7, from the same roadmap):
+- Skip this round, or pause chores while away (holding overdue and escalation).
+- Fair rotation between partners ("alternate the bins"), using `task_runs`.
+- Energy-aware levels: offering a chore's (Low)/(Medium)/(High) steps to suit the day, in
+  words, never scores.
+- Robustness: streaks and completion rates on the Tasks page; a check that the hourly job
+  never double-nudges after a restart.
+- Prompt 33's maintenance (active months, one a day, notes per run) built on the same base.
+
+### S1 · Shadow Calendar: energy remarks recorded
+Status: [x] (2026-10-25)
+Depends on: 18, 19
+Read first: "B. Energy engine (Shadow Calendar)". From the user's question about the "hidden
+internal calendar": the live data had 6 message-timing signals, no energy remarks at all, and
+3 of 168 hour-of-week cells learned. Erin's "it's a medium energy day" left no trace.
+
+Notes (2026-10-25), failing tests first:
+- Causes:
+    - The system prompt never asked for energy remarks; only the tool's description did.
+    - Stated levels ("a medium energy day") had nowhere to go: the tool took only drains and
+      boosts, from -3 to +3, with no zero.
+    - Nothing caught a remark the model skipped.
+- Day levels: signal source `day_level` (-1 low, 0 medium, 1 high), governed by the
+  "energy notes" switch. `combine(..., timezone=)` leaves day levels out of the added points.
+  The latest level stated earlier the same local day pulls the result towards
+  `DAY_LEVEL_TARGETS` (35, 55, 75) with weight 0.75, and it's gone the next day. Projections
+  (the windows) pass the timezone too.
+- `log_energy_level` tool (low, medium or high), and a system-prompt line asking for both
+  energy tools alongside whatever else was asked.
+- Backstop: `themi.energy.remarks.energy_remark` catches only unmistakable first-person
+  patterns ("medium energy", "I'm wiped/exhausted/drained", "took a lot out of me", "I feel
+  really good/refreshed", but not "feel good about"). `Agent._catch_energy` records one after a
+  turn that recorded nothing, and the switch still applies.
+- Evals: new case `energy-medium-day`. The drain and boost cases now accept either tool in the
+  right direction (a drain or "low", a boost or "high"). Energy slice live: 6/7, then 7/7
+  re-scored (prompt 28 had 2/6).
+
+### S2 · Shadow Calendar: calendar, task load and busy times as inputs
+Status: [x] (2026-10-25)
+Depends on: S1, 26, F3, F6b
+Read first: "B. Energy engine (Shadow Calendar)" → Inputs. The original spec said the hidden
+calendar is "updated based on all available data"; the plan narrowed that to three inputs.
+
+Build:
+- Calendar load: for each person with a linked Google account, read their primary calendar's
+  events for today and the next 7 days (the existing `calendar.events` scope allows reading).
+  Keep only start, end and free/busy, never titles or attendees. A packed stretch lowers the
+  projection for those hours and the hour after; an empty day leaves the baseline alone. It
+  becomes an input with its own privacy switch ("calendar"), and does nothing until Google is
+  set up (this server's `.env` has no Google keys yet).
+- Task load: each person's open and overdue tasks (overdue chores count more) lower their spare
+  room a little, with a cap, so matching doesn't pile more onto someone who's behind. It's
+  derived, not stored.
+- Busy times: a long busy block (e.g. a 9-5 workday) is followed by a short wind-down dip, so
+  the first nudge after work isn't timed as if it were a fresh morning.
+- Plan update: the inputs list gains these three.
+
+Decided 2026-10-25: busy events also hold Themi's messages, like busy times; primary calendar
+only.
+
+Tests:
+- Calendar events turn into the right hours (all-day and declined events ignored; titles never
+  stored); the switch; behaviour with no Google.
+- Task load caps; matching moves a task away from someone with a pile of overdue chores.
+- The wind-down dip after a long busy block, and not after short ones.
+
+Notes (2026-10-25), failing tests first:
+- `CalendarClient.list_events` (single instances; paged). `themi.connectors.gcal.busy.CalendarBusy`
+  refreshes every 15 minutes (`calendar.busy`, only when Google is set up). For each enabled
+  linked account with calendar access, it reads the primary calendar for the next 7 days and
+  keeps busy blocks only (migration 0031, `calendar_busy`: member, account, start, end; no
+  titles). Left out: all-day, "free", cancelled and self-declined events. An outage keeps the
+  last blocks.
+- A fourth privacy switch, "calendar" (`TRACKING_INPUTS`). Switching it off deletes the blocks
+  at the next refresh, and `blocks()` returns nothing. It's on the website and in `/tracking`.
+- Holding messages: `free_from(..., blocks)`, and `Outbox.calendar_blocks` (set by the app).
+  The energy windows treat blocks as quiet too.
+- Energy: `EnergyModel.load()` takes 8 points off inside a busy event, and in the hour after a
+  long event (2 hours or more) or a long busy time (4 hours or more). It applies to `capacity()`
+  and the projections. Words only, as always.
+- Task load: `Matcher.spare` subtracts `task_load` (2 per open task, overdue ones double,
+  capped at 15).
+- The plan's Inputs list now includes all three.
+- For the family: the calendar input does nothing until Google is set up (the README's Google
+  Cloud section) and each person links their account.
+
+### S3 · Shadow Calendar: a private "how Themi sees my week" view
+Status: [x] (2026-10-25)
+Depends on: S1, S2 (optional)
+
+Build:
+- A website page for each person, about themselves only (admins included: nobody sees
+  another's): for each day of the coming week, morning, afternoon and evening in words ("usually
+  a good stretch", "tends to be low"), the good windows Themi would use, and what it has learned
+  from ("based on 14 replies and 3 things you mentioned about your energy"). Words only, never
+  scores. Each input's switch is linked from the page.
+- "That's not right" per part of the day: a correction the person can make ("Tuesday evenings
+  are usually fine for me"), stored as a gentle nudge to the baseline.
+- `make dev`: a debug page in the simulator with the actual numbers, for testing only (never
+  in the real website).
+
+Decided 2026-10-25: yes, gentle corrections from the page.
+
+Tests:
+- Only your own week is shown; no numbers anywhere on the real page; corrections move the
+  baseline gently; the dev page exists only in `make dev`.
+
+Notes (2026-10-25), failing tests first:
+- `themi.energy.week`:
+    - `week_view` covers 7 days × morning (8-12), afternoon (12-17) and evening (17-21) in
+      `WEEK_WORDS`, from the projection averaged over the open hours. Parts mostly in quiet
+      hours, busy times or calendar events say so. A part with no learned hour yet is marked
+      "(a first guess)", added after the screenshot showed nearly every part as "usually
+      steady".
+    - `good_moments` gives the next day's windows; `learned_from` counts replies, energy
+      remarks and nudge outcomes.
+    - `correct()` moves the hours of that weekday's part 10 points in the cell (n+1). With
+      the prior blend, one correction shifts the baseline about 2.5 points.
+- Website: My week (`/week`, nav "My week") takes no member id, so it's always your own. Its
+  "Usually better" and "Usually harder" buttons post to `/week/correct`. The page avoids the
+  words "capacity" and "score" (the architecture guard on templates).
+- `make dev`: an "Energy ↗" link in the simulator opens `/sim/energy`, with hour-by-hour
+  baseline and capacity numbers and recent signals (`runner.energy_numbers`). It's dev only.
+- Screenshot-checked. A live check also showed "It's a low energy day" recorded as a day level.
+- The plan's energy engine section now describes the page.
+
+### S4 · Energy-aware chore levels
+Status: [x] (2026-10-25)
+Depends on: S1, F6a
+
+Build:
+- A chore whose steps are tagged by level ("(Low) ...", "(Medium) ...", "(High) ...") is nudged
+  with the level that suits how the person seems right now, in words: "A lighter version for
+  today:" followed by the Low steps. Medium takes in the Low steps plus its own, and so on, as
+  in Erin's bathroom rule. A stated day level (S1) wins over the estimate.
+- When asked "what should I do about the bathroom?", the model gets the same suggested level,
+  in words.
+
+Decided 2026-10-25: only the suggested level's steps, plus one line saying more is there.
+
+Tests:
+- Low, medium and high days pick the right steps; a stated level wins; untagged steps are
+  unchanged; no numbers in any text.
+
+Notes (2026-10-25), failing tests first:
+- `EnergyModel.suggested_level(member)` returns "low", "medium" or "high": a level stated today
+  wins, else the estimate (below "steady" is low, below "some energy" is medium). It returns
+  None with every input switched off, and then all steps show. The number stays inside the
+  energy package.
+- `TaskBoard._steps_for` replaces the old steps hook. Level-tagged steps are kept cumulatively
+  (Medium takes in Low, High takes in all); untagged steps always show. The lead line is
+  "A lighter / middle / full version for today:", followed by the quoted steps, then "The rest is
+  there too if you feel like more." unless it's the full version. Open items add "Suggested
+  today: the lighter (Low) version." for the model.
+- Seen while testing: a stated low day also makes matching hand an unassigned chore to the
+  partner, and makes the outbox wait for a better moment. Both are as designed; the tests pin
+  the owner and read the queued nudge.
+- S1 follow-up: `test_eval_runner` expected the energy case's old problem text.
 
 ---
 
@@ -2546,6 +2939,10 @@ Do:
   setup) in `docs/research/voice-calls.md`.
 - SMS as an extra channel: current Twilio pricing and US A2P 10DLC registration steps and costs,
   in `docs/research/sms.md`.
+- Dishwasher, from Erin's idea #4 (2026-10-25): she wants Themi to notice passively when the
+  household is falling behind. The dishwasher isn't known to be an LG ThinQ (prompt 30), so find
+  its make and any API. Also consider a smart plug that reports power use (the Tuya work in
+  prompt 32), which would detect cycles on any dishwasher.
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.

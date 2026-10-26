@@ -381,7 +381,8 @@ class Pantry:
     "update_pantry",
     "Record what the household has, when someone mentions it: 'used the last olive oil' is "
     "olive oil out; 'running low on rice' is rice low; 'bought eggs' is eggs plenty. Low or "
-    "out staples are offered for the grocery list automatically.",
+    "out staples are offered for the grocery list automatically, so don't also call "
+    "add_to_grocery_list for them.",
     {
         "items": {
             "type": "array",

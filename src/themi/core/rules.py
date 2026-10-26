@@ -32,7 +32,7 @@ from themi.autonomy import Autonomy, CappedCategory
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core.services import AwaitingItem, Decision, Services
-from themi.core.tools import Tool, ToolContext, tool
+from themi.core.tools import Tool, ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -113,6 +113,7 @@ class Rulebook:
         services.awaiting_sources.append(self.awaiting_items)
         services.add_command("/rules", self.on_rules_command, "See the rules and your drafts")
         services.tools.register(propose_rule_tool)
+        services.tools.register(set_aside_draft_rule)
 
     # ----- reading ------------------------------------------------------------
 
@@ -355,7 +356,7 @@ class Rulebook:
         return [
             AwaitingItem(
                 f"rule:{r.id}",
-                f"Proposed rule: {r.summary}",
+                f"Proposed rule {r.id}: {r.summary}",
                 resolver(r.id),
                 self._asked_in(r.id, member.id),
             )
@@ -408,9 +409,10 @@ class Rulebook:
 
 @tool(
     "propose_rule",
-    "Capture a household rule as a draft for this person to lock in. Use it when they're "
-    "settling how something should work from now on ('always archive store promos', "
-    "'remind me about bins on Tuesday evenings'). It sends them the proposal; nothing takes "
+    "Capture a rule about how Themi itself behaves, as a draft for this person to lock in "
+    "('always archive store promos', 'list steps as bullet points'). Chores, schedules and "
+    "the steps of a job are tasks (create_task), never rules. It sends them the proposal; "
+    "nothing takes "
     "effect until they lock it in. applies_to: household rules apply to everyone in the "
     "family; personal ones only shape your conversations with this person. Ask if it isn't "
     "clear which they mean. Rules can't change when Themi's own messages go out: that's "
@@ -467,3 +469,21 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 propose_rule_tool: Tool = propose_rule
+
+
+@tool(
+    "set_aside_draft_rule",
+    "Set aside one of this person's draft rules when they say they don't want it (a draft "
+    "was never in effect). Draft numbers are in their open items. Never for locked rules.",
+    {"rule_id": {"type": "integer"}},
+)
+async def set_aside_draft_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
+    rulebook = ctx.services.rulebook
+    assert rulebook is not None
+    try:
+        rule = rulebook.get(args["rule_id"])
+    except NotFound as exc:
+        raise ToolFailed("There's no rule with that number.") from exc
+    if rule.status != "draft" or rule.affects != ctx.member.id:
+        raise ToolFailed("That isn't one of their open draft rules.")
+    return await rulebook.discard(rule.id, ctx.member)

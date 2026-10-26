@@ -81,6 +81,9 @@ class Sender(Protocol):
     ) -> None: ...
 
 
+BlockSource = Callable[["Member", datetime, datetime], list[tuple[datetime, datetime]]]
+
+
 class ReceptivityProvider(Protocol):
     def not_before(self, member: Member, priority: Priority, now: datetime) -> datetime:
         """The earliest good moment to reach `member` (return `now` when it's fine)."""
@@ -118,6 +121,9 @@ class Outbox:
         self.pauses = pauses or PauseBook(store.db)
         # Called after each successful delivery with (outbox row, telegram message id).
         self.sent_listeners: list[Callable[[dict[str, Any], int | None], None]] = []
+        # Busy events from someone's calendar (S2), which hold messages like busy times:
+        # (member, start, end) -> [(starts, ends)]. None without Google.
+        self.calendar_blocks: BlockSource | None = None
 
     @property
     def _tz(self) -> str:
@@ -316,7 +322,12 @@ class Outbox:
             return now
         tz = self._tz
         overdue = deadline is not None and deadline <= now
-        when = free_from(member, now, tz)
+        blocks = (
+            self.calendar_blocks(member, now, now + timedelta(days=8))
+            if self.calendar_blocks
+            else []
+        )
+        when = free_from(member, now, tz, blocks)
         if not overdue and self.sent_today(member.id, now) >= member.daily_limit:
             when = max(when, next_waking_start(member, now, tz))
         if not overdue:
@@ -327,7 +338,7 @@ class Outbox:
         if held is not None:
             when = max(when, held)
         # Whatever was chosen, it can't land inside quiet hours or a busy time.
-        return free_from(member, when, tz)
+        return free_from(member, when, tz, blocks)
 
     def release_held(self, member: Member) -> int:
         """After a pause ends early, let held messages be reconsidered at the next flush."""

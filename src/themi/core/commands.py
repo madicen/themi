@@ -31,11 +31,13 @@ TRACKING_WORDS = {
     "text_notes": "Notes about how you're doing, when you mention it",
     "message_timing": "When you tend to reply, and how quickly",
     "device_activity": "Activity from household devices (laundry, feeders)",
+    "calendar": "When your Google calendar says you're busy (never what the events are)",
 }
 TRACKING_SHORT = {
     "text_notes": "energy notes",
     "message_timing": "reply timing",
     "device_activity": "device activity",
+    "calendar": "calendar",
 }
 PAUSE_HELP = (
     "To pause something, send for example /pause meals today, /pause laundry 3 hours or "

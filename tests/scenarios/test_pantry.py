@@ -295,3 +295,22 @@ async def test_an_honest_reply_about_a_waiting_item_is_kept(scenario: Scenario) 
     scenario.primary.queue_text("Want taco shells too? The card above is ready when you are.")
     replies = await scenario.say("Husband", "we're having tacos tonight")
     assert replies[-1] == "Want taco shells too? The card above is ready when you are."
+
+
+async def test_a_false_add_claim_after_a_pantry_offer_is_replaced(scenario: Scenario) -> None:
+    """Evals (pantry-rice-low): the pantry offered rice for the list, and the reply said it was
+    "popped on the grocery list". The honesty check only saw approvals made by staged tools."""
+    scenario.primary.queue_tool_call(
+        "update_pantry", {"items": [{"name": "rice", "status": "low", "expiry": ""}]}
+    )
+    scenario.primary.queue_text("I've added rice to the pantry as low, and popped it on the list.")
+    replies = await scenario.say("Erin", "We're running low on rice")
+    assert replies[-1] == WAITING_TEXT.format(summary="Rice for the grocery list")
+
+
+def test_the_grocery_tool_says_low_and_out_items_are_the_pantrys_job() -> None:
+    from themi.core.groceries import add_to_grocery_list
+    from themi.core.pantry import update_pantry
+
+    assert "not for things running low or out" in add_to_grocery_list.spec.description
+    assert "don't also call add_to_grocery_list" in update_pantry.spec.description

@@ -6,6 +6,7 @@ Everything is stored in UTC; anything a person experiences (quiet hours,
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -56,18 +57,27 @@ def in_busy_time(member: Member, moment: datetime, timezone: str) -> bool:
     return any(busy.covers(local) for busy in member.busy_times)
 
 
-def free_from(member: Member, moment: datetime, timezone: str) -> datetime:
-    """The first moment at or after `moment` outside quiet hours and busy times.
+def free_from(
+    member: Member,
+    moment: datetime,
+    timezone: str,
+    blocks: Sequence[tuple[datetime, datetime]] = (),
+) -> datetime:
+    """The first moment at or after `moment` outside quiet hours, busy times and `blocks`
+    (busy events from their calendar).
 
-    A busy time can run into quiet hours (or the other way round), so this keeps
-    stepping to the end of whatever covers the moment until nothing does.
+    One can run into another, so this keeps stepping to the end of whatever covers the
+    moment until nothing does.
     """
     when = moment
-    for _ in range(2 * len(member.busy_times) + 2):
+    for _ in range(2 * (len(member.busy_times) + len(blocks)) + 2):
         after_quiet = quiet_hours_end(member, when, timezone)
         local = to_local(after_quiet, timezone)
         covering = [b for b in member.busy_times if b.covers(local)]
         step = _at(local, max(b.end for b in covering)) if covering else after_quiet
+        in_event = [end for start, end in blocks if start <= step < end]
+        if in_event:
+            step = max(in_event)
         if step == when:
             return when
         when = step

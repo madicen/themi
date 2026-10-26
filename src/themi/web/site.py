@@ -40,6 +40,7 @@ TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
     "message_timing": "When you tend to reply, and how quickly",
     "device_activity": "Activity from household devices (laundry, feeders)",
+    "calendar": "When your Google calendar says you're busy (never what the events are)",
 }
 EVENT_WORDS = {
     "staged": "Asked about",
@@ -75,7 +76,14 @@ def security_headers(response: Response, form_targets: str = "") -> None:
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import admin_pages, ai_pages, google_pages, knowledge_pages
+    from themi.web import (
+        admin_pages,
+        ai_pages,
+        google_pages,
+        knowledge_pages,
+        task_pages,
+        week_pages,
+    )
 
     kit = Kit(ctx)
     google = ctx.app.services.google
@@ -120,6 +128,8 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(core_routes(kit))
     web.include_router(admin_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
+    web.include_router(task_pages.routes(kit))
+    web.include_router(week_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
 

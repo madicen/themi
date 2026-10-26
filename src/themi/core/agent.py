@@ -6,8 +6,9 @@ For each inbound event:
   (two-option choices) count as if the person typed the option.
 - Voice notes are transcribed first, then treated like text.
 - Text feeds PDA calibration, then a bare yes/no/not-now resolves the one
-  item waiting on this person, if there's exactly one and Themi hasn't asked
-  them another question since that item's message. Otherwise the model
+  item waiting on this person, if Themi hasn't asked them another question
+  since that item's message. With several waiting, Themi asks which one
+  (listing them) instead of guessing. Otherwise the model
   runs a tool loop (at most `max_steps` model calls) and the final text goes
   out through the outbox as a reply.
 
@@ -31,6 +32,7 @@ from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.tools import ToolContext
+from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
 if TYPE_CHECKING:
@@ -57,9 +59,12 @@ YES_WORDS = frozenset(
 )
 # A reply that says something was done while it's only waiting on a yes is replaced.
 WAITING_TEXT = "{summary}: that's waiting for a yes on the card above."
+FAILED_TEXT = "That didn't go through, so nothing has changed yet."
+WHICH_TEXT = "Which one did you mean: {items}? Each card above has its own buttons."
+NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already waiting for a yes."
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
-    r"created|removed|deleted|set up|made)\b"
+    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded)\b"
     r"|^(?:added|done|archived|booked|sent|ordered|scheduled)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
     r"sent|ordered|scheduled|on the list)\b",
@@ -67,12 +72,17 @@ CLAIMS_DONE = re.compile(
 )
 
 
-def _honest(reply: str, waiting: list[str]) -> str:
+def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     """The model sometimes says "Added X" when X is only waiting on a yes (prompt 28's evals,
-    feedback bug #3). The approval card speaks for itself, so such a reply is replaced."""
-    if not waiting or not CLAIMS_DONE.search(reply):
+    feedback bug #3), or claims success when every tool call failed (bug #5). Such replies
+    are replaced: the approval card speaks for itself, and a failure is said plainly."""
+    if not CLAIMS_DONE.search(reply):
         return reply
-    return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
+    if outcomes and "ok" not in outcomes:
+        return NOTHING_CHANGED_TEXT if "declined" in outcomes else FAILED_TEXT
+    if waiting:
+        return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
+    return reply
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
@@ -142,8 +152,12 @@ class Agent:
         self.services.energy.observe_inbound(member)
         if await self._fast_path(member, text):
             return
+        energy_mark = self.services.store.db.scalar(
+            "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
+        )
         async with channel.typing(member):
             reply = await self._converse(member, text, event)
+        self._catch_energy(member, text, energy_mark)
         await self._reply(member, reply)
 
     # ----- steps --------------------------------------------------------------
@@ -176,23 +190,58 @@ class Agent:
         if decision is None:
             return False
         waiting = self.services.awaiting(member)
-        if len(waiting) != 1 or self._asked_since(member, waiting[0]):
-            return False
+        cards = {i for item in waiting for i in item.message_ids}  # the waiting cards themselves
+        if not waiting or any(self._asked_since(member, item, cards) for item in waiting):
+            return False  # nothing waiting, or Themi has asked something else since
+        if len(waiting) > 1:  # a bare yes can't say which: ask, rather than guess
+            names = [item.summary for item in waiting]
+            listed = ", ".join(names[:-1]) + f" or {names[-1]}"
+            await self._reply(member, WHICH_TEXT.format(items=listed))
+            return True
         outcome = await waiting[0].resolve(decision)
         await self._reply(member, outcome)
         return True
 
-    def _asked_since(self, member: Member, item: AwaitingItem) -> bool:
-        """Has Themi asked this person a question since the item's own message?
-        Then a bare "yes" may answer that question, so the model decides."""
+    def _catch_energy(self, member: Member, text: str, mark: int) -> None:
+        """If the turn recorded no energy remark but the message plainly has one, record it
+        (the person's privacy switch still decides; see themi.energy.remarks)."""
+        recorded = self.services.store.db.scalar(
+            "SELECT COUNT(*) FROM energy_signals WHERE id > ? AND member_id = ? "
+            "AND source IN ('text_note', 'day_level')",
+            (mark, member.id),
+        )
+        if recorded:
+            return
+        remark = energy_remark(text)
+        if remark is not None:
+            self.services.energy.record(
+                member, remark.source, remark.value, f"said: {remark.words}"
+            )
+
+    def _waiting_since(self, member: Member, mark: int) -> list[str]:
+        """Approvals created for this member after `mark` that are still waiting on a yes."""
+        rows = self.services.store.db.query(
+            "SELECT summary FROM pending_actions WHERE id > ? AND member_id = ? "
+            "AND status = 'pending' ORDER BY id",
+            (mark, member.id),
+        )
+        return [r["summary"] for r in rows]
+
+    def _asked_since(
+        self, member: Member, item: AwaitingItem, cards: frozenset[int] | set[int] = frozenset()
+    ) -> bool:
+        """Has Themi asked this person a question since the item's own message? Then a bare
+        "yes" may answer that question, so the model decides. Other waiting cards (`cards`)
+        don't count: "Go ahead, or not now?" on the next card isn't a different question."""
         if not item.message_ids:
             return False
-        row = self.services.store.db.one(
-            "SELECT 1 FROM message_log WHERE member_id = ? AND direction = 'out' "
-            "AND kind != 'edit' AND telegram_message_id > ? AND text LIKE '%?%' LIMIT 1",
+        rows = self.services.store.db.query(
+            "SELECT telegram_message_id FROM message_log WHERE member_id = ? "
+            "AND direction = 'out' AND kind != 'edit' AND telegram_message_id > ? "
+            "AND text LIKE '%?%'",
             (member.id, max(item.message_ids)),
         )
-        return row is not None
+        return any(r["telegram_message_id"] not in cards for r in rows)
 
     async def _converse(self, member: Member, text: str, event: InboundEvent) -> str:
         services = self.services
@@ -215,13 +264,15 @@ class Agent:
         tools = services.tools.specs()
         client = services.router.client_for(member.id, AITask.CONVERSATION)
         ctx = ToolContext(member, services, request_text=text)
+        # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
+        mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for _ in range(self.max_steps):
                 response = await client.chat(system, messages, tools)
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
-                    return _honest(reply, ctx.staged)
+                    return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
                 results = [await services.tools.run(call, ctx) for call in response.tool_calls]

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Tasks · Themi{% endblock %}
+{% block content %}
+<h1>Tasks</h1>
+
+{% macro task_card(task) %}
+<article class="card">
+  <form method="post" action="/tasks/{{ task.id }}/edit" class="settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Task <input type="text" name="title" value="{{ task.title }}" required></label>
+    {% if task.shared %}<p><strong>Overdue: on both your lists until it's done.</strong></p>{% endif %}
+    {% if task.due_on %}<p class="muted">Due {{ task.due_on.strftime('%a %d %b') }}</p>{% endif %}
+    {% if task.repeats %}
+    <p class="muted">{{ summary(task) }}. Change it in chat.</p>
+    {% if upcoming.get(task.id) %}<p class="muted">Next: {% for d in upcoming[task.id] %}{{ d.strftime('%a %d %b') }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+    {% set done = runs.get(task.id, []) %}
+    {% if done %}
+    <p class="muted">Last done: {{ done[-1].done_at.astimezone(tz).strftime('%a %d %b') }} by {{ names.get(done[-1].done_by, "someone") }}{% if done|length > 1 %} · before that: {% for r in done[:-1]|reverse %}{{ r.done_at.astimezone(tz).strftime('%a %d %b') }}{% if not r.on_time %} (late){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+    {% endif %}
+    {% endif %}
+    <label>Steps, one per line
+      <textarea name="steps" rows="{{ [task.steps|length + 1, 3]|max }}">{{ task.steps|join('\n') }}</textarea>
+    </label>
+    <button>Save</button>
+  </form>
+</article>
+{% endmacro %}
+
+<h2>On your list</h2>
+{% for task in mine %}{{ task_card(task) }}{% else %}<p class="muted">Nothing on your list.</p>{% endfor %}
+
+{% if added %}
+<h2>You added for someone else</h2>
+{% for task in added %}
+<p class="muted">For {{ names.get(task.assignee, "someone") }}:</p>
+{{ task_card(task) }}
+{% endfor %}
+{% endif %}
+{% endblock %}

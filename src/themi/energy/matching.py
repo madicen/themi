@@ -20,6 +20,7 @@ from datetime import datetime
 from themi import clock
 from themi.accounts import AccountStore, Member
 from themi.energy.model import SOURCE_INPUT, EnergyModel
+from themi.localtime import to_local
 
 POINTS_PER_EFFORT = 8.0
 KIND_WORDS = {"text": "texting", "call": "calls", "physical": "hands-on jobs", "errand": "errands"}
@@ -50,6 +51,10 @@ def _tracked(member: Member) -> bool:
     return any(member.tracks(toggle) for toggle in SOURCE_INPUT.values())
 
 
+TASK_LOAD_POINTS = 2.0  # per open task; an overdue one counts twice
+TASK_LOAD_CAP = 15.0
+
+
 class Matcher:
     def __init__(self, store: AccountStore, model: EnergyModel) -> None:
         self.store = store
@@ -66,7 +71,25 @@ class Matcher:
         return requester
 
     def spare(self, member: Member, kind: str, effort: int, at: datetime | None = None) -> float:
-        return self.model.capacity(member, at) - task_cost(member, kind, effort)
+        return (
+            self.model.capacity(member, at)
+            - task_cost(member, kind, effort)
+            - self.task_load(member)
+        )
+
+    def task_load(self, member: Member) -> float:
+        """What's already on their plate (S2): each open task a little, overdue ones double,
+        capped, so matching doesn't pile more onto someone who's behind."""
+        family = self.store.get_family()
+        today = to_local(clock.now(), family.timezone if family else "UTC").date()
+        row = self.store.db.one(
+            "SELECT COUNT(*) AS open, SUM(CASE WHEN due_on < ? THEN 1 ELSE 0 END) AS overdue "
+            "FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed')",
+            (today.isoformat(), member.id),
+        )
+        if row is None:
+            return 0.0
+        return min(TASK_LOAD_CAP, TASK_LOAD_POINTS * (row["open"] + (row["overdue"] or 0)))
 
     def assign(
         self, kind: str, effort: int, requester: Member, at: datetime | None = None

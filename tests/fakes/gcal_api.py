@@ -16,6 +16,7 @@ import re
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from itertools import count
 from typing import Any
 
@@ -53,6 +54,7 @@ class FakeGcal:
         self.app.add_api_route(f"{base}/calendars", self._create_calendar, methods=["POST"])
         events = f"{base}/calendars/{{cid}}/events"
         self.app.add_api_route(events, self._insert, methods=["POST"])
+        self.app.add_api_route(events, self._list_events, methods=["GET"])
         self.app.add_api_route(f"{events}/{{eid}}", self._update, methods=["PUT"])
         self.app.add_api_route(f"{events}/{{eid}}", self._delete, methods=["DELETE"])
         self._background = BackgroundServer(self.app)
@@ -94,10 +96,40 @@ class FakeGcal:
         live = [e for e in cal.events.values() if e.get("status") != "cancelled"]
         return sorted(live, key=lambda e: (e["start"].get("date", ""), e["id"]))
 
+    def add_event(
+        self,
+        address: str,
+        start: str,
+        end: str,
+        *,
+        summary: str = "Something private",
+        all_day: bool = False,
+        transparency: str = "opaque",
+        declined: bool = False,
+        status: str = "confirmed",
+    ) -> None:
+        """An event on someone's primary calendar. `start`/`end`: RFC 3339, or dates."""
+        cal = self._box(address).setdefault(
+            "primary", _Calendar("primary", address, "UTC", "owner")
+        )
+        eid = f"e{next(self._ids)}"
+        key = "date" if all_day else "dateTime"
+        event: dict[str, Any] = {
+            "id": eid,
+            "summary": summary,
+            "start": {key: start},
+            "end": {key: end},
+            "transparency": transparency,
+            "status": status,
+        }
+        if declined:
+            event["attendees"] = [{"email": address, "self": True, "responseStatus": "declined"}]
+        cal.events[eid] = event
+
     def fail(self, endpoint: str, status: int, *, times: int = 1) -> None:
         """The next `times` calls to `endpoint` fail.
 
-        Endpoints: calendarList, create_calendar, insert, update, delete.
+        Endpoints: calendarList, create_calendar, insert, update, delete, list_events.
         """
         self.failures.setdefault(endpoint, []).extend([status] * times)
 
@@ -160,6 +192,23 @@ class FakeGcal:
         cal.events[eid] = {**event, "id": eid, "status": event.get("status", "confirmed")}
         return JSONResponse(cal.events[eid])
 
+    async def _list_events(self, request: Request, cid: str) -> JSONResponse:
+        box, error = self._open(request, "list_events")
+        if box is None:
+            return error  # type: ignore[return-value]
+        cal = box.get(cid)
+        if cal is None:
+            return JSONResponse({"items": []})
+        low = _when(request.query_params.get("timeMin", "1970-01-01T00:00:00Z"))
+        high = _when(request.query_params.get("timeMax", "2999-01-01T00:00:00Z"))
+        items = [
+            e
+            for e in cal.events.values()
+            if _when(e["end"].get("dateTime") or e["end"]["date"]) > low
+            and _when(e["start"].get("dateTime") or e["start"]["date"]) < high
+        ]
+        return JSONResponse({"items": items})
+
     async def _update(self, request: Request, cid: str, eid: str) -> JSONResponse:
         box, error = self._open(request, "update")
         if box is None:
@@ -200,3 +249,10 @@ def _fake_gcal_server(_fake_google_server: FakeGoogle) -> Iterator[FakeGcal]:
 def fake_gcal(_fake_gcal_server: FakeGcal, fake_google: FakeGoogle) -> FakeGcal:
     _fake_gcal_server.reset()
     return _fake_gcal_server
+
+
+def _when(value: str) -> datetime:
+    """An RFC 3339 time or a plain date (as midnight UTC), for comparing."""
+    if len(value) == 10:
+        return datetime.fromisoformat(value).replace(tzinfo=UTC)
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Callable
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -238,6 +238,10 @@ class Scenario:
         return [p["text"] for p in self.telegram.calls("sendMessage")[before:]]
 
     # ----- looking ------------------------------------------------------------
+
+    def today(self) -> date:
+        """The family's local date now."""
+        return clock.now().astimezone(START.tzinfo).date()
 
     def inbox(self, name: str) -> list[str]:
         """Everything Themi has sent `name` so far."""

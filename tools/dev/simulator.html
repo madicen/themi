@@ -36,7 +36,7 @@
     border-radius: 8px; padding: 4px 10px; cursor: pointer;
   }
   button:hover { border-color: var(--accent); }
-  #website { color: var(--accent); text-decoration: none; }
+  #website, #energy { color: var(--accent); text-decoration: none; }
   #website:hover { text-decoration: underline; }
   nav { background: var(--panel); border-right: 1px solid var(--line); padding: 8px; }
   nav button {
@@ -139,6 +139,7 @@
   <button data-skip="240">4 hours</button>
   <button data-skip="1440">1 day</button>
   <a id="website" target="_blank" rel="noopener">Website ↗</a>
+  <a id="energy" target="_blank" rel="noopener" title="The Shadow Calendar's numbers (dev only)">Energy ↗</a>
   <button id="copy" title="Copy the conversations and Themi's log, to paste into Claude">Copy session</button>
   <button id="session" title="Start a new test session: later copies begin here">New session</button>
 </header>
@@ -312,6 +313,7 @@ async function poll() {
   people = state.people;
   const site = document.getElementById("website");
   site.href = `/sim/website?person=${chat}`;
+  document.getElementById("energy").href = `/sim/energy?person=${chat}`;
   site.title = `Open the website signed in as ${(people.find((p) => p.id === chat) || {}).name}`;
   seen[chat] = state.latest[chat] || 0;
   renderClock(state.now, state.skipped_minutes);

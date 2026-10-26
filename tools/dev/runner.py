@@ -25,9 +25,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 from tests.fakes.telegram_api import BOT_TOKEN
 from tests.fixtures.family import ERIN_TELEGRAM_ID, seed_family
+from themi import clock
 from themi.accounts import SYSTEM, AccountStore
 from themi.accounts.setup import run_invite
 from themi.ai.settings import AISettingsStore
@@ -37,6 +39,7 @@ from themi.storage import open_database
 from themi.storage.secrets import Secret, generate_key
 
 if TYPE_CHECKING:
+    from themi.runtime import Runtime
     from tools.dev.simulator import Simulator
 
 DEV_DIR = Path("data/dev")
@@ -129,6 +132,30 @@ def login_link(settings: Settings, telegram_user_id: int = ERIN_TELEGRAM_ID) -> 
         store.db.close()
 
 
+def energy_numbers(runtime: Runtime, telegram_user_id: int) -> str:
+    """The Shadow Calendar's numbers for the next day, hour by hour (dev only)."""
+    from themi.energy.model import EnergyModel
+
+    store = runtime.app.store
+    member = store.member_by_telegram(telegram_user_id)
+    model = runtime.app.services.energy
+    if member is None or not isinstance(model, EnergyModel):
+        return "That person isn't a member."
+    now = clock.now()
+    lines = [f"Energy for {member.name} (dev only; the real app shows words, never these)", ""]
+    for hour in range(24):
+        moment = now + timedelta(hours=hour)
+        lines.append(
+            f"{moment.astimezone(ZoneInfo(model.timezone)):%a %H:%M}  "
+            f"baseline {model.baseline(member, moment):5.1f}  "
+            f"capacity {model.capacity(member, moment):5.1f}"
+            + (f"  ({model.label(member)})" if hour == 0 else "")
+        )
+    lines += ["", "Recent signals:"]
+    lines += [f"  {s.at:%a %H:%M} {s.source} {s.value:+.1f}" for s in model.signals(member, now)]
+    return "\n".join(lines)
+
+
 def invite(settings: Settings, name: str) -> str:
     store = _store(settings)
     try:
@@ -156,6 +183,7 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
         logging.getLogger().addHandler(simulator.logs)  # for the page's Copy session
         runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK)
         simulator.login = lambda telegram_user_id: login_link(settings, telegram_user_id)
+        simulator.energy_debug = lambda telegram_user_id: energy_numbers(runtime, telegram_user_id)
         print(_banner(simulator.url, login_link(settings) or "", result, dev_dir), flush=True)
 
         async def main() -> None:

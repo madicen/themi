@@ -23,6 +23,7 @@ from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.connectors.gcal import CalendarSync
+from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
@@ -129,9 +130,13 @@ def build_app(
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
+    calendar_busy: CalendarBusy | None = None
     if services.google is not None:
         services.calendar = CalendarSync(store, services.google)
         TaskCalendar(services, tasks, services.calendar, scheduler).install()
+        calendar_busy = CalendarBusy(store, services.calendar)
+        outbox.calendar_blocks = calendar_busy.blocks
+        energy.calendar_blocks = calendar_busy.blocks
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()
@@ -145,6 +150,7 @@ def build_app(
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
+        PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
@@ -157,6 +163,8 @@ def build_app(
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
+    if calendar_busy is not None:
+        periodic.append(PeriodicTask("calendar.busy", timedelta(minutes=15), calendar_busy.refresh))
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
     if services.triage is not None:
