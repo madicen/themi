@@ -279,6 +279,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 pda_strength=as_int(form.get("pda_strength")),
                 phrasing=str(form.get("phrasing", "")) or None,
                 phrasing_notes=str(form.get("phrasing_notes", "")),
+                checkin_reviews=form.get("checkin_reviews") == "on",
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
             )
         except InvalidValue as exc:

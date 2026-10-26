@@ -170,7 +170,8 @@ class HabitReserve:
                 kind="habit",
             )
             self.db.execute(
-                "UPDATE habits SET last_sent_on = ?, last_outbox_id = ? WHERE id = ?",
+                "UPDATE habits SET last_sent_on = ?, last_outbox_id = ?, check_ins = check_ins + 1 "
+                "WHERE id = ?",
                 (today, result.outbox_id, habit["id"]),
             )
             sent += 1

@@ -27,6 +27,7 @@
         <option value="gentle" {% if member.phrasing == "gentle" %}selected{% endif %}>Gentle: indirect and low-key</option>
       </select>
     </label>
+    <label class="check"><input type="checkbox" name="checkin_reviews" {% if member.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>
     <label>Your own notes on phrasing
       <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
     </label>

@@ -139,6 +139,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         ),
         phrasing=row["phrasing"],
         phrasing_notes=row["phrasing_notes"],
+        checkin_reviews=bool(row["checkin_reviews"]),
     )
 
 
@@ -362,6 +363,7 @@ class AccountStore:
         busy_times: Sequence[BusyTime] | None = None,
         phrasing: str | None = None,
         phrasing_notes: str | None = None,
+        checkin_reviews: bool | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -405,6 +407,8 @@ class AccountStore:
             if len(phrasing_notes) > MAX_PHRASING_NOTES:
                 raise InvalidValue(f"phrasing notes are at most {MAX_PHRASING_NOTES} characters")
             changes["phrasing_notes"] = phrasing_notes.strip()
+        if checkin_reviews is not None:
+            changes["checkin_reviews"] = int(checkin_reviews)
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

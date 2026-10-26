@@ -25,7 +25,7 @@ TOPICS: dict[str, frozenset[str]] = {
     "laundry": frozenset({"laundry"}),
     "maintenance": frozenset({"maintenance"}),
     "tasks": frozenset({"task", "task_summary"}),
-    "habits": frozenset({"habit", "routine"}),
+    "habits": frozenset({"habit", "routine", "review"}),
     "approvals": frozenset({"approval", "rule"}),
     "notes": frozenset({"relay"}),  # notes passed on from your partner
     EVERYTHING: frozenset(),  # every proactive message

@@ -72,6 +72,7 @@ class Member:
     busy_times: tuple[BusyTime, ...] = ()
     phrasing: str = "plain"  # plain (say it straight) or gentle (indirect, low-key), idea #12
     phrasing_notes: str = ""  # their own words on how they like things said
+    checkin_reviews: bool = True  # now and then, ask whether a check-in is helping (idea #13)
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)
