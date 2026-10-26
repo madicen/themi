@@ -108,6 +108,7 @@ async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -
         "pda_enabled": "on",
         "pda_strength": "3",
         "track_text_notes": "on",
+        "chart_limit": "1",
         # message_timing and device_activity left unticked
     }
     response = await site.post("/settings", data=form)
@@ -118,6 +119,7 @@ async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -
         "07:45",
     )
     assert (erin.daily_limit, erin.pda_enabled, erin.pda_strength) == (3, True, 3)
+    assert erin.chart_limit == 1
     assert erin.tracks("text_notes") and not erin.tracks("message_timing")
     page = await site.get("/settings")
     assert "Saved." in page.text and 'value="22:15"' in page.text

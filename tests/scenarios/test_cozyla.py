@@ -56,3 +56,39 @@ async def test_a_chore_ticked_on_the_chart_isnt_asked_about(
     await scenario.advance(hours=6, minutes=1)  # 18:01
     assert not any("kitchen" in t for t in scenario.inbox("Erin")[before:])
     assert board.get(kitchen.id).due_on == date(2026, 10, 28)
+
+
+async def test_erin_sees_one_chore_at_a_time(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    """C2d (ideas #16 and #17): a long chore chart is overwhelming, so Erin sees one chore
+    at a time. She ticks it on the wall and the next comes up, with its nudge; the one still
+    waiting isn't in her evening list."""
+    from datetime import date
+
+    from themi.core.repeat import parse
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    titles = ("Clean the kitchen", "Clean upstairs", "Clean the bathroom")
+    for title in titles:
+        task = await board.create(erin, title, "physical", 2, assignee=erin)
+        await board.set_schedule(task.id, erin, repeat=parse("every Wednesday", scenario.today()))
+    await scenario.run_periodic("cozyla.chores")
+    assert [c["choreName"] for c in fake_cozyla.chores.values()] == ["Clean the kitchen"]
+    assert not any("upstairs" in t or "bathroom" in t for t in scenario.inbox("Erin"))
+
+    await scenario.advance(hours=3)  # noon: the kitchen's done, ticked on the wall
+    uid = fake_cozyla.chore_named("Clean the kitchen")["choreUid"]
+    fake_cozyla.tick_chore(uid, "m-erin", date(2026, 10, 21))
+    await scenario.run_periodic("cozyla.chores")
+    await scenario.advance(minutes=1)
+    assert "Clean upstairs" in [c["choreName"] for c in fake_cozyla.chores.values()]
+    assert any("Clean upstairs" in t for t in scenario.inbox("Erin"))
+
+    quiet = scenario.member("Erin").quiet_start
+    await scenario.advance(hours=quiet.hour - 12 - 2, minutes=quiet.minute + 1)
+    await scenario.run_periodic("tasks.day_end")
+    await scenario.advance(minutes=1)
+    (evening,) = [t for t in scenario.inbox("Erin") if t.startswith("Still open today")]
+    assert "Clean upstairs" in evening and "bathroom" not in evening
