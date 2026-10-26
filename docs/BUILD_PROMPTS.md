@@ -68,7 +68,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
 | C2a | Cozyla: chore and routine client, schedules both ways | Cozyla | [x] |
-| C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [ ] |
+| C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [x] |
 | C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [ ] |
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
@@ -3179,7 +3179,7 @@ Notes (2026-10-26):
   ended in July). Routine records come back per day, as expected.
 
 ### C2b · Cozyla: Themi's chores on the chore chart, Themi in charge
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: C2a
 Build:
 - A `cozyla.chores` job (every few minutes). Each Themi chore has one wall chore: repeating
@@ -3197,6 +3197,28 @@ Build:
   Themi as that person; a round done in Themi ticks the doer's occurrence. Processed ticks are
   remembered, so none counts twice.
 - Wall reminders stay off; Themi does the reminding.
+
+Notes (2026-10-26):
+- Opt-in: `COZYLA_CHORES=yes`, separate from the to-do list, since Themi then rewrites the
+  family's chart. The job runs every 5 minutes. Nothing is queued: each sync compares what
+  the chart should hold with what it holds and writes the difference.
+- Migration 0036: `tasks.either` (kept every round, so `shared` comes back each round),
+  `cozyla_chores` (task to wall chore, and the last run ticked on the wall),
+  `cozyla_chore_ticks` (wall ticks already acted on), `cozyla_chore_sync`.
+- A chore that's due whenever ("twice a week" before its first round is done) shows on the
+  wall as today, and moves day by day until it's done.
+- A finished course is left on the wall (its own end stops it); a cancelled chore, or one
+  that no longer repeats, is deleted there.
+- A one-off round moved on the wall loses that day's tick history there; Themi keeps its own.
+- Dry run against the real wall (a copy of the database, writes recorded): the 9 active wall
+  chores came in with their schedules (bins, kitchen, upstairs, both bathrooms, feeders, flea
+  meds, the transfer, and the two Mimi pill courses, as "either of you" with their end
+  dates), and matched the wall exactly, so no writes for them. Themi's own three chores
+  (upstairs bathroom, bird cage, running) would be created. 11 nudges would be queued, each
+  for its chore's day. Near-duplicates to settle first: Themi's one-off "Clean the kitchen"
+  and the wall's weekly "Clean kitchen"; Themi's "Clean upstairs bathroom" and the wall's
+  "Clean upstairs".
+- Running is a check-in: C3 moves check-ins to routines instead of chores.
 
 ### C2c · Reminders by importance: end of day, more specific when overdue
 Status: [ ]

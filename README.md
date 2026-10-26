@@ -148,6 +148,10 @@ that match open tasks by title, and nudges the assigned ones gently, a few at a 
 
 Members are matched by first name. Leave `COZYLA_TODO_LIST` empty to stop syncing.
 
+With `COZYLA_CHORES=yes`, Themi also runs the wall's chore chart. Its chores are written
+there and kept that way (an edit on the wall is put back, so change chores in Themi), chores
+only on the wall come into Themi first, and a tick on either side counts on both.
+
 ### In the cloud
 
 `docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly
