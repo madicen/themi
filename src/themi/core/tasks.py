@@ -175,6 +175,9 @@ class TaskBoard:
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = []  # steps come first, from _steps_for
+        # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
+        # on Sunday 1 Nov."), so it answers with the day rather than guessing.
+        self.wall_notes: list[Callable[[Task], str | None]] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -267,7 +270,8 @@ class TaskBoard:
                         f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
                     )
             schedule = f" {self.summary(t)}." if t.repeats else ""
-            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{steps}"))
+            wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
+            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{wall}{steps}"))
         return items
 
     # ----- changing -----------------------------------------------------------

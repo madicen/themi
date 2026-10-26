@@ -55,6 +55,11 @@ SMALL_WORDS = frozenset({"the", "a", "an", "my", "our", "your"})
 Desired = tuple[str, list[str], str, WallSchedule]  # name, people, kind, schedule
 
 
+def day_words(day: date) -> str:
+    """ "Sunday 1 Nov": the day a chore shows on the wall, which is what people ask about."""
+    return f"{day:%A} {day.day} {day:%b}"
+
+
 def on_chart(task: Task) -> bool:
     """A chore, or a one-off someone put on the chart."""
     return task.repeats or task.on_chart
@@ -98,7 +103,12 @@ async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str
         raise ToolFailed("There's no task with that number.") from exc
     except PermissionDenied as exc:
         raise ToolFailed("That task isn't theirs to change.") from exc
-    return f"Task {task.id} ({task.title}) will be on the chore chart within a few minutes."
+    day = day_words(task.due_on or board._today())
+    return (
+        f"Task {task.id} ({task.title}) is moving to the wall's chore chart, where it shows on "
+        f"{day} (its day). It's off the to-do list, and the chart has it within a few minutes. "
+        f"Tell them the day it shows."
+    )
 
 
 class CozylaChores:
@@ -114,6 +124,15 @@ class CozylaChores:
 
     def install(self) -> None:
         self.services.tools.register(put_task_on_chore_chart)
+        self.board.wall_notes.append(self.where)
+
+    def where(self, task: Task) -> str | None:
+        """The day a task shows on the chart, for the model; None if it isn't for the chart."""
+        if task.status not in ("open", "snoozed") or not on_chart(task) or is_routine(task):
+            return None
+        day = day_words(self._round_day(task, self._today()))
+        linked = self.db.one("SELECT 1 FROM cozyla_chores WHERE task_id = ?", (task.id,))
+        return f"Shows on the wall's chore chart on {day}{'' if linked else ' (being added now)'}."
 
     async def sync(self) -> int:
         """Scheduler job: bring in the wall's chores and ticks, then make the chart match

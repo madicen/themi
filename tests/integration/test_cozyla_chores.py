@@ -200,3 +200,35 @@ async def test_a_one_off_on_the_chart_done_in_themi_is_ticked_there(
     await board(scenario).complete(sheets.id, erin)
     await sync(scenario)
     assert fake_cozyla.chore_ticks[(uid, "m-erin", WED.isoformat())] == "completed"
+
+
+async def test_themi_knows_which_day_a_task_shows_on_the_chart(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Erin moved "Vacuum upstairs bedroom" to chores and asked when it would show. Themi
+    said the chore integration "isn't active"; the answer she wanted was "Sunday"."""
+    from datetime import timedelta
+
+    erin = scenario.member("Erin")
+    sunday = WED + timedelta(days=4)
+    vacuum = await board(scenario).create(
+        erin, "Vacuum upstairs bedroom", "physical", 2, sunday, assignee=erin
+    )
+    scenario.primary.queue_tool_call("put_task_on_chore_chart", {"task_id": vacuum.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "move vacuum upstairs bedroom to chores")
+    result = str(scenario.primary.last_request.messages[-1].content[0])
+    assert "Sunday 25 Oct" in result
+
+    def item() -> str:
+        (found,) = [i.summary for i in board(scenario).open_items(erin) if "Vacuum" in i.summary]
+        return found
+
+    assert "Shows on the wall's chore chart on Sunday 25 Oct (being added now)" in item()
+    await sync(scenario)
+    assert "Shows on the wall's chore chart on Sunday 25 Oct." in item()
+    bins = await chore(scenario, "Bring the bins in", "every Wednesday")
+    await sync(scenario)
+    (bins_item,) = [i.summary for i in board(scenario).open_items(erin) if "bins" in i.summary]
+    assert "Shows on the wall's chore chart on Wednesday 21 Oct." in bins_item
+    assert bins.id

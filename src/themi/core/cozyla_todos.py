@@ -122,6 +122,18 @@ class CozylaTodos:
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         self.services.tools.register(put_task_on_wall_list)
         self.services.tools.register(add_to_wall_list)
+        self.board.wall_notes.append(self.where)
+
+    def where(self, task: Task) -> str | None:
+        """Which wall list a task is on, for the model."""
+        link = self._link(task.id)
+        if link is None or task.repeats or task.on_chart or task.status not in ("open", "snoozed"):
+            return None
+        lists = self.lists()
+        name = lists.get(link["list_id"] or "") or self.client.config.todo_list
+        if link["todo_id"] is None:
+            return f"On the wall's {name} list (being added now)."
+        return f"On the wall's {name} list."
 
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
