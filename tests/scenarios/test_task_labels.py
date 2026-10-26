@@ -19,7 +19,9 @@ async def nudge_for(scenario: Scenario, title: str, due: date | None = None, **k
         kw.pop("by", erin), title, "physical", 1, due, assignee=erin, nudge=False, **kw
     )
     await board(scenario).prompt(task)
-    return scenario.inbox("Erin")[-1]
+    text = scenario.inbox("Erin")[-1]
+    await board(scenario).complete(task.id, erin)  # answered, so the next can come (#11)
+    return text
 
 
 async def test_a_task_without_a_date_is_a_to_do(scenario: Scenario) -> None:

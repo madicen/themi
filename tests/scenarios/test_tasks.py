@@ -292,3 +292,27 @@ async def test_a_task_isnt_prompted_before_its_day(scenario: Scenario) -> None:
     for _ in range(10):  # Friday 09:00
         await scenario.advance(hours=1)
     assert any(t.startswith("Due today: Return the library books") for t in scenario.inbox("Erin"))
+
+
+async def test_task_nudges_come_one_at_a_time(scenario: Scenario) -> None:
+    """Idea #11: "only prompt one task at a time". Four nudges had landed together at 08:00."""
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    today = date(2026, 10, 21)
+    for title in ("Book the dentist", "Return the books", "Call the vet"):
+        await board.create(erin, title, "errand", 1, today, assignee=erin)
+
+    def nudged() -> list[str]:
+        return [t for t in scenario.inbox("Erin") if t.startswith("Due today:")]
+
+    assert len(nudged()) == 1
+    await scenario.tap("Erin", "Done")  # answered: the next one may come
+    await scenario.advance(minutes=1)
+    assert len(nudged()) == 2
+    await scenario.advance(hours=1)  # not answered yet: the third waits
+    assert len(nudged()) == 2
+    await scenario.advance(hours=1, minutes=1)  # two hours unanswered: it comes anyway
+    assert len(nudged()) == 3

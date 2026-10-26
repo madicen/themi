@@ -93,6 +93,8 @@ class Sender(Protocol):
 
 
 BlockSource = Callable[["Member", datetime, datetime], list[tuple[datetime, datetime]]]
+# A feature's own hold on a kind of message: (member, when) -> hold until, or None.
+Gate = Callable[["Member", datetime], datetime | None]
 
 
 class ReceptivityProvider(Protocol):
@@ -137,6 +139,8 @@ class Outbox:
         self.calendar_blocks: BlockSource | None = None
         # Rows on their way out, so a flush running meanwhile doesn't send them again.
         self._sending: set[int] = set()
+        # Holds a feature puts on its own kind ("task": one nudge at a time, idea #11).
+        self.gates: dict[str, Gate] = {}
 
     @property
     def _tz(self) -> str:
@@ -167,6 +171,17 @@ class Outbox:
         when = self.send_time(
             member, priority, deadline=deadline, kind=kind, not_before=not_before, now=now
         )
+        # A gate (one task nudge at a time) is checked again at every flush, not stored:
+        # answering the nudge before it lets this one go at once.
+        stored = self.send_time(
+            member,
+            priority,
+            deadline=deadline,
+            kind=kind,
+            not_before=not_before,
+            now=now,
+            gated=False,
+        )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -177,7 +192,7 @@ class Outbox:
                 priority.value,
                 kind,
                 dedupe_key,
-                to_utc_iso(when),
+                to_utc_iso(stored),
                 to_utc_iso(deadline) if deadline else None,
                 to_utc_iso(now),
                 int(link_preview),
@@ -203,6 +218,7 @@ class Outbox:
         kind: str = "chat",
         not_before: datetime | None = None,
         now: datetime | None = None,
+        gated: bool = True,
     ) -> datetime:
         """When a message queued now would go out, for wording that depends on the day."""
         now = now or clock.now()  # send() passes its own reading, so "now" is one moment
@@ -210,7 +226,7 @@ class Outbox:
         start = now
         if not_before is not None and priority not in IMMEDIATE:
             start = max(now, not_before)
-        return self._earliest(member, priority, start, deadline, kind)
+        return self._earliest(member, priority, start, deadline, kind, gated=gated)
 
     async def flush(self) -> int:
         """Send whatever is due. Returns how many went out. Run it from the scheduler."""
@@ -226,12 +242,15 @@ class Outbox:
                 continue
             member = self.store.get_member(row["member_id"])
             deadline = datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
-            when = self._earliest(member, Priority(row["priority"]), now, deadline, row["kind"])
+            priority = Priority(row["priority"])
+            when = self._earliest(member, priority, now, deadline, row["kind"], gated=False)
             if when > now:
                 self.store.db.execute(
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
                 )
                 continue
+            if self._gated(member, row["kind"], now, priority):
+                continue  # waits its turn; looked at again next flush
             if (await self._deliver(row)).status == "sent":
                 sent += 1
         return sent
@@ -343,6 +362,8 @@ class Outbox:
         now: datetime,
         deadline: datetime | None,
         kind: str = "chat",
+        *,
+        gated: bool = True,
     ) -> datetime:
         if priority in IMMEDIATE:
             return now
@@ -363,8 +384,20 @@ class Outbox:
         held = self.pauses.held_until(member, kind)  # the person asked: outranks a deadline
         if held is not None:
             when = max(when, held)
+        if gated:
+            gate = self.gates.get(kind)
+            until = gate(member, when) if gate is not None else None
+            if until is not None:
+                when = max(when, until)
         # Whatever was chosen, it can't land inside quiet hours or a busy time.
         return free_from(member, when, tz, blocks)
+
+    def _gated(self, member: Member, kind: str, now: datetime, priority: Priority) -> bool:
+        if priority in IMMEDIATE:
+            return False
+        gate = self.gates.get(kind)
+        until = gate(member, now) if gate is not None else None
+        return until is not None and until > now
 
     def release_held(self, member: Member) -> int:
         """After a pause ends early, let held messages be reconsidered at the next flush."""

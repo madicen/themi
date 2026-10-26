@@ -43,6 +43,8 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+# One task nudge at a time (idea #11): the next waits while one is unanswered, this long.
+ONE_AT_A_TIME_FOR = timedelta(hours=2)
 # A task someone just added for themselves in chat isn't asked about straight away.
 FIRST_NUDGE_AFTER = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
@@ -192,6 +194,20 @@ class TaskBoard:
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
+        self.outbox.gates["task"] = self._one_at_a_time
+
+    def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
+        """While a task nudge sent to this person is unanswered (still open, not put off),
+        the next waits, for up to two hours (idea #11)."""
+        row = self.db.one(
+            "SELECT MAX(o.sent_at) AS sent_at FROM tasks t "
+            "JOIN outbox o ON o.id = t.prompt_outbox_id WHERE o.member_id = ? "
+            "AND o.status = 'sent' AND t.status = 'open' AND o.sent_at > ?",
+            (member.id, to_utc_iso(when - ONE_AT_A_TIME_FOR)),
+        )
+        if row is None or row["sent_at"] is None:
+            return None
+        return datetime.fromisoformat(row["sent_at"]) + ONE_AT_A_TIME_FOR
 
     # ----- reading ------------------------------------------------------------
 
