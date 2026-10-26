@@ -134,7 +134,7 @@ async def test_a_task_someone_takes_on_stays_theirs(scenario: Scenario) -> None:
         "SELECT member_id, text FROM outbox WHERE kind = 'task' AND text LIKE '%plumber%'"
     )
     assert nudge["member_id"] == scenario.member("Erin").id
-    assert nudge["text"].startswith("To do: text the plumber back, whenever it suits.")
+    assert nudge["text"].startswith("To do: text the plumber back. Done already")
 
 
 async def test_a_task_for_a_named_person_says_who_added_it(scenario: Scenario) -> None:
@@ -151,7 +151,7 @@ async def test_a_task_for_a_named_person_says_who_added_it(scenario: Scenario) -
     assert "assigned to Husband" in result and "Let Erin know it went to Husband." in result
     await scenario.advance(hours=10)
     assert any(
-        t.startswith("To do: pick up the dry cleaning (Erin added this for you), whenever")
+        t.startswith("To do: pick up the dry cleaning (Erin added this for you).")
         for t in scenario.inbox("Husband")
     )
 

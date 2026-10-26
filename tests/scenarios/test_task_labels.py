@@ -26,7 +26,7 @@ async def nudge_for(scenario: Scenario, title: str, due: date | None = None, **k
 
 async def test_a_task_without_a_date_is_a_to_do(scenario: Scenario) -> None:
     assert await nudge_for(scenario, "Water the plants") == (
-        "To do: Water the plants, whenever it suits. Done already, or later?"
+        "To do: Water the plants. Done already, or later?"
     )
 
 
@@ -61,10 +61,7 @@ async def test_a_task_from_someone_else_says_who_after_the_label(scenario: Scena
         "Due today: Call the plumber (Husband added this for you). Done already, or later?"
     )
     undated = await nudge_for(scenario, "Fix the gate", by=scenario.member("Husband"))
-    assert undated == (
-        "To do: Fix the gate (Husband added this for you), whenever it suits. "
-        "Done already, or later?"
-    )
+    assert undated == ("To do: Fix the gate (Husband added this for you). Done already, or later?")
 
 
 async def test_a_check_in_is_labelled_as_one(scenario: Scenario) -> None:

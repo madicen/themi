@@ -142,7 +142,7 @@ async def test_a_rewrite_that_still_demands_is_softened(family: SeededFamily) ->
     rewriter = FakeRewriter(Rewrite("You need to move the laundry."))
     result = await PdaShield(rewriter).apply("Move the laundry.", family.erin)
     assert result.method == "softened"
-    assert result.text == "If you're up for it, you could move the laundry."
+    assert result.text == "Up next: move the laundry."
 
 
 async def test_ai_failure_falls_back_to_the_softener(family: SeededFamily) -> None:

@@ -99,7 +99,7 @@ async def test_a_new_to_do_on_the_wall_becomes_a_task_and_is_nudged(
     assert dentist.assignee == scenario.member("Erin").id and dentist.created_by is None
     await scenario.advance(hours=12)
     (nudge,) = [t for t in scenario.inbox("Erin") if "Book the dentist" in t]
-    assert nudge.startswith("To do: Book the dentist, whenever")  # nobody named as adding it
+    assert nudge.startswith("To do: Book the dentist. Done")  # nobody named as adding it
 
 
 async def test_ticking_off_deleting_and_editing_on_the_wall_reach_themi(
