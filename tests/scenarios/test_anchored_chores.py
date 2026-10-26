@@ -134,3 +134,47 @@ async def test_the_tasks_page_shows_the_next_dates(
     page = (await site.get("/tasks")).text
     assert "Every Tuesday at 6 pm" in page
     assert "Next: Tue 27 Oct, Tue 03 Nov, Tue 10 Nov" in page
+
+
+async def test_a_new_chore_isnt_nudged_before_its_first_day(scenario: Scenario) -> None:
+    """Bug #10: running, set up on Sunday for Tuesday afternoons, was asked about on Monday
+    morning. The nudge queued when the task was made stayed, since its date didn't move."""
+    run = await board(scenario).create(
+        scenario.member("Erin"),
+        "Go for a run",
+        "physical",
+        2,
+        date(2026, 10, 27),
+        interactive=True,
+        assignee=scenario.member("Erin"),
+    )
+    await schedule(scenario, run, "every Tuesday afternoon")
+    before = len(scenario.inbox("Erin"))
+    await scenario.advance(hours=24 * 6 + 4, minutes=59)  # Tue 13:59
+    assert not any("run" in t for t in scenario.inbox("Erin")[before:])
+    await scenario.advance(minutes=2)  # Tue 14:01
+    assert [t for t in scenario.inbox("Erin")[before:] if "run" in t] == [
+        "Due today: Go for a run. Done already, or later?"
+    ]
+
+
+async def test_a_new_floating_chore_waits_for_its_due_day(scenario: Scenario) -> None:
+    cage = await board(scenario).create(
+        scenario.member("Erin"),
+        "Clean the bird cage",
+        "physical",
+        2,
+        date(2026, 10, 23),
+        interactive=True,
+        assignee=scenario.member("Erin"),
+    )
+    await schedule(scenario, cage, "twice a week")
+    before = len(scenario.inbox("Erin"))
+    for _ in range(24 + 14):  # hour by hour, to Thu 23:00
+        await scenario.advance(hours=1)
+    assert not any("bird cage" in t for t in scenario.inbox("Erin")[before:])
+    for _ in range(10):  # Fri 09:00
+        await scenario.advance(hours=1)
+    assert any(
+        t.startswith("Due today: Clean the bird cage") for t in scenario.inbox("Erin")[before:]
+    )

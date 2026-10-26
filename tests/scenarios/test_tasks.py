@@ -21,6 +21,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
                     "due_date": "",
                     "assign_to": "anyone",
                     "steps": [],
+                    "check_in": False,
                 },
                 None,
             ),
@@ -98,6 +99,7 @@ def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
                 "due_date": "",
                 "assign_to": assign_to,
                 "steps": [],
+                "check_in": False,
             },
             None,
         ),
@@ -130,7 +132,7 @@ async def test_a_task_someone_takes_on_stays_theirs(scenario: Scenario) -> None:
         "SELECT member_id, text FROM outbox WHERE kind = 'task' AND text LIKE '%plumber%'"
     )
     assert nudge["member_id"] == scenario.member("Erin").id
-    assert nudge["text"].startswith("On the list for you, whenever it suits:")
+    assert nudge["text"].startswith("To do: text the plumber back, whenever it suits.")
 
 
 async def test_a_task_for_a_named_person_says_who_added_it(scenario: Scenario) -> None:
@@ -147,7 +149,7 @@ async def test_a_task_for_a_named_person_says_who_added_it(scenario: Scenario) -
     assert "assigned to Husband" in result and "Let Erin know it went to Husband." in result
     await scenario.advance(hours=10)
     assert any(
-        t.startswith("Erin added this for you, whenever it suits: pick up the dry cleaning.")
+        t.startswith("To do: pick up the dry cleaning (Erin added this for you), whenever")
         for t in scenario.inbox("Husband")
     )
 
@@ -168,7 +170,7 @@ async def test_matching_still_hands_off_tasks_for_anyone(scenario: Scenario) -> 
     task = scenario.app.db.one("SELECT * FROM tasks")
     assert task is not None and task["assignee"] == scenario.member("Husband").id
     await scenario.advance(hours=10)
-    assert any(t.startswith("Erin added this for you") for t in scenario.inbox("Husband"))
+    assert any("(Erin added this for you)" in t for t in scenario.inbox("Husband"))
 
 
 async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -> None:
@@ -183,6 +185,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
             "due_date": "",
             "assign_to": "me",
             "steps": [],
+            "check_in": False,
         },
     )
     scenario.primary.queue_text("Added to your list.")
@@ -193,7 +196,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
     assert not any("upstairs bathroom" in t for t in scenario.inbox("Erin"))
     await scenario.advance(minutes=2)  # 13:01
     nudges = [t for t in scenario.inbox("Erin") if "upstairs bathroom" in t]
-    assert len(nudges) == 1 and nudges[0].startswith("On the list for you")
+    assert len(nudges) == 1 and nudges[0].startswith("To do: clean the upstairs")
 
 
 async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Scenario) -> None:
@@ -206,6 +209,7 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
             "due_date": "",
             "assign_to": "Husband",
             "steps": [],
+            "check_in": False,
         },
     )
     scenario.primary.queue_text("Passed to him.")
@@ -227,7 +231,7 @@ async def test_a_task_due_today_says_so(scenario: Scenario) -> None:
     await scenario.advance(hours=1)
     inbox = scenario.inbox("Erin")
     assert "Due today: Book the dentist. Done already, or later?" in inbox
-    assert any(t.startswith("On the list for you, whenever it suits: Return") for t in inbox)
+    assert "Due 30 Oct: Return the library books. Done already, or later?" in inbox
     assert any(
         t.startswith("Due today: Call the plumber (Erin added this for you).")
         for t in scenario.inbox("Husband")

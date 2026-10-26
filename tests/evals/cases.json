@@ -52,6 +52,7 @@
     {"id": "task-call-pge", "category": "tasks", "message": "Can someone call PG&E about the bill being too high?", "expect": ["draft_vendor_call"], "allow": ["create_task"]},
     {"id": "task-registration", "category": "tasks", "message": "Remind us to renew the car registration by November 15", "expect": ["create_task"], "args": {"create_task": {"_json": ["11-15"]}}},
     {"id": "task-pause", "category": "tasks", "message": "Please don't send me anything for the next couple of hours", "expect": ["pause_messages"]},
+    {"id": "task-check-in-run", "category": "tasks", "message": "Check in with me on Tuesday and Thursday afternoons about whether I went for a run", "expect": ["create_task", "set_task_schedule"], "args": {"create_task": {"check_in": {"equals": true}}, "set_task_schedule": {"repeat": {"contains": "tue"}}}, "_note": "2026-10-26 (bug #9, #10): a check-in is a task made with check_in, so its nudge says Check-in:."},
     {"id": "task-expect-email", "category": "tasks", "message": "Tell me if the PG&E confirmation doesn't show up this month", "expect": ["expect_email"], "requires": ["expect_email"]}
   ]
 }

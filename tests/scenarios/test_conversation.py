@@ -216,6 +216,26 @@ async def test_plan_scenario_5_a_forgotten_fact_is_pinned_and_used(scenario: Sce
     assert repair["diagnosis"] == "never_stored"
 
 
+async def test_a_question_about_a_suggestion_isnt_a_forgotten_fact(scenario: Scenario) -> None:
+    """Idea #8: Erin asked why Themi offered a water check-in. The model reported it as
+    forgotten context, and a note about the offer was pinned for the whole family."""
+    scenario.primary.queue_tool_call(
+        "report_forgotten_context",
+        {
+            "what_was_forgotten": "that you didn't configure the water check-in yourself",
+            "correct_version": "Water check-ins were suggested, not configured by you.",
+        },
+    )
+    scenario.primary.queue_text("It was just an idea to try.")
+    await scenario.say(
+        "Erin", "What prompted you to send me the water check in? I did not configure that"
+    )
+    result = scenario.primary.last_request.messages[2].content[0]
+    assert isinstance(result, ToolResult) and result.is_error
+    assert scenario.app.services.memory.repairs() == []  # type: ignore[union-attr]
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 0
+
+
 async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None:
     memory = scenario.app.services.memory
     assert memory is not None

@@ -1,5 +1,6 @@
 """Outbox timing rules, with Erin's quiet hours 21:30-08:00 Pacific and a frozen clock."""
 
+import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -211,13 +212,70 @@ async def test_failed_sends_are_retried_with_backoff(
 ) -> None:
     clock.freeze(at(21, 10))
     sender.failures = 1
-    result = await outbox.send(family.erin, "Thanks!", priority=Priority.REPLY)
+    result = await outbox.send(family.erin, "Thanks!", priority=Priority.NORMAL)
     assert result.status == "queued"
     assert result.send_after == at(21, 10, 1)
     assert await outbox.flush() == 0
     clock.advance(timedelta(minutes=1))
     assert await outbox.flush() == 1
     assert sender.texts() == ["Thanks!"]
+
+
+async def test_a_failed_reply_is_retried_within_minutes(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    """Someone is waiting on a reply: an hour's backoff left one 90 minutes late."""
+    clock.freeze(at(21, 10))
+    sender.failures = 4
+    result = await outbox.send(family.erin, "Added it.", priority=Priority.REPLY)
+    for _ in range(10):
+        clock.advance(timedelta(minutes=1))
+        await outbox.flush()
+    assert sender.texts() == ["Added it."]
+    row = family.db.one("SELECT sent_at FROM outbox WHERE id = ?", (result.outbox_id,))
+    assert row is not None and datetime.fromisoformat(row["sent_at"]) <= at(21, 10) + timedelta(
+        minutes=5
+    )
+
+
+async def test_a_reply_keeps_trying_through_a_longer_outage(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    clock.freeze(at(21, 10))
+    sender.failures = 6
+    await outbox.send(family.erin, "Added it.", priority=Priority.REPLY)
+    for _ in range(12):
+        clock.advance(timedelta(minutes=15))
+        await outbox.flush()
+    assert sender.texts() == ["Added it."]
+
+
+async def test_a_message_being_sent_isnt_sent_again_by_a_flush(
+    family: SeededFamily, sender: FakeSender
+) -> None:
+    """Idea #8's "saved" reply went out twice: the scheduler's flush ran while the
+    reply was still on its way and sent the same row again."""
+
+    class SlowShield(PdaShield):
+        def __init__(self) -> None:
+            super().__init__(None)
+            self.gate = asyncio.Event()
+
+        async def apply(self, text, member, **kwargs):  # type: ignore[no-untyped-def]
+            await self.gate.wait()
+            return await super().apply(text, member, **kwargs)
+
+    shield = SlowShield()
+    outbox = Outbox(family.store, sender, shield)
+    clock.freeze(at(21, 10))
+    sending = asyncio.create_task(outbox.send(family.erin, "Saved.", priority=Priority.REPLY))
+    await asyncio.sleep(0)  # the reply is now waiting on the shield
+    flushing = asyncio.create_task(outbox.flush())
+    await asyncio.sleep(0)
+    shield.gate.set()
+    await sending
+    assert await flushing == 0
+    assert sender.texts() == ["Saved."]
 
 
 async def test_sending_gives_up_after_five_attempts(

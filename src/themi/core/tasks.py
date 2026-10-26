@@ -46,19 +46,13 @@ SNOOZE_FOR = timedelta(hours=4)
 # A task someone just added for themselves in chat isn't asked about straight away.
 FIRST_NUDGE_AFTER = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
-# Titles are often commands ("Call the vet"), so they never open a sentence here.
-PROMPT_TEXT = "On the list for you, whenever it suits: {title}. Done already, or later?"
-PROMPT_WITH_DETAILS = (
-    "On the list for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
-)
+# Every nudge opens with a label: when it's due, "To do" without a date, or "Check-in"
+# (Erin's rules 6-8, bug #9). Titles are often commands ("Call the vet"), so they never
+# open a sentence; the label comes first.
+NUDGE_LEAD = "{label}: {title}{who}{whenever}"
+WHENEVER = ", whenever it suits"
 # When someone else added it, the nudge says who, so it doesn't arrive out of nowhere.
-ADDED_BY_TEXT = "{who} added this for you, whenever it suits: {title}. Done already, or later?"
-ADDED_BY_WITH_DETAILS = (
-    "{who} added this for you, whenever it suits: {title}.\n\n{details}\n\nDone already, or later?"
-)
-# A task due on the day the nudge goes out says so first (asked for by Erin's rule 6).
-DUE_TODAY_TEXT = "Due today: {title}. Done already, or later?"
-DUE_TODAY_WITH_DETAILS = "Due today: {title}.\n\n{details}\n\nDone already, or later?"
+ADDED_BY = " ({who} added this for you)"
 # Repeating chores (F6b).
 OVERDUE_TEXT = "Overdue: {title} (last done {ago})"
 SHARED_OVERDUE_TEXT = "Overdue for both of you: {title} (last done {ago})"
@@ -97,6 +91,7 @@ class Task:
     repeat: Repeat | None = None
     missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
     due_before_task: int | None = None  # due the day before that chore's round
+    check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
 
     @property
     def repeats(self) -> bool:
@@ -140,6 +135,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         repeat=Repeat.from_json(json.loads(row["repeat"])) if row["repeat"] else None,
         missed=row["missed"],
         due_before_task=row["due_before_task"],
+        check_in=bool(row["check_in"]),
     )
 
 
@@ -257,6 +253,7 @@ class TaskBoard:
         nudge: bool = True,
         assignee: Member | None = None,
         steps: Sequence[str] = (),
+        check_in: bool = False,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -275,7 +272,8 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps, check_in) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -287,6 +285,7 @@ class TaskBoard:
                 due_on.isoformat() if due_on else None,
                 to_utc_iso(clock.now()),
                 json.dumps(cleaned_steps),
+                int(check_in),
             ),
         )
         if nudge:
@@ -338,27 +337,18 @@ class TaskBoard:
         if overdue is not None:
             template = SHARED_OVERDUE_TEXT if overdue == "shared" else OVERDUE_TEXT
             lead = template.format(title=task.title, ago=self._last_done_words(task))
-            text = (
-                f"{lead}.\n\n{details}\n\nDone already, or later?"
-                if details
-                else f"{lead}. Done already, or later?"
-            )
-        elif task.due_on is not None and task.due_on == local_day:
-            who = f" ({added_by.name} added this for you)" if added_by is not None else ""
-            text = (
-                DUE_TODAY_WITH_DETAILS.format(title=f"{task.title}{who}", details=details)
-                if details
-                else DUE_TODAY_TEXT.format(title=f"{task.title}{who}")
-            )
-        elif added_by is not None:
-            template = ADDED_BY_WITH_DETAILS if details else ADDED_BY_TEXT
-            text = template.format(who=added_by.name, title=task.title, details=details)
         else:
-            text = (
-                PROMPT_WITH_DETAILS.format(title=task.title, details=details)
-                if details
-                else PROMPT_TEXT.format(title=task.title)
+            lead = NUDGE_LEAD.format(
+                label=_label(task, local_day),
+                title=task.title,
+                who=ADDED_BY.format(who=added_by.name) if added_by is not None else "",
+                whenever=WHENEVER if task.due_on is None and not task.check_in else "",
             )
+        text = (
+            f"{lead}.\n\n{details}\n\nDone already, or later?"
+            if details
+            else f"{lead}. Done already, or later?"
+        )
         result = await self.outbox.send(
             member,
             text,
@@ -549,6 +539,9 @@ class TaskBoard:
             self._withdraw_prompt(task)
             await self.prompt(task, not_before=self._round_starts(task))
             await self._changed(task, "rescheduled", True)
+        elif task.due_on is not None and self._withdraw_prompt(task):
+            # The nudge queued when the task was made waits for the chore's own day (bug #10).
+            await self.prompt(task, not_before=self._round_starts(task))
         return task
 
     def summary(self, task: Task) -> str:
@@ -810,16 +803,19 @@ class TaskBoard:
         self._withdraw_prompt(task)
         return LATER_TEXT.format(title=task.title)
 
-    def _withdraw_prompt(self, task: Task) -> None:
-        """Take back any of the task's nudges that haven't gone out yet (shared ones too)."""
+    def _withdraw_prompt(self, task: Task) -> bool:
+        """Take back any of the task's nudges that haven't gone out yet (shared ones too).
+        True if there was one."""
+        withdrawn = False
         row = self.db.one("SELECT prompt_outbox_id FROM tasks WHERE id = ?", (task.id,))
         if row and row["prompt_outbox_id"]:
-            self.outbox.cancel(row["prompt_outbox_id"])
+            withdrawn = self.outbox.cancel(row["prompt_outbox_id"])
         for queued in self.db.query(
             "SELECT id FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
             (f"task-{task.id}-%",),
         ):
-            self.outbox.cancel(queued["id"])
+            withdrawn = self.outbox.cancel(queued["id"]) or withdrawn
+        return withdrawn
 
     async def resurface(self) -> int:
         """Snoozed tasks whose time has come are offered again."""
@@ -844,6 +840,24 @@ class TaskBoard:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
+
+
+def _label(task: Task, today: date) -> str:
+    """What a nudge opens with, for the day it goes out. At most three words, so the
+    phrasing check reads it as a label rather than an order."""
+    if task.check_in:
+        return "Check-in"
+    if task.due_on is None:
+        return "To do"
+    days = (task.due_on - today).days
+    if days == 0:
+        return "Due today"
+    if days == 1:
+        return "Due tomorrow"
+    if days == -1:
+        return "Was due yesterday"
+    named = f"{task.due_on:%A}" if abs(days) < 7 else f"{task.due_on.day} {task.due_on:%b}"
+    return f"Due {named}" if days > 0 else f"Was due {named}"
 
 
 def _on(day: date, at: time, tz: ZoneInfo) -> datetime:
@@ -910,6 +924,11 @@ def _board(ctx: ToolContext) -> TaskBoard:
             "description": "The steps of the job, in their words and order (tags like "
             "'(Optional/Bonus)' included), or an empty list.",
         },
+        "check_in": {
+            "type": "boolean",
+            "description": "True when they want Themi to check in on whether they did it "
+            "('check in with me about running'), rather than to remind them of a job.",
+        },
     },
 )
 async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -939,6 +958,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             interactive=True,
             assignee=chosen,
             steps=args["steps"],
+            check_in=bool(args["check_in"]),
         )
     except ValueError as exc:
         return f"Not created: {exc}"
