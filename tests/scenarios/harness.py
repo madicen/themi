@@ -306,7 +306,7 @@ def _cozyla_list(fake: FakeCozyla) -> int:
 
 
 def _cozyla_client(fake: FakeCozyla, family: SeededFamily) -> CozylaClient:
-    config = CozylaConfig(COZYLA_EMAIL, Secret(COZYLA_PASSWORD), todo_list="Family")
+    config = CozylaConfig(COZYLA_EMAIL, Secret(COZYLA_PASSWORD), todo_list="Family", chores=True)
     for name in ("Erin", "Husband"):
         if not any(m["memberName"] == name for m in fake.members):
             fake.add_member(name)

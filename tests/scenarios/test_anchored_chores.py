@@ -35,6 +35,7 @@ async def schedule(
             "escalate_to": "owner",
             "missed": missed,
             "due_before_task": before,
+            "either": False,
         },
     )
     scenario.primary.queue_text("All set.")
