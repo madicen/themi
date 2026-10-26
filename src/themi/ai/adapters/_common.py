@@ -14,11 +14,19 @@ TRANSCRIBE_PROMPT = (
 
 
 def transport_exceptions() -> tuple[type[BaseException], ...]:
-    """Timeout and connection exception types from whichever httpx flavours are installed.
+    """Timeout and connection exception types from whichever HTTP clients are installed.
 
-    The Anthropic SDK runs on httpx2 and google-genai on either, so both are checked.
+    The Anthropic SDK runs on httpx2, and google-genai on httpx, or on aiohttp whenever that's
+    installed (the OurGroceries extra brings it). aiohttp's timeouts surface as the built-in
+    TimeoutError, so that's always included.
     """
-    found: list[type[BaseException]] = []
+    found: list[type[BaseException]] = [TimeoutError]
+    try:
+        import aiohttp
+
+        found.append(aiohttp.ClientError)
+    except ImportError:
+        pass
     for module_name in ("httpx", "httpx2"):
         try:
             module = __import__(module_name)
