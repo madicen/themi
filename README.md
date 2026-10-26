@@ -150,7 +150,10 @@ Members are matched by first name. Leave `COZYLA_TODO_LIST` empty to stop syncin
 
 With `COZYLA_CHORES=yes`, Themi also runs the wall's chore chart. Its chores are written
 there and kept that way (an edit on the wall is put back, so change chores in Themi), chores
-only on the wall come into Themi first, and a tick on either side counts on both.
+only on the wall come into Themi first, and a tick on either side counts on both. It reads
+the wall's routines too: after the morning, and an hour before quiet hours, anyone whose
+routines for that part of the day aren't all done gets one message with a button for each.
+Themi's check-ins (like a run on set days) show on the wall as that person's routine.
 
 ### In the cloud
 

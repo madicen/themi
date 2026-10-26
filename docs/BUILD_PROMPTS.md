@@ -69,8 +69,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
 | C2a | Cozyla: chore and routine client, schedules both ways | Cozyla | [x] |
 | C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [x] |
-| C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [ ] |
-| C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [ ] |
+| C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [x] |
+| C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -3221,7 +3221,7 @@ Notes (2026-10-26):
 - Running is a check-in: C3 moves check-ins to routines instead of chores.
 
 ### C2c · Reminders by importance: end of day, more specific when overdue
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: C2b
 Build:
 - `tasks.importance`: low, normal or high. A tool sets it ("the meds really matter"); chores
@@ -3237,8 +3237,24 @@ Build:
   throughout (the PDA rules); never more demanding, only more concrete.
 - Tests with a frozen clock across several days, for each importance.
 
+Notes (2026-10-26):
+- `themi.core.reminders`: jobs `tasks.day_end` (every 15 minutes) and `tasks.overdue`
+  (hourly), and the `set_task_importance` tool. Migration 0037: `tasks.importance`,
+  `overdue_reminders` and `overdue_reminded_on` (reset whenever the round or due date moves),
+  and `day_end_sent`.
+- "Overdue" here means past its due date: one-off tasks with a date, floating chores, and
+  catch-up chores. Chores whose missed rounds roll on, and deadline chores, move by
+  themselves, so they're never raised as overdue. A chore's own "overdue after N days"
+  nudge (F6b) still comes; the two never land on the same day.
+- Stage three's moment comes from the outbox's receptivity (the energy engine's good
+  windows): "This evening looks lighter, if that helps", or "Now looks like a good moment".
+  The offer names the other person ("I can move it, or ask Michael to take it").
+- The end-of-day list has a deadline 15 minutes before quiet hours, so daily limits and good
+  windows can't push it to the next morning.
+- Medicine-like names from the wall (pill, meds, drops, cream, tabs, dose) start as high.
+
 ### C3 · Cozyla: routines, and morning and evening routine checks
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: C2a, C2c
 Build:
 - Wall routines stay the wall's: Themi reads each day's routine records. After the morning
@@ -3249,6 +3265,27 @@ Build:
   day, kept by Themi as chores are; a tick on the wall closes Themi's round.
 - Routine ticks become energy signals for the Shadow Calendar ("Cycle Dishwasher" is Erin's
   idea #4 signal, without hardware); people see words, never scores. Revisit H1 after this.
+
+Notes (2026-10-26):
+- `themi.core.cozyla_routines`, job `cozyla.routines` every 15 minutes, under the same
+  `COZYLA_CHORES=yes`. Migration 0038: `cozyla_routines`, `cozyla_routine_ticks`,
+  `routine_checks_sent`.
+- The morning check runs from noon and the evening one from an hour before quiet hours,
+  once each per person per day, with a deadline 15 minutes before quiet hours. Afternoon
+  routines aren't checked (not asked for).
+- Energy: one signal per check, as `device_activity` (so the person's "activity from household
+  devices" switch covers it; its description now mentions the wall's routines): +0.5 when
+  that part of the day is done, -0.5 when it isn't.
+- A check-in becomes a routine only on fixed days (the wall's routines always repeat); a
+  "3 times a week" check-in stays a chore. A routine can't change hands on the wall, so a
+  check-in given to someone else is deleted there and made again for them.
+- The scenario harness's `tap` sees buttons on sent messages only; the test taps the edited
+  message's keyboard directly.
+- Dry run against the real wall (a copy, writes recorded): Erin's run would become her
+  Afternoon routine (Tue, Thu, Sat); her walk, Michael's dishwasher, meds and bins routines
+  stay the wall's and are only read. At 10:58 nothing was due to be checked.
+- H1 (dishwasher): "Cycle Dishwasher" now feeds the energy model each evening; try that
+  before any hardware.
 ---
 
 ## Milestone 5: Devices (Phase 2)
