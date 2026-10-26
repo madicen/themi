@@ -81,6 +81,7 @@ async def test_the_model_can_ask_for_a_check_in(scenario: Scenario) -> None:
             "steps": [],
             "check_in": True,
             "due_time": "",
+            "from_time": "",
         },
     )
     scenario.primary.queue_text("I'll check in on it.")

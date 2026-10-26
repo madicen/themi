@@ -267,3 +267,33 @@ async def test_to_dos_sent_at_midnight_are_moved_to_the_end_of_the_day(
         wall(fake_cozyla, scenario)["Buy stamps"]["dueDateTime"] / 1000, LA
     )
     assert (due.date(), due.hour, due.minute) == (date(2026, 10, 27), 23, 59)
+
+
+async def test_a_time_window_reminds_at_its_start_and_is_due_at_its_end(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """ "Between 2 and 3": a nudge around 2, and overdue on the wall from 3."""
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Answer the tutoring email",
+            "kind": "text",
+            "effort": 1,
+            "due_date": "2026-10-21",
+            "from_time": "14:00",
+            "due_time": "15:00",
+            "assign_to": "me",
+            "steps": [],
+            "check_in": False,
+        },
+    )
+    scenario.primary.queue_text("I'll remind you at 2.")
+    await scenario.say("Erin", "between 2 and 3 today, answer the tutoring email")
+    await sync(scenario)
+    todo = wall(fake_cozyla, scenario)["Answer the tutoring email"]
+    due = datetime.fromtimestamp(todo["dueDateTime"] / 1000, LA)
+    assert (due.hour, due.minute) == (15, 0)
+    await scenario.advance(hours=4, minutes=59)  # 13:59
+    assert not any("tutoring" in t for t in scenario.inbox("Erin")[1:])
+    await scenario.advance(minutes=2)  # 14:01
+    assert any(t.startswith("Due today: Answer the tutoring email") for t in scenario.inbox("Erin"))

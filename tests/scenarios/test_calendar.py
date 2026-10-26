@@ -77,6 +77,7 @@ async def test_tasks_with_dates_appear_on_the_calendar(
             "steps": [],
             "check_in": False,
             "due_time": "",
+            "from_time": "",
         },
     )
     scenario.primary.queue_text("Added, for Friday.")

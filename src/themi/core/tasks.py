@@ -98,6 +98,7 @@ class Task:
     either: bool = False  # a chore either of you can do, every round (on both lists)
     importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
     due_time: time | None = None  # a time of day on the due date ("today around 2")
+    from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
     on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
 
     @property
@@ -147,6 +148,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         either=bool(row["either"]),
         importance=row["importance"],
         due_time=time.fromisoformat(row["due_time"]) if row["due_time"] else None,
+        from_time=time.fromisoformat(row["from_time"]) if row["from_time"] else None,
         on_chart=bool(row["on_chart"]),
     )
 
@@ -290,6 +292,7 @@ class TaskBoard:
         steps: Sequence[str] = (),
         check_in: bool = False,
         due_time: time | None = None,
+        from_time: time | None = None,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -308,8 +311,8 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at, steps, check_in, due_time) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps, check_in, due_time, from_time) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -323,6 +326,7 @@ class TaskBoard:
                 json.dumps(cleaned_steps),
                 int(check_in),
                 due_time.strftime("%H:%M") if due_on and due_time else None,
+                from_time.strftime("%H:%M") if due_on and from_time else None,
             ),
         )
         if nudge:
@@ -430,7 +434,8 @@ class TaskBoard:
 
     @staticmethod
     def _time_of(task: Task) -> time | None:
-        return task.due_time or (task.repeat.at if task.repeat else None)
+        """When its nudge comes: a window's start, else its time, else the chore's."""
+        return task.from_time or task.due_time or (task.repeat.at if task.repeat else None)
 
     def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
@@ -1053,7 +1058,13 @@ def _board(ctx: ToolContext) -> TaskBoard:
         "due_time": {
             "type": "string",
             "description": "HH:MM (24-hour) if they gave a time of day ('around 2' is 14:00), "
-            "else an empty string. Nothing is asked about before it's due.",
+            "or a window's end ('between 2 and 3' is 15:00), else an empty string. Nothing is "
+            "asked about before it's due.",
+        },
+        "from_time": {
+            "type": "string",
+            "description": "HH:MM for a window's start ('between 2 and 3' is 14:00; the "
+            "nudge comes then and it's overdue after due_time), else an empty string.",
         },
         "assign_to": {
             "type": "string",
@@ -1079,14 +1090,15 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             due = date.fromisoformat(args["due_date"])
         except ValueError:
             return "Not created: the due date should look like 2026-11-03."
-    due_time = None
-    if args["due_time"]:
-        try:
-            due_time = time.fromisoformat(args["due_time"])
-        except ValueError:
-            return "Not created: the time should look like 14:30."
-        if due is None:
-            due = _board(ctx)._today()  # a time with no date means today
+    try:
+        due_time = time.fromisoformat(args["due_time"]) if args["due_time"] else None
+        from_time = time.fromisoformat(args["from_time"]) if args["from_time"] else None
+    except ValueError:
+        return "Not created: times should look like 14:30."
+    if from_time and (due_time is None or from_time >= due_time):
+        return "Not created: a window needs its start (from_time) before its end (due_time)."
+    if due_time and due is None:
+        due = _board(ctx)._today()  # a time with no date means today
     target = args["assign_to"].strip()
     chosen: Member | None = None
     if target.lower() in ("me", "myself", "the person asking"):
@@ -1109,6 +1121,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             steps=args["steps"],
             check_in=bool(args["check_in"]),
             due_time=due_time,
+            from_time=from_time,
         )
     except ValueError as exc:
         return f"Not created: {exc}"

@@ -23,6 +23,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
                     "steps": [],
                     "check_in": False,
                     "due_time": "",
+                    "from_time": "",
                 },
                 None,
             ),
@@ -102,6 +103,7 @@ def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
                 "steps": [],
                 "check_in": False,
                 "due_time": "",
+                "from_time": "",
             },
             None,
         ),
@@ -189,6 +191,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
             "steps": [],
             "check_in": False,
             "due_time": "",
+            "from_time": "",
         },
     )
     scenario.primary.queue_text("Added to your list.")
@@ -214,6 +217,7 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
             "steps": [],
             "check_in": False,
             "due_time": "",
+            "from_time": "",
         },
     )
     scenario.primary.queue_text("Passed to him.")
@@ -265,6 +269,7 @@ async def test_a_task_for_later_today_waits_for_its_time(scenario: Scenario) -> 
             "effort": 1,
             "due_date": "2026-10-21",
             "due_time": "14:00",
+            "from_time": "",
             "assign_to": "me",
             "steps": [],
             "check_in": False,
