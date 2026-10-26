@@ -44,36 +44,49 @@ async def add_task(scenario: Scenario, title: str, who: str = "Erin", **kw: Any)
     return await board(scenario).create(member, title, "errand", 2, assignee=member, **kw)
 
 
-async def test_first_sync_links_matches_brings_in_the_rest_quietly_and_sends_themis(
+async def test_first_sync_links_matches_brings_in_the_rest_and_sends_themis(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:
     family = scenario.cozyla_list
     fake_cozyla.add_todo(family, "Call the vet")  # also open in Themi
     fake_cozyla.add_todo(family, "Fix the gate", assignee="m-husband")
+    fake_cozyla.add_todo(family, "Sort the photos")  # nobody's yet
     fake_cozyla.add_todo(family, "Wrap presents", done=True)  # history
     await add_task(scenario, "call the vet")
     await add_task(scenario, "Buy stamps", due_on=date(2026, 10, 27))
-    sent_before = len(scenario.telegram.calls("sendMessage"))
 
     await sync(scenario)
-    assert set(tasks(scenario)) == {"call the vet", "Fix the gate", "Buy stamps"}
+    assert set(tasks(scenario)) == {"call the vet", "Fix the gate", "Sort the photos", "Buy stamps"}
     gate = tasks(scenario)["Fix the gate"]
     assert gate.assignee == scenario.member("Husband").id and gate.created_by is None
     assert "Wrap presents" not in tasks(scenario, "done")  # left alone
     on_wall = wall(fake_cozyla, scenario)
-    assert set(on_wall) == {"Call the vet", "Fix the gate", "Wrap presents", "Buy stamps"}
+    assert set(on_wall) == {
+        "Call the vet",
+        "Fix the gate",
+        "Sort the photos",
+        "Wrap presents",
+        "Buy stamps",
+    }
     stamps = on_wall["Buy stamps"]
     assert stamps["assignMemberUid"] == "m-erin"
     due = datetime.fromtimestamp(stamps["dueDateTime"] / 1000, LA)
     assert (due.date(), due.hour) == (date(2026, 10, 27), 0)  # the start of that day, locally
-    await scenario.advance(hours=12)
-    texts = [p["text"] for p in scenario.telegram.calls("sendMessage")[sent_before:]]
-    assert not any("Fix the gate" in t for t in texts)  # brought in quietly
+    # His to-do is nudged, gently (low priority, so a long list trickles out); the
+    # unassigned one comes in quietly.
+    nudges = scenario.app.db.query(
+        "SELECT member_id, priority, text FROM outbox WHERE kind = 'task'"
+    )
+    gate_nudges = [n for n in nudges if "Fix the gate" in n["text"]]
+    assert [(n["member_id"], n["priority"]) for n in gate_nudges] == [
+        (scenario.member("Husband").id, "low")
+    ]
+    assert not any("Sort the photos" in n["text"] for n in nudges)
 
     calls = len(fake_cozyla.calls)
     await sync(scenario)
     assert writes_since(fake_cozyla, calls) == []
-    assert len(tasks(scenario)) == 3  # nothing doubled
+    assert len(tasks(scenario)) == 4  # nothing doubled
 
 
 async def test_a_new_to_do_on_the_wall_becomes_a_task_and_is_nudged(
