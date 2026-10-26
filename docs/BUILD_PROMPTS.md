@@ -3385,9 +3385,14 @@ Notes (2026-10-26):
   of her chores is due until Tuesday, when the bird cage comes up.
 - Setup: `themi run` restarted (migration 0045), then Erin's limit set to 1 (on the settings
   page, by asking Themi, or for her).
-- Still open: rule 13 ("one flexible task per day plus strict deadlines") is locked but does
-  nothing; Erin can retire it. Picking a lighter chore on a low-energy day is a possible next
-  step.
+- Live (2026-10-26, 15:50): restarted, Erin's limit set to 1 and rule 13 deleted, as asked.
+  The real chart then held the pills, flea meds, feeders and Michael's bins; her first chore
+  comes up Tuesday.
+- Added after: each person chooses whether chores for either of you count toward their limit
+  (`members.chart_counts_shared`, migration 0046, on by default as the family decided): the
+  settings page, or `set_chore_chart_limit`'s `shared_count` (its `limit` of -1 keeps the
+  number). Off, those chores always show for them.
+- A possible next step: picking a lighter chore on a low-energy day.
 
 ---
 
