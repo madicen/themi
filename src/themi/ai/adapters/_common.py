@@ -14,17 +14,25 @@ TRANSCRIBE_PROMPT = (
 
 
 def transport_exceptions() -> tuple[type[BaseException], ...]:
-    """Timeout and connection exception types from whichever httpx flavours are installed.
+    """Timeout and connection exception types from whichever HTTP clients are installed.
 
-    The Anthropic SDK runs on httpx2 and google-genai on either, so both are checked.
+    The Anthropic SDK runs on httpx2, and google-genai on httpx, or on aiohttp whenever that's
+    installed (the OurGroceries extra brings it). aiohttp's timeouts surface as the built-in
+    TimeoutError, so that's always included.
     """
-    found: list[type[BaseException]] = []
-    for module_name in ("httpx", "httpx2"):
+    found: list[type[BaseException]] = [TimeoutError]
+    # Imported by name: none of these is a dependency of Themi's own (CI lacks aiohttp).
+    clients = {
+        "aiohttp": ("ClientError",),
+        "httpx": ("TimeoutException", "TransportError"),
+        "httpx2": ("TimeoutException", "TransportError"),
+    }
+    for module_name, attrs in clients.items():
         try:
             module = __import__(module_name)
         except ImportError:
             continue
-        for attr in ("TimeoutException", "TransportError"):
+        for attr in attrs:
             exc = getattr(module, attr, None)
             if isinstance(exc, type) and issubclass(exc, BaseException):
                 found.append(exc)

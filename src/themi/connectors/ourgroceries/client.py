@@ -8,6 +8,7 @@ It's imported only when the mirror first runs, so Themi works without it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from themi.storage.secrets import Secret
@@ -22,16 +23,30 @@ class RemoteItem:
     id: str
     value: str
     crossed_off: bool
+    crossed_at: datetime | None = None  # when it was crossed off, if it is
+
+
+def _crossed_at(item: dict[str, Any]) -> datetime | None:
+    # The library's own `crossedOff` is always False; a crossed-off item is the one with a
+    # `crossedOffAt` timestamp, in milliseconds (checked against the live API, 2026-10-25).
+    stamp = item.get("crossedOffAt")
+    if isinstance(stamp, int | float):
+        return datetime.fromtimestamp(stamp / 1000, UTC)
+    return None
 
 
 class GroceryListClient(Protocol):
     """One shared list in OurGroceries."""
+
+    list_name: str
 
     async def items(self) -> list[RemoteItem]: ...
 
     async def add(self, value: str) -> None: ...
 
     async def remove(self, item_id: str) -> None: ...
+
+    async def set_crossed_off(self, item_id: str, crossed_off: bool) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -44,6 +59,7 @@ class OurGroceriesConfig:
 class OurGroceriesClient:
     def __init__(self, config: OurGroceriesConfig) -> None:
         self.config = config
+        self.list_name = config.list_name
         self._api: Any = None
         self._list_id: str | None = None
 
@@ -83,10 +99,12 @@ class OurGroceriesClient:
     async def items(self) -> list[RemoteItem]:
         api, list_id = await self._ready()
         data = await self._call("reading the list", api.get_list_items(list_id))
-        return [
-            RemoteItem(str(i["id"]), str(i.get("value", "")), bool(i.get("crossedOff")))
-            for i in data.get("list", {}).get("items", [])
-        ]
+        items = []
+        for i in data.get("list", {}).get("items", []):
+            crossed_at = _crossed_at(i)
+            crossed = bool(i.get("crossedOff")) or i.get("crossedOffAt") is not None
+            items.append(RemoteItem(str(i["id"]), str(i.get("value", "")), crossed, crossed_at))
+        return items
 
     async def add(self, value: str) -> None:
         api, list_id = await self._ready()
@@ -95,3 +113,10 @@ class OurGroceriesClient:
     async def remove(self, item_id: str) -> None:
         api, list_id = await self._ready()
         await self._call("removing an item", api.remove_item_from_list(list_id, item_id))
+
+    async def set_crossed_off(self, item_id: str, crossed_off: bool) -> None:
+        api, list_id = await self._ready()
+        await self._call(
+            "crossing an item off" if crossed_off else "bringing an item back",
+            api.toggle_item_crossed_off(list_id, item_id, cross_off=crossed_off),
+        )

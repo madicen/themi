@@ -115,6 +115,34 @@ async def test_the_grocery_tool_and_buying_things(
     assert fake_ourgroceries.values() == ["cumin"]
 
 
+async def test_the_family_list_in_ourgroceries_comes_into_themi(
+    scenario: Scenario, fake_ourgroceries: FakeOurGroceries
+) -> None:
+    """G1: most of the family's list is crossed off (bought before), so only the rest is
+    needed; what they add or cross off in the app shows up in Themi, and back."""
+    milk = fake_ourgroceries.put("Milk")
+    fake_ourgroceries.put("Bananas", crossed_off=True)
+    fake_ourgroceries.put("Eggs", crossed_off=True)
+    await scenario.run_periodic("groceries.mirror")
+    assert on_list(scenario) == ["milk"]
+    scenario.primary.queue_tool_call("show_grocery_list", {})
+    scenario.primary.queue_text("Just milk.")
+    await scenario.say("Erin", "what's on the grocery list?")
+    assert "On the list: milk." in tool_result(scenario)
+
+    fake_ourgroceries.put("Cumin")  # added in the app
+    fake_ourgroceries.cross(milk)  # bought at the store
+    await scenario.run_periodic("groceries.mirror")
+    assert on_list(scenario) == ["cumin"]
+    assert pantry(scenario).item("milk").status == "plenty"  # type: ignore[union-attr]
+    assert scenario.inbox("Erin") == ["Just milk."]  # nothing to approve: they added it
+
+    pantry_says(scenario, ("cumin", "plenty"))
+    await scenario.say("Erin", "bought cumin")
+    await scenario.run_periodic("groceries.mirror")
+    assert fake_ourgroceries.list[fake_ourgroceries.find("Cumin")].crossed_off
+
+
 # ----- receipts --------------------------------------------------------------------
 
 RECEIPT = {

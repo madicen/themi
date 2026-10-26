@@ -58,6 +58,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [x] |
 | S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [x] |
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
+| G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2775,6 +2776,86 @@ Notes (2026-10-25), failing tests first:
   partner, and makes the outbox wait for a better moment. Both are as designed; the tests pin
   the owner and read the queued nudge.
 - S1 follow-up: `test_eval_runner` expected the energy case's old problem text.
+
+### G1 · Two-way grocery sync with OurGroceries
+Status: [x] 2026-10-25
+Depends on: 25
+Read first: "Integrations" → OurGroceries; prompt 25's notes. The plan made Themi's list the
+source of truth, mirrored one way into OurGroceries. Set up for real on 2026-10-25 (the
+account is Erin's, the list is "Madicen Groceries"): the family already keeps about 110 items
+there, and Themi's own list had one, so Themi's answers about groceries would be wrong.
+
+Build:
+- Each sync (the existing `groceries.mirror` job, every minute) reads the OurGroceries list and
+  compares it with a snapshot of what Themi saw last time, so it can tell what changed in the
+  app since then:
+    - added in the app: added to Themi's list (no approval: a person added it there), marked
+      as coming from OurGroceries;
+    - crossed off in the app: bought in Themi (the pantry item goes back to plenty, as with
+      "bought eggs");
+    - deleted in the app: removed in Themi (not bought).
+- Changes made in Themi still go out as now, and win for that item if both sides changed it
+  since the last sync (Themi's change is the newer one). Something needed again that's crossed
+  off in the app gets un-crossed rather than added twice.
+- First sync: items not crossed off come into Themi as needed. Crossed-off items (most of the
+  family's list) come in as already bought, with the time they were crossed off, so Themi
+  knows them as done and never treats them as new.
+- Crossed off means bought (the user, 2026-10-25: "We cross off items when we buy them").
+  OurGroceries marks it with a `crossedOffAt` timestamp; the library's own `crossedOff` is
+  always false (fixed in the adapter the same day).
+- Each row keeps its OurGroceries item id. Matching still falls back to the name (ignoring
+  case), so nothing is doubled.
+- Only the configured list is read or changed; the account's other lists are never touched.
+- `show_grocery_list` and the website then show the real family list.
+- Plan update: OurGroceries becomes a two-way sync, not a mirror.
+
+Tests (with the fake OurGroceries, which gains crossing off, deleting and adding "from the app"):
+- First import; adds, cross-offs and deletes in the app reach Themi; Themi's changes still go out.
+- Both sides changed one item: Themi's wins; needed again means un-crossed, not duplicated.
+- An outage changes nothing, and the next sync catches up; other lists untouched.
+
+Done when: an item added or crossed off in the OurGroceries app shows up correctly in Themi
+within a couple of minutes, and the family's existing list is in Themi. Commit.
+
+Fixes made first, found while setting it up (2026-10-25, failing tests first):
+- Crossed-off detection: the adapter read `crossedOff`, which the library always reports as
+  false, so all 106 items on the live list (103 crossed off) looked needed. It now treats an
+  item with `crossedOffAt` as crossed off.
+- The one-way mirror now follows how the family uses the list. A needed item that's crossed
+  off in the app is un-crossed instead of skipped (before, it stayed hidden). A bought item is
+  crossed off instead of deleted; removed items are still deleted. The client gained
+  `set_crossed_off`, using the library's `toggle_item_crossed_off`.
+- Installing the extra brings in aiohttp, and google-genai then uses it. Its timeouts surface
+  as the built-in `TimeoutError`, which `transport_exceptions()` didn't list, so a slow Gemini
+  reply skipped the retry and fallback. That's a real issue in the Docker image, which
+  installs the extra. `TimeoutError` and `aiohttp.ClientError` now count as transport errors.
+  The google-genai warnings about subclassing `aiohttp.ClientSession` come from inside that
+  library and are harmless.
+- `test_without_the_library_the_mirror_just_waits` simulated a missing library by depending on
+  what was installed; it now patches the import.
+
+Notes (2026-10-25):
+- Migration 0032: `grocery_list.remote_id` and `source` ('themi' or 'ourgroceries'), plus
+  `ourgroceries_seen` (the last snapshot) and `ourgroceries_sync`, both kept per list name. A
+  newly configured list gets a first import rather than looking like everything was deleted,
+  and Themi's needed items that aren't on it are sent there. The old list is left alone.
+- Each sync now reads the list every minute, even with nothing to send. A failed read backs
+  off (1 minute doubling to an hour) instead of retrying every minute.
+- Themi wins by name: while a row is pending, the app's changes to an item with that name are
+  ignored. Removing an item in Themi that's already crossed off in the app leaves it crossed
+  off; it isn't deleted.
+- A delete in the app is matched by item id only, never by name, so Themi never removes an
+  item it can't tie to the deleted one. Themi learns the id of an item it added on the next
+  read, since the library doesn't return it.
+- Crossing off in the app calls the pantry, the same as the website's "Got it"
+  (`set_status(..., "plenty", source="list")`). That creates a pantry item if there isn't one,
+  just as "Got it" and receipts do. The first import leaves the pantry alone: crossed-off
+  history doesn't mean the family has those things now.
+- Names Themi can't store (all emoji, or over 60 characters) are skipped with a log line.
+- Dry run on a copy of the real database against the live list, with writes blocked: 3
+  needed (1 gallon storage bags, quart ziplock bags, white miso), 103 bought, nothing sent.
+- Setup: restart `themi run` so the migration runs and the sync starts. The first sync
+  imports the list.
 
 ---
 

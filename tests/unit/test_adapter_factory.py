@@ -1,3 +1,5 @@
+import importlib
+
 import pytest
 
 from themi.ai import PermanentError
@@ -49,3 +51,18 @@ def test_local_presets(kind: str, url: str) -> None:
 def test_incomplete_configs_are_permanent_errors(config: AdapterConfig) -> None:
     with pytest.raises(PermanentError):
         build_provider(config)
+
+
+def test_timeouts_and_aiohttp_errors_count_as_transport_errors() -> None:
+    """google-genai uses aiohttp when it's installed (the OurGroceries extra brings it, so the
+    Docker image has it). Its timeouts surface as the built-in TimeoutError, which wasn't
+    treated as retryable, so a slow reply skipped the retry and fallback."""
+    from themi.ai.adapters._common import transport_exceptions
+
+    errors = transport_exceptions()
+    assert TimeoutError in errors
+    try:
+        aiohttp = importlib.import_module("aiohttp")  # by name: CI doesn't install it
+    except ImportError:
+        return
+    assert aiohttp.ClientError in errors

@@ -1,12 +1,13 @@
-"""The grocery list: Themi's own, the source of truth. OurGroceries mirrors it.
+"""The grocery list: Themi's own, kept in step with OurGroceries both ways (G1).
 
 - Adding goes through the trust tiers: the `grocery_list_add` category (which
   a locked rule can make automatic) and the `groceries.add` executor. Both the
   `add_to_grocery_list` tool and the pantry's restocking stage it.
 - Buying (a receipt, "bought eggs", the website's "Got it") marks the row
   bought; the pantry item goes back to plenty.
-- Every change sets the row's mirror state to pending; the mirror job does
-  the rest (`themi.connectors.ourgroceries`). Nothing here waits for it.
+- Every change sets the row's mirror state to pending; the sync job does
+  the rest (`themi.connectors.ourgroceries`). Nothing here waits for it. The
+  same job brings in what the family adds, crosses off or deletes in the app.
 """
 
 from __future__ import annotations

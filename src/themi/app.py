@@ -159,7 +159,10 @@ def build_app(
         backups = BackupJob(store, Backups(backup, cipher), outbox)
         periodic.append(PeriodicTask("backup.nightly", timedelta(hours=1), backups.run))
     if grocery_list is not None:
-        mirror = GroceryMirror(db, grocery_list)
+        # Crossed off in the app: bought, and the pantry has it again, like the website's "Got it".
+        mirror = GroceryMirror(
+            db, grocery_list, bought=lambda name: pantry.set_status(name, "plenty", source="list")
+        )
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
