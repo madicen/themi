@@ -71,7 +71,8 @@ async def test_first_sync_links_matches_brings_in_the_rest_and_sends_themis(
     stamps = on_wall["Buy stamps"]
     assert stamps["assignMemberUid"] == "m-erin"
     due = datetime.fromtimestamp(stamps["dueDateTime"] / 1000, LA)
-    assert (due.date(), due.hour) == (date(2026, 10, 27), 0)  # the start of that day, locally
+    # The end of that day, locally: midnight showed as overdue all day on the wall.
+    assert (due.date(), due.hour, due.minute) == (date(2026, 10, 27), 23, 59)
     # His to-do is nudged, gently (low priority, so a long list trickles out); the
     # unassigned one comes in quietly.
     nudges = scenario.app.db.query(
@@ -223,3 +224,46 @@ async def test_a_missing_list_waits_and_says_why(
     await sync(scenario)
     assert "no to-do list called 'Family'" in caplog.text
     assert fake_cozyla.todos == {}
+
+
+async def test_a_task_with_a_time_is_due_then_on_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    from datetime import time
+
+    erin = scenario.member("Erin")
+    await board(scenario).create(
+        erin,
+        "Answer the tutoring email",
+        "text",
+        1,
+        date(2026, 10, 21),
+        assignee=erin,
+        due_time=time(14),
+    )
+    await sync(scenario)
+    todo = wall(fake_cozyla, scenario)["Answer the tutoring email"]
+    due = datetime.fromtimestamp(todo["dueDateTime"] / 1000, LA)
+    assert (due.hour, due.minute) == (14, 0)
+
+
+async def test_to_dos_sent_at_midnight_are_moved_to_the_end_of_the_day(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """The ones already on the wall at 00:00 are corrected after the update."""
+    from themi.storage.migrations import discover, split_statements
+
+    await add_task(scenario, "Buy stamps", due_on=date(2026, 10, 27))
+    await sync(scenario)
+    todo = wall(fake_cozyla, scenario)["Buy stamps"]
+    midnight = datetime(2026, 10, 27, tzinfo=LA)
+    fake_cozyla.edit(todo["todoId"], dueDateTime=int(midnight.timestamp() * 1000))
+    await sync(scenario)  # a due time change alone on the wall isn't Themi's to undo...
+    (fix,) = [m for m in discover() if m.name == "cozyla_due_end_of_day"]
+    for statement in split_statements(fix.sql):  # ...but the migration marks them again
+        scenario.app.db.execute(statement)
+    await sync(scenario)
+    due = datetime.fromtimestamp(
+        wall(fake_cozyla, scenario)["Buy stamps"]["dueDateTime"] / 1000, LA
+    )
+    assert (due.date(), due.hour, due.minute) == (date(2026, 10, 27), 23, 59)

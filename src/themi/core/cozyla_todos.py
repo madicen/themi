@@ -41,7 +41,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -64,6 +64,7 @@ WALL_KIND, WALL_EFFORT = "errand", 2
 ADD_CATEGORY = "wall_list_add"
 ADD_EXECUTOR = "cozyla.add"
 MAX_ITEM_LENGTH = 100
+END_OF_DAY = time(23, 59)
 
 
 def backoff(attempts: int) -> timedelta:
@@ -385,12 +386,12 @@ class CozylaTodos:
             del current[todo.id]
             todo = None
         assignee = self._assignee_for(task)
-        due = self._due_at(task.due_on)
+        due = self._due_at(task)
         if todo is None:
             todo_id = await self.client.create(target, task.title, assignee=assignee, due=due)
             current[todo_id] = Todo(todo_id, target, task.title, assignee, due, False)
             return todo_id
-        if (todo.title, todo.assignee, self._due_on(todo)) != (task.title, assignee, task.due_on):
+        if (todo.title, todo.assignee, todo.due) != (task.title, assignee, due):
             await self.client.update(todo, title=task.title, assignee=assignee, due=due)
             todo = current[todo.id] = replace(todo, title=task.title, assignee=assignee, due=due)
         if todo.completed:
@@ -491,11 +492,14 @@ class CozylaTodos:
     def _due_on(self, todo: Todo) -> date | None:
         return todo.due.astimezone(self._tz).date() if todo.due else None
 
-    def _due_at(self, due_on: date | None) -> datetime | None:
-        """Themi keeps a date; the wall a moment: the start of that day, locally."""
-        if due_on is None:
+    def _due_at(self, task: Task) -> datetime | None:
+        """The wall keeps a moment: the task's time on its day, else the end of the day
+        (23:59, the wall's own "no time"). Midnight showed as overdue all day."""
+        if task.due_on is None:
             return None
-        return datetime(due_on.year, due_on.month, due_on.day, tzinfo=self._tz)
+        at = task.due_time or END_OF_DAY
+        day = task.due_on
+        return datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=self._tz)
 
     def _admin(self) -> Member:
         return next(m for m in self.services.store.list_members() if m.is_admin)
