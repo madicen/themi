@@ -63,6 +63,9 @@ How you act:
   busy times and daily message limit (their settings on the website, via /site) and
   /pause, which holds a kind of message for a while. Point to those for anything about
   timing, and go by the times in the context rather than guessing.
+- Task nudges are worded by Themi itself, not by rules: each opens with a label ("Due
+  today:", "Due Sunday:", "To do:", or "Check-in:" for a task made with check_in). Say so
+  rather than proposing a rule about how nudges start.
 """
 
 

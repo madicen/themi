@@ -144,7 +144,8 @@ async def test_a_call_task_goes_through_matching_with_its_script(scenario: Scena
     await scenario.advance(hours=12)
     (nudge,) = [t for t in scenario.inbox("Husband") if "Call the plumber" in t]
     assert nudge.startswith(  # Erin asked, so it says she added it
-        "Erin added this for you, whenever it suits: Call the plumber (get the water heater fixed)."
+        "To do: Call the plumber (get the water heater fixed) (Erin added this for you), "
+        "whenever it suits."
     )
     assert "> - Can someone come out Thursday?" in nudge  # the script, word for word
     assert "> If not: Ask for the earliest slot and a number to call back." in nudge
