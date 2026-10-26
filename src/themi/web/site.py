@@ -76,7 +76,14 @@ def security_headers(response: Response, form_targets: str = "") -> None:
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import admin_pages, ai_pages, google_pages, knowledge_pages, task_pages
+    from themi.web import (
+        admin_pages,
+        ai_pages,
+        google_pages,
+        knowledge_pages,
+        task_pages,
+        week_pages,
+    )
 
     kit = Kit(ctx)
     google = ctx.app.services.google
@@ -122,6 +129,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(admin_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
     web.include_router(task_pages.routes(kit))
+    web.include_router(week_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
 

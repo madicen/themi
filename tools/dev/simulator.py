@@ -74,6 +74,8 @@ class Simulator(FakeTelegram):
         self._session_at = _wall_clock()
         # Telegram user id -> a website sign-in link, or None if they aren't a member.
         self.login: Callable[[int], str | None] | None = None
+        # Telegram user id -> the energy model's numbers as text (dev only, never the website).
+        self.energy_debug: Callable[[int], str] | None = None
         self.app.add_api_route("/", self._page, methods=["GET"], response_class=HTMLResponse)
         self.app.add_api_route("/sim/state", self._state, methods=["GET"])
         self.app.add_api_route("/sim/send", self._send, methods=["POST"])
@@ -81,6 +83,7 @@ class Simulator(FakeTelegram):
         self.app.add_api_route("/sim/react", self._react, methods=["POST"])
         self.app.add_api_route("/sim/skip", self._skip, methods=["POST"])
         self.app.add_api_route("/sim/website", self._website, methods=["GET"])
+        self.app.add_api_route("/sim/energy", self._energy, methods=["GET"])
         self.app.add_api_route("/sim/report", self._report, methods=["GET"])
         self.app.add_api_route("/sim/session", self._new_session, methods=["POST"])
 
@@ -243,6 +246,11 @@ class Simulator(FakeTelegram):
         if link is None:
             return HTMLResponse("That person isn't a paired member yet.", status_code=404)
         return RedirectResponse(link, status_code=303)
+
+    async def _energy(self, person: int) -> Response:
+        if self.energy_debug is None:
+            return PlainTextResponse("No energy model attached.", status_code=404)
+        return PlainTextResponse(self.energy_debug(person))
 
     async def _skip(self, request: Request) -> JSONResponse:
         body = await request.json()

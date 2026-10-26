@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My week · Themi{% endblock %}
+{% block content %}
+<h1>How Themi sees your week</h1>
+<p class="muted">This is what Themi has picked up about when things tend to go well for you, so it
+can time its messages kindly. Only you see this page, and it's all in words on purpose.</p>
+
+<p class="muted">
+{% if learned.nothing %}
+Themi is still learning: nothing much to go on yet, so this is a gentle starting guess.
+{% else %}
+Based on {{ learned.replies }} repl{{ "y" if learned.replies == 1 else "ies" }},
+{{ learned.remarks }} thing{{ "" if learned.remarks == 1 else "s" }} you mentioned about your energy,
+and how {{ learned.nudges }} of its messages landed.
+{% endif %}
+What it notices is up to you: <a href="/settings">My settings</a>.
+</p>
+
+{% if moments %}
+<section class="card">
+  <h2>Good moments Themi would pick in the next day</h2>
+  <p>{% for w in moments %}{{ w.start.astimezone(tz_info).strftime('%a %-I:%M %p') }} to {{ w.end.astimezone(tz_info).strftime('%-I:%M %p') }}{% if not loop.last %}; {% endif %}{% endfor %}</p>
+</section>
+{% endif %}
+
+{% for day in days %}
+<section class="card">
+  <h2>{{ day.day.strftime('%A %d %b') }}</h2>
+  {% for p in day.parts %}
+  <div class="row">
+    <span><strong>{{ p.part|capitalize }}:</strong> {{ p.words }}{% if p.first_guess and p.words not in ("quiet hours", "busy (your busy times)", "busy on your calendar") %} <span class="muted">(a first guess)</span>{% endif %}</span>
+    {% if p.words not in ("quiet hours", "busy (your busy times)", "busy on your calendar") %}
+    <form method="post" action="/week/correct" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="weekday" value="{{ day.day.weekday() }}">
+      <input type="hidden" name="part" value="{{ p.part }}">
+      <button class="quiet" name="way" value="better" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s usually go better than this">Usually better</button>
+      <button class="quiet" name="way" value="worse" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s are usually harder than this">Usually harder</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+{% endblock %}

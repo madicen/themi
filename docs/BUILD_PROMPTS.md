@@ -56,7 +56,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
 | S1 | Shadow Calendar: energy remarks recorded | Shadow Calendar review | [x] |
 | S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [x] |
-| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [~] |
+| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [x] |
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
@@ -2704,7 +2704,7 @@ Notes (2026-10-25), failing tests first:
   Cloud section) and each person links their account.
 
 ### S3 · Shadow Calendar: a private "how Themi sees my week" view
-Status: [~]
+Status: [x] (2026-10-25)
 Depends on: S1, S2 (optional)
 
 Build:
@@ -2723,6 +2723,25 @@ Decided 2026-10-25: yes, gentle corrections from the page.
 Tests:
 - Only your own week is shown; no numbers anywhere on the real page; corrections move the
   baseline gently; the dev page exists only in `make dev`.
+
+Notes (2026-10-25), failing tests first:
+- `themi.energy.week`:
+    - `week_view` covers 7 days × morning (8-12), afternoon (12-17) and evening (17-21) in
+      `WEEK_WORDS`, from the projection averaged over the open hours. Parts mostly in quiet
+      hours, busy times or calendar events say so. A part with no learned hour yet is marked
+      "(a first guess)", added after the screenshot showed nearly every part as "usually
+      steady".
+    - `good_moments` gives the next day's windows; `learned_from` counts replies, energy
+      remarks and nudge outcomes.
+    - `correct()` moves the hours of that weekday's part 10 points in the cell (n+1). With
+      the prior blend, one correction shifts the baseline about 2.5 points.
+- Website: My week (`/week`, nav "My week") takes no member id, so it's always your own. Its
+  "Usually better" and "Usually harder" buttons post to `/week/correct`. The page avoids the
+  words "capacity" and "score" (the architecture guard on templates).
+- `make dev`: an "Energy ↗" link in the simulator opens `/sim/energy`, with hour-by-hour
+  baseline and capacity numbers and recent signals (`runner.energy_numbers`). It's dev only.
+- Screenshot-checked. A live check also showed "It's a low energy day" recorded as a day level.
+- The plan's energy engine section now describes the page.
 
 ### S4 · Energy-aware chore levels
 Status: [x] (2026-10-25)
