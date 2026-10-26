@@ -109,6 +109,7 @@ async def test_chores_only_on_the_wall_come_in_and_matching_ones_link(
     assert board(scenario).summary(kitchen) == "Every Wednesday"
     bins = chores["Bring bins in"]
     assert bins.either and bins.shared
+    assert chores["Mimi pill"].importance == "high" and kitchen.importance == "normal"  # C2c
     assert board(scenario).summary(chores["Mimi pill"]) == (
         "Every other day, until Fri 30 Oct; either of you"
     )
