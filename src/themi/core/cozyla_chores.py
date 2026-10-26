@@ -36,6 +36,7 @@ from themi.accounts import Member
 from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
 from themi.connectors.cozyla.schedule import from_wall, to_wall
 from themi.core.cozyla_todos import backoff, member_map
+from themi.core.reminders import MEDICINE
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard
 from themi.localtime import to_utc_iso
@@ -135,7 +136,12 @@ class CozylaChores:
                 owner, chore.name, CHORE_KIND, CHORE_EFFORT, nudge=False, assignee=owner
             )
             # From the wall: nobody is known to have added it, so its nudges name no one.
-            self.db.execute("UPDATE tasks SET created_by = NULL WHERE id = ?", (task.id,))
+            # Medicine-like chores start as important (C2c).
+            importance = "high" if MEDICINE.search(chore.name) else "normal"
+            self.db.execute(
+                "UPDATE tasks SET created_by = NULL, importance = ? WHERE id = ?",
+                (importance, task.id),
+            )
             await self.board.set_schedule(
                 task.id, self._admin(), repeat=repeat, either=len(people) > 1
             )

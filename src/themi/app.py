@@ -42,6 +42,7 @@ from themi.core.habits import HabitReserve
 from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.pantry import Pantry
+from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
@@ -131,6 +132,8 @@ def build_app(
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    reminders = Reminders(services, tasks)
+    reminders.install()
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
@@ -155,6 +158,8 @@ def build_app(
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
+        PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
+        PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),

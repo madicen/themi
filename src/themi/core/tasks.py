@@ -94,6 +94,7 @@ class Task:
     due_before_task: int | None = None  # due the day before that chore's round
     check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
     either: bool = False  # a chore either of you can do, every round (on both lists)
+    importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
 
     @property
     def repeats(self) -> bool:
@@ -140,6 +141,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         due_before_task=row["due_before_task"],
         check_in=bool(row["check_in"]),
         either=bool(row["either"]),
+        importance=row["importance"],
     )
 
 
@@ -317,9 +319,11 @@ class TaskBoard:
         member: Member | None = None,
         overdue: str | None = None,
         priority: Priority = Priority.NORMAL,
+        lead: str | None = None,
     ) -> None:
         """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording.
-        `priority` LOW lets a batch of nudges trickle out in good moments."""
+        `priority` LOW lets a batch of nudges trickle out in good moments. `lead` replaces
+        the opening line (an overdue reminder's, C2c)."""
         if task.assignee is None and member is None:
             return
         deadline = self._deadline(task)
@@ -340,10 +344,10 @@ class TaskBoard:
         )
         family = self.store.get_family()
         local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
-        if overdue is not None:
+        if lead is None and overdue is not None:
             template = SHARED_OVERDUE_TEXT if overdue == "shared" else OVERDUE_TEXT
             lead = template.format(title=task.title, ago=self._last_done_words(task))
-        else:
+        elif lead is None:
             lead = NUDGE_LEAD.format(
                 label=_label(task, local_day),
                 title=task.title,
@@ -696,7 +700,8 @@ class TaskBoard:
             return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
         self.db.execute(  # the next round: back to its owner, nothing overdue
             "UPDATE tasks SET status = 'open', due_on = ?, shared = either, snoozed_until = NULL, "
-            "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
+            "overdue_notified_at = NULL, escalated_at = NULL, overdue_reminders = 0, "
+            "overdue_reminded_on = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
         self._withdraw_prompt(task)
@@ -751,7 +756,8 @@ class TaskBoard:
 
     def _move_round(self, task: Task, due: date) -> None:
         self.db.execute(
-            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL WHERE id = ?",
+            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL, "
+            "overdue_reminders = 0, overdue_reminded_on = NULL WHERE id = ?",
             (due.isoformat(), task.id),
         )
         self._withdraw_prompt(task)
@@ -855,7 +861,8 @@ class TaskBoard:
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
         self.db.execute(
-            "UPDATE tasks SET due_on = ? WHERE id = ?",
+            "UPDATE tasks SET due_on = ?, overdue_reminders = 0, overdue_reminded_on = NULL "
+            "WHERE id = ?",
             (due_on.isoformat() if due_on else None, task_id),
         )
         await self._changed(self.get(task_id), "rescheduled", interactive)
