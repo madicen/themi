@@ -49,7 +49,18 @@ RETRY_BACKOFF = (
     timedelta(minutes=15),
     timedelta(hours=1),
 )
+# Someone is waiting on a reply, so it's tried again within seconds, and for longer.
+REPLY_RETRY_BACKOFF = (
+    timedelta(seconds=15),
+    timedelta(seconds=30),
+    timedelta(minutes=1),
+    timedelta(minutes=2),
+    timedelta(minutes=5),
+    timedelta(minutes=15),
+    timedelta(hours=1),
+)
 MAX_ATTEMPTS = 5
+MAX_REPLY_ATTEMPTS = 8
 DEDUPE_WINDOW = timedelta(hours=24)
 
 
@@ -124,6 +135,8 @@ class Outbox:
         # Busy events from someone's calendar (S2), which hold messages like busy times:
         # (member, start, end) -> [(starts, ends)]. None without Google.
         self.calendar_blocks: BlockSource | None = None
+        # Rows on their way out, so a flush running meanwhile doesn't send them again.
+        self._sending: set[int] = set()
 
     @property
     def _tz(self) -> str:
@@ -209,6 +222,8 @@ class Outbox:
         rows.sort(key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], r["id"]))
         sent = 0
         for row in rows:
+            if row["id"] in self._sending:
+                continue
             member = self.store.get_member(row["member_id"])
             deadline = datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
             when = self._earliest(member, Priority(row["priority"]), now, deadline, row["kind"])
@@ -222,6 +237,15 @@ class Outbox:
         return sent
 
     async def _deliver(self, row: dict[str, Any]) -> OutboxResult:
+        if row["id"] in self._sending:
+            return OutboxResult("queued", row["id"])
+        self._sending.add(row["id"])
+        try:
+            return await self._deliver_now(row)
+        finally:
+            self._sending.discard(row["id"])
+
+    async def _deliver_now(self, row: dict[str, Any]) -> OutboxResult:
         member = self.store.get_member(row["member_id"])
         buttons = tuple(_button_from_json(b) for b in json.loads(row["buttons"]))
         priority = Priority(row["priority"])
@@ -283,7 +307,9 @@ class Outbox:
 
     def _record_failure(self, row: dict[str, Any], exc: Exception) -> OutboxResult:
         attempts = row["attempts"] + 1
-        if attempts >= MAX_ATTEMPTS:
+        reply = Priority(row["priority"]) == Priority.REPLY
+        backoff = REPLY_RETRY_BACKOFF if reply else RETRY_BACKOFF
+        if attempts >= (MAX_REPLY_ATTEMPTS if reply else MAX_ATTEMPTS):
             log.error(
                 "Giving up on outbox message %s after %d attempts (%s)",
                 row["id"],
@@ -295,7 +321,7 @@ class Outbox:
                 (attempts, type(exc).__name__, row["id"]),
             )
             return OutboxResult("failed", row["id"])
-        retry_at = clock.now() + RETRY_BACKOFF[min(attempts - 1, len(RETRY_BACKOFF) - 1)]
+        retry_at = clock.now() + backoff[min(attempts - 1, len(backoff) - 1)]
         log.warning(
             "Sending outbox message %s failed (%s); retrying at %s",
             row["id"],
