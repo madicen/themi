@@ -67,7 +67,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
-| C2a | Cozyla: chore and routine client, schedules both ways | Cozyla | [~] |
+| C2a | Cozyla: chore and routine client, schedules both ways | Cozyla | [x] |
 | C2b | Cozyla: Themi's chores on the chore chart, Themi in charge | Cozyla | [ ] |
 | C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [ ] |
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [ ] |
@@ -3152,7 +3152,7 @@ The family's decisions (2026-10-26):
    overdue.
 
 ### C2a · Cozyla: chore and routine client, schedules both ways
-Status: [~]
+Status: [x] 2026-10-26
 Depends on: C1c
 Build:
 - `CozylaClient`: `chores()`, `create_chore`, `update_chore` (every field re-sent, as the API
@@ -3164,6 +3164,19 @@ Build:
   time", "the first Monday", deadline chores) is put on the wall one round at a time.
 - `Repeat.until`: a last day ("Mimi pill until 30 Oct"), parsed ("... until 30 Oct"), read
   back, and honoured when working out rounds; after the last one, the chore is done.
+
+Notes (2026-10-26):
+- `themi.connectors.cozyla.chores` holds the wall's shapes (`Chore`, `ChoreRecord`,
+  `Routine`, `RoutineRecord`, `WallSchedule`) and the request bodies; `schedule` converts.
+  Chores are created with reminders off (-1): Themi does the reminding.
+- A wall chore that "repeats forever" (`repeatsUntil`) ignores its `endDay`; the family's
+  chores have stale end dates from when they were made, so `Chore.active_on` follows that.
+- Themi keeps one day of the month; a wall chore on "1,15" would come in as the 1st (none of
+  the family's do).
+- Read-only run of the new readers against the live wall: all 16 chores and 4 routines read,
+  9 active chores (the cleaning, bins, feeders, flea meds, a money transfer and two Mimi pill
+  courses), 7 ended ones (old courses, Tube Time, and the wall's bird cage chore, which
+  ended in July). Routine records come back per day, as expected.
 
 ### C2b · Cozyla: Themi's chores on the chore chart, Themi in charge
 Status: [ ]

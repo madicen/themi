@@ -169,3 +169,51 @@ async def test_the_check_says_when_the_list_is_missing_or_unset(fake_cozyla: Fak
 
 
 WRITES = {"create", "update", "checkTodo", "delete"}
+
+
+async def test_chores_round_trip_every_field(fake_cozyla: FakeCozyla) -> None:
+    """C2a: update/v1 keeps nothing that isn't sent, so every field goes each time."""
+    from datetime import date
+
+    from themi.connectors.cozyla import WallSchedule
+
+    clock.freeze(datetime(2026, 10, 21, 16, tzinfo=UTC))
+    fake_cozyla.add_member("Erin")
+    client = client_for(fake_cozyla)
+    weekly = WallSchedule(True, "Weekly", 1, "Wednesday", start=date(2026, 10, 21))
+    made = await client.create_chore("Bring bins in", ["m-erin"], "Everyone", weekly)
+    assert made.members == ("m-erin",) and made.schedule.days == "Wednesday"
+    assert fake_cozyla.chores[made.uid]["reminder"] == -1  # Themi does the reminding
+    await client.update_chore(made, "Bring the bins in", ["m-erin"], "Everyone", weekly)
+    (chore,) = await client.chores()
+    assert chore.name == "Bring the bins in" and chore.schedule == made.schedule
+
+    (record,) = await client.chore_records(date(2026, 10, 21))
+    assert (record.member, record.status) == ("m-erin", "pending")
+    await client.check_chore(made.uid, "m-erin", date(2026, 10, 21), True)
+    (record,) = await client.chore_records(date(2026, 10, 21))
+    assert record.status == "completed"
+    assert await client.chore_records(date(2026, 10, 22)) == []
+    await client.delete_chore(made.uid)
+    assert await client.chores() == []
+
+
+async def test_routines_and_their_records(fake_cozyla: FakeCozyla) -> None:
+    from datetime import date
+
+    from themi.connectors.cozyla import WallSchedule
+
+    clock.freeze(datetime(2026, 10, 21, 16, tzinfo=UTC))
+    client = client_for(fake_cozyla)
+    daily = WallSchedule(True, "Daily", start=date(2026, 10, 21))
+    routine_id = await client.create_routine("m-erin", "Walk dog", "Morning", daily)
+    (routine,) = await client.routines()
+    assert (routine.id, routine.member, routine.part) == (routine_id, "m-erin", "Morning")
+    await client.update_routine(routine, "Walk the dog", "Morning", daily, date(2026, 10, 21))
+    (record,) = await client.routine_records(date(2026, 10, 21))
+    assert (record.title, record.completed) == ("Walk the dog", False)
+    await client.check_routine(routine_id, date(2026, 10, 21), True)
+    (record,) = await client.routine_records(date(2026, 10, 21))
+    assert record.completed
+    await client.delete_routine(routine_id, date(2026, 10, 21))
+    assert await client.routines() == []

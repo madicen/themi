@@ -5,6 +5,9 @@
     fake_cozyla.tick(todo_id)                            # ticked off on the wall
     fake_cozyla.fail("todosInfo/list", code=500)         # the next call to it fails
     fake_cozyla.expire_tokens()                          # every token now gets code 101
+    fake_cozyla.add_chore("Bins", ["m-erin"], every="Weekly", days="Tuesday")  # -> chore uid
+    fake_cozyla.tick_chore(uid, "m-erin", date(2026, 10, 27))  # ticked on the chore chart
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")  # -> routine id
 
 It answers like the real service as described in cozyla-sdk's notes: JSON POSTs to
 `/cal-server/...`, a `{code, message, result}` envelope with the code as a string, the
@@ -21,7 +24,7 @@ import json
 import secrets
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -53,6 +56,10 @@ class FakeCozyla:
         self.members: list[dict[str, Any]] = []
         self.lists: dict[int, dict[str, Any]] = {}
         self.todos: dict[int, dict[str, Any]] = {}
+        self.chores: dict[str, dict[str, Any]] = {}
+        self.chore_ticks: dict[tuple[str, str, str], str] = {}  # (uid, member, day) -> status
+        self.routines: dict[int, dict[str, Any]] = {}
+        self.routine_ticks: set[tuple[int, str]] = set()  # (routine id, day) ticked
         self.tokens: set[str] = set()
         self.calls: list[Call] = []
         self.locked_for = 0  # seconds of sign-in lockout to report, if any
@@ -122,6 +129,92 @@ class FakeCozyla:
 
     def titles(self, list_id: int, *, done: bool = False) -> list[str]:
         return sorted(t["todoTitle"] for t in self.in_list(list_id) if t["completeStatus"] == done)
+
+    def add_chore(
+        self,
+        name: str,
+        members: list[str],
+        *,
+        kind: str = "Everyone",
+        every: str = "Weekly",
+        count: int = 1,
+        days: str = "",
+        start: date | None = None,
+        end: date | None = None,
+        forever: bool = True,
+        repeats: bool = True,
+        due_time: str = "23:59",
+    ) -> str:
+        start = start or clock.now().date()
+        uid = secrets.token_hex(16)
+        self.chores[uid] = {
+            "choreUid": uid,
+            "id": len(self.chores) + 1,
+            "choreName": name,
+            "icon": "czl_chores_emoji#_#broom#_#🧹",
+            "coins": 0,
+            "choreType": kind,
+            "rotateEveryCounts": 1,
+            "startDay": start.isoformat(),
+            "endDay": (end or start + timedelta(days=30)).isoformat(),
+            "dueTime": due_time,
+            "repeats": repeats,
+            "repeatsEvery": every,
+            "repeatsEveryCounts": count,
+            "repeatsIn": days,
+            "repeatsUntil": forever,
+            "reminder": -1,
+            "memberRefs": self._refs(members),
+            "choreBank": False,
+            "choreDeviceId": "db3860b5-9178-427a-894e-d9dfed2bcf5b",
+            "description": "",
+        }
+        return uid
+
+    def tick_chore(self, uid: str, member: str, day: date, done: bool = True) -> None:
+        self.chore_ticks[(uid, member, day.isoformat())] = "completed" if done else "pending"
+
+    def chore_named(self, name: str) -> dict[str, Any]:
+        (chore,) = [c for c in self.chores.values() if c["choreName"] == name]
+        return chore
+
+    def add_routine(
+        self,
+        member: str,
+        title: str,
+        part: str = "Morning",
+        *,
+        every: str = "Daily",
+        days: str = "",
+        start: date | None = None,
+    ) -> int:
+        routine_id = next(self._ids)
+        self.routines[routine_id] = {
+            "id": routine_id,
+            "memberUid": member,
+            "routineTitle": title,
+            "routineType": part,
+            "routineIcon": "routine_property_bed",
+            "coins": 0,
+            "habitEnabled": 0,
+            "habitBonusStars": 0,
+            "repeatsEvery": every,
+            "repeatsEveryCounts": 1,
+            "repeatsIn": days,
+            "startDay": (start or clock.now().date()).isoformat(),
+            "endDay": None,
+            "description": "",
+        }
+        return routine_id
+
+    def tick_routine(self, routine_id: int, day: date, done: bool = True) -> None:
+        (self.routine_ticks.add if done else self.routine_ticks.discard)(
+            (routine_id, day.isoformat())
+        )
+
+    def routine_named(self, title: str) -> dict[str, Any]:
+        (routine,) = [r for r in self.routines.values() if r["routineTitle"] == title]
+        return routine
 
     def fail(self, endpoint: str, code: int = 500, times: int = 1) -> None:
         """The next `times` calls to an endpoint ("todosInfo/list", "signIn") get `code`."""
@@ -194,6 +287,109 @@ class FakeCozyla:
     def _delete(self, body: dict[str, Any]) -> None:
         del self.todos[body["id"]]
 
+    # ----- chores and routines ------------------------------------------------------------
+
+    def _refs(self, members: list[str]) -> list[dict[str, Any]]:
+        names = {m["memberUid"]: m["memberName"] for m in self.members}
+        return [{"memberUid": m, "memberName": names.get(m, m), "coins": 0} for m in members]
+
+    def _create_chore(self, body: dict[str, Any]) -> dict[str, Any]:
+        missing = [k for k in CHORE_FIELDS if k not in body]
+        if missing:
+            raise KeyError(missing)
+        uid = self.add_chore(body["choreName"], body["memberUids"])
+        self._set_chore(uid, body)
+        return self.chores[uid]
+
+    def _update_chore(self, body: dict[str, Any]) -> dict[str, Any]:
+        missing = [k for k in CHORE_FIELDS if k not in body]  # the real API needs them all
+        if missing or body["choreUid"] not in self.chores:
+            raise KeyError(missing or body["choreUid"])
+        self._set_chore(body["choreUid"], body)
+        return self.chores[body["choreUid"]]
+
+    def _set_chore(self, uid: str, body: dict[str, Any]) -> None:
+        chore = self.chores[uid]
+        for name in CHORE_FIELDS:
+            if name != "memberUids":
+                chore[name] = body[name]
+        chore["memberRefs"] = self._refs(body["memberUids"])
+
+    def _delete_chore(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        del self.chores[body["choreUid"]]
+        return list(self.chores.values())
+
+    def _chore_records(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        day = date.fromisoformat(body["selectDay"])
+        records = []
+        for chore in self.chores.values():
+            if not _occurs(chore, day):
+                continue
+            for ref in chore["memberRefs"]:
+                status = self.chore_ticks.get(
+                    (chore["choreUid"], ref["memberUid"], day.isoformat())
+                )
+                if status is None:
+                    status = "expired" if day < clock.now().date() else "pending"
+                records.append(
+                    {
+                        "choreUid": chore["choreUid"],
+                        "choreName": chore["choreName"],
+                        "memberUid": ref["memberUid"],
+                        "memberName": ref["memberName"],
+                        "checkDay": day.isoformat(),
+                        "status": status,
+                        "choreMemberRecordUid": f"{chore['choreUid']}_{ref['memberUid']}_{day}",
+                    }
+                )
+        return records
+
+    def _check_chore(self, body: dict[str, Any]) -> None:
+        if body["choreUid"] not in self.chores:
+            raise KeyError(body["choreUid"])
+        self.chore_ticks[(body["choreUid"], body["memberUid"], body["checkDay"])] = body[
+            "choreStatus"
+        ]
+
+    def _create_routine(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        made = []
+        for member in body["memberUids"]:
+            routine_id = self.add_routine(member, body["routineTitle"], body["routineType"])
+            self.routines[routine_id].update({k: body[k] for k in ROUTINE_FIELDS})
+            made.append({"routineId": routine_id, "memberUid": member, "memberId": 1})
+        return made
+
+    def _update_routine(self, body: dict[str, Any]) -> None:
+        routine = self.routines[body["id"]]
+        routine.update({k: body[k] for k in ROUTINE_FIELDS})
+
+    def _delete_routine(self, body: dict[str, Any]) -> None:
+        del self.routines[body["id"]]
+
+    def _routine_records(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        day = date.fromisoformat(body["selectDay"])
+        return [
+            {
+                "routineId": r["id"],
+                "memberUid": r["memberUid"],
+                "routineTitle": r["routineTitle"],
+                "routineType": r["routineType"],
+                "checkDay": day.isoformat(),
+                "status": "completed"
+                if (r["id"], day.isoformat()) in self.routine_ticks
+                else "pending",
+            }
+            for r in self.routines.values()
+            if _occurs({**r, "repeats": True, "repeatsUntil": True}, day)
+        ]
+
+    def _check_routine(self, body: dict[str, Any]) -> None:
+        if body["routineId"] not in self.routines:
+            raise KeyError(body["routineId"])
+        self.tick_routine(
+            body["routineId"], date.fromisoformat(body["checkDay"]), body["status"] == "completed"
+        )
+
 
 TODO_FIELDS = (
     "todoListId",
@@ -218,6 +414,62 @@ BLANK: dict[str, Any] = {
     "timeUnit": "none",
 }
 
+CHORE_FIELDS = (
+    "choreName",
+    "icon",
+    "coins",
+    "choreType",
+    "rotateEveryCounts",
+    "startDay",
+    "endDay",
+    "dueTime",
+    "repeats",
+    "repeatsEvery",
+    "repeatsEveryCounts",
+    "repeatsIn",
+    "repeatsUntil",
+    "reminder",
+    "memberUids",
+    "choreBank",
+    "choreDeviceId",
+    "description",
+)
+ROUTINE_FIELDS = (
+    "routineTitle",
+    "routineType",
+    "routineIcon",
+    "coins",
+    "habitBonusStars",
+    "habitEnabled",
+    "repeatsEvery",
+    "repeatsEveryCounts",
+    "repeatsIn",
+    "startDay",
+    "description",
+)
+
+
+def _occurs(item: dict[str, Any], day: date) -> bool:
+    """Whether a chore or routine falls on `day`, as the wall works it out."""
+    start = date.fromisoformat(item["startDay"])
+    end = date.fromisoformat(item["endDay"]) if item.get("endDay") else None
+    if day < start:
+        return False
+    if not item.get("repeats", True):
+        return day <= (end or start)
+    if not item.get("repeatsUntil", True) and end is not None and day > end:
+        return False
+    n = int(item.get("repeatsEveryCounts") or 1)
+    parts = [p.strip() for p in str(item.get("repeatsIn") or "").split(",") if p.strip()]
+    if item["repeatsEvery"] == "Daily":
+        return (day - start).days % n == 0
+    if item["repeatsEvery"] == "Weekly":
+        week_of = lambda d: (d - timedelta(days=d.weekday())).toordinal() // 7  # noqa: E731
+        return day.strftime("%A") in parts and (week_of(day) - week_of(start)) % n == 0
+    months = (day.year - start.year) * 12 + day.month - start.month
+    return str(day.day) in parts and months % n == 0
+
+
 ROUTES = {
     "users/cozUsersMember/queryMembers": lambda f, b: f.members,
     "rewards/todosList/list": lambda f, b: list(f.lists.values()),
@@ -226,6 +478,18 @@ ROUTES = {
     "rewards/todosInfo/update": FakeCozyla._update,
     "rewards/todosInfo/checkTodo": FakeCozyla._check,
     "rewards/todosInfo/delete": FakeCozyla._delete,
+    "rewards/chores/myChoresV1": lambda f, b: list(f.chores.values()),
+    "rewards/chores/create/v1": FakeCozyla._create_chore,
+    "rewards/chores/update/v1": FakeCozyla._update_chore,
+    "rewards/chores/delete/v1": FakeCozyla._delete_chore,
+    "rewards/chores/choreRecordByDay/v3": FakeCozyla._chore_records,
+    "rewards/chores/choreCheck/v1": FakeCozyla._check_chore,
+    "rewards/routineUser/getRoutineList/v1": lambda f, b: list(f.routines.values()),
+    "rewards/routineUser/createRoutine": FakeCozyla._create_routine,
+    "rewards/routineUser/updateRoutine": FakeCozyla._update_routine,
+    "rewards/routineUser/delRoutine": FakeCozyla._delete_routine,
+    "rewards/routineUserRecord/getRoutineRecordByDay/v1": FakeCozyla._routine_records,
+    "rewards/routineUserRecord/checkUserRoutine": FakeCozyla._check_routine,
 }
 
 
