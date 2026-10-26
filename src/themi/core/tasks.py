@@ -17,7 +17,7 @@ import logging
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -27,6 +27,13 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core.prompts import OpenItem
+from themi.core.repeat import (
+    Repeat,
+    next_occurrences,
+    parse,
+    previous_occurrence,
+    read_back,
+)
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.energy.matching import Assignment, Matcher
@@ -85,6 +92,14 @@ class Task:
     escalate_days: float | None = None  # escalated after this many days
     escalate_to: str | None = None  # "owner" or "both"
     shared: bool = False  # escalated to both: on everyone's list, anyone can do it
+    # Anchored schedules (F7): fixed dates. Floating ones stay in times_per_week.
+    repeat: Repeat | None = None
+    missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
+    due_before_task: int | None = None  # due the day before that chore's round
+
+    @property
+    def repeats(self) -> bool:
+        return bool(self.times_per_week or self.repeat or self.due_before_task)
 
 
 @dataclass(frozen=True)
@@ -93,6 +108,7 @@ class Run:
     done_at: datetime
     due_on: date | None
     on_time: bool
+    missed: bool = False  # a round that passed without anyone doing it
 
 
 TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
@@ -120,6 +136,9 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         escalate_days=row["escalate_days"],
         escalate_to=row["escalate_to"],
         shared=bool(row["shared"]),
+        repeat=Repeat.from_json(json.loads(row["repeat"])) if row["repeat"] else None,
+        missed=row["missed"],
+        due_before_task=row["due_before_task"],
     )
 
 
@@ -147,6 +166,7 @@ class TaskBoard:
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = [_steps_text]
+        self._pending_prompts: list[int] = []
 
     @property
     def outbox(self) -> Outbox:
@@ -192,6 +212,7 @@ class TaskBoard:
                 datetime.fromisoformat(r["done_at"]),
                 date.fromisoformat(r["due_on"]) if r["due_on"] else None,
                 bool(r["on_time"]),
+                bool(r["missed"]),
             )
             for r in rows
         ]
@@ -211,7 +232,7 @@ class TaskBoard:
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
             whose = "shared, overdue: either of you" if t.shared else "theirs"
             steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
-            schedule = f" {schedule_summary(t)}." if t.times_per_week else ""
+            schedule = f" {self.summary(t)}." if t.repeats else ""
             items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{steps}"))
         return items
 
@@ -349,12 +370,23 @@ class TaskBoard:
             )
 
     def _deadline(self, task: Task) -> datetime | None:
+        """By when a nudge should go out: 9 am on the due date, or the chore's own time."""
         if task.due_on is None:
             return None
+        at = task.repeat.at if task.repeat and task.repeat.at else time(9)
+        return _on(task.due_on, at, self._tz())
+
+    def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
-        tz = ZoneInfo(family.timezone if family else "UTC")
-        due = task.due_on
-        return datetime(due.year, due.month, due.day, 9, 0, tzinfo=tz)
+        return ZoneInfo(family.timezone if family else "UTC")
+
+    def _round_starts(self, task: Task) -> datetime | None:
+        """When this round's nudge may go: the chore's time on its due date, or that morning."""
+        if task.due_on is None:
+            return None
+        if task.repeat and task.repeat.at:
+            return _on(task.due_on, task.repeat.at, self._tz())
+        return self._day_start(task.due_on)
 
     def can_edit(self, task: Task, member: Member) -> bool:
         return member.is_admin or member.id in (task.assignee, task.created_by)
@@ -389,7 +421,7 @@ class TaskBoard:
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
-        if task.times_per_week:
+        if task.repeats:
             return await self._complete_round(task, by, interactive)
         self.db.execute(
             "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
@@ -411,7 +443,9 @@ class TaskBoard:
         return datetime(day.year, day.month, day.day, tzinfo=tz)
 
     def _last_done(self, task: Task) -> datetime | None:
-        value = self.db.scalar("SELECT MAX(done_at) FROM task_runs WHERE task_id = ?", (task.id,))
+        value = self.db.scalar(
+            "SELECT MAX(done_at) FROM task_runs WHERE task_id = ? AND missed = 0", (task.id,)
+        )
         return datetime.fromisoformat(value) if value else None
 
     def _last_done_words(self, task: Task) -> str:
@@ -426,56 +460,160 @@ class TaskBoard:
         task_id: int,
         by: Member,
         *,
-        times_per_week: float,
+        repeat: Repeat | None,
         minimum_days: float = 0,
         escalate_days: float = 0,
         escalate_to: str = "owner",
+        missed: str = "roll",
+        due_before_task: int | None = None,
     ) -> Task:
-        """Make a task repeat (or stop, with times_per_week 0). Zeros mean "no minimum" or
-        "no escalation"."""
+        """Give a task a schedule, or take it away (no `repeat` and no `due_before_task`).
+        Zeros mean "no minimum" or "no escalation". Anchored and deadline schedules get their
+        first due date and a nudge for it."""
         task = self.get(task_id)
         if not self.can_edit(task, by):
             raise PermissionDenied("only the person doing it, whoever added it, or an admin")
-        if times_per_week <= 0:
+        if repeat is None and due_before_task is None:
             self.db.execute(
-                "UPDATE tasks SET times_per_week = NULL, minimum_days = NULL, "
-                "escalate_days = NULL, escalate_to = NULL, shared = 0 WHERE id = ?",
+                "UPDATE tasks SET times_per_week = NULL, repeat = NULL, due_before_task = NULL, "
+                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0 "
+                "WHERE id = ?",
                 (task_id,),
             )
             return self.get(task_id)
-        if times_per_week > 14:
-            raise ValueError("at most 14 times a week")
         if minimum_days < 0 or escalate_days < 0:
             raise ValueError("days can't be negative")
         if minimum_days and escalate_days and escalate_days < minimum_days:
             raise ValueError("escalation has to come after the minimum, not before it")
         if escalate_to not in ("owner", "both"):
             raise ValueError("escalate_to is 'owner' or 'both'")
+        if missed not in ("roll", "catch_up"):
+            raise ValueError("missed is 'roll' or 'catch_up'")
+        if due_before_task is not None:
+            if due_before_task == task_id:
+                raise ValueError("a chore can't be due before itself")
+            target = self.get(due_before_task)  # NotFound if there's no such task
+            if target.repeat is None and target.due_on is None:
+                raise ValueError(f"'{target.title}' has no dates to be due before")
+        floating = repeat is not None and not repeat.anchored
         self.db.execute(
-            "UPDATE tasks SET times_per_week = ?, minimum_days = ?, escalate_days = ?, "
-            "escalate_to = ? WHERE id = ?",
+            "UPDATE tasks SET times_per_week = ?, repeat = ?, due_before_task = ?, missed = ?, "
+            "minimum_days = ?, escalate_days = ?, escalate_to = ? WHERE id = ?",
             (
-                times_per_week,
+                repeat.times_per_week if floating and repeat else None,
+                json.dumps(repeat.to_json()) if repeat and repeat.anchored else None,
+                due_before_task,
+                missed,
                 minimum_days or None,
                 escalate_days or None,
                 escalate_to if escalate_days else None,
                 task_id,
             ),
         )
-        return self.get(task_id)
+        task = self.get(task_id)
+        first = self._first_due(task)
+        if first is not None and first != task.due_on:
+            self.db.execute(
+                "UPDATE tasks SET due_on = ? WHERE id = ?", (first.isoformat(), task_id)
+            )
+            task = self.get(task_id)
+            self._withdraw_prompt(task)
+            await self.prompt(task, not_before=self._round_starts(task))
+            await self._changed(task, "rescheduled", True)
+        return task
+
+    def summary(self, task: Task) -> str:
+        """The schedule in plain words, from what's stored (the read-back)."""
+        parts = []
+        if task.due_before_task is not None:
+            try:
+                target = self.get(task.due_before_task)
+                parts.append(f"Due the day before {target.title} ({self.summary(target)})")
+            except NotFound:
+                parts.append("Due the day before another chore that's gone")
+        elif task.repeat is not None:
+            parts.append(read_back(task.repeat))
+        elif task.times_per_week:
+            parts.append(read_back(Repeat("floating", times_per_week=task.times_per_week)))
+        else:
+            return "Doesn't repeat"
+        if task.minimum_days:
+            parts.append(f"overdue after {_days(task.minimum_days)}")
+        if task.escalate_days:
+            who = "both of you" if task.escalate_to == "both" else "a reminder to its owner"
+            verb = "it goes to" if task.escalate_to == "both" else "comes"
+            parts.append(f"after {_days(task.escalate_days)} {verb} {who}")
+        if task.repeat is not None and task.missed == "catch_up":
+            parts.append("a missed round stays owed")
+        return "; ".join(parts)
+
+    def next_dates(self, task: Task, count: int = 3) -> list[datetime]:
+        """The coming rounds of an anchored chore, for the website."""
+        if task.repeat is None:
+            return []
+        start = self._round_starts(task)
+        upcoming = [start] if start else []
+        after = start or clock.now()
+        upcoming += next_occurrences(task.repeat, after, self._tz(), count)
+        return upcoming[:count]
+
+    def _first_due(self, task: Task) -> date | None:
+        """An anchored chore's next date (today counts if its time hasn't passed), or a
+        deadline chore's day-before date."""
+        if task.due_before_task is not None:
+            return self._deadline_due(task)
+        if task.repeat is None:
+            return None
+        now = clock.now()
+        if task.repeat.at is None:  # a date-only round today is still today's
+            now = self._day_start(self._today()) - timedelta(microseconds=1)
+        found = next_occurrences(task.repeat, now, self._tz())
+        return found[0].date() if found else None
+
+    def _deadline_due(self, task: Task) -> date | None:
+        """The day before the other chore's round, unless this chore was already done for
+        that round, in which case the day before its next one."""
+        assert task.due_before_task is not None
+        try:
+            target = self.get(task.due_before_task)
+        except NotFound:
+            return task.due_on
+        if target.due_on is None:
+            return task.due_on
+        tz = self._tz()
+        round_day = target.due_on
+        last = self._last_done(task)
+        if last is not None and target.repeat is not None:
+            previous = previous_occurrence(target.repeat, self._day_start(round_day), tz)
+            if last.astimezone(tz).date() > (previous.date() if previous else date.min):
+                end_of_round = self._day_start(round_day + timedelta(days=1))
+                following = next_occurrences(target.repeat, end_of_round, tz)
+                if following:
+                    round_day = following[0].date()
+        return round_day - timedelta(days=1)
+
+    def _next_due_after_done(self, task: Task, today: date) -> date:
+        if task.due_before_task is not None:
+            return self._deadline_due(task) or today + timedelta(days=7)
+        if task.repeat is not None:
+            # This round counts as done, early or late: the next one is after it.
+            last_day = max(today, task.due_on or today)
+            after = self._day_start(last_day + timedelta(days=1)) - timedelta(microseconds=1)
+            found = next_occurrences(task.repeat, after, self._tz())
+            return found[0].date() if found else today + timedelta(days=7)
+        assert task.times_per_week is not None
+        return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
     async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
         today = self._today()
         on_time = task.due_on is None or today <= task.due_on
-        assert task.times_per_week is not None
-        interval = max(1, int(7 / task.times_per_week + 0.5))
-        next_due = today + timedelta(days=interval)
         now = to_utc_iso(clock.now())
         self.db.execute(
             "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
             "VALUES (?, ?, ?, ?, ?)",
             (task.id, by.id, now, task.due_on.isoformat() if task.due_on else None, int(on_time)),
         )
+        next_due = self._next_due_after_done(task, today)
         self.db.execute(  # the next round: back to its owner, nothing overdue
             "UPDATE tasks SET status = 'open', due_on = ?, shared = 0, snoozed_until = NULL, "
             "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
@@ -483,23 +621,64 @@ class TaskBoard:
         )
         self._withdraw_prompt(task)
         fresh = self.get(task.id)
-        await self.prompt(fresh, not_before=self._day_start(next_due))
+        await self.prompt(fresh, not_before=self._round_starts(fresh))
         await self._changed(fresh, "rescheduled", interactive)
         await self._maybe_offer_step_up(fresh)
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=next_due.strftime("%a %d %b")
         )
 
+    async def _settle_missed_round(self, task: Task) -> Task:
+        """An anchored round whose day has passed: roll on to the next date (recording a missed
+        run), or, for catch-up chores, leave it owed. Deadline chores follow their target."""
+        today = self._today()
+        if task.due_before_task is not None:
+            due = self._deadline_due(task)
+            if due is not None and task.due_on is not None and due > task.due_on and due > today:
+                # The other chore's round moved on; if this one wasn't done for it, it's missed.
+                last = self._last_done(task)
+                if last is None or last.astimezone(self._tz()).date() < task.due_on:
+                    self._record_missed(task)
+                self._move_round(task, due)
+            return self.get(task.id)
+        if task.repeat is None or task.due_on is None or task.due_on >= today:
+            return task
+        if task.missed == "catch_up":
+            return task
+        self._record_missed(task)
+        found = next_occurrences(task.repeat, clock.now(), self._tz())
+        if found:
+            self._move_round(task, found[0].date())
+        return self.get(task.id)
+
+    def _record_missed(self, task: Task) -> None:
+        self.db.execute(
+            "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time, missed) "
+            "VALUES (?, NULL, ?, ?, 0, 1)",
+            (task.id, to_utc_iso(clock.now()), task.due_on.isoformat() if task.due_on else None),
+        )
+
+    def _move_round(self, task: Task, due: date) -> None:
+        self.db.execute(
+            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL WHERE id = ?",
+            (due.isoformat(), task.id),
+        )
+        self._withdraw_prompt(task)
+        self._pending_prompts.append(task.id)
+
     async def check_schedules(self) -> int:
-        """Scheduler job: overdue nudges past the minimum, escalation past its point.
-        Each happens once per round. Returns how many tasks were nudged."""
+        """Scheduler job: settle missed anchored rounds, then overdue nudges past the minimum
+        and escalation past its point (each once per round). Returns how many were nudged."""
         nudged = 0
         now = clock.now()
+        self._pending_prompts = []
         rows = self.db.query(
-            "SELECT * FROM tasks WHERE times_per_week IS NOT NULL AND status IN ('open', 'snoozed')"
+            "SELECT * FROM tasks WHERE (times_per_week IS NOT NULL OR repeat IS NOT NULL "
+            "OR due_before_task IS NOT NULL) AND status IN ('open', 'snoozed')"
         )
         for row in rows:
-            task = _task_from_row(row)
+            task = await self._settle_missed_round(_task_from_row(row))
+            row = self.db.one("SELECT * FROM tasks WHERE id = ?", (task.id,)) or row
             since = self._last_done(task) or datetime.fromisoformat(row["created_at"])
             days = (now - since) / timedelta(days=1)
             stamp = to_utc_iso(now)
@@ -524,6 +703,10 @@ class TaskBoard:
                 )
                 await self.prompt(task, overdue="own")
                 nudged += 1
+        for task_id in self._pending_prompts:  # rounds that moved on get their nudge
+            fresh = self.get(task_id)
+            await self.prompt(fresh, not_before=self._round_starts(fresh))
+        self._pending_prompts = []
         return nudged
 
     async def _maybe_offer_step_up(self, task: Task) -> None:
@@ -557,7 +740,7 @@ class TaskBoard:
         task_id, times = int(payload["task"]), float(payload["times"])
         self.db.execute("UPDATE tasks SET times_per_week = ? WHERE id = ?", (times, task_id))
         task = self.get(task_id)
-        return f"{task.title}: {schedule_summary(task)} from now on."
+        return f"{task.title}: {self.summary(task)}, from now on."
 
     async def cancel(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
         """Nobody needs to do it after all (deleting a task keeps its record)."""
@@ -634,29 +817,13 @@ class TaskBoard:
             await self.outbox.edit(event.member, event.button.message_id, reply)
 
 
+def _on(day: date, at: time, tz: ZoneInfo) -> datetime:
+    """That wall-clock time on that day, in the family's timezone."""
+    return datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
+
+
 def _days(value: float) -> str:
     return f"{value:g} day{'s' if value != 1 else ''}"
-
-
-def schedule_summary(task: Task) -> str:
-    """How a repeating chore reads: "Repeats 2 times a week (at least every 7 days; after 14
-    days, both of you)"."""
-    times = task.times_per_week
-    if not times:
-        return "Doesn't repeat"
-    if times == 1:
-        often = "Repeats once a week"
-    elif times < 1:
-        often = f"Repeats every {_days(round(7 / times))}"
-    else:
-        often = f"Repeats {times:g} times a week"
-    extra = []
-    if task.minimum_days:
-        extra.append(f"at least every {_days(task.minimum_days)}")
-    if task.escalate_days:
-        who = "both of you" if task.escalate_to == "both" else "a reminder to its owner"
-        extra.append(f"after {_days(task.escalate_days)}, {who}")
-    return f"{often} ({'; '.join(extra)})" if extra else often
 
 
 def _steps_text(task: Task) -> str | None:
@@ -772,37 +939,72 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "set_task_schedule",
-    "Make a chore repeat, or change or stop its schedule (times_per_week 0 stops it). "
-    "at_least_every_days: overdue after that many days (0 for none). escalate_after_days: "
-    "past that, escalate (0 for none); escalate_to 'both' when they want it on both partners' "
-    "lists (it becomes shared until done), else 'owner'. Use it after create_task for "
-    "chores like 'twice a week, at least weekly, over two weeks it's on both our lists', and "
-    "for repeating reminders like 'always remind me about the bins on Tuesdays' (once a week).",
+    "Make a chore repeat, change its schedule, or stop it. repeat is a short phrase in plain "
+    "words: 'every Tuesday at 6pm', 'every other Monday', 'every Tue and Fri', 'first Monday "
+    "of the month', 'the 1st of every month', 'every 3 days', or 'twice a week' (counted from "
+    "the last time it was done); empty to stop. Keep any time of day they gave ('Tuesday "
+    "evenings' is 'every Tuesday evening'). due_before_task: the id of another chore this "
+    "one is due the day before ('cardboard before garbage day'), else 0; repeat can then be "
+    "empty. at_least_every_days: overdue after that many days (0 for none). "
+    "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
+    "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
+    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. Use it after "
+    "create_task, also for repeating reminders ('always remind me about the bins on "
+    "Tuesdays'). Themi reads the saved schedule back to them itself.",
     {
         "task_id": {"type": "integer"},
-        "times_per_week": {"type": "number"},
+        "repeat": {"type": "string"},
         "at_least_every_days": {"type": "number"},
         "escalate_after_days": {"type": "number"},
         "escalate_to": {"type": "string", "enum": ["owner", "both"]},
+        "missed": {"type": "string", "enum": ["roll", "catch_up"]},
+        "due_before_task": {"type": "integer"},
     },
 )
 async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
+    phrase = args["repeat"].strip()
     try:
-        task = await _board(ctx).set_schedule(
+        repeat = parse(phrase, board._today()) if phrase else None
+        task = await board.set_schedule(
             args["task_id"],
             ctx.member,
-            times_per_week=float(args["times_per_week"]),
+            repeat=repeat,
             minimum_days=float(args["at_least_every_days"]),
             escalate_days=float(args["escalate_after_days"]),
             escalate_to=args["escalate_to"],
+            missed=args["missed"],
+            due_before_task=args["due_before_task"] or None,
         )
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
     except PermissionDenied as exc:
         raise ToolFailed("That task isn't theirs to change.") from exc
-    except ValueError as exc:
+    except ValueError as exc:  # RepeatError included: its message lists phrases that work
         raise ToolFailed(str(exc)) from exc
-    return f"Task {task.id} ({task.title}): {schedule_summary(task)}."
+    if not task.repeats:
+        return f"Task {task.id} ({task.title}) doesn't repeat any more."
+    # The read-back is built here from what was stored, and sent as it is.
+    text = f"Saved: {board.summary(task)}."
+    upcoming = board.next_dates(task, 1) if task.repeat else []
+    if upcoming:
+        when = upcoming[0]
+        clock_time = f", {_clock_words(when)}" if task.repeat and task.repeat.at else ""
+        text += f" Next: {when:%a %d %b}{clock_time}."
+    elif task.due_on is not None and task.due_before_task is not None:
+        text += f" Next: {task.due_on:%a %d %b}."
+    await ctx.services.outbox.send(ctx.member, text, priority=Priority.REPLY)
+    return (
+        f"Task {task.id} ({task.title}) is scheduled, and it was read back to them already, "
+        f'word for word: "{text}". Don\'t restate the schedule; a short acknowledgement is '
+        "enough, or ask if anything sounds wrong."
+    )
+
+
+def _clock_words(moment: datetime) -> str:
+    hour = moment.hour % 12 or 12
+    suffix = "am" if moment.hour < 12 else "pm"
+    return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"
 
 
 @tool(

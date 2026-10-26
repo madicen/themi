@@ -13,7 +13,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import NotFound, PermissionDenied
-from themi.core.tasks import TaskBoard, schedule_summary
+from themi.core.tasks import TaskBoard
 from themi.web.kit import Kit
 
 
@@ -36,7 +36,12 @@ def routes(kit: Kit) -> APIRouter:
             if t.assignee != member.id and t.id not in {m.id for m in mine}
         ]
         names = {m.id: m.name for m in app.store.list_members()}
-        runs = {t.id: board().runs(t.id)[-5:] for t in [*mine, *added] if t.times_per_week}
+        runs = {
+            t.id: [r for r in board().runs(t.id) if not r.missed][-5:]
+            for t in [*mine, *added]
+            if t.repeats
+        }
+        upcoming = {t.id: board().next_dates(t) for t in [*mine, *added] if t.repeat}
         return kit.with_flash(
             request,
             "tasks.html",
@@ -45,7 +50,8 @@ def routes(kit: Kit) -> APIRouter:
             added=added,
             names=names,
             runs=runs,
-            schedule_summary=schedule_summary,
+            summary=board().summary,
+            upcoming=upcoming,
             tz=ZoneInfo(family.timezone if (family := app.store.get_family()) else "UTC"),
         )
 

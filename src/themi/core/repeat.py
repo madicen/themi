@@ -270,7 +270,9 @@ def read_back(rep: Repeat) -> str:
 
 def _rule(rep: Repeat) -> rrule.rrule:
     start = rep.start or clock.now().date()  # only hand-built Repeats lack a start
-    dtstart = datetime.combine(start, rep.at or time(0))
+    at = rep.at or time(0)
+    # Naive on purpose: wall-clock time, given the timezone after (see next_occurrences).
+    dtstart = datetime(start.year, start.month, start.day, at.hour, at.minute)  # noqa: DTZ001
     if rep.kind == "daily":
         return rrule.rrule(rrule.DAILY, interval=rep.every, dtstart=dtstart)
     if rep.kind == "weekly":
@@ -280,6 +282,14 @@ def _rule(rep: Repeat) -> rrule.rrule:
         day = _RRULE_DAYS[rep.weekdays[0]](rep.month_position)
         return rrule.rrule(rrule.MONTHLY, interval=rep.every, byweekday=day, dtstart=dtstart)
     return rrule.rrule(rrule.MONTHLY, interval=rep.every, bymonthday=rep.month_day, dtstart=dtstart)
+
+
+def previous_occurrence(rep: Repeat, before: datetime, tz: ZoneInfo) -> datetime | None:
+    """The last occurrence strictly before `before`, or None (or for floating schedules)."""
+    if not rep.anchored:
+        return None
+    found = _rule(rep).before(before.astimezone(tz).replace(tzinfo=None), inc=False)
+    return found.replace(tzinfo=tz) if found else None
 
 
 def next_occurrences(rep: Repeat, after: datetime, tz: ZoneInfo, count: int = 1) -> list[datetime]:

@@ -10,8 +10,9 @@
     <label>Task <input type="text" name="title" value="{{ task.title }}" required></label>
     {% if task.shared %}<p><strong>Overdue: on both your lists until it's done.</strong></p>{% endif %}
     {% if task.due_on %}<p class="muted">Due {{ task.due_on.strftime('%a %d %b') }}</p>{% endif %}
-    {% if task.times_per_week %}
-    <p class="muted">{{ schedule_summary(task) }}. Change it in chat.</p>
+    {% if task.repeats %}
+    <p class="muted">{{ summary(task) }}. Change it in chat.</p>
+    {% if upcoming.get(task.id) %}<p class="muted">Next: {% for d in upcoming[task.id] %}{{ d.strftime('%a %d %b') }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
     {% set done = runs.get(task.id, []) %}
     {% if done %}
     <p class="muted">Last done: {{ done[-1].done_at.astimezone(tz).strftime('%a %d %b') }} by {{ names.get(done[-1].done_by, "someone") }}{% if done|length > 1 %} · before that: {% for r in done[:-1]|reverse %}{{ r.done_at.astimezone(tz).strftime('%a %d %b') }}{% if not r.on_time %} (late){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</p>

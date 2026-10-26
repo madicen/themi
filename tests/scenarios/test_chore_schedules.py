@@ -24,10 +24,12 @@ async def bird_cage(scenario: Scenario, escalate_to: str = "both") -> Task:
         "set_task_schedule",
         {
             "task_id": task.id,
-            "times_per_week": 2,
+            "repeat": "2 times a week",
             "at_least_every_days": 7,
             "escalate_after_days": 14,
             "escalate_to": escalate_to,
+            "missed": "roll",
+            "due_before_task": 0,
         },
     )
     scenario.primary.queue_text("Set up.")
@@ -48,7 +50,10 @@ async def test_a_schedule_is_kept_and_described(scenario: Scenario) -> None:
         for i in scenario.app.services.open_items(scenario.member("Erin"))
         if i.summary.startswith("Task")
     ]
-    assert "Repeats 2 times a week (at least every 7 days; after 14 days, both of you)" in item
+    assert (
+        "Twice a week, counted from the last time it was done; overdue after 7 days; "
+        "after 14 days it goes to both of you" in item
+    )
 
 
 async def test_done_starts_the_next_round(scenario: Scenario) -> None:
@@ -139,8 +144,9 @@ async def test_stopping_a_schedule_and_bad_values(scenario: Scenario) -> None:
     task = await bird_cage(scenario)
     scenario.primary.queue_tool_call(
         "set_task_schedule",
-        {"task_id": task.id, "times_per_week": 0, "at_least_every_days": 0,
-         "escalate_after_days": 0, "escalate_to": "owner"},
+        {"task_id": task.id, "repeat": "", "at_least_every_days": 0,
+         "escalate_after_days": 0, "escalate_to": "owner", "missed": "roll",
+         "due_before_task": 0},
     )  # fmt: skip
     scenario.primary.queue_text("It won't repeat.")
     await scenario.say("Erin", "stop repeating it")
@@ -148,8 +154,9 @@ async def test_stopping_a_schedule_and_bad_values(scenario: Scenario) -> None:
 
     scenario.primary.queue_tool_call(
         "set_task_schedule",
-        {"task_id": task.id, "times_per_week": 2, "at_least_every_days": 14,
-         "escalate_after_days": 7, "escalate_to": "both"},
+        {"task_id": task.id, "repeat": "2 times a week", "at_least_every_days": 14,
+         "escalate_after_days": 7, "escalate_to": "both", "missed": "roll",
+         "due_before_task": 0},
     )  # fmt: skip
     scenario.primary.queue_text("Hmm.")
     await scenario.say("Erin", "escalate after a week but at least every two")
@@ -165,5 +172,5 @@ async def test_the_tasks_page_shows_the_schedule_and_recent_runs(
     await board(scenario).complete(task.id, scenario.member("Erin"))
     await sign_in(scenario, site, "Erin")
     page = (await site.get("/tasks")).text
-    assert "Repeats 2 times a week (at least every 7 days; after 14 days, both of you)" in page
+    assert "Twice a week, counted from the last time it was done; overdue after 7 days" in page
     assert "Last done: Wed 21 Oct by Erin" in page

@@ -53,7 +53,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
 | F6a | Chores: steps on tasks | Feedback | [x] |
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
-| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [~] |
+| F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2541,7 +2541,7 @@ Done when: Erin can describe a chore's steps and schedule in chat and it becomes
 repeats. Commit.
 
 ### F7 · Chores: anchored schedules, deadlines, read-back
-Status: [~] (go-ahead 2026-10-25)
+Status: [x] (2026-10-25)
 Depends on: F6b
 Read first: F6's notes. From the evals and Erin's chores: "bins on Tuesday evenings" and
 "cardboard before Tuesday (garbage day)" can't be expressed. F6b only knows "N times a week,
@@ -2577,6 +2577,41 @@ Tests:
 
 Done when: "bins on Tuesday evenings" and "cardboard before garbage day" are stored, nudged and
 read back exactly. Commit.
+
+Notes (2026-10-25), failing tests first:
+- New dependency: `python-dateutil` (3.0 installed), plus `types-python-dateutil` for dev.
+- Deviation from the plan above: `set_task_schedule` takes a short `repeat` phrase instead of
+  separate rule fields. `themi.core.repeat.parse` reads it in code ("every Tuesday at 6pm",
+  "every other Monday", "every Tue and Fri", "first Monday of the month", "the 15th of every
+  month", "every 3 days", "twice a week", time words like "evening" = 6 pm). Anything else is
+  refused with examples. A schedule is stored as structured JSON (`tasks.repeat`, migration
+  0030) rather than a raw RRULE string, and turned into a `dateutil.rrule` when needed. That
+  keeps the read-back exact and the calendar export easy later. Floating schedules stay in
+  `times_per_week`, so F6b's data needed no change.
+- Occurrences are worked out on local wall-clock time and given the timezone afterwards, so
+  "6 pm" stays 6 pm across the Nov 1 change (tested).
+- Anchored rounds: the first due date is the next occurrence; a date-only round on today's
+  date counts as today. The nudge waits for the chore's time on its day (or the morning), and
+  the outbox deadline is that time too. Done (early or late) settles the round, and the next
+  is the first occurrence after it.
+- Missed rounds (`tasks.schedules`): with "roll" (the default), a passed date records a
+  missed run (`task_runs.missed`, ignored for "last done" and on-time streaks) and moves to
+  the next date. With "catch_up" the round stays owed.
+- `due_before_task`: due the day before the other chore's round, or the day before its
+  following round once this one is done for it. It follows the other chore when that rolls,
+  and records a miss if it wasn't done.
+- Read-back: the tool sends "Saved: <TaskBoard.summary>. Next: <date, time>." itself, and
+  tells the model it was read back word for word. The Tasks page shows the next three dates.
+- Live evals: `rule-bins` passes 3/3. At first the model sent "every Tuesday" for "Tuesday
+  evenings"; the read-back showed the gap ("Saved: Every Tuesday."), and the tool description
+  now asks it to keep the time of day. After that: "Saved: Every Tuesday at 6 pm".
+- The architecture guard flags any call named `combine` (an energy function), and
+  `datetime.combine` matched it. The code uses its own `_on()` helper instead of loosening the
+  guard.
+- The plan's Task matching bullet now covers fixed dates, deadlines, missed rounds and the
+  read-back.
+- Real data: migration 0030 runs on the next restart. Nothing else needs moving. Michael's
+  cardboard (task 5) could be "due before" a bins chore once one exists.
 
 Later prompts (not part of F7, from the same roadmap):
 - Skip this round, or pause chores while away (holding overdue and escalation).
