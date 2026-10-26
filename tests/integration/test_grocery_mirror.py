@@ -1,9 +1,11 @@
-"""The OurGroceries mirror: Themi's list is the truth, and failures only delay the copy."""
+"""The OurGroceries mirror: Themi's changes go out, and failures only delay them.
+
+Changes made in the app that reach Themi are tested in `test_grocery_sync.py` (G1)."""
 
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -58,8 +60,8 @@ async def test_needed_items_are_added_once(
     assert await mirror.sync() == 2
     assert fake_ourgroceries.values() == ["Eggs", "olive oil"]
     assert fake_ourgroceries.calls["add"] == 1
-    assert await mirror.sync() == 0  # nothing pending: OurGroceries isn't even asked
-    assert fake_ourgroceries.calls["items"] == 1
+    assert await mirror.sync() == 0  # nothing left to send (G1: the list is still read)
+    assert fake_ourgroceries.calls["add"] == 1
 
 
 async def test_bought_items_are_crossed_off_and_removed_ones_deleted(
@@ -213,6 +215,8 @@ async def test_the_adapter_finds_the_list_by_name_and_maps_items() -> None:
     eggs, rice = await client.items()
     assert (eggs.id, eggs.value, eggs.crossed_off) == ("i1", "eggs", False)
     assert (rice.id, rice.value, rice.crossed_off) == ("i2", "rice", True)  # crossedOffAt
+    assert rice.crossed_at == datetime(2025, 10, 25, 13, 46, 40, tzinfo=UTC)
+    assert eggs.crossed_at is None
     await client.add("olive oil")
     await client.remove("i1")
     await client.set_crossed_off("i2", False)
