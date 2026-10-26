@@ -39,6 +39,7 @@ class ToolContext:
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
     staged: list[str] = field(default_factory=list)  # actions left waiting on a yes this turn
+    outcomes: list[bool] = field(default_factory=list)  # each tool call this turn: did it work?
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,11 @@ class Proposal:
 
 
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
+
+
+class ToolFailed(Exception):
+    """A tool couldn't do what was asked (no such task, not theirs...). The message goes
+    back to the model as an error result, and the turn knows nothing was done."""
 
 
 class ToolDeclined(Exception):
@@ -127,6 +133,11 @@ class ToolRegistry:
         t = self._tools.get(call.name)
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
+        result = await self._run(t, call, ctx)
+        ctx.outcomes.append(not result.is_error)
+        return result
+
+    async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> ToolResult:
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:
@@ -139,6 +150,8 @@ class ToolRegistry:
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
         except ToolDeclined as exc:
             return ToolResult(call.id, str(exc))
+        except ToolFailed as exc:
+            return ToolResult(call.id, f"{exc} Nothing was changed.", is_error=True)
         except Exception as exc:
             log.exception("Tool %s failed for member %s", call.name, ctx.member.id)
             return ToolResult(

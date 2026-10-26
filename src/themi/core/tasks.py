@@ -25,7 +25,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core.prompts import OpenItem
 from themi.core.services import Services
-from themi.core.tools import ToolContext, tool
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import to_utc_iso
 
@@ -417,8 +417,8 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return await _board(ctx).complete(args["task_id"], ctx.member, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -429,8 +429,8 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return await _board(ctx).cancel(args["task_id"], ctx.member, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -450,8 +450,8 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             return "Not changed: the due date should look like 2026-11-03."
     try:
         return await _board(ctx).reschedule(args["task_id"], due, interactive=True)
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
 
 
 @tool(
@@ -462,5 +462,5 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
         return _board(ctx).snooze(args["task_id"])
-    except NotFound:
-        return "There's no task with that number."
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc

@@ -51,6 +51,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F3 | Busy times | Feedback | [x] |
 | F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
+| F6 | Chores: steps and repeating schedules | Feedback | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2382,6 +2383,62 @@ Notes (2026-10-25):
   answered".
 - Not done: an explicit request for an item already waiting on a yes (say, from restocking)
   still says it's waiting, rather than approving that item.
+- Follow-up from feedback bug #5 (failing tests first): the model kept turning chores and their
+  steps into draft rules. When Erin said "delete the draft rules", it ran `cancel_task` with
+  rule numbers, which failed, and replied "I've cleared out those draft rules".
+    - `set_aside_draft_rule` (the person's own drafts only; never locked rules). Drafts now
+      show their number in open items ("Proposed rule 12: ...").
+    - `ToolFailed`: a tool raises it when it couldn't act, and the result goes back as an
+      error. The task tools' not-found cases use it. `ToolContext.outcomes` records each call;
+      if every call failed and the reply claims success, it's replaced with `FAILED_TEXT`.
+      `CLAIMS_DONE` also catches "cleared", "cancelled" and "set aside".
+    - The system prompt and `propose_rule` say rules are for how Themi behaves; chores,
+      schedules and the steps of a job are tasks, never rules. Re-run the evals.
+    - The deeper cause: tasks can't hold steps or a repeat schedule, so that detail had
+      nowhere else to go. That's F6.
+    - Real data, by plain SQL: Erin's drafts 9 (rescue spray), 11 (bird cage schedule) and 12
+      (bird cage steps) set aside. Their text is kept for F6.
+
+### F6 · Chores: steps and repeating schedules
+Status: [ ] (design written 2026-10-25; waiting for the user's OK)
+Depends on: 20, F4, F5
+Read first: "Shadow Calendar" → tasks and matching; "Module behaviour" → C (Maintenance), whose
+interval, step-by-step guide and history this reuses. From feedback bug #5: Erin's chores
+(bird cage, kitchen, bathroom) come with steps and schedules, and tasks couldn't hold either, so
+the model kept turning them into rules.
+
+Build:
+- Steps: a task keeps an ordered list of steps, each optionally tagged (e.g. "Optional/Bonus",
+  or an energy level like "Medium"). `create_task` and a new `update_task` take them. The nudge
+  shows them (the existing task-details hook), and so do `list_open_items` and the website.
+- Repeating schedule: a target ("2 times a week"), a minimum ("at least once a week") and an
+  escalation point ("over 2 weeks"). Marking a repeating task done records a run (when, who,
+  notes) and sets the next due date from the target.
+- Escalation: past the minimum, the nudge says it's overdue. Past the escalation point, the task
+  goes to the top of both partners' lists and both are nudged (still respecting quiet hours and
+  busy times; never any energy talk).
+- Growing the habit: after a steady stretch at the target (say 6 runs in a row on time), Themi
+  offers a step up ("try 3 times a week?"), as an approval. It never changes the schedule
+  itself.
+- Website: a task page with steps, schedule and recent runs, all editable.
+- Migration: step and schedule columns on tasks, plus `task_runs`. Prompt 33's maintenance items
+  can later build on the same base (adding active months, one a day, calendar).
+- Real data, once built: the bird cage (task 7) gets its steps and schedule from set-aside drafts
+  12 and 11. The kitchen (task 6) gets its steps out of its title, plus the optional rescue
+  spray (draft 9), in rule 10's format. The bathroom (task 4) gets rule 3's energy levels as
+  tagged steps, and then rule 3 can be unlocked.
+
+Tests:
+- Steps: create, update, shown in the nudge, tags kept, rule 10's style untouched (wording is
+  the person's).
+- Schedules: next due date from the target; overdue wording past the minimum; escalation to
+  both lists and both people; quiet hours still hold.
+- The step-up offer after a steady stretch, as an approval; nothing changes without a yes.
+- Scenario: Erin's bird cage conversation ends as one task with steps and a schedule, and no
+  rule proposals.
+
+Done when: Erin can describe a chore's steps and schedule in chat and it becomes one task that
+repeats. Commit.
 
 ---
 
@@ -2546,6 +2603,10 @@ Do:
   setup) in `docs/research/voice-calls.md`.
 - SMS as an extra channel: current Twilio pricing and US A2P 10DLC registration steps and costs,
   in `docs/research/sms.md`.
+- Dishwasher, from Erin's idea #4 (2026-10-25): she wants Themi to notice passively when the
+  household is falling behind. The dishwasher isn't known to be an LG ThinQ (prompt 30), so find
+  its make and any API. Also consider a smart plug that reports power use (the Tuya work in
+  prompt 32), which would detect cycles on any dishwasher.
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.

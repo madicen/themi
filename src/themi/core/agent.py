@@ -57,9 +57,10 @@ YES_WORDS = frozenset(
 )
 # A reply that says something was done while it's only waiting on a yes is replaced.
 WAITING_TEXT = "{summary}: that's waiting for a yes on the card above."
+FAILED_TEXT = "That didn't go through, so nothing has changed yet."
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
-    r"created|removed|deleted|set up|made)\b"
+    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded)\b"
     r"|^(?:added|done|archived|booked|sent|ordered|scheduled)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
     r"sent|ordered|scheduled|on the list)\b",
@@ -67,12 +68,17 @@ CLAIMS_DONE = re.compile(
 )
 
 
-def _honest(reply: str, waiting: list[str]) -> str:
+def _honest(reply: str, waiting: list[str], outcomes: list[bool]) -> str:
     """The model sometimes says "Added X" when X is only waiting on a yes (prompt 28's evals,
-    feedback bug #3). The approval card speaks for itself, so such a reply is replaced."""
-    if not waiting or not CLAIMS_DONE.search(reply):
+    feedback bug #3), or claims success when every tool call failed (bug #5). Such replies
+    are replaced: the approval card speaks for itself, and a failure is said plainly."""
+    if not CLAIMS_DONE.search(reply):
         return reply
-    return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
+    if outcomes and not any(outcomes):
+        return FAILED_TEXT
+    if waiting:
+        return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
+    return reply
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
@@ -221,7 +227,7 @@ class Agent:
                 response = await client.chat(system, messages, tools)
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
-                    return _honest(reply, ctx.staged)
+                    return _honest(reply, ctx.staged, ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
                 results = [await services.tools.run(call, ctx) for call in response.tool_calls]

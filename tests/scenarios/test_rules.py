@@ -4,6 +4,7 @@ import pytest
 
 from tests.scenarios.harness import Scenario
 from themi.autonomy import Tier
+from themi.core.agent import FAILED_TEXT
 from themi.core.rules import (
     LOCKED_REPLY,
     PROPOSAL_TEXT,
@@ -214,3 +215,40 @@ async def test_yes_to_a_question_asked_after_the_proposal_doesnt_lock_it(
     scenario.primary.queue_text("Sure, which day do the bins go out?")
     assert await scenario.say("Erin", "yes") == ["Sure, which day do the bins go out?"]
     assert scenario.app.rulebook.locked() == []
+
+
+# ----- setting drafts aside, and staying honest (feedback bug #5) ------------------
+
+
+async def test_the_model_can_set_aside_a_draft_when_asked(scenario: Scenario) -> None:
+    queue_proposal(scenario)
+    await scenario.say("Erin", "store promos could just be archived")
+    (draft,) = scenario.app.rulebook.drafts(scenario.member("Erin"))
+    turn_items = scenario.app.services.open_items(scenario.member("Erin"))
+    assert f"Waiting on you: Proposed rule {draft.id}: Archive store promos" in [
+        i.summary for i in turn_items
+    ]
+
+    scenario.primary.queue_tool_call("set_aside_draft_rule", {"rule_id": draft.id})
+    scenario.primary.queue_text("Set that idea aside.")
+    assert await scenario.say("Erin", "actually drop that draft") == ["Set that idea aside."]
+    assert scenario.app.rulebook.get(draft.id).status == "discarded"
+
+
+async def test_someone_elses_draft_cant_be_set_aside(scenario: Scenario) -> None:
+    queue_proposal(scenario)
+    await scenario.say("Erin", "store promos could just be archived")
+    (draft,) = scenario.app.rulebook.drafts(scenario.member("Erin"))
+    scenario.primary.queue_tool_call("set_aside_draft_rule", {"rule_id": draft.id})
+    scenario.primary.queue_text("That one isn't yours.")
+    await scenario.say("Husband", "drop that promo rule")
+    assert scenario.app.rulebook.get(draft.id).status == "draft"
+
+
+async def test_a_failed_action_isnt_reported_as_done(scenario: Scenario) -> None:
+    """Bug #5: "delete the draft rules" ran cancel_task with rule numbers, which failed, and
+    the reply said "I've cleared out those draft rules"."""
+    scenario.primary.queue_tool_call("cancel_task", {"task_id": 999})
+    scenario.primary.queue_text("I've cleared out those draft rules.")
+    replies = await scenario.say("Erin", "delete the draft rules")
+    assert replies == [FAILED_TEXT]

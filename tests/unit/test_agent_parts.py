@@ -202,3 +202,11 @@ def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
     )
     assert "Themi's own messages wait for: quiet hours 23:00-07:00\n" in plain
     assert "busy times" in STABLE_SYSTEM
+
+
+def test_rules_are_for_how_themi_behaves_and_chores_are_tasks() -> None:
+    from themi.core.prompts import STABLE_SYSTEM
+    from themi.core.rules import propose_rule
+
+    assert "Chores, schedules and the steps of a job are tasks" in STABLE_SYSTEM
+    assert "never rules" in propose_rule.spec.description
