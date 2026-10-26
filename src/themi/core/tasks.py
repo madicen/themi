@@ -52,7 +52,7 @@ TASK_KINDS = ["text", "call", "physical", "errand"]
 # (Erin's rules 6-8, bug #9). Titles are often commands ("Call the vet"), so they never
 # open a sentence; the label comes first.
 NUDGE_LEAD = "{label}: {title}{who}{whenever}"
-WHENEVER = ", whenever it suits"
+WHENEVER = ", whenever it suits"  # gentle phrasing only (idea #12)
 # When someone else added it, the nudge says who, so it doesn't arrive out of nowhere.
 ADDED_BY = " ({who} added this for you)"
 # Repeating chores (F6b).
@@ -388,7 +388,11 @@ class TaskBoard:
                 label=_label(task, local_day),
                 title=task.title,
                 who=ADDED_BY.format(who=added_by.name) if added_by is not None else "",
-                whenever=WHENEVER if task.due_on is None and not task.check_in else "",
+                whenever=(
+                    WHENEVER
+                    if task.due_on is None and not task.check_in and member.phrasing == "gentle"
+                    else ""
+                ),
             )
         text = (
             f"{lead}.\n\n{details}\n\nDone already, or later?"

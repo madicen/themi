@@ -70,6 +70,8 @@ class Member:
     kind_costs: dict[str, float] = field(default_factory=dict, hash=False)
     email: str | None = None  # Google sign-in address for the website
     busy_times: tuple[BusyTime, ...] = ()
+    phrasing: str = "plain"  # plain (say it straight) or gentle (indirect, low-key), idea #12
+    phrasing_notes: str = ""  # their own words on how they like things said
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

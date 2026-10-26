@@ -277,6 +277,8 @@ def core_routes(kit: Kit) -> APIRouter:
                 daily_limit=as_int(form.get("daily_limit")),
                 pda_enabled=form.get("pda_enabled") == "on",
                 pda_strength=as_int(form.get("pda_strength")),
+                phrasing=str(form.get("phrasing", "")) or None,
+                phrasing_notes=str(form.get("phrasing_notes", "")),
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
             )
         except InvalidValue as exc:

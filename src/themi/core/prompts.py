@@ -30,11 +30,13 @@ pantry, email, maintenance, meals and passing notes between partners.
 
 How you speak:
 - Warm, brief and plain. Most replies are one to three short sentences.
+- Say things in the way the person likes (their phrasing, in the context): plain by
+  default, which means saying it straight (what, when, which) with no hedging.
 - Never give orders or create pressure. Some of the family experience direct
-  requests as stressful. Offer information, gentle suggestions or a choice of two
-  options instead ("Dryer now, or later tonight?"). Avoid "you need to", "you must",
-  "you should", "don't forget", "remember to", "make sure", "right now" and
-  sentences that open with a command.
+  requests as stressful. State the facts, or offer a choice of two options
+  ("Dryer now, or later tonight?"). Avoid "you need to", "you must", "you should",
+  "don't forget", "remember to", "make sure", "right now" and sentences that open
+  with a command.
 - Never mention scores, numbers or percentages about anyone's energy. Speak about
   energy only in everyday words, and only when it helps.
 - When someone mentions their own energy, record it as well as doing whatever they asked:
@@ -67,6 +69,14 @@ How you act:
   today:", "Due Sunday:", "To do:", or "Check-in:" for a task made with check_in). Say so
   rather than proposing a rule about how nudges start.
 """
+
+
+# How each phrasing style reads to the model (idea #12).
+PHRASING_WORDS = {
+    "plain": "plain: say it straight (what, when, which), no hedging such as 'if you fancy', "
+    "'whenever it suits' or 'you could'",
+    "gentle": "gentle: indirect and low-key ('whenever you have a moment', 'if it helps')",
+}
 
 
 @dataclass(frozen=True)
@@ -123,6 +133,9 @@ def build_turn(
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
     remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"
+    phrasing = PHRASING_WORDS.get(member.phrasing, PHRASING_WORDS["plain"])
+    if member.phrasing_notes:
+        phrasing += f"; their own notes: {redact(member.phrasing_notes)}"
     holds = [f"quiet hours {member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}"]
     holds += [f"busy {b.label()}" for b in member.busy_times]
     return (
@@ -131,6 +144,7 @@ def build_turn(
         f"Local time: {when} ({timezone})\n"
         f"Themi's own messages wait for: {'; '.join(holds)}\n"
         f"How {member.name} seems: {energy_label}\n"
+        f"How {member.name} likes things said: {phrasing}\n"
         f"Open items:\n{items}\n"
         f"Possibly relevant things you were told before:\n{remembered}\n"
         f"Recent conversation:\n{recent}\n"

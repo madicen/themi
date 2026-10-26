@@ -20,6 +20,19 @@
   </fieldset>
 
   <fieldset>
+    <legend>How Themi says things</legend>
+    <label>Style
+      <select name="phrasing">
+        <option value="plain" {% if member.phrasing == "plain" %}selected{% endif %}>Plain: say it straight (what, when, which)</option>
+        <option value="gentle" {% if member.phrasing == "gentle" %}selected{% endif %}>Gentle: indirect and low-key</option>
+      </select>
+    </label>
+    <label>Your own notes on phrasing
+      <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
+    </label>
+  </fieldset>
+
+  <fieldset>
     <legend>Gentle phrasing</legend>
     <label class="check"><input type="checkbox" name="pda_enabled" {% if member.pda_enabled %}checked{% endif %}> Soften anything that reads like an instruction</label>
     <label>How much
