@@ -58,6 +58,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [x] |
 | S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [x] |
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
+| G1 | Two-way grocery sync with OurGroceries | Groceries | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2775,6 +2776,41 @@ Notes (2026-10-25), failing tests first:
   partner, and makes the outbox wait for a better moment. Both are as designed; the tests pin
   the owner and read the queued nudge.
 - S1 follow-up: `test_eval_runner` expected the energy case's old problem text.
+
+### G1 · Two-way grocery sync with OurGroceries
+Status: [ ] (designed 2026-10-25; waiting for the user's OK)
+Depends on: 25
+Read first: "Integrations" → OurGroceries; prompt 25's notes. The plan made Themi's list the
+source of truth, mirrored one way into OurGroceries. Set up for real on 2026-10-25 (the
+account is Erin's, the list is "Madicen Groceries"): the family already keeps about 110 items
+there, and Themi's own list had one, so Themi's answers about groceries would be wrong.
+
+Build:
+- Each sync (the existing `groceries.mirror` job, every minute) reads the OurGroceries list and
+  compares it with a snapshot of what Themi saw last time, so it can tell what changed in the
+  app since then:
+    - added in the app: added to Themi's list (no approval: a person added it there), marked
+      as coming from OurGroceries;
+    - crossed off in the app: bought in Themi (the pantry item goes back to plenty, as with
+      "bought eggs");
+    - deleted in the app: removed in Themi (not bought).
+- Changes made in Themi still go out as now, and win for that item if both sides changed it
+  since the last sync (Themi's change is the newer one). Something needed again that's crossed
+  off in the app gets un-crossed rather than added twice.
+- First sync: everything not crossed off comes into Themi. Crossed-off history is left alone.
+- Each row keeps its OurGroceries item id. Matching still falls back to the name (ignoring
+  case), so nothing is doubled.
+- Only the configured list is read or changed; the account's other lists are never touched.
+- `show_grocery_list` and the website then show the real family list.
+- Plan update: OurGroceries becomes a two-way sync, not a mirror.
+
+Tests (with the fake OurGroceries, which gains crossing off, deleting and adding "from the app"):
+- First import; adds, cross-offs and deletes in the app reach Themi; Themi's changes still go out.
+- Both sides changed one item: Themi's wins; needed again means un-crossed, not duplicated.
+- An outage changes nothing, and the next sync catches up; other lists untouched.
+
+Done when: an item added or crossed off in the OurGroceries app shows up correctly in Themi
+within a couple of minutes, and the family's existing list is in Themi. Commit.
 
 ---
 
