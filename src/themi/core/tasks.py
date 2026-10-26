@@ -549,6 +549,9 @@ class TaskBoard:
             self._withdraw_prompt(task)
             await self.prompt(task, not_before=self._round_starts(task))
             await self._changed(task, "rescheduled", True)
+        elif task.due_on is not None and self._withdraw_prompt(task):
+            # The nudge queued when the task was made waits for the chore's own day (bug #10).
+            await self.prompt(task, not_before=self._round_starts(task))
         return task
 
     def summary(self, task: Task) -> str:
@@ -810,16 +813,19 @@ class TaskBoard:
         self._withdraw_prompt(task)
         return LATER_TEXT.format(title=task.title)
 
-    def _withdraw_prompt(self, task: Task) -> None:
-        """Take back any of the task's nudges that haven't gone out yet (shared ones too)."""
+    def _withdraw_prompt(self, task: Task) -> bool:
+        """Take back any of the task's nudges that haven't gone out yet (shared ones too).
+        True if there was one."""
+        withdrawn = False
         row = self.db.one("SELECT prompt_outbox_id FROM tasks WHERE id = ?", (task.id,))
         if row and row["prompt_outbox_id"]:
-            self.outbox.cancel(row["prompt_outbox_id"])
+            withdrawn = self.outbox.cancel(row["prompt_outbox_id"])
         for queued in self.db.query(
             "SELECT id FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
             (f"task-{task.id}-%",),
         ):
-            self.outbox.cancel(queued["id"])
+            withdrawn = self.outbox.cancel(queued["id"]) or withdrawn
+        return withdrawn
 
     async def resurface(self) -> int:
         """Snoozed tasks whose time has come are offered again."""
