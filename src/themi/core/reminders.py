@@ -91,7 +91,7 @@ class Reminders:
             left = [
                 t.title
                 for t in self.board.open_for(member)
-                if t.due_on == today and t.importance != "low"
+                if t.due_on == today and t.importance != "low" and not self.board.held(t, member)
             ]
             if not left:
                 continue
@@ -136,8 +136,11 @@ class Reminders:
             people: list[Member | None] = (
                 [m for m in self.store.list_members() if m.telegram_user_id is not None]
                 if task.shared
-                else [None]
+                else [self._doer(task)]
             )
+            people = [p for p in people if p is None or not self.board.held(task, p)]
+            if not people:
+                continue  # waiting its turn for the chart (C2d): raised once it comes up
             for person in people:
                 await self.board.prompt(task, member=person, lead=lead)
             self.db.execute(
@@ -146,6 +149,9 @@ class Reminders:
             )
             raised += 1
         return raised
+
+    def _doer(self, task: Task) -> Member | None:
+        return self.store.get_member(task.assignee) if task.assignee is not None else None
 
     @staticmethod
     def _moves_by_itself(task: Task) -> bool:

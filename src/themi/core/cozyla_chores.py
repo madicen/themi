@@ -19,6 +19,9 @@ simply compared with what Themi has:
 - A tick on the wall for the current round's day closes the round in Themi,
   as whoever ticked it; a round done in Themi ticks the doer's day on the wall.
   Ticks already acted on are remembered, so none counts twice.
+- Someone who sees only so many chores at a time (C2d, `themi.core.chore_chart`):
+  their waiting chores are off the wall (or there only for the other person), and a
+  chore that's up shows as a one-off for today. Deleting it on the wall completes it.
 
 Wall reminders stay off (C2a creates chores without them): Themi does the
 reminding. A failed read waits and backs off, as the to-do sync does.
@@ -35,7 +38,8 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member, NotFound, PermissionDenied
 from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
-from themi.connectors.cozyla.schedule import from_wall, to_wall, wall_can_say
+from themi.connectors.cozyla.schedule import from_wall, to_wall
+from themi.core.chore_chart import ChartQueue, is_routine, on_chart
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.reminders import MEDICINE
 from themi.core.services import Services
@@ -58,16 +62,6 @@ Desired = tuple[str, list[str], str, WallSchedule]  # name, people, kind, schedu
 def day_words(day: date) -> str:
     """ "Sunday 1 Nov": the day a chore shows on the wall, which is what people ask about."""
     return f"{day:%A} {day.day} {day:%b}"
-
-
-def on_chart(task: Task) -> bool:
-    """A chore, or a one-off someone put on the chart."""
-    return task.repeats or task.on_chart
-
-
-def is_routine(task: Task) -> bool:
-    """A check-in on fixed days: it lives on the wall as a routine (C3), not a chore."""
-    return task.check_in and wall_can_say(task.repeat)
 
 
 def title_key(title: str) -> str:
@@ -121,15 +115,26 @@ class CozylaChores:
         self._read_after: datetime | None = None
         self._to_member: dict[str, int] = {}
         self._to_cozyla: dict[int, str] = {}
+        self.queue = ChartQueue(services, board)
 
     def install(self) -> None:
         self.services.tools.register(put_task_on_chore_chart)
         self.board.wall_notes.append(self.where)
+        self.queue.install()
 
     def where(self, task: Task) -> str | None:
         """The day a task shows on the chart, for the model; None if it isn't for the chart."""
         if task.status not in ("open", "snoozed") or not on_chart(task) or is_routine(task):
             return None
+        limited = [m for m in self.queue.limited() if self.queue.counts(task, m)]
+        up = next((m for m in limited if self.queue.is_up(task, m)), None)
+        if up is not None:
+            return f"Up now on {up.name}'s chore chart ({up.chart_limit} at a time)."
+        if limited and not self._wall_members(task):
+            charts = " and ".join(
+                f"{m.name}'s chore chart ({m.chart_limit} at a time)" for m in limited
+            )
+            return f"Waiting its turn for {charts}; not on the wall yet."
         day = day_words(self._round_day(task, self._today()))
         linked = self.db.one("SELECT 1 FROM cozyla_chores WHERE task_id = ?", (task.id,))
         return f"Shows on the wall's chore chart on {day}{'' if linked else ' (being added now)'}."
@@ -153,8 +158,9 @@ class CozylaChores:
         by_uid = {c.uid: c for c in chores}
         try:
             await self._bring_in(chores)
-            await self._ticks_from_wall()
+            await self._ticks_from_wall(by_uid)
             await self._ticks_to_wall(by_uid)
+            await self._bring_up()
             changed = await self._push(by_uid)
         except CozylaError as exc:
             log.warning("Cozyla chore sync stopped partway; next time it carries on: %s", exc)
@@ -205,7 +211,7 @@ class CozylaChores:
             linked.add(chore.uid)
             log.info("Brought in Cozyla chore %s as task %s", chore.uid, task.id)
 
-    async def _ticks_from_wall(self) -> None:
+    async def _ticks_from_wall(self, by_uid: dict[str, Chore]) -> None:
         """A tick on the wall for an open round's day closes the round, as whoever ticked."""
         today = self._today()
         rounds: dict[date, list[tuple[Task, str]]] = {}
@@ -214,7 +220,7 @@ class CozylaChores:
             "WHERE t.status IN ('open', 'snoozed')"
         ):
             task = self.board.get(link["task_id"])
-            day = self._round_day(task, today)
+            day = self._wall_day(by_uid.get(link["chore_uid"])) or self._round_day(task, today)
             if today - LOOK_BACK <= day <= today:
                 rounds.setdefault(day, []).append((task, link["chore_uid"]))
         for day, items in rounds.items():
@@ -244,7 +250,7 @@ class CozylaChores:
             for run in runs:
                 member = self._to_cozyla.get(run["done_by"]) if run["done_by"] else None
                 if chore is not None and not run["missed"] and run["due_on"] and member:
-                    day = date.fromisoformat(run["due_on"])
+                    day = self._wall_day(chore) or date.fromisoformat(run["due_on"])
                     who = member if member in chore.members else chore.members[0]
                     await self.client.check_chore(chore.uid, who, day, True)
                     self._first_time(f"{chore.uid}_{who}_{day}")
@@ -252,6 +258,19 @@ class CozylaChores:
                     "UPDATE cozyla_chores SET last_run = ? WHERE task_id = ?",
                     (run["id"], link["task_id"]),
                 )
+
+    async def _bring_up(self) -> None:
+        """Fill the charts of people who see a few at a time; a chore that comes up gets its
+        nudge then (it was held back while it waited)."""
+        for member, task in self.queue.refresh():
+            queued = self.db.one(
+                "SELECT 1 FROM outbox WHERE status = 'queued' AND member_id = ? "
+                "AND dedupe_key LIKE ?",
+                (member.id, f"task-{task.id}-%"),
+            )
+            if not queued:
+                await self.board.prompt(task, member=member)
+            self.queue.prompted(member, task)
 
     async def _push(self, by_uid: dict[str, Chore]) -> int:
         """Make each Themi chore's wall chore match it; Themi wins."""
@@ -264,8 +283,17 @@ class CozylaChores:
             task = self.board.get(row["id"])
             link = self.db.one("SELECT * FROM cozyla_chores WHERE task_id = ?", (task.id,))
             chore = by_uid.get(link["chore_uid"]) if link else None
-            if task.status == "cancelled" or not on_chart(task) or is_routine(task):
-                # A check-in on fixed days is a routine on the wall (C3), not a chore.
+            if link is not None and chore is None and task.status in ("open", "snoozed"):
+                doer = self.queue.done_on_wall(task)
+                if doer is not None:  # deleted on the wall while up: done (C2d)
+                    self.db.execute("DELETE FROM cozyla_chores WHERE task_id = ?", (task.id,))
+                    await self.board.complete(task.id, doer)
+                    self._caught_up(task.id)
+                    continue
+            off_wall = self._waiting(task) and not self._wall_members(task)
+            if task.status == "cancelled" or not on_chart(task) or is_routine(task) or off_wall:
+                # A check-in on fixed days is a routine on the wall (C3), not a chore; a chore
+                # waiting its turn for someone's chart is off the wall (C2d).
                 if chore is not None:
                     await self.client.delete_chore(chore.uid)
                     changed += 1
@@ -304,17 +332,42 @@ class CozylaChores:
             await self.client.check_chore(chore.uid, who, day, True)
 
     def _desired(self, task: Task) -> Desired | None:
-        if task.either or task.shared:
-            people = list(self._to_cozyla.values())
-        elif task.assignee is not None and task.assignee in self._to_cozyla:
-            people = [self._to_cozyla[task.assignee]]
-        else:
-            return None
+        people = self._wall_people(task)
         if not people:
             return None
         kind = "AnyOne" if len(people) > 1 else "Everyone"
-        day = self._round_day(task, self._today())
-        return task.title[:50], people, kind, to_wall(task.repeat, day)
+        today = self._today()
+        if any(self.queue.is_up(task, m) for m in self.queue.limited()):
+            # Up on a limited chart: a one-off for today, whatever its round's day (C2d).
+            at = task.repeat.at if task.repeat else None
+            once = WallSchedule(False, start=today, end=today, forever=False, due_time=at)
+            return task.title[:50], people, kind, once
+        return task.title[:50], people, kind, to_wall(task.repeat, self._round_day(task, today))
+
+    def _wall_members(self, task: Task) -> list[int]:
+        """Whose chart a chore is on: its person, or both for either of you, less anyone it's
+        waiting its turn for (C2d)."""
+        if task.either or task.shared:
+            members = self.services.store.list_members()
+        elif task.assignee is not None:
+            members = [self.services.store.get_member(task.assignee)]
+        else:
+            members = []
+        return [m.id for m in members if not self.queue.held(task, m)]
+
+    def _waiting(self, task: Task) -> bool:
+        return any(self.queue.held(task, m) for m in self.queue.limited())
+
+    def _wall_people(self, task: Task) -> list[str]:
+        """The same, as the wall's member ids, for those the wall knows."""
+        return [self._to_cozyla[i] for i in self._wall_members(task) if i in self._to_cozyla]
+
+    @staticmethod
+    def _wall_day(chore: Chore | None) -> date | None:
+        """A one-off wall chore's own day, which is where its tick lands."""
+        if chore is None or chore.schedule.repeats:
+            return None
+        return chore.schedule.start
 
     @staticmethod
     def _matches(chore: Chore, desired: Desired) -> bool:

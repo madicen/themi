@@ -262,6 +262,7 @@ class FeedbackChat:
             + (f" ({member.phrasing_notes})" if member.phrasing_notes else ""),
             "gentle phrasing": f"strength {member.pda_strength}" if member.pda_enabled else "off",
             "check-in reviews": "on" if member.checkin_reviews else "off",
+            "chores on the chart at a time": str(member.chart_limit or "no limit"),
             "tracking": ", ".join(
                 f"{k} {'on' if v else 'off'}" for k, v in member.tracking.items()
             ),

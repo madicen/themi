@@ -180,6 +180,8 @@ class TaskBoard:
         # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.wall_notes: list[Callable[[Task], str | None]] = []
+        # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
+        self.holds: list[Callable[[Task, Member], bool]] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -215,6 +217,10 @@ class TaskBoard:
         return datetime.fromisoformat(row["sent_at"]) + ONE_AT_A_TIME_FOR
 
     # ----- reading ------------------------------------------------------------
+
+    def held(self, task: Task, member: Member) -> bool:
+        """Waiting its turn for this person's chore chart, so not raised with them."""
+        return any(hold(task, member) for hold in self.holds)
 
     def get(self, task_id: int) -> Task:
         row = self.db.one("SELECT * FROM tasks WHERE id = ?", (task_id,))
@@ -376,6 +382,8 @@ class TaskBoard:
         if member is None:
             assert task.assignee is not None
             member = self.store.get_member(task.assignee)
+        if self.held(task, member):
+            return  # it gets its nudge when it comes up on the chart
         parts = [self._steps_for(task, member), *(source(task) for source in self.details)]
         details = "\n\n".join(d for d in parts if d)
         added_by = (
@@ -761,10 +769,10 @@ class TaskBoard:
         if next_due is None:
             await self._finish_course(task, interactive)
             return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
-        self.db.execute(  # the next round: back to its owner, nothing overdue
+        self.db.execute(  # the next round: back to its owner, nothing overdue or unanswered
             "UPDATE tasks SET status = 'open', due_on = ?, shared = either, snoozed_until = NULL, "
             "overdue_notified_at = NULL, escalated_at = NULL, overdue_reminders = 0, "
-            "overdue_reminded_on = NULL WHERE id = ?",
+            "overdue_reminded_on = NULL, prompt_outbox_id = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
         self._withdraw_prompt(task)
