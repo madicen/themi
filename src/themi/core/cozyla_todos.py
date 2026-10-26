@@ -1,32 +1,44 @@
-"""Themi's one-off tasks and a Cozyla to-do list, kept in step both ways (C1b, a trial).
+"""Themi's one-off tasks and the to-do lists on a Cozyla wall, kept in step both ways
+(C1b, a trial; C1c: every list, reassigning, and naming a list).
 
-Each sync (the `cozyla.sync` job, every minute) reads the configured list and
+Each sync (the `cozyla.sync` job, every minute) reads every list on the wall and
 compares it with what it saw last time (`cozyla_seen`), so it can tell what
 happened on the wall since:
 
-- a new to-do: a Themi task, assigned to the matching member (else by
-  matching), and nudged as usual; nobody is named as having added it;
-- ticked off: done; deleted: cancelled; a new title or due date: copied over.
-  Reopening and reassigning on the wall are only logged in this trial.
+- a new to-do on the configured list, or on any list if it's assigned to
+  someone: a Themi task for that person, nudged as usual; nobody is named as
+  having added it. Assigned to the family member (Cozyla's "Madicen Family"),
+  it's shared: on both lists, nudged to both. Unassigned items on other lists
+  ("Things to Cook") are lists, not jobs, and are left alone;
+- ticked off: done; ticked back: open again; deleted: cancelled; reassigned:
+  the task goes to that person (or to both); moved to another list: the task
+  stays on it; a new title or due date: copied over.
 
 Then Themi's own changes go out. Every task change marks the task's link
 pending, and the sync makes the to-do match: created, edited (title, due
-date, assignee), ticked off or reopened, or deleted when the task is
-cancelled. A task still pending wins over a change on the wall. Repeating
-chores stay off the list (they're closer to Cozyla's chore chart).
+date, assignee), ticked off or reopened, moved to the list it belongs on, or
+deleted when the task is cancelled. A task goes on the configured list unless
+someone put it on another (`put_task_on_wall_list`). A task still pending wins
+over a change on the wall. Repeating chores stay off the lists (they're closer
+to Cozyla's chore chart).
 
-The first sync of a list links open to-dos to open tasks with the same title,
-brings the other open ones in without nudging (it's a list the family already
-keeps), leaves ticked-off ones alone, and sends Themi's open one-off tasks.
+The first sync of a list links open to-dos to open tasks with the same title
+and brings the rest in. Assigned ones are nudged at low priority, so a list the
+family already keeps trickles out within daily limits; unassigned ones come in
+quietly. The configured list's first sync also sends Themi's open one-off
+tasks. Ticked-off to-dos are left alone.
 
 Like the OurGroceries mirror, configuring the list is the go-ahead for
-keeping it in step, so these writes don't ask each time. A failed read backs
-off from a minute to an hour; a failed write retries the same way.
+keeping tasks in step, so those writes don't ask each time. Items for a list
+that aren't anyone's task (`add_to_wall_list`) are staged like any other
+outside change. A failed read backs off from a minute to an hour; a failed
+write retries the same way.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
@@ -34,10 +46,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import Member
-from themi.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo
+from themi.accounts import InvalidValue, Member, NotFound
+from themi.autonomy import ExecutionContext
+from themi.channels.outbox import Priority
+from themi.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo, TodoList
+from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
+from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -45,6 +61,9 @@ log = logging.getLogger(__name__)
 MAX_BACKOFF = timedelta(hours=1)
 # Wall to-dos say nothing about the kind of job, so they come in as a light errand.
 WALL_KIND, WALL_EFFORT = "errand", 2
+ADD_CATEGORY = "wall_list_add"
+ADD_EXECUTOR = "cozyla.add"
+MAX_ITEM_LENGTH = 100
 
 
 def backoff(attempts: int) -> timedelta:
@@ -57,6 +76,7 @@ def _same(a: str, b: str) -> bool:
 
 @dataclass(frozen=True)
 class Seen:
+    list_id: str
     title: str
     assignee: str | None
     due_on: date | None
@@ -74,9 +94,15 @@ class CozylaTodos:
         self._read_after: datetime | None = None
         self._to_member: dict[str, int] = {}  # Cozyla member id -> Themi member id
         self._to_cozyla: dict[int, str] = {}
+        self._family: str | None = None  # the Cozyla member that stands for everyone
+        self._default: str | None = None  # the configured list's id
 
     def install(self) -> None:
         self.board.change_listeners.append(self.on_task_changed)
+        self.services.wall = self
+        self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
+        self.services.tools.register(put_task_on_wall_list)
+        self.services.tools.register(add_to_wall_list)
 
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
@@ -93,8 +119,13 @@ class CozylaTodos:
         if self._read_after is not None and clock.now() < self._read_after:
             return 0
         try:
-            list_id = await self._list_id()
-            todos = [t for t in await self.client.todos() if t.list_id == list_id]
+            lists = await self.client.lists()
+            default = self._find(lists, self.client.config.todo_list)
+            if default is None:
+                raise CozylaError(
+                    f"Cozyla has no to-do list called {self.client.config.todo_list!r}"
+                )
+            todos = await self.client.todos()
             members = await self.client.members()
         except CozylaError as exc:
             log.warning("Cozyla sync waits: %s", exc)
@@ -102,28 +133,26 @@ class CozylaTodos:
             self._read_after = clock.now() + backoff(self._read_failures)
             return 0
         self._read_failures, self._read_after = 0, None
+        self._default = default.id
         self._to_member = self._member_map(members)
         self._to_cozyla = {mid: uid for uid, mid in self._to_member.items()}
-        seen = self._seen(list_id)
+        self._family = self._family_member(members)
+        titles = {t.id: t.title for t in lists}
+        todos = [t for t in todos if t.list_id in titles]
+        synced = {r["list_id"] for r in self.db.query("SELECT list_id FROM cozyla_sync")}
         self._applying = True
         try:
-            if seen is None:
-                await self._import(todos)
-            else:
-                await self._pull(todos, seen)
+            await self._pull(todos, self._seen(), synced)
         finally:
             self._applying = False
         current = {t.id: t for t in todos}
-        done = await self._push(list_id, current)
-        self._remember(list_id, current.values())
+        done = await self._push(current)
+        self._remember(titles, current.values())
         return done
 
-    async def _list_id(self) -> str:
-        wanted = self.client.config.todo_list
-        for todo_list in await self.client.lists():
-            if _same(todo_list.title, wanted):
-                return todo_list.id
-        raise CozylaError(f"Cozyla has no to-do list called {wanted!r}")
+    @staticmethod
+    def _find(lists: Iterable[TodoList], name: str) -> TodoList | None:
+        return next((t for t in lists if _same(t.title, name)), None)
 
     def _member_map(self, members: list[CozylaMember]) -> dict[str, int]:
         """Cozyla member id -> Themi member id, by first name."""
@@ -135,52 +164,59 @@ class CozylaTodos:
                 found[member.id] = themi[first]
         return found
 
+    def _family_member(self, members: list[CozylaMember]) -> str | None:
+        """The member that isn't a person: "Madicen Family". Assigned to it means both."""
+        for member in members:
+            if member.id not in self._to_member and "family" in member.name.casefold():
+                return member.id
+        return None
+
+    def _assigned(self, assignee: str | None) -> bool:
+        return assignee is not None and (assignee in self._to_member or assignee == self._family)
+
+    def _wanted(self, list_id: str, assignee: str | None) -> bool:
+        """A to-do that's a Themi task: anything on the configured list, and anything
+        assigned to someone on the others."""
+        return list_id == self._default or self._assigned(assignee)
+
+    # ----- the tools' side ----------------------------------------------------------------
+
+    def lists(self) -> dict[str, str]:
+        """The wall's lists as of the last sync: id -> name."""
+        return {r["list_id"]: r["title"] for r in self.db.query("SELECT * FROM cozyla_sync")}
+
+    def find_list(self, name: str) -> tuple[str, str] | None:
+        return next(((i, t) for i, t in self.lists().items() if _same(t, name)), None)
+
+    def default_list(self) -> str | None:
+        found = self.find_list(self.client.config.todo_list)
+        return found[0] if found else None
+
+    def put_on(self, task_id: int, list_id: str) -> None:
+        self.db.execute(
+            "INSERT INTO cozyla_links (task_id, list_id) VALUES (?, ?) ON CONFLICT(task_id) "
+            "DO UPDATE SET list_id = excluded.list_id, state = 'pending', "
+            "version = version + 1, attempts = 0, retry_after = NULL",
+            (task_id, list_id),
+        )
+
+    async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        items = [str(i) for i in payload["items"]]
+        for item in items:
+            await self.client.create(str(payload["list_id"]), item, assignee=None, due=None)
+        return f"Added {and_list(items)} to {payload['list']}."
+
     # ----- what changed on the wall -------------------------------------------------------
 
-    async def _import(self, todos: list[Todo]) -> None:
-        """The first sync of this list."""
+    async def _pull(self, todos: list[Todo], seen: dict[str, Seen], synced: set[str]) -> None:
         for todo in todos:
-            if todo.completed or self._link_for(todo.id):
-                continue
-            match = self._open_unlinked(todo.title)
-            if match is not None:
-                self._linked(match.id, todo.id)
-            else:
-                await self._bring_in(todo, nudge=False)
-        # Themi's open one-off tasks that aren't on the wall go onto it.
-        for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
-            task = self.board.get(row["id"])
-            link = self._link(task.id)
-            if not task.repeats and (link is None or link["todo_id"] is None):
-                self._mark(task.id)
-
-    async def _pull(self, todos: list[Todo], seen: dict[str, Seen]) -> None:
-        current = {t.id for t in todos}
-        for todo in todos:
-            before = seen.get(todo.id)
             link = self._link_for(todo.id)
+            before = seen.get(todo.id)
             if link is None:
-                if before is None and not todo.completed:
-                    await self._bring_in(todo, nudge=True)
-                continue
-            if link["state"] == "pending":
-                continue  # Themi changed it since: its change wins
-            task = self.board.get(link["task_id"])
-            if task.status in ("done", "cancelled") or before is None:
-                continue
-            if todo.completed and not before.completed:
-                await self.board.complete(task.id, self._doer(task))
-                continue
-            if before.completed and not todo.completed:
-                log.info("Cozyla to-do %s was reopened on the wall; not followed yet", todo.id)
-            if todo.assignee != before.assignee:
-                log.info("Cozyla to-do %s was reassigned on the wall; not followed yet", todo.id)
-            if todo.title.strip() and todo.title != before.title:
-                await self.board.update(task.id, self._admin(), title=todo.title)
-            due_on = self._due_on(todo)
-            if due_on != before.due_on:
-                await self.board.reschedule(task.id, due_on)
-        for todo_id in seen.keys() - current:
+                await self._maybe_bring_in(todo, before, first=todo.list_id not in synced)
+            else:
+                await self._follow(todo, before, link)
+        for todo_id in seen.keys() - {t.id for t in todos}:
             link = self._link_for(todo_id)
             if link is None or link["state"] == "pending":
                 continue
@@ -188,8 +224,68 @@ class CozylaTodos:
             if task.status in ("open", "snoozed"):
                 await self.board.cancel(task.id, self._admin())
             self.db.execute("UPDATE cozyla_links SET todo_id = NULL WHERE task_id = ?", (task.id,))
+        if self._default not in synced:
+            # The configured list's first sync: Themi's open one-off tasks go onto it.
+            for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
+                task = self.board.get(row["id"])
+                link = self._link(task.id)
+                if not task.repeats and (link is None or link["todo_id"] is None):
+                    self._mark(task.id)
 
-    async def _bring_in(self, todo: Todo, *, nudge: bool) -> None:
+    async def _maybe_bring_in(self, todo: Todo, before: Seen | None, *, first: bool) -> None:
+        if todo.completed or not self._wanted(todo.list_id, todo.assignee):
+            return
+        if first:  # the first sync of this list
+            match = self._open_unlinked(todo.title)
+            if match is not None:
+                self._linked(match.id, todo.id, todo.list_id)
+                return
+            nudge = Priority.LOW if self._assigned(todo.assignee) else None
+            await self._bring_in(todo, nudge)
+        elif before is None or not self._wanted(before.list_id, before.assignee):
+            await self._bring_in(todo, Priority.NORMAL)  # new, or newly someone's
+
+    async def _follow(self, todo: Todo, before: Seen | None, link: dict[str, Any]) -> None:
+        if link["state"] == "pending":
+            return  # Themi changed it since: its change wins
+        task = self.board.get(link["task_id"])
+        if link["list_id"] != todo.list_id:  # moved on the wall: it stays where it went
+            self.db.execute(
+                "UPDATE cozyla_links SET list_id = ? WHERE task_id = ?", (todo.list_id, task.id)
+            )
+        if before is None or task.status == "cancelled":
+            return
+        if todo.completed and not before.completed:
+            if task.status in ("open", "snoozed"):
+                await self.board.complete(task.id, self._doer(task))
+            return
+        if before.completed and not todo.completed and task.status == "done":
+            task = await self.board.reopen(task.id)
+        if task.status not in ("open", "snoozed"):
+            return
+        if todo.assignee != before.assignee:
+            await self._reassigned(task, todo)
+        if todo.title.strip() and todo.title != before.title:
+            await self.board.update(task.id, self._admin(), title=todo.title)
+        due_on = self._due_on(todo)
+        if due_on != before.due_on:
+            await self.board.reschedule(task.id, due_on)
+
+    async def _reassigned(self, task: Task, todo: Todo) -> None:
+        if todo.assignee is not None and todo.assignee == self._family:
+            await self.board.reassign(task.id, None, shared=True)
+            return
+        member_id = self._to_member.get(todo.assignee or "")
+        if member_id is None:
+            log.info(
+                "Cozyla to-do %s was unassigned on the wall; task %s keeps its person",
+                todo.id,
+                task.id,
+            )
+            return
+        await self.board.reassign(task.id, self.services.store.get_member(member_id))
+
+    async def _bring_in(self, todo: Todo, nudge: Priority | None) -> None:
         title = todo.title.strip()
         if not title:
             return
@@ -204,11 +300,18 @@ class CozylaTodos:
             nudge=False,
             assignee=assignee,
         )
+        shared = todo.assignee is not None and todo.assignee == self._family
         # Added on the wall: nobody is known to have added it, so the nudge names no one.
-        self.db.execute("UPDATE tasks SET created_by = NULL WHERE id = ?", (task.id,))
-        self._linked(task.id, todo.id)
-        if nudge:
-            await self.board.prompt(self.board.get(task.id))
+        self.db.execute(
+            "UPDATE tasks SET created_by = NULL, shared = ? WHERE id = ?", (int(shared), task.id)
+        )
+        self._linked(task.id, todo.id, todo.list_id)
+        if nudge is None:
+            return
+        task = self.board.get(task.id)
+        people: list[Member | None] = [*self._everyone()] if shared else [None]
+        for person in people:
+            await self.board.prompt(task, member=person, priority=nudge)
 
     # ----- what changed in Themi ----------------------------------------------------------
 
@@ -219,13 +322,13 @@ class CozylaTodos:
             (to_utc_iso(clock.now()),),
         )
 
-    async def _push(self, list_id: str, current: dict[str, Todo]) -> int:
+    async def _push(self, current: dict[str, Todo]) -> int:
         done = 0
         for link in self._due():
             task = self.board.get(link["task_id"])
             todo = current.get(link["todo_id"] or "")
             try:
-                todo_id = await self._send(list_id, task, todo, current)
+                todo_id = await self._send(link, task, todo, current)
             except CozylaError as exc:
                 log.warning("Cozyla sync of task %s waits: %s", task.id, exc)
                 self._failed(link, str(exc))
@@ -245,7 +348,7 @@ class CozylaTodos:
         return done
 
     async def _send(
-        self, list_id: str, task: Task, todo: Todo | None, current: dict[str, Todo]
+        self, link: dict[str, Any], task: Task, todo: Todo | None, current: dict[str, Todo]
     ) -> str | None:
         """Make the wall match the task; returns its to-do's id, if it still has one."""
         if task.status == "cancelled" or task.repeats:
@@ -258,11 +361,17 @@ class CozylaTodos:
                 await self.client.set_done(todo.id, True)
                 current[todo.id] = replace(todo, completed=True)
             return todo.id if todo else None
-        assignee = self._to_cozyla.get(task.assignee) if task.assignee else None
+        target = link["list_id"] or (todo.list_id if todo else self._default)
+        assert target is not None
+        if todo is not None and todo.list_id != target:  # put on another list in Themi
+            await self.client.delete(todo.id)
+            del current[todo.id]
+            todo = None
+        assignee = self._assignee_for(task)
         due = self._due_at(task.due_on)
         if todo is None:
-            todo_id = await self.client.create(list_id, task.title, assignee=assignee, due=due)
-            current[todo_id] = Todo(todo_id, list_id, task.title, assignee, due, False)
+            todo_id = await self.client.create(target, task.title, assignee=assignee, due=due)
+            current[todo_id] = Todo(todo_id, target, task.title, assignee, due, False)
             return todo_id
         if (todo.title, todo.assignee, self._due_on(todo)) != (task.title, assignee, task.due_on):
             await self.client.update(todo, title=task.title, assignee=assignee, due=due)
@@ -271,6 +380,11 @@ class CozylaTodos:
             await self.client.set_done(todo.id, False)
             current[todo.id] = replace(todo, completed=False)
         return todo.id
+
+    def _assignee_for(self, task: Task) -> str | None:
+        if task.shared and self._family is not None:
+            return self._family
+        return self._to_cozyla.get(task.assignee) if task.assignee else None
 
     # ----- links and the snapshot ---------------------------------------------------------
 
@@ -287,11 +401,12 @@ class CozylaTodos:
             (task_id,),
         )
 
-    def _linked(self, task_id: int, todo_id: str) -> None:
+    def _linked(self, task_id: int, todo_id: str, list_id: str) -> None:
         self.db.execute(
-            "INSERT INTO cozyla_links (task_id, todo_id, state) VALUES (?, ?, 'done') "
-            "ON CONFLICT(task_id) DO UPDATE SET todo_id = excluded.todo_id, state = 'done'",
-            (task_id, todo_id),
+            "INSERT INTO cozyla_links (task_id, todo_id, state, list_id) VALUES (?, ?, 'done', ?) "
+            "ON CONFLICT(task_id) DO UPDATE SET todo_id = excluded.todo_id, state = 'done', "
+            "list_id = excluded.list_id",
+            (task_id, todo_id, list_id),
         )
 
     def _open_unlinked(self, title: str) -> Task | None:
@@ -312,28 +427,27 @@ class CozylaTodos:
             (attempts, to_utc_iso(clock.now() + backoff(attempts)), error[:300], link["task_id"]),
         )
 
-    def _seen(self, list_id: str) -> dict[str, Seen] | None:
-        if not self.db.one("SELECT 1 FROM cozyla_sync WHERE list_id = ?", (list_id,)):
-            return None
+    def _seen(self) -> dict[str, Seen]:
         return {
             r["todo_id"]: Seen(
+                r["list_id"],
                 r["title"],
                 r["assignee"],
                 date.fromisoformat(r["due_on"]) if r["due_on"] else None,
                 bool(r["completed"]),
             )
-            for r in self.db.query("SELECT * FROM cozyla_seen WHERE list_id = ?", (list_id,))
+            for r in self.db.query("SELECT * FROM cozyla_seen")
         }
 
-    def _remember(self, list_id: str, todos: Iterable[Todo]) -> None:
-        self.db.execute("DELETE FROM cozyla_seen WHERE list_id = ?", (list_id,))
+    def _remember(self, titles: dict[str, str], todos: Iterable[Todo]) -> None:
+        self.db.execute("DELETE FROM cozyla_seen")
         for todo in todos:
             due_on = self._due_on(todo)
             self.db.execute(
                 "INSERT INTO cozyla_seen (list_id, todo_id, title, assignee, due_on, completed) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
                 (
-                    list_id,
+                    todo.list_id,
                     todo.id,
                     todo.title,
                     todo.assignee,
@@ -341,11 +455,14 @@ class CozylaTodos:
                     int(todo.completed),
                 ),
             )
-        self.db.execute(
-            "INSERT INTO cozyla_sync (list_id, synced_at) VALUES (?, ?) "
-            "ON CONFLICT(list_id) DO UPDATE SET synced_at = excluded.synced_at",
-            (list_id, to_utc_iso(clock.now())),
-        )
+        now = to_utc_iso(clock.now())
+        for list_id, title in titles.items():
+            self.db.execute(
+                "INSERT INTO cozyla_sync (list_id, synced_at, title) VALUES (?, ?, ?) "
+                "ON CONFLICT(list_id) DO UPDATE SET synced_at = excluded.synced_at, "
+                "title = excluded.title",
+                (list_id, now, title),
+            )
 
     # ----- small things -------------------------------------------------------------------
 
@@ -366,7 +483,86 @@ class CozylaTodos:
     def _admin(self) -> Member:
         return next(m for m in self.services.store.list_members() if m.is_admin)
 
+    def _everyone(self) -> list[Member]:
+        return [m for m in self.services.store.list_members() if m.telegram_user_id is not None]
+
     def _doer(self, task: Task) -> Member:
         if task.assignee is not None:
             return self.services.store.get_member(task.assignee)
         return self._admin()
+
+
+# ----- tools (registered only when a wall list is configured) -----------------------------
+
+
+def _wall(ctx: ToolContext) -> CozylaTodos:
+    wall = ctx.services.wall
+    assert wall is not None
+    return wall
+
+
+def _named_list(wall: CozylaTodos, name: str) -> tuple[str, str]:
+    found = wall.find_list(name)
+    if found is None:
+        names = ", ".join(sorted(wall.lists().values())) or "none yet"
+        raise ToolFailed(f"There's no list called {name!r} on the wall. Its lists: {names}.")
+    return found
+
+
+@tool(
+    "put_task_on_wall_list",
+    "Put a task on a particular to-do list on the Cozyla wall when someone names one ('add "
+    "making lasagna for Erin to Things to Cook'). Use after create_task. Without it, tasks "
+    "go on the main to-do list.",
+    {
+        "task_id": {"type": "integer"},
+        "list": {"type": "string", "description": "The list's name, as they said it."},
+    },
+)
+async def put_task_on_wall_list(ctx: ToolContext, args: dict[str, Any]) -> str:
+    wall = _wall(ctx)
+    list_id, title = _named_list(wall, args["list"])
+    try:
+        task = wall.board.get(args["task_id"])
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    if not wall.board.can_edit(task, ctx.member):
+        raise ToolFailed("That task isn't theirs to change.")
+    if task.repeats:
+        raise ToolFailed("Repeating chores stay off the wall's to-do lists.")
+    wall.put_on(task.id, list_id)
+    return f"Task {task.id} ({task.title}) will be on {title} on the wall within a minute."
+
+
+@staged_tool(
+    "add_to_wall_list",
+    "Add items to a list on the Cozyla wall that aren't anyone's job ('add lasagna to Things "
+    "to Cook'). For something a person should do, use create_task and put_task_on_wall_list.",
+    {
+        "list": {"type": "string", "description": "The list's name, as they said it."},
+        "items": {"type": "array", "items": {"type": "string"}},
+    },
+)
+async def add_to_wall_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+    wall = _wall(ctx)
+    list_id, title = _named_list(wall, args["list"])
+    if list_id == wall.default_list():
+        raise ToolFailed(f"{title} holds tasks: use create_task for it.")
+    items: list[str] = []
+    for raw in args["items"]:
+        item = " ".join(str(raw).split())
+        if item and item.casefold() not in (i.casefold() for i in items):
+            items.append(item[:MAX_ITEM_LENGTH])
+    if not items:
+        raise InvalidValue("no items to add")
+    # Asked for, if every item is in what they just wrote; otherwise it waits for a yes.
+    said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).casefold()
+    asked = all(" ".join(re.sub(r"[^\w\s&'/-]", " ", i).split()).casefold() in said for i in items)
+    summary = and_list(items)
+    return Proposal(
+        ADD_CATEGORY,
+        f"{summary[:1].upper()}{summary[1:]} for {title}",
+        ADD_EXECUTOR,
+        {"list_id": list_id, "list": title, "items": items},
+        requested=bool(said) and asked,
+    )

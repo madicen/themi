@@ -107,7 +107,8 @@ class Run:
     missed: bool = False  # a round that passed without anyone doing it
 
 
-TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
+# "created", "rescheduled", "done", "cancelled", "reassigned" or "reopened"
+TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
 # Extra text to send with a task's nudge (a call script, say), or None.
@@ -312,8 +313,10 @@ class TaskBoard:
         not_before: datetime | None = None,
         member: Member | None = None,
         overdue: str | None = None,
+        priority: Priority = Priority.NORMAL,
     ) -> None:
-        """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording."""
+        """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording.
+        `priority` LOW lets a batch of nudges trickle out in good moments."""
         if task.assignee is None and member is None:
             return
         deadline = self._deadline(task)
@@ -330,7 +333,7 @@ class TaskBoard:
             else None
         )
         goes_out = self.outbox.send_time(
-            member, Priority.NORMAL, deadline=deadline, kind="task", not_before=not_before
+            member, priority, deadline=deadline, kind="task", not_before=not_before
         )
         family = self.store.get_family()
         local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
@@ -352,7 +355,7 @@ class TaskBoard:
         result = await self.outbox.send(
             member,
             text,
-            priority=Priority.NORMAL,
+            priority=priority,
             kind="task",
             buttons=[
                 Button("Done", "task", {"task": task.id, "action": "done"}),
@@ -449,6 +452,46 @@ class TaskBoard:
         self._withdraw_prompt(task)
         await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
+
+    async def reassign(self, task_id: int, member: Member | None, *, shared: bool = False) -> Task:
+        """Give a one-off task to someone else, or to both of you (`shared`: on everyone's
+        list, either can do it). The nudge goes to whoever has it now."""
+        task = self.get(task_id)
+        if task.status not in ("open", "snoozed"):
+            return task
+        assignee = member.id if member is not None else task.assignee
+        if (assignee, shared) == (task.assignee, task.shared):
+            return task
+        self.db.execute(
+            "UPDATE tasks SET assignee = ?, shared = ? WHERE id = ?",
+            (assignee, int(shared), task_id),
+        )
+        self._withdraw_prompt(task)
+        task = self.get(task_id)
+        people = (
+            [m for m in self.store.list_members() if m.telegram_user_id is not None]
+            if shared
+            else [self.store.get_member(assignee)]
+            if assignee is not None
+            else []
+        )
+        for person in people:
+            await self.prompt(task, member=person)
+        await self._changed(task, "reassigned", False)
+        return task
+
+    async def reopen(self, task_id: int) -> Task:
+        """A one-off task marked done that turns out not to be: open again, and nudged."""
+        task = self.get(task_id)
+        if task.status != "done" or task.repeats:
+            return task
+        self.db.execute(
+            "UPDATE tasks SET status = 'open', completed_at = NULL WHERE id = ?", (task_id,)
+        )
+        task = self.get(task_id)
+        await self.prompt(task)
+        await self._changed(task, "reopened", False)
+        return task
 
     # ----- repeating chores (F6b) ------------------------------------------------
 
