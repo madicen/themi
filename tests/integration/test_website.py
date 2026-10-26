@@ -119,7 +119,7 @@ async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -
         "07:45",
     )
     assert (erin.daily_limit, erin.pda_enabled, erin.pda_strength) == (3, True, 3)
-    assert erin.chart_limit == 1
+    assert erin.chart_limit == 1 and not erin.chart_counts_shared  # left unticked
     assert erin.tracks("text_notes") and not erin.tracks("message_timing")
     page = await site.get("/settings")
     assert "Saved." in page.text and 'value="22:15"' in page.text

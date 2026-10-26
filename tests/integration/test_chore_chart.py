@@ -132,6 +132,27 @@ async def test_either_of_you_counts_for_her_and_stays_for_him(
     assert (bins["choreType"], bins["repeats"]) == ("Everyone", True)
 
 
+async def test_she_can_choose_that_shared_chores_dont_count(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    limit(scenario, "Erin", 1)
+    await chore(scenario, "Clean the kitchen", "every Wednesday")
+    await chore(scenario, "Clean upstairs", "every Wednesday")
+    await chore(scenario, "Bring the bins in", "every Wednesday", either=True)
+    scenario.primary.queue_tool_call("set_chore_chart_limit", {"limit": -1, "shared_count": "no"})
+    scenario.primary.queue_text("Shared chores will always show.")
+    await scenario.say("Erin", "Chores either of us can do shouldn't count toward my one")
+    erin = scenario.member("Erin")
+    assert (erin.chart_limit, erin.chart_counts_shared) == (1, False)  # the limit kept
+    await sync(scenario)
+    assert on_wall(fake_cozyla) == {
+        "Clean the kitchen": ["m-erin"],  # her one
+        "Bring the bins in": ["m-erin", "m-husband"],  # always shows, for both
+    }
+    bins = fake_cozyla.chore_named("Bring the bins in")
+    assert (bins["choreType"], bins["repeats"]) == ("AnyOne", True)
+
+
 async def test_waiting_chores_send_no_nudges(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
     await chore(scenario, "Clean the kitchen", "every Wednesday at 6pm")
     await chore(scenario, "Clean upstairs", "every Wednesday at 6pm")
@@ -253,7 +274,7 @@ async def test_themi_knows_whether_a_chore_is_up_or_waiting(
 async def test_the_limit_is_a_setting(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
     await chore(scenario, "Clean the kitchen", "every Wednesday")
     await chore(scenario, "Clean upstairs", "every Wednesday")
-    scenario.primary.queue_tool_call("set_chore_chart_limit", {"limit": 1})
+    scenario.primary.queue_tool_call("set_chore_chart_limit", {"limit": 1, "shared_count": "keep"})
     scenario.primary.queue_text("Just one at a time from now on.")
     await scenario.say("Erin", "Only show me one chore at a time on the wall")
     assert scenario.member("Erin").chart_limit == 1

@@ -22,7 +22,8 @@
   <fieldset>
     <legend>The wall's chore chart</legend>
     <label>Show <input type="number" name="chart_limit" min="0" max="10" value="{{ member.chart_limit }}"> of my chores at a time</label>
-    <p class="muted">0 shows them all. The rest wait their turn; medicines and other important chores always show.</p>
+    <label class="check"><input type="checkbox" name="chart_counts_shared" {% if member.chart_counts_shared %}checked{% endif %}> Chores either of us can do count toward that number</label>
+    <p class="muted">0 shows them all. The rest wait their turn; medicines and other important chores always show. Unticked, chores for either of you always show too.</p>
   </fieldset>
 
   <fieldset>

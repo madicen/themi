@@ -5,8 +5,9 @@ the wall shows at once (`chart_limit`; Erin's is 1). The rest wait in Themi, off
 wall, without nudges, until one comes up:
 
 - High-importance chores (medicines, or anything set high) always show and don't count.
-  A chore for either of you counts for the person with the limit; it stays on the wall
-  for the other person.
+  A chore for either of you counts for the person with the limit, unless they chose
+  otherwise (`chart_counts_shared`); while it waits for them it stays on the wall for the
+  other person.
 - Which one comes up: chores due today or earlier (or due whenever), the most overdue
   first, then the more important, then the oldest. Nothing comes up before it's due
   (#14), except when asked for.
@@ -78,12 +79,16 @@ class ChartQueue:
     @staticmethod
     def counts(task: Task, member: Member) -> bool:
         """One of this person's chores that their limit applies to."""
+        if task.either or task.shared:
+            theirs = member.chart_counts_shared  # their choice whether shared ones count
+        else:
+            theirs = task.assignee == member.id
         return (
-            task.status in ("open", "snoozed")
+            theirs
+            and task.status in ("open", "snoozed")
             and on_chart(task)
             and not is_routine(task)
             and task.importance != "high"
-            and (task.assignee == member.id or task.either or task.shared)
         )
 
     def picks(self, member: Member) -> list[Pick]:
@@ -319,23 +324,37 @@ def _queue(ctx: ToolContext) -> ChartQueue:
 @tool(
     "set_chore_chart_limit",
     "How many of this person's chores the wall's chore chart shows at a time ('just one chore "
-    "at a time'); the rest wait their turn in Themi, without nudges. 0 shows them all. "
-    "High-importance chores (medicines) always show and don't count. This is a setting, "
-    "never a rule.",
-    {"limit": {"type": "integer"}},
+    "at a time'); the rest wait their turn in Themi, without nudges. limit: 0 shows them all, "
+    "-1 keeps it as it is. shared_count: whether chores either of you can do count toward it "
+    "('yes'), always show ('no'), or 'keep'. High-importance chores (medicines) always show "
+    "and don't count. This is a setting, never a rule.",
+    {
+        "limit": {"type": "integer"},
+        "shared_count": {"type": "string", "enum": ["yes", "no", "keep"]},
+    },
 )
 async def set_chore_chart_limit(ctx: ToolContext, args: dict[str, Any]) -> str:
+    shared = {"yes": True, "no": False}.get(args["shared_count"])
     try:
         member = ctx.services.store.update_settings(
-            ctx.member, ctx.member.id, chart_limit=args["limit"]
+            ctx.member,
+            ctx.member.id,
+            chart_limit=args["limit"] if args["limit"] >= 0 else None,
+            chart_counts_shared=shared,
         )
     except InvalidValue as exc:
         raise ToolFailed(str(exc)) from exc
     if member.chart_limit == 0:
-        return "All their chores show on the wall's chart again, within a few minutes."
+        return "All their chores show on the wall's chart, within a few minutes."
+    shared_words = (
+        "chores for either of you count toward it"
+        if member.chart_counts_shared
+        else "chores for either of you always show"
+    )
     return (
         f"Their chart shows {member.chart_limit} chore(s) at a time from the next sync (a few "
-        "minutes); important ones always show. Ticking or deleting one there brings up the next."
+        f"minutes); important ones always show, and {shared_words}. Ticking or deleting one "
+        "there brings up the next."
     )
 
 
