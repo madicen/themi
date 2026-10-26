@@ -61,6 +61,7 @@ STEP_UP_CATEGORY = "chore_step_up"
 STEP_UP_EXECUTOR = "tasks.step_up"
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
+LAST_ROUND_TEXT = " That was the last one."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
@@ -657,7 +658,8 @@ class TaskBoard:
                     round_day = following[0].date()
         return round_day - timedelta(days=1)
 
-    def _next_due_after_done(self, task: Task, today: date) -> date:
+    def _next_due_after_done(self, task: Task, today: date) -> date | None:
+        """The next round's day; None when a course with an end date is over."""
         if task.due_before_task is not None:
             return self._deadline_due(task) or today + timedelta(days=7)
         if task.repeat is not None:
@@ -665,7 +667,9 @@ class TaskBoard:
             last_day = max(today, task.due_on or today)
             after = self._day_start(last_day + timedelta(days=1)) - timedelta(microseconds=1)
             found = next_occurrences(task.repeat, after, self._tz())
-            return found[0].date() if found else today + timedelta(days=7)
+            if found:
+                return found[0].date()
+            return None if task.repeat.until else today + timedelta(days=7)
         assert task.times_per_week is not None
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
@@ -679,6 +683,9 @@ class TaskBoard:
             (task.id, by.id, now, task.due_on.isoformat() if task.due_on else None, int(on_time)),
         )
         next_due = self._next_due_after_done(task, today)
+        if next_due is None:
+            await self._finish_course(task, interactive)
+            return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
         self.db.execute(  # the next round: back to its owner, nothing overdue
             "UPDATE tasks SET status = 'open', due_on = ?, shared = 0, snoozed_until = NULL, "
             "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
@@ -692,6 +699,15 @@ class TaskBoard:
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=next_due.strftime("%a %d %b")
         )
+
+    async def _finish_course(self, task: Task, interactive: bool) -> None:
+        """A chore with an end date has had its last round."""
+        self.db.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+            (to_utc_iso(clock.now()), task.id),
+        )
+        self._withdraw_prompt(task)
+        await self._changed(self.get(task.id), "done", interactive)
 
     async def _settle_missed_round(self, task: Task) -> Task:
         """An anchored round whose day has passed: roll on to the next date (recording a missed
@@ -714,6 +730,8 @@ class TaskBoard:
         found = next_occurrences(task.repeat, clock.now(), self._tz())
         if found:
             self._move_round(task, found[0].date())
+        elif task.repeat.until is not None:
+            await self._finish_course(task, False)
         return self.get(task.id)
 
     def _record_missed(self, task: Task) -> None:
@@ -743,6 +761,8 @@ class TaskBoard:
         )
         for row in rows:
             task = await self._settle_missed_round(_task_from_row(row))
+            if task.status == "done":  # a course that's over
+                continue
             row = self.db.one("SELECT * FROM tasks WHERE id = ?", (task.id,)) or row
             since = self._last_done(task) or datetime.fromisoformat(row["created_at"])
             days = (now - since) / timedelta(days=1)
@@ -1050,7 +1070,8 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "words: 'every Tuesday at 6pm', 'every other Monday', 'every Tue and Fri', 'first Monday "
     "of the month', 'the 1st of every month', 'every 3 days', or 'twice a week' (counted from "
     "the last time it was done); empty to stop. Keep any time of day they gave ('Tuesday "
-    "evenings' is 'every Tuesday evening'). due_before_task: the id of another chore this "
+    "evenings' is 'every Tuesday evening'), and any end ('every 2 days until 30 Oct' for a "
+    "course of medicine). due_before_task: the id of another chore this "
     "one is due the day before ('cardboard before garbage day'), else 0; repeat can then be "
     "empty. at_least_every_days: overdue after that many days (0 for none). "
     "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "

@@ -90,3 +90,20 @@ def test_monthly_occurrences() -> None:
 
 def test_floating_repeats_have_no_fixed_dates() -> None:
     assert next_occurrences(parse("twice a week", WED), datetime(2026, 10, 21, tzinfo=TZ), TZ) == []
+
+
+def test_a_course_with_an_end_date() -> None:
+    """C2a: the wall's medication courses run until a day ("Mimi pill until 30 Oct")."""
+    rep = parse("every 2 days until 30 Oct", WED)
+    assert rep.until == date(2026, 10, 30)
+    assert read_back(rep) == "Every other day, until Fri 30 Oct"
+    assert parse("every Tuesday at 6pm until 2026-11-10", WED).until == date(2026, 11, 10)
+    assert Repeat.from_json(rep.to_json()) == rep
+    found = next_occurrences(rep, datetime(2026, 10, 21, 12, tzinfo=TZ), TZ, count=10)
+    assert [d.date().day for d in found] == [23, 25, 27, 29]  # none after the 30th
+
+
+@pytest.mark.parametrize("words", ["twice a week until 30 Oct", "every day until 1 Oct"])
+def test_end_dates_need_fixed_days_and_the_future(words: str) -> None:
+    with pytest.raises(RepeatError):
+        parse(words, WED)
