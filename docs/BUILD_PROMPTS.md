@@ -51,7 +51,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F3 | Busy times | Feedback | [x] |
 | F4 | Tasks someone takes on stay theirs | Feedback | [x] |
 | F5 | Asked-for actions, honest replies, check-in wording | Feedback | [x] |
-| F6 | Chores: steps and repeating schedules | Feedback | [ ] |
+| F6a | Chores: steps on tasks | Feedback | [x] |
+| F6b | Chores: repeating schedules and escalation | Feedback | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2400,7 +2401,32 @@ Notes (2026-10-25):
       (bird cage steps) set aside. Their text is kept for F6.
 
 ### F6 · Chores: steps and repeating schedules
-Status: [ ] (design written 2026-10-25; waiting for the user's OK)
+Status: split into F6a (steps) and F6b (schedules and escalation), approved 2026-10-25.
+- F6a · Steps on tasks: [x] (2026-10-25; data move waits for a restart). The Steps bullet below, `update_task`, the website task page, and
+  moving steps into tasks 6 and 4 (and unlocking rule 3).
+- F6b · Repeating schedules and escalation: [ ]. Everything else below, plus the bird cage
+  data.
+- The user's answers: escalation names who it goes to. "Top of both our lists" makes the chore
+  shared at that point: it shows first for both, both are nudged, and either can mark it done.
+  When it's done, the next round goes back to its owner. Escalation that names only the owner
+  keeps it theirs. The step-up offer comes after 6 on-time runs in a row.
+- F6a notes (2026-10-25), failing tests first:
+    - Migration 0028 adds `tasks.steps` (JSON list of strings). The person's wording is kept as
+      is: `clean_steps` trims, drops blank lines and leading bullets, and allows at most 30
+      steps of 200 characters each. Tags such as "(Optional/Bonus)" are just text, so rule
+      10's format survives unchanged.
+    - `create_task` requires `steps` (an empty list is fine). `update_task` renames a task or
+      replaces its steps: empty values keep what's there, and `clear_steps` empties them.
+      `TaskBoard.update` limits edits to the assignee, whoever added the task, or an admin,
+      and sends an "edited" change, so the calendar keeps up.
+    - Nudges list the steps ("- step" lines) through the task-details hook. Open items show
+      "Steps: a; b; c", so the model can answer "what does the kitchen task involve?".
+    - Website: a Tasks page (nav "Tasks") lists your tasks and ones you added for others,
+      each with an editable title and steps (one per line).
+    - Data still to move after the user restarts `themi run` (the migration runs then):
+      steps for task 6 (kitchen, from its title plus draft 9's rescue spray as optional),
+      task 4 (bathroom, rule 3's levels as tagged steps, then rule 3 unlocked) and task 7
+      (bird cage, from draft 12). The bird cage schedule waits for F6b.
 Depends on: 20, F4, F5
 Read first: "Shadow Calendar" → tasks and matching; "Module behaviour" → C (Maintenance), whose
 interval, step-by-step guide and history this reuses. From feedback bug #5: Erin's chores

@@ -20,6 +20,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
                     "effort": 2,
                     "due_date": "",
                     "assign_to": "anyone",
+                    "steps": [],
                 },
                 None,
             ),
@@ -90,7 +91,14 @@ def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
         ("log_energy_note", {"effect": -3, "note": "the call with the bank drained her"}, None),
         (
             "create_task",
-            {"title": title, "kind": kind, "effort": 2, "due_date": "", "assign_to": assign_to},
+            {
+                "title": title,
+                "kind": kind,
+                "effort": 2,
+                "due_date": "",
+                "assign_to": assign_to,
+                "steps": [],
+            },
             None,
         ),
     ]
@@ -174,6 +182,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
             "effort": 3,
             "due_date": "",
             "assign_to": "me",
+            "steps": [],
         },
     )
     scenario.primary.queue_text("Added to your list.")
@@ -196,6 +205,7 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
             "effort": 1,
             "due_date": "",
             "assign_to": "Husband",
+            "steps": [],
         },
     )
     scenario.primary.queue_text("Passed to him.")

@@ -12,15 +12,16 @@ Every change (created, rescheduled, done, cancelled) goes to
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import Member, NotFound
+from themi.accounts import Member, NotFound, PermissionDenied
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core.prompts import OpenItem
@@ -68,6 +69,7 @@ class Task:
     status: str
     due_on: date | None
     created_by: int | None = None
+    steps: tuple[str, ...] = ()  # in the person's words; tags like "(Optional/Bonus)" included
 
 
 TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
@@ -89,7 +91,24 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         status=row["status"],
         due_on=date.fromisoformat(row["due_on"]) if row["due_on"] else None,
         created_by=row["created_by"],
+        steps=tuple(json.loads(row["steps"])),
     )
+
+
+MAX_STEPS = 30
+MAX_STEP_LENGTH = 200
+
+
+def clean_steps(steps: Sequence[str]) -> list[str]:
+    """Steps as given, trimmed, blanks dropped. The wording is the person's: never rewritten."""
+    cleaned = [" ".join(str(s).split()) for s in steps]
+    cleaned = [s.lstrip("-• ").strip() for s in cleaned]
+    cleaned = [s for s in cleaned if s]
+    if len(cleaned) > MAX_STEPS:
+        raise ValueError(f"a task can have at most {MAX_STEPS} steps")
+    if any(len(s) > MAX_STEP_LENGTH for s in cleaned):
+        raise ValueError(f"each step can be at most {MAX_STEP_LENGTH} characters")
+    return cleaned
 
 
 class TaskBoard:
@@ -99,7 +118,7 @@ class TaskBoard:
         self.store = services.store
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
-        self.details: list[TaskDetails] = []
+        self.details: list[TaskDetails] = [_steps_text]
 
     @property
     def outbox(self) -> Outbox:
@@ -113,6 +132,7 @@ class TaskBoard:
         s.tools.register(cancel_task)
         s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
+        s.tools.register(update_task)
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
 
@@ -132,11 +152,21 @@ class TaskBoard:
         )
         return [_task_from_row(r) for r in rows]
 
+    def added_by(self, member: Member) -> list[Task]:
+        """Open tasks this member added, whoever is doing them."""
+        rows = self.db.query(
+            "SELECT * FROM tasks WHERE created_by = ? AND status IN ('open', 'snoozed') "
+            "ORDER BY due_on IS NULL, due_on, id",
+            (member.id,),
+        )
+        return [_task_from_row(r) for r in rows]
+
     def open_items(self, member: Member) -> list[OpenItem]:
         items = []
         for t in self.open_for(member):
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
-            items.append(OpenItem(f"Task {t.id} (theirs{due}): {t.title}"))
+            steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
+            items.append(OpenItem(f"Task {t.id} (theirs{due}): {t.title}.{steps}"))
         return items
 
     # ----- changing -----------------------------------------------------------
@@ -152,6 +182,7 @@ class TaskBoard:
         interactive: bool = False,
         nudge: bool = True,
         assignee: Member | None = None,
+        steps: Sequence[str] = (),
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -159,6 +190,7 @@ class TaskBoard:
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
+        cleaned_steps = clean_steps(steps)
         if assignee is None:
             assignment = self.matcher.assign(kind, effort, requester)
         elif assignee.id == requester.id:
@@ -169,7 +201,7 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -180,6 +212,7 @@ class TaskBoard:
                 assignment.reason,
                 due_on.isoformat() if due_on else None,
                 to_utc_iso(clock.now()),
+                json.dumps(cleaned_steps),
             ),
         )
         if nudge:
@@ -257,6 +290,35 @@ class TaskBoard:
         tz = ZoneInfo(family.timezone if family else "UTC")
         due = task.due_on
         return datetime(due.year, due.month, due.day, 9, 0, tzinfo=tz)
+
+    def can_edit(self, task: Task, member: Member) -> bool:
+        return member.is_admin or member.id in (task.assignee, task.created_by)
+
+    async def update(
+        self,
+        task_id: int,
+        by: Member,
+        *,
+        title: str | None = None,
+        steps: Sequence[str] | None = None,
+        interactive: bool = False,
+    ) -> Task:
+        """Rename a task or replace its steps. The assignee, whoever added it, or an admin."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        changes: dict[str, Any] = {}
+        if title is not None and title.strip().rstrip("."):
+            changes["title"] = title.strip().rstrip(".")
+        if steps is not None:
+            changes["steps"] = json.dumps(clean_steps(steps))
+        if changes:
+            assignments = ", ".join(f"{c} = :{c}" for c in changes)
+            self.db.execute(
+                f"UPDATE tasks SET {assignments} WHERE id = :id", {**changes, "id": task_id}
+            )
+            await self._changed(self.get(task_id), "edited", interactive)
+        return self.get(task_id)
 
     async def complete(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
         task = self.get(task_id)
@@ -339,6 +401,11 @@ class TaskBoard:
             await self.outbox.edit(event.member, event.button.message_id, reply)
 
 
+def _steps_text(task: Task) -> str | None:
+    """The task's steps for its nudge, one per line, as written."""
+    return "\n".join(f"- {step}" for step in task.steps) or None
+
+
 def _board(ctx: ToolContext) -> TaskBoard:
     board = ctx.services.taskboard
     assert board is not None
@@ -366,6 +433,12 @@ def _board(ctx: ToolContext) -> TaskBoard:
         "assign_to": {
             "type": "string",
             "description": "'me', a family member's name, or 'anyone'.",
+        },
+        "steps": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "The steps of the job, in their words and order (tags like "
+            "'(Optional/Bonus)' included), or an empty list.",
         },
     },
 )
@@ -395,6 +468,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             due,
             interactive=True,
             assignee=chosen,
+            steps=args["steps"],
         )
     except ValueError as exc:
         return f"Not created: {exc}"
@@ -407,6 +481,34 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         f"Task {task.id} created and assigned to {who}. Why: {task.assign_reason} "
         f"{assignee.name} gets a gentle nudge at a good moment.{tell}"
     )
+
+
+@tool(
+    "update_task",
+    "Rename a task or replace its steps (the full new list, in their words), e.g. when someone "
+    "adds, removes or reorders steps of a chore. Empty title or steps keep what's there; "
+    "clear_steps removes them all.",
+    {
+        "task_id": {"type": "integer"},
+        "title": {"type": "string", "description": "A new title, or an empty string."},
+        "steps": {"type": "array", "items": {"type": "string"}},
+        "clear_steps": {"type": "boolean"},
+    },
+)
+async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    steps = [] if args["clear_steps"] else (args["steps"] or None)
+    try:
+        task = await _board(ctx).update(
+            args["task_id"], ctx.member, title=args["title"], steps=steps, interactive=True
+        )
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except PermissionDenied as exc:
+        raise ToolFailed("That task isn't theirs to change.") from exc
+    except ValueError as exc:
+        raise ToolFailed(str(exc)) from exc
+    steps_now = "; ".join(task.steps) if task.steps else "none"
+    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}"
 
 
 @tool(
