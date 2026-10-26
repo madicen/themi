@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -61,17 +62,33 @@ async def test_needed_items_are_added_once(
     assert fake_ourgroceries.calls["items"] == 1
 
 
-async def test_bought_and_removed_items_come_off(
+async def test_bought_items_are_crossed_off_and_removed_ones_deleted(
     family: SeededFamily, mirror: GroceryMirror, fake_ourgroceries: FakeOurGroceries
 ) -> None:
+    """The family crosses things off when they buy them, so bought means crossed off."""
     eggs, rice = put(family, "eggs"), put(family, "rice")
     await mirror.sync()
     finish(family, eggs, "bought")
     finish(family, rice, "removed")
-    fake_ourgroceries.put("rice", crossed_off=True)  # a crossed-off copy is left alone
     assert await mirror.sync() == 2
-    assert fake_ourgroceries.values() == []
-    assert [i.value for i in fake_ourgroceries.list.values()] == ["rice"]
+    assert fake_ourgroceries.values() == []  # nothing left to buy
+    assert [(i.value, i.crossed_off) for i in fake_ourgroceries.list.values()] == [
+        ("eggs", True)  # still there, done
+    ]
+
+
+async def test_a_needed_item_crossed_off_in_the_app_is_uncrossed_not_doubled(
+    family: SeededFamily, mirror: GroceryMirror, fake_ourgroceries: FakeOurGroceries
+) -> None:
+    """Most of the family's items are crossed off (bought before). Needing one again
+    brings it back, rather than leaving it hidden or adding a second copy."""
+    fake_ourgroceries.put("Olive oil", crossed_off=True)
+    put(family, "olive oil")
+    assert await mirror.sync() == 1
+    assert [(i.value, i.crossed_off) for i in fake_ourgroceries.list.values()] == [
+        ("Olive oil", False)
+    ]
+    assert fake_ourgroceries.calls["add"] == 0
 
 
 async def test_failures_back_off_and_retry(
@@ -138,6 +155,7 @@ class StandInLibrary:
         self.fail_on = fail_on
         self.added: list[tuple[str, str, bool]] = []
         self.removed: list[tuple[str, str]] = []
+        self.toggled: list[tuple[str, str, bool]] = []
         self.logins = 0
 
     async def login(self) -> None:
@@ -151,7 +169,28 @@ class StandInLibrary:
     async def get_list_items(self, list_id: str) -> dict[str, Any]:
         if self.fail_on == "items":
             raise OSError("connection reset")
-        return {"list": {"id": list_id, "items": [{"id": "i1", "value": "eggs"}]}}
+        # As the real library returns them: its own crossedOff is always False; the real
+        # sign of a crossed-off item is a crossedOffAt timestamp (milliseconds).
+        return {
+            "list": {
+                "id": list_id,
+                "items": [
+                    {"id": "i1", "value": "eggs", "crossedOff": False},
+                    {
+                        "id": "i2",
+                        "value": "rice",
+                        "crossedOff": False,
+                        "crossedOffAt": 1761400000000,
+                    },
+                ],
+            }
+        }
+
+    async def toggle_item_crossed_off(
+        self, list_id: str, item_id: str, cross_off: bool = False
+    ) -> dict:
+        self.toggled.append((list_id, item_id, cross_off))
+        return {}
 
     async def add_item_to_list(self, list_id: str, value: str, auto_category: bool = False) -> dict:
         self.added.append((list_id, value, auto_category))
@@ -171,12 +210,16 @@ def real_client(library: StandInLibrary, list_name: str = "groceries") -> OurGro
 async def test_the_adapter_finds_the_list_by_name_and_maps_items() -> None:
     library = StandInLibrary()
     client = real_client(library)
-    (item,) = await client.items()
-    assert (item.id, item.value, item.crossed_off) == ("i1", "eggs", False)
+    eggs, rice = await client.items()
+    assert (eggs.id, eggs.value, eggs.crossed_off) == ("i1", "eggs", False)
+    assert (rice.id, rice.value, rice.crossed_off) == ("i2", "rice", True)  # crossedOffAt
     await client.add("olive oil")
     await client.remove("i1")
+    await client.set_crossed_off("i2", False)
+    await client.set_crossed_off("i1", True)
     assert library.added == [("L2", "olive oil", True)]
     assert library.removed == [("L2", "i1")]
+    assert library.toggled == [("L2", "i2", False), ("L2", "i1", True)]
     assert library.logins == 1
 
 
@@ -188,11 +231,14 @@ async def test_the_adapter_turns_problems_into_mirror_errors() -> None:
     with pytest.raises(MirrorError, match="reading the list failed"):
         await client.items()
     library.fail_on = ""
-    assert len(await client.items()) == 1
+    assert len(await client.items()) == 2
     assert library.logins == 2  # signed in again after the failure
 
 
-async def test_without_the_library_the_mirror_just_waits() -> None:
+async def test_without_the_library_the_mirror_just_waits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "ourgroceries", None)  # as if it weren't installed
     client = OurGroceriesClient(OurGroceriesConfig("us@x.example", Secret("pw"), "Groceries"))
     with pytest.raises(MirrorError, match="isn't installed"):
         await client.items()

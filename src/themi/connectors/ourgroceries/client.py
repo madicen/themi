@@ -33,6 +33,8 @@ class GroceryListClient(Protocol):
 
     async def remove(self, item_id: str) -> None: ...
 
+    async def set_crossed_off(self, item_id: str, crossed_off: bool) -> None: ...
+
 
 @dataclass(frozen=True)
 class OurGroceriesConfig:
@@ -84,7 +86,13 @@ class OurGroceriesClient:
         api, list_id = await self._ready()
         data = await self._call("reading the list", api.get_list_items(list_id))
         return [
-            RemoteItem(str(i["id"]), str(i.get("value", "")), bool(i.get("crossedOff")))
+            RemoteItem(
+                str(i["id"]),
+                str(i.get("value", "")),
+                # The library's own `crossedOff` is always False; a crossed-off item is the one
+                # with a `crossedOffAt` timestamp (checked against the live API, 2026-10-25).
+                bool(i.get("crossedOff")) or i.get("crossedOffAt") is not None,
+            )
             for i in data.get("list", {}).get("items", [])
         ]
 
@@ -95,3 +103,10 @@ class OurGroceriesClient:
     async def remove(self, item_id: str) -> None:
         api, list_id = await self._ready()
         await self._call("removing an item", api.remove_item_from_list(list_id, item_id))
+
+    async def set_crossed_off(self, item_id: str, crossed_off: bool) -> None:
+        api, list_id = await self._ready()
+        await self._call(
+            "crossing an item off" if crossed_off else "bringing an item back",
+            api.toggle_item_crossed_off(list_id, item_id, cross_off=crossed_off),
+        )

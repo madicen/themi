@@ -2,9 +2,13 @@
 
 Themi's `grocery_list` is the source of truth. Each row starts with
 `mirror_state = 'pending'`, and `GroceryMirror.sync()` (the `groceries.mirror`
-job) makes OurGroceries match it: a needed item is added unless the list
-already has it, and a bought or removed one is taken off. Matching is by name,
-ignoring case, so a crash between "added" and "recorded" never adds twice.
+job) makes OurGroceries match it. Matching is by name, ignoring case, so a crash
+between "added" and "recorded" never adds twice.
+
+- needed: added, unless it's there already; if it's there crossed off (bought
+  before), it's brought back rather than added a second time;
+- bought: crossed off, as the family does when they buy something;
+- removed: taken off the list.
 
 A failure is logged and the row retried later, backing off from 1 minute to an
 hour. It never blocks the local list: adding, buying and showing items only
@@ -59,19 +63,29 @@ class GroceryMirror:
             for row in rows:
                 self._failed(row, str(exc))
             return 0
-        on_list: dict[str, RemoteItem] = {}
+        on_list: dict[str, RemoteItem] = {}  # not crossed off
+        crossed: dict[str, RemoteItem] = {}
         for item in remote:
-            if not item.crossed_off:
-                on_list.setdefault(_key(item.value), item)
+            (crossed if item.crossed_off else on_list).setdefault(_key(item.value), item)
         done = 0
         for row in rows:
             key = _key(row["name"])
             try:
                 if row["status"] == "needed":
-                    if key not in on_list:
+                    if key in on_list:
+                        pass
+                    elif key in crossed:
+                        await self.client.set_crossed_off(crossed[key].id, False)
+                        on_list[key] = crossed.pop(key)
+                    else:
                         await self.client.add(row["name"])
                 elif key in on_list:
-                    await self.client.remove(on_list.pop(key).id)
+                    item = on_list.pop(key)
+                    if row["status"] == "bought":
+                        await self.client.set_crossed_off(item.id, True)
+                        crossed[key] = item
+                    else:
+                        await self.client.remove(item.id)
             except MirrorError as exc:
                 log.warning("OurGroceries mirror of %r waits: %s", row["name"], exc)
                 self._failed(row, str(exc))

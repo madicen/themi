@@ -42,6 +42,11 @@ class FakeOurGroceries:
         self._maybe_fail("remove")
         self.list.pop(item_id, None)
 
+    async def set_crossed_off(self, item_id: str, crossed_off: bool) -> None:
+        self._maybe_fail("cross")
+        item = self.list[item_id]
+        self.list[item_id] = RemoteItem(item.id, item.value, crossed_off)
+
     # ----- for tests ------------------------------------------------------------
 
     def fail(self, op: str, times: int = 1) -> None:
