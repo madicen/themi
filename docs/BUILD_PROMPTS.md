@@ -2317,9 +2317,17 @@ Notes (2026-10-25):
 - Real data: task 5 (the cardboard) moved from Erin to Michael with a plain SQL update; there's
   no reassign function yet. Erin's earlier nudge for it still has Done/Later buttons that
   act on the task.
-- Not done (the user didn't pick them): skipping the instant nudge for your own new task (Erin's
-  rule 2 asks for it, but rules can't change it), and catching duplicate tasks (Erin has
-  "Clean upstairs bathroom" twice).
+- Follow-up the same day, at the user's request (failing tests first): adding a task for
+  yourself in chat sent an instant "Done already, or later?". Erin's rule 2 was a workaround for
+  that. Now the first nudge for your own interactively created task waits at least
+  `FIRST_NUDGE_AFTER` (4 hours) through the new `Outbox.send(not_before=)`. After that the usual
+  rules apply (quiet hours, busy times, daily limit, receptive window within a day). A due date
+  still wins (by 09:00 that day). A task for someone else still goes out promptly.
+- Real data, by plain SQL: rule 2 unlocked; duplicate task 3 ("Clean upstairs bathroom")
+  cancelled, keeping task 4 ("... (once a week)"). Tasks 1 and 2 still overlap (both change
+  the upstairs sheets), so ask the user.
+- Not done: catching near-duplicate tasks when they're created. New rule 6 ("Start task prompts
+  with 'Due today:'") can't take effect either, since nudge text is a code template.
 
 ---
 

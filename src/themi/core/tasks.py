@@ -32,6 +32,8 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+# A task someone just added for themselves in chat isn't asked about straight away.
+FIRST_NUDGE_AFTER = timedelta(hours=4)
 TASK_KINDS = ["text", "call", "physical", "errand"]
 # Titles are often commands ("Call the vet"), so they never open a sentence here.
 PROMPT_TEXT = "On the list for you, whenever it suits: {title}. Done already, or later?"
@@ -178,7 +180,11 @@ class TaskBoard:
             ),
         )
         if nudge:
-            await self.prompt(self.get(task_id))
+            # They just said it themselves: an instant "done already, or later?" is noise.
+            own = interactive and assignment.assignee.id == requester.id
+            await self.prompt(
+                self.get(task_id), not_before=clock.now() + FIRST_NUDGE_AFTER if own else None
+            )
         task = self.get(task_id)
         await self._changed(task, "created", interactive)
         return task
@@ -190,9 +196,12 @@ class TaskBoard:
             except Exception:
                 log.exception("A task listener failed for task %s (%s)", task.id, change)
 
-    async def prompt(self, task: Task) -> None:
+    async def prompt(self, task: Task, *, not_before: datetime | None = None) -> None:
         if task.assignee is None:
             return
+        deadline = self._deadline(task)
+        if not_before is not None and deadline is not None:
+            not_before = min(not_before, deadline)  # a due date still wins
         member = self.store.get_member(task.assignee)
         details = "\n\n".join(d for source in self.details if (d := source(task)))
         added_by = (
@@ -218,7 +227,8 @@ class TaskBoard:
                 Button("Done", "task", {"task": task.id, "action": "done"}),
                 Button("Later", "task", {"task": task.id, "action": "later"}),
             ],
-            deadline=self._deadline(task),
+            deadline=deadline,
+            not_before=not_before,
         )
         if result.outbox_id is not None:
             self.db.execute(

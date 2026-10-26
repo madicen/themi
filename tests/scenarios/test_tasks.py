@@ -161,3 +161,44 @@ async def test_matching_still_hands_off_tasks_for_anyone(scenario: Scenario) -> 
     assert task is not None and task["assignee"] == scenario.member("Husband").id
     await scenario.advance(hours=10)
     assert any(t.startswith("Erin added this for you") for t in scenario.inbox("Husband"))
+
+
+async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -> None:
+    """Erin's rule 2 was a workaround for this: adding a task in chat got an instant
+    "Done already, or later?" about the thing she'd just said."""
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "clean the upstairs bathroom",
+            "kind": "physical",
+            "effort": 3,
+            "due_date": "",
+            "assign_to": "me",
+        },
+    )
+    scenario.primary.queue_text("Added to your list.")
+    assert await scenario.say("Erin", "add cleaning the upstairs bathroom") == [
+        "Added to your list."
+    ]
+    await scenario.advance(hours=3, minutes=59)  # 12:59, added at 09:00
+    assert not any("upstairs bathroom" in t for t in scenario.inbox("Erin"))
+    await scenario.advance(minutes=2)  # 13:01
+    nudges = [t for t in scenario.inbox("Erin") if "upstairs bathroom" in t]
+    assert len(nudges) == 1 and nudges[0].startswith("On the list for you")
+
+
+async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "pick up the dry cleaning",
+            "kind": "errand",
+            "effort": 1,
+            "due_date": "",
+            "assign_to": "Husband",
+        },
+    )
+    scenario.primary.queue_text("Passed to him.")
+    await scenario.say("Erin", "can Husband pick up the dry cleaning?")
+    await scenario.advance(minutes=30)
+    assert any("dry cleaning" in t for t in scenario.inbox("Husband"))

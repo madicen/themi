@@ -137,12 +137,18 @@ class Outbox:
         dedupe_key: str | None = None,
         deadline: datetime | None = None,
         link_preview: bool = True,
+        not_before: datetime | None = None,
     ) -> OutboxResult:
+        """`not_before` holds a proactive message until then at the earliest (replies and
+        urgent messages never wait); after that, the usual timing rules apply."""
         now = clock.now()
         priority = Priority(priority)
         if dedupe_key and self._is_duplicate(member.id, dedupe_key, now):
             return OutboxResult("duplicate", None)
-        when = self._earliest(member, priority, now, deadline, kind)
+        start = now
+        if not_before is not None and priority not in IMMEDIATE:
+            start = max(now, not_before)
+        when = self._earliest(member, priority, start, deadline, kind)
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

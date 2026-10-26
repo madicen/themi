@@ -320,3 +320,20 @@ async def test_busy_times_hold_messages_until_they_end(
     clock.freeze(at(21, 17))
     assert await outbox.flush() == 1
     assert sender.texts()[-1] == "The washer finished."
+
+
+async def test_not_before_holds_a_message_until_then(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    from datetime import timedelta
+
+    clock.freeze(at(21, 10))
+    later = at(21, 14)
+    held = await outbox.send(
+        family.erin, "On the list for you.", priority=Priority.NORMAL, not_before=later
+    )
+    assert (held.status, held.send_after) == ("queued", later)
+    reply = await outbox.send(family.erin, "Sure.", priority=Priority.REPLY, not_before=later)
+    assert reply.status == "sent"  # replies never wait
+    clock.advance(timedelta(hours=4))
+    assert await outbox.flush() == 1
