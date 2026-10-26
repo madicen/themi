@@ -280,3 +280,23 @@ async def test_yes_still_answers_the_card_after_a_remark_that_isnt_a_question(
     )
     assert await scenario.say("Erin", "yes") == ["Archived 3 promos."]
     assert gmail.archived == [{"count": 3}] and scenario.primary.requests == []
+
+
+async def test_a_reply_claiming_an_add_that_was_declined_is_replaced(
+    scenario: Scenario,
+) -> None:
+    """Evals (approve-ambiguous-yes): two grocery items waiting, a bare "yes", the model tried
+    to add them again (declined: already waiting) and replied "Added eggs and rice"."""
+    from themi.core.agent import DECLINED_TEXT, NOTHING_CHANGED_TEXT
+
+    services = scenario.app.services
+    erin = scenario.member("Erin")
+    for item in ("eggs", "rice"):
+        await services.autonomy.stage(
+            "grocery_list_add", erin, f"{item.title()} for the grocery list",
+            {"items": [item]}, "groceries.add",
+        )  # fmt: skip
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["eggs", "rice"]})
+    scenario.primary.queue_text("Added eggs and rice to the grocery list.")
+    assert await scenario.say("Erin", "yes") == [NOTHING_CHANGED_TEXT]
+    assert NOTHING_CHANGED_TEXT != DECLINED_TEXT  # the refusal message stays its own

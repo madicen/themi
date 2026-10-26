@@ -17,9 +17,9 @@
     {"id": "pantry-dinner", "category": "pantry", "message": "What can I make for dinner? Too tired to cook anything real", "expect": ["suggest_meals"], "allow": ["log_energy_note", "show_pantry"]},
 
     {"id": "rule-thinking-aloud", "category": "rules", "message": "What if we only did laundry on weekends? Just thinking out loud", "expect": [], "allow": ["propose_rule"]},
-    {"id": "rule-no-work-messages", "category": "rules", "message": "Let's make it a rule: no work stuff from you after 9pm", "expect": ["propose_rule"], "args": {"propose_rule": {"kind": {"equals": "policy"}}}},
+    {"id": "rule-no-work-messages", "category": "rules", "message": "Let's make it a rule: no work stuff from you after 9pm", "expect": [], "allow": ["propose_rule"], "args": {"propose_rule": {"kind": {"equals": "policy"}}}, "reply_must": "(?i)(quiet hours|busy times|rule)", "_note": "2026-10-25: rules can't change when messages go out, so pointing to quiet hours or busy times is right too; a policy rule about content also passes."},
     {"id": "rule-archive-promos", "category": "rules", "message": "From now on you can archive store promo emails without asking me", "expect": ["propose_rule"], "args": {"propose_rule": {"kind": {"equals": "autonomy_grant"}, "category": {"equals": "email_archive_noise"}}}},
-    {"id": "rule-bins", "category": "rules", "message": "Always remind me about the bins on Tuesday evenings", "expect": ["propose_rule"]},
+    {"id": "rule-bins", "category": "rules", "message": "Always remind me about the bins on Tuesday evenings", "expect": ["create_task", "set_task_schedule"], "allow": ["propose_rule"], "args": {"set_task_schedule": {"times_per_week": {"equals": 1}}}, "_note": "2026-10-25 (F6): a repeating reminder is a chore with a weekly schedule, not a rule."},
     {"id": "rule-husband-groceries", "category": "rules", "from": "Husband", "message": "New rule: the grocery order happens on Sundays", "expect": ["propose_rule"]},
 
     {"id": "repair-vet", "category": "context_repair", "message": "You keep forgetting the cat's vet is on Tuesdays", "expect": ["report_forgotten_context"], "allow": ["remember_fact"], "args": {"report_forgotten_context": {"_json": ["vet"]}}},

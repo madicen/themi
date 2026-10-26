@@ -1965,11 +1965,33 @@ Notes (2026-10-25):
       actions are never "done", log energy remarks, and ask on an ambiguous yes. Then
       re-run once.
     - Decide whether the PDA detector should allow "right now" when it isn't urging.
+      Decided 2026-10-25: it's allowed when the sentence describes how things are ("the list
+      is empty right now"); "call right now" is still flagged.
     - The default backend: the plan's default, Gemini free tier on `gemini-3.8-flash`, gave
       this key 20 requests a day, which can't carry a household. The flash-lite models did
       fine here, so the default model probably needs to change. That's the user's call.
       Decided 2026-10-25: the default is now `gemini-3.5-flash-lite` (see "Fixed technical
       choices").
+- Third run (2026-10-25, after F1–F6, slices only at the user's request: rules, tasks,
+  approvals and pantry; the family shares this key's quota): 17/22, the same as the second run
+  for these categories, but approvals went up and rules went down.
+    - Two rules cases predated the day's decisions, so they were updated with the user's OK.
+      `rule-no-work-messages` also accepts pointing to quiet hours or busy times.
+      `rule-bins` now expects a repeating task (`create_task` plus `set_task_schedule`, once a
+      week), with a rule allowed.
+    - "Right now" is allowed when it describes a state (`pda._describes_a_state`), which fixed
+      `pantry-show-list`.
+    - Honesty: declined tool calls (nothing to do) now count as "nothing happened"
+      (`ToolContext.outcomes` holds "ok", "declined" or "failed"). A claim of success after
+      only declined or failed calls becomes `NOTHING_CHANGED_TEXT` or `FAILED_TEXT`. A live
+      re-run caught a name clash: my first constant was called `DECLINED_TEXT`, the existing
+      refusal message, and replaced it. It's renamed, and a test keeps the two apart.
+    - Re-scored offline: 20/22, PDA 100%. Live re-runs of the changed cases: `rule-bins` and
+      `rule-no-work-messages` pass. `approve-ambiguous-yes` is honest now ("Nothing changed
+      there...") but still fails: the model re-adds instead of asking which item was meant.
+    - Still failing: `pantry-rice-low` (an extra grocery call that's declined, harmless) and
+      `approve-ambiguous-yes`. Schedules can't hold a weekday or time ("Tuesday evenings"), so
+      the bins reply overstates it a little.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
 Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
 Depends on: 10, 28

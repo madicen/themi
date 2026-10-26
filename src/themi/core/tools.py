@@ -39,7 +39,8 @@ class ToolContext:
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
     staged: list[str] = field(default_factory=list)  # actions left waiting on a yes this turn
-    outcomes: list[bool] = field(default_factory=list)  # each tool call this turn: did it work?
+    # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
+    outcomes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -133,15 +134,15 @@ class ToolRegistry:
         t = self._tools.get(call.name)
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
-        result = await self._run(t, call, ctx)
-        ctx.outcomes.append(not result.is_error)
+        result, outcome = await self._run(t, call, ctx)
+        ctx.outcomes.append(outcome)
         return result
 
-    async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> ToolResult:
+    async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:
-            return ToolResult(call.id, f"Invalid arguments: {exc.message}", is_error=True)
+            return ToolResult(call.id, f"Invalid arguments: {exc.message}", is_error=True), "failed"
         try:
             output = await t.handler(ctx, call.arguments)
             if t.proposes:
@@ -149,18 +150,15 @@ class ToolRegistry:
             elif not isinstance(output, str):
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
         except ToolDeclined as exc:
-            return ToolResult(call.id, str(exc))
+            return ToolResult(call.id, str(exc)), "declined"
         except ToolFailed as exc:
-            return ToolResult(call.id, f"{exc} Nothing was changed.", is_error=True)
+            return ToolResult(call.id, f"{exc} Nothing was changed.", is_error=True), "failed"
         except Exception as exc:
             log.exception("Tool %s failed for member %s", call.name, ctx.member.id)
-            return ToolResult(
-                call.id,
-                f"The tool failed ({type(exc).__name__}). Nothing was changed.",
-                is_error=True,
-            )
+            failure = f"The tool failed ({type(exc).__name__}). Nothing was changed."
+            return ToolResult(call.id, failure, is_error=True), "failed"
         log.info("Tool %s ran for member %s", call.name, ctx.member.id)
-        return ToolResult(call.id, output)
+        return ToolResult(call.id, output), "ok"
 
     @staticmethod
     async def _stage(proposal: Any, ctx: ToolContext) -> str:

@@ -58,6 +58,7 @@ YES_WORDS = frozenset(
 # A reply that says something was done while it's only waiting on a yes is replaced.
 WAITING_TEXT = "{summary}: that's waiting for a yes on the card above."
 FAILED_TEXT = "That didn't go through, so nothing has changed yet."
+NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already waiting for a yes."
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
     r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded)\b"
@@ -68,14 +69,14 @@ CLAIMS_DONE = re.compile(
 )
 
 
-def _honest(reply: str, waiting: list[str], outcomes: list[bool]) -> str:
+def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     """The model sometimes says "Added X" when X is only waiting on a yes (prompt 28's evals,
     feedback bug #3), or claims success when every tool call failed (bug #5). Such replies
     are replaced: the approval card speaks for itself, and a failure is said plainly."""
     if not CLAIMS_DONE.search(reply):
         return reply
-    if outcomes and not any(outcomes):
-        return FAILED_TEXT
+    if outcomes and "ok" not in outcomes:
+        return NOTHING_CHANGED_TEXT if "declined" in outcomes else FAILED_TEXT
     if waiting:
         return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
     return reply

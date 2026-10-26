@@ -195,3 +195,14 @@ def test_a_leading_label_isnt_an_opening_command() -> None:
     assert find_demands("Check-in: A glass of water might feel good about now.") == []
     assert find_demands("Due today: Call the plumber. Done already, or later?") == []
     assert [f.rule for f in find_demands("Check in with the vet.")] == ["imperative"]
+
+
+def test_right_now_describing_how_things_are_isnt_a_demand() -> None:
+    """Prompt 28's open question, decided 2026-10-25: "right now" is only flagged as urging."""
+    assert (
+        find_demands("The grocery list is empty right now. Would you like to add anything?") == []
+    )
+    assert find_demands("We're out of eggs right now.") == []
+    assert "right-now" in {f.rule for f in find_demands("Call the plumber right now.")}
+    assert "right-now" in {f.rule for f in find_demands("You could start right now.")}
+    assert "right-now" in {f.rule for f in find_demands("Do it immediately, the list is long.")}

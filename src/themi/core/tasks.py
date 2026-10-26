@@ -776,7 +776,8 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "at_least_every_days: overdue after that many days (0 for none). escalate_after_days: "
     "past that, escalate (0 for none); escalate_to 'both' when they want it on both partners' "
     "lists (it becomes shared until done), else 'owner'. Use it after create_task for "
-    "chores like 'twice a week, at least weekly, over two weeks it's on both our lists'.",
+    "chores like 'twice a week, at least weekly, over two weeks it's on both our lists', and "
+    "for repeating reminders like 'always remind me about the bins on Tuesdays' (once a week).",
     {
         "task_id": {"type": "integer"},
         "times_per_week": {"type": "number"},
