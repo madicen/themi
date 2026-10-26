@@ -65,7 +65,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
-| C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [ ] |
+| C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -3018,7 +3018,7 @@ Notes (2026-10-25):
   which C1b needs.
 
 ### C1b · Cozyla: two-way to-do list sync (trial)
-Status: [ ]
+Status: [x] 2026-10-25
 Depends on: C1a
 Build (the same shape as G1):
 - What syncs: Themi's one-off tasks and the configured Cozyla to-do list. Repeating chores
@@ -3040,6 +3040,25 @@ Build (the same shape as G1):
 
 Tests: with the fake: first sync, each direction, conflicts, outage, and a scenario (a to-do
 ticked off on the wall stops Themi's nudges).
+
+Notes (2026-10-25):
+- `themi.core.cozyla_todos.CozylaTodos`, installed only when `COZYLA_TODO_LIST` is set.
+  Migration 0034: `cozyla_links` (task to to-do, pending or done, with a `version` so a change
+  made mid-send isn't lost), `cozyla_seen` and `cozyla_sync`, per list.
+- Due dates: Themi's date goes to the wall as the start of that day, family time; the wall's
+  moment comes back as its local date. Not checked against the real wall yet: if
+  `themi cozyla check` shows the wall uses another time of day (noon, say), change `_due_at`.
+- To-dos from the wall come in as a light errand (kind "errand", effort 2), since the wall
+  doesn't say what kind of job it is. `created_by` is cleared, so the nudge doesn't name
+  someone as having added it.
+- Changes made from the wall run with the listener muted, so they aren't sent straight back.
+- A task that becomes a repeating chore after being sent is taken off the wall.
+- Reopening or reassigning on the wall is only logged in this trial. Ticking off a to-do
+  whose task is Themi's to nudge marks it done with the assignee as the doer.
+- Follow-ups if the trial works: follow reopen and reassign; map repeating chores to Cozyla's
+  chore chart; let the model guess the kind of a wall to-do.
+- Setup: as in the README's "Cozyla to-do list" section. Nothing syncs until
+  `COZYLA_TODO_LIST` is set; restart `themi run` after setting it.
 
 ---
 
