@@ -64,6 +64,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L1 | Lists on demand | Lists | [ ] |
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
+| C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [ ] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2974,6 +2976,70 @@ Build:
 - Cycles become energy signals for the Shadow Calendar: fewer runs than usual for the
   household is a gentle "running behind" sign. The plan's rule holds: people see words, never
   scores.
+
+### C1a · Cozyla: unofficial client and a read-only check
+Status: [x] 2026-10-25
+Depends on: 26
+Read first: "Integrations" → Cozyla (no official API); prompt 26 (the calendar route).
+The family has a Calendar+ 2 and already uses its to-do lists, and asked (2026-10-25) to try
+a two-way to-do sync. Cozyla publishes no API. The community project
+[cozyla-sdk](https://github.com/Fgruntjes/cozyla-sdk) (MIT) mapped the cloud API the tablet
+apps use, by decompiling them: `https://api.cozylacal.com/cal-server/...`, JSON POSTs, a
+token from `users/cozUsers/signIn` (email plus the password RSA-encrypted with the app's
+public key), no refresh (codes 101/102 mean sign in again; 1002 is a sign-in lockout).
+Themi writes its own small client from that description rather than depending on the repo
+(not on PyPI, 11 commits). It may break, and may conflict with Cozyla's terms: the family's
+own account only, and an admin opts in by configuring it.
+
+Build:
+- Settings: `COZYLA_EMAIL`, `COZYLA_PASSWORD` (a secret: encrypted at rest, redacted),
+  `COZYLA_TODO_LIST` (the list to sync; empty means no sync), `COZYLA_DEVICE_SN` (default
+  `themi`; it must stay the same).
+- `themi.connectors.cozyla`: sign-in, re-sign-in once on an expired token, never in a loop
+  (a lockout waits); members, to-do lists, to-dos; create, update (every field re-sent:
+  the API keeps only what's sent), complete or reopen, delete. Errors become `CozylaError`.
+- `themi cozyla check`: signs in and prints the lists (with open/done counts), the members,
+  and a sample of how due dates come back. Read-only, and no to-do titles unless asked.
+- A fake Cozyla cloud (`tests/fakes/cozyla.py`) behind an httpx transport.
+
+Tests: sign-in body (password encrypted, never sent plain), token reuse and one re-sign-in,
+lockout surfaced, envelope errors, create/update/complete/delete bodies, the check output.
+
+Notes (2026-10-25):
+- Built from cozyla-sdk's notes and code (read at commit 2052b64, 2026-10-23). The app's
+  public key for the password is copied from there; it's public, not a secret.
+- A lockout (1002) uses the countdown Cozyla sends, else 15 minutes, and the client doesn't
+  try to sign in again until it's over.
+- The fake makes its own RSA key pair; the client takes `password_key`, so the fake checks
+  the decrypted password. Its `update` clears fields that aren't sent, as the real API does.
+- Not yet tried against the real service. Setup: put `COZYLA_EMAIL` and `COZYLA_PASSWORD`
+  (the family's Cozyla ID) in `.env`, run `themi cozyla check`, then set `COZYLA_TODO_LIST`
+  to the list to sync. The check also shows what time of day the wall stores due dates at,
+  which C1b needs.
+
+### C1b · Cozyla: two-way to-do list sync (trial)
+Status: [ ]
+Depends on: C1a
+Build (the same shape as G1):
+- What syncs: Themi's one-off tasks and the configured Cozyla to-do list. Repeating chores
+  stay out (they're closer to Cozyla's chore chart; a later step).
+- Themi to Cozyla: the task change listener marks a link pending; the `cozyla.sync` job
+  (every minute) creates, updates (title, due date, assignee), completes or deletes the to-do.
+- Cozyla to Themi, by comparing with the last snapshot: a new to-do becomes a Themi task
+  (assigned to the matching member, else by matching) and is nudged as usual; ticked off
+  becomes done; deleted becomes cancelled; a new title or due date is copied over.
+- Members are matched by first name, ignoring case.
+- Themi wins while its change is pending. Reopening in Cozyla and reassigning there are
+  only logged in this trial.
+- First sync: open to-dos with the same title as an open Themi task are linked; other open
+  to-dos come in quietly (no nudge burst for a list the family already keeps); ticked-off
+  ones are left alone; Themi's open one-off tasks go onto the list.
+- Like the OurGroceries mirror, configuring the list is the go-ahead for keeping it in step;
+  no per-item approval.
+- A failed read backs off (1 minute doubling to an hour); per-task failures retry the same way.
+
+Tests: with the fake: first sync, each direction, conflicts, outage, and a scenario (a to-do
+ticked off on the wall stops Themi's nudges).
 
 ---
 
