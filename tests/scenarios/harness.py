@@ -24,6 +24,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.cozyla import EMAIL as COZYLA_EMAIL
+from tests.fakes.cozyla import PASSWORD as COZYLA_PASSWORD
+from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
@@ -39,6 +42,7 @@ from themi.ai.router import ProviderFactory
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
+from themi.connectors.cozyla import CozylaClient, CozylaConfig
 from themi.connectors.google import GoogleConfig
 from themi.storage.secrets import Secret
 
@@ -77,6 +81,7 @@ class Scenario:
         gmail: FakeGmail | None = None,
         ourgroceries: FakeOurGroceries | None = None,
         gcal: FakeGcal | None = None,
+        cozyla: FakeCozyla | None = None,
         *,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
@@ -87,6 +92,7 @@ class Scenario:
         self.telegram = telegram
         self.google = google
         self.models = ModelBank()
+        self.cozyla_list = _cozyla_list(cozyla) if cozyla else 0  # the synced list's id
         self.app: App = build_app(
             family.db,
             family.store.cipher,
@@ -103,6 +109,7 @@ class Scenario:
             sleep=asyncio.sleep if real_models else _no_sleep,
             google=_google_config(google, gmail, gcal),
             grocery_list=ourgroceries,
+            cozyla=_cozyla_client(cozyla, family) if cozyla else None,
         )
         if not real_models:
             for member in (family.erin, family.husband):
@@ -269,7 +276,8 @@ async def scenario(
 
     Google sign-in and linking are configured when the test also uses `fake_google`, and
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
-    `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`.
+    `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
+    sync (a "Family" list) when it uses `fake_cozyla`.
     """
 
     def optional(name: str) -> Any:
@@ -282,7 +290,29 @@ async def scenario(
         optional("fake_gmail"),
         optional("fake_ourgroceries"),
         optional("fake_gcal"),
+        optional("fake_cozyla"),
     )
     await s.start()
     yield s
     await s.stop()
+
+
+def _cozyla_list(fake: FakeCozyla) -> int:
+    """The fake's "Family" list, made if the test hasn't."""
+    for list_id, todo_list in fake.lists.items():
+        if todo_list["todoListTitle"] == "Family":
+            return list_id
+    return fake.add_list("Family")
+
+
+def _cozyla_client(fake: FakeCozyla, family: SeededFamily) -> CozylaClient:
+    config = CozylaConfig(COZYLA_EMAIL, Secret(COZYLA_PASSWORD), todo_list="Family", chores=True)
+    for name in ("Erin", "Husband"):
+        if not any(m["memberName"] == name for m in fake.members):
+            fake.add_member(name)
+    return CozylaClient(
+        config,
+        timezone=family.family.timezone,
+        password_key=fake.public_key,
+        transport=fake.transport,
+    )

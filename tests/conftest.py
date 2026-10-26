@@ -17,6 +17,7 @@ pytest_plugins = [
     "tests.fakes.google_oauth",
     "tests.fakes.gmail_api",
     "tests.fakes.gcal_api",
+    "tests.fakes.cozyla",
     "tests.fakes.ourgroceries",
     "tests.fakes.s3_api",
     "tests.scenarios.harness",

@@ -30,7 +30,7 @@ from themi.web.auth import WebAuth
 TRACKING_WORDS = {
     "text_notes": "Notes about how you're doing, when you mention it",
     "message_timing": "When you tend to reply, and how quickly",
-    "device_activity": "Activity from household devices (laundry, feeders)",
+    "device_activity": "Activity from household devices (laundry, feeders, the wall's routines)",
     "calendar": "When your Google calendar says you're busy (never what the events are)",
 }
 TRACKING_SHORT = {

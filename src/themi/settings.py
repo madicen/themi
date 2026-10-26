@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from themi.backup.s3 import S3Config
 from themi.backup.snapshots import BackupConfig
+from themi.connectors.cozyla.client import CozylaConfig
 from themi.connectors.google.oauth import GoogleConfig
 from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
@@ -57,6 +58,11 @@ class Settings(BaseModel):
     ourgroceries_username: str = ""
     ourgroceries_password: Secret | None = None
     ourgroceries_list: str = "Groceries"
+    cozyla_email: str = ""
+    cozyla_password: Secret | None = None
+    cozyla_todo_list: str = ""
+    cozyla_device_sn: str = "themi"
+    cozyla_chores: bool = False
     backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
@@ -76,6 +82,18 @@ class Settings(BaseModel):
             return None
         return OurGroceriesConfig(
             self.ourgroceries_username, self.ourgroceries_password, self.ourgroceries_list
+        )
+
+    def cozyla(self) -> CozylaConfig | None:
+        """The Cozyla connection (unofficial API), if a login is set."""
+        if not self.cozyla_email or self.cozyla_password is None:
+            return None
+        return CozylaConfig(
+            self.cozyla_email,
+            self.cozyla_password,
+            self.cozyla_todo_list,
+            self.cozyla_device_sn,
+            chores=self.cozyla_chores,
         )
 
     @classmethod
@@ -127,6 +145,8 @@ class Settings(BaseModel):
             problems.append(
                 "OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD go together; set both or neither"
             )
+        if bool(get("COZYLA_EMAIL")) != bool(get("COZYLA_PASSWORD")):
+            problems.append("COZYLA_EMAIL and COZYLA_PASSWORD go together; set both or neither")
 
         backup_names = (
             "THEMI_BACKUP_ENDPOINT",
@@ -156,6 +176,7 @@ class Settings(BaseModel):
         token = get("TELEGRAM_BOT_TOKEN")
         google_secret = get("GOOGLE_CLIENT_SECRET")
         grocery_password = get("OURGROCERIES_PASSWORD")
+        cozyla_password = get("COZYLA_PASSWORD")
         endpoints = {
             field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
         }
@@ -175,6 +196,11 @@ class Settings(BaseModel):
             ourgroceries_username=get("OURGROCERIES_USERNAME"),
             ourgroceries_password=Secret(grocery_password) if grocery_password else None,
             ourgroceries_list=get("OURGROCERIES_LIST") or "Groceries",
+            cozyla_email=get("COZYLA_EMAIL"),
+            cozyla_password=Secret(cozyla_password) if cozyla_password else None,
+            cozyla_todo_list=get("COZYLA_TODO_LIST"),
+            cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
+            cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),

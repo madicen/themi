@@ -61,6 +61,7 @@ STEP_UP_CATEGORY = "chore_step_up"
 STEP_UP_EXECUTOR = "tasks.step_up"
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
+LAST_ROUND_TEXT = " That was the last one."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
@@ -92,6 +93,8 @@ class Task:
     missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
     due_before_task: int | None = None  # due the day before that chore's round
     check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
+    either: bool = False  # a chore either of you can do, every round (on both lists)
+    importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
 
     @property
     def repeats(self) -> bool:
@@ -107,7 +110,8 @@ class Run:
     missed: bool = False  # a round that passed without anyone doing it
 
 
-TaskChange = str  # "created", "rescheduled", "done" or "cancelled"
+# "created", "rescheduled", "done", "cancelled", "reassigned" or "reopened"
+TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
 # Extra text to send with a task's nudge (a call script, say), or None.
@@ -136,6 +140,8 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         missed=row["missed"],
         due_before_task=row["due_before_task"],
         check_in=bool(row["check_in"]),
+        either=bool(row["either"]),
+        importance=row["importance"],
     )
 
 
@@ -312,8 +318,12 @@ class TaskBoard:
         not_before: datetime | None = None,
         member: Member | None = None,
         overdue: str | None = None,
+        priority: Priority = Priority.NORMAL,
+        lead: str | None = None,
     ) -> None:
-        """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording."""
+        """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording.
+        `priority` LOW lets a batch of nudges trickle out in good moments. `lead` replaces
+        the opening line (an overdue reminder's, C2c)."""
         if task.assignee is None and member is None:
             return
         deadline = self._deadline(task)
@@ -330,14 +340,14 @@ class TaskBoard:
             else None
         )
         goes_out = self.outbox.send_time(
-            member, Priority.NORMAL, deadline=deadline, kind="task", not_before=not_before
+            member, priority, deadline=deadline, kind="task", not_before=not_before
         )
         family = self.store.get_family()
         local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
-        if overdue is not None:
+        if lead is None and overdue is not None:
             template = SHARED_OVERDUE_TEXT if overdue == "shared" else OVERDUE_TEXT
             lead = template.format(title=task.title, ago=self._last_done_words(task))
-        else:
+        elif lead is None:
             lead = NUDGE_LEAD.format(
                 label=_label(task, local_day),
                 title=task.title,
@@ -352,7 +362,7 @@ class TaskBoard:
         result = await self.outbox.send(
             member,
             text,
-            priority=Priority.NORMAL,
+            priority=priority,
             kind="task",
             buttons=[
                 Button("Done", "task", {"task": task.id, "action": "done"}),
@@ -450,6 +460,46 @@ class TaskBoard:
         await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
 
+    async def reassign(self, task_id: int, member: Member | None, *, shared: bool = False) -> Task:
+        """Give a one-off task to someone else, or to both of you (`shared`: on everyone's
+        list, either can do it). The nudge goes to whoever has it now."""
+        task = self.get(task_id)
+        if task.status not in ("open", "snoozed"):
+            return task
+        assignee = member.id if member is not None else task.assignee
+        if (assignee, shared) == (task.assignee, task.shared):
+            return task
+        self.db.execute(
+            "UPDATE tasks SET assignee = ?, shared = ? WHERE id = ?",
+            (assignee, int(shared), task_id),
+        )
+        self._withdraw_prompt(task)
+        task = self.get(task_id)
+        people = (
+            [m for m in self.store.list_members() if m.telegram_user_id is not None]
+            if shared
+            else [self.store.get_member(assignee)]
+            if assignee is not None
+            else []
+        )
+        for person in people:
+            await self.prompt(task, member=person)
+        await self._changed(task, "reassigned", False)
+        return task
+
+    async def reopen(self, task_id: int) -> Task:
+        """A one-off task marked done that turns out not to be: open again, and nudged."""
+        task = self.get(task_id)
+        if task.status != "done" or task.repeats:
+            return task
+        self.db.execute(
+            "UPDATE tasks SET status = 'open', completed_at = NULL WHERE id = ?", (task_id,)
+        )
+        task = self.get(task_id)
+        await self.prompt(task)
+        await self._changed(task, "reopened", False)
+        return task
+
     # ----- repeating chores (F6b) ------------------------------------------------
 
     def _today(self) -> date:
@@ -485,6 +535,7 @@ class TaskBoard:
         escalate_to: str = "owner",
         missed: str = "roll",
         due_before_task: int | None = None,
+        either: bool = False,
     ) -> Task:
         """Give a task a schedule, or take it away (no `repeat` and no `due_before_task`).
         Zeros mean "no minimum" or "no escalation". Anchored and deadline schedules get their
@@ -495,8 +546,8 @@ class TaskBoard:
         if repeat is None and due_before_task is None:
             self.db.execute(
                 "UPDATE tasks SET times_per_week = NULL, repeat = NULL, due_before_task = NULL, "
-                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0 "
-                "WHERE id = ?",
+                "minimum_days = NULL, escalate_days = NULL, escalate_to = NULL, shared = 0, "
+                "either = 0 WHERE id = ?",
                 (task_id,),
             )
             return self.get(task_id)
@@ -517,7 +568,8 @@ class TaskBoard:
         floating = repeat is not None and not repeat.anchored
         self.db.execute(
             "UPDATE tasks SET times_per_week = ?, repeat = ?, due_before_task = ?, missed = ?, "
-            "minimum_days = ?, escalate_days = ?, escalate_to = ? WHERE id = ?",
+            "minimum_days = ?, escalate_days = ?, escalate_to = ?, either = ?, shared = ? "
+            "WHERE id = ?",
             (
                 repeat.times_per_week if floating and repeat else None,
                 json.dumps(repeat.to_json()) if repeat and repeat.anchored else None,
@@ -526,6 +578,8 @@ class TaskBoard:
                 minimum_days or None,
                 escalate_days or None,
                 escalate_to if escalate_days else None,
+                int(either),
+                int(either),
                 task_id,
             ),
         )
@@ -559,6 +613,8 @@ class TaskBoard:
             parts.append(read_back(Repeat("floating", times_per_week=task.times_per_week)))
         else:
             return "Doesn't repeat"
+        if task.either:
+            parts.append("either of you")
         if task.minimum_days:
             parts.append(f"overdue after {_days(task.minimum_days)}")
         if task.escalate_days:
@@ -614,7 +670,8 @@ class TaskBoard:
                     round_day = following[0].date()
         return round_day - timedelta(days=1)
 
-    def _next_due_after_done(self, task: Task, today: date) -> date:
+    def _next_due_after_done(self, task: Task, today: date) -> date | None:
+        """The next round's day; None when a course with an end date is over."""
         if task.due_before_task is not None:
             return self._deadline_due(task) or today + timedelta(days=7)
         if task.repeat is not None:
@@ -622,7 +679,9 @@ class TaskBoard:
             last_day = max(today, task.due_on or today)
             after = self._day_start(last_day + timedelta(days=1)) - timedelta(microseconds=1)
             found = next_occurrences(task.repeat, after, self._tz())
-            return found[0].date() if found else today + timedelta(days=7)
+            if found:
+                return found[0].date()
+            return None if task.repeat.until else today + timedelta(days=7)
         assert task.times_per_week is not None
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
@@ -636,9 +695,13 @@ class TaskBoard:
             (task.id, by.id, now, task.due_on.isoformat() if task.due_on else None, int(on_time)),
         )
         next_due = self._next_due_after_done(task, today)
+        if next_due is None:
+            await self._finish_course(task, interactive)
+            return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
         self.db.execute(  # the next round: back to its owner, nothing overdue
-            "UPDATE tasks SET status = 'open', due_on = ?, shared = 0, snoozed_until = NULL, "
-            "overdue_notified_at = NULL, escalated_at = NULL WHERE id = ?",
+            "UPDATE tasks SET status = 'open', due_on = ?, shared = either, snoozed_until = NULL, "
+            "overdue_notified_at = NULL, escalated_at = NULL, overdue_reminders = 0, "
+            "overdue_reminded_on = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
         self._withdraw_prompt(task)
@@ -649,6 +712,15 @@ class TaskBoard:
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=next_due.strftime("%a %d %b")
         )
+
+    async def _finish_course(self, task: Task, interactive: bool) -> None:
+        """A chore with an end date has had its last round."""
+        self.db.execute(
+            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+            (to_utc_iso(clock.now()), task.id),
+        )
+        self._withdraw_prompt(task)
+        await self._changed(self.get(task.id), "done", interactive)
 
     async def _settle_missed_round(self, task: Task) -> Task:
         """An anchored round whose day has passed: roll on to the next date (recording a missed
@@ -671,6 +743,8 @@ class TaskBoard:
         found = next_occurrences(task.repeat, clock.now(), self._tz())
         if found:
             self._move_round(task, found[0].date())
+        elif task.repeat.until is not None:
+            await self._finish_course(task, False)
         return self.get(task.id)
 
     def _record_missed(self, task: Task) -> None:
@@ -682,7 +756,8 @@ class TaskBoard:
 
     def _move_round(self, task: Task, due: date) -> None:
         self.db.execute(
-            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL WHERE id = ?",
+            "UPDATE tasks SET due_on = ?, status = 'open', snoozed_until = NULL, "
+            "overdue_reminders = 0, overdue_reminded_on = NULL WHERE id = ?",
             (due.isoformat(), task.id),
         )
         self._withdraw_prompt(task)
@@ -700,6 +775,8 @@ class TaskBoard:
         )
         for row in rows:
             task = await self._settle_missed_round(_task_from_row(row))
+            if task.status == "done":  # a course that's over
+                continue
             row = self.db.one("SELECT * FROM tasks WHERE id = ?", (task.id,)) or row
             since = self._last_done(task) or datetime.fromisoformat(row["created_at"])
             days = (now - since) / timedelta(days=1)
@@ -784,7 +861,8 @@ class TaskBoard:
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
         self.db.execute(
-            "UPDATE tasks SET due_on = ? WHERE id = ?",
+            "UPDATE tasks SET due_on = ?, overdue_reminders = 0, overdue_reminded_on = NULL "
+            "WHERE id = ?",
             (due_on.isoformat() if due_on else None, task_id),
         )
         await self._changed(self.get(task_id), "rescheduled", interactive)
@@ -1007,12 +1085,14 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "words: 'every Tuesday at 6pm', 'every other Monday', 'every Tue and Fri', 'first Monday "
     "of the month', 'the 1st of every month', 'every 3 days', or 'twice a week' (counted from "
     "the last time it was done); empty to stop. Keep any time of day they gave ('Tuesday "
-    "evenings' is 'every Tuesday evening'). due_before_task: the id of another chore this "
+    "evenings' is 'every Tuesday evening'), and any end ('every 2 days until 30 Oct' for a "
+    "course of medicine). due_before_task: the id of another chore this "
     "one is due the day before ('cardboard before garbage day'), else 0; repeat can then be "
     "empty. at_least_every_days: overdue after that many days (0 for none). "
     "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
     "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
-    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. Use it after "
+    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. either: true "
+    "when either of them can do it each time (it's on both lists). Use it after "
     "create_task, also for repeating reminders ('always remind me about the bins on "
     "Tuesdays'). Themi reads the saved schedule back to them itself.",
     {
@@ -1023,6 +1103,7 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         "escalate_to": {"type": "string", "enum": ["owner", "both"]},
         "missed": {"type": "string", "enum": ["roll", "catch_up"]},
         "due_before_task": {"type": "integer"},
+        "either": {"type": "boolean"},
     },
 )
 async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1039,6 +1120,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
             escalate_to=args["escalate_to"],
             missed=args["missed"],
             due_before_task=args["due_before_task"] or None,
+            either=bool(args["either"]),
         )
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc

@@ -126,6 +126,35 @@ OurGroceries app as well, put the account's login in `.env` as `OURGROCERIES_USE
 `pip install -e '.[ourgroceries]'`. It's unofficial, so if OurGroceries changes, the mirror
 logs the problem and keeps retrying while Themi's own list carries on.
 
+### Cozyla to-do lists (optional, a trial)
+
+Themi can keep the Cozyla wall calendar's to-do lists in step with its one-off tasks, both
+ways: added, ticked off or back, deleted, renamed, reassigned or given a new date on either
+side. Repeating chores stay off them. Cozyla has no official API; this uses the one its
+tablet apps use, which may change or break, and may conflict with Cozyla's terms, so use the
+family's own account.
+
+1. Put the family's Cozyla ID in `.env` as `COZYLA_EMAIL` and `COZYLA_PASSWORD`.
+2. Run `themi cozyla check`. It signs in, changes nothing, and lists the to-do lists and
+   members (add `--titles` to see the open to-dos on the chosen list).
+3. Set `COZYLA_TODO_LIST` to the main list, and restart. Themi's tasks go there unless
+   someone names another list ("put it on Things to Cook").
+
+What becomes a Themi task: everything on the main list, and anything on another list that's
+assigned to someone. A to-do assigned to the family member (for example "Madicen Family") is
+shared: on both lists, and either of you can tick it off. Unassigned items on other lists
+stay lists; "add lasagna to Things to Cook" just adds it there. The first sync links to-dos
+that match open tasks by title, and nudges the assigned ones gently, a few at a time.
+
+Members are matched by first name. Leave `COZYLA_TODO_LIST` empty to stop syncing.
+
+With `COZYLA_CHORES=yes`, Themi also runs the wall's chore chart. Its chores are written
+there and kept that way (an edit on the wall is put back, so change chores in Themi), chores
+only on the wall come into Themi first, and a tick on either side counts on both. It reads
+the wall's routines too: after the morning, and an hour before quiet hours, anyone whose
+routines for that part of the day aren't all done gets one message with a button for each.
+Themi's check-ins (like a run on set days) show on the wall as that person's routine.
+
 ### In the cloud
 
 `docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly

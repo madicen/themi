@@ -30,6 +30,7 @@ async def bird_cage(scenario: Scenario, escalate_to: str = "both") -> Task:
             "escalate_to": escalate_to,
             "missed": "roll",
             "due_before_task": 0,
+            "either": False,
         },
     )
     scenario.primary.queue_text("Set up.")
@@ -146,7 +147,7 @@ async def test_stopping_a_schedule_and_bad_values(scenario: Scenario) -> None:
         "set_task_schedule",
         {"task_id": task.id, "repeat": "", "at_least_every_days": 0,
          "escalate_after_days": 0, "escalate_to": "owner", "missed": "roll",
-         "due_before_task": 0},
+         "due_before_task": 0, "either": False},
     )  # fmt: skip
     scenario.primary.queue_text("It won't repeat.")
     await scenario.say("Erin", "stop repeating it")
@@ -156,7 +157,7 @@ async def test_stopping_a_schedule_and_bad_values(scenario: Scenario) -> None:
         "set_task_schedule",
         {"task_id": task.id, "repeat": "2 times a week", "at_least_every_days": 14,
          "escalate_after_days": 7, "escalate_to": "both", "missed": "roll",
-         "due_before_task": 0},
+         "due_before_task": 0, "either": False},
     )  # fmt: skip
     scenario.primary.queue_text("Hmm.")
     await scenario.say("Erin", "escalate after a week but at least every two")

@@ -26,7 +26,13 @@ CAPPED = {
     "habit_trial",
     "chore_step_up",  # F6b: Themi never changes a chore's schedule on its own
 }
-CAN_BE_AUTOMATIC = {"email_mark_read", "email_archive_noise", "grocery_list_add", "calendar_write"}
+CAN_BE_AUTOMATIC = {
+    "email_mark_read",
+    "email_archive_noise",
+    "grocery_list_add",
+    "calendar_write",
+    "wall_list_add",
+}
 
 
 class Recorder:

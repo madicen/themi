@@ -35,6 +35,7 @@ async def schedule(
             "escalate_to": "owner",
             "missed": missed,
             "due_before_task": before,
+            "either": False,
         },
     )
     scenario.primary.queue_text("All set.")
@@ -178,3 +179,28 @@ async def test_a_new_floating_chore_waits_for_its_due_day(scenario: Scenario) ->
     assert any(
         t.startswith("Due today: Clean the bird cage") for t in scenario.inbox("Erin")[before:]
     )
+
+
+async def test_a_course_ends_after_its_last_round(scenario: Scenario) -> None:
+    """C2a: "Mimi pill every 2 days until 25 Oct". The clock starts on Wednesday 21 October."""
+    pill = await chore(scenario, "Mimi pill")
+    replies = await schedule(scenario, pill, "every 2 days until 25 Oct")
+    assert "Saved: Every other day, until Sun 25 Oct. Next: Wed 21 Oct." in replies
+    erin = scenario.member("Erin")
+    for day in (21, 23):
+        assert board(scenario).get(pill.id).due_on == date(2026, 10, day)
+        await board(scenario).complete(pill.id, erin)
+        await scenario.advance(hours=48)
+    assert board(scenario).get(pill.id).due_on == date(2026, 10, 25)
+    reply = await board(scenario).complete(pill.id, erin)
+    assert "That was the last one." in reply
+    assert board(scenario).get(pill.id).status == "done"
+
+
+async def test_a_course_whose_last_round_passes_is_over(scenario: Scenario) -> None:
+    pill = await chore(scenario, "Mimi pill")
+    await schedule(scenario, pill, "every 2 days until 23 Oct")
+    await board(scenario).complete(pill.id, scenario.member("Erin"))  # the 21st
+    await scenario.advance(hours=24 * 3)  # the 23rd goes by undone
+    await scenario.run_periodic("tasks.schedules")
+    assert board(scenario).get(pill.id).status == "done"

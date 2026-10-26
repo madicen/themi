@@ -121,6 +121,33 @@ def test_ourgroceries_is_off_until_both_login_parts_are_set() -> None:
     assert "pw" not in repr(config)
 
 
+def test_cozyla_is_off_until_both_login_parts_are_set() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).cozyla() is None
+    with pytest.raises(SettingsError, match="COZYLA_EMAIL and COZYLA_PASSWORD"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "COZYLA_PASSWORD": "pw"})
+    config = Settings.from_mapping(
+        {"THEMI_SECRET_KEY": KEY, "COZYLA_EMAIL": "us@x.example", "COZYLA_PASSWORD": "pw"}
+    ).cozyla()
+    assert config is not None
+    assert (config.email, config.password.reveal(), config.todo_list, config.device_sn) == (
+        "us@x.example",
+        "pw",
+        "",  # no list: the check works, nothing syncs
+        "themi",
+    )
+    assert "pw" not in repr(config)
+    listed = Settings.from_mapping(
+        {
+            "THEMI_SECRET_KEY": KEY,
+            "COZYLA_EMAIL": "us@x.example",
+            "COZYLA_PASSWORD": "pw",
+            "COZYLA_TODO_LIST": " Family ",
+            "COZYLA_DEVICE_SN": "themi-home",
+        }
+    ).cozyla()
+    assert listed is not None and (listed.todo_list, listed.device_sn) == ("Family", "themi-home")
+
+
 BACKUP = {
     "THEMI_BACKUP_ENDPOINT": "https://abc123.r2.cloudflarestorage.com/",
     "THEMI_BACKUP_BUCKET": "themi-backups",

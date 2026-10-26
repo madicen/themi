@@ -18,11 +18,12 @@ timezone, so "Tuesday at 6 pm" stays 6 pm across daylight-saving changes.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
+from dateutil import parser as dateutil_parser
 from dateutil import rrule
 
 from themi import clock
@@ -78,6 +79,7 @@ class Repeat:
     month_day: int | None = None  # 1-31
     at: time | None = None  # time of day, if any
     start: date | None = None  # where the rhythm starts (anchored)
+    until: date | None = None  # the last day it can fall on (a course of medicine, C2a)
 
     @property
     def anchored(self) -> bool:
@@ -93,6 +95,7 @@ class Repeat:
             "month_day": self.month_day,
             "at": self.at.strftime("%H:%M") if self.at else None,
             "start": self.start.isoformat() if self.start else None,
+            "until": self.until.isoformat() if self.until else None,
         }
 
     @classmethod
@@ -106,6 +109,7 @@ class Repeat:
             month_day=data.get("month_day"),
             at=time.fromisoformat(data["at"]) if data.get("at") else None,
             start=date.fromisoformat(data["start"]) if data.get("start") else None,
+            until=date.fromisoformat(data["until"]) if data.get("until") else None,
         )
 
 
@@ -146,8 +150,36 @@ def _days(text: str) -> tuple[int, ...]:
     return tuple(sorted(found))
 
 
+def _take_until(phrase: str, today: date) -> tuple[str, date | None]:
+    """Pull an end date off the phrase: "... until 30 Oct", "... until 2026-11-10"."""
+    m = re.search(r"\s+(?:until|till|through)\s+(.+)$", phrase, re.IGNORECASE)
+    if not m:
+        return phrase, None
+    default = datetime(today.year, today.month, today.day)  # noqa: DTZ001
+    try:
+        until = dateutil_parser.parse(m.group(1), default=default).date()
+    except (ValueError, OverflowError) as exc:
+        raise RepeatError(f"'{m.group(1)}' isn't a date. {EXAMPLES}") from exc
+    if until < today:
+        raise RepeatError(f"{until:%a %d %b} has already gone by. {EXAMPLES}")
+    return phrase[: m.start()], until
+
+
 def parse(phrase: str, today: date) -> Repeat:
     """Read a schedule phrase. Raises RepeatError, with examples, if it isn't clear."""
+    return _parse(*_take_until(phrase, today), today)
+
+
+def _parse(phrase: str, until: date | None, today: date) -> Repeat:
+    rep = _parse_rhythm(phrase, today)
+    if until is None:
+        return rep
+    if not rep.anchored:
+        raise RepeatError(f"An end date needs fixed days ('every 2 days until 30 Oct'). {EXAMPLES}")
+    return replace(rep, until=until)
+
+
+def _parse_rhythm(phrase: str, today: date) -> Repeat:
     text = " ".join(re.sub(r"[^a-z0-9: ]", " ", phrase.lower().replace("&", " and ")).split())
     if not text:
         raise RepeatError(f"There's no schedule there. {EXAMPLES}")
@@ -262,7 +294,8 @@ def read_back(rep: Repeat) -> str:
         text = f"The {_POSITION_WORDS[rep.month_position]} {day} of each month"
     else:
         text = f"The {_ordinal_day(rep.month_day or 1)} of each month"
-    return f"{text} at {_time_words(rep.at)}" if rep.at else text
+    text = f"{text} at {_time_words(rep.at)}" if rep.at else text
+    return f"{text}, until {rep.until:%a %d %b}" if rep.until else text
 
 
 # ----- occurrences ----------------------------------------------------------------------
@@ -273,15 +306,26 @@ def _rule(rep: Repeat) -> rrule.rrule:
     at = rep.at or time(0)
     # Naive on purpose: wall-clock time, given the timezone after (see next_occurrences).
     dtstart = datetime(start.year, start.month, start.day, at.hour, at.minute)  # noqa: DTZ001
+    until = (
+        datetime(rep.until.year, rep.until.month, rep.until.day, 23, 59)  # noqa: DTZ001
+        if rep.until
+        else None
+    )
     if rep.kind == "daily":
-        return rrule.rrule(rrule.DAILY, interval=rep.every, dtstart=dtstart)
+        return rrule.rrule(rrule.DAILY, interval=rep.every, dtstart=dtstart, until=until)
     if rep.kind == "weekly":
         days = [_RRULE_DAYS[d] for d in rep.weekdays]
-        return rrule.rrule(rrule.WEEKLY, interval=rep.every, byweekday=days, dtstart=dtstart)
+        return rrule.rrule(
+            rrule.WEEKLY, interval=rep.every, byweekday=days, dtstart=dtstart, until=until
+        )
     if rep.month_position is not None:
         day = _RRULE_DAYS[rep.weekdays[0]](rep.month_position)
-        return rrule.rrule(rrule.MONTHLY, interval=rep.every, byweekday=day, dtstart=dtstart)
-    return rrule.rrule(rrule.MONTHLY, interval=rep.every, bymonthday=rep.month_day, dtstart=dtstart)
+        return rrule.rrule(
+            rrule.MONTHLY, interval=rep.every, byweekday=day, dtstart=dtstart, until=until
+        )
+    return rrule.rrule(
+        rrule.MONTHLY, interval=rep.every, bymonthday=rep.month_day, dtstart=dtstart, until=until
+    )
 
 
 def previous_occurrence(rep: Repeat, before: datetime, tz: ZoneInfo) -> datetime | None:

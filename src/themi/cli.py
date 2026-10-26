@@ -54,6 +54,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true", help="fetch, decrypt and check it, but change nothing"
     )
     restore.add_argument("--yes", action="store_true", help="really replace the database")
+    cozyla = commands.add_parser("cozyla", help="the Cozyla wall calendar (unofficial API)")
+    cozyla_commands = cozyla.add_subparsers(dest="cozyla_command", required=True)
+    cozyla_check = cozyla_commands.add_parser(
+        "check", help="sign in and show the lists and members, changing nothing"
+    )
+    cozyla_check.add_argument(
+        "--titles", action="store_true", help="also list the open to-dos on COZYLA_TODO_LIST"
+    )
     return parser
 
 
@@ -71,6 +79,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     """Wire Themi from its settings, as `themi run` (and `make dev`) runs it."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
+    from themi.connectors.cozyla import CozylaClient
     from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.runtime import Runtime
     from themi.settings import SettingsError
@@ -95,6 +104,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         google=settings.google(),
         backup=settings.backup,
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
+        cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
     )
     return Runtime(
         app,
@@ -227,6 +237,35 @@ def _feedback(include_reviewed: bool, done: list[int] | None) -> None:
     print(book.report(book.items(include_reviewed)), end="")
 
 
+def _cozyla_check(titles: bool) -> int:
+    import asyncio
+
+    from themi.connectors.cozyla import CozylaClient, CozylaError
+    from themi.connectors.cozyla.check import check
+    from themi.settings import Settings
+
+    settings = Settings.load()
+    config = settings.cozyla()
+    if config is None:
+        print("Set COZYLA_EMAIL and COZYLA_PASSWORD in .env first.", file=sys.stderr)
+        return 1
+    family = _store().get_family()
+    client = CozylaClient(config, timezone=family.timezone if family else "UTC")
+
+    async def run() -> str:
+        try:
+            return await check(client, titles=titles)
+        finally:
+            await client.aclose()
+
+    try:
+        print(asyncio.run(run()))
+    except CozylaError as exc:
+        print(f"Cozyla check failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -260,6 +299,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _backup(args.list)
         elif args.command == "restore":
             _restore(args.snapshot, args.dry_run, args.yes)
+        elif args.command == "cozyla":
+            return _cozyla_check(args.titles)
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:

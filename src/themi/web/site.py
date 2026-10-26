@@ -39,7 +39,7 @@ __all__ = ["SiteContext", "install_site"]
 TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
     "message_timing": "When you tend to reply, and how quickly",
-    "device_activity": "Activity from household devices (laundry, feeders)",
+    "device_activity": "Activity from household devices (laundry, feeders, the wall's routines)",
     "calendar": "When your Google calendar says you're busy (never what the events are)",
 }
 EVENT_WORDS = {
