@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -165,7 +166,7 @@ class TaskBoard:
         self.store = services.store
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
-        self.details: list[TaskDetails] = [_steps_text]
+        self.details: list[TaskDetails] = []  # steps come first, from _steps_for
         self._pending_prompts: list[int] = []
 
     @property
@@ -232,6 +233,12 @@ class TaskBoard:
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
             whose = "shared, overdue: either of you" if t.shared else "theirs"
             steps = f" Steps: {'; '.join(t.steps)}" if t.steps else ""
+            if any(_step_level(step) for step in t.steps):
+                level = self.services.energy.suggested_level(member)
+                if level is not None:
+                    steps += (
+                        f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
+                    )
             schedule = f" {self.summary(t)}." if t.repeats else ""
             items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{steps}"))
         return items
@@ -316,7 +323,8 @@ class TaskBoard:
         if member is None:
             assert task.assignee is not None
             member = self.store.get_member(task.assignee)
-        details = "\n\n".join(d for source in self.details if (d := source(task)))
+        parts = [self._steps_for(task, member), *(source(task) for source in self.details)]
+        details = "\n\n".join(d for d in parts if d)
         added_by = (
             self.store.get_member(task.created_by)
             if task.created_by is not None and task.created_by != member.id
@@ -387,6 +395,27 @@ class TaskBoard:
         if task.repeat and task.repeat.at:
             return _on(task.due_on, task.repeat.at, self._tz())
         return self._day_start(task.due_on)
+
+    def _steps_for(self, task: Task, member: Member) -> str | None:
+        """The steps for a nudge. With (Low)/(Medium)/(High) tags, only the level that suits
+        the person today (each level takes in the ones below it), in words (S4)."""
+        if not task.steps:
+            return None
+        levels = [_step_level(step) for step in task.steps]
+        if not any(levels):
+            return _quoted(task.steps)
+        level = self.services.energy.suggested_level(member)
+        if level is None:
+            return _quoted(task.steps)
+        keep = [
+            step
+            for step, tag in zip(task.steps, levels, strict=True)
+            if tag is None or _LEVEL_ORDER[tag] <= _LEVEL_ORDER[level]
+        ]
+        lines = [_LEVEL_LEAD[level], _quoted(keep)]
+        if any(tag and _LEVEL_ORDER[tag] > _LEVEL_ORDER[level] for tag in levels):
+            lines.append("The rest is there too if you feel like more.")
+        return "\n".join(lines)
 
     def can_edit(self, task: Task, member: Member) -> bool:
         return member.is_admin or member.id in (task.assignee, task.created_by)
@@ -826,10 +855,25 @@ def _days(value: float) -> str:
     return f"{value:g} day{'s' if value != 1 else ''}"
 
 
-def _steps_text(task: Task) -> str | None:
-    """The task's steps for its nudge, one per line, as written. Each is a `> ` quote, so the
-    PDA shield keeps them word for word (steps are usually commands: "Wipe the counters")."""
-    return "\n".join(f"> - {step}" for step in task.steps) or None
+_LEVEL_TAG = re.compile(r"^\((low|medium|high)\)", re.IGNORECASE)
+_LEVEL_ORDER = {"low": 0, "medium": 1, "high": 2}
+_LEVEL_LEAD = {
+    "low": "A lighter version for today:",
+    "medium": "A middle version for today:",
+    "high": "The full version for today:",
+}
+_LEVEL_WORD = {"low": "lighter", "medium": "middle", "high": "full"}
+
+
+def _step_level(step: str) -> str | None:
+    m = _LEVEL_TAG.match(step)
+    return m.group(1).lower() if m else None
+
+
+def _quoted(steps: Sequence[str]) -> str:
+    """Steps as `> ` quotes, so the PDA shield keeps them word for word (steps are usually
+    commands: "Wipe the counters")."""
+    return "\n".join(f"> - {step}" for step in steps)
 
 
 def _board(ctx: ToolContext) -> TaskBoard:

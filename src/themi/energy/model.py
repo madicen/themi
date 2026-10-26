@@ -243,6 +243,24 @@ class EnergyModel:
             self.timezone,
         )
 
+    def suggested_level(self, member: Member) -> str | None:
+        """ "low", "medium" or "high" for a chore's level today: a level they stated today wins,
+        else the estimate. None if they've switched every input off (no read)."""
+        member = self.store.get_member(member.id)
+        if not any(member.tracks(toggle) for toggle in SOURCE_INPUT.values()):
+            return None
+        now = clock.now()
+        today = to_local(now, self.timezone).date()
+        stated = [
+            s
+            for s in self.signals(member, now)
+            if s.source == "day_level" and to_local(s.at, self.timezone).date() == today
+        ]
+        if stated:
+            return {-1: "low", 0: "medium", 1: "high"}[round(stated[-1].value)]
+        capacity = self.capacity(member, now)
+        return "low" if capacity < 45 else "medium" if capacity < 65 else "high"
+
     def label(self, member: Member) -> str:
         member = self.store.get_member(member.id)
         if not any(member.tracks(toggle) for toggle in SOURCE_INPUT.values()):

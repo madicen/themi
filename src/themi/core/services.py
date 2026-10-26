@@ -44,6 +44,8 @@ Decision = Literal["yes", "no", "later"]
 class EnergyLabeler(Protocol):
     def label(self, member: Member) -> str: ...
 
+    def suggested_level(self, member: Member) -> str | None: ...
+
     def observe_inbound(self, member: Member) -> None: ...
 
     def record(self, member: Member, source: str, value: float, note: str = "") -> bool: ...
@@ -54,6 +56,9 @@ class NoEnergyReadYet:
 
     def label(self, member: Member) -> str:
         return "no read yet"
+
+    def suggested_level(self, member: Member) -> str | None:
+        return None
 
     def observe_inbound(self, member: Member) -> None:
         return None

@@ -55,6 +55,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F6b | Chores: repeating schedules and escalation | Feedback | [x] |
 | F7 | Chores: anchored schedules, deadlines, read-back | Feedback | [x] |
 | S1 | Shadow Calendar: energy remarks recorded | Shadow Calendar review | [x] |
+| S2 | Shadow Calendar: calendar, task load and busy times as inputs | Shadow Calendar review | [ ] |
+| S3 | Shadow Calendar: a private "how Themi sees my week" view | Shadow Calendar review | [ ] |
+| S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -2650,6 +2653,89 @@ Notes (2026-10-25), failing tests first:
 - Evals: new case `energy-medium-day`. The drain and boost cases now accept either tool in the
   right direction (a drain or "low", a boost or "high"). Energy slice live: 6/7, then 7/7
   re-scored (prompt 28 had 2/6).
+
+### S2 · Shadow Calendar: calendar, task load and busy times as inputs
+Status: [ ] (designed 2026-10-25; waiting for the user's choices below)
+Depends on: S1, 26, F3, F6b
+Read first: "B. Energy engine (Shadow Calendar)" → Inputs. The original spec said the hidden
+calendar is "updated based on all available data"; the plan narrowed that to three inputs.
+
+Build:
+- Calendar load: for each person with a linked Google account, read their primary calendar's
+  events for today and the next 7 days (the existing `calendar.events` scope allows reading).
+  Keep only start, end and free/busy, never titles or attendees. A packed stretch lowers the
+  projection for those hours and the hour after; an empty day leaves the baseline alone. It
+  becomes an input with its own privacy switch ("calendar"), and does nothing until Google is
+  set up (this server's `.env` has no Google keys yet).
+- Task load: each person's open and overdue tasks (overdue chores count more) lower their spare
+  room a little, with a cap, so matching doesn't pile more onto someone who's behind. It's
+  derived, not stored.
+- Busy times: a long busy block (e.g. a 9-5 workday) is followed by a short wind-down dip, so
+  the first nudge after work isn't timed as if it were a fresh morning.
+- Plan update: the inputs list gains these three.
+
+Decided 2026-10-25: busy events also hold Themi's messages, like busy times; primary calendar
+only.
+
+Tests:
+- Calendar events turn into the right hours (all-day and declined events ignored; titles never
+  stored); the switch; behaviour with no Google.
+- Task load caps; matching moves a task away from someone with a pile of overdue chores.
+- The wind-down dip after a long busy block, and not after short ones.
+
+### S3 · Shadow Calendar: a private "how Themi sees my week" view
+Status: [ ] (designed 2026-10-25; waiting for the user's choices below)
+Depends on: S1, S2 (optional)
+
+Build:
+- A website page for each person, about themselves only (admins included: nobody sees
+  another's): for each day of the coming week, morning, afternoon and evening in words ("usually
+  a good stretch", "tends to be low"), the good windows Themi would use, and what it has learned
+  from ("based on 14 replies and 3 things you mentioned about your energy"). Words only, never
+  scores. Each input's switch is linked from the page.
+- "That's not right" per part of the day: a correction the person can make ("Tuesday evenings
+  are usually fine for me"), stored as a gentle nudge to the baseline.
+- `make dev`: a debug page in the simulator with the actual numbers, for testing only (never
+  in the real website).
+
+Decided 2026-10-25: yes, gentle corrections from the page.
+
+Tests:
+- Only your own week is shown; no numbers anywhere on the real page; corrections move the
+  baseline gently; the dev page exists only in `make dev`.
+
+### S4 · Energy-aware chore levels
+Status: [x] (2026-10-25)
+Depends on: S1, F6a
+
+Build:
+- A chore whose steps are tagged by level ("(Low) ...", "(Medium) ...", "(High) ...") is nudged
+  with the level that suits how the person seems right now, in words: "A lighter version for
+  today:" followed by the Low steps. Medium takes in the Low steps plus its own, and so on, as
+  in Erin's bathroom rule. A stated day level (S1) wins over the estimate.
+- When asked "what should I do about the bathroom?", the model gets the same suggested level,
+  in words.
+
+Decided 2026-10-25: only the suggested level's steps, plus one line saying more is there.
+
+Tests:
+- Low, medium and high days pick the right steps; a stated level wins; untagged steps are
+  unchanged; no numbers in any text.
+
+Notes (2026-10-25), failing tests first:
+- `EnergyModel.suggested_level(member)` returns "low", "medium" or "high": a level stated today
+  wins, else the estimate (below "steady" is low, below "some energy" is medium). It returns
+  None with every input switched off, and then all steps show. The number stays inside the
+  energy package.
+- `TaskBoard._steps_for` replaces the old steps hook. Level-tagged steps are kept cumulatively
+  (Medium takes in Low, High takes in all); untagged steps always show. The lead line is
+  "A lighter / middle / full version for today:", followed by the quoted steps, then "The rest is
+  there too if you feel like more." unless it's the full version. Open items add "Suggested
+  today: the lighter (Low) version." for the model.
+- Seen while testing: a stated low day also makes matching hand an unassigned chore to the
+  partner, and makes the outbox wait for a better moment. Both are as designed; the tests pin
+  the owner and read the queued nudge.
+- S1 follow-up: `test_eval_runner` expected the energy case's old problem text.
 
 ---
 
