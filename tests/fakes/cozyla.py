@@ -287,6 +287,15 @@ class FakeCozyla:
     def _delete(self, body: dict[str, Any]) -> None:
         del self.todos[body["id"]]
 
+    def _create_list(self, body: dict[str, Any]) -> dict[str, Any]:
+        list_id = self.add_list(body["todoListTitle"])
+        return {"listId": list_id, "displayOrder": 0.0, "version": 1, "createDate": 0}
+
+    def _delete_list(self, body: dict[str, Any]) -> None:
+        del self.lists[body["id"]]
+        for todo_id in [t["todoId"] for t in self.in_list(body["id"])]:
+            del self.todos[todo_id]  # assumed: a list's to-dos go with it
+
     # ----- chores and routines ------------------------------------------------------------
 
     def _refs(self, members: list[str]) -> list[dict[str, Any]]:
@@ -478,6 +487,8 @@ ROUTES = {
     "rewards/todosInfo/update": FakeCozyla._update,
     "rewards/todosInfo/checkTodo": FakeCozyla._check,
     "rewards/todosInfo/delete": FakeCozyla._delete,
+    "rewards/todosList/create": FakeCozyla._create_list,
+    "rewards/todosList/delete": FakeCozyla._delete_list,
     "rewards/chores/myChoresV1": lambda f, b: list(f.chores.values()),
     "rewards/chores/create/v1": FakeCozyla._create_chore,
     "rewards/chores/update/v1": FakeCozyla._update_chore,
