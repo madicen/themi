@@ -61,7 +61,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
 | F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
-| F9b | Exercise schedules: sunset-relative times | Feedback | [~] |
+| F9b | Exercise schedules: sunset-relative times | Feedback | [x] |
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
@@ -2976,11 +2976,25 @@ Notes (2026-10-26):
   schedule; it's stored as Tue, Thu and Sat at 2 pm, rolling on.
 
 ### F9b · Exercise schedules: sunset-relative times
-Status: [~]
+Status: [x] 2026-10-27
 Depends on: F9a
 - Sunset-relative times ("an hour before sunset"): needs the family's location (a setting,
   coarse is enough) and an offline sunset calculation (for example the `astral` library);
   read back as "about 5:10 pm today". The wall routine's part of the day follows it.
+
+Notes (2026-10-27):
+- `themi.core.sun.sunset`: the sunrise equation, offline and without a library (checked
+  against NOAA's equations: San Francisco, 27 Oct, 6:17 pm). The place is K4's
+  `family_home`, so no new setting.
+- `Repeat.before_sunset` (minutes; 0 is at sunset) from "an hour before sunset", "30 minutes
+  before sunset", "at sunset"; with a time too ("at 2pm, at least an hour before sunset"),
+  whichever is earlier. Fixed days only. Read back as "..., at least an hour before sunset;
+  today that's about 2 pm".
+- `TaskBoard.time_of(task, day)` works it out for the round's day, on the five minutes;
+  without a home address it falls back to the schedule's own time. Nudges, round starts and
+  the wall routine's part of the day follow it.
+- For Erin's run it changes nothing in practice: 2 pm is always earlier than an hour before
+  sunset at home (about 3:50 pm in December). Her stored schedule could take the words.
 
 ### F9c · Exercise schedules: distance plans
 Status: [x] 2026-10-26
