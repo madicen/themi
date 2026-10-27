@@ -72,7 +72,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
 | K4 | Calendars: travel time and "time to get ready" | Calendars | [x] |
-| K5 | Calendars: blocking time for tasks | Calendars | [ ] |
+| K5 | Calendars: blocking time for tasks | Calendars | [x] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
@@ -3707,7 +3707,7 @@ Notes (2026-10-26):
   optionally `TOMTOM_API_KEY` in `.env` for live traffic (restart after).
 
 ### K5 · Calendars: blocking time for tasks
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: K1, K3
 - "Block Saturday morning for the bathroom": an event on the person's calendar for that task
   (made at once: asked for, and Themi's own). "Find me time for the bathroom": Themi suggests
@@ -3718,6 +3718,27 @@ Depends on: K1, K3
 - When a block ends with the task still open: one message, done or move the block?
 - Blocks are known as Themi's (K1), so they never hold Themi's own messages as busy time.
 - Tests: made, nudged at the block, moved, deleted, ended undone, not busy.
+
+Notes (2026-10-26):
+- `themi.core.task_blocks.TaskBlocks`. Tools: `block_time_for_task` (task, date, start, end;
+  at once when the message mentions blocking, the calendar or "time for"; else a card) and
+  `find_time_for_task` (minutes, days; the first energy-model window long enough, from 30
+  minutes on, on the quarter hour: their calendar's busy times, busy times and quiet hours
+  are already out of those windows; always a card). Both under `calendar_event`.
+- The block is made by K3's `Events.make` with source `task-block:<task>`, so the event
+  carries that marker and K1 never counts it as busy. `task_blocks` (migration 0056).
+- Hold: `TaskBoard.holds` while a block is coming (end-of-day and overdue reminders respect
+  it too); a queued nudge is taken back. `blocks.tick` (every 5 minutes) nudges as a block
+  begins, follows moves (the read's times win; moved later, it's re-armed), and treats a
+  block missing from a read made after it was created, and before it ended, as deleted: the
+  block ends and the task gets its usual nudge. `calendar_reads` records each account's last
+  read, so an empty calendar still counts.
+- At the end, with the task still open: "The time for X is over. Done, or move the block?"
+  with a Done button. Not if the nudge from the block's start is still unanswered (one
+  question at a time, idea #11); asked at most once.
+- The task's line in Themi's open items says when its time is blocked.
+- `TaskBoard.withdraw_prompt` and `time_of` are public now; `events.when_words`.
+- Setup: restart (applies 0056).
 
 ---
 
