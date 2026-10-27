@@ -225,3 +225,16 @@ async def test_only_events_they_may_see(
     husband = scenario.member("Husband")
     scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
     assert "Husband: Dentist, Wed 21 Oct, 3-4 pm" in await ask(scenario, "Erin", "dentist", "")
+
+
+async def test_words_match_loosely(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """Bug #20: "her tutoring appointment" didn't find "Tutor Gabriel (Illems)"."""
+    fake_travel.place("790 La Para Ave", 37.705, -122.405)
+    ready.add_event(ERIN, local(16, day=29), local(17, day=29), summary="Tutor Gabriel (Illems)",
+                    location="790 La Para Ave")  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    assert "Tutor Gabriel (Illems), Thu 29 Oct, 4-5 pm" in await ask(
+        scenario, "Erin", "tutoring appointment", ""
+    )

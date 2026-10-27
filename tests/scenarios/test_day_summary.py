@@ -23,6 +23,14 @@ from themi.core.tasks import TaskBoard
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HUSBAND = "him@gmail.com"
 WED = date(2026, 10, 21)
+TODAY = (  # Erin's day in the format she asked for (idea #19), untouched by the shield
+    "Wed 21 Oct:\n"
+    "- 10-11 am: Dentist (at Smile Dental)\n"
+    "- 12-1 pm: Standup (video call)\n"
+    "- 2 pm: Go for a run (check-in, 1.3 miles this week)\n"
+    "- Return the library books (since Mon 19 Oct)\n"
+    "- Call the vet"
+)
 
 
 def local(hour: int, minute: int = 0, day: int = 21) -> str:
@@ -75,21 +83,30 @@ async def test_what_is_on_today_on_request(scenario: Scenario, linked: FakeGcal)
     await erins_day(scenario, linked)
     scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
     scenario.primary.queue_text("Here's your day.")
-    await scenario.say("Erin", "What's my day look like?")
-    assert tool_result(scenario) == (
-        "Wednesday 21 October.\nEvents:\n"
-        '<data source="calendars">\n'
-        "10-11 am: Dentist (at Smile Dental)\n12-1 pm: Standup (video call)\n</data>\n"
-        "Due:\n- since Mon 19 Oct: Return the library books\n- any time: Call the vet\n"
-        "- 2 pm: Go for a run (check-in, 1.3 miles this week)"
-    )
+    replies = await scenario.say("Erin", "What's my day look like?")
+    assert replies[0] == TODAY  # sent as it is (idea #19), in the order of the day
+    assert '<data source="day summary">' in tool_result(scenario)
+    assert "Don't repeat it" in tool_result(scenario)
     scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-22", "partner": False})
     scenario.primary.queue_text("Tomorrow.")
-    await scenario.say("Erin", "And tomorrow?")
-    assert tool_result(scenario) == (
-        "Thursday 22 October.\nEvents:\n"
-        '<data source="calendars">\n10-11 am: Tomorrow\'s thing\n</data> Nothing due.'
+    replies = await scenario.say("Erin", "And tomorrow?")
+    assert replies[0] == "Thu 22 Oct:\n- 10-11 am: Tomorrow's thing"
+
+
+async def test_a_chore_waiting_for_the_chart_is_in_tomorrows_summary(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Idea #19: Erin's bird cage, her one chart chore, was missing from tomorrow's list,
+    because today it's still waiting its turn."""
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    cage = await board(scenario).create(
+        erin, "Clean the bird cage", "physical", 2, assignee=erin, nudge=False
     )
+    await board(scenario).set_schedule(cage.id, erin, repeat=parse("every Thursday", WED))
+    summary = scenario.app.services.day_summary
+    assert summary is not None
+    assert summary.text(erin, date(2026, 10, 22)) == "Thu 22 Oct:\n- Clean the bird cage"
 
 
 async def test_the_partners_events_only_when_they_share(
@@ -108,7 +125,7 @@ async def test_the_partners_events_only_when_they_share(
     assert "Haircut" not in await ask()
     husband = scenario.member("Husband")
     scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
-    assert "Husband: 3-4 pm: Haircut" in await ask()
+    assert "3-4 pm: Haircut (Husband)" in await ask()
 
 
 async def test_the_morning_summary(scenario: Scenario, linked: FakeGcal) -> None:
@@ -116,14 +133,10 @@ async def test_the_morning_summary(scenario: Scenario, linked: FakeGcal) -> None
     erin = scenario.member("Erin")
     scenario.app.store.update_settings(erin, erin.id, morning_summary="08:30")
     await scenario.run_periodic("calendar.morning")  # 9 am: today's is due, and goes
-    summaries = [t for t in scenario.inbox("Erin") if t.startswith("Your day")]
-    assert summaries == [
-        "Your day, Wed 21 Oct:\nOn the calendar:\n- 10-11 am: Dentist (at Smile Dental)\n"
-        "- 12-1 pm: Standup (video call)\nDue:\n- since Mon 19 Oct: Return the library books\n"
-        "- any time: Call the vet\n- 2 pm: Go for a run (check-in, 1.3 miles this week)"
-    ]
+    summaries = [t for t in scenario.inbox("Erin") if t.startswith("Wed 21 Oct:")]
+    assert summaries == [TODAY]
     await scenario.run_periodic("calendar.morning")
-    assert len([t for t in scenario.inbox("Erin") if t.startswith("Your day")]) == 1  # once
+    assert len([t for t in scenario.inbox("Erin") if t.startswith("Wed 21 Oct:")]) == 1  # once
 
 
 async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
@@ -141,7 +154,7 @@ async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
     (row,) = scenario.app.db.query(
         "SELECT status, send_after, text FROM outbox WHERE kind = 'summary'"
     )
-    assert row["text"] == "Your day, Fri 23 Oct: nothing on the calendar, nothing due."
+    assert row["text"] == "Fri 23 Oct: nothing on the calendar, nothing due."
     assert row["status"] == "queued"  # until her quiet hours end
     assert datetime.fromisoformat(row["send_after"]) == datetime(2026, 10, 23, 8, tzinfo=PACIFIC)
 

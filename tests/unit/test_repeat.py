@@ -147,3 +147,15 @@ def test_an_either_day_round_and_a_rest_rule() -> None:
 def test_either_days_and_rest_need_fixed_neighbouring_days(words: str) -> None:
     with pytest.raises(RepeatError):
         parse(words, WED)
+
+
+def test_titles_match_loosely() -> None:
+    """Bug #20: event searches by the words people use."""
+    from themi.core.events import title_matches
+
+    assert title_matches("tutoring", "Tutor Gabriel (Illems)")
+    assert title_matches("pediatrics", "Pediatrician: Rosie")
+    assert title_matches("the dentist", "Dentist")
+    assert not title_matches("dentist", "Dental cleaning")  # sharing "dent" isn't enough
+    assert not title_matches("run", "Brunch")
+    assert not title_matches("", "Anything")
