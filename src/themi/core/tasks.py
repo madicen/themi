@@ -1284,7 +1284,8 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     return (
         f"Task {task.id} ({task.title}) is scheduled, and it was read back to them already, "
         f'word for word: "{text}". Don\'t restate the schedule; a short acknowledgement is '
-        "enough, or ask if anything sounds wrong."
+        "enough, or ask if anything sounds wrong. If they asked for something that read-back "
+        "doesn't show, say which part isn't set up and keep it with remember_fact."
     )
 
 
