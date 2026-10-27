@@ -220,12 +220,18 @@ class CozylaChores:
             "WHERE t.status IN ('open', 'snoozed')"
         ):
             task = self.board.get(link["task_id"])
-            day = self._wall_day(by_uid.get(link["chore_uid"])) or self._round_day(task, today)
-            if today - LOOK_BACK <= day <= today:
-                rounds.setdefault(day, []).append((task, link["chore_uid"]))
+            one_off = self._wall_day(by_uid.get(link["chore_uid"]))
+            # An either-day round's tick can be on either day (F9a).
+            days = [one_off] if one_off else self.board.round_days(task) or [today]
+            for day in days:
+                if today - LOOK_BACK <= day <= today:
+                    rounds.setdefault(day, []).append((task, link["chore_uid"]))
+        closed: set[int] = set()
         for day, items in rounds.items():
             records = await self.client.chore_records(day)
             for task, uid in items:
+                if task.id in closed:
+                    continue
                 for record in records:
                     if record.chore_uid != uid or record.status != "completed":
                         continue
@@ -235,6 +241,7 @@ class CozylaChores:
                     doer = self.services.store.get_member(member_id) if member_id else self._admin()
                     await self.board.complete(task.id, doer)
                     self._caught_up(task.id)  # that run came from the wall: no tick back
+                    closed.add(task.id)
                     break
 
     # ----- to the wall --------------------------------------------------------------------
@@ -250,7 +257,11 @@ class CozylaChores:
             for run in runs:
                 member = self._to_cozyla.get(run["done_by"]) if run["done_by"] else None
                 if chore is not None and not run["missed"] and run["due_on"] and member:
-                    day = self._wall_day(chore) or date.fromisoformat(run["due_on"])
+                    day = self._wall_day(chore) or self.board.done_day(
+                        date.fromisoformat(run["due_on"]),
+                        datetime.fromisoformat(run["done_at"]),
+                        self.board.get(link["task_id"]),
+                    )
                     who = member if member in chore.members else chore.members[0]
                     await self.client.check_chore(chore.uid, who, day, True)
                     self._first_time(f"{chore.uid}_{who}_{day}")

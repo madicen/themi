@@ -60,7 +60,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
-| F9 | Exercise schedules: either-day rounds, rest days, sunset, distance plans | Feedback | [ ] |
+| F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [~] |
+| F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
+| F9c | Exercise schedules: distance plans | Feedback | [ ] |
 | L1 | Lists on demand | Lists | [ ] |
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
@@ -2918,12 +2920,13 @@ Notes (2026-10-26):
   the day", adjusted from her feedback. Habit timing that learns is a follow-up.
 - The Cozyla branch (C1) also used migration 0033; it was renumbered to 0034 when rebased.
 
-### F9 · Exercise schedules: either-day rounds, rest days, sunset, distance plans
-Status: [ ]
+### F9a · Exercise schedules: either-day rounds, rest days, a missed day moves to the next
+Status: [~]
 Depends on: F7, F8
 From Erin's running set-up (bug #10): "Tuesday, Thursday, and Saturday or Sunday, an afternoon
 check-in at least an hour before sunset. If I miss a day, prompt me the next day. Never two
 days in a row. Next week is 1.3 miles, then 1.5, then up 0.25 a week, stepping up on Tuesdays."
+F9 was split: this part is the schedule; F9b is sunset times, F9c the distance plan.
 
 Build:
 - Either-day rounds in the schedule phrases: "Saturday or Sunday" is one round that's due
@@ -2932,14 +2935,24 @@ Build:
   round moves to the next allowed day rather than the next listed day.
 - "If I miss a day, the next day": a `missed` choice that moves the round to tomorrow (if the
   rest rule allows), alongside roll and catch_up.
+- The wall: an either-day routine or chore shows on both days, and a tick on either closes
+  the round.
+- Read-backs for all of these, built from what was stored; tests with a frozen clock across
+  a week, including a missed Tuesday and a run on Sunday followed by Monday.
+
+### F9b · Exercise schedules: sunset-relative times
+Status: [ ]
+Depends on: F9a
 - Sunset-relative times ("an hour before sunset"): needs the family's location (a setting,
   coarse is enough) and an offline sunset calculation (for example the `astral` library);
-  read back as "about 5:10 pm today".
+  read back as "about 5:10 pm today". The wall routine's part of the day follows it.
+
+### F9c · Exercise schedules: distance plans
+Status: [ ]
+Depends on: F9a
 - A progression on a task: a quantity that steps on a weekday ("1.3 miles, then 1.5, then up
   0.25 a week, on Tuesdays"), shown in the nudge ("Check-in: Go for a run (1.5 miles this
   week)") and read back exactly, like schedules.
-- Read-backs for all of these, built from what was stored; tests with a frozen clock across
-  a week, including a missed Tuesday and a run on Sunday followed by Monday.
 
 ### L1 · Lists on demand
 Status: [ ]

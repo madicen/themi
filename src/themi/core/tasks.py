@@ -34,6 +34,7 @@ from themi.core.repeat import (
     parse,
     previous_occurrence,
     read_back,
+    round_end,
 )
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -61,6 +62,7 @@ SHARED_OVERDUE_TEXT = "Overdue for both of you: {title} (last done {ago})"
 NEXT_ROUND_TEXT = " Next round: {when}."
 STEP_UP_CATEGORY = "chore_step_up"
 STEP_UP_EXECUTOR = "tasks.step_up"
+MISSED = ("roll", "catch_up", "next_day")  # what happens to a round that passes undone
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 LAST_ROUND_TEXT = " That was the last one."
@@ -92,7 +94,7 @@ class Task:
     shared: bool = False  # escalated to both: on everyone's list, anyone can do it
     # Anchored schedules (F7): fixed dates. Floating ones stay in times_per_week.
     repeat: Repeat | None = None
-    missed: str = "roll"  # a missed anchored round: "roll" on, or "catch_up"
+    missed: str = "roll"  # a missed anchored round: "roll" on, "catch_up", or "next_day"
     due_before_task: int | None = None  # due the day before that chore's round
     check_in: bool = False  # "did you...?": the nudge is labelled "Check-in:"
     either: bool = False  # a chore either of you can do, every round (on both lists)
@@ -142,7 +144,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         escalate_to=row["escalate_to"],
         shared=bool(row["shared"]),
         repeat=Repeat.from_json(json.loads(row["repeat"])) if row["repeat"] else None,
-        missed=row["missed"],
+        missed="next_day" if row["missed_next_day"] else row["missed"],
         due_before_task=row["due_before_task"],
         check_in=bool(row["check_in"]),
         either=bool(row["either"]),
@@ -628,8 +630,8 @@ class TaskBoard:
             raise ValueError("escalation has to come after the minimum, not before it")
         if escalate_to not in ("owner", "both"):
             raise ValueError("escalate_to is 'owner' or 'both'")
-        if missed not in ("roll", "catch_up"):
-            raise ValueError("missed is 'roll' or 'catch_up'")
+        if missed not in MISSED:
+            raise ValueError("missed is 'roll', 'catch_up' or 'next_day'")
         if due_before_task is not None:
             if due_before_task == task_id:
                 raise ValueError("a chore can't be due before itself")
@@ -639,13 +641,14 @@ class TaskBoard:
         floating = repeat is not None and not repeat.anchored
         self.db.execute(
             "UPDATE tasks SET times_per_week = ?, repeat = ?, due_before_task = ?, missed = ?, "
-            "minimum_days = ?, escalate_days = ?, escalate_to = ?, either = ?, shared = ? "
-            "WHERE id = ?",
+            "missed_next_day = ?, minimum_days = ?, escalate_days = ?, escalate_to = ?, "
+            "either = ?, shared = ? WHERE id = ?",
             (
                 repeat.times_per_week if floating and repeat else None,
                 json.dumps(repeat.to_json()) if repeat and repeat.anchored else None,
                 due_before_task,
-                missed,
+                "roll" if missed == "next_day" else missed,  # its own column (0047)
+                int(missed == "next_day"),
                 minimum_days or None,
                 escalate_days or None,
                 escalate_to if escalate_days else None,
@@ -694,6 +697,8 @@ class TaskBoard:
             parts.append(f"after {_days(task.escalate_days)} {verb} {who}")
         if task.repeat is not None and task.missed == "catch_up":
             parts.append("a missed round stays owed")
+        if task.repeat is not None and task.missed == "next_day":
+            parts.append("a missed day moves to the next day")
         return "; ".join(parts)
 
     def next_dates(self, task: Task, count: int = 3) -> list[datetime]:
@@ -717,7 +722,37 @@ class TaskBoard:
         if task.repeat.at is None:  # a date-only round today is still today's
             now = self._day_start(self._today()) - timedelta(microseconds=1)
         found = next_occurrences(task.repeat, now, self._tz())
-        return found[0].date() if found else None
+        return self._after_rest(task, found[0].date()) if found else None
+
+    def round_end(self, task: Task) -> date | None:
+        """The last day the current round is on time: the day after its due date for an
+        either-day round ("Saturday or Sunday"), else the due date (F9a)."""
+        if task.due_on is None or task.repeat is None:
+            return task.due_on
+        return round_end(task.repeat, task.due_on)
+
+    def round_days(self, task: Task) -> list[date]:
+        """The days the current round can be done on time, for ticks on the wall."""
+        end = self.round_end(task)
+        if task.due_on is None or end is None:
+            return []
+        return [task.due_on + timedelta(days=n) for n in range((end - task.due_on).days + 1)]
+
+    def done_day(self, due_on: date, done_at: datetime, task: Task) -> date:
+        """Which day a round's tick goes on: the day it was done, when that was one of the
+        round's days (Sunday for a weekend run done Sunday), else its due date."""
+        day = done_at.astimezone(self._tz()).date()
+        end = round_end(task.repeat, due_on) if task.repeat is not None else due_on
+        return day if due_on <= day <= end else due_on
+
+    def _after_rest(self, task: Task, day: date) -> date:
+        """ "Never two days in a row": not the day after the last time it was done (F9a)."""
+        if task.repeat is None or not task.repeat.rest:
+            return day
+        last = self._last_done(task)
+        if last is None:
+            return day
+        return max(day, last.astimezone(self._tz()).date() + timedelta(days=2))
 
     def _deadline_due(self, task: Task) -> date | None:
         """The day before the other chore's round, unless this chore was already done for
@@ -751,14 +786,15 @@ class TaskBoard:
             after = self._day_start(last_day + timedelta(days=1)) - timedelta(microseconds=1)
             found = next_occurrences(task.repeat, after, self._tz())
             if found:
-                return found[0].date()
+                return self._after_rest(task, found[0].date())
             return None if task.repeat.until else today + timedelta(days=7)
         assert task.times_per_week is not None
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
     async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
         today = self._today()
-        on_time = task.due_on is None or today <= task.due_on
+        end = self.round_end(task)
+        on_time = end is None or today <= end
         now = to_utc_iso(clock.now())
         self.db.execute(
             "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
@@ -795,7 +831,8 @@ class TaskBoard:
 
     async def _settle_missed_round(self, task: Task) -> Task:
         """An anchored round whose day has passed: roll on to the next date (recording a missed
-        run), or, for catch-up chores, leave it owed. Deadline chores follow their target."""
+        run), for catch-up chores leave it owed, or for next-day ones move it to tomorrow
+        (F9a). Deadline chores follow their target."""
         today = self._today()
         if task.due_before_task is not None:
             due = self._deadline_due(task)
@@ -806,14 +843,23 @@ class TaskBoard:
                     self._record_missed(task)
                 self._move_round(task, due)
             return self.get(task.id)
-        if task.repeat is None or task.due_on is None or task.due_on >= today:
+        end = self.round_end(task)
+        if task.repeat is None or end is None or end >= today:
             return task
         if task.missed == "catch_up":
             return task
+        if task.missed == "next_day":  # unless the next round comes first: then it rolls on
+            tomorrow = self._after_rest(task, today)
+            following = next_occurrences(
+                task.repeat, self._day_start(end + timedelta(days=1)), self._tz()
+            )
+            if following and tomorrow < following[0].date():
+                self._move_round(task, tomorrow)
+                return self.get(task.id)
         self._record_missed(task)
         found = next_occurrences(task.repeat, clock.now(), self._tz())
         if found:
-            self._move_round(task, found[0].date())
+            self._move_round(task, self._after_rest(task, found[0].date()))
         elif task.repeat.until is not None:
             await self._finish_course(task, False)
         return self.get(task.id)
@@ -1184,7 +1230,9 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "empty. at_least_every_days: overdue after that many days (0 for none). "
     "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
     "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
-    "next date if a round passes undone (usual), or 'catch_up' to keep it owed. either: true "
+    "next date if a round passes undone (usual), 'catch_up' to keep it owed, or 'next_day' "
+    "('if I miss a day, prompt me the next day'). Either-day rounds and rest days go in the "
+    "phrase: 'every Tue, Thu and Sat or Sun, never two days in a row'. either: true "
     "when either of them can do it each time (it's on both lists). Use it after "
     "create_task, also for repeating reminders ('always remind me about the bins on "
     "Tuesdays'). Themi reads the saved schedule back to them itself.",
@@ -1194,7 +1242,7 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         "at_least_every_days": {"type": "number"},
         "escalate_after_days": {"type": "number"},
         "escalate_to": {"type": "string", "enum": ["owner", "both"]},
-        "missed": {"type": "string", "enum": ["roll", "catch_up"]},
+        "missed": {"type": "string", "enum": list(MISSED)},
         "due_before_task": {"type": "integer"},
         "either": {"type": "boolean"},
     },

@@ -111,11 +111,12 @@ class CozylaRoutines:
             "WHERE t.status IN ('open', 'snoozed')"
         ):
             task = self.board.get(link["task_id"])
-            if task.due_on is None or not today - LOOK_BACK <= task.due_on <= today:
-                continue
-            if task.due_on not in by_day:
-                by_day[task.due_on] = await self.client.routine_records(task.due_on)
-            for record in by_day[task.due_on]:
+            days = [d for d in self.board.round_days(task) if today - LOOK_BACK <= d <= today]
+            for day in days:  # an either-day round's tick can be on either day (F9a)
+                if day not in by_day:
+                    by_day[day] = await self.client.routine_records(day)
+            records = [r for day in days for r in by_day[day]]
+            for record in records:
                 if record.routine_id != link["routine_id"] or not record.completed:
                     continue
                 if not self._first_time(f"{record.routine_id}_{record.day}"):
@@ -123,6 +124,7 @@ class CozylaRoutines:
                 doer = self.store.get_member(task.assignee) if task.assignee else self._admin()
                 await self.board.complete(task.id, doer)
                 self._caught_up(task.id)
+                break
 
     async def _ticks_to_wall(self) -> None:
         for link in self.db.query("SELECT * FROM cozyla_routines"):
@@ -131,7 +133,11 @@ class CozylaRoutines:
                 (link["task_id"], link["last_run"]),
             ):
                 if not run["missed"] and run["due_on"]:
-                    day = date.fromisoformat(run["due_on"])
+                    day = self.board.done_day(
+                        date.fromisoformat(run["due_on"]),
+                        datetime.fromisoformat(run["done_at"]),
+                        self.board.get(link["task_id"]),
+                    )
                     await self.client.check_routine(link["routine_id"], day, True)
                     self._first_time(f"{link['routine_id']}_{day}")
                 self.db.execute(

@@ -27,7 +27,11 @@ def to_wall(rep: Repeat | None, due_on: date) -> WallSchedule:
     if rep.kind == "daily":
         every, days = "Daily", ""
     elif rep.kind == "weekly":
-        every, days = "Weekly", ",".join(DAY_NAMES[d] for d in sorted(rep.weekdays))
+        # An either-day round ("Saturday or Sunday") shows on both days (F9a).
+        every, days = (
+            "Weekly",
+            ",".join(DAY_NAMES[d] for d in sorted({*rep.weekdays, *rep.or_days})),
+        )
     else:
         every, days = "Monthly", str(rep.month_day or 1)
     return WallSchedule(

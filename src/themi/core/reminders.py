@@ -10,7 +10,8 @@
     2. ...and the smallest version of it (its lightest step).
     3. ...and a moment that looks lighter, and an offer to move it or hand it on.
   Never more demanding, only more concrete (the plan's PDA rules). Chores whose
-  missed rounds roll on, and deadline chores, move by themselves instead.
+  missed rounds roll on or move to the next day, and deadline chores, move by
+  themselves instead.
 
 Importance is set with `set_task_importance`; medicine-like chores from the
 wall start as high.
@@ -91,7 +92,9 @@ class Reminders:
             left = [
                 t.title
                 for t in self.board.open_for(member)
-                if t.due_on == today and t.importance != "low" and not self.board.held(t, member)
+                if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
+                and t.importance != "low"
+                and not self.board.held(t, member)
             ]
             if not left:
                 continue
@@ -126,6 +129,8 @@ class Reminders:
             task = self.board.get(row["id"])
             if task.due_on is None or self._moves_by_itself(task):
                 continue
+            if (self.board.round_end(task) or task.due_on) >= today:
+                continue  # an either-day round's second day is still on time
             last = row["overdue_reminded_on"]
             if last and (today - date.fromisoformat(last)).days < CADENCE[task.importance]:
                 continue
@@ -155,10 +160,11 @@ class Reminders:
 
     @staticmethod
     def _moves_by_itself(task: Task) -> bool:
-        """Missed rounds that roll on, and deadline chores, aren't overdue: they move."""
+        """Missed rounds that roll on or move to the next day, and deadline chores, aren't
+        overdue: they move."""
         if task.due_before_task is not None:
             return True
-        return task.repeat is not None and task.missed == "roll"
+        return task.repeat is not None and task.missed in ("roll", "next_day")
 
     def _nudged_today(self, row: dict[str, Any], today: date) -> bool:
         stamp = row["overdue_notified_at"]
