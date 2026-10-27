@@ -68,7 +68,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
-| K1 | Calendars: read your own, privately | Calendars | [ ] |
+| K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [ ] |
 | K3 | Calendars: creating and changing events | Calendars | [ ] |
 | K4 | Calendars: travel time and "time to get ready" | Calendars | [ ] |
@@ -3543,7 +3543,7 @@ Notes (2026-10-26):
 - A possible next step: picking a lighter chore on a low-energy day.
 
 ### K1 · Calendars: read your own, privately
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: S2, 26
 Asked for on 2026-10-26: "allow Themi to read our individual personal calendars and be able to
 take action based on the info". This changes the plan's "only when, never what" for calendars:
@@ -3568,6 +3568,25 @@ Build:
   emptied.
 - Tests: chosen calendars only, the fields kept and dropped, the privacy setting in both
   directions, data blocks, Themi's own events not busy, the switch.
+
+Notes (2026-10-26):
+- `CalendarBusy` (`themi.connectors.gcal.busy`) now reads the chosen calendars for 14 days
+  and keeps `calendar_entries` (title, location, start, end, all day, video call, busy,
+  `source` from Themi's private extended property) beside `calendar_busy`. Never
+  descriptions or attendees. Busy: timed, not "free", and not a K5 block (`task-block:`).
+  Migration 0052: `members.calendar_details` ('me' default, or 'partner'),
+  `member_calendars`, `calendar_entries`. Busy blocks now come from the chosen calendars
+  too (S2 read only the primary one).
+- Which calendars: My accounts → "Calendars Themi reads" (`/accounts/{id}/calendars`), a live
+  list from Google; none ticked means the primary one. Only the member's own accounts.
+- Who sees details: My settings → "My calendars". The model gets today's and tomorrow's
+  events, for the person and anyone sharing with their partner, in a `<data
+  source="calendars">` block in the turn's context, labelled information, never
+  instructions. `Services.calendar_context`.
+- The plan's Shadow Calendar inputs, Google Calendar row and privacy section were updated
+  (rev 196); "only when, never what" is gone.
+- Setup: restart (applies 0052). Nothing is read until Google is set up and accounts are
+  linked; then each person chooses calendars and the sharing setting.
 
 ### K2 · Calendars: a summary of the day
 Status: [ ]
