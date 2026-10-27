@@ -53,6 +53,7 @@ from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
@@ -154,6 +155,7 @@ def build_app(
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
     calendar_busy: CalendarBusy | None = None
+    task_blocks: TaskBlocks | None = None
     if services.google is not None:
         services.calendar = CalendarSync(store, services.google)
         TaskCalendar(services, tasks, services.calendar, scheduler).install()
@@ -162,6 +164,8 @@ def build_app(
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
         Events(services).install()
+        task_blocks = TaskBlocks(services, tasks)
+        task_blocks.install()
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
@@ -215,6 +219,8 @@ def build_app(
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:
         periodic.append(PeriodicTask("calendar.busy", timedelta(minutes=15), calendar_busy.refresh))
+    if task_blocks is not None:
+        periodic.append(PeriodicTask("blocks.tick", timedelta(minutes=5), task_blocks.tick))
     if travel_heads_ups is not None:
         periodic.append(
             PeriodicTask("travel.heads_up", timedelta(minutes=5), travel_heads_ups.heads_up)

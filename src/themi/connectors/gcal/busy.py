@@ -147,6 +147,11 @@ class CalendarBusy:
         with self.db.transaction():
             self.db.execute("DELETE FROM calendar_busy WHERE account_id = ?", (account_id,))
             self.db.execute("DELETE FROM calendar_entries WHERE account_id = ?", (account_id,))
+            self.db.execute(
+                "INSERT INTO calendar_reads (account_id, member_id, read_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(account_id) DO UPDATE SET read_at = excluded.read_at",
+                (account_id, member.id, stamp),
+            )
             for calendar_id, e in found:
                 self.db.execute(
                     "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, "

@@ -34,7 +34,7 @@ from themi.accounts import LinkedAccount, Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarError, event_id
-from themi.connectors.gcal.busy import Entry, event_line
+from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core.lists import name_key
 from themi.core.rules import RuleError
@@ -112,6 +112,12 @@ def asked_for(title: str, request_text: str) -> bool:
         return False
     words = [w for w in name_key(title).split() if len(w) > 2 and w not in STOPWORDS]
     return bool(words) and all(re.search(rf"\b{re.escape(w)}", said) for w in words)
+
+
+def when_words(when: When, tz: ZoneInfo) -> str:
+    """ "Tue 03 Nov, 3-4 pm", or "Sat 24 Oct, all day"."""
+    entry = Entry(0, "", "", when.starts, when.ends, when.all_day, False, None)
+    return event_line(entry, tz).split(": ", 1)[0]
 
 
 def describe(title: str, when: When, location: str, tz: ZoneInfo) -> str:
@@ -195,10 +201,7 @@ class Events:
         matches = [f for f in found.values() if key and key in name_key(f.title)]
         if len(matches) == 1:
             return matches[0]
-        listed = "; ".join(
-            f"{f.title} ({describe(f.title, f.when, '', tz).split(', ', 1)[1]})"
-            for f in matches[:6]
-        )
+        listed = "; ".join(f"{f.title} ({when_words(f.when, tz)})" for f in matches[:6])
         if matches:
             raise ToolFailed(
                 f'More than one event matches "{words}": {listed}. Ask which, or give its date.'
@@ -222,6 +225,14 @@ class Events:
     # ----- doing it -----------------------------------------------------------------------
 
     async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        _, text = await self.make(ctx.member, payload, ctx.idempotency_key)
+        if str(payload["source"]).startswith("email:"):
+            await self._after_email_event(ctx, text)
+        return text
+
+    async def make(self, member: Member, payload: dict[str, Any], key: str) -> tuple[int, str]:
+        """Put an event on the calendar from an add payload; returns its `themi_events` id
+        and the read-back. `key` (the action's) keeps a retry from making it twice."""
         tz = self._tz()
         when = When(
             datetime.fromisoformat(payload["starts"]),
@@ -229,19 +240,17 @@ class Events:
             bool(payload["all_day"]),
         )
         title, location = str(payload["title"]), str(payload.get("location") or "")
-        account_id, calendar_id = await self._target(ctx.member, str(payload["calendar"]))
-        made = self.db.one(
-            "SELECT * FROM themi_events WHERE action_key = ?", (ctx.idempotency_key,)
-        )
+        account_id, calendar_id = await self._target(member, str(payload["calendar"]))
+        made = self.db.one("SELECT * FROM themi_events WHERE action_key = ?", (key,))
         if made is None:  # idempotent: a retry doesn't make it twice
             themi_id = self.db.execute(
                 "INSERT INTO themi_events (member_id, account_id, calendar_id, event_id, title, "
                 "location, starts_at, ends_at, all_day, source, action_key, created_at) "
                 "VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    ctx.member.id, account_id, calendar_id, title, location,
+                    member.id, account_id, calendar_id, title, location,
                     to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day),
-                    payload["source"], ctx.idempotency_key, to_utc_iso(clock.now()),
+                    payload["source"], key, to_utc_iso(clock.now()),
                 ),
             )  # fmt: skip
             eid = event_id("event", themi_id, self._seed())
@@ -250,12 +259,9 @@ class Events:
             themi_id, eid = made["id"], made["event_id"]
         await self._write(account_id, calendar_id, eid, title, location, when, themi_id)
         if payload["calendar"] != "family":
-            self._show(ctx.member, account_id, calendar_id, eid, title, location, when, themi_id)
+            self._show(member, account_id, calendar_id, eid, title, location, when, themi_id)
         where = "the family calendar" if payload["calendar"] == "family" else "your calendar"
-        text = f"On {where}: {describe(title, when, location, tz)}."
-        if str(payload["source"]).startswith("email:"):
-            await self._after_email_event(ctx, text)
-        return text
+        return themi_id, f"On {where}: {describe(title, when, location, tz)}."
 
     async def _execute_move(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
         found = self._payload_found(payload)
@@ -305,9 +311,15 @@ class Events:
             "summary": title,
             "location": location,
             **_times(when, self._tz()),
-            "extendedProperties": {"private": {"themi": f"event:{themi_id}"}},
+            "extendedProperties": {"private": {"themi": self._marker(themi_id)}},
         }
         await sync.upsert(account_id, calendar_id, eid, body)
+
+    def _marker(self, themi_id: int) -> str:
+        """What the event carries: "task-block:<task>" for time blocked for a task (K5: never
+        busy time), else "event:<id>"."""
+        source = self.db.scalar("SELECT source FROM themi_events WHERE id = ?", (themi_id,))
+        return source if str(source or "").startswith(TASK_BLOCK) else f"event:{themi_id}"
 
     def _show(
         self, member: Member, account_id: int, calendar_id: str, eid: str, title: str,
@@ -322,7 +334,8 @@ class Events:
             (
                 member.id, account_id, calendar_id, eid, title, location,
                 to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day),
-                int(not when.all_day), f"event:{themi_id}", to_utc_iso(clock.now()),
+                int(not when.all_day and not self._marker(themi_id).startswith(TASK_BLOCK)),
+                self._marker(themi_id), to_utc_iso(clock.now()),
             ),
         )  # fmt: skip
 
@@ -538,9 +551,7 @@ async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         "ends": when.ends.isoformat(),
         "all_day": when.all_day,
     }
-    summary = (
-        f"Moving {found.title} to {describe(found.title, when, '', events._tz()).split(', ', 1)[1]}"
-    )
+    summary = f"Moving {found.title} to {when_words(when, events._tz())}"
     proposal = Proposal(OWN if found.themi_id else CHANGE, summary, MOVE, payload)
     return replace(proposal, requested=found.themi_id is not None)
 
@@ -555,10 +566,9 @@ async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposa
 async def delete_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     events = _events(ctx)
     found = events.find(ctx.member, args["event"], args["on"])
-    when_words = describe(found.title, found.when, "", events._tz()).split(", ", 1)[1]
     proposal = Proposal(
         OWN if found.themi_id else CHANGE,
-        f"Deleting {found.title} ({when_words}) from the calendar",
+        f"Deleting {found.title} ({when_words(found.when, events._tz())}) from the calendar",
         DELETE,
         _found_payload(found),
     )
