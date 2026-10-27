@@ -71,7 +71,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
-| K4 | Calendars: travel time and "time to get ready" | Calendars | [ ] |
+| K4 | Calendars: travel time and "time to get ready" | Calendars | [x] |
 | K5 | Calendars: blocking time for tasks | Calendars | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
@@ -3666,7 +3666,7 @@ Notes (2026-10-26):
 - Setup: restart (applies 0054).
 
 ### K4 · Calendars: travel time and "time to get ready"
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: K1
 The family chose (2026-10-26): TomTom's Routing API with live traffic (its free plan, no card;
 check the current allowance), and a rough estimate from distance without a key.
@@ -3685,6 +3685,26 @@ check the current allowance), and a rough estimate from distance without a key.
 - `tests/fakes/tomtom.py`: routing and geocoding, with failures. No real calls in tests.
 - Setup for the family: a TomTom developer account and key (`TOMTOM_API_KEY`), and the home
   address on the Family page.
+
+Notes (2026-10-26):
+- `themi.connectors.travel.TravelClient`: TomTom's geocoder and router (live traffic, arriving
+  at the start) with `TOMTOM_API_KEY`; without it, OpenStreetMap's Nominatim (named
+  User-Agent) and an estimate: straight-line km x 1.35 at 45 km/h plus 5 minutes, rounded up
+  to 5. Always built (the key is optional); the harness passes `fake_travel`.
+- `themi.core.travel.TravelHeadsUps`, job `travel.heads_up` every 5 minutes, next 24 hours:
+  skips all-day, video calls, events without a place and anything within 0.5 km of home. The
+  rough estimate decides when an event is close (no lookups until about 45 minutes before
+  it could matter); then the route; at "leave by" minus getting ready (3 minutes early at
+  most) one message, normal priority, deadline the leave time: "Dentist at 3 pm, about 35
+  min with traffic: leave around 2:25 pm." Without traffic it says "(a rough guess, without
+  traffic)"; a failed route falls back to the estimate. One per event and start time.
+- Migration 0055: `members.getting_ready_minutes` (15) and `leave_heads_up` (on), on My
+  settings; `family_home` (address and coordinates, the Family page's "Home"), `geocodes`
+  (places looked up; not found is retried after a day), `travel_headsups`.
+- Logs: `?key=` in a URL is now redacted (TomTom's key travels in the query).
+- F9b can use `family_home` for sunset times.
+- Setup: restart (applies 0055); an admin saves the home address on the Family page;
+  optionally `TOMTOM_API_KEY` in `.env` for live traffic (restart after).
 
 ### K5 · Calendars: blocking time for tasks
 Status: [ ]
