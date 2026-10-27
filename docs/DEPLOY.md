@@ -44,7 +44,7 @@ the options I checked:
 | **Oracle Cloud Always Free** (Arm A1) | Up to 4 OCPU and 24 GB per Oracle's docs, though reports say this was halved in June 2026 | Free | Capacity is often unavailable. Idle VMs (under about 20% CPU, network and memory over 7 days) can be reclaimed. |
 | **Hetzner Cloud** CX23 | 2 vCPU, 4 GB RAM, 40 GB | About €5.49/month plus €0.50 for IPv4, excluding VAT (after the June 2026 price rise) | EU and US locations. Best value among paid options. |
 | **AWS Lightsail** | The $5 plan is 512 MB, which is too small. The $7 plan has 1 GB. | $7/month for 1 GB | Simple, but less memory for the money. |
-| **A spare PC or Raspberry Pi at home** | Whatever it has | Electricity | Data stays home, and it can run Ollama too. Same steps from section 4. |
+| **A spare PC or Raspberry Pi at home** | Whatever it has | Electricity | Data stays home, and it can run Ollama too. Same steps from section 4; for a Pi, see `docs/RASPBERRY_PI.md`. |
 
 The plan called the e2-micro free. In fact it costs about $3.65 a month for its IPv4
 address, which Google started charging for in February 2024. A VM without a public address
@@ -257,6 +257,21 @@ Sources:
   - Then update `.env` and run `docker compose up -d`.
 
 ## 9. Upgrades
+
+Copy `deploy/update.sh` next to `compose.yml` once (`docs/RASPBERRY_PI.md` has the
+details). Then an upgrade is one line:
+
+```sh
+~/themi/update.sh 1.4.0      # pull, copy the database, switch, wait for healthy
+~/themi/update.sh 1.3.2 --restore   # going back by hand
+```
+
+It pulls first (nothing stops if that fails), copies the database on its volume and backs
+it up to storage when that's set up, switches `THEMI_VERSION` in `.env`, restarts, and
+waits for the health check; if the new version isn't healthy, the old one and the copy go
+back. A release is `tools/release.sh 1.4.0` on your machine, once CI on main is green.
+
+By hand, without the script:
 
 ```sh
 cd ~/themi
