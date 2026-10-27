@@ -6,8 +6,9 @@
   wrote go straight on; items the model inferred are staged (`list_add`) and wait for a
   yes. A whole list is deleted without asking only when they named it (`list_delete`).
 - Ticked items stay, crossed off, until someone clears them (the family's choice).
-- L1b keeps a list in step with a Cozyla wall list (`cozyla_list_id`); until then lists live
-  in Themi and on the website's Lists page.
+- A list can be kept in step with a list on the Cozyla wall (L1b, `themi.core.cozyla_lists`):
+  the wall's own lists come in, and a list goes on the wall when someone asks. Changes made
+  here mark the item pending and removals are queued for the wall; the sync does the rest.
 """
 
 from __future__ import annotations
@@ -43,21 +44,21 @@ def _clean(raw: str, limit: int, what: str) -> str:
     return text
 
 
-def _key(text: str) -> str:
+def name_key(text: str) -> str:
     """For comparing names: lowercase words, no punctuation."""
     return " ".join(re.sub(r"[^\w\s&'/-]", " ", text.lower()).split())
 
 
-def _list_key(text: str) -> str:
+def list_key(text: str) -> str:
     """A list's name as people say it: "the packing list" is "packing"."""
-    key = re.sub(r"^(?:the|my|our)\s+", "", _key(text))
+    key = re.sub(r"^(?:the|my|our)\s+", "", name_key(text))
     return re.sub(r"\s+list$", "", key) or key
 
 
 def _said(names: list[str], request_text: str) -> bool:
     """Every name appears, as whole words, in what they wrote this turn."""
-    said = _key(request_text)
-    return bool(said) and all(re.search(rf"\b{re.escape(_key(n))}\b", said) for n in names)
+    said = name_key(request_text)
+    return bool(said) and all(re.search(rf"\b{re.escape(name_key(n))}\b", said) for n in names)
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class NamedList:
     name: str
     owner_id: int | None  # None: the household's
     items: tuple[ListItem, ...]
+    wall_id: str | None = None  # the Cozyla list it's kept in step with (L1b)
 
     @property
     def personal(self) -> bool:
@@ -124,16 +126,15 @@ class Lists:
         """The list they mean: the same name, or the one list whose name has all their words
         ("packing" for "packing for the trip"). Raises ToolFailed naming the lists there are."""
         lists = self.visible(member)
-        wanted = _list_key(name)
-        exact = [nl for nl in lists if _list_key(nl.name) == wanted]
+        wanted = list_key(name)
+        exact = [nl for nl in lists if list_key(nl.name) == wanted]
         if len(exact) == 1:
             return exact[0]
         words = wanted.split()
         close = [
             nl
             for nl in lists
-            if words
-            and all(any(w.startswith(x) for w in _list_key(nl.name).split()) for x in words)
+            if words and all(any(w.startswith(x) for w in list_key(nl.name).split()) for x in words)
         ]
         if len(close) == 1:
             return close[0]
@@ -155,14 +156,14 @@ class Lists:
                 "SELECT * FROM list_items WHERE list_id = ? ORDER BY id", (row["id"],)
             )
         )
-        return NamedList(row["id"], row["name"], row["owner_id"], items)
+        return NamedList(row["id"], row["name"], row["owner_id"], items, row["cozyla_list_id"])
 
     # ----- changing -----------------------------------------------------------
 
     def create(self, member: Member, name: str, *, personal: bool) -> NamedList:
         name = _clean(name, MAX_NAME, "list")
         for nl in self.visible(member):
-            if _list_key(nl.name) == _list_key(name):
+            if list_key(nl.name) == list_key(name):
                 raise InvalidValue(f'there\'s a list called "{nl.name}" already')
         list_id = self.db.execute(
             "INSERT INTO lists (name, owner_id, created_by, created_at) VALUES (?, ?, ?, ?)",
@@ -174,13 +175,13 @@ class Lists:
 
     def add(self, nl: NamedList, names: list[str], by: Member | None) -> list[str]:
         """Put items on a list; returns the ones that weren't on it (unticked) already."""
-        there = {_key(i.name) for i in nl.open_items}
+        there = {name_key(i.name) for i in nl.open_items}
         added = []
         for raw in names:
             name = _clean(raw, MAX_ITEM, "list item")
-            if _key(name) in there:
+            if name_key(name) in there:
                 continue
-            ticked = next((i for i in nl.ticked if _key(i.name) == _key(name)), None)
+            ticked = next((i for i in nl.ticked if name_key(i.name) == name_key(name)), None)
             if ticked is not None:  # back on: untick it rather than list it twice
                 self.tick(ticked, False, by)
             else:
@@ -189,13 +190,13 @@ class Lists:
                     "VALUES (?, ?, ?, ?)",
                     (nl.id, name, by.id if by else None, to_utc_iso(clock.now())),
                 )
-            there.add(_key(name))
+            there.add(name_key(name))
             added.append(name)
         return added
 
     def tick(self, item: ListItem, done: bool, by: Member | None) -> None:
         self.db.execute(
-            "UPDATE list_items SET done = ?, done_by = ?, done_at = ? WHERE id = ?",
+            "UPDATE list_items SET done = ?, done_by = ?, done_at = ?, pending = 1 WHERE id = ?",
             (
                 int(done),
                 by.id if by and done else None,
@@ -205,13 +206,29 @@ class Lists:
         )
 
     def remove(self, item: ListItem) -> None:
+        self._off_the_wall("id = ?", (item.id,))
         self.db.execute("DELETE FROM list_items WHERE id = ?", (item.id,))
 
     def clear_ticked(self, nl: NamedList) -> int:
+        self._off_the_wall("list_id = ? AND done = 1", (nl.id,))
         return self.db.update("DELETE FROM list_items WHERE list_id = ? AND done = 1", (nl.id,))
 
     def delete(self, nl: NamedList) -> None:
+        """Delete a list, and its wall list too if it has one."""
+        if nl.wall_id is not None:
+            self.db.execute(
+                "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) VALUES ('list', ?)",
+                (nl.wall_id,),
+            )
         self.db.execute("DELETE FROM lists WHERE id = ?", (nl.id,))
+
+    def _off_the_wall(self, where: str, params: tuple[Any, ...]) -> None:
+        """Queue the wall's copies of these items for deletion."""
+        self.db.execute(
+            "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) SELECT 'todo', "
+            f"cozyla_todo_id FROM list_items WHERE cozyla_todo_id IS NOT NULL AND {where}",
+            params,
+        )
 
     def match(
         self, nl: NamedList, names: list[str], *, ticked: bool | None = None
@@ -221,9 +238,11 @@ class Lists:
         pool = [i for i in nl.items if ticked is None or i.done == ticked]
         found: list[ListItem] = []
         for raw in names:
-            key = _key(str(raw))
-            exact = [i for i in pool if _key(i.name) == key]
-            close = exact or [i for i in pool if re.search(rf"\b{re.escape(key)}\b", _key(i.name))]
+            key = name_key(str(raw))
+            exact = [i for i in pool if name_key(i.name) == key]
+            close = exact or [
+                i for i in pool if re.search(rf"\b{re.escape(key)}\b", name_key(i.name))
+            ]
             if len(close) != 1:
                 on = and_list([i.name for i in pool]) if pool else "nothing"
                 raise ToolFailed(f'"{raw}" isn\'t one item on {nl.name}. On it: {on}.')
@@ -257,11 +276,20 @@ class Lists:
         if not lists:
             return []
         parts = [
-            f'"{nl.name}"{" (theirs only)" if nl.personal else ""}: {len(nl.open_items)} to go'
+            f'"{nl.name}"{" (theirs only)" if nl.personal else ""}'
+            + (" (on the wall)" if nl.wall_id else "")
+            + f": {len(nl.open_items)} to go"
             + (f", {len(nl.ticked)} ticked" if nl.ticked else "")
             for nl in lists
         ]
         return [OpenItem("Lists: " + "; ".join(parts))]
+
+
+def named_in(nl: NamedList, asked_for: str, request_text: str) -> bool:
+    """Its name, or the words that found it ("the packing list"), are in what they wrote."""
+    said = name_key(request_text)
+    names = {list_key(nl.name), list_key(asked_for)}
+    return bool(said) and any(re.search(rf"\b{re.escape(n)}\b", said) for n in names if n)
 
 
 def words(nl: NamedList) -> str:
@@ -309,14 +337,14 @@ async def create_list(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     lists = _lists(ctx)
     nl = lists.find(ctx.member, args["list"])
-    there = {_key(i.name) for i in nl.open_items}
+    there = {name_key(i.name) for i in nl.open_items}
     names, skipped = [], []
     for raw in args["items"]:
         try:
             name = _clean(raw, MAX_ITEM, "list item")
         except InvalidValue as exc:
             raise ToolFailed(f"{str(exc).capitalize()}.") from exc
-        if _key(name) in there or name in names:
+        if name_key(name) in there or name in names:
             skipped.append(name)
         else:
             names.append(name)
@@ -404,11 +432,9 @@ async def show_lists(ctx: ToolContext, args: dict[str, Any]) -> str:
 )
 async def delete_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     nl = _lists(ctx).find(ctx.member, args["list"])
-    # Named: its name, or the words that found it ("the packing list"), are in what they wrote.
-    said = _key(ctx.request_text)
-    names = {_list_key(nl.name), _list_key(args["list"])}
-    named = bool(said) and any(re.search(rf"\b{re.escape(n)}\b", said) for n in names if n)
+    named = named_in(nl, args["list"], ctx.request_text)
+    wall = ", on the wall too" if nl.wall_id else ""
     proposal = Proposal(
-        DELETE_CATEGORY, f"Deleting the list {nl.name}", DELETE_EXECUTOR, {"list_id": nl.id}
+        DELETE_CATEGORY, f"Deleting the list {nl.name}{wall}", DELETE_EXECUTOR, {"list_id": nl.id}
     )
     return replace(proposal, requested=named)

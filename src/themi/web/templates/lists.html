@@ -7,7 +7,7 @@ here. The household's are for everyone; yours are only yours.</p>
 
 {% for nl in lists %}
 <article class="card">
-  <p class="summary">{{ nl.name }}{% if nl.personal %} <span class="muted">· just yours</span>{% endif %}</p>
+  <p class="summary">{{ nl.name }}{% if nl.personal %} <span class="muted">· just yours</span>{% endif %}{% if nl.wall_id %} <span class="muted">· on the wall</span>{% endif %}</p>
   {% for item in nl.items %}
   <div class="row list-item">
     <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/tick" class="inline">
@@ -36,7 +36,7 @@ here. The household's are for everyone; yours are only yours.</p>
     </form>
     {% endif %}
     <details>
-      <summary>Delete this list</summary>
+      <summary>Delete this list{% if nl.wall_id %} (from the wall too){% endif %}</summary>
       <form method="post" action="/lists/{{ nl.id }}/delete">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button>Delete {{ nl.name }} and everything on it</button>

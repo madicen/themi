@@ -9,7 +9,8 @@ happened on the wall since:
   someone: a Themi task for that person, nudged as usual; nobody is named as
   having added it. Assigned to the family member (Cozyla's "Madicen Family"),
   it's shared: on both lists, nudged to both. Unassigned items on other lists
-  ("Things to Cook") are lists, not jobs, and are left alone;
+  ("Things to Cook") are lists, not jobs: Themi's lists keep them (L1b,
+  `themi.core.cozyla_lists`, handed the same read);
 - ticked off: done; ticked back: open again; deleted: cancelled; reassigned:
   the task goes to that person (or to both); moved to another list: the task
   stays on it; a new title or due date: copied over.
@@ -29,16 +30,13 @@ quietly. The configured list's first sync also sends Themi's open one-off
 tasks. Ticked-off to-dos are left alone.
 
 Like the OurGroceries mirror, configuring the list is the go-ahead for
-keeping tasks in step, so those writes don't ask each time. Items for a list
-that aren't anyone's task (`add_to_wall_list`) are staged like any other
-outside change. A failed read backs off from a minute to an hour; a failed
-write retries the same way.
+keeping tasks in step, so those writes don't ask each time. A failed read
+backs off from a minute to an hour; a failed write retries the same way.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
@@ -46,14 +44,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import InvalidValue, Member, NotFound
-from themi.autonomy import ExecutionContext
+from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo, TodoList
-from themi.core.groceries import and_list
+from themi.core.cozyla_lists import WallLists
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
-from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -61,9 +58,6 @@ log = logging.getLogger(__name__)
 MAX_BACKOFF = timedelta(hours=1)
 # Wall to-dos say nothing about the kind of job, so they come in as a light errand.
 WALL_KIND, WALL_EFFORT = "errand", 2
-ADD_CATEGORY = "wall_list_add"
-ADD_EXECUTOR = "cozyla.add"
-MAX_ITEM_LENGTH = 100
 END_OF_DAY = time(23, 59)
 
 
@@ -116,14 +110,16 @@ class CozylaTodos:
         self._to_cozyla: dict[int, str] = {}
         self._family: str | None = None  # the Cozyla member that stands for everyone
         self._default: str | None = None  # the configured list's id
+        self.wall_lists: WallLists | None = None  # Themi's lists on the wall (L1b)
 
     def install(self) -> None:
         self.board.change_listeners.append(self.on_task_changed)
         self.services.wall = self
-        self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         self.services.tools.register(put_task_on_wall_list)
-        self.services.tools.register(add_to_wall_list)
         self.board.wall_notes.append(self.where)
+        if self.services.lists is not None:
+            self.wall_lists = WallLists(self.services, self.services.lists, self.client)
+            self.wall_lists.install()
 
     def where(self, task: Task) -> str | None:
         """Which wall list a task is on, for the model."""
@@ -179,6 +175,12 @@ class CozylaTodos:
             self._applying = False
         current = {t.id: t for t in todos}
         done = await self._push(current)
+        if self.wall_lists is not None:
+            tasks = {
+                r["todo_id"]
+                for r in self.db.query("SELECT todo_id FROM cozyla_links WHERE todo_id IS NOT NULL")
+            }
+            await self.wall_lists.sync(lists, list(current.values()), {default.id}, tasks)
         self._remember(titles, current.values())
         return done
 
@@ -215,12 +217,6 @@ class CozylaTodos:
             "version = version + 1, attempts = 0, retry_after = NULL",
             (task_id, list_id),
         )
-
-    async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
-        items = [str(i) for i in payload["items"]]
-        for item in items:
-            await self.client.create(str(payload["list_id"]), item, assignee=None, due=None)
-        return f"Added {and_list(items)} to {payload['list']}."
 
     # ----- what changed on the wall -------------------------------------------------------
 
@@ -556,37 +552,3 @@ async def put_task_on_wall_list(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed("Repeating chores stay off the wall's to-do lists.")
     wall.put_on(task.id, list_id)
     return f"Task {task.id} ({task.title}) will be on {title} on the wall within a minute."
-
-
-@staged_tool(
-    "add_to_wall_list",
-    "Add items to a list on the Cozyla wall that aren't anyone's job ('add lasagna to Things "
-    "to Cook'). For something a person should do, use create_task and put_task_on_wall_list.",
-    {
-        "list": {"type": "string", "description": "The list's name, as they said it."},
-        "items": {"type": "array", "items": {"type": "string"}},
-    },
-)
-async def add_to_wall_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
-    wall = _wall(ctx)
-    list_id, title = _named_list(wall, args["list"])
-    if list_id == wall.default_list():
-        raise ToolFailed(f"{title} holds tasks: use create_task for it.")
-    items: list[str] = []
-    for raw in args["items"]:
-        item = " ".join(str(raw).split())
-        if item and item.casefold() not in (i.casefold() for i in items):
-            items.append(item[:MAX_ITEM_LENGTH])
-    if not items:
-        raise InvalidValue("no items to add")
-    # Asked for, if every item is in what they just wrote; otherwise it waits for a yes.
-    said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).casefold()
-    asked = all(" ".join(re.sub(r"[^\w\s&'/-]", " ", i).split()).casefold() in said for i in items)
-    summary = and_list(items)
-    return Proposal(
-        ADD_CATEGORY,
-        f"{summary[:1].upper()}{summary[1:]} for {title}",
-        ADD_EXECUTOR,
-        {"list_id": list_id, "list": title, "items": items},
-        requested=bool(said) and asked,
-    )
