@@ -59,7 +59,7 @@ class WallLists:
         wall = {w.id: w for w in wall_lists if w.id not in skip}
         current = {t.id: t for t in todos}
         await self._removals(wall, current)
-        first = self._link_lists(wall)
+        first = await self._link_lists(wall)
         for row in self.db.query("SELECT * FROM lists WHERE cozyla_list_id IS NOT NULL"):
             list_id = row["cozyla_list_id"]
             here = [
@@ -91,9 +91,9 @@ class WallLists:
                 "DELETE FROM list_wall_removals WHERE kind = ? AND wall_id = ?", (kind, wall_id)
             )
 
-    def _link_lists(self, wall: dict[str, TodoList]) -> set[str]:
-        """Follow renames and deletions on the wall, and link or make a list for each new
-        wall list. Returns the wall lists linked just now."""
+    async def _link_lists(self, wall: dict[str, TodoList]) -> set[str]:
+        """Follow renames (either side's) and deletions on the wall, and link or make a list
+        for each new wall list. Returns the wall lists linked just now."""
         linked = {}
         for row in self.db.query("SELECT * FROM lists WHERE cozyla_list_id IS NOT NULL"):
             wall_list = wall.get(row["cozyla_list_id"])
@@ -102,10 +102,7 @@ class WallLists:
                 self._unlink(row["id"])
             else:
                 linked[wall_list.id] = row
-                if wall_list.title.strip() and wall_list.title != row["name"]:
-                    self.db.execute(
-                        "UPDATE lists SET name = ? WHERE id = ?", (wall_list.title, row["id"])
-                    )
+                await self._rename(row, wall_list)
         first = set()
         for wall_id, wall_list in wall.items():
             if wall_id in linked or not wall_list.title.strip():
@@ -122,20 +119,37 @@ class WallLists:
             )
             if same is not None:
                 self.db.execute(  # the wall's spelling, from now on
-                    "UPDATE lists SET cozyla_list_id = ?, name = ? WHERE id = ?",
-                    (wall_id, wall_list.title, same["id"]),
+                    "UPDATE lists SET cozyla_list_id = ?, name = ?, wall_name = ? WHERE id = ?",
+                    (wall_id, wall_list.title, wall_list.title, same["id"]),
                 )
             else:
                 self.db.execute(
-                    "INSERT INTO lists (name, owner_id, created_by, created_at, cozyla_list_id) "
-                    "VALUES (?, NULL, NULL, ?, ?)",
-                    (wall_list.title, to_utc_iso(clock.now()), wall_id),
+                    "INSERT INTO lists (name, owner_id, created_by, created_at, cozyla_list_id, "
+                    "wall_name) VALUES (?, NULL, NULL, ?, ?, ?)",
+                    (wall_list.title, to_utc_iso(clock.now()), wall_id, wall_list.title),
                 )
             first.add(wall_id)
         return first
 
+    async def _rename(self, row: dict[str, Any], wall_list: TodoList) -> None:
+        """Renamed on the wall: renamed here. Renamed here since: renamed on the wall."""
+        title = wall_list.title
+        if title.strip() and title != row["wall_name"]:
+            self.db.execute(
+                "UPDATE lists SET name = ?, wall_name = ? WHERE id = ?", (title, title, row["id"])
+            )
+        elif row["name"] != title:
+            try:
+                await self.client.rename_list(wall_list, row["name"])
+            except CozylaError as exc:
+                log.warning("Renaming Cozyla list %s waits: %s", wall_list.id, exc)
+                return
+            self.db.execute("UPDATE lists SET wall_name = name WHERE id = ?", (row["id"],))
+
     def _unlink(self, list_id: int) -> None:
-        self.db.execute("UPDATE lists SET cozyla_list_id = NULL WHERE id = ?", (list_id,))
+        self.db.execute(
+            "UPDATE lists SET cozyla_list_id = NULL, wall_name = NULL WHERE id = ?", (list_id,)
+        )
         self.db.execute(
             "UPDATE list_items SET cozyla_todo_id = NULL, wall_title = NULL, wall_done = NULL, "
             "pending = 0 WHERE list_id = ?",
@@ -239,7 +253,9 @@ class WallLists:
         if nl.wall_id is not None:
             return f"{nl.name} is on the wall already."
         wall_id = await self.client.create_list(nl.name)
-        self.db.execute("UPDATE lists SET cozyla_list_id = ? WHERE id = ?", (wall_id, nl.id))
+        self.db.execute(
+            "UPDATE lists SET cozyla_list_id = ?, wall_name = name WHERE id = ?", (wall_id, nl.id)
+        )
         return f"{nl.name} is going on the wall; its items follow within a minute."
 
 

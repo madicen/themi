@@ -291,6 +291,12 @@ class FakeCozyla:
         list_id = self.add_list(body["todoListTitle"])
         return {"listId": list_id, "displayOrder": 0.0, "version": 1, "createDate": 0}
 
+    def _update_list(self, body: dict[str, Any]) -> None:
+        todo_list = self.lists[body["listId"]]
+        # Like to-dos, anything left out is cleared.
+        for name in ("todoListTitle", "todoListColor", "todoListIcon"):
+            todo_list[name] = body.get(name, "")
+
     def _delete_list(self, body: dict[str, Any]) -> None:
         del self.lists[body["id"]]
         for todo_id in [t["todoId"] for t in self.in_list(body["id"])]:
@@ -488,6 +494,7 @@ ROUTES = {
     "rewards/todosInfo/checkTodo": FakeCozyla._check,
     "rewards/todosInfo/delete": FakeCozyla._delete,
     "rewards/todosList/create": FakeCozyla._create_list,
+    "rewards/todosList/update": FakeCozyla._update_list,
     "rewards/todosList/delete": FakeCozyla._delete_list,
     "rewards/chores/myChoresV1": lambda f, b: list(f.chores.values()),
     "rewards/chores/create/v1": FakeCozyla._create_chore,

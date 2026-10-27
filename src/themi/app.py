@@ -30,6 +30,7 @@ from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
@@ -131,7 +132,9 @@ def build_app(
         ExpectedEmails(services, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
-    Lists(services).install()
+    lists = Lists(services)
+    lists.install()
+    ThingsToBuy(services, lists).install()
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))

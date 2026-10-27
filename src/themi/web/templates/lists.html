@@ -15,6 +15,13 @@ here. The household's are for everyone; yours are only yours.</p>
       <input type="hidden" name="done" value="{{ 0 if item.done else 1 }}">
       <button class="link{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}">{{ '☑' if item.done else '☐' }} {{ item.name }}</button>
     </form>
+    {% if nl.purpose %}
+    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/store" class="inline store">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="store" value="{{ stores[nl.id].get(item.id, '') }}" placeholder="Usually from…" aria-label="Where {{ item.name }} usually comes from" maxlength="40">
+      <button class="quiet">Save</button>
+    </form>
+    {% endif %}
     <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/remove" class="inline">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="quiet" aria-label="Take {{ item.name }} off">Remove</button>

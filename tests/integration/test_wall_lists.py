@@ -176,3 +176,21 @@ async def test_deleting_renaming_and_lists_gone_from_the_wall(
     await sync(scenario)
     assert cook not in fake_cozyla.lists
     assert [nl.name for nl in lists(scenario).visible(scenario.member("Erin"))] == ["Shopping List"]
+
+
+async def test_renamed_in_themi_renamed_on_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """L2a: the family's Shopping List becomes Things to Buy."""
+    shop = fake_cozyla.add_list("Shopping List")
+    fake_cozyla.lists[shop]["todoListColor"] = "#123456"
+    await sync(scenario)
+    erin = scenario.member("Erin")
+    lists(scenario).rename(named(scenario, "shopping"), erin, "Things to Buy")
+    await sync(scenario)
+    assert fake_cozyla.lists[shop]["todoListTitle"] == "Things to Buy"
+    assert fake_cozyla.lists[shop]["todoListColor"] == "#123456"  # sent back as it was
+    await sync(scenario)  # settled: no rename back and forth
+    assert named(scenario, "things to buy").name == "Things to Buy"
+    renames = [p for p in fake_cozyla.paths() if p.endswith("todosList/update")]
+    assert len(renames) == 1

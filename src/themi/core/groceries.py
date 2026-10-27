@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.tools import Proposal, ToolContext, ToolDeclined, staged_tool, tool
+from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -146,6 +146,9 @@ class GroceryList:
     async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
         names = [str(n) for n in payload.get("items", [])]
         added = self.add(names, by=ctx.member, action_id=ctx.action_id)
+        if self.services.buying is not None:  # settled: these are groceries (L2a)
+            for name in names:
+                self.services.buying.remember(name, kind="food")
         if not added:
             return f"{and_list(names)} {'was' if len(names) == 1 else 'were'} already on the list."
         return f"Added {and_list(added)} to the grocery list."
@@ -199,6 +202,13 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     # restocking, receipts and items the model inferred still wait for a yes.
     said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).lower()
     asked = bool(said) and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
+    buying = ctx.services.buying
+    other = [n for n in names if buying is not None and buying.kind_of(n) == "other"]
+    if other and not asked:  # L2a: settled before as not food
+        raise ToolFailed(
+            f"{and_list(other)} went on Things to Buy before (not food): use "
+            "add_to_things_to_buy, or ask which list they want."
+        )
     return replace(proposal(names), requested=asked)
 
 
