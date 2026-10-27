@@ -3044,8 +3044,10 @@ Notes (2026-10-26):
 - Items: unassigned to-dos that aren't tasks, both ways (added, ticked, unticked, renamed,
   deleted). Each linked item keeps how the wall had it at the last sync (`wall_title`,
   `wall_done`), and `pending` marks a change made in Themi since, which wins. A to-do that
-  becomes someone's leaves the list and is a task (C1c). A list's first sync leaves the
-  ticked history behind and pairs items with the same name rather than doubling them.
+  becomes someone's leaves the list and is a task (C1c). Ticked-off to-dos Themi never
+  saw are history and stay behind (at first only on a list's first sync, so the second
+  sync brought the history in, live; fixed the same day). A list's first sync pairs items
+  with the same name rather than doubling them.
 - Removed in Themi, an item or a whole list is queued in `list_wall_removals` and deleted
   from the wall next sync (forgotten if it's gone already). Deleting a list in Themi deletes
   the wall's too; the card says "on the wall too". Assumed, not seen: deleting a wall list

@@ -49,6 +49,7 @@ async def test_the_walls_lists_come_in(scenario: Scenario, fake_cozyla: FakeCozy
     fake_cozyla.add_todo(cook, "Old soup", done=True)  # history: left behind
     fake_cozyla.add_todo(cook, "Make the pie crust", assignee="m-erin")  # a task (C1c)
     await sync(scenario)
+    await sync(scenario)  # the history stays behind on later syncs too (seen live)
     cooking = named(scenario, "things to cook", who="Husband")  # the household's
     assert cooking.wall_id == str(cook) and not cooking.personal
     assert items(scenario, "things to cook") == [("Lasagna", False)]

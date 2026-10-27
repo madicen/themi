@@ -9,7 +9,7 @@ hands what it read to `WallLists.sync`, so nothing is read twice:
 - Its items that aren't anyone's job (unassigned, and not a task) are the list's items,
   both ways: added, ticked, unticked, renamed or deleted on either side. A change made in
   Themi since the last sync wins. An item that becomes someone's on the wall is a task now
-  (C1c) and leaves the list. A list's first sync leaves the ticked-off history behind.
+  (C1c) and leaves the list. Ticked-off to-dos Themi never saw are history, left behind.
 - A list goes on the wall when someone asks (`put_list_on_wall`): a wall list is made with
   its name and kept in step from then on. Deleting a list in Themi deletes the wall's too.
 
@@ -155,8 +155,8 @@ class WallLists:
                 if row is not None:  # Themi's wording and tick go out
                     unsent.remove(row)
                     row = {**row, "cozyla_todo_id": todo.id, "pending": 1}
-            if row is None:
-                if not (first and todo.completed) and todo.title.strip():
+            if row is None:  # new on the wall; ticked ones Themi never saw are history
+                if not todo.completed and todo.title.strip():
                     self._bring_in(list_id, todo)
             elif row["pending"]:
                 await self._send(row, todo)
