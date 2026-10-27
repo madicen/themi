@@ -69,6 +69,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
+| F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3585,6 +3586,32 @@ Notes (2026-10-27):
 - Setup: restart (applies 0057). The mistaken personal "Evening Routine" list from #22 (on
   the wall, with "Replace vacuum water") is still there, waiting for the family's OK to
   delete it.
+
+### F12 · Feedback (2026-10-27): heads-ups explained, "one of us", emoji on the wall
+Status: [x] 2026-10-27
+Depends on: K4b, C2b, C3
+From the family's reports of 2026-10-27: bugs #24 and #26, idea #25.
+
+Notes (2026-10-27):
+- #24 ("the time to get ready should be factored into nudges for when to leave"): it already
+  was (the heads-up comes at the leave time minus getting ready), but Themi didn't know and
+  said there were no advance reminders, then drafted a rule (set aside). A prompt line now
+  says how heads-ups work, and `drive_time` says when the heads-up comes and to whom ("goes to
+  Husband, whose calendar it's on"), or that it's switched off. Known gap: a heads-up goes to
+  whoever's calendar the event was read from, so an event for Erin on the Madicen Family
+  calendar (read through Michael's account) reaches Michael; Erin hasn't linked Google yet.
+- #26 (Erin: "make one of us assemble a grocery order", urgent): it became her task alone, at
+  normal importance. `create_task` takes `assign_to` "both" ("one of us", "either of us": on
+  both lists, asked of both, whoever does it closes it; `TaskBoard.make_either`) and an
+  `importance` ("urgent" is high). `IMPORTANCE` moved to `themi.core.tasks`.
+- #25 (Michael: "pick appropriate emoji based on the task description"):
+  `themi.connectors.cozyla.emoji`, a household keyword list (bird 🦜, cat 🐈, pill 💊, bins 🗑️,
+  run 🏃...) in the wall's own format (`czl_chores_emoji#_#<name>#_#<emoji>`,
+  `czl_routine_emoji#_#...`). New chores and routines get one; Themi's own plain default (the
+  broom, the bed) or no icon is replaced once when there's a real fit; an icon the family
+  chose is never touched. Dry run on the real wall: Clean the bird cage 🧹 to 🦜, both Mimi
+  pills to 💊, Go for a run (routine) to 🏃; nothing else.
+- Setup: a restart.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
