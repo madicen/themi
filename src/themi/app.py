@@ -39,6 +39,7 @@ from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.day_summary import DaySummary
+from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
@@ -157,6 +158,7 @@ def build_app(
         services.calendars = calendar_busy
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
+        Events(services).install()
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()

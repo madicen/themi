@@ -64,6 +64,9 @@ class CalendarClient:
             "POST", "/calendars", json={"summary": name, "timeZone": timezone}
         )
 
+    async def get_event(self, calendar_id: str, event_id: str) -> dict[str, Any]:
+        return await self._request("GET", f"{_events(calendar_id)}/{event_id}")
+
     async def update_event(self, calendar_id: str, event_id: str, event: dict[str, Any]) -> None:
         await self._request("PUT", f"{_events(calendar_id)}/{event_id}", json=event)
 

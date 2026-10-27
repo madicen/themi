@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from themi.core.chore_chart import ChartQueue
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
+    from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
     from themi.core.groceries import GroceryList
@@ -121,6 +122,7 @@ class Services:
     calendar: CalendarSync | None = None
     calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
     day_summary: DaySummary | None = None  # what's on someone's day (K2)
+    events: Events | None = None  # calendar events made and changed from chat (K3)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None
