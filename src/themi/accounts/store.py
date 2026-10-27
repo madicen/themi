@@ -96,6 +96,7 @@ def _parse_hhmm(value: str | time) -> time:
 MAX_BUSY_TIMES = 10
 PHRASING_STYLES = ("plain", "gentle")
 MAX_PHRASING_NOTES = 500
+MAX_CHART_LIMIT = 10
 
 
 def _busy_json(busy: BusyTime) -> dict[str, Any]:
@@ -140,6 +141,8 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         phrasing=row["phrasing"],
         phrasing_notes=row["phrasing_notes"],
         checkin_reviews=bool(row["checkin_reviews"]),
+        chart_limit=row["chart_limit"],
+        chart_counts_shared=bool(row["chart_counts_shared"]),
     )
 
 
@@ -364,6 +367,8 @@ class AccountStore:
         phrasing: str | None = None,
         phrasing_notes: str | None = None,
         checkin_reviews: bool | None = None,
+        chart_limit: int | None = None,
+        chart_counts_shared: bool | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -409,6 +414,12 @@ class AccountStore:
             changes["phrasing_notes"] = phrasing_notes.strip()
         if checkin_reviews is not None:
             changes["checkin_reviews"] = int(checkin_reviews)
+        if chart_limit is not None:
+            if not 0 <= chart_limit <= MAX_CHART_LIMIT:
+                raise InvalidValue(f"chores at a time is between 0 and {MAX_CHART_LIMIT}")
+            changes["chart_limit"] = chart_limit
+        if chart_counts_shared is not None:
+            changes["chart_counts_shared"] = int(chart_counts_shared)
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

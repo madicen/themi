@@ -72,6 +72,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C2c | Reminders by importance: end of day, more specific when overdue | Cozyla | [x] |
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [x] |
 | F10 | Feedback: due times, one nudge at a time, plain phrasing, check-in reviews | Feedback | [x] |
+| C2d | Cozyla: one chore on the chart at a time | Cozyla | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [ ] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
@@ -3330,6 +3331,69 @@ Notes (2026-10-26):
   (ask Themi again, or `put_task_on_chore_chart` for task 1).
 - Still open from the reports: the near-duplicate chores ("Clean the kitchen" and the wall's
   "Clean kitchen"; "Clean upstairs bathroom" and "Clean upstairs") now both exist in Themi.
+
+### C2d · Cozyla: one chore on the chart at a time
+Status: [x] 2026-10-26
+Depends on: C2b, C2c, F10
+From Erin's ideas #16 and #17 (2026-10-26): a long chore chart is overwhelming, so by default
+she sees one chore at a time. Her rule 13 ("one flexible task per day plus strict deadlines")
+asked for this, but a rule can't change what the sync writes; this is the feature. The
+family's decisions (2026-10-26): one at a time (tick it and the next appears), chores for
+either of you count, a single limit for now, and deleting it on the wall means it's done.
+Build:
+- A per-person `chart_limit` (0 = no limit): the settings page and `set_chore_chart_limit`.
+- For someone with a limit, only that many of their chores are on the chart; the rest wait in
+  Themi, off the wall. High-importance chores (medicines, or anything set high) always show and
+  don't count. A chore for either of you counts for the person with the limit; it stays on the
+  wall for the other person.
+- Which one: chores due today or earlier (or due whenever), the most overdue first, then by
+  importance, then the oldest. Nothing is pulled forward by itself (#14: nothing before it's
+  due). A chore that's up stays up until its round is done or moves, even across days, and
+  shows on the wall as a one-off for today.
+- Ticking it (on the wall or in Themi), or deleting it on the wall, completes it; the next sync
+  brings up the next.
+- In chat, `change_chore_chart`: "a different one" puts the current chore back for today and
+  brings up another (a named one, or Themi's next pick, or the next coming up if nothing else is
+  due); "another one" adds one more on top of the limit.
+- Waiting chores send no nudges, aren't on the end-of-day list and aren't raised as overdue;
+  a chore that comes up gets its nudge then.
+- The model is told whether a chore is up or waiting its turn, and that the limit is a setting,
+  not a rule.
+
+Notes (2026-10-26):
+- `themi.core.chore_chart` (`ChartQueue`), run by the `cozyla.chores` sync, so it's on only
+  with `COZYLA_CHORES=yes`. Migration 0045: `members.chart_limit`, `cozyla_chart_picks` (what's
+  up, for which round, whether it's an extra and whether it's had its nudge) and
+  `cozyla_chart_skips` ("a different one" passes a chore over for that day). The limit is on
+  the settings page and in chat (`set_chore_chart_limit`); the feedback report shows it.
+- `on_chart` and `is_routine` moved to `chore_chart` (the sync imports them from there).
+- Waiting chores are held back through `TaskBoard.holds`: `prompt` skips them, the end-of-day
+  list and the overdue job leave them out, and the sync withdraws their queued nudges. A chore
+  that comes up gets its nudge then, unless it was asked for in chat (the reply says so).
+- Fixed on the way: a repeating chore's round done in Themi kept pointing at its answered
+  nudge, so the one-nudge-at-a-time gate held the next nudge for two hours. A done round now
+  clears it.
+- On the wall: when the limit goes on, the person's waiting chores are deleted from the chart
+  (their wall history goes; Themi keeps its own) and come back as one-offs for the day they're
+  up. A chore for either of you waiting for Erin stays on the wall as Michael's alone. Deleting
+  a chore for either of you that's up for Erin counts as hers, since the wall doesn't say who
+  deleted it.
+- Dry run against the real wall (a copy, writes recorded), Erin at 1: nine of her chores would
+  leave the chart and "Bring bins in" would become Michael's there; the Mimi pills, the flea
+  meds and the feeders stay. Six queued nudges for waiting chores (kitchen, upstairs, both
+  bathrooms, bins, the transfer) would be withdrawn. Nothing would be up on Monday, since none
+  of her chores is due until Tuesday, when the bird cage comes up.
+- Setup: `themi run` restarted (migration 0045), then Erin's limit set to 1 (on the settings
+  page, by asking Themi, or for her).
+- Live (2026-10-26, 15:50): restarted, Erin's limit set to 1 and rule 13 deleted, as asked.
+  The real chart then held the pills, flea meds, feeders and Michael's bins; her first chore
+  comes up Tuesday.
+- Added after: each person chooses whether chores for either of you count toward their limit
+  (`members.chart_counts_shared`, migration 0046, on by default as the family decided): the
+  settings page, or `set_chore_chart_limit`'s `shared_count` (its `limit` of -1 keeps the
+  number). Off, those chores always show for them.
+- A possible next step: picking a lighter chore on a low-energy day.
+
 ---
 
 ## Milestone 5: Devices (Phase 2)

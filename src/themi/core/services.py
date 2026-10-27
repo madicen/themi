@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.core.calls import VendorCalls
+    from themi.core.chore_chart import ChartQueue
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
@@ -122,6 +123,7 @@ class Services:
     meals: Meals | None = None
     calls: VendorCalls | None = None
     wall: CozylaTodos | None = None  # the Cozyla wall's to-do lists, when configured
+    chart_queue: ChartQueue | None = None  # chores waiting their turn for the chart (C2d)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

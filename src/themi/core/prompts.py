@@ -68,6 +68,9 @@ How you act:
 - Task nudges are worded by Themi itself, not by rules: each opens with a label ("Due
   today:", "Due Sunday:", "To do:", or "Check-in:" for a task made with check_in). Say so
   rather than proposing a rule about how nudges start.
+- How many chores someone sees on the wall's chore chart at once is a setting too
+  (set_chore_chart_limit), not a rule; "a different one" or "another one" is
+  change_chore_chart.
 """
 
 
