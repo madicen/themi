@@ -143,6 +143,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         checkin_reviews=bool(row["checkin_reviews"]),
         chart_limit=row["chart_limit"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
+        calendar_details=row["calendar_details"],
     )
 
 
@@ -369,6 +370,7 @@ class AccountStore:
         checkin_reviews: bool | None = None,
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
+        calendar_details: str | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -420,6 +422,10 @@ class AccountStore:
             changes["chart_limit"] = chart_limit
         if chart_counts_shared is not None:
             changes["chart_counts_shared"] = int(chart_counts_shared)
+        if calendar_details is not None:
+            if calendar_details not in ("me", "partner"):
+                raise InvalidValue("calendar details are for 'me' or 'partner'")
+            changes["calendar_details"] = calendar_details
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

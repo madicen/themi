@@ -23,6 +23,7 @@ from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
     from themi.connectors.gcal import CalendarSync
+    from themi.connectors.gcal.busy import CalendarBusy
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.core.buying import ThingsToBuy
@@ -117,6 +118,7 @@ class Services:
     google: GoogleAccounts | None = None
     gmail: GmailSync | None = None
     calendar: CalendarSync | None = None
+    calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None
@@ -152,6 +154,10 @@ class Services:
         for row in self.outbox.queued(member.id):
             items.append(OpenItem(f"Scheduled to send later: {row['text'][:80]}"))
         return items
+
+    def calendar_context(self, member: Member) -> str:
+        """Today's and tomorrow's events this person may see, for the model (K1)."""
+        return self.calendars.context(member) if self.calendars is not None else ""
 
     def rules(self, member: Member) -> tuple[list[str], list[str]]:
         """(locked household rules, the member's own personal rules), for the system prompt."""

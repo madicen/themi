@@ -27,6 +27,17 @@
   </fieldset>
 
   <fieldset>
+    <legend>My calendars</legend>
+    <label>Who sees what's on my calendars
+      <select name="calendar_details">
+        <option value="me" {% if member.calendar_details == "me" %}selected{% endif %}>Just me</option>
+        <option value="partner" {% if member.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
+      </select>
+    </label>
+    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">My accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>How Themi says things</legend>
     <label>Style
       <select name="phrasing">

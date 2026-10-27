@@ -75,6 +75,7 @@ class Member:
     checkin_reviews: bool = True  # now and then, ask whether a check-in is helping (idea #13)
     chart_limit: int = 0  # chores on the wall's chart at a time; 0 is no limit (C2d)
     chart_counts_shared: bool = True  # chores for either of you count toward that limit
+    calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

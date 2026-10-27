@@ -259,6 +259,7 @@ class Agent:
             history=self._history(member, event),
             notes=notes,
             timezone=timezone,
+            calendars=services.calendar_context(member),
         )
         messages = [Message.user(turn)]
         tools = services.tools.specs()

@@ -14,8 +14,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from themi.accounts import AccountsError
-from themi.connectors.google import GoogleAccounts, OAuthError
+from themi.accounts import AccountsError, LinkedAccount, Member
+from themi.connectors.gcal import CalendarError
+from themi.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
 from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import Kit
@@ -134,6 +135,45 @@ def routes(kit: Kit) -> APIRouter:
             )
             return kit.redirect("/accounts", message)
         return kit.redirect("/accounts", f"Saved the settings for {account.address}.")
+
+    # ----- which calendars Themi reads (K1) ------------------------------------------------
+
+    def own_account(member: Member, account_id: int) -> LinkedAccount | None:
+        return next((a for a in app.store.linked_accounts(member.id) if a.id == account_id), None)
+
+    @router.get("/accounts/{account_id}/calendars", response_class=HTMLResponse)
+    async def calendars_page(request: Request, account_id: int) -> Response:
+        session = kit.current(request)
+        account = own_account(session.member, account_id)
+        reader, sync = app.services.calendars, app.services.calendar
+        if account is None or reader is None or sync is None:
+            return kit.redirect("/accounts", "That account isn't one of yours.")
+        if not account.allows(CALENDAR_SCOPE):
+            return kit.redirect("/accounts", "Link this account again to let Themi see calendars.")
+        try:
+            listed = await sync.client(account.id).calendars()
+        except CalendarError:
+            return kit.redirect("/accounts", "Google didn't answer; try again in a minute.")
+        chosen = {c for c, _ in reader.calendars(account.id)}
+        options = [
+            (str(c["id"]), str(c.get("summaryOverride") or c.get("summary") or c["id"]),
+             str(c["id"]) in chosen or (c.get("primary") and chosen == {"primary"}))
+            for c in listed
+        ]  # fmt: skip
+        return kit.with_flash(request, "calendars.html", session, account=account, options=options)
+
+    @router.post("/accounts/{account_id}/calendars")
+    async def choose_calendars(request: Request, account_id: int) -> Response:
+        session, form = await kit.checked(request)
+        account = own_account(session.member, account_id)
+        reader = app.services.calendars
+        if account is None or reader is None:
+            return kit.redirect("/accounts", "That account isn't one of yours.")
+        ticked = (await request.form()).getlist("calendar")  # every box, not just one
+        chosen = [(str(value), str(form.get(f"name_{value}", value))) for value in ticked]
+        reader.choose(account.id, chosen)
+        names = ", ".join(n for _, n in chosen) or "your primary calendar"
+        return kit.redirect("/accounts", f"Themi reads {names} for {account.address}.")
 
     @router.post("/accounts/{account_id}/expected")
     async def add_expected(request: Request, account_id: int) -> Response:

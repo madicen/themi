@@ -151,6 +151,7 @@ def build_app(
         services.calendar = CalendarSync(store, services.google)
         TaskCalendar(services, tasks, services.calendar, scheduler).install()
         calendar_busy = CalendarBusy(store, services.calendar)
+        services.calendars = calendar_busy
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
     habits = HabitReserve(services)
