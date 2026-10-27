@@ -72,6 +72,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
 | K4 | Calendars: travel time and "time to get ready" | Calendars | [x] |
+| K4b | Calendars: drive time on request | Calendars | [x] |
 | K5 | Calendars: blocking time for tasks | Calendars | [x] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
@@ -3705,6 +3706,24 @@ Notes (2026-10-26):
 - F9b can use `family_home` for sunset times.
 - Setup: restart (applies 0055); an admin saves the home address on the Family page;
   optionally `TOMTOM_API_KEY` in `.env` for live traffic (restart after).
+
+### K4b · Calendars: drive time on request
+Status: [x] 2026-10-26
+Depends on: K4
+Asked for on 2026-10-26: "how long will it take to drive to our next pediatrics appointment?"
+- A tool: an upcoming event found by words from its title (among the calendars the person
+  may see, as K1's setting says), or an address; the drive from home, arriving at the
+  event's start (live traffic with a TomTom key), and when to leave and start getting
+  ready. Event text comes back as data.
+
+Notes (2026-10-26):
+- Tool `drive_time` (event words, or an address) in `themi.core.travel`. An event: the soonest
+  upcoming one in the next 14 days (as far as calendars are read) whose title has every
+  word, among the person's own and any shared with them; the route arrives at its start.
+  "About 35 min from home with traffic: leave around 9:25 am, and start getting ready around
+  9:10 am." An address: leaving now. Video calls, events without an address and places not
+  on the map are said plainly; a failed route falls back to the estimate.
+- No migration; a restart picks it up.
 
 ### K5 · Calendars: blocking time for tasks
 Status: [x] 2026-10-26
