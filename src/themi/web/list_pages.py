@@ -31,7 +31,14 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/lists", response_class=HTMLResponse)
     def lists_page(request: Request) -> HTMLResponse:
         session = kit.current(request)
-        return kit.with_flash(request, "lists.html", session, lists=lists().visible(session.member))
+        found = lists().visible(session.member)
+        return kit.with_flash(
+            request,
+            "lists.html",
+            session,
+            lists=found,
+            stores={nl.id: lists().stores(nl) for nl in found if nl.purpose},
+        )
 
     @router.post("/lists")
     async def create_list(request: Request) -> Response:
@@ -74,6 +81,22 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect("/lists", "That item isn't on a list you can see.")
         lists().remove(item)
         return kit.redirect("/lists", f"Took {item.name} off.")
+
+    @router.post("/lists/{list_id}/items/{item_id}/store")
+    async def set_store(request: Request, list_id: int, item_id: int) -> Response:
+        """Where a thing to buy usually comes from (L2a)."""
+        session, form = await kit.checked(request)
+        nl = mine(session.member, list_id)
+        item = item_of(nl, item_id) if nl else None
+        buying = app.services.buying
+        if item is None or buying is None:
+            return kit.redirect("/lists", "That item isn't on a list you can see.")
+        store = " ".join(str(form.get("store", "")).split())[:40]
+        if store:
+            buying.remember(item.name, store=store)
+            return kit.redirect("/lists", f"{item.name}: usually from {store}.")
+        buying.forget_store(item.name)
+        return kit.redirect("/lists", f"Forgot where {item.name} comes from.")
 
     @router.post("/lists/{list_id}/clear")
     async def clear_ticked(request: Request, list_id: int) -> Response:

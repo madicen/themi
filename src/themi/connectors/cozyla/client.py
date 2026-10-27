@@ -79,10 +79,16 @@ class CozylaMember:
     name: str
 
 
+# How a list Themi makes looks on the wall: a preset colour and icon the wall's lists use.
+LIST_COLOR, LIST_ICON = "#E9B14D", "icon_todolist_preset9"
+
+
 @dataclass(frozen=True)
 class TodoList:
     id: str
     title: str
+    color: str = LIST_COLOR  # sent back as they are when the list is renamed
+    icon: str = LIST_ICON
 
 
 @dataclass(frozen=True)
@@ -126,8 +132,6 @@ def _todo(raw: dict[str, Any]) -> Todo:
     )
 
 
-# How a list Themi makes looks on the wall: a preset colour and icon the wall's lists use.
-LIST_COLOR, LIST_ICON = "#E9B14D", "icon_todolist_preset9"
 # What an update sends; the rest of a to-do's fields are Cozyla's own.
 UPDATE_FIELDS = (
     "todoListId",
@@ -171,7 +175,15 @@ class CozylaClient:
 
     async def lists(self) -> list[TodoList]:
         result = await self._call("rewards/todosList/list")
-        return [TodoList(str(t["listId"]), str(t["todoListTitle"])) for t in result or []]
+        return [
+            TodoList(
+                str(t["listId"]),
+                str(t["todoListTitle"]),
+                str(t.get("todoListColor") or LIST_COLOR),
+                str(t.get("todoListIcon") or LIST_ICON),
+            )
+            for t in result or []
+        ]
 
     async def todos(self) -> list[Todo]:
         """Every to-do on the account, across all its lists."""
@@ -222,6 +234,16 @@ class CozylaClient:
         }
         result = await self._call("rewards/todosList/create", body)
         return str(result["listId"])
+
+    async def rename_list(self, todo_list: TodoList, title: str) -> None:
+        """A new name; the colour and icon are sent back as they are (L2a)."""
+        body = {
+            "listId": int(todo_list.id),
+            "todoListTitle": title,
+            "todoListColor": todo_list.color,
+            "todoListIcon": todo_list.icon,
+        }
+        await self._call("rewards/todosList/update", body)
 
     async def delete_list(self, list_id: str) -> None:
         await self._call("rewards/todosList/delete", {"id": int(list_id)})

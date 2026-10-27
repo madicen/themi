@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from themi.core.services import Services
 
 ADD_CATEGORY, ADD_EXECUTOR = "list_add", "lists.add"
+THINGS_TO_BUY = "things_to_buy"  # the household's list for what isn't food (L2a)
 DELETE_CATEGORY, DELETE_EXECUTOR = "list_delete", "lists.delete"
 MAX_NAME = 60
 MAX_ITEM = 100
@@ -77,6 +78,7 @@ class NamedList:
     owner_id: int | None  # None: the household's
     items: tuple[ListItem, ...]
     wall_id: str | None = None  # the Cozyla list it's kept in step with (L1b)
+    purpose: str | None = None  # THINGS_TO_BUY, or None for an ordinary list
 
     @property
     def personal(self) -> bool:
@@ -156,7 +158,9 @@ class Lists:
                 "SELECT * FROM list_items WHERE list_id = ? ORDER BY id", (row["id"],)
             )
         )
-        return NamedList(row["id"], row["name"], row["owner_id"], items, row["cozyla_list_id"])
+        return NamedList(
+            row["id"], row["name"], row["owner_id"], items, row["cozyla_list_id"], row["purpose"]
+        )
 
     # ----- changing -----------------------------------------------------------
 
@@ -172,6 +176,58 @@ class Lists:
         found = self.get(list_id, member)
         assert found is not None
         return found
+
+    def things_to_buy(self, member: Member) -> NamedList:
+        """The household's list for things to buy that aren't food, made if there isn't one."""
+        row = self.db.one("SELECT id FROM lists WHERE purpose = ?", (THINGS_TO_BUY,))
+        if row is None:
+            list_id = self.db.execute(
+                "INSERT INTO lists (name, owner_id, created_by, created_at, purpose) "
+                "VALUES ('Things to Buy', NULL, NULL, ?, ?)",
+                (to_utc_iso(clock.now()), THINGS_TO_BUY),
+            )
+        else:
+            list_id = row["id"]
+        found = self.get(list_id, member)
+        assert found is not None
+        return found
+
+    def rename(self, nl: NamedList, member: Member, name: str) -> NamedList:
+        """A new name; a list on the wall is renamed there at the next sync."""
+        name = _clean(name, MAX_NAME, "list")
+        for other in self.visible(member):
+            if other.id != nl.id and list_key(other.name) == list_key(name):
+                raise InvalidValue(f'there\'s a list called "{other.name}" already')
+        self.db.execute("UPDATE lists SET name = ? WHERE id = ?", (name, nl.id))
+        found = self.get(nl.id, member)
+        assert found is not None
+        return found
+
+    def stores(self, nl: NamedList) -> dict[int, str]:
+        """Item id -> the store it usually comes from, where known (L2a)."""
+        found = {}
+        for item in nl.items:
+            row = self.db.one(
+                "SELECT store FROM item_homes WHERE name_key = ? AND store IS NOT NULL",
+                (name_key(item.name),),
+            )
+            if row:
+                found[item.id] = row["store"]
+        return found
+
+    def describe(self, nl: NamedList) -> str:
+        """A list in a line; things to buy grouped by where they usually come from."""
+        if nl.purpose != THINGS_TO_BUY or not nl.open_items:
+            return words(nl)
+        stores = self.stores(nl)
+        groups: dict[str, list[str]] = {}
+        for item in nl.open_items:
+            groups.setdefault(stores.get(item.id, "anywhere"), []).append(item.name)
+        order = sorted(groups, key=lambda g: (g == "anywhere", g.casefold()))
+        text = f"{nl.name}: " + "; ".join(f"{g}: {and_list(groups[g])}" for g in order)
+        if nl.ticked:
+            text += f" (ticked: {and_list([i.name for i in nl.ticked])})"
+        return text + "."
 
     def add(self, nl: NamedList, names: list[str], by: Member | None) -> list[str]:
         """Put items on a list; returns the ones that weren't on it (unticked) already."""
@@ -417,11 +473,11 @@ async def remove_from_list(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def show_lists(ctx: ToolContext, args: dict[str, Any]) -> str:
     lists = _lists(ctx)
     if args["list"].strip():
-        return words(lists.find(ctx.member, args["list"]))
+        return lists.describe(lists.find(ctx.member, args["list"]))
     found = lists.visible(ctx.member)
     if not found:
         return "There are no lists yet."
-    return " ".join(words(nl) for nl in found)
+    return " ".join(lists.describe(nl) for nl in found)
 
 
 @staged_tool(
