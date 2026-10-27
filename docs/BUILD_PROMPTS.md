@@ -70,6 +70,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
+| F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
+| E1 | Email: suggest important senders | Feedback | [ ] |
+| S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
+| M1 | Memory: a record of conversations | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3138,6 +3142,37 @@ Build:
   household is a gentle "running behind" sign. The plan's rule holds: people see words, never
   scores.
 
+### E1 · Email: suggest important senders
+Status: [ ]
+Depends on: 21, 22
+From Erin's idea #27 ("auto detect important senders, have user confirm"), 2026-10-27, when she
+linked her inbox and was asked which senders always count as urgent.
+- After an inbox's first sync, and now and then after, look at who writes: people she replies
+  to, senders of mail triage called urgent, banks, schools, the property manager. Offer a
+  short list as a card with a button per sender ("Always urgent: Schwab, Rosie's school?");
+  only what she confirms is added. Never added on Themi's own say-so.
+
+### S5 · Shadow Calendar: learning from reactions
+Status: [ ]
+Depends on: S1, 28
+From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
+or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
+- Record a reaction on any of Themi's messages with the message's kind (a nudge, a check-in, a
+  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not.
+- Over time, a per-person picture of what lands ("short nudges do well; long explanations
+  don't"), shown to the model as a line of its own, in words, never numbers, and on the
+  person's tracking page. A switch, like the other inputs.
+
+### M1 · Memory: a record of conversations
+Status: [ ]
+Depends on: 13
+From Erin's ideas #28 and #30, 2026-10-27: "maintain records of general questions/conversations
+in the shadow calendar". F13 keeps a note per answer or settled problem; this is the fuller
+record.
+- A daily, private journal per person: the topics talked about and what was decided, written
+  at the end of the day from the day's messages, searchable ("what did we decide about the
+  pacifiers?"), on the website's Rules & memory page, deletable.
+
 ### C1a · Cozyla: unofficial client and a read-only check
 Status: [x] 2026-10-25
 Depends on: 26
@@ -3612,6 +3647,36 @@ Notes (2026-10-27):
   chose is never touched. Dry run on the real wall: Clean the bird cage 🧹 to 🦜, both Mimi
   pills to 💊, Go for a run (routine) to 🏃; nothing else.
 - Setup: a restart.
+
+### F13 · Feedback (2026-10-27): problems talked through, mentions, nicknames, slow replies
+Status: [x] 2026-10-27
+Depends on: F5, 11
+From the family's reports of 2026-10-27: bugs #29 and #30, ideas #28 and #32 (#27, #31 and
+the fuller #28 are prompts E1, S5 and M1).
+
+Notes (2026-10-27):
+- #30 ("an idea for us to implement, not a rule for Themi"): a prompt line for problems ("how
+  can we stop losing the pacifiers?"): two to four ideas, they pick, then ask about actions
+  (buy something, a task or routine, raise it with their partner), only what they agree to,
+  and a summary kept with `remember_fact`. `propose_rule` says ideas for the family are a
+  conversation, never rules. Also a bug: "I swear all our pacifiers keep disappearing??"
+  put pacifiers straight on Things to Buy, because the "asked for" check only looked for the
+  item's name. `groceries.asks_to_add`: the message also has to ask (add, put, need, buy,
+  get, out of, running low...), or carry on one that did ("and limes", "batteries too";
+  `ToolContext.previous_text`). Groceries, Things to Buy and named lists all use it.
+- #28 (records of general questions): a prompt line keeps a one-line note of an answer worth
+  keeping. A fuller record of conversations is prompt M1.
+- #32 (nicknames): "Michael calls Erin Hundo" was saved as Erin's personal note, so Michael's
+  conversations wouldn't know it; moved to a household note. A prompt line: nicknames are
+  household notes that say who calls whom, read from the speaker's side.
+- #29 ("why that exchange took so long"): two model calls of about 29 seconds each, on the
+  free Gemini key. Interactive calls never wait more than 20 seconds for a retry, so it was
+  slow answers, retries, or both; probably the free tier's limits while Erin's newly linked
+  inbox was triaged on the same key. Nothing recorded it, so now `ai_calls` (migration 0058)
+  keeps a week of every call: task, backend, seconds, time waited, retries, last status, ok.
+  Each call sends about 10,000 tokens (55 tools' schemas are most of it); trimming them is a
+  possible follow-up.
+- Setup: restart (applies 0058).
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
