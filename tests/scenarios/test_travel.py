@@ -146,3 +146,82 @@ async def test_the_family_page_saves_home(
     assert "Home saved" in page and f'value="{HOME}"' in page
     travel = scenario.app.services.travel
     assert travel is not None and travel.home() is not None
+
+
+# ----- K4b: drive time on request -------------------------------------------------------
+
+
+def tool_result(scenario: Scenario) -> str:
+    from themi.ai.types import ToolResult
+
+    return [
+        block.content
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ][-1]
+
+
+async def ask(scenario: Scenario, who: str, event: str, address: str) -> str:
+    scenario.primary.queue_tool_call("drive_time", {"event": event, "address": address})
+    scenario.primary.queue_text("About that long.")
+    await scenario.say(who, "How long will it take to drive there?")
+    return tool_result(scenario)
+
+
+async def test_the_drive_to_the_next_matching_event(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.place("Kids Clinic, 4 Elm St", 37.760, -122.430)
+    ready.add_event(ERIN, local(10, day=23), local(11, day=23), summary="Pediatrics: Rosie",
+                    location="Kids Clinic, 4 Elm St")  # fmt: skip
+    ready.add_event(ERIN, local(10, day=30), local(11, day=30), summary="Pediatrics: Rosie",
+                    location="Kids Clinic, 4 Elm St")  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    result = await ask(scenario, "Erin", "pediatrics", "")
+    assert '<data source="calendars">\nPediatrics: Rosie, Fri 23 Oct, 10-11 am' in result
+    assert (
+        "About 35 min from home with traffic: leave around 9:25 am, and start getting ready "
+        "around 9:10 am."
+    ) in result
+    (_, params) = [c for c in fake_travel.calls if c[0] == "route"][-1]
+    arrive = datetime.fromisoformat(params["arriveAt"])
+    assert arrive == datetime(2026, 10, 23, 10, tzinfo=PACIFIC)  # timed for the start
+
+
+async def test_a_typed_address_is_right_now(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    result = await ask(scenario, "Erin", "", "Smile Dental")
+    assert result == "To Smile Dental: about 35 min from home with traffic, leaving now."
+
+
+async def test_what_it_cant_answer(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    ready.add_event(
+        ERIN, local(15), local(16), summary="Standup", hangoutLink="https://meet.google.com/x"
+    )
+    ready.add_event(ERIN, local(17), local(18), summary="Pick up the cake")
+    await scenario.run_periodic("calendar.busy")
+    assert "No upcoming event of theirs matches" in await ask(scenario, "Erin", "pediatrics", "")
+    assert "is a video call" in await ask(scenario, "Erin", "standup", "")
+    assert "has no address" in await ask(scenario, "Erin", "cake", "")
+    assert "wasn't found on the map" in await ask(scenario, "Erin", "", "Nowhere Lane")
+
+
+async def test_only_events_they_may_see(
+    scenario: Scenario,
+    ready: FakeGcal,
+    fake_google: FakeGoogle,
+    site: httpx.AsyncClient,
+) -> None:
+    await link(scenario, site, fake_google, "Husband", "him@gmail.com")
+    ready.add_event(
+        "him@gmail.com", local(15), local(16), summary="Dentist", location="Smile Dental"
+    )
+    await scenario.run_periodic("calendar.busy")
+    assert "No upcoming event of theirs matches" in await ask(scenario, "Erin", "dentist", "")
+    husband = scenario.member("Husband")
+    scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
+    assert "Husband: Dentist, Wed 21 Oct, 3-4 pm" in await ask(scenario, "Erin", "dentist", "")

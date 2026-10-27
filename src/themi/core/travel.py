@@ -21,15 +21,25 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import Entry
-from themi.connectors.travel import Place, TravelClient, TravelError, distance_km, estimate
+from themi.connectors.travel import (
+    Place,
+    Route,
+    TravelClient,
+    TravelError,
+    distance_km,
+    estimate,
+)
+from themi.core.events import When, when_words
 from themi.core.lists import name_key
+from themi.core.prompts import as_data
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -42,6 +52,7 @@ AT_HOME_KM = 0.5  # closer than this is home: nothing to drive to
 MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look early
 SLACK = timedelta(minutes=3)  # the job runs every 5 minutes: send a little early, not late
 RETRY_NOT_FOUND = timedelta(days=1)
+LOOK_AHEAD_ON_REQUEST = timedelta(days=14)  # as far as calendars are read (K1)
 
 
 class TravelHeadsUps:
@@ -52,6 +63,7 @@ class TravelHeadsUps:
 
     def install(self) -> None:
         self.services.travel = self
+        self.services.tools.register(drive_time)
 
     # ----- home -----------------------------------------------------------------------------
 
@@ -144,6 +156,74 @@ class TravelHeadsUps:
             dedupe_key=f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}",
         )
 
+    # ----- on request (K4b) ------------------------------------------------------------------
+
+    def next_event(self, viewer: Member, words: str) -> tuple[Member, Entry] | None:
+        """The soonest upcoming event, among those this person may see, whose title has all
+        these words."""
+        reader = self.services.calendars
+        wanted = name_key(words).split()
+        if reader is None or not wanted:
+            return None
+        now = clock.now()
+        found = [
+            (owner, entry)
+            for owner in reader.visible_to(viewer)
+            for entry in reader.entries(owner, now, now + LOOK_AHEAD_ON_REQUEST)
+            if entry.starts_at > now and all(w in name_key(entry.title).split() for w in wanted)
+        ]
+        return min(found, key=lambda f: f[1].starts_at) if found else None
+
+    async def drive_to_event(self, viewer: Member, owner: Member, entry: Entry) -> str:
+        found = self.home()
+        if found is None:
+            raise TravelError("there's no home address yet (the Family page on the website)")
+        tz = self._tz()
+        whose = "" if owner.id == viewer.id else f"{owner.name}: "
+        when = when_words(When(entry.starts_at, entry.ends_at, entry.all_day), tz)
+        line = f"{whose}{entry.title}, {when}" + (
+            f" (at {entry.location})" if entry.location else ""
+        )
+        if entry.video:
+            return as_data("calendars", line) + "\nThat one is a video call: no drive."
+        if not entry.location:
+            return as_data("calendars", line) + "\nThat event has no address on the calendar."
+        place = await self._place(entry.location)
+        if place is None:
+            return as_data("calendars", line) + "\nIts address wasn't found on the map."
+        route = await self._route(found[1], place, entry.starts_at)
+        leave_by = entry.starts_at - timedelta(minutes=route.minutes)
+        ready = leave_by - timedelta(minutes=viewer.getting_ready_minutes)
+        now = clock.now()
+        if leave_by <= now:
+            plan = "leave now"
+        else:
+            plan = f"leave around {_clock(leave_by.astimezone(tz))}"
+            if ready > now:
+                plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
+        how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
+        return as_data("calendars", line) + (
+            f"\nAbout {_duration(route.minutes)} from home {how}: {plan}."
+        )
+
+    async def drive_to_address(self, address: str) -> str:
+        found = self.home()
+        if found is None:
+            raise TravelError("there's no home address yet (the Family page on the website)")
+        place = await self._place(address)
+        if place is None:
+            return f"{address} wasn't found on the map. Adding the city might help."
+        route = await self._route(found[1], place, clock.now())
+        how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
+        return f"To {address}: about {_duration(route.minutes)} from home {how}, leaving now."
+
+    async def _route(self, home: Place, place: Place, arrive_at: datetime) -> Route:
+        try:
+            return await self.client.route(home, place, arrive_at)
+        except TravelError as exc:
+            log.info("No route (%s); estimating", exc)
+            return estimate(home, place)
+
     # ----- places ---------------------------------------------------------------------------
 
     async def _place(self, location: str) -> Place | None:
@@ -202,3 +282,30 @@ def _duration(minutes: int) -> str:
         return f"{minutes} min"
     hours, rest = divmod(minutes, 60)
     return f"{hours} hr {rest} min" if rest else f"{hours} hr"
+
+
+@tool(
+    "drive_time",
+    "How long the drive from home takes, and when to leave: to their next event whose title "
+    "has these words (event: 'pediatrics'; timed for arriving at its start, with traffic "
+    "where it can), or to an address (address; leaving now). One of the two, the other ''.",
+    {"event": {"type": "string"}, "address": {"type": "string"}},
+)
+async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
+    travel = ctx.services.travel
+    if travel is None:
+        raise ToolFailed("Travel times aren't set up.")
+    words, address = str(args["event"]).strip(), " ".join(str(args["address"]).split())
+    try:
+        if words:
+            found = travel.next_event(ctx.member, words)
+            if found is None:
+                raise ToolFailed(
+                    f'No upcoming event of theirs matches "{words}" in the next two weeks.'
+                )
+            return await travel.drive_to_event(ctx.member, *found)
+        if address:
+            return await travel.drive_to_address(address)
+    except TravelError as exc:
+        raise ToolFailed(f"No drive time: {exc}.") from exc
+    raise ToolFailed("Which event, or which address?")
