@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from themi.core.feedback import FeedbackChat
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
+    from themi.core.lists import Lists
     from themi.core.meals import Meals
     from themi.core.memory import Memory
     from themi.core.pantry import Pantry
@@ -124,6 +125,7 @@ class Services:
     calls: VendorCalls | None = None
     wall: CozylaTodos | None = None  # the Cozyla wall's to-do lists, when configured
     chart_queue: ChartQueue | None = None  # chores waiting their turn for the chart (C2d)
+    lists: Lists | None = None  # named lists Themi keeps (L1a)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
