@@ -64,7 +64,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
-| L1b | Lists on demand: the wall's lists | Lists | [ ] |
+| L1b | Lists on demand: the wall's lists | Lists | [x] |
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
@@ -3025,7 +3025,7 @@ Notes (2026-10-26):
 - Setup: restart Themi (applies 0049).
 
 ### L1b · Lists on demand: the wall's lists
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: L1a, C1c
 - The wall's own lists other than the to-do list (Things to Cook, Shopping List) come in as
   household lists; their unassigned items sync both ways (added, ticked, removed). Assigned
@@ -3035,6 +3035,33 @@ Depends on: L1a, C1c
   stay off the wall unless their owner asks.
 - `add_to_wall_list` folds into the list tools, keeping its `wall_list_add` category for
   lists on the wall.
+
+Notes (2026-10-26):
+- `themi.core.cozyla_lists.WallLists`, run inside the to-do sync with the same read (no extra
+  calls). Every wall list but the to-do list is a household list: linked to one with the
+  same name (taking the wall's spelling) or made. Renamed on the wall, renamed in Themi;
+  deleted on the wall, the list stays in Themi, unlinked.
+- Items: unassigned to-dos that aren't tasks, both ways (added, ticked, unticked, renamed,
+  deleted). Each linked item keeps how the wall had it at the last sync (`wall_title`,
+  `wall_done`), and `pending` marks a change made in Themi since, which wins. A to-do that
+  becomes someone's leaves the list and is a task (C1c). A list's first sync leaves the
+  ticked history behind and pairs items with the same name rather than doubling them.
+- Removed in Themi, an item or a whole list is queued in `list_wall_removals` and deleted
+  from the wall next sync (forgotten if it's gone already). Deleting a list in Themi deletes
+  the wall's too; the card says "on the wall too". Assumed, not seen: deleting a wall list
+  takes its to-dos with it.
+- `put_list_on_wall` (staged, `wall_list_add`, straight through when they named the list)
+  makes a wall list with the list's name (`/cal-server/rewards/todosList/create`, the
+  wall's preset colour and icon); the items follow next sync. Personal lists can go up too
+  when their owner asks. `add_to_wall_list` and its executor are gone; no approvals were
+  waiting on it. Migration 0050 (also relabels the category).
+- The Lists page marks lists on the wall; Themi's "Lists:" context line says "(on the wall)".
+- Dry run against the real wall (a copy of the database, writes recorded): Shopping List
+  comes in empty (nothing open and unassigned), Things to Cook with Chicken, Creami prep,
+  Bean soup and Cashew mac sauce; no writes, no new tasks.
+- Watch: the wall's "Shopping List" is now a Themi list, while groceries stay in
+  OurGroceries; the prompt keeps named lists apart from the grocery list.
+- Setup: restart Themi (applies 0050).
 
 ### L2 · A "things to buy" list sorted by store
 Status: [ ]
