@@ -70,7 +70,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
-| K3 | Calendars: creating and changing events | Calendars | [ ] |
+| K3 | Calendars: creating and changing events | Calendars | [x] |
 | K4 | Calendars: travel time and "time to get ready" | Calendars | [ ] |
 | K5 | Calendars: blocking time for tasks | Calendars | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
@@ -3616,7 +3616,7 @@ Notes (2026-10-26):
 - Setup: restart (applies 0053); each person sets a time if they want one.
 
 ### K3 · Calendars: creating and changing events
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: K1, 26
 The family chose (2026-10-26), as groceries work (F5):
 - Asked for in their own words ("put the dentist on my calendar Tuesday at 3"): made at once,
@@ -3640,6 +3640,30 @@ Build:
   the offer after enough approvals.
 - Tests: each case above, read-backs, unclear dates, the email path and its offer, the
   message after an automatic one.
+
+Notes (2026-10-26):
+- `themi.core.events.Events`. Tools: `add_calendar_event` (title, date, start, end,
+  location, calendar "mine" or "family"), `move_calendar_event` and `delete_calendar_event`
+  (an event found by words from its title, and its date when there could be more than one).
+- Deviation: dates and times come as fields (YYYY-MM-DD, HH:MM; "3pm" accepted), checked
+  here rather than parsed from a phrase. The model has the local date; the read-back is
+  built from what was stored, so a misunderstanding still shows at once. A date that has
+  gone by, an end before the start or a time that isn't one is refused with an example.
+- "Asked for": the message mentions the calendar (or booking) and every word of the title
+  that matters; "the plumber's coming Thursday" is a card. Events Themi made move and go at
+  once (`calendar_event`, requested); anyone else's event is `calendar_event_change`,
+  capped: always a card, and the rest of the event (description, guests) is kept.
+- Mine: the person's linked account's primary calendar. Family: prompt 26's "Themi"
+  calendar, under `calendar_write`.
+- Made events carry `themi: event:<id>`, are recorded in `themi_events` (migration 0054;
+  `action_key` keeps a retry from making two) and go into `calendar_entries` at once.
+- Email: triage now pulls an event out of a confirmation (title, date, start, end,
+  location; the schema's new `event` field). A new one is staged as `calendar_from_email`
+  ("From an email: ..., for your calendar"). After 3 approved in a row, Themi proposes the
+  autonomy grant once (a household rule; needs an admin); locked, they're made without a
+  card and a message always says so ("Added to your calendar from an email: ...").
+- A prompt line: appointments at a set time go on a calendar; things to do are tasks.
+- Setup: restart (applies 0054).
 
 ### K4 · Calendars: travel time and "time to get ready"
 Status: [ ]
