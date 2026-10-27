@@ -68,6 +68,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -90,6 +91,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35 | Meal reminders, takeout rescue, cart staging | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
+| R2 | Research: Google Home | 7 Research | [ ] |
 
 ## Fixed technical choices
 
@@ -3543,6 +3545,42 @@ Notes (2026-10-26):
   number). Off, those chores always show for them.
 - A possible next step: picking a lighter chore on a low-energy day.
 
+### F11 · Feedback (2026-10-27): put off until a time, summaries, finding events, routine items
+Status: [x] 2026-10-27
+Depends on: K2, K4b, C3
+From the family's reports of 2026-10-26/27 (`themi feedback`): ideas #18 and #19, bugs #20 and
+#22.
+
+Notes (2026-10-27):
+- #18 ("If I give a specific time that I will do a task, I shouldn't get a nudge before that
+  time"): "I'll do it tonight around 9" could only snooze for four hours, so the nudge came
+  at 7:32 and Themi had said "set for tonight at 9". `snooze_task` takes `until` (HH:MM,
+  today, or tomorrow if passed; empty: four hours, as "Later" still is), and the end-of-day
+  list leaves out a task put off past now. The draft personal rule Themi proposed for it
+  (13) was discarded.
+- #19: summaries are "Tue 27 Oct:" and one bulleted list in the order of the day (all-day
+  events, then anything with a time, then the rest; the partner's events marked with their
+  name). `day_summary` sends it itself, word for word (the model had reworded it). The PDA
+  shield now reads a bullet line as a list item, not an order ("- Call the vet"). Erin's
+  bird cage was missing from tomorrow's list: a chart chore waiting its turn is only left out
+  for today.
+- #20: "her tutoring appointment" didn't find "Tutor Gabriel (Illems)" on the Madicen Family
+  calendar. `events.title_matches`: every word they used, bar fillers ("the",
+  "appointment"), matches a title word, the same or a form of it (a shared start of five
+  letters or more, most of the shorter word). Used by `drive_time` and by moving and deleting
+  events.
+- #22: an item for a routine on the wall went to the calendar, then the chore chart, then a
+  new list. `add_to_wall_routine` (title, Morning/Afternoon/Evening, repeat: '' for just
+  today or a schedule phrase), category `wall_routine_add` (member, may become automatic),
+  at once when they said "routine" and the item. It's the wall's own routine, so the morning
+  and evening checks include it. The wall's routines have no end date, so a just-for-today
+  item is deleted the next day (`wall_routine_once`, migration 0057). A prompt line keeps
+  routine items off calendars, chores and lists.
+- #21 (Google Home) is research: prompt R2.
+- Setup: restart (applies 0057). The mistaken personal "Evening Routine" list from #22 (on
+  the wall, with "Replace vacuum water") is still there, waiting for the family's OK to
+  delete it.
+
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
 Depends on: S2, 26
@@ -3926,3 +3964,18 @@ Do:
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.
+
+### R2 · Research: Google Home
+Status: [ ]
+Depends on: none
+From Michael's idea #21 ("google home integration", 2026-10-27). Find out what would help and
+what's possible before building anything:
+- What the family wants from it: asking Themi by voice ("Hey Google, ask Themi..."), Themi
+  speaking announcements on a speaker, or reading the home's devices (thermostat, cameras,
+  locks) as signals.
+- What Google allows now: Google Home APIs, conversational actions (retired in 2023), the
+  broadcast route, Matter. Accounts, costs, and whether a household app can use them
+  unreviewed.
+- The plan's rule that device connections read status only and never control anything:
+  anything beyond reading needs the family's decision and a plan change first.
+
