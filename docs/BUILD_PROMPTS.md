@@ -61,7 +61,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
 | F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
-| F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
+| F9b | Exercise schedules: sunset-relative times | Feedback | [~] |
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
@@ -71,7 +71,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
 | F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
-| E1 | Email: suggest important senders | Feedback | [ ] |
+| E1 | Email: suggest important senders | Feedback | [x] |
 | S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -2976,7 +2976,7 @@ Notes (2026-10-26):
   schedule; it's stored as Tue, Thu and Sat at 2 pm, rolling on.
 
 ### F9b · Exercise schedules: sunset-relative times
-Status: [ ]
+Status: [~]
 Depends on: F9a
 - Sunset-relative times ("an hour before sunset"): needs the family's location (a setting,
   coarse is enough) and an offline sunset calculation (for example the `astral` library);
@@ -3143,7 +3143,7 @@ Build:
   scores.
 
 ### E1 · Email: suggest important senders
-Status: [ ]
+Status: [x] 2026-10-27
 Depends on: 21, 22
 From Erin's idea #27 ("auto detect important senders, have user confirm"), 2026-10-27, when she
 linked her inbox and was asked which senders always count as urgent.
@@ -3151,6 +3151,18 @@ linked her inbox and was asked which senders always count as urgent.
   to, senders of mail triage called urgent, banks, schools, the property manager. Offer a
   short list as a card with a button per sender ("Always urgent: Schwab, Rosie's school?");
   only what she confirms is added. Never added on Themi's own say-so.
+
+Notes (2026-10-27):
+- `themi.core.senders.SenderSuggestions`, job `email.senders` every 6 hours: for each watched
+  inbox with nothing left to sort, senders from the last 90 days whose mail triage called
+  urgent about money, the property, tenants or family, or real people who wrote more than
+  once and were waiting on a reply. Four at most, likeliest first; not ones already urgent or
+  offered before (`sender_suggestions`, migration 0059). One message, normal priority: "A few
+  senders in erin@... might always count as urgent: Schwab Alerts (money) and Bob Tenant
+  (waiting on replies). Tap any that should; nothing changes otherwise." Each button adds
+  that address to the account's urgent senders and says so.
+- Not done: replies she sends aren't read, so "people she replies to" isn't a signal.
+- Setup: restart (applies 0059).
 
 ### S5 · Shadow Calendar: learning from reactions
 Status: [ ]
