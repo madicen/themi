@@ -63,7 +63,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
 | F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
-| L1 | Lists on demand | Lists | [ ] |
+| L1a | Lists on demand: Themi's own lists | Lists | [x] |
+| L1b | Lists on demand: the wall's lists | Lists | [ ] |
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
@@ -2988,22 +2989,56 @@ Notes (2026-10-26):
 - Setup: restart Themi (applies 0048), then give "Go for a run" (task 8) the plan. Erin's
   note about it (fact 2) can then go: it says "next week", which goes stale.
 
-### L1 · Lists on demand
-Status: [ ]
+### L1a · Lists on demand: Themi's own lists
+Status: [x] 2026-10-26
 Depends on: 25
-From Erin's idea #7: "Themi should be able to create new internal lists on demand."
+From Erin's idea #7: "Themi should be able to create new internal lists on demand." L1 was
+split (2026-10-26): this part is Themi's lists; L1b is the wall. The family chose: a list is
+for the household unless someone says it's theirs ("my gift ideas"); ticked items stay,
+crossed off, until cleared; lists go on the wall only when asked (L1b).
 
 Build:
 - Named lists kept by Themi ("packing for the trip", "gift ideas"): create, add, tick off,
   remove, show and delete from chat, with tools that check names against what they typed, as
-  F5 does for groceries. Each list is household or personal.
-- A Lists page on the website.
-- If the Cozyla to-do trial (C1) works out, a list can be mirrored to a Cozyla list the same
-  way; otherwise leave a seam for it.
+  F5 does for groceries: items they wrote go straight on, items the model inferred wait for a
+  yes; a list is deleted without asking only when they named it. Each list is household or
+  personal (only its owner sees a personal one).
+- A Lists page on the website: see, add, tick, clear the ticked, make and delete lists.
+- A seam for L1b: a list can be linked to a Cozyla list.
+
+Notes (2026-10-26):
+- `themi.core.lists`, tables `lists` and `list_items` (migration 0049). Tools: `create_list`
+  (personal only when they say it's theirs), `add_to_list`, `tick_list_items` (tick or
+  untick), `remove_from_list` (items, or the ticked ones), `show_lists`, `delete_list`.
+- A list is found by the name people use: "the packing list" finds "Packing for the trip"
+  when it's the only list with those words; otherwise the tool names the lists there are.
+  Items are matched the same way, against what's on the list.
+- `add_to_list` and `delete_list` are staged (`list_add`, `list_delete`, both may become
+  automatic): straight through when every item, or the list's name, is in what they wrote
+  (F5's check); otherwise an approval card. Ticking and removing named items is direct.
+- Themi's open items show a "Lists:" line (names, how many to go and ticked), so the model
+  knows which lists exist. A prompt line keeps named lists apart from tasks and groceries.
+- The Lists page (/lists, in the menu): tick and untick, add, remove, clear the ticked, make
+  (with "Just for me") and delete, behind a "Delete this list" fold. Someone else's
+  personal list is never shown or changed, whatever a form says.
+- `lists.cozyla_list_id` and `list_items.cozyla_todo_id` are there for L1b, unused so far.
+- Setup: restart Themi (applies 0049).
+
+### L1b · Lists on demand: the wall's lists
+Status: [ ]
+Depends on: L1a, C1c
+- The wall's own lists other than the to-do list (Things to Cook, Shopping List) come in as
+  household lists; their unassigned items sync both ways (added, ticked, removed). Assigned
+  items stay tasks, as in C1c.
+- "Put the packing list on the wall": makes a Cozyla list of that name
+  (`/cal-server/rewards/todosList/create`) and keeps it in step from then on. Personal lists
+  stay off the wall unless their owner asks.
+- `add_to_wall_list` folds into the list tools, keeping its `wall_list_add` category for
+  lists on the wall.
 
 ### L2 · A "things to buy" list sorted by store
 Status: [ ]
-Depends on: L1, 35
+Depends on: L1b, 35
 From Erin's idea #6: non-food things to buy go on their own list, not the grocery list in
 OurGroceries ("body wash comes from Amazon"). Each item knows where the family usually buys
 it, and when a Safeway or Amazon order is put together (prompt 35's cart staging), the
