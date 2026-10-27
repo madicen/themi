@@ -182,8 +182,8 @@ async def test_the_drive_to_the_next_matching_event(
     assert '<data source="calendars">\nPediatrics: Rosie, Fri 23 Oct, 10-11 am' in result
     assert (
         "About 35 min from home with traffic: leave around 9:25 am, and start getting ready "
-        "around 9:10 am."
-    ) in result
+        "around 9:10 am. The heads-up to get ready comes then, at about 9:10 am."
+    ) in result  # bug #24: Themi had said there were no advance reminders
     (_, params) = [c for c in fake_travel.calls if c[0] == "route"][-1]
     arrive = datetime.fromisoformat(params["arriveAt"])
     assert arrive == datetime(2026, 10, 23, 10, tzinfo=PACIFIC)  # timed for the start
@@ -224,7 +224,11 @@ async def test_only_events_they_may_see(
     assert "No upcoming event of theirs matches" in await ask(scenario, "Erin", "dentist", "")
     husband = scenario.member("Husband")
     scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
-    assert "Husband: Dentist, Wed 21 Oct, 3-4 pm" in await ask(scenario, "Erin", "dentist", "")
+    result = await ask(scenario, "Erin", "dentist", "")
+    assert "Husband: Dentist, Wed 21 Oct, 3-4 pm" in result
+    assert "The heads-up to get ready goes to Husband, whose calendar it's on" in result
+    scenario.app.store.update_settings(husband, husband.id, leave_heads_up=False)
+    assert "Husband has the heads-up switched off" in await ask(scenario, "Erin", "dentist", "")
 
 
 async def test_words_match_loosely(

@@ -14,11 +14,11 @@ from dataclasses import dataclass, field
 from datetime import date, time, timedelta
 from typing import Any
 
+from themi.connectors.cozyla.emoji import better_icon, chore_icon, routine_icon
+
 NO_TIME = "23:59"  # what the app stores when a chore has no time of day
 # The app always sends this as the chore's device id.
 CHORE_DEVICE_ID = "db3860b5-9178-427a-894e-d9dfed2bcf5b"
-CHORE_ICON = "czl_chores_emoji#_#broom#_#🧹"
-ROUTINE_ICON = "routine_property_bed"
 PARTS = ("Morning", "Afternoon", "Evening")
 
 
@@ -132,13 +132,22 @@ def chore_from(raw: dict[str, Any]) -> Chore:
     )
 
 
+def _icon(current: object, fitting: str) -> str:
+    """The family's icon stays; Themi's plain default gives way to one that fits; no icon
+    stays none unless one fits (a new item gets Themi's default at least)."""
+    icon = str(current or "")
+    if better_icon(icon, fitting) or (not icon and current is None):
+        return fitting
+    return icon
+
+
 def chore_body(
     name: str, members: list[str], kind: str, schedule: WallSchedule, raw: dict[str, Any]
 ) -> dict[str, Any]:
     """Everything create/v1 and update/v1 need: every field, since update keeps none."""
     return {
         "choreName": name[:50],
-        "icon": raw.get("icon") or CHORE_ICON,
+        "icon": _icon(raw.get("icon"), chore_icon(name)),
         "coins": int(raw.get("coins") or 0),
         "choreType": kind,
         "rotateEveryCounts": int(raw.get("rotateEveryCounts") or 1),
@@ -178,7 +187,7 @@ def routine_body(
     return {
         "routineTitle": title[:50],
         "routineType": part,
-        "routineIcon": raw.get("routineIcon") or ROUTINE_ICON,
+        "routineIcon": _icon(raw.get("routineIcon"), routine_icon(title)),
         "coins": int(raw.get("coins") or 0),
         "habitBonusStars": int(raw.get("habitBonusStars") or 0),
         "habitEnabled": int(raw.get("habitEnabled") or 0),

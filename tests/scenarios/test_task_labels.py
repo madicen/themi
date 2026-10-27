@@ -80,6 +80,7 @@ async def test_the_model_can_ask_for_a_check_in(scenario: Scenario) -> None:
             "assign_to": "me",
             "steps": [],
             "check_in": True,
+            "importance": "normal",
             "due_time": "",
             "from_time": "",
         },

@@ -76,6 +76,7 @@ async def test_tasks_with_dates_appear_on_the_calendar(
             "assign_to": "anyone",
             "steps": [],
             "check_in": False,
+            "importance": "normal",
             "due_time": "",
             "from_time": "",
         },

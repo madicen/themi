@@ -65,6 +65,8 @@ NEXT_ROUND_TEXT = " Next round: {when}."
 STEP_UP_CATEGORY = "chore_step_up"
 STEP_UP_EXECUTOR = "tasks.step_up"
 MISSED = ("roll", "catch_up", "next_day")  # what happens to a round that passes undone
+IMPORTANCE = ("low", "normal", "high")  # how often an overdue task is raised (C2c)
+BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 LAST_ROUND_TEXT = " That was the last one."
@@ -314,6 +316,7 @@ class TaskBoard:
         check_in: bool = False,
         due_time: time | None = None,
         from_time: time | None = None,
+        importance: str = "normal",
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -321,6 +324,8 @@ class TaskBoard:
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
+        if importance not in IMPORTANCE:
+            raise ValueError("importance is low, normal or high")
         cleaned_steps = clean_steps(steps)
         if assignee is None:
             assignment = self.matcher.assign(kind, effort, requester)
@@ -332,8 +337,8 @@ class TaskBoard:
             )
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
-            "assign_reason, due_on, created_at, steps, check_in, due_time, from_time) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "assign_reason, due_on, created_at, steps, check_in, due_time, from_time, "
+            "importance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -348,6 +353,7 @@ class TaskBoard:
                 int(check_in),
                 due_time.strftime("%H:%M") if due_on and due_time else None,
                 from_time.strftime("%H:%M") if due_on and from_time else None,
+                importance,
             ),
         )
         if nudge:
@@ -1013,6 +1019,17 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title)
         return RESCHEDULED_TEXT.format(title=task.title, due=due_on.isoformat())
 
+    async def make_either(self, task_id: int) -> Task:
+        """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
+        and whoever does it closes it."""
+        self.db.execute("UPDATE tasks SET either = 1, shared = 1 WHERE id = ?", (task_id,))
+        task = self.get(task_id)
+        self.withdraw_prompt(task)  # one nudge each, not a second for whoever had it
+        for member in self.store.list_members():
+            if member.telegram_user_id is not None:
+                await self.prompt(task, member=member)
+        return task
+
     def snooze(
         self, task_id: int, for_: timedelta = SNOOZE_FOR, *, until: datetime | None = None
     ) -> str:
@@ -1127,8 +1144,9 @@ def _board(ctx: ToolContext) -> TaskBoard:
     "create_task",
     "Add a household task and nudge whoever does it at a good moment. assign_to says who: "
     "'me' when the person asking will do it ('I want to...', 'I'll...', 'remind me to...'), "
-    "a family member's name when they name someone, or 'anyone' when it just needs doing "
-    "('can someone...', 'remind us...'); then Themi works out who has room for it.",
+    "a family member's name when they name someone, 'both' when either of them can do it "
+    "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
+    "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},
@@ -1154,7 +1172,7 @@ def _board(ctx: ToolContext) -> TaskBoard:
         },
         "assign_to": {
             "type": "string",
-            "description": "'me', a family member's name, or 'anyone'.",
+            "description": "'me', a family member's name, 'both', or 'anyone'.",
         },
         "steps": {
             "type": "array",
@@ -1166,6 +1184,12 @@ def _board(ctx: ToolContext) -> TaskBoard:
             "type": "boolean",
             "description": "True when they want Themi to check in on whether they did it "
             "('check in with me about running'), rather than to remind them of a job.",
+        },
+        "importance": {
+            "type": "string",
+            "enum": list(IMPORTANCE),
+            "description": "'high' when they say it's urgent or important, 'low' when it's "
+            "a nice-to-have, else 'normal'.",
         },
     },
 )
@@ -1187,9 +1211,10 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         due = _board(ctx)._today()  # a time with no date means today
     target = args["assign_to"].strip()
     chosen: Member | None = None
+    both = target.lower() in BOTH_WORDS  # bug #26: "one of us" was one person's
     if target.lower() in ("me", "myself", "the person asking"):
         chosen = ctx.member
-    elif target.lower() not in ("anyone", "someone", ""):
+    elif not both and target.lower() not in ("anyone", "someone", ""):
         members = ctx.services.store.list_members()
         chosen = next((m for m in members if m.name.lower() == target.lower()), None)
         if chosen is None:
@@ -1208,7 +1233,11 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             check_in=bool(args["check_in"]),
             due_time=due_time,
             from_time=from_time,
+            nudge=not both,
+            importance=args["importance"],
         )
+        if both:
+            task = await _board(ctx).make_either(task.id)
     except ValueError as exc:
         return f"Not created: {exc}"
     assignee = ctx.services.store.get_member(task.assignee) if task.assignee else ctx.member

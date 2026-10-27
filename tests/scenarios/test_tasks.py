@@ -24,6 +24,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
                     "assign_to": "anyone",
                     "steps": [],
                     "check_in": False,
+                    "importance": "normal",
                     "due_time": "",
                     "from_time": "",
                 },
@@ -104,6 +105,7 @@ def drained_erin_then(title: str, kind: str, assign_to: str) -> list:
                 "assign_to": assign_to,
                 "steps": [],
                 "check_in": False,
+                "importance": "normal",
                 "due_time": "",
                 "from_time": "",
             },
@@ -192,6 +194,7 @@ async def test_your_own_new_task_isnt_nudged_straight_away(scenario: Scenario) -
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "importance": "normal",
             "due_time": "",
             "from_time": "",
         },
@@ -218,6 +221,7 @@ async def test_a_task_for_someone_else_still_reaches_them_promptly(scenario: Sce
             "assign_to": "Husband",
             "steps": [],
             "check_in": False,
+            "importance": "normal",
             "due_time": "",
             "from_time": "",
         },
@@ -275,6 +279,7 @@ async def test_a_task_for_later_today_waits_for_its_time(scenario: Scenario) -> 
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "importance": "normal",
         },
     )
     scenario.primary.queue_text("I'll remind you at 2.")
@@ -370,3 +375,50 @@ async def test_put_off_without_a_time_is_a_few_hours(scenario: Scenario) -> None
     scenario.primary.queue_text("Later then.")
     await scenario.say("Erin", "later")
     assert board.get(task.id).status == "snoozed"
+
+
+async def test_one_of_us_goes_on_both_lists_and_urgent_is_high(scenario: Scenario) -> None:
+    """Bug #26: "make one of us assemble a grocery order" was Erin's alone, and "urgent"
+    was lost."""
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Assemble the grocery order",
+            "kind": "errand",
+            "effort": 2,
+            "due_date": "2026-10-21",
+            "due_time": "",
+            "from_time": "",
+            "assign_to": "both",
+            "steps": [],
+            "check_in": False,
+            "importance": "high",
+        },
+    )
+    scenario.primary.queue_text("It's on both your lists.")
+    await scenario.say("Erin", "Urgent: one of us needs to assemble a grocery order today")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    (task,) = [t for t in board.open_for(scenario.member("Erin")) if t.title.startswith("Assemble")]
+    assert (task.either, task.shared, task.importance) == (True, True, "high")
+    assert any(t.id == task.id for t in board.open_for(scenario.member("Husband")))
+    await scenario.app.outbox.flush()
+    for name in ("Erin", "Husband"):  # both are asked; whoever does it closes it
+        assert any("Assemble the grocery order" in t for t in scenario.inbox(name)), name
+
+
+async def test_making_a_task_both_of_ours_asks_each_once(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Assemble grocery order", "errand", 2, date(2026, 10, 22), assignee=erin
+    )
+    await board.make_either(task.id)
+    rows = scenario.app.db.query(
+        "SELECT member_id FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
+        (f"task-{task.id}-%",),
+    )
+    assert sorted(r["member_id"] for r in rows) == sorted(
+        [erin.id, scenario.member("Husband").id]
+    )  # her nudge from before was taken back, not doubled

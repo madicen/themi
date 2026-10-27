@@ -38,6 +38,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member, NotFound, PermissionDenied
 from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
+from themi.connectors.cozyla.emoji import better_icon, chore_icon
 from themi.connectors.cozyla.schedule import from_wall, to_wall
 from themi.core.chore_chart import ChartQueue, is_routine, on_chart
 from themi.core.cozyla_todos import backoff, member_map
@@ -383,11 +384,13 @@ class CozylaChores:
     @staticmethod
     def _matches(chore: Chore, desired: Desired) -> bool:
         name, people, kind, schedule = desired
+        icon = str(chore.raw.get("icon") or "")
         return (
             chore.name == name
             and set(chore.members) == set(people)
             and chore.kind == kind
             and _same_schedule(chore.schedule, schedule)
+            and not better_icon(icon, chore_icon(name))  # idea #25
         )
 
     # ----- small things -------------------------------------------------------------------

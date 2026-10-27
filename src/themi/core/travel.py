@@ -201,8 +201,27 @@ class TravelHeadsUps:
             if ready > now:
                 plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
+        heads_up = self._heads_up_words(viewer, owner, leave_by, now)
         return as_data("calendars", line) + (
-            f"\nAbout {_duration(route.minutes)} from home {how}: {plan}."
+            f"\nAbout {_duration(route.minutes)} from home {how}: {plan}.{heads_up}"
+        )
+
+    def _heads_up_words(
+        self, viewer: Member, owner: Member, leave_by: datetime, now: datetime
+    ) -> str:
+        """When the heads-up comes, and to whom: the person whose calendar it's on (bug #24:
+        Themi had said there were no advance reminders)."""
+        if not owner.leave_heads_up:
+            return f" {owner.name} has the heads-up switched off."
+        at = leave_by - timedelta(minutes=owner.getting_ready_minutes)
+        if at <= now:
+            return ""
+        when = _clock(at.astimezone(self._tz()))
+        if owner.id == viewer.id:
+            return f" The heads-up to get ready comes then, at about {when}."
+        return (
+            f" The heads-up to get ready goes to {owner.name}, whose calendar it's on, at "
+            f"about {when}."
         )
 
     async def drive_to_address(self, address: str) -> str:
