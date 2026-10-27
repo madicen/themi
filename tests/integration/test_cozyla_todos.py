@@ -285,6 +285,7 @@ async def test_a_time_window_reminds_at_its_start_and_is_due_at_its_end(
             "assign_to": "me",
             "steps": [],
             "check_in": False,
+            "importance": "normal",
         },
     )
     scenario.primary.queue_text("I'll remind you at 2.")

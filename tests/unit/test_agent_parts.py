@@ -222,3 +222,4 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     assert "is set_task_plan" in STABLE_SYSTEM  # Erin's distance plan was only a note
     assert "goes on a calendar" in STABLE_SYSTEM  # K3: appointments aren't tasks
     assert "is\n  add_to_wall_routine" in STABLE_SYSTEM  # bug #22: not the calendar or a list
+    assert "heads-up" in STABLE_SYSTEM  # bug #24: it said there were no advance reminders

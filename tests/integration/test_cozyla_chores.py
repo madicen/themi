@@ -232,3 +232,28 @@ async def test_themi_knows_which_day_a_task_shows_on_the_chart(
     (bins_item,) = [i.summary for i in board(scenario).open_items(erin) if "bins" in i.summary]
     assert "Shows on the wall's chore chart on Wednesday 21 Oct." in bins_item
     assert bins.id
+
+
+async def test_wall_items_get_a_fitting_emoji_and_the_familys_stay(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Idea #25."""
+    fake_cozyla.add_chore("Refill pet feeders", ["m-erin"], days="Monday",
+                          icon="czl_chores_emoji#_#paw_prints#_#🐾")  # fmt: skip
+    await chore(scenario, "Clean the bird cage", "every Thursday")
+    await sync(scenario)
+    assert (
+        fake_cozyla.chore_named("Clean the bird cage")["icon"] == "czl_chores_emoji#_#parrot#_#🦜"
+    )
+    assert fake_cozyla.chore_named("Refill pet feeders")["icon"] == (
+        "czl_chores_emoji#_#paw_prints#_#🐾"
+    )  # the family's choice
+
+    fake_cozyla.chore_named("Clean the bird cage")["icon"] = "czl_chores_emoji#_#broom#_#🧹"
+    await sync(scenario)  # Themi's old default gives way, once
+    assert (
+        fake_cozyla.chore_named("Clean the bird cage")["icon"] == "czl_chores_emoji#_#parrot#_#🦜"
+    )
+    calls = len(fake_cozyla.calls)
+    await sync(scenario)
+    assert not any("chores/update" in p for p in fake_cozyla.paths()[calls:])

@@ -144,6 +144,7 @@ class FakeCozyla:
         forever: bool = True,
         repeats: bool = True,
         due_time: str = "23:59",
+        icon: str = "czl_chores_emoji#_#broom#_#🧹",
     ) -> str:
         start = start or clock.now().date()
         uid = secrets.token_hex(16)
@@ -151,7 +152,7 @@ class FakeCozyla:
             "choreUid": uid,
             "id": len(self.chores) + 1,
             "choreName": name,
-            "icon": "czl_chores_emoji#_#broom#_#🧹",
+            "icon": icon,
             "coins": 0,
             "choreType": kind,
             "rotateEveryCounts": 1,
