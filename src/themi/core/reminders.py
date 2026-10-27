@@ -93,6 +93,7 @@ class Reminders:
                 t.title
                 for t in self.board.open_for(member)
                 if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
+                and not self._put_off(t)
                 and t.importance != "low"
                 and not self.board.held(t, member)
             ]
@@ -154,6 +155,13 @@ class Reminders:
             )
             raised += 1
         return raised
+
+    def _put_off(self, task: Task) -> bool:
+        """Put off until a time that hasn't come ("tonight at 9", #18): not raised before."""
+        until = self.db.scalar(
+            "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
+        )
+        return bool(until) and datetime.fromisoformat(until) > clock.now()
 
     def _doer(self, task: Task) -> Member | None:
         return self.store.get_member(task.assignee) if task.assignee is not None else None

@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
+    from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
     from themi.core.events import Events
@@ -127,6 +128,7 @@ class Services:
     events: Events | None = None  # calendar events made and changed from chat (K3)
     travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
     task_blocks: TaskBlocks | None = None  # time blocked on calendars for tasks (K5)
+    wall_routines: CozylaRoutines | None = None  # the wall's routines (C3, bug #22)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None

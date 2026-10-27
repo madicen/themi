@@ -121,6 +121,7 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
 
 
 _LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
+_BULLET = re.compile(r"^\s*[-•*]\s")
 
 
 def _opening_command(sentence: str) -> str | None:
@@ -128,6 +129,8 @@ def _opening_command(sentence: str) -> str | None:
         return None  # "Dryer now, or later?" offers a choice; it isn't a command
     if _LABEL.match(sentence):
         return None  # "Check-in: ..." or "Due today: ..." labels the message
+    if _BULLET.match(sentence):
+        return None  # "- Call the vet" in a list names a task; it isn't an order (#19)
     words = _WORD.findall(sentence.lower())
     if not words:
         return None
