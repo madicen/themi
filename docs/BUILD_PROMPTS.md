@@ -3548,8 +3548,8 @@ Notes (2026-10-26):
 ### F11 · Feedback (2026-10-27): put off until a time, summaries, finding events, routine items
 Status: [x] 2026-10-27
 Depends on: K2, K4b, C3
-From the family's reports of 2026-10-26/27 (`themi feedback`): ideas #18 and #19, bugs #20 and
-#22.
+From the family's reports of 2026-10-26/27 (`themi feedback`): ideas #18, #19 and #23, bugs #20
+and #22.
 
 Notes (2026-10-27):
 - #18 ("If I give a specific time that I will do a task, I shouldn't get a nudge before that
@@ -3577,6 +3577,11 @@ Notes (2026-10-27):
   item is deleted the next day (`wall_routine_once`, migration 0057). A prompt line keeps
   routine items off calendars, chores and lists.
 - #21 (Google Home) is research: prompt R2.
+- #23 (Erin: "this rule should probably be the default for everyone"): "drink black tea
+  tomorrow at 7" was offered for the family calendar, and she locked a personal rule (14)
+  against it. Now a task someone makes for themselves (or that came from the wall with
+  nobody named), not shared or for either of them, is never offered for the family
+  calendar; ones for the other person, or shared, still are. Rule 14 was retired (unlocked).
 - Setup: restart (applies 0057). The mistaken personal "Evening Routine" list from #22 (on
   the wall, with "Replace vacuum water") is still there, waiting for the family's OK to
   delete it.
