@@ -159,3 +159,22 @@ def test_titles_match_loosely() -> None:
     assert not title_matches("dentist", "Dental cleaning")  # sharing "dent" isn't enough
     assert not title_matches("run", "Brunch")
     assert not title_matches("", "Anything")
+
+
+def test_times_relative_to_sunset() -> None:
+    """F9b, Erin's runs: "an afternoon check-in at least an hour before sunset"."""
+    rep = parse("every Tue, Thu and Sat or Sun at 2pm, at least an hour before sunset", WED)
+    assert (rep.at, rep.before_sunset) == (time(14), 60)
+    assert read_back(rep) == (
+        "Every Tuesday, Thursday and Saturday or Sunday at 2 pm, at least an hour before sunset"
+    )
+    assert Repeat.from_json(rep.to_json()) == rep
+    alone = parse("every day 30 minutes before sunset", WED)
+    assert (alone.at, alone.before_sunset, read_back(alone)) == (
+        None,
+        30,
+        "Every day, 30 minutes before sunset",
+    )
+    assert read_back(parse("every friday at sunset", WED)) == "Every Friday, at sunset"
+    with pytest.raises(RepeatError):
+        parse("twice a week, an hour before sunset", WED)  # no fixed days

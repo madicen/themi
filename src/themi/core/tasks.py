@@ -39,6 +39,7 @@ from themi.core.repeat import (
     round_end,
 )
 from themi.core.services import Services
+from themi.core.sun import sunset
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import to_utc_iso
@@ -463,10 +464,30 @@ class TaskBoard:
             return None
         return _on(task.due_on, self.time_of(task) or time(9), self._tz())
 
-    @staticmethod
-    def time_of(task: Task) -> time | None:
-        """When its nudge comes: a window's start, else its time, else the chore's."""
-        return task.from_time or task.due_time or (task.repeat.at if task.repeat else None)
+    def time_of(self, task: Task, day: date | None = None) -> time | None:
+        """When its nudge comes: a window's start, else its time, else the chore's (F9b: by
+        sunset at home that day, or the earlier of its time and that)."""
+        if task.from_time or task.due_time:
+            return task.from_time or task.due_time
+        if task.repeat is None:
+            return None
+        if task.repeat.before_sunset is None:
+            return task.repeat.at
+        by_sunset = self.sunset_time(day or task.due_on or self._today(), task.repeat.before_sunset)
+        if by_sunset is None:
+            return task.repeat.at  # no home on the map yet: its own time, if it has one
+        return min(task.repeat.at, by_sunset) if task.repeat.at else by_sunset
+
+    def sunset_time(self, day: date, before: int) -> time | None:
+        """`before` minutes before sunset at home on `day`, on the five minutes."""
+        home = self.db.one("SELECT lat, lon FROM family_home WHERE id = 1")
+        if home is None:
+            return None
+        down = sunset(day, home["lat"], home["lon"], self._tz())
+        if down is None:
+            return None
+        moment = down - timedelta(minutes=before)
+        return time(moment.hour, moment.minute - moment.minute % 5)
 
     def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
@@ -731,6 +752,13 @@ class TaskBoard:
             parts.append("a missed round stays owed")
         if task.repeat is not None and task.missed == "next_day":
             parts.append("a missed day moves to the next day")
+        if task.repeat is not None and task.repeat.before_sunset is not None:
+            at = self.time_of(task, self._today())
+            parts.append(
+                f"today that's about {_clock_words(at)}"
+                if at
+                else "sunset needs the home address (the Family page)"
+            )
         return "; ".join(parts)
 
     def next_dates(self, task: Task, count: int = 3) -> list[datetime]:
@@ -1292,8 +1320,9 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "escalate_after_days: past that, escalate (0 for none); escalate_to 'both' when they want "
     "it on both partners' lists (shared until done), else 'owner'. missed: 'roll' on to the "
     "next date if a round passes undone (usual), 'catch_up' to keep it owed, or 'next_day' "
-    "('if I miss a day, prompt me the next day'). Either-day rounds and rest days go in the "
-    "phrase: 'every Tue, Thu and Sat or Sun, never two days in a row'. either: true "
+    "('if I miss a day, prompt me the next day'). Either-day rounds, rest days and sunset go "
+    "in the phrase: 'every Tue, Thu and Sat or Sun at 2pm, at least an hour before sunset, "
+    "never two days in a row', 'every day 30 minutes before sunset'. either: true "
     "when either of them can do it each time (it's on both lists). Use it after "
     "create_task, also for repeating reminders ('always remind me about the bins on "
     "Tuesdays'). Themi reads the saved schedule back to them itself.",
@@ -1350,7 +1379,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     )
 
 
-def _clock_words(moment: datetime) -> str:
+def _clock_words(moment: datetime | time) -> str:
     hour = moment.hour % 12 or 12
     suffix = "am" if moment.hour < 12 else "pm"
     return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"

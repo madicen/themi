@@ -203,3 +203,36 @@ async def test_the_distance_plan_steps_up_on_tuesdays(scenario: Scenario) -> Non
         i.summary for i in board(scenario).open_items(scenario.member("Erin")) if "run" in i.summary
     ]
     assert "Plan: 1.3 miles from Tue 27 Oct" in item and "; 1.5 miles this week." in item
+
+
+async def test_by_sunset(scenario: Scenario) -> None:
+    """F9b: "at least an hour before sunset". The clock starts Wednesday 21 October, 9 am in
+    California; sunset at home is about 6:24 pm."""
+    scenario.app.db.execute(
+        "INSERT INTO family_home (id, address, lat, lon, set_at) VALUES "
+        "(1, 'Home', 37.7749, -122.4194, '2026-10-21T00:00:00+00:00')"
+    )
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    task = await board(scenario).set_schedule(
+        run.id,
+        erin,
+        repeat=parse("every Tue, Thu and Sat or Sun at 2pm, at least an hour before sunset", WED),
+    )
+    assert board(scenario).summary(task) == (
+        "Every Tuesday, Thursday and Saturday or Sunday at 2 pm, at least an hour before sunset; "
+        "today that's about 2 pm"
+    )  # 2 pm is earlier than 5:20
+    walk = await board(scenario).create(
+        erin, "Walk the dog", "physical", 1, assignee=erin, nudge=False
+    )
+    walk = await board(scenario).set_schedule(
+        walk.id, erin, repeat=parse("every day an hour before sunset", WED)
+    )
+    assert board(scenario).summary(walk).endswith("today that's about 5:20 pm")
+    await at(scenario, WED, 17, 15)
+    assert not any("Walk the dog" in t for t in scenario.inbox("Erin"))
+    await at(scenario, WED, 17, 21)
+    assert any("Walk the dog" in t for t in scenario.inbox("Erin"))
