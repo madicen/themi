@@ -74,6 +74,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E1 | Email: suggest important senders | Feedback | [x] |
 | S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
 | M1 | Memory: a record of conversations | Feedback | [ ] |
+| P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3198,6 +3199,29 @@ record.
 - A daily, private journal per person: the topics talked about and what was decided, written
   at the end of the day from the day's messages, searchable ("what did we decide about the
   pacifiers?"), on the website's Rules & memory page, deletable.
+
+### P1 · Faster replies: only the tools a message needs
+Status: [x] 2026-10-27
+Depends on: F13
+From bug #29 (2026-10-27): every message sent all 55 tools' schemas, about 32,000 characters
+(some 8,000 tokens), on the free Gemini tier, twice for a message that used a tool.
+- A core set always goes (tasks, notes and rules, approvals, energy notes, groceries, Things
+  to Buy, feedback); the rest are grouped (schedules, calendar, lists, the wall, email,
+  pantry and meals, calls, settings) and go when the message or the last few messages call
+  for them. `more_tools` (in the core) adds a group mid-turn, so a miss costs a step, not a
+  wrong answer. A tool not in the table is core.
+
+Notes (2026-10-27):
+- `themi.core.tools`: `GROUPS` (what each is for, and the words that call for it),
+  `TOOL_GROUPS` (tool to group; anything else is core), `choose_groups` over this message and
+  the last four, `ToolRegistry.specs(groups)`, and `more_tools` (a starter tool) which adds
+  groups to `ToolContext.groups`; the agent asks for the specs again each step.
+- Measured on the real app: all 56 tools are 33,500 characters; a plain message now sends 19
+  (12,800), one about the calendar or a list 26 to 28 (16,000 to 17,800). The words are
+  generous on purpose ("good morning" brings the calendar's); a miss costs a `more_tools`
+  step. `ai_calls` (F13) will show whether replies got faster.
+- Not checked against a real model (the evals need `--run-evals` and API keys); worth a look
+  in `ai_calls` and in chat over the next days.
 
 ### C1a · Cozyla: unofficial client and a read-only check
 Status: [x] 2026-10-25
