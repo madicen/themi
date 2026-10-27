@@ -51,6 +51,7 @@ from themi.core.memory import Memory
 from themi.core.pantry import Pantry
 from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
+from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.task_blocks import TaskBlocks
@@ -135,6 +136,7 @@ def build_app(
         services.gmail = GmailSync(store, services.google, outbox)
         install_executors(services.autonomy.executors, services.gmail)
         EmailTriage(services, services.gmail).install()
+        SenderSuggestions(services).install()
         ExpectedEmails(services, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
@@ -227,6 +229,8 @@ def build_app(
         )
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
+    if services.senders is not None:
+        periodic.append(PeriodicTask("email.senders", timedelta(hours=6), services.senders.offer))
     if services.triage is not None:
         periodic.append(
             PeriodicTask("pantry.receipts", timedelta(minutes=10), pantry.read_pending_receipts)
