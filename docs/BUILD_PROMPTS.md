@@ -60,7 +60,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S4 | Energy-aware chore levels | Shadow Calendar review | [x] |
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
-| F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [~] |
+| F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
 | F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
 | F9c | Exercise schedules: distance plans | Feedback | [ ] |
 | L1 | Lists on demand | Lists | [ ] |
@@ -2921,7 +2921,7 @@ Notes (2026-10-26):
 - The Cozyla branch (C1) also used migration 0033; it was renumbered to 0034 when rebased.
 
 ### F9a · Exercise schedules: either-day rounds, rest days, a missed day moves to the next
-Status: [~]
+Status: [x] 2026-10-26
 Depends on: F7, F8
 From Erin's running set-up (bug #10): "Tuesday, Thursday, and Saturday or Sunday, an afternoon
 check-in at least an hour before sunset. If I miss a day, prompt me the next day. Never two
@@ -2939,6 +2939,26 @@ Build:
   the round.
 - Read-backs for all of these, built from what was stored; tests with a frozen clock across
   a week, including a missed Tuesday and a run on Sunday followed by Monday.
+
+Notes (2026-10-26):
+- Phrases: "every Tue, Thu and Sat or Sun at 2pm, never two days in a row" reads back as
+  "Every Tuesday, Thursday and Saturday or Sunday at 2 pm, never two days in a row". `Repeat`
+  gained `or_days` (a day that stands in for the one before it; only the next day, weekly
+  only) and `rest` (any anchored schedule). `round_end` is a round's last on-time day.
+- The rest rule is kept wherever the board sets a round's day (first due, after done, after
+  a miss): never the day after the last run, so a run on Wednesday moves Thursday's round to
+  Friday, and a Friday run makes the weekend's round Sunday.
+- `missed="next_day"` lives in its own column, `tasks.missed_next_day` (migration 0047),
+  because 0030's CHECK on `missed` can't change without rebuilding `tasks`. A missed round
+  moves to tomorrow (rest permitting) unless the next round comes first; then it rolls on
+  and the miss is recorded. Overdue reminders leave these alone; the end-of-day list counts
+  an either-day round on both days.
+- The wall: an either-day routine or chore repeats on both days, and a tick on either closes
+  the round; a round done in Themi ticks the day it was done. Known gaps: after a Saturday
+  run, Sunday still shows unticked on the wall; a round moved to a day that isn't on the
+  wall's schedule (Wednesday, after a missed Tuesday) doesn't show there.
+- Setup: restart Themi (applies 0047), then Erin's "Go for a run" (task 8) needs its new
+  schedule; it's stored as Tue, Thu and Sat at 2 pm, rolling on.
 
 ### F9b · Exercise schedules: sunset-relative times
 Status: [ ]
