@@ -223,3 +223,10 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     assert "goes on a calendar" in STABLE_SYSTEM  # K3: appointments aren't tasks
     assert "is\n  add_to_wall_routine" in STABLE_SYSTEM  # bug #22: not the calendar or a list
     assert "heads-up" in STABLE_SYSTEM  # bug #24: it said there were no advance reminders
+    assert "talk it through" in STABLE_SYSTEM  # bug #30: advice became a rule
+    assert "never a rule for Themi" in STABLE_SYSTEM
+    from themi.core.rules import propose_rule
+
+    assert "ideas for the family to try" in propose_rule.spec.description
+    assert "general question worth keeping" in STABLE_SYSTEM  # idea #28
+    assert "who calls whom" in STABLE_SYSTEM  # idea #32: Michael's nickname for Erin

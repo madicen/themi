@@ -285,3 +285,28 @@ async def test_keys_stay_out_of_logs_and_errors(
     for key in (ERIN_CLAUDE, ERIN_GEMINI):
         assert key not in caplog.text
         assert key not in str(info.value) and key not in repr(info.value.errors)
+
+
+async def test_each_call_is_recorded_with_its_waits(
+    family: SeededFamily, ai: AISettingsStore, factory: Factory, router: AIRouter
+) -> None:
+    """Bug #29: a reply took a minute and nothing said why. Each call now records its time,
+    its waits for a busy provider and its retries."""
+    two_step_chain(family, ai)
+    factory.provider(ERIN_CLAUDE).fail(1, status=429, retry_after=15)
+    factory.provider(ERIN_CLAUDE).queue_text("Hi")
+    await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    (row,) = family.db.query("SELECT * FROM ai_calls")
+    assert (row["member_id"], row["task"], row["backend"]) == (
+        family.erin.id,
+        "conversation",
+        "Claude",
+    )
+    assert (row["retries"], row["waited"], row["last_status"], row["ok"]) == (1, 15.0, 429, 1)
+
+    factory.provider(ERIN_CLAUDE).fail(3, status=529)
+    factory.provider(ERIN_GEMINI).fail(3, status=529)
+    with pytest.raises(AllProvidersFailed):
+        await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    last = family.db.query("SELECT * FROM ai_calls ORDER BY id DESC LIMIT 1")[0]
+    assert (last["ok"], last["last_status"]) == (0, 529)

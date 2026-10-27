@@ -342,3 +342,12 @@ def test_the_grocery_tool_says_low_and_out_items_are_the_pantrys_job() -> None:
 
     assert "not for things running low or out" in add_to_grocery_list.spec.description
     assert "don't also call add_to_grocery_list" in update_pantry.spec.description
+
+
+async def test_naming_an_item_without_asking_still_asks(scenario: Scenario) -> None:
+    """Bug #30, for groceries: the item's name alone isn't a request."""
+    scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["frozen peas"]})
+    scenario.primary.queue_text("Want them on the list?")
+    replies = await scenario.say("Husband", "the frozen peas we got were amazing")
+    assert replies[0] == "Frozen peas for the grocery list\nGo ahead, or not now?"
+    assert on_list(scenario) == []
