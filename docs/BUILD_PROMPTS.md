@@ -62,7 +62,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
 | F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
 | F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
-| F9c | Exercise schedules: distance plans | Feedback | [ ] |
+| F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1 | Lists on demand | Lists | [ ] |
 | L2 | A "things to buy" list sorted by store | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
@@ -2968,11 +2968,25 @@ Depends on: F9a
   read back as "about 5:10 pm today". The wall routine's part of the day follows it.
 
 ### F9c · Exercise schedules: distance plans
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: F9a
 - A progression on a task: a quantity that steps on a weekday ("1.3 miles, then 1.5, then up
   0.25 a week, on Tuesdays"), shown in the nudge ("Check-in: Go for a run (1.5 miles this
   week)") and read back exactly, like schedules.
+
+Notes (2026-10-26):
+- `themi.core.progression`: "1.3 miles, then 1.5, then up 0.25 a week, on Tuesdays" parses
+  to amounts, a weekly step, an optional "up to", the step day and a start (the step day on
+  or after today, or "starting 2 Nov"). Read back: "1.3 miles from Tue 27 Oct, then 1.5,
+  then up 0.25 a week; it steps up on Tuesdays". A week runs from one step day to the day
+  before the next. Stored as JSON in `tasks.progression` (migration 0048).
+- Tool `set_task_plan` (empty to stop) sends the read-back itself, like `set_task_schedule`.
+  Nudges say the week's amount ("Check-in: Go for a run (1.3 miles this week)"), none
+  before the plan starts; Themi's open items show the plan and this week's amount. The
+  system prompt points weekly plans at the tool, not a note (Erin's was only a note).
+- Not done: recording how far she actually ran. The plan is what's planned.
+- Setup: restart Themi (applies 0048), then give "Go for a run" (task 8) the plan. Erin's
+  note about it (fact 2) can then go: it says "next week", which goes stale.
 
 ### L1 · Lists on demand
 Status: [ ]
