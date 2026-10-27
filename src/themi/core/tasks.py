@@ -454,10 +454,10 @@ class TaskBoard:
         chore's), else 9 am."""
         if task.due_on is None:
             return None
-        return _on(task.due_on, self._time_of(task) or time(9), self._tz())
+        return _on(task.due_on, self.time_of(task) or time(9), self._tz())
 
     @staticmethod
-    def _time_of(task: Task) -> time | None:
+    def time_of(task: Task) -> time | None:
         """When its nudge comes: a window's start, else its time, else the chore's."""
         return task.from_time or task.due_time or (task.repeat.at if task.repeat else None)
 
@@ -469,7 +469,7 @@ class TaskBoard:
         """When this round's nudge may go: the chore's time on its due date, or that morning."""
         if task.due_on is None:
             return None
-        at = self._time_of(task)
+        at = self.time_of(task)
         return _on(task.due_on, at, self._tz()) if at else self._day_start(task.due_on)
 
     def _steps_for(self, task: Task, member: Member) -> str | None:

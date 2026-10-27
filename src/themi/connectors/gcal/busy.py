@@ -243,7 +243,7 @@ class CalendarBusy:
         start = datetime(today.year, today.month, today.day, tzinfo=tz)
         end = start + timedelta(days=CONTEXT_DAYS)
         lines = [
-            f"{owner.name} · {_line(e, tz)}"
+            f"{owner.name} · {event_line(e, tz)}"
             for owner in self.visible_to(viewer)
             for e in self.entries(owner, start, end)
         ]
@@ -258,7 +258,7 @@ def _clock(moment: datetime) -> str:
     return moment.strftime("%I:%M %p").lstrip("0").replace(":00 ", " ").lower()
 
 
-def _line(entry: Entry, tz: ZoneInfo) -> str:
+def event_line(entry: Entry, tz: ZoneInfo) -> str:
     begins = entry.starts_at.astimezone(tz)
     if entry.all_day:
         when = f"{begins:%a %d %b}, all day"

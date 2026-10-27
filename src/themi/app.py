@@ -38,6 +38,7 @@ from themi.core.commands import Commands
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
+from themi.core.day_summary import DaySummary
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
@@ -141,6 +142,8 @@ def build_app(
     tasks.install()
     reminders = Reminders(services, tasks)
     reminders.install()
+    day_summary = DaySummary(services, tasks)
+    day_summary.install()
     reviews = CheckinReviews(services)
     reviews.install()
     Meals(services, pantry).install()
@@ -169,6 +172,7 @@ def build_app(
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
+        PeriodicTask("calendar.morning", timedelta(minutes=5), day_summary.morning),
         PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
         PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),

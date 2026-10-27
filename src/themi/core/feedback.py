@@ -264,6 +264,9 @@ class FeedbackChat:
             "check-in reviews": "on" if member.checkin_reviews else "off",
             "chores on the chart at a time": str(member.chart_limit or "no limit")
             + ("" if member.chart_counts_shared else " (shared chores don't count)"),
+            "morning summary": member.morning_summary.strftime("%H:%M")
+            if member.morning_summary
+            else "off",
             "calendar details seen by": "them only"
             if member.calendar_details == "me"
             else "them and their partner",

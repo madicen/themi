@@ -144,6 +144,8 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         chart_limit=row["chart_limit"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
         calendar_details=row["calendar_details"],
+        morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
+        morning_summary_empty=bool(row["morning_summary_empty"]),
     )
 
 
@@ -371,6 +373,8 @@ class AccountStore:
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
         calendar_details: str | None = None,
+        morning_summary: str | None = None,  # "HH:MM", or "" for off
+        morning_summary_empty: bool | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -426,6 +430,12 @@ class AccountStore:
             if calendar_details not in ("me", "partner"):
                 raise InvalidValue("calendar details are for 'me' or 'partner'")
             changes["calendar_details"] = calendar_details
+        if morning_summary is not None:
+            changes["morning_summary"] = (
+                _parse_hhmm(morning_summary).strftime("%H:%M") if morning_summary else None
+            )
+        if morning_summary_empty is not None:
+            changes["morning_summary_empty"] = int(morning_summary_empty)
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:
