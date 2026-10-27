@@ -24,7 +24,7 @@ tag v1.4.0        ──►  release: build amd64 + arm64,
 Nothing is built on the Pi, and nothing on it is edited by hand after setup except `.env`.
 Everything else is a script in the repo, so a rebuilt Pi comes out the same.
 
-## Part 1: repo changes (I'd build these)
+## Part 1: repo changes (done 2026-10-27)
 
 1. **Images for the Pi.** `release.yml` builds for `linux/amd64` only. Add QEMU and
    `platforms: linux/amd64,linux/arm64`, so every tag publishes an image the Pi can run. The
@@ -52,6 +52,24 @@ Everything else is a script in the repo, so a rebuilt Pi comes out the same.
    a few times.
 6. **`deploy/compose.yml` on a Pi**: `mem_limit: 700m` was sized for a 1 GB cloud VM; on a 4
    to 8 GB Pi it can go to 1.5 GB. Logs get rotated (see step 4 below).
+
+Done, and how it turned out:
+- `release.yml` builds `linux/amd64` and `linux/arm64` (QEMU) and passes the tag in as
+  `THEMI_BUILD_VERSION`, which `themi --version` reports (the Dockerfile's `ARG`).
+- `deploy/update.sh`: the database copy is SQLite's own online backup, made by Python in
+  Themi's image on the data volume (`themi.db.before-<version>`), so it needs no backup
+  storage and no tools on the host; the last three are kept (`KEEP_COPIES`). A storage
+  backup is taken too when `THEMI_BACKUP_BUCKET` is set. A failed version's database is kept
+  as `themi.db.failed-<version>`. Waits up to 180 s (`HEALTH_WAIT`).
+- `tools/release.sh` tags `main@origin`, not the working copy, after checking main's latest
+  CI run passed (`gh`), so a release is always what's merged and tested.
+- `deploy/bootstrap-pi.sh`: steps 3 to 6 below, each checked before it changes anything.
+- `THEMI_MEM_LIMIT` in `.env` sets the cap (`deploy/compose.yml`).
+- Tests: `tests/integration/test_deploy_scripts.py` runs `update.sh` against a stand-in
+  `docker` (no Docker here): upgrade, a failed health check rolling back the database, a
+  failed pull changing nothing, going back by hand, pruning, the storage backup.
+- Not done yet: the optional deploy-on-tag job (5), and a real run on Docker, which the first
+  release and the Pi will be.
 
 ## Part 2: the Pi itself (you, with me checking)
 
@@ -179,8 +197,7 @@ ssh themi ~/themi/update.sh 1.4.0
 2. **Deploy on tag, or by hand** to start (I'd start by hand).
 3. **When to move**: now, or after this machine has had backups running for a few nights.
 
-## What I'd do next
+## What's next
 
-The repo changes in Part 1 (multi-arch release, `update.sh` with health check and
-rollback, `bootstrap-pi.sh`, `release.sh`), tested here with Docker, so they're ready when the
-Pi arrives. The optional deploy job can wait until you've done a couple of releases by hand.
+Part 1 is built. The first real test is a release: `tools/release.sh 0.2.0` once this is
+merged, then watching the release workflow build both images. After that, the Pi (Part 2).

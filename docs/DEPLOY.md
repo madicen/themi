@@ -258,6 +258,21 @@ Sources:
 
 ## 9. Upgrades
 
+Copy `deploy/update.sh` next to `compose.yml` once (`docs/RASPBERRY_PI.md` has the
+details). Then an upgrade is one line:
+
+```sh
+~/themi/update.sh 1.4.0      # pull, copy the database, switch, wait for healthy
+~/themi/update.sh 1.3.2 --restore   # going back by hand
+```
+
+It pulls first (nothing stops if that fails), copies the database on its volume and backs
+it up to storage when that's set up, switches `THEMI_VERSION` in `.env`, restarts, and
+waits for the health check; if the new version isn't healthy, the old one and the copy go
+back. A release is `tools/release.sh 1.4.0` on your machine, once CI on main is green.
+
+By hand, without the script:
+
 ```sh
 cd ~/themi
 docker compose run --rm themi backup     # a fresh snapshot first

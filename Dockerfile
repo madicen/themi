@@ -6,6 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Which release this is (the tag, from the release workflow); `themi --version` says it.
+ARG THEMI_BUILD_VERSION=dev
+ENV THEMI_BUILD_VERSION=$THEMI_BUILD_VERSION
+
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src

@@ -17,8 +17,9 @@ services:
       # Only this machine can reach it; Tailscale Funnel publishes it over HTTPS.
       - "127.0.0.1:8080:8080"
     stop_grace_period: 45s
-    # An e2-micro has 1 GB; this keeps Themi from starving the host.
-    mem_limit: 700m
+    # An e2-micro has 1 GB, so 700m keeps Themi from starving the host; a Pi with 4 GB or
+    # more can give it THEMI_MEM_LIMIT=1500m in .env.
+    mem_limit: ${THEMI_MEM_LIMIT:-700m}
 
 volumes:
   themi-data:
