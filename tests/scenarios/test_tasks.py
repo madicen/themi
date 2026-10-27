@@ -405,3 +405,20 @@ async def test_one_of_us_goes_on_both_lists_and_urgent_is_high(scenario: Scenari
     await scenario.app.outbox.flush()
     for name in ("Erin", "Husband"):  # both are asked; whoever does it closes it
         assert any("Assemble the grocery order" in t for t in scenario.inbox(name)), name
+
+
+async def test_making_a_task_both_of_ours_asks_each_once(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Assemble grocery order", "errand", 2, date(2026, 10, 22), assignee=erin
+    )
+    await board.make_either(task.id)
+    rows = scenario.app.db.query(
+        "SELECT member_id FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
+        (f"task-{task.id}-%",),
+    )
+    assert sorted(r["member_id"] for r in rows) == sorted(
+        [erin.id, scenario.member("Husband").id]
+    )  # her nudge from before was taken back, not doubled

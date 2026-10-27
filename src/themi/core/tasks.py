@@ -1024,6 +1024,7 @@ class TaskBoard:
         and whoever does it closes it."""
         self.db.execute("UPDATE tasks SET either = 1, shared = 1 WHERE id = ?", (task_id,))
         task = self.get(task_id)
+        self.withdraw_prompt(task)  # one nudge each, not a second for whoever had it
         for member in self.store.list_members():
             if member.telegram_user_id is not None:
                 await self.prompt(task, member=member)
