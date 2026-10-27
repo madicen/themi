@@ -65,7 +65,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
-| L2 | A "things to buy" list sorted by store | Lists | [ ] |
+| L2a | A "things to buy" list sorted by store | Lists | [x] |
+| L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
@@ -3065,21 +3066,52 @@ Notes (2026-10-26):
   OurGroceries; the prompt keeps named lists apart from the grocery list.
 - Setup: restart Themi (applies 0050).
 
-### L2 · A "things to buy" list sorted by store
-Status: [ ]
-Depends on: L1b, 35
+### L2a · A "things to buy" list sorted by store
+Status: [x] 2026-10-26
+Depends on: L1b
 From Erin's idea #6: non-food things to buy go on their own list, not the grocery list in
-OurGroceries ("body wash comes from Amazon"). Each item knows where the family usually buys
-it, and when a Safeway or Amazon order is put together (prompt 35's cart staging), the
-matching items are added to that cart.
+OurGroceries ("body wash comes from Amazon"). L2 was split (2026-10-26): this part is the
+list and where things come from; L2b adds them to carts. The family chose: it's the wall's
+Shopping List, renamed "Things to Buy".
 
 Build:
+- A "things to buy" list: the household list with that purpose, kept on the wall (L1b).
+  Renaming a list in Themi renames it on the wall.
 - Food versus non-food when something is added: food goes to groceries as now; non-food goes
-  to "things to buy". Ask when it's unclear, and remember the answer for that item.
-- A usual store per item, learned from what people say and from receipts, editable on the
-  website.
-- When prompt 35 stages a cart, it offers the matching "things to buy" items as part of the
-  same approval.
+  to "things to buy". Ask when it's unclear, and remember the answer for that item; what
+  someone asks for in their own words wins over what was remembered.
+- A usual store per item, learned from what people say and from receipts (non-grocery
+  receipts like Amazon's are read for their items too; a receipt ticks off what it bought),
+  editable on the website, and the list shown by store.
+
+Notes (2026-10-26):
+- `themi.core.buying.ThingsToBuy`; the list is the household list with `purpose =
+  'things_to_buy'` (made as "Things to Buy" if there isn't one). Migration 0051: `purpose`,
+  `lists.wall_name` (a rename on either side is told apart, so renaming in Themi renames on
+  the wall: `CozylaClient.rename_list`, colour and icon sent back as they were), and
+  `item_homes` (by item name: food or other, and the usual store).
+- Tools: `add_to_things_to_buy` (items with an optional store; staged under `list_add`,
+  straight through when they wrote the names) and `set_usual_store` ("" forgets). An item
+  remembered as the other kind is refused when the model infers it, and goes through when
+  asked for in their words, which is remembered instead. Grocery adds remember "food".
+- `show_lists` shows Things to Buy by store ("Amazon: body wash; anywhere: batteries").
+  The Lists page has a "Usually from..." field per item there.
+- Receipts: a new "shopping" kind (Amazon, a hardware store) is read for its items as
+  grocery receipts are; either kind ticks off matching things to buy ("lavender body wash"
+  matches "body wash") and learns the store. Only grocery receipts feed the pantry. The
+  receipt prompt is given the things-to-buy names.
+- A prompt line: food and kitchen staples to groceries, anything else to Things to Buy, and
+  ask when it isn't clear.
+- Dry run on a copy: the only wall write is renaming "Shopping List" to "Things to Buy"
+  (its pink, #CE6388, kept).
+- Setup: restart Themi (applies 0051), then mark Themi list 1 (the wall's Shopping List) as
+  Things to Buy and rename it; the next sync renames it on the wall.
+
+### L2b · Things to buy in the carts
+Status: [ ]
+Depends on: L2a, 35
+- When prompt 35 stages a cart, it offers the matching "things to buy" items (by usual
+  store) as part of the same approval.
 
 ### H1 · Dishwasher: notice when the household is falling behind
 Status: [ ]
