@@ -69,7 +69,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
-| K2 | Calendars: a summary of the day | Calendars | [ ] |
+| K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [ ] |
 | K4 | Calendars: travel time and "time to get ready" | Calendars | [ ] |
 | K5 | Calendars: blocking time for tasks | Calendars | [ ] |
@@ -3589,7 +3589,7 @@ Notes (2026-10-26):
   linked; then each person chooses calendars and the sharing setting.
 
 ### K2 · Calendars: a summary of the day
-Status: [ ]
+Status: [x] 2026-10-26
 Depends on: K1
 - "What's my day look like?", "what's on Thursday?": a tool that gives the day's events (and,
   where the setting allows, the partner's), tasks due and chores up, in plain words.
@@ -3597,6 +3597,23 @@ Depends on: K1
   message, through the outbox (quiet hours and daily limits apply as usual; it counts as one
   message). Nothing on: a short line, or nothing, as the person chooses.
 - Tests: on request, on a time, off, quiet hours, privacy.
+
+Notes (2026-10-26):
+- `themi.core.day_summary.DaySummary`. Tool `day_summary` (date as YYYY-MM-DD from the
+  context, empty for today; `partner` adds the partner's events when they share). Events
+  come back inside a `calendars` data block; due items are plain.
+- Due: tasks due that day, an either-day round on either day, and, for today, ones still
+  open from before ("since Mon 19 Oct"); chores waiting for the chart are left out. Each line
+  opens with a label ("2 pm:", "any time:"), as nudges do: the PDA shield rewrote a line
+  that opened with a title like "Call the vet" into "Up next: ...". Check-ins and a plan's
+  week show in brackets.
+- Morning message: `members.morning_summary` ('HH:MM' or NULL) and
+  `morning_summary_empty` (migration 0053), on My settings → "My calendars". The
+  `calendar.morning` job (every 5 minutes) sends it once a day through the outbox (kind
+  `summary`, normal priority, so quiet hours and limits apply), with the partner's events
+  when they share; skipped if it's more than 3 hours late (Themi was down), and on empty
+  days unless asked for.
+- Setup: restart (applies 0053); each person sets a time if they want one.
 
 ### K3 · Calendars: creating and changing events
 Status: [ ]
