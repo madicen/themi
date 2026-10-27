@@ -107,9 +107,14 @@ class FakeGcal:
         transparency: str = "opaque",
         declined: bool = False,
         status: str = "confirmed",
-    ) -> None:
-        """An event on someone's primary calendar. `start`/`end`: RFC 3339, or dates."""
-        cal = self._box(address).setdefault(
+        calendar: str = "primary",
+        **extra: Any,
+    ) -> str:
+        """An event on someone's calendar (their primary one unless `calendar` is an id from
+        `add_calendar`). `start`/`end`: RFC 3339, or dates. `extra`: more event fields
+        (location, description, hangoutLink, extendedProperties...). Returns its id."""
+        box = self._box(address)
+        cal = box.get(calendar) or box.setdefault(
             "primary", _Calendar("primary", address, "UTC", "owner")
         )
         eid = f"e{next(self._ids)}"
@@ -124,7 +129,8 @@ class FakeGcal:
         }
         if declined:
             event["attendees"] = [{"email": address, "self": True, "responseStatus": "declined"}]
-        cal.events[eid] = event
+        cal.events[eid] = {**event, **extra}
+        return eid
 
     def fail(self, endpoint: str, status: int, *, times: int = 1) -> None:
         """The next `times` calls to `endpoint` fail.
@@ -159,7 +165,9 @@ class FakeGcal:
         if box is None:
             return error  # type: ignore[return-value]
         items = [
-            {"id": c.id, "summary": c.summary, "accessRole": c.access_role} for c in box.values()
+            {"id": c.id, "summary": c.summary, "accessRole": c.access_role}
+            | ({"primary": True} if c.id == "primary" else {})
+            for c in box.values()
         ]
         return JSONResponse({"items": items})
 
