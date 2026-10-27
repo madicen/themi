@@ -5,7 +5,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from themi.core.repeat import Repeat, RepeatError, next_occurrences, parse, read_back
+from themi.core.repeat import (
+    Repeat,
+    RepeatError,
+    next_occurrences,
+    parse,
+    read_back,
+    round_end,
+)
 
 TZ = ZoneInfo("America/Los_Angeles")
 WED = date(2026, 10, 21)  # a Wednesday
@@ -105,5 +112,38 @@ def test_a_course_with_an_end_date() -> None:
 
 @pytest.mark.parametrize("words", ["twice a week until 30 Oct", "every day until 1 Oct"])
 def test_end_dates_need_fixed_days_and_the_future(words: str) -> None:
+    with pytest.raises(RepeatError):
+        parse(words, WED)
+
+
+def test_an_either_day_round_and_a_rest_rule() -> None:
+    """F9a, Erin's runs: "Tuesday, Thursday, and Saturday or Sunday. Never two days in a row."""
+    rep = parse("every Tue, Thu and Sat or Sun at 2pm, never two days in a row", WED)
+    assert (rep.weekdays, rep.or_days, rep.rest) == ((1, 3, 5), (6,), True)
+    assert read_back(rep) == (
+        "Every Tuesday, Thursday and Saturday or Sunday at 2 pm, never two days in a row"
+    )
+    assert Repeat.from_json(rep.to_json()) == rep
+    after = datetime(2026, 10, 21, 9, tzinfo=TZ)
+    found = next_occurrences(rep, after, TZ, 4)
+    assert [d.date().day for d in found] == [22, 24, 27, 29]  # Sunday is no round of its own
+    saturday, tuesday = date(2026, 10, 24), date(2026, 10, 27)
+    assert (round_end(rep, saturday), round_end(rep, tuesday)) == (date(2026, 10, 25), tuesday)
+    assert read_back(parse("every saturday or sunday", WED)) == "Every Saturday or Sunday"
+    assert not parse("every tuesday", WED).rest
+    assert read_back(parse("every other day, no two days in a row", WED)) == (
+        "Every other day, never two days in a row"
+    )
+
+
+@pytest.mark.parametrize(
+    "words",
+    [
+        "every monday or thursday",  # "or" is a day and the one after it
+        "twice a week, never two days in a row",  # no fixed days to keep apart
+        "first monday or tuesday of the month",
+    ],
+)
+def test_either_days_and_rest_need_fixed_neighbouring_days(words: str) -> None:
     with pytest.raises(RepeatError):
         parse(words, WED)

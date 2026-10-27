@@ -56,6 +56,8 @@ async def test_a_weekly_chore_is_due_on_its_day_and_read_back(scenario: Scenario
     replies = await schedule(scenario, bins, "every Tuesday at 6pm")
     assert replies[0] == "Saved: Every Tuesday at 6 pm. Next: Tue 27 Oct, 6 pm."
     assert "read back to them already" in last_tool_result(scenario).content
+    # Idea #8: anything they asked for that the read-back doesn't show is said, and noted.
+    assert "remember_fact" in last_tool_result(scenario).content
     assert board(scenario).get(bins.id).due_on == date(2026, 10, 27)
 
     await scenario.advance(hours=24 * 6 + 8, minutes=59)  # Tue 17:59

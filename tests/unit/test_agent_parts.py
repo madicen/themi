@@ -210,3 +210,13 @@ def test_rules_are_for_how_themi_behaves_and_chores_are_tasks() -> None:
 
     assert "Chores, schedules and the steps of a job are tasks" in STABLE_SYSTEM
     assert "never rules" in propose_rule.spec.description
+
+
+def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
+    """Idea #8: Erin was told her runs had "rest days in between" when the schedule held
+    only Tue, Thu and Sat; the rest wasn't saved anywhere."""
+    from themi.core.prompts import STABLE_SYSTEM
+
+    assert "Only say what a tool's result shows was saved" in STABLE_SYSTEM
+    assert "remember_fact" in STABLE_SYSTEM
+    assert "is set_task_plan" in STABLE_SYSTEM  # Erin's distance plan was only a note

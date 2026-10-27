@@ -11,6 +11,10 @@ Two kinds of schedule:
   `dateutil.rrule` ("every Tuesday", "every other Monday", "the first Monday of
   each month", "every 3 days"), optionally at a time of day.
 
+Anchored weekly schedules can also have either-day rounds ("Saturday or Sunday": one
+round, due Saturday and still fine Sunday), and any anchored one a rest rule ("never
+two days in a row"), which the task board keeps when it sets a round's day (F9a).
+
 Occurrences are computed on local wall-clock times and then given the family's
 timezone, so "Tuesday at 6 pm" stays 6 pm across daylight-saving changes.
 """
@@ -19,7 +23,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
@@ -80,6 +84,8 @@ class Repeat:
     at: time | None = None  # time of day, if any
     start: date | None = None  # where the rhythm starts (anchored)
     until: date | None = None  # the last day it can fall on (a course of medicine, C2a)
+    or_days: tuple[int, ...] = field(default_factory=tuple)  # stand-ins for the day before
+    rest: bool = False  # never two days in a row
 
     @property
     def anchored(self) -> bool:
@@ -96,6 +102,8 @@ class Repeat:
             "at": self.at.strftime("%H:%M") if self.at else None,
             "start": self.start.isoformat() if self.start else None,
             "until": self.until.isoformat() if self.until else None,
+            "or_days": list(self.or_days),
+            "rest": self.rest,
         }
 
     @classmethod
@@ -110,6 +118,8 @@ class Repeat:
             at=time.fromisoformat(data["at"]) if data.get("at") else None,
             start=date.fromisoformat(data["start"]) if data.get("start") else None,
             until=date.fromisoformat(data["until"]) if data.get("until") else None,
+            or_days=tuple(data.get("or_days") or ()),
+            rest=bool(data.get("rest")),
         )
 
 
@@ -141,13 +151,50 @@ def _take_time(text: str) -> tuple[str, time | None]:
     return text, None
 
 
+def day_number(word: str) -> int | None:
+    """A day's name ("tuesday", "tue", "tuesdays") as a number, 0 for Monday."""
+    return _DAY_WORDS[word] if word in _DAY_WORDS else _DAY_WORDS.get(word.rstrip("s"))
+
+
 def _days(text: str) -> tuple[int, ...]:
     found = []
     for word in re.findall(r"[a-z]+", text):
-        day = _DAY_WORDS.get(word.rstrip("s")) if word not in _DAY_WORDS else _DAY_WORDS[word]
+        day = day_number(word)
         if day is not None and day not in found:
             found.append(day)
     return tuple(sorted(found))
+
+
+def _take_or_days(text: str) -> tuple[str, tuple[int, ...]]:
+    """Pull either-day rounds out: "saturday or sunday" leaves "saturday", and Sunday as
+    its stand-in. Only a day and the one after it."""
+    found = []
+    for m in reversed(list(re.finditer(r"\b([a-z]+)\s+or\s+([a-z]+)\b", text))):
+        first, second = day_number(m.group(1)), day_number(m.group(2))
+        if first is None or second is None:
+            continue
+        if second != (first + 1) % 7:
+            raise RepeatError(
+                f"'{m.group(0)}' needs to be a day and the one after it ('Saturday or "
+                f"Sunday'). {EXAMPLES}"
+            )
+        found.append(second)
+        text = text[: m.start()] + m.group(1) + text[m.end() :]
+    return text, tuple(sorted(found))
+
+
+_REST = re.compile(
+    r"[,;]?\s*(?:but\s+|and\s+)?(?:never|no|not)\s+(?:two|2)\s+days\s+in\s+a\s+row",
+    re.IGNORECASE,
+)
+
+
+def _take_rest(phrase: str) -> tuple[str, bool]:
+    """Pull "never two days in a row" off the phrase."""
+    m = _REST.search(phrase)
+    if not m:
+        return phrase, False
+    return phrase[: m.start()] + phrase[m.end() :], True
 
 
 def _take_until(phrase: str, today: date) -> tuple[str, date | None]:
@@ -167,7 +214,14 @@ def _take_until(phrase: str, today: date) -> tuple[str, date | None]:
 
 def parse(phrase: str, today: date) -> Repeat:
     """Read a schedule phrase. Raises RepeatError, with examples, if it isn't clear."""
-    return _parse(*_take_until(phrase, today), today)
+    phrase, rest = _take_rest(phrase)
+    rep = _parse(*_take_until(phrase, today), today)
+    if rest and not rep.anchored:
+        raise RepeatError(
+            f"'Never two days in a row' needs fixed days ('every Tue, Thu and Sat, never two "
+            f"days in a row'). {EXAMPLES}"
+        )
+    return replace(rep, rest=rest)
 
 
 def _parse(phrase: str, until: date | None, today: date) -> Repeat:
@@ -184,7 +238,16 @@ def _parse_rhythm(phrase: str, today: date) -> Repeat:
     if not text:
         raise RepeatError(f"There's no schedule there. {EXAMPLES}")
     text, at = _take_time(text)
-    text = " ".join(text.split())
+    text, or_days = _take_or_days(" ".join(text.split()))
+    rep = _parse_days(text, at, phrase, today)
+    if not or_days:
+        return rep
+    if rep.kind != "weekly" or set(or_days) & set(rep.weekdays):
+        raise RepeatError(f"'Or' works for weekly days ('every Saturday or Sunday'). {EXAMPLES}")
+    return replace(rep, or_days=or_days)
+
+
+def _parse_days(text: str, at: time | None, phrase: str, today: date) -> Repeat:
 
     m = re.fullmatch(r"(once|twice|\d+(?:\.\d+)?)\s*(?:times?|x)?\s*(?:a|per|each)\s+week", text)
     if m:
@@ -282,7 +345,7 @@ def read_back(rep: Repeat) -> str:
     if rep.kind == "daily":
         text = {1: "Every day", 2: "Every other day"}.get(rep.every, f"Every {rep.every} days")
     elif rep.kind == "weekly":
-        days = _and([DAY_NAMES[d] for d in rep.weekdays])
+        days = _and([_day_words(rep, d) for d in rep.weekdays])
         if rep.every == 1:
             text = f"Every {days}"
         elif rep.every == 2 and len(rep.weekdays) == 1:
@@ -295,7 +358,22 @@ def read_back(rep: Repeat) -> str:
     else:
         text = f"The {_ordinal_day(rep.month_day or 1)} of each month"
     text = f"{text} at {_time_words(rep.at)}" if rep.at else text
+    text = f"{text}, never two days in a row" if rep.rest else text
     return f"{text}, until {rep.until:%a %d %b}" if rep.until else text
+
+
+def _day_words(rep: Repeat, day: int) -> str:
+    following = (day + 1) % 7
+    or_day = f" or {DAY_NAMES[following]}" if following in rep.or_days else ""
+    return DAY_NAMES[day] + or_day
+
+
+def round_end(rep: Repeat, due: date) -> date:
+    """The last day a round due on `due` is still on time: the day after, for an either-day
+    round ("Saturday or Sunday"), else the day itself."""
+    if due.weekday() in rep.weekdays and (due.weekday() + 1) % 7 in rep.or_days:
+        return due + timedelta(days=1)
+    return due
 
 
 # ----- occurrences ----------------------------------------------------------------------
