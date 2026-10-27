@@ -30,12 +30,11 @@ from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
 from themi.core.services import Services
-from themi.core.tasks import Task, TaskBoard
+from themi.core.tasks import IMPORTANCE, Task, TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
 
 log = logging.getLogger(__name__)
 
-IMPORTANCE = ("low", "normal", "high")
 CADENCE = {"high": 1, "normal": 2, "low": 7}  # days between overdue reminders
 DAY_END_BEFORE_QUIET = timedelta(hours=2)
 DAY_END_TEXT = "Still open today: {items}. Done any of them already? Tomorrow's fine too."

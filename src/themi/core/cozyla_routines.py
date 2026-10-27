@@ -38,6 +38,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
+from themi.connectors.cozyla.emoji import better_icon, routine_icon
 from themi.connectors.cozyla.schedule import to_wall, wall_can_say
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
@@ -219,11 +220,17 @@ class CozylaRoutines:
                     (task.id, made, self._last_run(task.id)),
                 )
                 continue
-            same = (routine.title, routine.part) == (title, part) and (
-                routine.schedule.every,
-                routine.schedule.count,
-                {d.strip() for d in routine.schedule.days.split(",") if d.strip()},
-            ) == (schedule.every, schedule.count, {d for d in schedule.days.split(",") if d})
+            icon = str(routine.raw.get("routineIcon") or "")
+            same = (
+                (routine.title, routine.part) == (title, part)
+                and (
+                    routine.schedule.every,
+                    routine.schedule.count,
+                    {d.strip() for d in routine.schedule.days.split(",") if d.strip()},
+                )
+                == (schedule.every, schedule.count, {d for d in schedule.days.split(",") if d})
+                and not better_icon(icon, routine_icon(title))  # idea #25
+            )
             if not same:
                 await self.client.update_routine(routine, title, part, schedule, today)
 
