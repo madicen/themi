@@ -126,6 +126,8 @@ def _todo(raw: dict[str, Any]) -> Todo:
     )
 
 
+# How a list Themi makes looks on the wall: a preset colour and icon the wall's lists use.
+LIST_COLOR, LIST_ICON = "#E9B14D", "icon_todolist_preset9"
 # What an update sends; the rest of a to-do's fields are Cozyla's own.
 UPDATE_FIELDS = (
     "todoListId",
@@ -209,6 +211,20 @@ class CozylaClient:
 
     async def delete(self, todo_id: str) -> None:
         await self._call("rewards/todosInfo/delete", {"id": int(todo_id)})
+
+    async def create_list(self, title: str) -> str:
+        """A new to-do list on the wall (L1b); returns its id."""
+        body = {
+            "todoListTitle": title,
+            "todoListColor": LIST_COLOR,
+            "todoListIcon": LIST_ICON,
+            "version": 0,
+        }
+        result = await self._call("rewards/todosList/create", body)
+        return str(result["listId"])
+
+    async def delete_list(self, list_id: str) -> None:
+        await self._call("rewards/todosList/delete", {"id": int(list_id)})
 
     # ----- the chore chart and routines (C2a) --------------------------------------------
 

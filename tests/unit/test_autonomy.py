@@ -32,6 +32,8 @@ CAN_BE_AUTOMATIC = {
     "grocery_list_add",
     "calendar_write",
     "wall_list_add",
+    "list_add",
+    "list_delete",
 }
 
 

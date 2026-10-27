@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Lists · Themi{% endblock %}
+{% block content %}
+<h1>Lists</h1>
+<p class="muted">Lists Themi keeps for you: ask in chat ("make a packing list") or make one
+here. The household's are for everyone; yours are only yours.</p>
+
+{% for nl in lists %}
+<article class="card">
+  <p class="summary">{{ nl.name }}{% if nl.personal %} <span class="muted">· just yours</span>{% endif %}{% if nl.wall_id %} <span class="muted">· on the wall</span>{% endif %}</p>
+  {% for item in nl.items %}
+  <div class="row list-item">
+    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/tick" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="done" value="{{ 0 if item.done else 1 }}">
+      <button class="link{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}">{{ '☑' if item.done else '☐' }} {{ item.name }}</button>
+    </form>
+    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/remove" class="inline">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="quiet" aria-label="Take {{ item.name }} off">Remove</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="muted">Nothing on it yet.</p>
+  {% endfor %}
+  <form method="post" action="/lists/{{ nl.id }}/add" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="item" placeholder="Add an item" aria-label="Add an item to {{ nl.name }}" required>
+    <button>Add</button>
+  </form>
+  <div class="buttons">
+    {% if nl.ticked %}
+    <form method="post" action="/lists/{{ nl.id }}/clear">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="quiet">Clear ticked ({{ nl.ticked|length }})</button>
+    </form>
+    {% endif %}
+    <details>
+      <summary>Delete this list{% if nl.wall_id %} (from the wall too){% endif %}</summary>
+      <form method="post" action="/lists/{{ nl.id }}/delete">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button>Delete {{ nl.name }} and everything on it</button>
+      </form>
+    </details>
+  </div>
+</article>
+{% else %}
+<p class="muted">No lists yet.</p>
+{% endfor %}
+
+<form method="post" action="/lists" class="card settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset>
+    <legend>A new list</legend>
+    <label>Name <input type="text" name="name" maxlength="60" required></label>
+    <label class="check"><input type="checkbox" name="personal"> Just for me</label>
+  </fieldset>
+  <button class="primary">Make it</button>
+</form>
+{% endblock %}

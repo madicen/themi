@@ -41,6 +41,7 @@ from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
+from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.pantry import Pantry
@@ -130,6 +131,7 @@ def build_app(
         ExpectedEmails(services, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
+    Lists(services).install()
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))

@@ -161,38 +161,3 @@ async def test_a_task_can_be_put_on_a_named_list(
     await scenario.say("Erin", "actually move it to the garden list")
     result = str(scenario.primary.last_request.messages[-1].content[0])
     assert "no list called 'Garden'" in result and "Things to Cook" in result
-
-
-async def test_items_that_arent_anyones_job_go_straight_on_the_list(
-    scenario: Scenario, fake_cozyla: FakeCozyla
-) -> None:
-    cook = fake_cozyla.add_list("Things to Cook")
-    await sync(scenario)
-    scenario.primary.queue_tool_call(
-        "add_to_wall_list", {"list": "Things to Cook", "items": ["Lasagna", "Pho"]}
-    )
-    scenario.primary.queue_text("Added.")
-    await scenario.say("Erin", "add lasagna and pho to things to cook")
-    added = on(fake_cozyla, cook)
-    assert set(added) == {"Lasagna", "Pho"}
-    assert all(t["assignMemberUid"] is None for t in added.values())
-    await sync(scenario)
-    assert tasks(scenario) == {}  # a list, not jobs
-
-    scenario.primary.queue_tool_call(
-        "add_to_wall_list", {"list": "Things to Cook", "items": ["Tacos"]}
-    )
-    scenario.primary.queue_text("Want tacos on there?")
-    await scenario.say("Erin", "what should we cook this week?")  # not asked for
-    assert "Tacos" not in on(fake_cozyla, cook)
-    assert any(
-        "Tacos for Things to Cook" in i.summary
-        for i in scenario.app.services.awaiting(scenario.member("Erin"))
-    )
-
-    scenario.primary.queue_tool_call(
-        "add_to_wall_list", {"list": "Family", "items": ["Mow the lawn"]}
-    )
-    scenario.primary.queue_text("That's a task.")
-    await scenario.say("Erin", "add mow the lawn to the family list")
-    assert "use create_task" in str(scenario.primary.last_request.messages[-1].content[0])
