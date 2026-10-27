@@ -68,6 +68,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| K1 | Calendars: read your own, privately | Calendars | [ ] |
+| K2 | Calendars: a summary of the day | Calendars | [ ] |
+| K3 | Calendars: creating and changing events | Calendars | [ ] |
+| K4 | Calendars: travel time and "time to get ready" | Calendars | [ ] |
+| K5 | Calendars: blocking time for tasks | Calendars | [ ] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
@@ -3536,6 +3541,103 @@ Notes (2026-10-26):
   settings page, or `set_chore_chart_limit`'s `shared_count` (its `limit` of -1 keeps the
   number). Off, those chores always show for them.
 - A possible next step: picking a lighter chore on a low-energy day.
+
+### K1 · Calendars: read your own, privately
+Status: [ ]
+Depends on: S2, 26
+Asked for on 2026-10-26: "allow Themi to read our individual personal calendars and be able to
+take action based on the info". This changes the plan's "only when, never what" for calendars:
+update its Shadow Calendar inputs, Integrations and privacy sections to say what's kept now.
+The family chose (2026-10-26): who sees a person's event details is their setting; which
+calendars are read is chosen per person.
+
+Build:
+- Per person, the calendars Themi reads: picked from their Google calendar list on the
+  settings page (the primary one by default). Read every 15 minutes, as S2 does, for the next
+  14 days: title, location, start and end, all-day or not, and whether it's a video call
+  (a conference link). Never descriptions or attendee lists: what others write into an invite
+  is the riskiest text there is.
+- A setting, "Who sees my calendar details": just me (default), or my partner too. Busy blocks
+  (S2) keep working either way; the details only reach the model in conversations the setting
+  allows.
+- Event text is external: it reaches the model inside delimited data blocks, never as
+  instructions, like email.
+- Events Themi made itself (marked with a private extended property) are known by their
+  task or source, and K5's task blocks don't count as busy time.
+- The "calendar" privacy switch covers all of it: off, nothing is read and the cache is
+  emptied.
+- Tests: chosen calendars only, the fields kept and dropped, the privacy setting in both
+  directions, data blocks, Themi's own events not busy, the switch.
+
+### K2 · Calendars: a summary of the day
+Status: [ ]
+Depends on: K1
+- "What's my day look like?", "what's on Thursday?": a tool that gives the day's events (and,
+  where the setting allows, the partner's), tasks due and chores up, in plain words.
+- A setting, "Morning summary": off (default) or a time; the summary comes then as one
+  message, through the outbox (quiet hours and daily limits apply as usual; it counts as one
+  message). Nothing on: a short line, or nothing, as the person chooses.
+- Tests: on request, on a time, off, quiet hours, privacy.
+
+### K3 · Calendars: creating and changing events
+Status: [ ]
+Depends on: K1, 26
+The family chose (2026-10-26), as groceries work (F5):
+- Asked for in their own words ("put the dentist on my calendar Tuesday at 3"): made at once,
+  with a read-back built from what was stored ("On your calendar: Dentist, Tue 3 Nov,
+  3-4 pm").
+- Mentioned but not asked ("the plumber's coming Thursday morning"): a card, Go ahead or not
+  now.
+- Suggested by an email (a booking confirmation): a card. After several approved in a row,
+  Themi offers to make these automatic, which is a household rule like any other autonomy
+  grant; once it's locked, they're made without a card, and a message always says so ("Added
+  to your calendar from an email: Vet, Fri 30 Oct, 10 am").
+- Changing an event Themi made ("move the dentist to 4"): at once, read back.
+- Changing or deleting an event Themi didn't make: always a card first.
+Build:
+- Tools to create, move and delete events: on the person's own calendar (a chosen one,
+  default primary) or the family "Themi" calendar for the wall. Natural dates and times are
+  parsed deterministically, as schedules are, and refused with an example when unclear.
+- Categories: `calendar_event` (member scope, may become automatic) for their own events,
+  `calendar_event_change` (member scope, capped: always a card) for events Themi didn't make,
+  `calendar_from_email` (member scope, may become automatic) for emails' suggestions, and
+  the offer after enough approvals.
+- Tests: each case above, read-backs, unclear dates, the email path and its offer, the
+  message after an automatic one.
+
+### K4 · Calendars: travel time and "time to get ready"
+Status: [ ]
+Depends on: K1
+The family chose (2026-10-26): TomTom's Routing API with live traffic (its free plan, no card;
+check the current allowance), and a rough estimate from distance without a key.
+- A family setting: home, as an address (geocoded once, kept as coordinates). F9b's sunset
+  times use the same location.
+- A setting per person: "Getting ready takes" (default 15 minutes), and the heads-up on or
+  off.
+- For an event with a real location (not a video call, not all-day, not at home), travel
+  time from home: looked up once the day before or when it appears, and again about an hour
+  before it's needed, with traffic. A heads-up comes at "leave by" minus getting ready:
+  "Dentist at 3, about 35 min with traffic: leave around 2:20." It goes through the outbox at
+  normal priority with a deadline at the leave-by time; quiet hours hold it unless the leave
+  time would pass.
+- Without a TomTom key: distance (geocoded with a free service, or TomTom's geocoder when
+  there's a key) at typical driving speeds, and the heads-up says it's a rough guess.
+- `tests/fakes/tomtom.py`: routing and geocoding, with failures. No real calls in tests.
+- Setup for the family: a TomTom developer account and key (`TOMTOM_API_KEY`), and the home
+  address on the Family page.
+
+### K5 · Calendars: blocking time for tasks
+Status: [ ]
+Depends on: K1, K3
+- "Block Saturday morning for the bathroom": an event on the person's calendar for that task
+  (made at once: asked for, and Themi's own). "Find me time for the bathroom": Themi suggests
+  a free slot from their calendar and good windows, as a card.
+- The task's nudges wait for the block (a hold, as the chore chart's are, `TaskBoard.holds`);
+  the nudge comes as it starts. Moved on the calendar, the nudge moves; deleted, nudging is
+  as before.
+- When a block ends with the task still open: one message, done or move the block?
+- Blocks are known as Themi's (K1), so they never hold Themi's own messages as busy time.
+- Tests: made, nudged at the block, moved, deleted, ended undone, not busy.
 
 ---
 
