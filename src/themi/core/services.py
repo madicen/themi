@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.pantry import Pantry
     from themi.core.rules import Rulebook
+    from themi.core.senders import SenderSuggestions
     from themi.core.task_blocks import TaskBlocks
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
@@ -129,6 +130,7 @@ class Services:
     travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
     task_blocks: TaskBlocks | None = None  # time blocked on calendars for tasks (K5)
     wall_routines: CozylaRoutines | None = None  # the wall's routines (C3, bug #22)
+    senders: SenderSuggestions | None = None  # suggesting always-urgent senders (E1)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None

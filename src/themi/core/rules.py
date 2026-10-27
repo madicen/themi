@@ -411,7 +411,9 @@ class Rulebook:
     "propose_rule",
     "Capture a rule about how Themi itself behaves, as a draft for this person to lock in "
     "('always archive store promos', 'list steps as bullet points'). Chores, schedules and "
-    "the steps of a job are tasks (create_task), never rules. It sends them the proposal; "
+    "the steps of a job are tasks (create_task), never rules; ideas for the family to try "
+    "('keep the pacifiers in a basket') are a conversation, never rules. It sends them the "
+    "proposal; "
     "nothing takes "
     "effect until they lock it in. applies_to: household rules apply to everyone in the "
     "family; personal ones only shape your conversations with this person. Ask if it isn't "

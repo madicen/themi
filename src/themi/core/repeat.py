@@ -86,6 +86,9 @@ class Repeat:
     until: date | None = None  # the last day it can fall on (a course of medicine, C2a)
     or_days: tuple[int, ...] = field(default_factory=tuple)  # stand-ins for the day before
     rest: bool = False  # never two days in a row
+    # Minutes before sunset (F9b; 0 is at sunset). With `at` too, whichever is earlier
+    # ("at 2pm, at least an hour before sunset"). The time itself needs the home's place.
+    before_sunset: int | None = None
 
     @property
     def anchored(self) -> bool:
@@ -104,6 +107,7 @@ class Repeat:
             "until": self.until.isoformat() if self.until else None,
             "or_days": list(self.or_days),
             "rest": self.rest,
+            "before_sunset": self.before_sunset,
         }
 
     @classmethod
@@ -120,6 +124,7 @@ class Repeat:
             until=date.fromisoformat(data["until"]) if data.get("until") else None,
             or_days=tuple(data.get("or_days") or ()),
             rest=bool(data.get("rest")),
+            before_sunset=data.get("before_sunset"),
         )
 
 
@@ -189,6 +194,28 @@ _REST = re.compile(
 )
 
 
+_SUNSET = re.compile(
+    r"[,;]?\s*(?:at\s+least\s+)?(?:(?:(an?|one|\d+)\s*(hours?|hrs?|minutes?|mins?)\s+)"
+    r"before\s+sunset|at\s+sunset)",
+    re.IGNORECASE,
+)
+
+
+def _take_sunset(phrase: str) -> tuple[str, int | None]:
+    """Pull "an hour before sunset" (or "at sunset") off the phrase: minutes before it."""
+    m = _SUNSET.search(phrase)
+    if not m:
+        return phrase, None
+    if m.group(1) is None:
+        minutes = 0  # at sunset
+    else:
+        count = 1 if m.group(1).lower() in ("a", "an", "one") else int(m.group(1))
+        minutes = count * 60 if m.group(2).lower().startswith("h") else count
+    if minutes > 12 * 60:
+        raise RepeatError(f"That's more than half a day before sunset. {EXAMPLES}")
+    return phrase[: m.start()] + phrase[m.end() :], minutes
+
+
 def _take_rest(phrase: str) -> tuple[str, bool]:
     """Pull "never two days in a row" off the phrase."""
     m = _REST.search(phrase)
@@ -215,13 +242,16 @@ def _take_until(phrase: str, today: date) -> tuple[str, date | None]:
 def parse(phrase: str, today: date) -> Repeat:
     """Read a schedule phrase. Raises RepeatError, with examples, if it isn't clear."""
     phrase, rest = _take_rest(phrase)
+    phrase, before_sunset = _take_sunset(phrase)
     rep = _parse(*_take_until(phrase, today), today)
     if rest and not rep.anchored:
         raise RepeatError(
             f"'Never two days in a row' needs fixed days ('every Tue, Thu and Sat, never two "
             f"days in a row'). {EXAMPLES}"
         )
-    return replace(rep, rest=rest)
+    if before_sunset is not None and not rep.anchored:
+        raise RepeatError(f"A time by sunset needs fixed days ('every Tuesday'). {EXAMPLES}")
+    return replace(rep, rest=rest, before_sunset=before_sunset)
 
 
 def _parse(phrase: str, until: date | None, today: date) -> Repeat:
@@ -358,8 +388,22 @@ def read_back(rep: Repeat) -> str:
     else:
         text = f"The {_ordinal_day(rep.month_day or 1)} of each month"
     text = f"{text} at {_time_words(rep.at)}" if rep.at else text
+    if rep.before_sunset is not None:
+        sun = sunset_words(rep.before_sunset)
+        text = f"{text}, at least {sun}" if rep.at and rep.before_sunset else f"{text}, {sun}"
     text = f"{text}, never two days in a row" if rep.rest else text
     return f"{text}, until {rep.until:%a %d %b}" if rep.until else text
+
+
+def sunset_words(minutes: int) -> str:
+    """60: "an hour before sunset"; 90: "1 hour 30 minutes before sunset"; 0: "at sunset"."""
+    if minutes == 0:
+        return "at sunset"
+    hours, rest = divmod(minutes, 60)
+    parts = (["an hour"] if hours == 1 else [f"{hours} hours"] if hours else []) + (
+        [f"{rest} minutes"] if rest else []
+    )
+    return " ".join(parts) + " before sunset"
 
 
 def _day_words(rep: Repeat, day: int) -> str:

@@ -170,3 +170,23 @@ async def test_the_lists_page_edits_the_store(scenario: Scenario, site: httpx.As
     assert buying(scenario).store_of("body wash") == "Target"
     await site.post(f"/lists/{nl.id}/items/{item.id}/store", data={"csrf": csrf, "store": ""})
     assert buying(scenario).store_of("body wash") is None
+
+
+async def test_mentioning_something_isnt_asking_for_it(scenario: Scenario) -> None:
+    """Bug #30: "I swear all our pacifiers keep disappearing??" put pacifiers straight on
+    Things to Buy. The name was in what she wrote, but she hadn't asked for anything."""
+    replies = await say(
+        scenario,
+        "I swear all our pacifiers keep disappearing??",
+        "add_to_things_to_buy",
+        {"items": [{"name": "pacifiers", "store": ""}]},
+    )
+    assert replies[0] == "Pacifiers for Things to Buy\nGo ahead, or not now?"
+    assert on_it(scenario) == []
+    await say(
+        scenario,
+        "We need more pacifiers",
+        "add_to_things_to_buy",
+        {"items": [{"name": "pacifiers", "store": ""}]},
+    )
+    assert on_it(scenario) == [("pacifiers", False)]  # asked: straight on

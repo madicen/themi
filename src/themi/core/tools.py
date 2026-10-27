@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Awaitable, Callable
+import re
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -38,8 +39,11 @@ class ToolContext:
     member: Member
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
+    previous_text: str = ""  # their message before it, for a follow-up like "and limes"
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
+    # The tool groups this turn sends (P1); `more_tools` adds to it.
+    groups: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,115 @@ def staged_tool(
     return wrap
 
 
+# ----- which tools a message gets (P1) ---------------------------------------------------
+#
+# Every message sent all the tools' schemas, about 8,000 tokens (bug #29). A core set always
+# goes; the rest go by group when the message or the last few messages call for them, and
+# `more_tools` adds a group mid-turn. A tool not in TOOL_GROUPS is core, so a new tool is
+# never hidden by accident.
+
+GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call for it)
+    "schedules": (
+        "repeating chores, plans, importance, check-in reviews",
+        r"every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?|"
+        r"twice|once a|important|urgent|priority|check.?in|sunset|routine",
+    ),
+    "calendar": (
+        "calendar events, day summaries, drive times, blocking time",
+        r"calendar|appointment|meeting|event|today|tomorrow|tonight|morning|afternoon|"
+        r"evening|day look|what'?s on|monday|tuesday|wednesday|thursday|friday|saturday|"
+        r"sunday|weekend|drive|leave|traffic|block|time for|find (?:me )?time|summary",
+    ),
+    "lists": (
+        "named lists, the wall's lists, usual stores",
+        r"list|packing|ideas|tick|cross|check off|clear|things to cook|store|amazon|"
+        r"target|costco|home depot",
+    ),
+    "wall": (
+        "the Cozyla wall: chore chart, routines, to-do lists",
+        r"wall|cozyla|chart|chore|routine",
+    ),
+    "email": (
+        "inboxes, expected emails, urgent senders",
+        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe",
+    ),
+    "pantry": (
+        "the pantry and meal ideas",
+        r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
+        r"running low|ran out|leftover",
+    ),
+    "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
+    "settings": (
+        "pausing messages, phrasing, quiet hours",
+        r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
+        r"plain|pushy|too many|limit",
+    ),
+}
+TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(
+        ("set_task_schedule", "set_task_plan", "set_task_importance", "set_check_in_reviews"),
+        "schedules",
+    ),
+    **dict.fromkeys(
+        (
+            "add_calendar_event",
+            "move_calendar_event",
+            "delete_calendar_event",
+            "day_summary",
+            "drive_time",
+            "block_time_for_task",
+            "find_time_for_task",
+        ),
+        "calendar",
+    ),
+    **dict.fromkeys(
+        (
+            "create_list",
+            "add_to_list",
+            "tick_list_items",
+            "remove_from_list",
+            "show_lists",
+            "delete_list",
+            "put_list_on_wall",
+            "set_usual_store",
+        ),
+        "lists",
+    ),
+    **dict.fromkeys(
+        (
+            "put_task_on_wall_list",
+            "put_task_on_chore_chart",
+            "set_chore_chart_limit",
+            "change_chore_chart",
+            "add_to_wall_routine",
+        ),
+        "wall",
+    ),
+    **dict.fromkeys(
+        (
+            "expect_email",
+            "list_expected_emails",
+            "forget_expected_email",
+            "set_urgent_senders",
+            "set_inbox_watched",
+        ),
+        "email",
+    ),
+    **dict.fromkeys(("update_pantry", "show_pantry", "suggest_meals"), "pantry"),
+    **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
+    **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
+}
+_GROUP_WORDS = {
+    name: re.compile(rf"\b(?:{words})", re.IGNORECASE) for name, (_, words) in GROUPS.items()
+}
+
+
+def choose_groups(texts: Sequence[str]) -> set[str]:
+    """The groups these messages call for (this one and the last few)."""
+    joined = " ".join(texts)
+    return {name for name, pattern in _GROUP_WORDS.items() if pattern.search(joined)}
+
+
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None) -> None:
         self._tools: dict[str, Tool] = {}
@@ -122,9 +235,14 @@ class ToolRegistry:
             )
         self._tools[t.spec.name] = t
 
-    def specs(self) -> list[ToolSpec]:
-        # Sorted, so the tool list (part of the cached prompt prefix) is stable.
-        return [self._tools[name].spec for name in sorted(self._tools)]
+    def specs(self, groups: set[str] | None = None) -> list[ToolSpec]:
+        """Every tool, or (P1) the core and these groups'. Sorted, so the tool list (part
+        of the cached prompt prefix) is stable."""
+        return [
+            self._tools[name].spec
+            for name in sorted(self._tools)
+            if groups is None or TOOL_GROUPS.get(name, "core") in groups | {"core"}
+        ]
 
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
@@ -185,3 +303,19 @@ class ToolRegistry:
 
 def dumps(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False)
+
+
+@tool(
+    "more_tools",
+    "Bring in more of Themi's tools for this conversation, when what they ask needs ones "
+    "you don't have yet. groups: "
+    + "; ".join(f"'{name}' ({what})" for name, (what, _) in GROUPS.items())
+    + ".",
+    {"groups": {"type": "array", "items": {"type": "string", "enum": list(GROUPS)}}},
+)
+async def more_tools(ctx: ToolContext, args: dict[str, Any]) -> str:
+    added = [g for g in args["groups"] if g in GROUPS and g not in ctx.groups]
+    ctx.groups.update(added)
+    if not added:
+        return "Those tools are here already."
+    return f"Added the {', '.join(added)} tools; use them now."

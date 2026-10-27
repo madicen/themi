@@ -210,7 +210,7 @@ class CozylaRoutines:
                 link = routine = None
             if not keep or member is None or task.repeat is None:
                 continue
-            title, part = task.title[:50], part_of_day(task.repeat.at)
+            title, part = task.title[:50], part_of_day(self.board.time_of(task))
             schedule = to_wall(task.repeat, task.due_on or today)
             if routine is None:
                 made = await self.client.create_routine(member, title, part, schedule)

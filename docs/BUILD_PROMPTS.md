@@ -61,7 +61,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | G1 | Two-way grocery sync with OurGroceries | Groceries | [x] |
 | F8 | Feedback fixes: nudge labels, check-ins, duplicate sends | Feedback | [x] |
 | F9a | Exercise schedules: either-day rounds, rest days, a missed day moves to the next | Feedback | [x] |
-| F9b | Exercise schedules: sunset-relative times | Feedback | [ ] |
+| F9b | Exercise schedules: sunset-relative times | Feedback | [x] |
 | F9c | Exercise schedules: distance plans | Feedback | [x] |
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
@@ -70,6 +70,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
+| F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
+| E1 | Email: suggest important senders | Feedback | [x] |
+| S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
+| M1 | Memory: a record of conversations | Feedback | [ ] |
+| P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -2972,11 +2977,25 @@ Notes (2026-10-26):
   schedule; it's stored as Tue, Thu and Sat at 2 pm, rolling on.
 
 ### F9b · Exercise schedules: sunset-relative times
-Status: [ ]
+Status: [x] 2026-10-27
 Depends on: F9a
 - Sunset-relative times ("an hour before sunset"): needs the family's location (a setting,
   coarse is enough) and an offline sunset calculation (for example the `astral` library);
   read back as "about 5:10 pm today". The wall routine's part of the day follows it.
+
+Notes (2026-10-27):
+- `themi.core.sun.sunset`: the sunrise equation, offline and without a library (checked
+  against NOAA's equations: San Francisco, 27 Oct, 6:17 pm). The place is K4's
+  `family_home`, so no new setting.
+- `Repeat.before_sunset` (minutes; 0 is at sunset) from "an hour before sunset", "30 minutes
+  before sunset", "at sunset"; with a time too ("at 2pm, at least an hour before sunset"),
+  whichever is earlier. Fixed days only. Read back as "..., at least an hour before sunset;
+  today that's about 2 pm".
+- `TaskBoard.time_of(task, day)` works it out for the round's day, on the five minutes;
+  without a home address it falls back to the schedule's own time. Nudges, round starts and
+  the wall routine's part of the day follow it.
+- For Erin's run it changes nothing in practice: 2 pm is always earlier than an hour before
+  sunset at home (about 3:50 pm in December). Her stored schedule could take the words.
 
 ### F9c · Exercise schedules: distance plans
 Status: [x] 2026-10-26
@@ -3137,6 +3156,72 @@ Build:
 - Cycles become energy signals for the Shadow Calendar: fewer runs than usual for the
   household is a gentle "running behind" sign. The plan's rule holds: people see words, never
   scores.
+
+### E1 · Email: suggest important senders
+Status: [x] 2026-10-27
+Depends on: 21, 22
+From Erin's idea #27 ("auto detect important senders, have user confirm"), 2026-10-27, when she
+linked her inbox and was asked which senders always count as urgent.
+- After an inbox's first sync, and now and then after, look at who writes: people she replies
+  to, senders of mail triage called urgent, banks, schools, the property manager. Offer a
+  short list as a card with a button per sender ("Always urgent: Schwab, Rosie's school?");
+  only what she confirms is added. Never added on Themi's own say-so.
+
+Notes (2026-10-27):
+- `themi.core.senders.SenderSuggestions`, job `email.senders` every 6 hours: for each watched
+  inbox with nothing left to sort, senders from the last 90 days whose mail triage called
+  urgent about money, the property, tenants or family, or real people who wrote more than
+  once and were waiting on a reply. Four at most, likeliest first; not ones already urgent or
+  offered before (`sender_suggestions`, migration 0059). One message, normal priority: "A few
+  senders in erin@... might always count as urgent: Schwab Alerts (money) and Bob Tenant
+  (waiting on replies). Tap any that should; nothing changes otherwise." Each button adds
+  that address to the account's urgent senders and says so.
+- Not done: replies she sends aren't read, so "people she replies to" isn't a signal.
+- Setup: restart (applies 0059).
+
+### S5 · Shadow Calendar: learning from reactions
+Status: [ ]
+Depends on: S1, 28
+From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
+or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
+- Record a reaction on any of Themi's messages with the message's kind (a nudge, a check-in, a
+  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not.
+- Over time, a per-person picture of what lands ("short nudges do well; long explanations
+  don't"), shown to the model as a line of its own, in words, never numbers, and on the
+  person's tracking page. A switch, like the other inputs.
+
+### M1 · Memory: a record of conversations
+Status: [ ]
+Depends on: 13
+From Erin's ideas #28 and #30, 2026-10-27: "maintain records of general questions/conversations
+in the shadow calendar". F13 keeps a note per answer or settled problem; this is the fuller
+record.
+- A daily, private journal per person: the topics talked about and what was decided, written
+  at the end of the day from the day's messages, searchable ("what did we decide about the
+  pacifiers?"), on the website's Rules & memory page, deletable.
+
+### P1 · Faster replies: only the tools a message needs
+Status: [x] 2026-10-27
+Depends on: F13
+From bug #29 (2026-10-27): every message sent all 55 tools' schemas, about 32,000 characters
+(some 8,000 tokens), on the free Gemini tier, twice for a message that used a tool.
+- A core set always goes (tasks, notes and rules, approvals, energy notes, groceries, Things
+  to Buy, feedback); the rest are grouped (schedules, calendar, lists, the wall, email,
+  pantry and meals, calls, settings) and go when the message or the last few messages call
+  for them. `more_tools` (in the core) adds a group mid-turn, so a miss costs a step, not a
+  wrong answer. A tool not in the table is core.
+
+Notes (2026-10-27):
+- `themi.core.tools`: `GROUPS` (what each is for, and the words that call for it),
+  `TOOL_GROUPS` (tool to group; anything else is core), `choose_groups` over this message and
+  the last four, `ToolRegistry.specs(groups)`, and `more_tools` (a starter tool) which adds
+  groups to `ToolContext.groups`; the agent asks for the specs again each step.
+- Measured on the real app: all 56 tools are 33,500 characters; a plain message now sends 19
+  (12,800), one about the calendar or a list 26 to 28 (16,000 to 17,800). The words are
+  generous on purpose ("good morning" brings the calendar's); a miss costs a `more_tools`
+  step. `ai_calls` (F13) will show whether replies got faster.
+- Not checked against a real model (the evals need `--run-evals` and API keys); worth a look
+  in `ai_calls` and in chat over the next days.
 
 ### C1a · Cozyla: unofficial client and a read-only check
 Status: [x] 2026-10-25
@@ -3612,6 +3697,36 @@ Notes (2026-10-27):
   chose is never touched. Dry run on the real wall: Clean the bird cage 🧹 to 🦜, both Mimi
   pills to 💊, Go for a run (routine) to 🏃; nothing else.
 - Setup: a restart.
+
+### F13 · Feedback (2026-10-27): problems talked through, mentions, nicknames, slow replies
+Status: [x] 2026-10-27
+Depends on: F5, 11
+From the family's reports of 2026-10-27: bugs #29 and #30, ideas #28 and #32 (#27, #31 and
+the fuller #28 are prompts E1, S5 and M1).
+
+Notes (2026-10-27):
+- #30 ("an idea for us to implement, not a rule for Themi"): a prompt line for problems ("how
+  can we stop losing the pacifiers?"): two to four ideas, they pick, then ask about actions
+  (buy something, a task or routine, raise it with their partner), only what they agree to,
+  and a summary kept with `remember_fact`. `propose_rule` says ideas for the family are a
+  conversation, never rules. Also a bug: "I swear all our pacifiers keep disappearing??"
+  put pacifiers straight on Things to Buy, because the "asked for" check only looked for the
+  item's name. `groceries.asks_to_add`: the message also has to ask (add, put, need, buy,
+  get, out of, running low...), or carry on one that did ("and limes", "batteries too";
+  `ToolContext.previous_text`). Groceries, Things to Buy and named lists all use it.
+- #28 (records of general questions): a prompt line keeps a one-line note of an answer worth
+  keeping. A fuller record of conversations is prompt M1.
+- #32 (nicknames): "Michael calls Erin Hundo" was saved as Erin's personal note, so Michael's
+  conversations wouldn't know it; moved to a household note. A prompt line: nicknames are
+  household notes that say who calls whom, read from the speaker's side.
+- #29 ("why that exchange took so long"): two model calls of about 29 seconds each, on the
+  free Gemini key. Interactive calls never wait more than 20 seconds for a retry, so it was
+  slow answers, retries, or both; probably the free tier's limits while Erin's newly linked
+  inbox was triaged on the same key. Nothing recorded it, so now `ai_calls` (migration 0058)
+  keeps a week of every call: task, backend, seconds, time waited, retries, last status, ok.
+  Each call sends about 10,000 tokens (55 tools' schemas are most of it); trimming them is a
+  possible follow-up.
+- Setup: restart (applies 0058).
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
