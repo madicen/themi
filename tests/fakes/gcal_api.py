@@ -55,6 +55,7 @@ class FakeGcal:
         events = f"{base}/calendars/{{cid}}/events"
         self.app.add_api_route(events, self._insert, methods=["POST"])
         self.app.add_api_route(events, self._list_events, methods=["GET"])
+        self.app.add_api_route(f"{events}/{{eid}}", self._get, methods=["GET"])
         self.app.add_api_route(f"{events}/{{eid}}", self._update, methods=["PUT"])
         self.app.add_api_route(f"{events}/{{eid}}", self._delete, methods=["DELETE"])
         self._background = BackgroundServer(self.app)
@@ -107,9 +108,14 @@ class FakeGcal:
         transparency: str = "opaque",
         declined: bool = False,
         status: str = "confirmed",
-    ) -> None:
-        """An event on someone's primary calendar. `start`/`end`: RFC 3339, or dates."""
-        cal = self._box(address).setdefault(
+        calendar: str = "primary",
+        **extra: Any,
+    ) -> str:
+        """An event on someone's calendar (their primary one unless `calendar` is an id from
+        `add_calendar`). `start`/`end`: RFC 3339, or dates. `extra`: more event fields
+        (location, description, hangoutLink, extendedProperties...). Returns its id."""
+        box = self._box(address)
+        cal = box.get(calendar) or box.setdefault(
             "primary", _Calendar("primary", address, "UTC", "owner")
         )
         eid = f"e{next(self._ids)}"
@@ -124,7 +130,8 @@ class FakeGcal:
         }
         if declined:
             event["attendees"] = [{"email": address, "self": True, "responseStatus": "declined"}]
-        cal.events[eid] = event
+        cal.events[eid] = {**event, **extra}
+        return eid
 
     def fail(self, endpoint: str, status: int, *, times: int = 1) -> None:
         """The next `times` calls to `endpoint` fail.
@@ -139,7 +146,10 @@ class FakeGcal:
     # ----- plumbing -----------------------------------------------------------
 
     def _box(self, address: str) -> dict[str, _Calendar]:
-        return self.calendars.setdefault(address.lower(), {})
+        """Someone's calendars; like a real account, there's always a primary one."""
+        box = self.calendars.setdefault(address.lower(), {})
+        box.setdefault("primary", _Calendar("primary", address, "UTC", "owner"))
+        return box
 
     def _open(
         self, request: Request, endpoint: str
@@ -159,7 +169,9 @@ class FakeGcal:
         if box is None:
             return error  # type: ignore[return-value]
         items = [
-            {"id": c.id, "summary": c.summary, "accessRole": c.access_role} for c in box.values()
+            {"id": c.id, "summary": c.summary, "accessRole": c.access_role}
+            | ({"primary": True} if c.id == "primary" else {})
+            for c in box.values()
         ]
         return JSONResponse({"items": items})
 
@@ -208,6 +220,15 @@ class FakeGcal:
             and _when(e["start"].get("dateTime") or e["start"]["date"]) < high
         ]
         return JSONResponse({"items": items})
+
+    async def _get(self, request: Request, cid: str, eid: str) -> JSONResponse:
+        box, error = self._open(request, "get")
+        if box is None:
+            return error  # type: ignore[return-value]
+        cal = box.get(cid)
+        if cal is None or eid not in cal.events:
+            return _error(404, "Not Found")
+        return JSONResponse(cal.events[eid])
 
     async def _update(self, request: Request, cid: str, eid: str) -> JSONResponse:
         box, error = self._open(request, "update")

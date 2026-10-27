@@ -284,6 +284,11 @@ def core_routes(kit: Kit) -> APIRouter:
                 checkin_reviews=form.get("checkin_reviews") == "on",
                 chart_limit=as_int(form.get("chart_limit")),
                 chart_counts_shared=form.get("chart_counts_shared") == "on",
+                calendar_details=str(form.get("calendar_details", "")) or None,
+                morning_summary=str(form.get("morning_summary", "")),
+                morning_summary_empty=form.get("morning_summary_empty") == "on",
+                getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
+                leave_heads_up=form.get("leave_heads_up") == "on",
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
             )
         except InvalidValue as exc:

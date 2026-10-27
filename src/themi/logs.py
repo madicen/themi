@@ -30,6 +30,8 @@ PATTERNS = [
     # One-time links: website sign-in (/site) and Google's OAuth state (/link gmail)
     re.compile(r"(/login/)[A-Za-z0-9_-]{16,}"),
     re.compile(r"([?&]state=)[^&\s]+"),
+    # API keys passed in a URL (TomTom's ?key=)
+    re.compile(r"([?&]key=)[^&\s'\"]+"),
     # Fernet tokens (our own ciphertext; harmless but noisy)
     re.compile(r"\bgAAAAA[0-9A-Za-z_=-]{20,}"),
     # Authorization headers

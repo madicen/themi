@@ -454,10 +454,10 @@ class TaskBoard:
         chore's), else 9 am."""
         if task.due_on is None:
             return None
-        return _on(task.due_on, self._time_of(task) or time(9), self._tz())
+        return _on(task.due_on, self.time_of(task) or time(9), self._tz())
 
     @staticmethod
-    def _time_of(task: Task) -> time | None:
+    def time_of(task: Task) -> time | None:
         """When its nudge comes: a window's start, else its time, else the chore's."""
         return task.from_time or task.due_time or (task.repeat.at if task.repeat else None)
 
@@ -469,7 +469,7 @@ class TaskBoard:
         """When this round's nudge may go: the chore's time on its due date, or that morning."""
         if task.due_on is None:
             return None
-        at = self._time_of(task)
+        at = self.time_of(task)
         return _on(task.due_on, at, self._tz()) if at else self._day_start(task.due_on)
 
     def _steps_for(self, task: Task, member: Member) -> str | None:
@@ -532,7 +532,7 @@ class TaskBoard:
             "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
             (to_utc_iso(clock.now()), task_id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
 
@@ -549,7 +549,7 @@ class TaskBoard:
             "UPDATE tasks SET assignee = ?, shared = ? WHERE id = ?",
             (assignee, int(shared), task_id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         task = self.get(task_id)
         people = (
             [m for m in self.store.list_members() if m.telegram_user_id is not None]
@@ -678,10 +678,10 @@ class TaskBoard:
                 "UPDATE tasks SET due_on = ? WHERE id = ?", (first.isoformat(), task_id)
             )
             task = self.get(task_id)
-            self._withdraw_prompt(task)
+            self.withdraw_prompt(task)
             await self.prompt(task, not_before=self._round_starts(task))
             await self._changed(task, "rescheduled", True)
-        elif task.due_on is not None and self._withdraw_prompt(task):
+        elif task.due_on is not None and self.withdraw_prompt(task):
             # The nudge queued when the task was made waits for the chore's own day (bug #10).
             await self.prompt(task, not_before=self._round_starts(task))
         return task
@@ -836,7 +836,7 @@ class TaskBoard:
             "overdue_reminded_on = NULL, prompt_outbox_id = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         fresh = self.get(task.id)
         await self.prompt(fresh, not_before=self._round_starts(fresh))
         await self._changed(fresh, "rescheduled", interactive)
@@ -851,7 +851,7 @@ class TaskBoard:
             "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
             (to_utc_iso(clock.now()), task.id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         await self._changed(self.get(task.id), "done", interactive)
 
     async def _settle_missed_round(self, task: Task) -> Task:
@@ -902,7 +902,7 @@ class TaskBoard:
             "overdue_reminders = 0, overdue_reminded_on = NULL WHERE id = ?",
             (due.isoformat(), task.id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         self._pending_prompts.append(task.id)
 
     async def check_schedules(self) -> int:
@@ -992,7 +992,7 @@ class TaskBoard:
             "UPDATE tasks SET status = 'cancelled', completed_at = ? WHERE id = ?",
             (to_utc_iso(clock.now()), task_id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         await self._changed(self.get(task_id), "cancelled", interactive)
         return CANCELLED_TEXT.format(title=task.title)
 
@@ -1020,10 +1020,10 @@ class TaskBoard:
             "UPDATE tasks SET status = 'snoozed', snoozed_until = ? WHERE id = ?",
             (to_utc_iso(clock.now() + for_), task_id),
         )
-        self._withdraw_prompt(task)
+        self.withdraw_prompt(task)
         return LATER_TEXT.format(title=task.title)
 
-    def _withdraw_prompt(self, task: Task) -> bool:
+    def withdraw_prompt(self, task: Task) -> bool:
         """Take back any of the task's nudges that haven't gone out yet (shared ones too).
         True if there was one."""
         withdrawn = False

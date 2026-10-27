@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Calendars · Themi{% endblock %}
+{% block content %}
+<h1>Calendars Themi reads</h1>
+<p class="muted">For {{ account.address }}. Themi keeps each event's title, place and times,
+never its description or who's invited. Who else sees them is on
+<a href="/settings">My settings</a>. Choose none for just your main calendar.</p>
+<form method="post" action="/accounts/{{ account.id }}/calendars" class="card settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset>
+    <legend>Read these</legend>
+    {% for id, name, on in options %}
+    <label class="check"><input type="checkbox" name="calendar" value="{{ id }}" {% if on %}checked{% endif %}> {{ name }}</label>
+    <input type="hidden" name="name_{{ id }}" value="{{ name }}">
+    {% endfor %}
+  </fieldset>
+  <button class="primary">Save</button>
+</form>
+{% endblock %}

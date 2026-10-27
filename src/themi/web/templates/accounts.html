@@ -11,6 +11,7 @@ and it only sends after you say yes. You can link as many as you like.</p>
   {% if not account.enabled %}
   <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
   {% endif %}
+  <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
   <form method="post" action="/accounts/{{ account.id }}/settings" class="settings">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>

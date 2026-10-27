@@ -33,6 +33,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
+from tests.fakes.travel import FakeTravel
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.accounts import Member
@@ -82,6 +83,7 @@ class Scenario:
         ourgroceries: FakeOurGroceries | None = None,
         gcal: FakeGcal | None = None,
         cozyla: FakeCozyla | None = None,
+        travel: FakeTravel | None = None,
         *,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
@@ -110,6 +112,7 @@ class Scenario:
             google=_google_config(google, gmail, gcal),
             grocery_list=ourgroceries,
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
+            travel=travel.client() if travel else None,
         )
         if not real_models:
             for member in (family.erin, family.husband):
@@ -291,6 +294,7 @@ async def scenario(
         optional("fake_ourgroceries"),
         optional("fake_gcal"),
         optional("fake_cozyla"),
+        optional("fake_travel"),
     )
     await s.start()
     yield s

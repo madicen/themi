@@ -68,6 +68,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| K1 | Calendars: read your own, privately | Calendars | [x] |
+| K2 | Calendars: a summary of the day | Calendars | [x] |
+| K3 | Calendars: creating and changing events | Calendars | [x] |
+| K4 | Calendars: travel time and "time to get ready" | Calendars | [x] |
+| K4b | Calendars: drive time on request | Calendars | [x] |
+| K5 | Calendars: blocking time for tasks | Calendars | [x] |
 | C1a | Cozyla: unofficial client and a read-only check | Cozyla | [x] |
 | C1b | Cozyla: two-way to-do list sync (trial) | Cozyla | [x] |
 | C1c | Cozyla: every list, reassigning, the family member, named lists | Cozyla | [x] |
@@ -3536,6 +3542,222 @@ Notes (2026-10-26):
   settings page, or `set_chore_chart_limit`'s `shared_count` (its `limit` of -1 keeps the
   number). Off, those chores always show for them.
 - A possible next step: picking a lighter chore on a low-energy day.
+
+### K1 · Calendars: read your own, privately
+Status: [x] 2026-10-26
+Depends on: S2, 26
+Asked for on 2026-10-26: "allow Themi to read our individual personal calendars and be able to
+take action based on the info". This changes the plan's "only when, never what" for calendars:
+update its Shadow Calendar inputs, Integrations and privacy sections to say what's kept now.
+The family chose (2026-10-26): who sees a person's event details is their setting; which
+calendars are read is chosen per person.
+
+Build:
+- Per person, the calendars Themi reads: picked from their Google calendar list on the
+  settings page (the primary one by default). Read every 15 minutes, as S2 does, for the next
+  14 days: title, location, start and end, all-day or not, and whether it's a video call
+  (a conference link). Never descriptions or attendee lists: what others write into an invite
+  is the riskiest text there is.
+- A setting, "Who sees my calendar details": just me (default), or my partner too. Busy blocks
+  (S2) keep working either way; the details only reach the model in conversations the setting
+  allows.
+- Event text is external: it reaches the model inside delimited data blocks, never as
+  instructions, like email.
+- Events Themi made itself (marked with a private extended property) are known by their
+  task or source, and K5's task blocks don't count as busy time.
+- The "calendar" privacy switch covers all of it: off, nothing is read and the cache is
+  emptied.
+- Tests: chosen calendars only, the fields kept and dropped, the privacy setting in both
+  directions, data blocks, Themi's own events not busy, the switch.
+
+Notes (2026-10-26):
+- `CalendarBusy` (`themi.connectors.gcal.busy`) now reads the chosen calendars for 14 days
+  and keeps `calendar_entries` (title, location, start, end, all day, video call, busy,
+  `source` from Themi's private extended property) beside `calendar_busy`. Never
+  descriptions or attendees. Busy: timed, not "free", and not a K5 block (`task-block:`).
+  Migration 0052: `members.calendar_details` ('me' default, or 'partner'),
+  `member_calendars`, `calendar_entries`. Busy blocks now come from the chosen calendars
+  too (S2 read only the primary one).
+- Which calendars: My accounts → "Calendars Themi reads" (`/accounts/{id}/calendars`), a live
+  list from Google; none ticked means the primary one. Only the member's own accounts.
+- Who sees details: My settings → "My calendars". The model gets today's and tomorrow's
+  events, for the person and anyone sharing with their partner, in a `<data
+  source="calendars">` block in the turn's context, labelled information, never
+  instructions. `Services.calendar_context`.
+- The plan's Shadow Calendar inputs, Google Calendar row and privacy section were updated
+  (rev 196); "only when, never what" is gone.
+- Setup: restart (applies 0052). Nothing is read until Google is set up and accounts are
+  linked; then each person chooses calendars and the sharing setting.
+
+### K2 · Calendars: a summary of the day
+Status: [x] 2026-10-26
+Depends on: K1
+- "What's my day look like?", "what's on Thursday?": a tool that gives the day's events (and,
+  where the setting allows, the partner's), tasks due and chores up, in plain words.
+- A setting, "Morning summary": off (default) or a time; the summary comes then as one
+  message, through the outbox (quiet hours and daily limits apply as usual; it counts as one
+  message). Nothing on: a short line, or nothing, as the person chooses.
+- Tests: on request, on a time, off, quiet hours, privacy.
+
+Notes (2026-10-26):
+- `themi.core.day_summary.DaySummary`. Tool `day_summary` (date as YYYY-MM-DD from the
+  context, empty for today; `partner` adds the partner's events when they share). Events
+  come back inside a `calendars` data block; due items are plain.
+- Due: tasks due that day, an either-day round on either day, and, for today, ones still
+  open from before ("since Mon 19 Oct"); chores waiting for the chart are left out. Each line
+  opens with a label ("2 pm:", "any time:"), as nudges do: the PDA shield rewrote a line
+  that opened with a title like "Call the vet" into "Up next: ...". Check-ins and a plan's
+  week show in brackets.
+- Morning message: `members.morning_summary` ('HH:MM' or NULL) and
+  `morning_summary_empty` (migration 0053), on My settings → "My calendars". The
+  `calendar.morning` job (every 5 minutes) sends it once a day through the outbox (kind
+  `summary`, normal priority, so quiet hours and limits apply), with the partner's events
+  when they share; skipped if it's more than 3 hours late (Themi was down), and on empty
+  days unless asked for.
+- Setup: restart (applies 0053); each person sets a time if they want one.
+
+### K3 · Calendars: creating and changing events
+Status: [x] 2026-10-26
+Depends on: K1, 26
+The family chose (2026-10-26), as groceries work (F5):
+- Asked for in their own words ("put the dentist on my calendar Tuesday at 3"): made at once,
+  with a read-back built from what was stored ("On your calendar: Dentist, Tue 3 Nov,
+  3-4 pm").
+- Mentioned but not asked ("the plumber's coming Thursday morning"): a card, Go ahead or not
+  now.
+- Suggested by an email (a booking confirmation): a card. After several approved in a row,
+  Themi offers to make these automatic, which is a household rule like any other autonomy
+  grant; once it's locked, they're made without a card, and a message always says so ("Added
+  to your calendar from an email: Vet, Fri 30 Oct, 10 am").
+- Changing an event Themi made ("move the dentist to 4"): at once, read back.
+- Changing or deleting an event Themi didn't make: always a card first.
+Build:
+- Tools to create, move and delete events: on the person's own calendar (a chosen one,
+  default primary) or the family "Themi" calendar for the wall. Natural dates and times are
+  parsed deterministically, as schedules are, and refused with an example when unclear.
+- Categories: `calendar_event` (member scope, may become automatic) for their own events,
+  `calendar_event_change` (member scope, capped: always a card) for events Themi didn't make,
+  `calendar_from_email` (member scope, may become automatic) for emails' suggestions, and
+  the offer after enough approvals.
+- Tests: each case above, read-backs, unclear dates, the email path and its offer, the
+  message after an automatic one.
+
+Notes (2026-10-26):
+- `themi.core.events.Events`. Tools: `add_calendar_event` (title, date, start, end,
+  location, calendar "mine" or "family"), `move_calendar_event` and `delete_calendar_event`
+  (an event found by words from its title, and its date when there could be more than one).
+- Deviation: dates and times come as fields (YYYY-MM-DD, HH:MM; "3pm" accepted), checked
+  here rather than parsed from a phrase. The model has the local date; the read-back is
+  built from what was stored, so a misunderstanding still shows at once. A date that has
+  gone by, an end before the start or a time that isn't one is refused with an example.
+- "Asked for": the message mentions the calendar (or booking) and every word of the title
+  that matters; "the plumber's coming Thursday" is a card. Events Themi made move and go at
+  once (`calendar_event`, requested); anyone else's event is `calendar_event_change`,
+  capped: always a card, and the rest of the event (description, guests) is kept.
+- Mine: the person's linked account's primary calendar. Family: prompt 26's "Themi"
+  calendar, under `calendar_write`.
+- Made events carry `themi: event:<id>`, are recorded in `themi_events` (migration 0054;
+  `action_key` keeps a retry from making two) and go into `calendar_entries` at once.
+- Email: triage now pulls an event out of a confirmation (title, date, start, end,
+  location; the schema's new `event` field). A new one is staged as `calendar_from_email`
+  ("From an email: ..., for your calendar"). After 3 approved in a row, Themi proposes the
+  autonomy grant once (a household rule; needs an admin); locked, they're made without a
+  card and a message always says so ("Added to your calendar from an email: ...").
+- A prompt line: appointments at a set time go on a calendar; things to do are tasks.
+- Setup: restart (applies 0054).
+
+### K4 · Calendars: travel time and "time to get ready"
+Status: [x] 2026-10-26
+Depends on: K1
+The family chose (2026-10-26): TomTom's Routing API with live traffic (its free plan, no card;
+check the current allowance), and a rough estimate from distance without a key.
+- A family setting: home, as an address (geocoded once, kept as coordinates). F9b's sunset
+  times use the same location.
+- A setting per person: "Getting ready takes" (default 15 minutes), and the heads-up on or
+  off.
+- For an event with a real location (not a video call, not all-day, not at home), travel
+  time from home: looked up once the day before or when it appears, and again about an hour
+  before it's needed, with traffic. A heads-up comes at "leave by" minus getting ready:
+  "Dentist at 3, about 35 min with traffic: leave around 2:20." It goes through the outbox at
+  normal priority with a deadline at the leave-by time; quiet hours hold it unless the leave
+  time would pass.
+- Without a TomTom key: distance (geocoded with a free service, or TomTom's geocoder when
+  there's a key) at typical driving speeds, and the heads-up says it's a rough guess.
+- `tests/fakes/tomtom.py`: routing and geocoding, with failures. No real calls in tests.
+- Setup for the family: a TomTom developer account and key (`TOMTOM_API_KEY`), and the home
+  address on the Family page.
+
+Notes (2026-10-26):
+- `themi.connectors.travel.TravelClient`: TomTom's geocoder and router (live traffic, arriving
+  at the start) with `TOMTOM_API_KEY`; without it, OpenStreetMap's Nominatim (named
+  User-Agent) and an estimate: straight-line km x 1.35 at 45 km/h plus 5 minutes, rounded up
+  to 5. Always built (the key is optional); the harness passes `fake_travel`.
+- `themi.core.travel.TravelHeadsUps`, job `travel.heads_up` every 5 minutes, next 24 hours:
+  skips all-day, video calls, events without a place and anything within 0.5 km of home. The
+  rough estimate decides when an event is close (no lookups until about 45 minutes before
+  it could matter); then the route; at "leave by" minus getting ready (3 minutes early at
+  most) one message, normal priority, deadline the leave time: "Dentist at 3 pm, about 35
+  min with traffic: leave around 2:25 pm." Without traffic it says "(a rough guess, without
+  traffic)"; a failed route falls back to the estimate. One per event and start time.
+- Migration 0055: `members.getting_ready_minutes` (15) and `leave_heads_up` (on), on My
+  settings; `family_home` (address and coordinates, the Family page's "Home"), `geocodes`
+  (places looked up; not found is retried after a day), `travel_headsups`.
+- Logs: `?key=` in a URL is now redacted (TomTom's key travels in the query).
+- F9b can use `family_home` for sunset times.
+- Setup: restart (applies 0055); an admin saves the home address on the Family page;
+  optionally `TOMTOM_API_KEY` in `.env` for live traffic (restart after).
+
+### K4b · Calendars: drive time on request
+Status: [x] 2026-10-26
+Depends on: K4
+Asked for on 2026-10-26: "how long will it take to drive to our next pediatrics appointment?"
+- A tool: an upcoming event found by words from its title (among the calendars the person
+  may see, as K1's setting says), or an address; the drive from home, arriving at the
+  event's start (live traffic with a TomTom key), and when to leave and start getting
+  ready. Event text comes back as data.
+
+Notes (2026-10-26):
+- Tool `drive_time` (event words, or an address) in `themi.core.travel`. An event: the soonest
+  upcoming one in the next 14 days (as far as calendars are read) whose title has every
+  word, among the person's own and any shared with them; the route arrives at its start.
+  "About 35 min from home with traffic: leave around 9:25 am, and start getting ready around
+  9:10 am." An address: leaving now. Video calls, events without an address and places not
+  on the map are said plainly; a failed route falls back to the estimate.
+- No migration; a restart picks it up.
+
+### K5 · Calendars: blocking time for tasks
+Status: [x] 2026-10-26
+Depends on: K1, K3
+- "Block Saturday morning for the bathroom": an event on the person's calendar for that task
+  (made at once: asked for, and Themi's own). "Find me time for the bathroom": Themi suggests
+  a free slot from their calendar and good windows, as a card.
+- The task's nudges wait for the block (a hold, as the chore chart's are, `TaskBoard.holds`);
+  the nudge comes as it starts. Moved on the calendar, the nudge moves; deleted, nudging is
+  as before.
+- When a block ends with the task still open: one message, done or move the block?
+- Blocks are known as Themi's (K1), so they never hold Themi's own messages as busy time.
+- Tests: made, nudged at the block, moved, deleted, ended undone, not busy.
+
+Notes (2026-10-26):
+- `themi.core.task_blocks.TaskBlocks`. Tools: `block_time_for_task` (task, date, start, end;
+  at once when the message mentions blocking, the calendar or "time for"; else a card) and
+  `find_time_for_task` (minutes, days; the first energy-model window long enough, from 30
+  minutes on, on the quarter hour: their calendar's busy times, busy times and quiet hours
+  are already out of those windows; always a card). Both under `calendar_event`.
+- The block is made by K3's `Events.make` with source `task-block:<task>`, so the event
+  carries that marker and K1 never counts it as busy. `task_blocks` (migration 0056).
+- Hold: `TaskBoard.holds` while a block is coming (end-of-day and overdue reminders respect
+  it too); a queued nudge is taken back. `blocks.tick` (every 5 minutes) nudges as a block
+  begins, follows moves (the read's times win; moved later, it's re-armed), and treats a
+  block missing from a read made after it was created, and before it ended, as deleted: the
+  block ends and the task gets its usual nudge. `calendar_reads` records each account's last
+  read, so an empty calendar still counts.
+- At the end, with the task still open: "The time for X is over. Done, or move the block?"
+  with a Done button. Not if the nudge from the block's start is still unanswered (one
+  question at a time, idea #11); asked at most once.
+- The task's line in Themi's open items says when its time is blocked.
+- `TaskBoard.withdraw_prompt` and `time_of` are public now; `events.when_words`.
+- Setup: restart (applies 0056).
 
 ---
 

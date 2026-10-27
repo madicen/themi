@@ -23,12 +23,15 @@ from themi.core.tools import ToolRegistry
 
 if TYPE_CHECKING:
     from themi.connectors.gcal import CalendarSync
+    from themi.connectors.gcal.busy import CalendarBusy
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.cozyla_todos import CozylaTodos
+    from themi.core.day_summary import DaySummary
+    from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
     from themi.core.groceries import GroceryList
@@ -38,7 +41,9 @@ if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.pantry import Pantry
     from themi.core.rules import Rulebook
+    from themi.core.task_blocks import TaskBlocks
     from themi.core.tasks import TaskBoard
+    from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
     from themi.energy.outcomes import OutcomeTracker
 
@@ -117,6 +122,11 @@ class Services:
     google: GoogleAccounts | None = None
     gmail: GmailSync | None = None
     calendar: CalendarSync | None = None
+    calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
+    day_summary: DaySummary | None = None  # what's on someone's day (K2)
+    events: Events | None = None  # calendar events made and changed from chat (K3)
+    travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
+    task_blocks: TaskBlocks | None = None  # time blocked on calendars for tasks (K5)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None
@@ -152,6 +162,10 @@ class Services:
         for row in self.outbox.queued(member.id):
             items.append(OpenItem(f"Scheduled to send later: {row['text'][:80]}"))
         return items
+
+    def calendar_context(self, member: Member) -> str:
+        """Today's and tomorrow's events this person may see, for the model (K1)."""
+        return self.calendars.context(member) if self.calendars is not None else ""
 
     def rules(self, member: Member) -> tuple[list[str], list[str]]:
         """(locked household rules, the member's own personal rules), for the system prompt."""

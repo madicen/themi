@@ -27,6 +27,21 @@
   </fieldset>
 
   <fieldset>
+    <legend>My calendars</legend>
+    <label>Who sees what's on my calendars
+      <select name="calendar_details">
+        <option value="me" {% if member.calendar_details == "me" %}selected{% endif %}>Just me</option>
+        <option value="partner" {% if member.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
+      </select>
+    </label>
+    <label>A summary of my day at <input type="time" name="morning_summary" value="{{ member.morning_summary.strftime('%H:%M') if member.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
+    <label class="check"><input type="checkbox" name="morning_summary_empty" {% if member.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>
+    <label class="check"><input type="checkbox" name="leave_heads_up" {% if member.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>
+    <label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ member.getting_ready_minutes }}"> minutes</label>
+    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">My accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>How Themi says things</legend>
     <label>Style
       <select name="phrasing">

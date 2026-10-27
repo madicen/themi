@@ -143,6 +143,11 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         checkin_reviews=bool(row["checkin_reviews"]),
         chart_limit=row["chart_limit"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
+        calendar_details=row["calendar_details"],
+        morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
+        morning_summary_empty=bool(row["morning_summary_empty"]),
+        getting_ready_minutes=row["getting_ready_minutes"],
+        leave_heads_up=bool(row["leave_heads_up"]),
     )
 
 
@@ -369,6 +374,11 @@ class AccountStore:
         checkin_reviews: bool | None = None,
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
+        calendar_details: str | None = None,
+        morning_summary: str | None = None,  # "HH:MM", or "" for off
+        morning_summary_empty: bool | None = None,
+        getting_ready_minutes: int | None = None,
+        leave_heads_up: bool | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -420,6 +430,22 @@ class AccountStore:
             changes["chart_limit"] = chart_limit
         if chart_counts_shared is not None:
             changes["chart_counts_shared"] = int(chart_counts_shared)
+        if calendar_details is not None:
+            if calendar_details not in ("me", "partner"):
+                raise InvalidValue("calendar details are for 'me' or 'partner'")
+            changes["calendar_details"] = calendar_details
+        if morning_summary is not None:
+            changes["morning_summary"] = (
+                _parse_hhmm(morning_summary).strftime("%H:%M") if morning_summary else None
+            )
+        if morning_summary_empty is not None:
+            changes["morning_summary_empty"] = int(morning_summary_empty)
+        if getting_ready_minutes is not None:
+            if not 0 <= getting_ready_minutes <= 120:
+                raise InvalidValue("getting ready takes between 0 and 120 minutes")
+            changes["getting_ready_minutes"] = getting_ready_minutes
+        if leave_heads_up is not None:
+            changes["leave_heads_up"] = int(leave_heads_up)
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

@@ -32,6 +32,7 @@ def test_known_token_shapes_are_redacted(kind: str) -> None:
         ("api_key=supersecretvalue next", "api_key="),
         ('{"token": "abc123xyz", "ok": 1}', '"token": "'),
         ("password: hunter2", "password: "),
+        ("GET https://api.tomtom.com/routing/1/x/json?key=Ab12Cd34&traffic=true", "?key="),
     ],
 )
 def test_sensitive_key_value_pairs_are_redacted(text: str, kept: str) -> None:

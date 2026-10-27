@@ -28,6 +28,7 @@ from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.buying import ThingsToBuy
@@ -38,6 +39,8 @@ from themi.core.commands import Commands
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
+from themi.core.day_summary import DaySummary
+from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.groceries import GroceryList
@@ -50,8 +53,10 @@ from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
+from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
@@ -98,6 +103,7 @@ def build_app(
     google: GoogleConfig | None = None,
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
+    travel: TravelClient | None = None,
     backup: BackupConfig | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
@@ -141,18 +147,29 @@ def build_app(
     tasks.install()
     reminders = Reminders(services, tasks)
     reminders.install()
+    day_summary = DaySummary(services, tasks)
+    day_summary.install()
     reviews = CheckinReviews(services)
     reviews.install()
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
     calendar_busy: CalendarBusy | None = None
+    task_blocks: TaskBlocks | None = None
     if services.google is not None:
         services.calendar = CalendarSync(store, services.google)
         TaskCalendar(services, tasks, services.calendar, scheduler).install()
         calendar_busy = CalendarBusy(store, services.calendar)
+        services.calendars = calendar_busy
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
+        Events(services).install()
+        task_blocks = TaskBlocks(services, tasks)
+        task_blocks.install()
+    travel_heads_ups: TravelHeadsUps | None = None
+    if travel is not None:
+        travel_heads_ups = TravelHeadsUps(services, travel)
+        travel_heads_ups.install()
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()
@@ -168,6 +185,7 @@ def build_app(
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
+        PeriodicTask("calendar.morning", timedelta(minutes=5), day_summary.morning),
         PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
         PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
@@ -201,6 +219,12 @@ def build_app(
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:
         periodic.append(PeriodicTask("calendar.busy", timedelta(minutes=15), calendar_busy.refresh))
+    if task_blocks is not None:
+        periodic.append(PeriodicTask("blocks.tick", timedelta(minutes=5), task_blocks.tick))
+    if travel_heads_ups is not None:
+        periodic.append(
+            PeriodicTask("travel.heads_up", timedelta(minutes=5), travel_heads_ups.heads_up)
+        )
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
     if services.triage is not None:
