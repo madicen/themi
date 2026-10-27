@@ -206,3 +206,11 @@ def test_right_now_describing_how_things_are_isnt_a_demand() -> None:
     assert "right-now" in {f.rule for f in find_demands("Call the plumber right now.")}
     assert "right-now" in {f.rule for f in find_demands("You could start right now.")}
     assert "right-now" in {f.rule for f in find_demands("Do it immediately, the list is long.")}
+
+
+def test_a_bulleted_list_is_a_list_not_orders() -> None:
+    """Idea #19: a day's summary as "Tue 27 Oct:" and a bulleted list of what's on. "- Call
+    the vet" lists a task; it isn't telling anyone to do it."""
+    text = "Tue 27 Oct:\n- 10-11 am: Dentist\n- Call the vet\n- Clean the bird cage"
+    assert find_demands(text, 3) == []
+    assert find_demands("Call the vet now.", 3)  # a plain sentence still is

@@ -36,7 +36,7 @@ from themi.connectors.travel import (
     distance_km,
     estimate,
 )
-from themi.core.events import When, when_words
+from themi.core.events import When, title_matches, when_words
 from themi.core.lists import name_key
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -162,15 +162,14 @@ class TravelHeadsUps:
         """The soonest upcoming event, among those this person may see, whose title has all
         these words."""
         reader = self.services.calendars
-        wanted = name_key(words).split()
-        if reader is None or not wanted:
+        if reader is None:
             return None
         now = clock.now()
         found = [
             (owner, entry)
             for owner in reader.visible_to(viewer)
             for entry in reader.entries(owner, now, now + LOOK_AHEAD_ON_REQUEST)
-            if entry.starts_at > now and all(w in name_key(entry.title).split() for w in wanted)
+            if entry.starts_at > now and title_matches(words, entry.title)
         ]
         return min(found, key=lambda f: f[1].starts_at) if found else None
 

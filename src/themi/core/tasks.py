@@ -69,6 +69,7 @@ STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 LAST_ROUND_TEXT = " That was the last one."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
+UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
@@ -1012,15 +1013,21 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title)
         return RESCHEDULED_TEXT.format(title=task.title, due=due_on.isoformat())
 
-    def snooze(self, task_id: int, for_: timedelta = SNOOZE_FOR) -> str:
+    def snooze(
+        self, task_id: int, for_: timedelta = SNOOZE_FOR, *, until: datetime | None = None
+    ) -> str:
+        """Put a task off for a few hours, or until a time they gave ("tonight at 9", #18)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
         self.db.execute(
             "UPDATE tasks SET status = 'snoozed', snoozed_until = ? WHERE id = ?",
-            (to_utc_iso(clock.now() + for_), task_id),
+            (to_utc_iso(until or clock.now() + for_), task_id),
         )
         self.withdraw_prompt(task)
+        if until is not None:
+            when = _clock_words(until.astimezone(self._tz()))
+            return UNTIL_TEXT.format(title=task.title, when=when)
         return LATER_TEXT.format(title=task.title)
 
     def withdraw_prompt(self, task: Task) -> bool:
@@ -1367,12 +1374,26 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "snooze_task",
-    "Put a task off for a few hours when someone wants it later.",
-    {"task_id": {"type": "integer"}},
+    "Put a task off when someone wants it later: until a time they gave ('I'll do it "
+    "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
+    "or for a few hours (until ''). No nudge or reminder comes before then.",
+    {"task_id": {"type": "integer"}, "until": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
+    until = None
+    if str(args["until"]).strip():
+        try:
+            at = time.fromisoformat(str(args["until"]).strip())
+        except ValueError as exc:
+            raise ToolFailed("The time should look like 21:00.") from exc
+        tz = board._tz()
+        now = clock.now().astimezone(tz)
+        until = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
+        if until <= now:
+            until += timedelta(days=1)
     try:
-        return _board(ctx).snooze(args["task_id"])
+        return board.snooze(args["task_id"], until=until)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
 

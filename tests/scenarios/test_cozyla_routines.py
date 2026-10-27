@@ -141,3 +141,62 @@ async def test_themis_check_ins_are_routines_on_the_wall(
     assert (routine["id"], "2026-10-24") in fake_cozyla.routine_ticks
     await at(scenario, thursday, 17)
     assert routine_texts(scenario, "Erin") == []  # Themi nudges for its own check-ins
+
+
+# ----- bug #22: items added to a routine ----------------------------------------------------
+
+
+async def add(scenario: Scenario, said: str, args: dict[str, str]) -> list[str]:
+    scenario.primary.queue_tool_call("add_to_wall_routine", args)
+    scenario.primary.queue_text("Done.")
+    return await scenario.say("Erin", said)
+
+
+async def test_an_item_for_tonight_goes_on_the_evening_routine_and_off_tomorrow(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #22: it went to the calendar, then the chore chart, then a new list."""
+    await at(scenario, WED, 9, 30)  # a first sync: the wall's members are known
+    await add(
+        scenario,
+        "Add replace vacuum water as an item in my evening routine for tonight",
+        {"title": "Replace vacuum water", "part": "Evening", "repeat": ""},
+    )
+    routine = fake_cozyla.routine_named("Replace vacuum water")
+    assert (routine["memberUid"], routine["routineType"]) == ("m-erin", "Evening")
+    assert scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'") == []
+    assert not any(c["choreName"] == "Replace vacuum water" for c in fake_cozyla.chores.values())
+
+    await at(scenario, WED, 20, 30)  # an hour before her quiet hours: the evening check
+    assert any("Replace vacuum water" in t for t in routine_texts(scenario, "Erin"))
+    await at(scenario, WED + timedelta(days=1), 9)
+    assert not any(
+        r["routineTitle"] == "Replace vacuum water" for r in fake_cozyla.routines.values()
+    )
+
+
+async def test_a_repeating_item_stays(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    await at(scenario, WED, 9, 30)
+    await add(
+        scenario,
+        "Put water the plants in my morning routine every Tue and Thu",
+        {"title": "Water the plants", "part": "Morning", "repeat": "every Tue and Thu"},
+    )
+    routine = fake_cozyla.routine_named("Water the plants")
+    assert routine["repeatsIn"] == "Tuesday,Thursday"
+    await at(scenario, WED + timedelta(days=1), 9)
+    assert fake_cozyla.routine_named("Water the plants")  # still there
+
+
+async def test_mentioned_but_not_asked_its_a_card(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    await at(scenario, WED, 9, 30)
+    replies = await add(
+        scenario,
+        "I keep forgetting the vacuum",
+        {"title": "Replace vacuum water", "part": "Evening", "repeat": ""},
+    )
+    assert replies[0] == (
+        "Replace vacuum water for the evening routine, just today\nGo ahead, or not now?"
+    )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 
@@ -321,3 +323,50 @@ async def test_task_nudges_come_one_at_a_time(scenario: Scenario) -> None:
     assert len(nudged()) == 2
     await scenario.advance(hours=1, minutes=1)  # two hours unanswered: it comes anyway
     assert len(nudged()) == 3
+
+
+async def test_put_off_until_a_time_waits_for_that_time(scenario: Scenario) -> None:
+    """Idea #18: "I'll do it tonight around 9" was snoozed for four hours, so the nudge came
+    back at 7:32, and Themi had said "set for tonight at 9"."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from themi import clock
+
+    pacific = ZoneInfo("America/Los_Angeles")
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Mimi pill", "physical", 1, date(2026, 10, 21), assignee=erin, nudge=False
+    )
+    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "21:00"})
+    scenario.primary.queue_text("Okay, at 9.")
+    await scenario.say("Erin", "I'll do it tonight around 9")
+    assert "waits until 9 pm" in str(scenario.primary.last_request.messages[-1].content[0])
+
+    def pill_nudges() -> list[str]:
+        return [t for t in scenario.inbox("Erin") if t.startswith("Due today: Mimi pill")]
+
+    for hour in (13, 17, 19):
+        clock.advance(datetime(2026, 10, 21, hour, 32, tzinfo=pacific) - clock.now())
+        await scenario.run_periodic("tasks.resurface")
+        await scenario.run_periodic("tasks.day_end")
+        await scenario.app.outbox.flush()
+    assert pill_nudges() == []
+    assert not any("Mimi pill" in t for t in scenario.inbox("Erin") if t.startswith("Still open"))
+    clock.advance(datetime(2026, 10, 21, 21, 1, tzinfo=pacific) - clock.now())
+    await scenario.run_periodic("tasks.resurface")
+    await scenario.app.outbox.flush()
+    assert len(pill_nudges()) == 1
+
+
+async def test_put_off_without_a_time_is_a_few_hours(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Mimi pill", "physical", 1, assignee=erin, nudge=False)
+    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": ""})
+    scenario.primary.queue_text("Later then.")
+    await scenario.say("Erin", "later")
+    assert board.get(task.id).status == "snoozed"

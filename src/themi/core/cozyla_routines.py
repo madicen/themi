@@ -27,20 +27,26 @@ them from a button, and never changes them.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import Member
+from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
-from themi.connectors.cozyla.schedule import to_wall
+from themi.connectors.cozyla.schedule import to_wall, wall_can_say
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.groceries import and_list
+from themi.core.lists import name_key
+from themi.core.repeat import RepeatError, parse, read_back
 from themi.core.services import Services
 from themi.core.tasks import TaskBoard
+from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -51,6 +57,8 @@ CHECKED_PARTS = ("Morning", "Evening")
 CHECK_TEXT = "{part} routine: {items} still open. Done already?"
 ALL_DONE_TEXT = "{part} routine: all done."
 ROUTINE_SIGNAL = 0.5  # a part of the day done, or not: a small lift or dip
+PARTS = ("Morning", "Afternoon", "Evening")
+ADD_CATEGORY, ADD_EXECUTOR = "wall_routine_add", "cozyla.add_routine"
 
 
 def part_of_day(at: time | None) -> str:
@@ -74,6 +82,9 @@ class CozylaRoutines:
 
     def install(self) -> None:
         self.services.button_handlers["routine"] = self.on_button
+        self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
+        self.services.tools.register(add_to_wall_routine)
+        self.services.wall_routines = self
 
     async def sync(self) -> int:
         """Scheduler job: ticks both ways, Themi's check-ins on the wall, then the morning
@@ -94,6 +105,7 @@ class CozylaRoutines:
         self._to_member = member_map(members, self.store.list_members())
         self._to_cozyla = {mid: uid for uid, mid in self._to_member.items()}
         try:
+            await self._expire_once(today)
             await self._ticks_from_wall(today, records)
             await self._ticks_to_wall()
             await self._push({r.id: r for r in routines}, today)
@@ -101,6 +113,40 @@ class CozylaRoutines:
         except CozylaError as exc:
             log.warning("Cozyla routine sync stopped partway; next time it carries on: %s", exc)
             return 0
+
+    # ----- items added to a routine (bug #22) ----------------------------------------------
+
+    async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        member = self._to_cozyla.get(ctx.member.id)
+        if member is None:
+            members = await self.client.members()
+            mapped = member_map(members, self.store.list_members())
+            member = next((uid for uid, mid in mapped.items() if mid == ctx.member.id), None)
+        if member is None:
+            return "They aren't a member on the wall, so there's no routine to add it to."
+        today = self._today()
+        phrase = str(payload.get("repeat") or "")
+        repeat = parse(phrase or "every day", today)
+        title, part = str(payload["title"])[:50], str(payload["part"])
+        made = await self.client.create_routine(member, title, part, to_wall(repeat, today))
+        if not phrase:
+            self.db.execute(
+                "INSERT OR REPLACE INTO wall_routine_once (routine_id, member_id, day) "
+                "VALUES (?, ?, ?)",
+                (made, ctx.member.id, today.isoformat()),
+            )
+            return f"Added {title} to the {part.lower()} routine on the wall, just for today."
+        return f"Added {title} to the {part.lower()} routine on the wall: {read_back(repeat)}."
+
+    async def _expire_once(self, today: date) -> None:
+        """Just-for-today items go the day after."""
+        for row in self.db.query(
+            "SELECT routine_id FROM wall_routine_once WHERE day < ?", (today.isoformat(),)
+        ):
+            await self.client.delete_routine(row["routine_id"], today)
+            self.db.execute(
+                "DELETE FROM wall_routine_once WHERE routine_id = ?", (row["routine_id"],)
+            )
 
     # ----- Themi's check-ins as routines ------------------------------------------------------
 
@@ -323,3 +369,42 @@ class CozylaRoutines:
 
     def _admin(self) -> Member:
         return next(m for m in self.store.list_members() if m.is_admin)
+
+
+@staged_tool(
+    "add_to_wall_routine",
+    "Add an item to someone's morning, afternoon or evening routine on the Cozyla wall "
+    "('add replace vacuum water to my evening routine tonight'). repeat: '' for just today, "
+    "or a schedule phrase ('every day', 'every Tue and Thu'). Not a calendar event, a chore "
+    "or a list.",
+    {
+        "title": {"type": "string"},
+        "part": {"type": "string", "enum": list(PARTS)},
+        "repeat": {"type": "string"},
+    },
+)
+async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+    if ctx.services.wall_routines is None:
+        raise ToolFailed("The wall's routines aren't connected.")
+    title = " ".join(str(args["title"]).split())[:50]
+    if not title:
+        raise ToolFailed("A routine item needs a name.")
+    phrase = " ".join(str(args["repeat"]).split())
+    if phrase:
+        try:
+            repeat = parse(phrase, ctx.services.wall_routines._today())
+        except RepeatError as exc:
+            raise ToolFailed(str(exc)) from exc
+        if not wall_can_say(repeat):
+            raise ToolFailed("The wall's routines can't repeat like that; try 'every Tue and Thu'.")
+    when = f", {phrase}" if phrase else ", just today"
+    said = name_key(ctx.request_text)
+    words = [w for w in name_key(title).split() if len(w) > 2]
+    asked = "routine" in said and all(w in said for w in words)
+    proposal = Proposal(
+        ADD_CATEGORY,
+        f"{title} for the {str(args['part']).lower()} routine{when}",
+        ADD_EXECUTOR,
+        {"title": title, "part": args["part"], "repeat": phrase},
+    )
+    return replace(proposal, requested=asked)

@@ -260,3 +260,22 @@ async def test_choosing_the_calendar_on_the_family_page(
     await approve(scenario)
     await scenario.run_jobs()
     assert [e["summary"] for e in linked.events(ERIN, "Cozyla")] == ["Call the plumber"]
+
+
+async def test_personal_reminders_arent_offered_for_the_family_calendar(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Idea #23 (Erin's rule 14, for everyone): "drink black tea tomorrow at 7" was offered
+    for the family calendar. A task someone makes for themselves stays theirs."""
+    erin = scenario.member("Erin")
+    await board(scenario).create(
+        erin, "Drink black tea", "physical", 1, date(2026, 10, 22), assignee=erin
+    )
+    assert calendar_actions(scenario) == []
+    husband = scenario.member("Husband")
+    await board(scenario).create(
+        erin, "Fix the fence", "physical", 3, date(2026, 10, 23), assignee=husband
+    )  # for someone else: the family calendar is where the other person sees it
+    assert [a["summary"] for a in calendar_actions(scenario)] == [
+        "For the family calendar: Fix the fence, Fri Oct 23"
+    ]

@@ -104,6 +104,28 @@ def _time(text: str) -> time:
     return time(hour, minute)
 
 
+FILLER = STOPWORDS | {"appointment", "appt", "event", "next", "this", "her", "his", "their"}
+
+
+def _same_word(a: str, b: str) -> bool:
+    """The same word, or one a form of the other ("tutoring" and "tutor", "pediatrics" and
+    "pediatrician"): a shared start of five letters or more, most of the shorter word."""
+    if a == b:
+        return True
+    shared = next(
+        (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))
+    )
+    return shared >= 5 and shared >= 0.6 * min(len(a), len(b))
+
+
+def title_matches(words: str, title: str) -> bool:
+    """Every word they used (bar fillers like "the" or "appointment") is in the title, give
+    or take its ending (bug #20)."""
+    wanted = [w for w in name_key(words).split() if w not in FILLER]
+    have = name_key(title).split()
+    return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
+
+
 def asked_for(title: str, request_text: str) -> bool:
     """They asked for this event in their own words: the calendar (or booking) is
     mentioned, and so is every word of the title that matters."""
@@ -181,7 +203,6 @@ class Events:
     def find(self, member: Member, words: str, on: str) -> Found:
         """The one event of theirs they mean, by its title's words (and day, if given)."""
         tz = self._tz()
-        key = name_key(words)
         day = date.fromisoformat(on) if on.strip() else None
         start = _at(day or self._today(), time(0), tz)
         end = start + (timedelta(days=1) if day else timedelta(days=60))
@@ -198,7 +219,7 @@ class Events:
         ):
             if row["event_id"] not in found:
                 found[row["event_id"]] = self._found(row, None)
-        matches = [f for f in found.values() if key and key in name_key(f.title)]
+        matches = [f for f in found.values() if title_matches(words, f.title)]
         if len(matches) == 1:
             return matches[0]
         listed = "; ".join(f"{f.title} ({when_words(f.when, tz)})" for f in matches[:6])

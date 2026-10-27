@@ -2,7 +2,8 @@
 
 - A task that gets a date is staged as `calendar_write` ("Put ... on the
   family calendar?"), so it waits for a yes unless a locked rule made the
-  category automatic. Approving records the event and queues it.
+  category automatic. Approving records the event and queues it. Not a task
+  someone made for themselves: that's their own reminder (idea #23).
 - The write itself is the queued `calendar.sync` job, so a Google error is
   retried by the job queue with its back-off, and never blocks the task.
 - Once an event is on the calendar, it follows its task: a new date moves
@@ -44,6 +45,14 @@ def event_body(task: Task, assignee_name: str | None) -> dict[str, Any]:
         "transparency": "transparent",  # a reminder, not a busy block
         "extendedProperties": {"private": {"themi": f"task:{task.id}"}},
     }
+
+
+def _personal(task: Task) -> bool:
+    """A task someone made for themselves (or that came from the wall with nobody named),
+    not shared or for either of them: a reminder of theirs, not the family's business."""
+    if task.shared or task.either:
+        return False
+    return task.created_by is None or task.created_by == task.assignee
 
 
 def approval_summary(task: Task) -> str:
@@ -91,6 +100,8 @@ class TaskCalendar:
             return
         if task.status not in ("open", "snoozed") or self._waiting(task.id):
             return
+        if _personal(task):
+            return  # theirs alone: not for the family calendar (Erin's idea #23)
         if self.sync.account() is None:
             log.info("Task %s has a date, but there's no calendar to put it on yet", task.id)
             return
