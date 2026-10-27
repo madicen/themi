@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, tool
+from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, more_tools, tool
 
 # What the person must have said themselves before the model answers a card for them.
 _SAID = {
@@ -196,4 +196,5 @@ STARTER_TOOLS: list[Tool] = [
     list_open_items,
     answer_waiting_item,
     set_phrasing,
+    more_tools,
 ]

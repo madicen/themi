@@ -31,7 +31,7 @@ from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
-from themi.core.tools import ToolContext
+from themi.core.tools import ToolContext, choose_groups
 from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
@@ -263,16 +263,17 @@ class Agent:
             calendars=services.calendar_context(member),
         )
         messages = [Message.user(turn)]
-        tools = services.tools.specs()
         client = services.router.client_for(member.id, AITask.CONVERSATION)
         before = next((m.text for m in reversed(history) if m.direction == "in"), "")
-        ctx = ToolContext(member, services, request_text=text, previous_text=before)
+        # P1: the tools this message and the last few call for; more_tools adds to them.
+        groups = choose_groups([text, *(m.text for m in history[-4:])])
+        ctx = ToolContext(member, services, request_text=text, previous_text=before, groups=groups)
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for _ in range(self.max_steps):
-                response = await client.chat(system, messages, tools)
+                response = await client.chat(system, messages, services.tools.specs(ctx.groups))
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
