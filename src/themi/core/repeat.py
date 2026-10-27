@@ -151,14 +151,15 @@ def _take_time(text: str) -> tuple[str, time | None]:
     return text, None
 
 
-def _day(word: str) -> int | None:
+def day_number(word: str) -> int | None:
+    """A day's name ("tuesday", "tue", "tuesdays") as a number, 0 for Monday."""
     return _DAY_WORDS[word] if word in _DAY_WORDS else _DAY_WORDS.get(word.rstrip("s"))
 
 
 def _days(text: str) -> tuple[int, ...]:
     found = []
     for word in re.findall(r"[a-z]+", text):
-        day = _day(word)
+        day = day_number(word)
         if day is not None and day not in found:
             found.append(day)
     return tuple(sorted(found))
@@ -169,7 +170,7 @@ def _take_or_days(text: str) -> tuple[str, tuple[int, ...]]:
     its stand-in. Only a day and the one after it."""
     found = []
     for m in reversed(list(re.finditer(r"\b([a-z]+)\s+or\s+([a-z]+)\b", text))):
-        first, second = _day(m.group(1)), _day(m.group(2))
+        first, second = day_number(m.group(1)), day_number(m.group(2))
         if first is None or second is None:
             continue
         if second != (first + 1) % 7:

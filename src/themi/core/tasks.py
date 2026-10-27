@@ -27,6 +27,8 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
+from themi.core.progression import Progression, parse_plan
+from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
 from themi.core.repeat import (
     Repeat,
@@ -102,6 +104,7 @@ class Task:
     due_time: time | None = None  # a time of day on the due date ("today around 2")
     from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
     on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
+    progression: Progression | None = None  # an amount that steps up weekly (F9c)
 
     @property
     def repeats(self) -> bool:
@@ -152,6 +155,9 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         due_time=time.fromisoformat(row["due_time"]) if row["due_time"] else None,
         from_time=time.fromisoformat(row["from_time"]) if row["from_time"] else None,
         on_chart=bool(row["on_chart"]),
+        progression=(
+            Progression.from_json(json.loads(row["progression"])) if row["progression"] else None
+        ),
     )
 
 
@@ -200,6 +206,7 @@ class TaskBoard:
         s.tools.register(snooze_task)
         s.tools.register(update_task)
         s.tools.register(set_task_schedule)
+        s.tools.register(set_task_plan)
         s.button_handlers["task"] = self.on_button
         s.open_item_sources.append(self.open_items)
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
@@ -280,6 +287,11 @@ class TaskBoard:
                         f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
                     )
             schedule = f" {self.summary(t)}." if t.repeats else ""
+            if t.progression is not None:
+                week = t.progression.words_on(self._today())
+                schedule += f" Plan: {plan_read_back(t.progression)}" + (
+                    f"; {week}." if week else "."
+                )
             wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
             items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{wall}{steps}"))
         return items
@@ -398,13 +410,15 @@ class TaskBoard:
         )
         family = self.store.get_family()
         local_day = goes_out.astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        week = task.progression.words_on(local_day) if task.progression else None
+        title = f"{task.title} ({week})" if week else task.title  # "(1.3 miles this week)"
         if lead is None and overdue is not None:
             template = SHARED_OVERDUE_TEXT if overdue == "shared" else OVERDUE_TEXT
-            lead = template.format(title=task.title, ago=self._last_done_words(task))
+            lead = template.format(title=title, ago=self._last_done_words(task))
         elif lead is None:
             lead = NUDGE_LEAD.format(
                 label=_label(task, local_day),
-                title=task.title,
+                title=title,
                 who=ADDED_BY.format(who=added_by.name) if added_by is not None else "",
                 whenever=(
                     WHENEVER
@@ -671,6 +685,17 @@ class TaskBoard:
             # The nudge queued when the task was made waits for the chore's own day (bug #10).
             await self.prompt(task, not_before=self._round_starts(task))
         return task
+
+    def set_progression(self, task_id: int, by: Member, plan: Progression | None) -> Task:
+        """Give a task a plan that steps up week by week, or take it away (F9c)."""
+        task = self.get(task_id)
+        if not self.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        self.db.execute(
+            "UPDATE tasks SET progression = ? WHERE id = ?",
+            (json.dumps(plan.to_json()) if plan else None, task_id),
+        )
+        return self.get(task_id)
 
     def summary(self, task: Task) -> str:
         """The schedule in plain words, from what's stored (the read-back)."""
@@ -1350,3 +1375,40 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         return _board(ctx).snooze(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+
+
+@tool(
+    "set_task_plan",
+    "Give a task an amount that steps up week by week, or stop it. plan is a short phrase: "
+    "'1.3 miles, then 1.5, then up 0.25 a week, on Tuesdays', '20 minutes, up 5 a week up to "
+    "45 minutes', '2 km, starting 2 Nov, on Mondays'; empty to stop. Its nudges then say the "
+    "week's amount ('Go for a run (1.5 miles this week)'). For training plans and the like, "
+    "not one-off numbers (those are part of the title or a step). Themi reads the saved plan "
+    "back to them itself.",
+    {"task_id": {"type": "integer"}, "plan": {"type": "string"}},
+)
+async def set_task_plan(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
+    phrase = args["plan"].strip()
+    try:
+        plan = parse_plan(phrase, board._today()) if phrase else None
+        task = board.set_progression(args["task_id"], ctx.member, plan)
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except PermissionDenied as exc:
+        raise ToolFailed("That task isn't theirs to change.") from exc
+    except ValueError as exc:  # ProgressionError included: its message has an example
+        raise ToolFailed(str(exc)) from exc
+    if task.progression is None:
+        return f"Task {task.id} ({task.title}) has no plan any more."
+    # The read-back is built here from what was stored, and sent as it is.
+    text = f"Saved for {task.title}: {plan_read_back(task.progression)}."
+    week = task.progression.words_on(board._today())
+    text += f" Now: {week}." if week else ""
+    await ctx.services.outbox.send(ctx.member, text, priority=Priority.REPLY)
+    return (
+        f"Task {task.id} ({task.title}) has its plan, and it was read back to them already, "
+        f'word for word: "{text}". Don\'t restate it; a short acknowledgement is enough, or '
+        "ask if anything sounds wrong. If they asked for something that read-back doesn't "
+        "show, say which part isn't set up and keep it with remember_fact."
+    )

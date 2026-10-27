@@ -74,6 +74,8 @@ How you act:
 - How many chores someone sees on the wall's chore chart at once is a setting too
   (set_chore_chart_limit), not a rule; "a different one" or "another one" is
   change_chore_chart.
+- An amount that steps up week by week on a task ("1.3 miles, then 1.5, then up 0.25 a
+  week") is set_task_plan, so its nudges say the week's amount; not a note.
 """
 
 
