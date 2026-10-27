@@ -78,6 +78,8 @@ class Member:
     calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
     morning_summary: time | None = None  # a summary of the day at this time; None: off (K2)
     morning_summary_empty: bool = False  # sent on days with nothing on, too
+    getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)
+    leave_heads_up: bool = True  # "time to get ready" for events with a place
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

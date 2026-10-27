@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from themi.core.pantry import Pantry
     from themi.core.rules import Rulebook
     from themi.core.tasks import TaskBoard
+    from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
     from themi.energy.outcomes import OutcomeTracker
 
@@ -123,6 +124,7 @@ class Services:
     calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
     day_summary: DaySummary | None = None  # what's on someone's day (K2)
     events: Events | None = None  # calendar events made and changed from chat (K3)
+    travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None

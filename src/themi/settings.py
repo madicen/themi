@@ -63,6 +63,8 @@ class Settings(BaseModel):
     cozyla_todo_list: str = ""
     cozyla_device_sn: str = "themi"
     cozyla_chores: bool = False
+    # K4: TomTom's routing with live traffic; without it, a free geocoder and an estimate.
+    tomtom_api_key: Secret | None = None
     backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
@@ -177,6 +179,7 @@ class Settings(BaseModel):
         google_secret = get("GOOGLE_CLIENT_SECRET")
         grocery_password = get("OURGROCERIES_PASSWORD")
         cozyla_password = get("COZYLA_PASSWORD")
+        tomtom_key = get("TOMTOM_API_KEY")
         endpoints = {
             field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
         }
@@ -201,6 +204,7 @@ class Settings(BaseModel):
             cozyla_todo_list=get("COZYLA_TODO_LIST"),
             cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
             cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
+            tomtom_api_key=Secret(tomtom_key) if tomtom_key else None,
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),

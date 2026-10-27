@@ -15,6 +15,17 @@
   <button class="primary">Save</button>
 </form>
 
+{% if travel %}
+<h2>Home</h2>
+<form method="post" action="/family/home" class="card settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <p class="muted">Travel times to events start here. Only the map's coordinates are used,
+  and the address stays on this server.</p>
+  <label>Address <input name="address" value="{{ home[0] if home else '' }}" placeholder="12 Main St, Springfield" required></label>
+  <button>Save</button>
+</form>
+{% endif %}
+
 {% if calendar %}
 <h2>Family calendar</h2>
 <form method="post" action="/family/calendar" class="card">

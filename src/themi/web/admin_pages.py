@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, Response
 from themi.accounts import AccountsError, InvalidValue, Role
 from themi.accounts.setup import pairing_instructions, parse_money_to_cents
 from themi.autonomy import AutonomyError
+from themi.connectors.travel import TravelError
 from themi.core.rules import RuleError
 from themi.web.kit import Kit
 
@@ -33,6 +34,8 @@ def routes(kit: Kit) -> APIRouter:
             "budget": f"{family.takeout_budget_cents / 100:.2f}" if family else "0.00",
             "members": store.list_members(),
             "calendar": calendar_values(),
+            "home": app.services.travel.home() if app.services.travel else None,
+            "travel": app.services.travel is not None,
             **extra,
         }
 
@@ -49,6 +52,24 @@ def routes(kit: Kit) -> APIRouter:
             "using": account.address if account else None,
             "problem": calendar.problem(),
         }
+
+    @router.post("/family/home")
+    async def save_home(request: Request) -> Response:
+        """The family's home, for travel times (K4)."""
+        _, form = await kit.checked(request, admin=True)
+        travel = app.services.travel
+        if travel is None:
+            return kit.redirect("/family", "Travel times aren't set up.")
+        address = str(form.get("address", ""))
+        try:
+            place = await travel.set_home(address)
+        except TravelError:
+            return kit.redirect("/family", "The map service didn't answer; try again shortly.")
+        if place is None:
+            return kit.redirect(
+                "/family", "That address wasn't found on the map. Try adding the city."
+            )
+        return kit.redirect("/family", "Home saved. Travel times start from there.")
 
     @router.get("/family", response_class=HTMLResponse)
     def family_page(request: Request) -> HTMLResponse:

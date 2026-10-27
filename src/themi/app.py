@@ -28,6 +28,7 @@ from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.buying import ThingsToBuy
@@ -54,6 +55,7 @@ from themi.core.services import Services
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
+from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
@@ -100,6 +102,7 @@ def build_app(
     google: GoogleConfig | None = None,
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
+    travel: TravelClient | None = None,
     backup: BackupConfig | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
@@ -159,6 +162,10 @@ def build_app(
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
         Events(services).install()
+    travel_heads_ups: TravelHeadsUps | None = None
+    if travel is not None:
+        travel_heads_ups = TravelHeadsUps(services, travel)
+        travel_heads_ups.install()
     habits = HabitReserve(services)
     habits.install()
     Commands(services).install()
@@ -208,6 +215,10 @@ def build_app(
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:
         periodic.append(PeriodicTask("calendar.busy", timedelta(minutes=15), calendar_busy.refresh))
+    if travel_heads_ups is not None:
+        periodic.append(
+            PeriodicTask("travel.heads_up", timedelta(minutes=5), travel_heads_ups.heads_up)
+        )
     if services.triage is not None:
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
     if services.triage is not None:

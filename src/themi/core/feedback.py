@@ -267,6 +267,9 @@ class FeedbackChat:
             "morning summary": member.morning_summary.strftime("%H:%M")
             if member.morning_summary
             else "off",
+            "leave heads-up": f"on, {member.getting_ready_minutes} min to get ready"
+            if member.leave_heads_up
+            else "off",
             "calendar details seen by": "them only"
             if member.calendar_details == "me"
             else "them and their partner",

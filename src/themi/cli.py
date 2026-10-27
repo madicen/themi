@@ -81,6 +81,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     from themi.channels.telegram import TelegramChannel
     from themi.connectors.cozyla import CozylaClient
     from themi.connectors.ourgroceries import OurGroceriesClient
+    from themi.connectors.travel import TravelClient
     from themi.runtime import Runtime
     from themi.settings import SettingsError
     from themi.storage import open_database
@@ -105,6 +106,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         backup=settings.backup,
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
         cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
+        travel=TravelClient(settings.tomtom_api_key),
     )
     return Runtime(
         app,
