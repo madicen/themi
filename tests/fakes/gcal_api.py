@@ -55,6 +55,7 @@ class FakeGcal:
         events = f"{base}/calendars/{{cid}}/events"
         self.app.add_api_route(events, self._insert, methods=["POST"])
         self.app.add_api_route(events, self._list_events, methods=["GET"])
+        self.app.add_api_route(f"{events}/{{eid}}", self._get, methods=["GET"])
         self.app.add_api_route(f"{events}/{{eid}}", self._update, methods=["PUT"])
         self.app.add_api_route(f"{events}/{{eid}}", self._delete, methods=["DELETE"])
         self._background = BackgroundServer(self.app)
@@ -145,7 +146,10 @@ class FakeGcal:
     # ----- plumbing -----------------------------------------------------------
 
     def _box(self, address: str) -> dict[str, _Calendar]:
-        return self.calendars.setdefault(address.lower(), {})
+        """Someone's calendars; like a real account, there's always a primary one."""
+        box = self.calendars.setdefault(address.lower(), {})
+        box.setdefault("primary", _Calendar("primary", address, "UTC", "owner"))
+        return box
 
     def _open(
         self, request: Request, endpoint: str
@@ -216,6 +220,15 @@ class FakeGcal:
             and _when(e["start"].get("dateTime") or e["start"]["date"]) < high
         ]
         return JSONResponse({"items": items})
+
+    async def _get(self, request: Request, cid: str, eid: str) -> JSONResponse:
+        box, error = self._open(request, "get")
+        if box is None:
+            return error  # type: ignore[return-value]
+        cal = box.get(cid)
+        if cal is None or eid not in cal.events:
+            return _error(404, "Not Found")
+        return JSONResponse(cal.events[eid])
 
     async def _update(self, request: Request, cid: str, eid: str) -> JSONResponse:
         box, error = self._open(request, "update")
