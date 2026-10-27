@@ -250,13 +250,14 @@ class Agent:
         pinned, notes = services.facts_for(member, text)
         household, personal = services.rules(member)
         system = build_system(household, pinned, personal_rules=personal, owner=member.name)
+        history = self._history(member, event)
         turn = build_turn(
             member,
             text,
             local_now=to_local(clock.now(), timezone),
             energy_label=services.energy.label(member),
             open_items=services.open_items(member),
-            history=self._history(member, event),
+            history=history,
             notes=notes,
             timezone=timezone,
             calendars=services.calendar_context(member),
@@ -264,7 +265,8 @@ class Agent:
         messages = [Message.user(turn)]
         tools = services.tools.specs()
         client = services.router.client_for(member.id, AITask.CONVERSATION)
-        ctx = ToolContext(member, services, request_text=text)
+        before = next((m.text for m in reversed(history) if m.direction == "in"), "")
+        ctx = ToolContext(member, services, request_text=text, previous_text=before)
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False

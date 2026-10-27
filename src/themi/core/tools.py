@@ -38,6 +38,7 @@ class ToolContext:
     member: Member
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
+    previous_text: str = ""  # their message before it, for a follow-up like "and limes"
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
 

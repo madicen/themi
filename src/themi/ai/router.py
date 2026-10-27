@@ -21,12 +21,16 @@ raise `Deferred` so the scheduler re-queues the work instead of dropping it.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import random
+import sqlite3
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any, TypeVar
 
+from themi import clock
 from themi.ai import json_mode
 from themi.ai.adapters import AdapterConfig, build_provider
 from themi.ai.breaker import BreakerBoard, BreakerState
@@ -50,6 +54,7 @@ from themi.ai.types import (
     ToolSpec,
     Transcription,
 )
+from themi.localtime import to_utc_iso
 
 T = TypeVar("T")
 ProviderFactory = Callable[[AdapterConfig], Provider]
@@ -58,6 +63,7 @@ Operation = Callable[[Provider], Awaitable[T]]
 log = logging.getLogger(__name__)
 
 CONNECTION_TEST_PROMPT = "Reply with the single word OK."
+CALLS_KEPT = timedelta(days=7)  # ai_calls history (bug #29)
 
 
 class CircuitOpenError(AIError):
@@ -151,13 +157,27 @@ class AIRouter:
         on_retry: OnRetry | None = None,
     ) -> T:
         errors: list[tuple[str, Exception]] = []
+        call = _CallRecord(clock.now())
+
+        async def noted(attempt: int, error: RetryableError, wait: float) -> None:
+            call.retries += 1
+            call.waited += wait
+            call.last_status = error.status
+            if on_retry is not None:
+                result = on_retry(attempt, error, wait)
+                if inspect.isawaitable(result):
+                    await result
+
         for entry in self._chain(member_id, task):
             if not self.breakers.allow(member_id, entry.backend_id):
                 errors.append((entry.label, CircuitOpenError("temporarily skipped")))
                 continue
+            call.backend = entry.label
             try:
                 provider = self._factory(entry.config)
-                return await self._attempt(member_id, entry, provider, operation, kind, on_retry)
+                result = await self._attempt(member_id, entry, provider, operation, kind, noted)
+                self._record(member_id, task, kind, call, ok=True)
+                return result
             except _SKIP_TO_NEXT as exc:
                 if not isinstance(exc, RetriesExhausted | CircuitOpenError):
                     self.breakers.release_probe(member_id, entry.backend_id)
@@ -169,10 +189,36 @@ class AIRouter:
                     type(exc).__name__,
                 )
                 errors.append((entry.label, exc))
+        last = errors[-1][1] if errors else None
+        if isinstance(last, RetriesExhausted):
+            call.last_status = last.last_error.status or call.last_status
+        elif isinstance(last, AIError) and getattr(last, "status", None):
+            call.last_status = getattr(last, "status", None)
+        self._record(member_id, task, kind, call, ok=False)
         if errors and all(isinstance(e, RefusalError) for _, e in errors):
             raise errors[-1][1]
         failure = Deferred if kind is CallKind.BACKGROUND else AllProvidersFailed
         raise failure(f"no AI backend could handle {task.value}", errors)
+
+    def _record(
+        self, member_id: int, task: AITask, kind: CallKind, call: _CallRecord, *, ok: bool
+    ) -> None:
+        """Keep a week of calls: how long, how long waiting, how it ended (bug #29)."""
+        db = self.settings.db
+        now = clock.now()
+        try:
+            db.execute(
+                "INSERT INTO ai_calls (member_id, task, kind, backend, started_at, seconds, "
+                "waited, retries, last_status, ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    member_id, task.value, kind.value, call.backend, to_utc_iso(call.started),
+                    round((now - call.started).total_seconds(), 2), round(call.waited, 2),
+                    call.retries, call.last_status, int(ok),
+                ),
+            )  # fmt: skip
+            db.execute("DELETE FROM ai_calls WHERE started_at < ?", (to_utc_iso(now - CALLS_KEPT),))
+        except sqlite3.Error:  # never lose an answer over a note about it
+            log.warning("Couldn't record an AI call", exc_info=True)
 
     async def _attempt(
         self,
@@ -226,6 +272,15 @@ class AIRouter:
         return ConnectionResult(
             True, entry.label, response.provider, response.model, "Connected and answering."
         )
+
+
+@dataclass
+class _CallRecord:
+    started: datetime
+    backend: str = ""
+    retries: int = 0
+    waited: float = 0.0
+    last_status: int | None = None
 
 
 class TaskClient:

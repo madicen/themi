@@ -42,6 +42,26 @@ def item_name(raw: str) -> str:
     return name
 
 
+# Wording that asks for something to go on a list (bug #30: "our pacifiers keep
+# disappearing" named the item but asked for nothing).
+ADD_INTENT = re.compile(
+    r"\b(?:add|put|need|needs|needed|buy|get|grab|pick up|order|want|restock|more|"
+    r"out of|low on|running (?:low|out)|ran out|run out)\b"
+)
+FOLLOW_ON = re.compile(r"^(?:and|also|plus|oh and)\b|\b(?:too|as well)$")
+
+
+def asks_to_add(request_text: str, previous_text: str = "") -> bool:
+    """They asked for something to be added: in this message, or in the one before when
+    this one carries it on ("and limes")."""
+    said = " ".join(re.sub(r"[^\w\s&'/-]", " ", request_text).split()).lower()
+    if ADD_INTENT.search(said):
+        return True
+    before = " ".join(re.sub(r"[^\w\s&'/-]", " ", previous_text).split()).lower()
+    follow_on = bool(FOLLOW_ON.search(said)) or len(said.split()) <= 3
+    return follow_on and bool(ADD_INTENT.search(before))
+
+
 def and_list(names: list[str]) -> str:
     if len(names) <= 2:
         return " and ".join(names)
@@ -201,7 +221,11 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     # Asked for, if every item is in what they just wrote ("add white miso", "out of eggs");
     # restocking, receipts and items the model inferred still wait for a yes.
     said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).lower()
-    asked = bool(said) and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
+    asked = (
+        bool(said)
+        and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
+        and asks_to_add(ctx.request_text, ctx.previous_text)
+    )
     buying = ctx.services.buying
     other = [n for n in names if buying is not None and buying.kind_of(n) == "other"]
     if other and not asked:  # L2a: settled before as not food
