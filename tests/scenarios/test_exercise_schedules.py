@@ -165,3 +165,41 @@ async def test_on_the_wall_both_days_show_and_either_tick_counts(
     await done(scenario, run)  # Sunday's run, done in Themi: Sunday is ticked
     await scenario.run_periodic("cozyla.routines")
     assert (routine["id"], "2026-11-01") in fake_cozyla.routine_ticks
+
+
+async def test_the_distance_plan_steps_up_on_tuesdays(scenario: Scenario) -> None:
+    """F9c: "Next week is 1.3 miles, then 1.5, then up 0.25 a week, stepping up on Tuesdays"."""
+    run, _ = await runs(scenario)
+    scenario.primary.queue_tool_call(
+        "set_task_plan",
+        {"task_id": run.id, "plan": "1.3 miles, then 1.5, then up 0.25 a week, on Tuesdays"},
+    )
+    scenario.primary.queue_text("Got it.")
+    replies = await scenario.say("Erin", "Next week is 1.3 miles, then 1.5, then up 0.25")
+    assert replies[0] == (
+        "Saved for Go for a run: 1.3 miles from Tue 27 Oct, then 1.5, then up 0.25 a week; "
+        "it steps up on Tuesdays."
+    )  # it starts next week, so there's no amount yet
+
+    def latest() -> str:
+        return [t for t in scenario.inbox("Erin") if "Go for a run" in t][-1]
+
+    await at(scenario, date(2026, 10, 22), 14, 1)
+    assert latest().startswith("Check-in: Go for a run. ")  # before the plan starts
+    await done(scenario, run)
+    await at(scenario, date(2026, 10, 24), 15)
+    await done(scenario, run)
+    await at(scenario, date(2026, 10, 27), 14, 1)
+    assert latest().startswith("Check-in: Go for a run (1.3 miles this week).")
+    await done(scenario, run)
+    await at(scenario, date(2026, 10, 29), 14, 1)
+    assert "(1.3 miles this week)" in latest()
+    await done(scenario, run)
+    await at(scenario, date(2026, 10, 31), 15)
+    await done(scenario, run)
+    await at(scenario, date(2026, 11, 3), 14, 1)
+    assert latest().startswith("Check-in: Go for a run (1.5 miles this week).")
+    (item,) = [
+        i.summary for i in board(scenario).open_items(scenario.member("Erin")) if "run" in i.summary
+    ]
+    assert "Plan: 1.3 miles from Tue 27 Oct" in item and "; 1.5 miles this week." in item

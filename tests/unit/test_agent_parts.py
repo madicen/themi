@@ -219,3 +219,4 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
 
     assert "Only say what a tool's result shows was saved" in STABLE_SYSTEM
     assert "remember_fact" in STABLE_SYSTEM
+    assert "is set_task_plan" in STABLE_SYSTEM  # Erin's distance plan was only a note
