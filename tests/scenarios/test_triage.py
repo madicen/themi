@@ -46,6 +46,7 @@ def verdict(email_id: int, category: str, summary: str = "", **extra: Any) -> di
         "severe": extra.get("severe", False),
         "summary": summary or category,
         "reply_draft": extra.get("reply_draft", ""),
+        "unsure": extra.get("unsure", False),
         "event": extra.get("event", {k: "" for k in ("title", "date", "start", "end", "location")}),
     }
 
