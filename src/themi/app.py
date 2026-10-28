@@ -53,6 +53,7 @@ from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
+from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
@@ -143,6 +144,7 @@ def build_app(
     lists = Lists(services)
     lists.install()
     ThingsToBuy(services, lists).install()
+    Spending(services).install()
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
