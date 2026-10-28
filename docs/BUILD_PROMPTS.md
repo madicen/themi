@@ -78,7 +78,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
 | X1 | Spending: takeout and business expenses | Feedback | [x] |
-| B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
+| B1 | Breaks: a rest mode that ends with a question | Feedback | [x] |
 | T1 | Tasks: urgent and important | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -3898,7 +3898,7 @@ Notes (2026-10-28):
   he can say it again.
 
 ### B1 · Breaks: a rest mode that ends with a question
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: 17, F3
 From Erin's idea #42, 2026-10-27: "put Themi into rest/break/busy mode... At the end of the
 designated rest time, Themi will alert the user that time is up, giving the options 'End
@@ -3910,6 +3910,22 @@ customizable."
   (default 15).
 - Later: Themi suggests a break when the Shadow Calendar sees a long run of effort (asked,
   never started on its own).
+
+Notes (2026-10-28):
+- `themi.core.breaks`: `start_break(minutes)` (0: half an hour; up to 8 hours; a break
+  going on gets the new end), `end_break`, and `/break 30`. A break is a pause on the new
+  "break" topic (task, task_summary, habit, routine and review messages), so held nudges
+  wait in the outbox; replies, approvals and urgent alerts still come.
+- "Break's up. Ready to carry on, or a little longer?" goes at the end (NORMAL, with a
+  deadline five minutes on, so the daily limit doesn't hold it), with [End break] and
+  [Extend by N min]. Deviation: the pause runs ten minutes past the end, so nudges don't
+  land in the same minute as the question; answering ends that wait at once
+  (`release_held`, as /resume does).
+- Migration 0061: `breaks`, and `members.break_extend_minutes` (5-120, default 15), on My
+  settings.
+- Follow-ups from the idea: Themi suggesting breaks itself, and breaks that bring a chosen
+  set of prompts.
+- Setup: restart (applies 0061).
 
 ### T1 · Tasks: urgent and important
 Status: [ ]
