@@ -49,7 +49,8 @@ async def test_likely_senders_wait_in_the_audit_and_only_an_answer_adds_one(
     assert account.urgent_senders == ()  # nothing until she answers
 
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Urgent")  # Schwab Alerts first: the likeliest
+    await scenario.tap("Erin", "Same day")  # Schwab Alerts first: the likeliest
+    await scenario.tap("Erin", "Not important")
     account = scenario.app.store.get_linked_account(account.id)
     assert account.urgent_senders == ("alerts@schwab.example",)
 
@@ -70,7 +71,8 @@ async def test_what_each_inbox_has_set_and_whats_waiting(
     await scenario.run_periodic("email.senders")
     await scenario.app.outbox.flush()
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Urgent")  # Schwab Alerts
+    await scenario.tap("Erin", "Same day")  # Schwab Alerts
+    await scenario.tap("Erin", "Not important")
     scenario.primary.queue_tool_call("inbox_setup", {})
     scenario.primary.queue_text("Bob Tenant is the one left.")
     await scenario.say(
