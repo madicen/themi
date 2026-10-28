@@ -11,7 +11,11 @@ Priorities:
 
 A `deadline` means "by then at the latest": once it passes, the receptivity
 provider and daily limit stop holding the message back, but quiet hours
-still do.
+still do. `expires` means "no use after then": a message still waiting at that
+moment is dropped, never sent late (a day's summary, bug #57).
+
+A kind with a bundler (task nudges) may go as one message when several are
+waiting at once: the bundler sends it and takes back the ones it covers.
 
 Messages are stored as written and shielded (PDA) at the moment they go out.
 A failed send stays queued and is retried with backoff, so a Telegram outage
@@ -22,7 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -98,6 +102,9 @@ Gate = Callable[["Member", datetime], datetime | None]
 # A feature's order for its own kind of message when several are due at once (T1): a
 # queued row -> a sort key, lower first.
 Order = Callable[[dict[str, Any]], tuple[Any, ...]]
+# Several queued rows of one kind, ready for one person at once: send them as one message
+# (and take them back) if it suits, returning True; False leaves them as they are.
+Bundler = Callable[["Member", list[dict[str, Any]]], Awaitable[bool]]
 
 
 class ReceptivityProvider(Protocol):
@@ -145,6 +152,8 @@ class Outbox:
         # Holds a feature puts on its own kind ("task": one nudge at a time, idea #11).
         self.gates: dict[str, Gate] = {}
         self.orders: dict[str, Order] = {}
+        # Several of a kind waiting at once, sent as one (the morning list, bug #49).
+        self.bundlers: dict[str, Bundler] = {}
 
     @property
     def _tz(self) -> str:
@@ -165,6 +174,7 @@ class Outbox:
         deadline: datetime | None = None,
         link_preview: bool = True,
         not_before: datetime | None = None,
+        expires: datetime | None = None,
     ) -> OutboxResult:
         """`not_before` holds a proactive message until then at the earliest (replies and
         urgent messages never wait); after that, the usual timing rules apply."""
@@ -188,7 +198,8 @@ class Outbox:
         )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
-            "send_after, deadline, created_at, link_preview) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "send_after, deadline, created_at, link_preview, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id,
                 text,
@@ -200,6 +211,7 @@ class Outbox:
                 to_utc_iso(deadline) if deadline else None,
                 to_utc_iso(now),
                 int(link_preview),
+                to_utc_iso(expires) if expires else None,
             ),
         )
         if when > now:
@@ -242,8 +254,13 @@ class Outbox:
         rows.sort(key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], r["id"]))
         rows = self._in_their_order(rows)
         sent = 0
+        ready: list[tuple[Member, dict[str, Any]]] = []
         for row in rows:
             if row["id"] in self._sending:
+                continue
+            if row["expires_at"] and datetime.fromisoformat(row["expires_at"]) <= now:
+                self.store.db.execute("DELETE FROM outbox WHERE id = ?", (row["id"],))
+                log.info("Dropped message %s: too late to be any use", row["id"])
                 continue
             member = self.store.get_member(row["member_id"])
             deadline = datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
@@ -254,11 +271,35 @@ class Outbox:
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
                 )
                 continue
-            if self._gated(member, row["kind"], now, priority):
+            ready.append((member, row))
+        sent += await self._bundle(ready)
+        for member, row in ready:
+            if self._row_status(row["id"]) != "queued":
+                continue  # went in a bundle
+            if self._gated(member, row["kind"], now, Priority(row["priority"])):
                 continue  # waits its turn; looked at again next flush
             if (await self._deliver(row)).status == "sent":
                 sent += 1
         return sent
+
+    async def _bundle(self, ready: list[tuple[Member, dict[str, Any]]]) -> int:
+        """Offer each bundler the rows of its kind that are ready for one person, when
+        there's more than one. Returns how many bundles went."""
+        sent = 0
+        for kind, bundler in self.bundlers.items():
+            by_member: dict[int, list[dict[str, Any]]] = {}
+            members: dict[int, Member] = {}
+            for member, row in ready:
+                if row["kind"] == kind:
+                    by_member.setdefault(member.id, []).append(row)
+                    members[member.id] = member
+            for member_id, rows in by_member.items():
+                if len(rows) > 1 and await bundler(members[member_id], rows):
+                    sent += 1
+        return sent
+
+    def _row_status(self, outbox_id: int) -> str | None:
+        return self.store.db.scalar("SELECT status FROM outbox WHERE id = ?", (outbox_id,))
 
     def _in_their_order(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Rows of a kind with its own order (task nudges: urgent and important first) are

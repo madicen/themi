@@ -451,6 +451,7 @@ class Events:
             "calendar",
             _add_payload(title, event["location"], when, "mine", source),
             ADD,
+            expires=when.ends,  # a card about a delivery that's been and gone: no use (F15b)
         )
 
     async def _after_email_event(self, ctx: ExecutionContext, text: str) -> None:

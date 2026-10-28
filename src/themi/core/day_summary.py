@@ -153,6 +153,8 @@ class DaySummary:
                 priority=Priority.NORMAL,
                 kind="summary",
                 dedupe_key=f"summary-{member.id}-{now.date().isoformat()}",
+                deadline=due_at,  # the time they chose: the daily limit doesn't hold it (#57)
+                expires=datetime(now.year, now.month, now.day, tzinfo=tz) + timedelta(days=1),
             )
             sent += 1
         return sent

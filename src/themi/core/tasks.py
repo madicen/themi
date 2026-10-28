@@ -81,6 +81,10 @@ STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
+MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
+MORNING_LIST_DONE = "This morning's list: all done."
+MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
+MORNING_LIST_BUTTONS = 6
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
 SETTLED_TEXT = "That one's already settled."
@@ -226,6 +230,7 @@ class TaskBoard:
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
         self.outbox.gates["task"] = self._one_at_a_time
         self.outbox.orders["task"] = self._nudge_order
+        self.outbox.bundlers["task"] = self._morning_list
 
     def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
         """While a task nudge sent to this person is unanswered (still open, not put off),
@@ -473,6 +478,11 @@ class TaskBoard:
             if details
             else f"{lead}. Done already, or later?"
         )
+        for queued in self.db.query(  # one nudge per task waiting for them (bug #49)
+            "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
+            (member.id, f"task-{task.id}-%"),
+        ):
+            self.outbox.cancel(queued["id"])
         result = await self.outbox.send(
             member,
             text,
@@ -490,6 +500,83 @@ class TaskBoard:
             self.db.execute(
                 "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
             )
+
+    async def _morning_list(self, member: Member, rows: list[dict[str, Any]]) -> bool:
+        """Bug #49: when quiet hours end with several task nudges waiting, they go as one
+        list, a button per task, instead of one after another. Later in the day they keep
+        coming one at a time (idea #11)."""
+        tz = self._tz()
+        now = clock.now()
+        local = now.astimezone(tz)
+        end = member.quiet_end
+        woke = datetime(local.year, local.month, local.day, end.hour, end.minute, tzinfo=tz)
+        if not woke <= local < woke + MORNING_LIST_WITHIN:
+            return False
+        tasks: list[Task] = []
+        seen: set[int] = set()
+        for row in rows:  # already in their order (T1)
+            task_id = _task_id(row)
+            task = self.get(task_id) if task_id is not None else None
+            if task is not None and task.status == "open" and task.id not in seen:
+                seen.add(task.id)
+                tasks.append(task)
+        if len(tasks) < 2:
+            return False
+        text, buttons = self._list_message(tasks, local.date())
+        result = await self.outbox.send(
+            member,
+            text,
+            priority=Priority.NORMAL,
+            kind="task_summary",
+            buttons=buttons,
+            deadline=now,
+            dedupe_key=f"morning-list-{member.id}-{local.date().isoformat()}",
+        )
+        if result.outbox_id is None:
+            return False
+        for row in rows:
+            self.outbox.cancel(row["id"])
+        for task in tasks:  # the list is their nudge: the next one waits its turn after it
+            self.db.execute(
+                "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
+            )
+        return True
+
+    def _list_message(self, tasks: list[Task], today: date) -> tuple[str, list[Button]]:
+        ids = [t.id for t in tasks]
+        lines = "\n".join(f"- {_label(t, today)}: {t.title}" for t in tasks)
+        buttons = [
+            Button(
+                f"✓ {_short(t.title)}", "task", {"task": t.id, "action": "list_done", "list": ids}
+            )
+            for t in tasks[:MORNING_LIST_BUTTONS]
+        ]
+        return MORNING_LIST_TEXT.format(items=lines), buttons
+
+    async def _list_done(self, event: InboundEvent) -> None:
+        """A tick on the morning list: that one's done, and the list shows the rest."""
+        assert event.button is not None
+        await self.complete(
+            int(event.button.payload["task"]),
+            event.member,
+            interactive=True,
+            tapped=event.button.message_id,
+        )
+        if event.button.message_id is None:
+            return
+        left = []
+        for task_id in event.button.payload.get("list", []):
+            try:
+                task = self.get(int(task_id))
+            except NotFound:
+                continue
+            if task.status == "open":
+                left.append(task)
+        if not left:
+            await self.outbox.edit(event.member, event.button.message_id, MORNING_LIST_DONE)
+            return
+        text, buttons = self._list_message(left, self._today())
+        await self.outbox.edit(event.member, event.button.message_id, text, buttons)
 
     def _deadline(self, task: Task) -> datetime | None:
         """By when a nudge should go out: its time on the due date (the task's, or the
@@ -1206,6 +1293,9 @@ class TaskBoard:
         assert event.button is not None
         task_id = int(event.button.payload["task"])
         action = event.button.payload.get("action")
+        if action == "list_done":
+            await self._list_done(event)
+            return
         if action == "done":
             reply = await self.complete(
                 task_id, event.member, interactive=True, tapped=event.button.message_id
@@ -1214,6 +1304,16 @@ class TaskBoard:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
+
+
+def _task_id(row: dict[str, Any]) -> int | None:
+    """The task a queued nudge is for, from its dedupe key ("task-12-ab12cd34")."""
+    parts = str(row.get("dedupe_key") or "").split("-")
+    return int(parts[1]) if len(parts) > 2 and parts[0] == "task" and parts[1].isdigit() else None
+
+
+def _short(title: str, limit: int = 28) -> str:
+    return title if len(title) <= limit else title[: limit - 1].rstrip() + "…"
 
 
 def _label(task: Task, today: date) -> str:
