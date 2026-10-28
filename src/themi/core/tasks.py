@@ -67,6 +67,7 @@ STEP_UP_CATEGORY = "chore_step_up"
 STEP_UP_EXECUTOR = "tasks.step_up"
 MISSED = ("roll", "catch_up", "next_day")  # what happens to a round that passes undone
 IMPORTANCE = ("low", "normal", "high")  # how often an overdue task is raised (C2c)
+URGENT_WORDS = re.compile(r"\b(?:urgent|urgently|asap|right away|straight away)\b")
 BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
@@ -216,6 +217,7 @@ class TaskBoard:
         s.open_item_sources.append(self.open_items)
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
         self.outbox.gates["task"] = self._one_at_a_time
+        self.outbox.orders["task"] = self._nudge_order
 
     def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
         """While a task nudge sent to this person is unanswered (still open, not put off),
@@ -229,6 +231,23 @@ class TaskBoard:
         if row is None or row["sent_at"] is None:
             return None
         return datetime.fromisoformat(row["sent_at"]) + ONE_AT_A_TIME_FOR
+
+    def _nudge_order(self, row: dict[str, Any]) -> tuple[Any, ...]:
+        """Which waiting task nudge goes first (T1, Erin's idea #44)."""
+        from themi.core import priority
+
+        task_id = str(row.get("dedupe_key") or "").split("-")
+        if len(task_id) < 2 or not task_id[1].isdigit():
+            return (9,)
+        found = self.db.one(
+            "SELECT t.created_at, (SELECT MAX(done_at) FROM task_runs WHERE task_id = t.id) "
+            "AS last_done FROM tasks t WHERE t.id = ?",
+            (int(task_id[1]),),
+        )
+        if found is None:
+            return (9,)
+        since = datetime.fromisoformat(found["last_done"] or found["created_at"])
+        return priority.rank(self.get(int(task_id[1])), self._today(), since, clock.now())
 
     # ----- reading ------------------------------------------------------------
 
@@ -275,7 +294,9 @@ class TaskBoard:
         return [_task_from_row(r) for r in rows]
 
     def open_items(self, member: Member) -> list[OpenItem]:
-        items = []
+        from themi.core import priority
+
+        items, today = [], self._today()
         for t in self.open_for(member):
             due = f", due {t.due_on.isoformat()}" if t.due_on else ""
             if t.either:
@@ -298,7 +319,11 @@ class TaskBoard:
                     f"; {week}." if week else "."
                 )
             wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
-            items.append(OpenItem(f"Task {t.id} ({whose}{due}): {t.title}.{schedule}{wall}{steps}"))
+            matters = priority.words(t, today)  # T1: in words, never a score
+            matters = f", {matters}" if matters else ""
+            items.append(
+                OpenItem(f"Task {t.id} ({whose}{due}{matters}): {t.title}.{schedule}{wall}{steps}")
+            )
         return items
 
     # ----- changing -----------------------------------------------------------
@@ -1239,8 +1264,10 @@ def _board(ctx: ToolContext) -> TaskBoard:
         "importance": {
             "type": "string",
             "enum": list(IMPORTANCE),
-            "description": "'high' when they say it's urgent or important, 'low' when it's "
-            "a nice-to-have, else 'normal'.",
+            "description": "'high' when it's important: there are consequences if it's never "
+            "done ('important', 'we can't forget this', bills, medicine); 'low' for a "
+            "nice-to-have; else 'normal'. Urgent is the due date, not this: 'urgent' or "
+            "'asap' with no date is due today.",
         },
     },
 )
@@ -1260,6 +1287,8 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         return "Not created: a window needs its start (from_time) before its end (due_time)."
     if due_time and due is None:
         due = _board(ctx)._today()  # a time with no date means today
+    if due is None and URGENT_WORDS.search(ctx.request_text.lower()):
+        due = _board(ctx)._today()  # T1: urgent is a due date that's soon
     target = args["assign_to"].strip()
     chosen: Member | None = None
     both = target.lower() in BOTH_WORDS  # bug #26: "one of us" was one person's
