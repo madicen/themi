@@ -81,7 +81,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [x] |
 | T1 | Tasks: urgent and important | Feedback | [x] |
 | F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [x] |
-| F15b | Feedback: summaries and cards on time, one morning message, the urgent email | Feedback | [ ] |
+| F15b | Feedback: summaries and cards on time, one morning message | Feedback | [x] |
+| F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [ ] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
 | E2 | Email: an audit instead of single questions | Feedback | [ ] |
 | P2 | Response timing, and a word while a reply is slow | Feedback | [ ] |
@@ -4016,10 +4017,10 @@ Notes (2026-10-28):
   task cancelled; Michael's stale summary removed from the outbox.
 - No migration; a restart.
 
-### F15b · Feedback (2026-10-28): summaries and cards on time, one morning message, the urgent email
-Status: [ ]
-Depends on: F15a, F10, E1
-From the family's reports of 2026-10-28: bugs #57, #49 and #53, and Michael's held cards.
+### F15b · Feedback (2026-10-28): summaries and cards on time, one morning message
+Status: [x] 2026-10-28
+Depends on: F15a, F10
+From the family's reports of 2026-10-28: bugs #57 and #49, and Michael's held cards (#53 is F15c).
 - #57 ("my day summary didn't show up at the specified time (9:00 am)"): the summary is
   NORMAL priority. Michael had used his three messages for the day, so it was queued for
   8 am the next day, still headed "Wed 28 Oct". A summary he set a time for doesn't count
@@ -4039,6 +4040,37 @@ From the family's reports of 2026-10-28: bugs #57, #49 and #53, and Michael's he
     notices go as one morning list ("This morning: ..."), with a button per task. Cards
     still go one at a time after it.
   - The sender lists are E2's to replace.
+
+Notes (2026-10-28):
+- Migration 0062: `expires_at` on `outbox` and `pending_actions`. `Outbox.send(expires=)`:
+  a row still waiting at that moment is deleted at the next flush and logged, never sent
+  (the status column only allows queued, sent and failed, so expired rows go the way
+  cancelled ones do). `Autonomy.stage(expires=)`: `expire_stale` (the hourly
+  `approvals.expire`) lapses the action and edits or takes back its card.
+- #57: the morning summary has its chosen time as its deadline, so the daily limit doesn't
+  hold it, and it expires at local midnight. Quiet hours still hold it.
+- Held cards: every card has a deadline two hours after it's asked (`CARD_WITHIN`). It
+  still waits for a good moment, but the daily limit can't push it to the next day. A
+  calendar card from an email expires when the event ends.
+- #49: `TaskBoard.prompt` takes back any nudge for that task still waiting for that
+  person. That was also why the one-at-a-time gate let the second one through: the newer
+  queued nudge became the task's `prompt_outbox_id`. The morning list is a new outbox
+  hook, `Outbox.bundlers`. When at least two task nudges are ready for one person within
+  45 minutes of their quiet hours ending, they go as one message: "This morning:", a line
+  per task with its label, and a "✓ title" button each (six at most). That message
+  becomes each task's nudge, so the next one waits its turn (idea #11). A tick marks that
+  one done and edits the list down to the rest, or to "This morning's list: all done."
+  The tasks left aren't nudged again that morning; the end-of-day list still names them.
+  Later in the day nudges still come one at a time.
+- Tests: `test_reminders`' rhythm test counted two waiting nudges for one task; it now
+  counts the raises. The harness's `tap` finds buttons from edits too.
+- Not done here: the two sender lists at 8:00 are E2's to replace.
+- Setup: restart (applies 0062). Michael's cards already queued for tomorrow 8 am were
+  queued before this, without a deadline, so they still wait for tomorrow.
+### F15c · Feedback (2026-10-28): the urgent email that shouldn't need a rule
+Status: [ ]
+Depends on: F15b, E1
+From Michael's bug #53, 2026-10-28 (split from F15b).
 - #53 ("The Charles Schwab email is urgent and shouldn't be archived" became a proposed
   rule; "probably shouldn't need a rule for this"): Themi acts on that email. It's kept, and
   taken out of the archive if it was archived. Themi offers "always urgent" for that sender
