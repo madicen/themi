@@ -82,7 +82,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | T1 | Tasks: urgent and important | Feedback | [x] |
 | F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [x] |
 | F15b | Feedback: summaries and cards on time, one morning message | Feedback | [x] |
-| F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [ ] |
+| F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
 | E2 | Email: an audit instead of single questions | Feedback | [ ] |
 | P2 | Response timing, and a word while a reply is slow | Feedback | [ ] |
@@ -4068,7 +4068,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0062). Michael's cards already queued for tomorrow 8 am were
   queued before this, without a deadline, so they still wait for tomorrow.
 ### F15c · Feedback (2026-10-28): the urgent email that shouldn't need a rule
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F15b, E1
 From Michael's bug #53, 2026-10-28 (split from F15b).
 - #53 ("The Charles Schwab email is urgent and shouldn't be archived" became a proposed
@@ -4077,6 +4077,25 @@ From Michael's bug #53, 2026-10-28 (split from F15b).
   (E1's button), and `propose_rule` refuses requests about one email or sender.
   Also: Google security alerts were called urgent "(money)"; triage's urgent reasons get an
   "account security" reason.
+
+Notes (2026-10-28):
+- `keep_email(email)` (triage, email group). It takes their newest email from the last 30
+  days whose sender or subject has every word they used (`events.title_matches`), across
+  their own linked inboxes. It counts the email as urgent (Themi's own record) and
+  withdraws any waiting offer to archive it ("Kept: it isn't noise after all."). If
+  Themi archived it, the email goes back in the inbox: a new category, `email_keep`
+  (migration 0063, can be automatic), and executor `gmail.unarchive` (adds INBOX). Being
+  asked counts as the yes. If the sender isn't urgent already, Themi asks with E1's
+  button ("Always urgent: ...", recorded in `sender_suggestions`).
+- `propose_rule` fails on "this/that/the ... email" with no always, every, all, any or
+  "from now on", pointing to `keep_email`. It also fails on "X emails are urgent" or "mail
+  from X is ... urgent", pointing to `set_urgent_senders`. Rules about urgent mail in
+  general ("never archive urgent emails") still go through.
+- Triage's urgent kinds gain `security` ("account security"): sign-in alerts, new access
+  to an account, unrequested password resets; not money unless money moved.
+- Michael's draft rule from #53 is still a draft; he can set it aside. The Schwab email
+  was never archived (it's still in his inbox).
+- Setup: restart (applies 0062 and 0063).
 
 ### Rx1 · Medicines: safe reminders and advice
 Status: [ ]
