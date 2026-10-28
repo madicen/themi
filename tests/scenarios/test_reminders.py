@@ -94,11 +94,16 @@ async def test_overdue_reminders_get_more_specific(scenario: Scenario) -> None:
 
 async def test_importance_sets_the_rhythm(scenario: Scenario) -> None:
     await task(scenario, "Give Mimi her pill", WED, importance="high")
-    await task(scenario, "Sort the photos", WED, importance="low")
+    photos = await task(scenario, "Sort the photos", WED, importance="low")
     for days in range(1, 9):
         await at(scenario, WED + timedelta(days=days), 10)
     assert len(texts(scenario, "Overdue: Give Mimi her pill")) == 8  # every day
-    assert len(texts(scenario, "Overdue: Sort the photos")) == 2  # weekly
+    raised = scenario.app.db.scalar(
+        "SELECT overdue_reminders FROM tasks WHERE id = ?", (photos.id,)
+    )
+    assert raised == 2  # weekly
+    # Both waited behind Mimi's, so the second took the first's place (bug #49).
+    assert len(texts(scenario, "Overdue: Sort the photos")) == 1
 
 
 async def test_chores_that_roll_on_arent_raised_as_overdue(scenario: Scenario) -> None:
