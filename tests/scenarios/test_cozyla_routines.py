@@ -188,6 +188,21 @@ async def test_a_repeating_item_stays(scenario: Scenario, fake_cozyla: FakeCozyl
     assert fake_cozyla.routine_named("Water the plants")  # still there
 
 
+async def test_until_further_notice_stays_even_if_the_model_says_today(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #47: the two items from #38 had gone in just for today, and "add them until
+    further notice" didn't put them back."""
+    await at(scenario, WED, 9, 30)
+    await add(
+        scenario,
+        "Yes, add take wegovy to my morning routine until further notice",
+        {"title": "Take wegovy", "part": "Morning", "repeat": "today"},
+    )
+    await at(scenario, WED + timedelta(days=1), 9)
+    assert fake_cozyla.routine_named("Take wegovy")  # still there
+
+
 async def test_mentioned_but_not_asked_its_a_card(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:

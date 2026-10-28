@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import httpx
 import pytest
 
+from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fixtures.web import flash, sign_in
@@ -280,3 +281,15 @@ async def test_personal_reminders_arent_offered_for_the_family_calendar(
     assert [a["summary"] for a in calendar_actions(scenario)] == [
         "For the family calendar: Fix the fence, Fri Oct 23"
     ]
+
+
+async def test_with_the_wall_tasks_arent_offered_as_events(
+    scenario: Scenario, linked: FakeGcal, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #52: "make sure Michael checks in with me before implementing idea 48" was a task
+    for him, and a family calendar card as well; the wall shows the task already."""
+    await board(scenario).create(
+        scenario.member("Erin"), "Check in with Erin", "text", 1, FRIDAY,
+        assignee=scenario.member("Husband"),
+    )  # fmt: skip
+    assert calendar_actions(scenario) == []
