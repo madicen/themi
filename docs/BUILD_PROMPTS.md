@@ -85,6 +85,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
 | E2 | Email: an audit instead of single questions | Feedback | [x] |
+| E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -4165,6 +4166,37 @@ Notes (2026-10-28):
   (F15c) stays a message, since it answers what they just said.
 - Setup: restart (applies 0064). The audit tasks appear at the next `email.senders` run
   (within 6 hours of the restart).
+
+### E2b · Email audit: off the wall, and sliding scales
+Status: [x] 2026-10-28
+Depends on: E2
+Michael's answers to E2's follow-ups, 2026-10-28: the audit task stays off the wall, and
+yes to the sliding scales of Erin's idea #44 ("a sliding scale for each based on how
+urgent or important the thing is").
+- The audit task is Themi's own: never on the wall's to-do lists (ticking it there would
+  close it without the audit).
+- Each sender or email gets two questions: how urgent (not urgent, same day, right away),
+  then how important (not important, somewhat, very). In words, never numbers.
+- What the levels do: a sender that's urgent (same day) counts as urgent, as before; right
+  away, its alerts always come at once. Somewhat important, its mail is never offered for
+  archiving, as before; very, it's also never marked as read for them.
+
+Notes (2026-10-28):
+- Migration 0066: `tasks.off_wall` (set on the audit task; the wall's sync leaves such a
+  task off the to-do lists and takes it off if it was already there), and
+  `email_audit_items.urgency` and `.importance` (0-2, never shown; `answer` stays as the
+  pair in short, for the closing count). Answers given before E2b become level 1.
+- The flow: "1 of 5. Mail from SoFi (...), money.\nHow urgent is it?" with [Not urgent]
+  [Same day] [Right away] [Stop for now]; the tap edits the same message to "How important
+  is it?" with [Not important] [Somewhat] [Very] [Stop for now]; then "SoFi: urgent (same
+  day), somewhat important." and the next one. Stopped between the two, it picks up at the
+  second.
+- Triage reads `EmailAudit.sender_levels`: right away makes the alert `urgent` priority
+  even when the model didn't call it severe; very important leaves its confirmations
+  unmarked. For a single email, the levels only file it, as in E2 (they're looking at it).
+- Two taps per item instead of one. If that's too slow for a long audit, a [Same as
+  before]-style shortcut is a possible follow-up.
+- Setup: restart (applies 0066 with 0062-0065).
 
 ### P2a · Response timing, and a word while a reply is slow
 Status: [x] 2026-10-28
