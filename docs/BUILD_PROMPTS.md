@@ -76,7 +76,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
-| F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [~] |
+| F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
 | X1 | Spending: takeout and business expenses | Feedback | [ ] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
 | T1 | Tasks: urgent and important | Feedback | [ ] |
@@ -3809,11 +3809,14 @@ Notes (2026-10-28):
   12-1, 12-1) and "Contact Erin's parents about babysitting". Choose the family calendar on
   the admin page (Michael's account and "Madicen Family", say, if the wall shows that
   one), then delete the leftovers. Also waiting: card 78, Erin's 2-3 pm run block (#39),
-  which can be declined.
+  which can be declined. Done 2026-10-28: the family chose "Madicen Family" (no account
+  chosen, so it's Erin's, which owns it too). The 12-1 lunch and the babysitting reminder
+  were copied there with their ids, the other two lunches marked deleted, and the stray
+  "Themi" calendar deleted.
 - No migration; a restart.
 
 ### F14b · Feedback (2026-10-27): routine order, email setup, spending isn't shopping, passing messages on
-Status: [~]
+Status: [x] 2026-10-28
 Depends on: F14a, C3, E1
 From the family's reports of 2026-10-27: bugs #36, #38, #45 and idea #46, plus one found
 while reading them.
@@ -3833,6 +3836,30 @@ while reading them.
 - Found while reading: "can you tell Hundo 'I Wuv U ❤️'?" was saved as a note (`remember_fact`)
   and answered "I've saved that for her". Until Liaison (prompt 34), Themi says plainly that
   it can't pass messages on yet, and nothing is saved as a note.
+
+Notes (2026-10-28):
+- #38: the wall keeps each routine's place as `displayOrder` (Morning 1000s, Afternoon
+  2000s, Evening 3000s, new ones last), read from the real wall. `add_to_wall_routine` takes
+  `position` ('end', 'start', 'after: <item>', matched with `events.title_matches`). The
+  executor sends the order on create, reads the routine back, tries once more with an
+  update, and if the wall still keeps its own order says "it went at the end... needs
+  moving there". Not tried against the real wall yet: whether it takes `displayOrder` shows
+  the first time someone asks. `repeat` '' is now every day; 'today' (or '' in a message
+  that says today, tonight, "just for" or "this morning/afternoon/evening") is once. Cards
+  from before keep their old meaning ('' with no `once` field: once). Erin's two items from
+  #38 were deleted the next day as one-offs; they can be added again.
+- #46: routine checks are "Morning routine, still open:" and a bullet per item.
+- #45: `inbox_setup` (email group), from `SenderSuggestions.setup`. Michael's "Change them"
+  tap (10:57) was a quick reply the model made; its "None." was the model's, with nothing
+  to look at. Now there is.
+- #36: `groceries.refuse_spending`: "spent", "paid", "cost me" or "was/got charged" in the
+  message, or a price in an item (grocery and Things to Buy only; not other named lists),
+  fails the add and asks the model to say Themi doesn't track spending yet. X1 is where a
+  spend goes.
+- Relays: `remember_fact` fails when the message opens "tell X ...", "let X know",
+  "message/text/send X ..." (not me, myself or us), and a prompt line says Themi can't pass
+  messages on yet. Liaison (34) will relay them.
+- No migration; a restart.
 
 ### X1 · Spending: takeout and business expenses
 Status: [ ]
