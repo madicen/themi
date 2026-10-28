@@ -22,6 +22,7 @@ the context at once.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass, replace
@@ -38,7 +39,7 @@ from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core.lists import name_key
 from themi.core.rules import RuleError
-from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool
+from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -59,6 +60,11 @@ EXAMPLE = "Try a date like 2026-11-03 and times like 15:00 (empty for an all-day
 MAX_TITLE = 120
 INTENT = re.compile(r"\b(?:calendars?|schedule|book|booked)\b")
 STOPWORDS = {"the", "a", "an", "my", "our", "to", "with", "for", "at", "on", "and", "of"}
+# A meal with no time is at its usual one, not all day (bug #35); the card reads it back.
+MEALS = {"breakfast": "08:00", "brunch": "10:30", "lunch": "12:00", "dinner": "18:00",
+         "supper": "18:00"}  # fmt: skip
+MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
+REPLACED_TEXT = "Replaced by the newer card."
 
 
 @dataclass(frozen=True)
@@ -242,6 +248,49 @@ class Events:
             row["account_id"], row["calendar_id"], row["event_id"], row["title"],
             row["location"], when, themi_id,
         )  # fmt: skip
+
+    def made_that_day(self, member: Member, calendar: str, title: str, when: When) -> Found | None:
+        """An event Themi made on that calendar with this title on the same day (bug #35:
+        the lunch went on three times)."""
+        tz = self._tz()
+        start = _at(when.starts.astimezone(tz).date(), time(0), tz)
+        whose = (
+            "calendar_id != 'primary'"
+            if calendar == "family"
+            else ("calendar_id = 'primary' AND member_id = ?")
+        )
+        for row in self.db.query(
+            f"SELECT * FROM themi_events WHERE {whose} AND deleted_at IS NULL "
+            "AND source NOT LIKE ? AND starts_at >= ? AND starts_at < ?",
+            (
+                *(() if calendar == "family" else (member.id,)),
+                f"{TASK_BLOCK}%", to_utc_iso(start), to_utc_iso(start + timedelta(days=1)),
+            ),
+        ):  # fmt: skip
+            if name_key(row["title"]) == name_key(title):
+                return self._found(row, row["id"])
+        return None
+
+    async def replace_waiting(self, member: Member, payload: dict[str, Any]) -> None:
+        """A card still waiting for the same event (title, day and calendar) gives way to the
+        new one; the very same event is already waiting, so nothing new (bug #35)."""
+        tz = self._tz()
+        day = datetime.fromisoformat(payload["starts"]).astimezone(tz).date()
+        for row in self.db.query(
+            "SELECT id, payload FROM pending_actions WHERE member_id = ? AND executor = ? "
+            "AND status IN ('pending', 'snoozed') ORDER BY id",
+            (member.id, ADD),
+        ):
+            old = json.loads(row["payload"])
+            if (
+                old.get("calendar") != payload["calendar"]
+                or name_key(str(old.get("title", ""))) != name_key(payload["title"])
+                or datetime.fromisoformat(old["starts"]).astimezone(tz).date() != day
+            ):
+                continue
+            if (old["starts"], old["ends"]) == (payload["starts"], payload["ends"]):
+                raise ToolDeclined("That's already waiting for a yes on its card.")
+            await self.services.autonomy.withdraw(row["id"], REPLACED_TEXT)
 
     # ----- doing it -----------------------------------------------------------------------
 
@@ -519,8 +568,10 @@ def _events(ctx: ToolContext) -> Events:
     "add_calendar_event",
     "Put an event on someone's calendar: their own ('mine') or the family calendar on the "
     "wall ('family'). date: YYYY-MM-DD from the local date in the context; start and end: "
-    "HH:MM, 24-hour (end empty for an hour; both empty for all day). location: as they said "
-    "it, or ''. Asked for in their own words, it's made at once; otherwise they get a card.",
+    "HH:MM, 24-hour (end empty for an hour; both empty for all day; a meal with no time "
+    "gets its usual one). location: as they said it, or ''. Asked for in their own words, "
+    "it's made at once; otherwise they get a card. A correction to a card still waiting "
+    "replaces it; to change an event already made, use move_calendar_event.",
     {
         "title": {"type": "string"},
         "date": {"type": "string"},
@@ -537,14 +588,33 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         raise ToolFailed("An event needs a title.")
     if args["calendar"] == "mine":
         events.own_account(ctx.member)  # fails early, with what to do, if there's none
-    when = parse_when(args["date"], args["start"], args["end"], events._today(), events._tz())
+    start, end = str(args["start"]), str(args["end"])
+    meal = MEAL.search(name_key(title))
+    if meal and not start.strip():
+        start, end = MEALS[meal.group(1)], ""
+    when = parse_when(args["date"], start, end, events._today(), events._tz())
     location = " ".join(str(args["location"]).split())[:200]
-    where = "the family calendar" if args["calendar"] == "family" else "your calendar"
+    calendar = str(args["calendar"])
+    where = "the family calendar" if calendar == "family" else "your calendar"
+    tz = events._tz()
+    same = events.made_that_day(ctx.member, calendar, title, when)
+    if same is not None and same.when == when:
+        raise ToolDeclined(
+            f"Already on {where}: {describe(same.title, same.when, same.location, tz)}. "
+            "Nothing new was added."
+        )
+    if same is not None:
+        raise ToolFailed(
+            f"{same.title} is already on {where} ({when_words(same.when, tz)}). To change "
+            "its time, use move_calendar_event."
+        )
+    payload = _add_payload(title, location, when, calendar, "chat")
+    await events.replace_waiting(ctx.member, payload)
     proposal = Proposal(
-        FAMILY if args["calendar"] == "family" else OWN,
-        f"{describe(title, when, location, events._tz())}, for {where}",
+        FAMILY if calendar == "family" else OWN,
+        f"{describe(title, when, location, tz)}, for {where}",
         ADD,
-        _add_payload(title, location, when, str(args["calendar"]), "chat"),
+        payload,
     )
     return replace(proposal, requested=asked_for(title, ctx.request_text))
 

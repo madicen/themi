@@ -117,6 +117,8 @@ class ExecutionContext:
 Executor = Callable[[dict[str, Any], ExecutionContext], Awaitable[str]]
 # Called when an action starts waiting on someone: (action, someone is in the chat now).
 PendingListener = Callable[["Action", bool], Awaitable[None]]
+# Called when Themi withdraws an action nobody answered: (action, why, in a few words).
+WithdrawnListener = Callable[["Action", str], Awaitable[None]]
 
 
 class ExecutorRegistry:
@@ -186,6 +188,7 @@ class Autonomy:
         self.db = store.db
         self.executors = executors
         self.pending_listeners: list[PendingListener] = []
+        self.withdrawn_listeners: list[WithdrawnListener] = []
 
     # ----- categories ---------------------------------------------------------
 
@@ -432,6 +435,25 @@ class Autonomy:
             )
             self._audit(row["id"], row["category"], row["member_id"], "expired", "system", None)
         return [self.action(r["id"]) for r in rows]
+
+    async def withdraw(self, action_id: int, reason: str) -> bool:
+        """Take back an action still waiting on someone (a newer one replaces it, bug #35):
+        declined by the system, and its card says why. False if it was answered already."""
+        action = self.action(action_id)
+        withdrawn = self.db.update(
+            "UPDATE pending_actions SET status = 'declined', resolved_by = 'system', "
+            "resolved_at = ?, updated_at = ? WHERE id = ? AND status IN ('pending', 'snoozed')",
+            (to_utc_iso(clock.now()), to_utc_iso(clock.now()), action_id),
+        )
+        if not withdrawn:
+            return False
+        self._audit(action_id, action.category, action.member_id, "withdrawn", "system", reason)
+        for listener in self.withdrawn_listeners:
+            try:
+                await listener(self.action(action_id), reason)
+            except Exception:
+                log.exception("A withdrawn-action listener failed for action %s", action_id)
+        return True
 
     def audit_trail(self, action_id: int | None = None, category: str | None = None) -> list[dict]:
         if action_id is not None:
