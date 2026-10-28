@@ -75,7 +75,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
-| F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [~] |
+| F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [ ] |
 | X1 | Spending: takeout and business expenses | Feedback | [ ] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
@@ -3734,7 +3734,7 @@ Notes (2026-10-27):
 - Setup: restart (applies 0058).
 
 ### F14a · Feedback (2026-10-27): one card per event, nudges at a time, check-ins kept in Themi, whose day
-Status: [~]
+Status: [x] 2026-10-28
 Depends on: K3, K5, C1b, K2
 From the family's reports of 2026-10-27: bugs #35, #39, #40, #41 and #43. F14b takes the
 rest of that day's bugs; ideas #37, #42 and #44 are prompts X1, B1 and T1; #33 (burnout
@@ -3780,6 +3780,37 @@ Build:
   instead of a person. Partner events only when the message asks about both of them or the
   partner (we, us, our, both, the partner's name), whatever the model sent.
 - Tests for each, failing first; a scenario for the replaced card and the summary.
+
+Notes (2026-10-28):
+- #35: `Autonomy.withdraw(action, reason)` declines a waiting action as the system (audit
+  "withdrawn") and tells `withdrawn_listeners`; the approvals UI edits the card to "Replaced
+  by the newer card." with no buttons. `Events.replace_waiting` does this for an
+  `add_calendar_event` card with the same title (`name_key`), local day and calendar; the
+  very same event already waiting is a `ToolDeclined`. `Events.made_that_day` looks only at
+  events Themi made (`themi_events`): same times is "Already on ...", other times points to
+  `move_calendar_event`. Meals are 08:00, 10:30, 12:00, 18:00, an hour long.
+- #39: `block_time_for_task` fails when the message has prompt, remind, nudge, ping or "check
+  in with" and none of block, calendar, schedule or "time for". `snooze_task`'s description
+  covers "prompt me to run at 2pm".
+- #40: `TaskBoard.complete(..., tapped=)`: sent nudges of that task from the last 36 hours
+  are edited to "Marked done: X. Thank you." with no buttons, except the one whose button
+  was tapped (the button handler edits that one itself, as before).
+- #41: `cozyla_todos._not_a_todo`: repeating, on the chart, or a check-in. A check-in
+  already on the wall stays linked until it's done.
+- #43: `Entry` now carries `calendar_id` and `event_id`. Day summaries list an event read
+  through two accounts once; one on a calendar more than one person reads
+  (`member_calendars`) is marked with its name, e.g. "(Madicen Family)", and shows without
+  `partner`. `day_summary`'s `partner` only counts when the message has we, us, our, both,
+  together, everyone, family, husband, wife, partner or the other person's name. The model's
+  calendar context drops the duplicates too.
+- Setup, the family calendar: Themi's first family-calendar write (2026-10-27 11:53) made a
+  new "Themi" calendar on Erin's account, the first admin's, because none had been chosen.
+  The wall and Michael don't see it. On it now: three "Lunch at Merit" events (all day,
+  12-1, 12-1) and "Contact Erin's parents about babysitting". Choose the family calendar on
+  the admin page (Michael's account and "Madicen Family", say, if the wall shows that
+  one), then delete the leftovers. Also waiting: card 78, Erin's 2-3 pm run block (#39),
+  which can be declined.
+- No migration; a restart.
 
 ### F14b · Feedback (2026-10-27): routine order, email setup, spending isn't shopping, passing messages on
 Status: [ ]
