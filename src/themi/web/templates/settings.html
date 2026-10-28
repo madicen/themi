@@ -20,6 +20,12 @@
   </fieldset>
 
   <fieldset>
+    <legend>Breaks</legend>
+    <label>When a break is up, offer to extend it by <input type="number" name="break_extend_minutes" min="5" max="120" value="{{ member.break_extend_minutes }}" required> minutes</label>
+    <p class="muted">Say "I'm taking a break" (or /break 30) and task nudges and check-ins wait until it's over.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>The wall's chore chart</legend>
     <label>Show <input type="number" name="chart_limit" min="0" max="10" value="{{ member.chart_limit }}"> of my chores at a time</label>
     <label class="check"><input type="checkbox" name="chart_counts_shared" {% if member.chart_counts_shared %}checked{% endif %}> Chores either of us can do count toward that number</label>

@@ -291,6 +291,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 morning_summary_empty=form.get("morning_summary_empty") == "on",
                 getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
                 leave_heads_up=form.get("leave_heads_up") == "on",
+                break_extend_minutes=as_int(form.get("break_extend_minutes")),
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
             )
         except InvalidValue as exc:

@@ -28,6 +28,7 @@ TOPICS: dict[str, frozenset[str]] = {
     "habits": frozenset({"habit", "routine", "review"}),
     "approvals": frozenset({"approval", "rule"}),
     "notes": frozenset({"relay"}),  # notes passed on from your partner
+    "break": frozenset({"task", "task_summary", "habit", "routine", "review"}),  # B1
     EVERYTHING: frozenset(),  # every proactive message
 }
 TOPIC_WORDS = {
@@ -38,6 +39,7 @@ TOPIC_WORDS = {
     "habits": "check-ins",
     "approvals": "approval requests",
     "notes": "notes from your partner",
+    "break": "task nudges and check-ins, for a break",
     EVERYTHING: "everything that can wait",
 }
 ALIASES = {
