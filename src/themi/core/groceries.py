@@ -64,10 +64,7 @@ def asks_to_add(request_text: str, previous_text: str = "") -> bool:
 
 SPENT = re.compile(r"\b(?:spent|paid|cost me|was charged|got charged)\b")
 PRICE = re.compile(r"[$€£]\s?\d|\b\d+\.\d{2}\b")
-SPENT_TEXT = (
-    "That's money spent, not something to buy: nothing was added. Themi doesn't keep track "
-    "of spending yet; say so plainly."
-)
+SPENT_TEXT = "That's money spent, not something to buy: nothing was added. Use log_spending."
 
 
 def refuse_spending(names: list[str], request_text: str, *, prices: bool = True) -> None:

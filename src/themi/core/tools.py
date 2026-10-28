@@ -148,6 +148,11 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"running low|ran out|leftover",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
+    "spending": (
+        "money spent: takeout, eating out, business expenses",
+        r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
+        r"eating out|ate out|restaurant|receipt|cost",
+    ),
     "settings": (
         "pausing messages, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
@@ -155,6 +160,10 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(
+        ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
+        "spending",
+    ),
     **dict.fromkeys(
         ("set_task_schedule", "set_task_plan", "set_task_importance", "set_check_in_reviews"),
         "schedules",

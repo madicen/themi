@@ -82,6 +82,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         google_pages,
         knowledge_pages,
         list_pages,
+        spending_pages,
         task_pages,
         week_pages,
     )
@@ -132,6 +133,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(task_pages.routes(kit))
     web.include_router(list_pages.routes(kit))
     web.include_router(week_pages.routes(kit))
+    web.include_router(spending_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
 

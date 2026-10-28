@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from themi.core.pantry import Pantry
     from themi.core.rules import Rulebook
     from themi.core.senders import SenderSuggestions
+    from themi.core.spending import Spending
     from themi.core.task_blocks import TaskBlocks
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
@@ -142,6 +143,7 @@ class Services:
     chart_queue: ChartQueue | None = None  # chores waiting their turn for the chart (C2d)
     lists: Lists | None = None  # named lists Themi keeps (L1a)
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
+    spending: Spending | None = None  # takeout, eating out, business expenses (X1)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

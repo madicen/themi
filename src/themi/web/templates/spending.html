@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Spending · Themi{% endblock %}
+{% block content %}
+<h1>Spending, {{ month.strftime("%B %Y") }}</h1>
+<p class="muted">Takeout and eating out are the household's; business expenses here are only yours.
+Tell Themi in chat ("just spent $40 on DoorDash", "that lunch was for work"); takeout receipt
+emails are added on their own.</p>
+{% if takeout %}<p>{{ takeout }}</p>{% endif %}
+
+<section class="card">
+  {% for row in rows %}
+  <div class="row">
+    <span>{{ row.on.strftime("%a %d %b") }} · {{ row.place }} · {{ row.amount }} · {{ row.kind }}{% if row.business %}, business{% endif %} <span class="muted">· {{ row.who }}{% if row.receipt %} · receipt email{% endif %}</span></span>
+  </div>
+  {% else %}
+  <p class="muted">Nothing logged this month.</p>
+  {% endfor %}
+</section>
+
+<p>Your business expenses this month: {{ business_total }}.
+<a href="/spending/business.csv?month={{ month.strftime('%Y-%m') }}">Download as CSV</a></p>
+<p><a href="/spending?month={{ previous.strftime('%Y-%m') }}">← {{ previous.strftime("%B %Y") }}</a></p>
+{% endblock %}
