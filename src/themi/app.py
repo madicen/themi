@@ -31,6 +31,7 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
+from themi.core.breaks import Breaks
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
@@ -145,6 +146,7 @@ def build_app(
     lists.install()
     ThingsToBuy(services, lists).install()
     Spending(services).install()
+    Breaks(services).install()
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))

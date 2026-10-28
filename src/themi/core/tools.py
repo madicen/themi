@@ -154,12 +154,13 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"eating out|ate out|restaurant|receipt|cost",
     ),
     "settings": (
-        "pausing messages, phrasing, quiet hours",
+        "pausing messages, breaks, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
-        r"plain|pushy|too many|limit",
+        r"plain|pushy|too many|limit|break\b|\brest\b|i'?m back",
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(("start_break", "end_break"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
         "spending",

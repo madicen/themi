@@ -142,6 +142,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         phrasing_notes=row["phrasing_notes"],
         checkin_reviews=bool(row["checkin_reviews"]),
         chart_limit=row["chart_limit"],
+        break_extend_minutes=row["break_extend_minutes"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
         calendar_details=row["calendar_details"],
         morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
@@ -379,6 +380,7 @@ class AccountStore:
         morning_summary_empty: bool | None = None,
         getting_ready_minutes: int | None = None,
         leave_heads_up: bool | None = None,
+        break_extend_minutes: int | None = None,
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -428,6 +430,10 @@ class AccountStore:
             if not 0 <= chart_limit <= MAX_CHART_LIMIT:
                 raise InvalidValue(f"chores at a time is between 0 and {MAX_CHART_LIMIT}")
             changes["chart_limit"] = chart_limit
+        if break_extend_minutes is not None:
+            if not 5 <= break_extend_minutes <= 120:
+                raise InvalidValue("a break's extension is between 5 and 120 minutes")
+            changes["break_extend_minutes"] = break_extend_minutes
         if chart_counts_shared is not None:
             changes["chart_counts_shared"] = int(chart_counts_shared)
         if calendar_details is not None:
