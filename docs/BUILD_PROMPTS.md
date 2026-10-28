@@ -84,7 +84,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F15b | Feedback: summaries and cards on time, one morning message | Feedback | [x] |
 | F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
-| E2 | Email: an audit instead of single questions | Feedback | [ ] |
+| E2 | Email: an audit instead of single questions | Feedback | [x] |
 | P2 | Response timing, and a word while a reply is slow | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -4115,7 +4115,7 @@ this is built** (#52, Themi's task 40), so the details wait for that conversatio
 - Scenarios from #48's own conversation.
 
 ### E2 · Email: an audit instead of single questions
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: E1, T1
 From Erin's idea #50, 2026-10-28: "Instead of individual emails, create an 'email audit' task
 when it has emails that it's not sure about. Themi can prompt this audit, and if the user
@@ -4129,6 +4129,41 @@ the email audit."
   and E1's urgent senders come from them.
 - At the end, a short confirmation ("All 5 sorted: 2 urgent, 1 important."), and the task
   closes.
+
+Notes (2026-10-28):
+- `themi.core.email_audit.EmailAudit`. Migration 0064: `email_audit_items` (a sender, or
+  one email, with its answer) and `email_audits` (each person's task). E1's 17
+  suggestions that were never answered moved in: 12 Erin's, 5 Michael's, reason
+  "suggested before". A suggestion already added with an old message's button counts as
+  settled.
+- What goes in: E1's `email.senders` job puts its candidates in the audit instead of
+  sending the list, then makes sure anyone with something waiting has the task. Triage
+  has a new `unsure` field. An unsure urgent, noise or routine email gets no alert and no
+  archive offer; it waits in the audit. Unsure replies, confirmations and receipts are
+  acted on as before.
+- The task is "Email audit (N to look at)", retitled as the count changes, a normal
+  one-off task, so it's in T1's order and the one-at-a-time gate. Its nudge is its own,
+  through a new hook (`TaskBoard.own_nudges`): "Email audit: N to look at, one at a time.
+  Start now, or later?" with [Start] and the usual [Later] (a snooze).
+- Each one: "1 of 5. Mail from SoFi (sofi@...), money." or "An email from X: subject" with
+  triage's summary, then [Urgent] [Important] [Both] [Neither] [Stop for now]. An answer
+  edits the question to "SoFi: urgent and important." and the next one comes. At the end:
+  "All 5 sorted: 2 urgent, 1 important. That's the email audit done.", and the task is
+  done. Stopping snoozes it for four hours.
+- What answers do:
+  - A sender: urgent or both adds it to the inbox's urgent senders (E1's `add`);
+    important or both means its mail is never offered for archiving; neither means it's
+    not asked about again.
+  - An email: urgent or both files it as urgent; important takes it out of noise.
+- `start_email_audit` (email group; "audit" now calls the group) for "let's do the email
+  audit".
+- Deviation: the idea's sliding scales aren't here; each answer is yes or no on each
+  scale, as T1 has for tasks.
+- Follow-ups: the task is a one-off, so it also shows on the wall's To-do list; ticking
+  it there closes it without the audit. `keep_email`'s single "always urgent?" question
+  (F15c) stays a message, since it answers what they just said.
+- Setup: restart (applies 0064). The audit tasks appear at the next `email.senders` run
+  (within 6 hours of the restart).
 
 ### P2 · Response timing, and a word while a reply is slow
 Status: [ ]
