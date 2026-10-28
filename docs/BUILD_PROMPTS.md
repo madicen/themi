@@ -80,6 +80,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | X1 | Spending: takeout and business expenses | Feedback | [x] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [x] |
 | T1 | Tasks: urgent and important | Feedback | [x] |
+| F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [ ] |
+| F15b | Feedback: summaries and cards on time, one morning message, the urgent email | Feedback | [ ] |
+| Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
+| E2 | Email: an audit instead of single questions | Feedback | [ ] |
+| P2 | Response timing, and a word while a reply is slow | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3955,6 +3960,121 @@ Notes (2026-10-28):
 - Email: triage's urgent mail already alerts at once; nothing else changed there. Tasks
   made from email would carry the same two scales.
 - No migration.
+
+### F15a · Feedback (2026-10-28): changing a task's time, one task not two, reminders not events
+Status: [ ]
+Depends on: F11, F14a, T1
+From the family's reports of 2026-10-28: bugs #54, #56, #52 and the rest of #47.
+- #54 ("on Friday afternoon, remind me to drink green tea", then "a bit earlier... 5pm is
+  too late"; "extra reminders for the tutoring at 2pm and 3pm" for tomorrow's session):
+  there is no tool to change a task's time. The model used `snooze_task`, which only knows
+  today or tomorrow, so all three were set to come up today. When it then moved the day,
+  `reschedule_task` changed the date and left the snooze, so they would still come today.
+  The fix: `reschedule_task` takes a date and/or a time (and a window's start). It clears
+  any snooze, takes back the queued nudge and queues it again for the new moment, and says
+  both back with the weekday ("Thu 29 Oct, 2 pm"). `snooze_task` stays for "later" and
+  "tonight at 9", and its reply names the day when it isn't today. Reminders tied to an
+  event ("2 and 3 before tutoring tomorrow") take the event's day, and a prompt line says
+  "tomorrow" or "Friday" from earlier messages carries over.
+- #56 ("Mimi pill should always check at 9pm, and never before"): Themi made a second,
+  one-off "Mimi pill" task at 9 pm and said "every day". The repeating task wasn't touched,
+  so it nudged at 9 am, and Michael saw the pill twice. A repeating task's time goes in its
+  schedule (`set_task_schedule`, "every 2 days at 9pm until 30 Oct", keeping the course end
+  and the start). `create_task` refuses a task whose title matches an open one
+  (`events.title_matches`) and points to the tools that change that one.
+- #52 ("Urgent important make sure Michael checks in with me before implementing idea 48"):
+  the task for Michael was right; the family calendar card alongside it wasn't.
+  `add_calendar_event` refuses when the message is a reminder or to-do with no event in it
+  (remind, make sure, don't forget, check in with), as `task_blocks` refuses nudges (F14a).
+- #47 (rest): "add them until further notice" for two routine steps got "Which steps were
+  those?", then a "Take Wegovy" task marked done. The steps had been named in the earlier
+  message. F14b already fixed the first half (no "just today" unless said). A scenario: the
+  steps named a message earlier go back on the morning routine, every day.
+
+### F15b · Feedback (2026-10-28): summaries and cards on time, one morning message, the urgent email
+Status: [ ]
+Depends on: F15a, F10, E1
+From the family's reports of 2026-10-28: bugs #57, #49 and #53, and Michael's held cards.
+- #57 ("my day summary didn't show up at the specified time (9:00 am)"): the summary is
+  NORMAL priority. Michael had used his three messages for the day, so it was queued for
+  8 am the next day, still headed "Wed 28 Oct". A summary he set a time for doesn't count
+  against the daily limit (it has a deadline, as "Break's up" does). One that can't go the
+  same day is dropped, never sent late.
+- Approval cards held by the limit: Michael's reply draft to Juan (since 10-27), two
+  "mark as read" cards, and a calendar card for that day's UPS delivery all waited for the
+  next morning, so he only saw them on the website. Cards go the same day. A card about
+  something that is over by the time it would go (an event that has ended) is withdrawn
+  and declined as "too late", never sent.
+- #49 ("it should not give more than one task prompt at a time. The morning summary should be a
+  single message with a list of what's happening today"): at 8:00, when quiet hours ended,
+  Erin got six messages: two nudges for one task ("Was due yesterday" and "Overdue", both
+  task 37), two reply cards, and two lists of senders that might be urgent. The fixes:
+  - One nudge per task: an overdue notice replaces that task's waiting nudge.
+  - When several messages are waiting for the end of quiet hours, the task nudges and
+    notices go as one morning list ("This morning: ..."), with a button per task. Cards
+    still go one at a time after it.
+  - The sender lists are E2's to replace.
+- #53 ("The Charles Schwab email is urgent and shouldn't be archived" became a proposed
+  rule; "probably shouldn't need a rule for this"): Themi acts on that email. It's kept, and
+  taken out of the archive if it was archived. Themi offers "always urgent" for that sender
+  (E1's button), and `propose_rule` refuses requests about one email or sender.
+  Also: Google security alerts were called urgent "(money)"; triage's urgent reasons get an
+  "account security" reason.
+
+### Rx1 · Medicines: safe reminders and advice
+Status: [ ]
+Depends on: F15a
+From Erin's idea #48 (CRITICAL), 2026-10-28. "I don't remember if I took the wegovy or just
+thought about taking it" got "Take it if you aren't sure". That's the wrong advice: a
+missed dose is safer than a double one. **Erin asked that Michael check in with her before
+this is built** (#52, Themi's task 40), so the details wait for that conversation.
+- Themi never tells anyone to take a dose, or advises on doses at all. When someone isn't
+  sure whether they took one, it says not to take another until they've checked, and to ask
+  their doctor or pharmacist. Also in code: a medicine task's done check asks, and "not sure"
+  never becomes done.
+- General information (from the web, when that exists) always ends with "check with your
+  doctor or pharmacist".
+- Medicine tasks are marked as medicine, from the title or when said, and change nothing
+  else about how they nudge.
+- Scenarios from #48's own conversation.
+
+### E2 · Email: an audit instead of single questions
+Status: [ ]
+Depends on: E1, T1
+From Erin's idea #50, 2026-10-28: "Instead of individual emails, create an 'email audit' task
+when it has emails that it's not sure about. Themi can prompt this audit, and if the user
+accepts, then it goes through one by one and the user can select 'urgent' 'important' 'both'
+or 'neither'. When all emails have been categorized, Themi gives a brief confirmation and ends
+the email audit."
+- Emails and senders triage isn't sure about wait in an audit, and E1's sender lists move
+  into it. One task, "Email audit (5 to look at)", nudged like any other, in T1's order.
+- Accepted: one email at a time (sender, subject, one line), with [Urgent] [Important]
+  [Both] [Neither] and a way to stop partway. The answers teach triage about that sender,
+  and E1's urgent senders come from them.
+- At the end, a short confirmation ("All 5 sorted: 2 urgent, 1 important."), and the task
+  closes.
+
+### P2 · Response timing, and a word while a reply is slow
+Status: [ ]
+Depends on: P1, F13
+From Erin's ideas #51 ("make Themi faster") and #55 ("maintain internal metrics of why
+responses take as long as they do"), 2026-10-28, and Michael's idea the same day.
+Since 10-26, a conversation call on the free Gemini tier takes 9.8 s on average, 49 s at
+most, and a reply often takes two or three calls.
+- Per reply, a breakdown: each model call (seconds, waiting, retries), each tool, the
+  outbox. Kept a week, like `ai_calls`, with the slowest replies and the medians on the
+  admin website, so the slow part shows.
+- Michael's idea: when a reply is still coming after 10 seconds, Themi sends one short
+  message saying so. Some messages normalize what the family wants to be able to talk
+  about: "I'm having a bit of a low-energy day myself, I'll answer as soon as I can."
+  Others are plain: "Still thinking, nearly there." The rules:
+  - At most one per reply, through the outbox as a reply. It doesn't count toward the limit.
+  - Picked from a written list, varied, and not the same one twice in a row.
+  - Gentle phrasing applies, and never an energy score.
+  - Not for button taps or scheduled messages.
+  - If the reply arrives in the moment the notice would go, the notice doesn't go.
+- Then the speed-ups the numbers point to: a faster model for conversation, fewer tool
+  rounds, smaller prompts.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
