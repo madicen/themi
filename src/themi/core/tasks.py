@@ -17,7 +17,7 @@ import logging
 import re
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -27,6 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
+from themi.core.events import title_matches
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -47,6 +48,13 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+
+
+class Keep:
+    """An argument left as it is (a time that isn't changing)."""
+
+
+KEEP = Keep()
 # One task nudge at a time (idea #11): the next waits while one is unanswered, this long.
 ONE_AT_A_TIME_FOR = timedelta(hours=2)
 # A task someone just added for themselves in chat isn't asked about straight away.
@@ -1078,20 +1086,63 @@ class TaskBoard:
         return CANCELLED_TEXT.format(title=task.title)
 
     async def reschedule(
-        self, task_id: int, due_on: date | None, *, interactive: bool = False
+        self,
+        task_id: int,
+        due_on: date | None,
+        *,
+        due_time: time | Keep | None = KEEP,
+        from_time: time | Keep | None = KEEP,
+        interactive: bool = False,
     ) -> str:
+        """A new date, and a new time if given (bug #54). A snooze ends and the nudge is
+        asked again for the new moment, so nothing comes at the old one. A repeating
+        chore's time is its schedule's: every round takes it (bug #56)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        new_due = task.due_time if isinstance(due_time, Keep) else due_time
+        new_from = task.from_time if isinstance(from_time, Keep) else from_time
+        repeat = task.repeat
+        if repeat is not None and not isinstance(due_time, Keep):
+            repeat, new_due = replace(repeat, at=due_time), None
+        if due_on is None:
+            new_due = new_from = None
+        if new_from and (new_due is None or new_from >= new_due):
+            raise ValueError("a window needs its start before its end")
         self.db.execute(
-            "UPDATE tasks SET due_on = ?, overdue_reminders = 0, overdue_reminded_on = NULL "
-            "WHERE id = ?",
-            (due_on.isoformat() if due_on else None, task_id),
+            "UPDATE tasks SET due_on = ?, due_time = ?, from_time = ?, repeat = ?, "
+            "status = 'open', snoozed_until = NULL, overdue_reminders = 0, "
+            "overdue_reminded_on = NULL WHERE id = ?",
+            (
+                due_on.isoformat() if due_on else None,
+                new_due.strftime("%H:%M") if new_due else None,
+                new_from.strftime("%H:%M") if new_from else None,
+                json.dumps(repeat.to_json()) if repeat else None,
+                task_id,
+            ),
         )
-        await self._changed(self.get(task_id), "rescheduled", interactive)
+        self.withdraw_prompt(task)
+        task = self.get(task_id)
+        if due_on is not None:
+            if task.either:
+                for member in self.store.list_members():
+                    if member.telegram_user_id is not None:
+                        await self.prompt(task, member=member)
+            else:
+                await self.prompt(task)
+        await self._changed(task, "rescheduled", interactive)
         if due_on is None:
             return UNSCHEDULED_TEXT.format(title=task.title)
-        return RESCHEDULED_TEXT.format(title=task.title, due=due_on.isoformat())
+        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task))
+
+    def when_words(self, task: Task) -> str:
+        """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
+        assert task.due_on is not None
+        day = f"{task.due_on:%a %d %b}"
+        at = task.due_time or (task.repeat.at if task.repeat else None)
+        if task.from_time and task.due_time:
+            return f"{day}, {_clock_words(task.from_time)}-{_clock_words(task.due_time)}"
+        return f"{day}, {_clock_words(at)}" if at else day
 
     async def make_either(self, task_id: int) -> Task:
         """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
@@ -1117,7 +1168,10 @@ class TaskBoard:
         )
         self.withdraw_prompt(task)
         if until is not None:
-            when = _clock_words(until.astimezone(self._tz()))
+            local = until.astimezone(self._tz())
+            when = _clock_words(local)
+            if local.date() != self._today():  # bug #54: say which day, when it isn't today
+                when = f"{local:%a %d %b}, {when}"
             return UNTIL_TEXT.format(title=task.title, when=when)
         return LATER_TEXT.format(title=task.title)
 
@@ -1300,6 +1354,23 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         if chosen is None:
             names = ", ".join(m.name for m in members)
             return f"Not created: there's nobody called {target} in the family ({names})."
+    whose = [chosen] if chosen is not None else ctx.services.store.list_members()
+    same = next(
+        (
+            t
+            for m in whose
+            for t in _board(ctx).open_for(m)
+            if title_matches(args["title"], t.title)
+        ),
+        None,
+    )
+    if same is not None:  # bug #56: a second "Mimi pill" to change the first one's time
+        return (
+            f"Not created: task {same.id} ({same.title}) is already open. To change its day "
+            "or time, use reschedule_task (a repeating chore's time goes for every round); "
+            "its schedule, set_task_schedule. If this is a different job, give it a title "
+            "that says how."
+        )
     try:
         task = await _board(ctx).create(
             ctx.member,
@@ -1463,23 +1534,48 @@ async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "reschedule_task",
-    "Change when a task is due, or take its date away.",
+    "Change when a task is due: its day, its time, or both ('make it Friday at 1pm', "
+    "'earlier on Friday', 'at 2 and 3 tomorrow'), or take its date away. For a repeating "
+    "chore, a time changes every round ('the Mimi pill at 9pm, never before'); never make "
+    "a second task for it. due_date: YYYY-MM-DD, '' to keep it, 'none' to take it away. "
+    "Read the day from the whole conversation: 'tomorrow' or 'Friday' said earlier still "
+    "counts. due_time and from_time: HH:MM (24-hour) as for create_task, '' to keep, "
+    "'none' to clear. Anything put off earlier then waits for the new day and time.",
     {
         "task_id": {"type": "integer"},
-        "due_date": {"type": "string", "description": "YYYY-MM-DD, or '' for no date."},
+        "due_date": {"type": "string"},
+        "due_time": {"type": "string"},
+        "from_time": {"type": "string"},
     },
 )
 async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
-    due = None
-    if args["due_date"]:
-        try:
-            due = date.fromisoformat(args["due_date"])
-        except ValueError:
-            return "Not changed: the due date should look like 2026-11-03."
+    board = _board(ctx)
     try:
-        return await _board(ctx).reschedule(args["task_id"], due, interactive=True)
+        task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    said = str(args["due_date"]).strip().lower()
+    try:
+        due = task.due_on if not said else None if said == "none" else date.fromisoformat(said)
+        due_time = _time_arg(args["due_time"])
+        from_time = _time_arg(args["from_time"])
+    except ValueError as exc:
+        raise ToolFailed("Not changed: dates look like 2026-11-03, and times like 14:30.") from exc
+    if due is None and said != "none":
+        due = board._today() if not isinstance(due_time, Keep) else None  # a time: today
+    try:
+        return await board.reschedule(
+            task.id, due, due_time=due_time, from_time=from_time, interactive=True
+        )
+    except ValueError as exc:
+        raise ToolFailed(f"Not changed: {exc}.") from exc
+
+
+def _time_arg(value: Any) -> time | Keep | None:
+    text = str(value).strip().lower()
+    if not text:
+        return KEEP
+    return None if text == "none" else time.fromisoformat(text)
 
 
 @tool(
@@ -1487,8 +1583,9 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "Put a task off when someone wants it later: until a time they gave ('I'll do it "
     "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
     "or for a few hours (until ''). No nudge or reminder comes before then. Also for a "
-    "nudge at a time about a task they already have ('prompt me to run at 2pm': until "
-    "14:00): never a calendar block.",
+    "nudge later today about a task they already have ('prompt me to run at 2pm': until "
+    "14:00): never a calendar block. Another day, or a new time for it, is "
+    "reschedule_task.",
     {"task_id": {"type": "integer"}, "until": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
