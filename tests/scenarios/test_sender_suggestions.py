@@ -61,3 +61,30 @@ async def test_likely_senders_are_offered_and_only_a_tap_adds_one(
     await scenario.run_periodic("email.senders")  # each is offered once
     await scenario.app.outbox.flush()
     assert len([t for t in scenario.inbox("Erin") if t.startswith("A few senders")]) == 1
+
+
+async def test_what_each_inbox_has_set_and_whats_waiting(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """Bug #45: "remind me which [senders] I needed to evaluate?" got "you haven't set up
+    any watched inboxes": the model only had the expected-emails list to look in."""
+    from themi.ai.types import ToolResult
+
+    await mail(scenario, inbox)
+    await scenario.run_periodic("email.senders")
+    await scenario.tap("Erin", "Schwab Alerts")
+    scenario.primary.queue_tool_call("inbox_setup", {})
+    scenario.primary.queue_text("Bob Tenant is the one left.")
+    await scenario.say(
+        "Erin", "Let's do some email configuration. Which ones did I need to look at?"
+    )
+    (result,) = [
+        b.content
+        for m in scenario.primary.last_request.messages
+        for b in m.content
+        if isinstance(b, ToolResult)
+    ]
+    assert result == (
+        f"{ERIN}: watched. Urgent senders: alerts@schwab.example. Suggested, not answered "
+        "yet: Bob Tenant (bob@example.com). Expected emails: none."
+    )
