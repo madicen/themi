@@ -142,6 +142,8 @@ class Run:
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
+# Sends a task's nudge its own way (task, member, not_before, deadline); True if it did.
+OwnNudge = Callable[[Task, Member, datetime | None, datetime | None], Awaitable[bool]]
 # Extra text to send with a task's nudge (a call script, say), or None.
 TaskDetails = Callable[[Task], str | None]
 
@@ -203,6 +205,7 @@ class TaskBoard:
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = []  # steps come first, from _steps_for
+        self.own_nudges: list[OwnNudge] = []
         # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.wall_notes: list[Callable[[Task], str | None]] = []
@@ -445,6 +448,9 @@ class TaskBoard:
             member = self.store.get_member(task.assignee)
         if self.held(task, member):
             return  # it gets its nudge when it comes up on the chart
+        for own in self.own_nudges:  # a task with its own kind of nudge (E2's email audit)
+            if await own(task, member, not_before, deadline):
+                return
         parts = [self._steps_for(task, member), *(source(task) for source in self.details)]
         details = "\n\n".join(d for d in parts if d)
         added_by = (

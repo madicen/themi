@@ -9,6 +9,7 @@ A sender is likely when, in the last 90 days, triage called their mail urgent ab
 the property, tenants or family, or a real person who has written more than once was
 waiting on a reply. Senders already marked urgent, or offered before, aren't offered again.
 The `email.senders` job runs every 6 hours, so new likely senders come up now and then.
+With the email audit (E2) they wait there, one task, instead of coming as a message.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
-from themi.accounts import AccountsError, LinkedAccount
+from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
@@ -138,13 +139,20 @@ class SenderSuggestions:
                 continue
             member = self.store.get_member(account.member_id)
             buttons = []
+            audit = self.services.email_audit
             for c in found:
                 suggestion = self.db.execute(
                     "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
                     "VALUES (?, ?, ?, ?)",
                     (account.id, c.address, c.label, to_utc_iso(clock.now())),
                 )
+                if audit is not None:  # E2: waiting in the audit, not a message of its own
+                    audit.add_sender(account, c.address, c.label, c.reason, suggestion)
                 buttons.append(Button(c.label[:40], "urgent_sender", {"suggestion": suggestion}))
+            if audit is not None:
+                await audit.refresh(member)
+                sent += 1
+                continue
             senders = and_list([f"{c.label} ({c.reason})" for c in found])
             await self.services.outbox.send(
                 member,
@@ -154,34 +162,45 @@ class SenderSuggestions:
                 buttons=buttons,
             )
             sent += 1
+        if self.services.email_audit is not None:  # what's waiting has its task (E2)
+            for member in self.store.list_members():
+                if self.services.email_audit.waiting(member):
+                    await self.services.email_audit.refresh(member)
         return sent
 
     async def on_button(self, event: InboundEvent) -> None:
         assert event.button is not None
-        suggestion = int(event.button.payload["suggestion"])
-        row = self.db.one("SELECT * FROM sender_suggestions WHERE id = ?", (suggestion,))
+        row = self.add(event.member, int(event.button.payload["suggestion"]))
         if row is None:
             return
-        try:
-            account = self.store.get_linked_account(row["account_id"])
-            if account.member_id != event.member.id:
-                return
-            patterns = list(account.urgent_senders)
-            if row["address"] not in patterns:
-                self.store.update_linked_account(
-                    event.member, account.id, urgent_senders=[*patterns, row["address"]]
-                )
-        except AccountsError:
-            return
-        self.db.execute(
-            "UPDATE sender_suggestions SET added_at = ? WHERE id = ?",
-            (to_utc_iso(clock.now()), row["id"]),
-        )
         await self.services.outbox.send(
             event.member,
             ADDED_TEXT.format(label=row["label"], address=row["address"]),
             priority=Priority.REPLY,
         )
+
+    def add(self, member: Member, suggestion: int) -> dict[str, Any] | None:
+        """A suggested sender, confirmed: it always counts as urgent now. Returns the
+        suggestion, or None if it isn't theirs."""
+        row = self.db.one("SELECT * FROM sender_suggestions WHERE id = ?", (suggestion,))
+        if row is None:
+            return None
+        try:
+            account = self.store.get_linked_account(row["account_id"])
+            if account.member_id != member.id:
+                return None
+            patterns = list(account.urgent_senders)
+            if row["address"] not in patterns:
+                self.store.update_linked_account(
+                    member, account.id, urgent_senders=[*patterns, row["address"]]
+                )
+        except AccountsError:
+            return None
+        self.db.execute(
+            "UPDATE sender_suggestions SET added_at = ? WHERE id = ?",
+            (to_utc_iso(clock.now()), row["id"]),
+        )
+        return row
 
 
 @tool(

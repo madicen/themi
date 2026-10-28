@@ -41,6 +41,7 @@ from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.day_summary import DaySummary
+from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
@@ -151,6 +152,8 @@ def build_app(
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    if services.gmail is not None:
+        EmailAudit(services, tasks).install()
     reminders = Reminders(services, tasks)
     reminders.install()
     day_summary = DaySummary(services, tasks)
