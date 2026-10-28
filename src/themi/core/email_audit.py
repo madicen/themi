@@ -116,7 +116,13 @@ class EmailAudit:
         title = TITLE.format(n=waiting)
         if task is None:
             task = await self.board.create(
-                member, title, "text", 1, assignee=member, importance="normal", nudge=False,
+                member,
+                title,
+                "text",
+                1,
+                assignee=member,
+                importance="normal",
+                nudge=False,
                 off_wall=True,
             )
             self.db.execute(
