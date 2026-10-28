@@ -293,23 +293,29 @@ class CozylaClient:
         return [routine_from(r) for r in result or []]
 
     async def create_routine(
-        self, member: str, title: str, part: str, schedule: WallSchedule
-    ) -> int:
+        self, member: str, title: str, part: str, schedule: WallSchedule,
+        order: float | None = None,
+    ) -> int:  # fmt: skip
+        """`order`: its displayOrder, where it shows in that part of the day (the wall
+        numbers them 1000s, 2000s, 3000s; new ones go last)."""
         body = {
             **routine_body(title, part, schedule, {}),
             "memberUids": [member],
             "asATemplate": False,
+            **({"displayOrder": order} if order is not None else {}),
         }
         result = await self._call("rewards/routineUser/createRoutine", body)
         return int(result[0]["routineId"])
 
     async def update_routine(
-        self, routine: Routine, title: str, part: str, schedule: WallSchedule, today: date
-    ) -> None:
+        self, routine: Routine, title: str, part: str, schedule: WallSchedule, today: date,
+        order: float | None = None,
+    ) -> None:  # fmt: skip
         body = {
             **routine_body(title, part, schedule, routine.raw),
             "id": routine.id,
             "toDay": today.isoformat(),  # the edit applies from this day
+            **({"displayOrder": order} if order is not None else {}),
         }
         await self._call("rewards/routineUser/updateRoutine", body)
 

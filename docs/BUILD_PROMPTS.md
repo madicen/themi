@@ -76,7 +76,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
-| F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [ ] |
+| F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [~] |
 | X1 | Spending: takeout and business expenses | Feedback | [ ] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
 | T1 | Tasks: urgent and important | Feedback | [ ] |
@@ -3813,7 +3813,7 @@ Notes (2026-10-28):
 - No migration; a restart.
 
 ### F14b · Feedback (2026-10-27): routine order, email setup, spending isn't shopping, passing messages on
-Status: [ ]
+Status: [~]
 Depends on: F14a, C3, E1
 From the family's reports of 2026-10-27: bugs #36, #38, #45 and idea #46, plus one found
 while reading them.
