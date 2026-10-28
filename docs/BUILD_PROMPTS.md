@@ -80,7 +80,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | X1 | Spending: takeout and business expenses | Feedback | [x] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [x] |
 | T1 | Tasks: urgent and important | Feedback | [x] |
-| F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [ ] |
+| F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [x] |
 | F15b | Feedback: summaries and cards on time, one morning message, the urgent email | Feedback | [ ] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
 | E2 | Email: an audit instead of single questions | Feedback | [ ] |
@@ -3962,7 +3962,7 @@ Notes (2026-10-28):
 - No migration.
 
 ### F15a · Feedback (2026-10-28): changing a task's time, one task not two, reminders not events
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F11, F14a, T1
 From the family's reports of 2026-10-28: bugs #54, #56, #52 and the rest of #47.
 - #54 ("on Friday afternoon, remind me to drink green tea", then "a bit earlier... 5pm is
@@ -3990,6 +3990,31 @@ From the family's reports of 2026-10-28: bugs #54, #56, #52 and the rest of #47.
   those?", then a "Take Wegovy" task marked done. The steps had been named in the earlier
   message. F14b already fixed the first half (no "just today" unless said). A scenario: the
   steps named a message earlier go back on the morning routine, every day.
+
+Notes (2026-10-28):
+- #54: `TaskBoard.reschedule` takes `due_time` and `from_time` (left as they are unless
+  given). It ends any snooze, takes back the queued nudge and asks again for the new
+  moment (both people for an either task), and reads back "Thu 22 Oct, 2 pm". The tool's
+  `due_date` '' now keeps the date and 'none' takes it away; before, '' took it away.
+  The day carrying over from earlier messages is in the tool's description, not a prompt
+  line. `snooze_task` names the day when it isn't today ("waits until Thu 22 Oct, 8 am").
+  Rescheduling now always asks the nudge again, the wall's date changes too: before,
+  a nudge already queued kept the old moment.
+- #56: a time for a repeating chore goes in its schedule (`repeat.at`), keeping its start
+  and end. `create_task` refuses a title whose every word is in an open task's title
+  (`events.title_matches`), for that person or anyone, and says which tools change it.
+- #52: deviation from the plan. The plan offers dated tasks for the family calendar so
+  they show on the wall. Now that the wall's own lists are synced (`services.wall`), the
+  task is there already, so no calendar card. Without the wall, nothing changed.
+- #47: `add_to_wall_routine` keeps an item when the message says "until further notice",
+  "from now on", "every day/morning...", "always", "for good" or "permanently", even if
+  the model sent "today". The model asking "which steps?" was the free Gemini model
+  missing context; P2 is where a better model comes in.
+- Data fixed by hand on 2026-10-28 (copy of the database from before, in the session
+  scratchpad): green tea due Fri 30 Oct, 1 pm; the tutoring reminders on Thu 29 Oct at 2
+  and 3 pm; both Mimi pill courses at 9 pm, today's round at 9 pm; the extra "Mimi pill"
+  task cancelled; Michael's stale summary removed from the outbox.
+- No migration; a restart.
 
 ### F15b · Feedback (2026-10-28): summaries and cards on time, one morning message, the urgent email
 Status: [ ]
