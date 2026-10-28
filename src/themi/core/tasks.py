@@ -123,6 +123,7 @@ class Task:
     from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
     on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
     progression: Progression | None = None  # an amount that steps up weekly (F9c)
+    off_wall: bool = False  # Themi's own (the email audit): never on the wall's to-do lists
 
     @property
     def repeats(self) -> bool:
@@ -178,6 +179,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         progression=(
             Progression.from_json(json.loads(row["progression"])) if row["progression"] else None
         ),
+        off_wall=bool(row["off_wall"]),
     )
 
 
@@ -360,6 +362,7 @@ class TaskBoard:
         due_time: time | None = None,
         from_time: time | None = None,
         importance: str = "normal",
+        off_wall: bool = False,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -381,7 +384,7 @@ class TaskBoard:
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
             "assign_reason, due_on, created_at, steps, check_in, due_time, from_time, "
-            "importance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "importance, off_wall) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -397,6 +400,7 @@ class TaskBoard:
                 due_time.strftime("%H:%M") if due_on and due_time else None,
                 from_time.strftime("%H:%M") if due_on and from_time else None,
                 importance,
+                int(off_wall),
             ),
         )
         if nudge:

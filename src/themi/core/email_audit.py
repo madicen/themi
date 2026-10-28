@@ -3,15 +3,18 @@
 Senders that might always count as urgent (E1's suggestions) and emails triage wasn't sure
 about wait in `email_audit_items`, not in messages of their own. While any are waiting, the
 person has one task, "Email audit (5 to look at)", nudged like any other (one at a time, in
-T1's order), with [Start] and [Later]. Started, it goes one at a time: the sender or the
-email in a line, with [Urgent] [Important] [Both] [Neither] and [Stop for now]. At the end,
-a short count ("All 5 sorted: 2 urgent, 1 important.") and the task is done.
+T1's order), with [Start] and [Later]. It's Themi's own, so never on the wall (E2b).
+Started, it goes one at a time: the sender or the email in a line, then two questions on
+sliding scales (E2b, Erin's idea #44), in words: how urgent (not urgent, same day, right
+away), then how important (not important, somewhat, very), with [Stop for now] on each. At
+the end, a short count ("All 5 sorted: 2 urgent, 1 important.") and the task is done.
 
-What an answer does:
-- a sender: urgent or both, its mail always counts as urgent (E1's urgent senders);
-  important or both, its mail is never offered for archiving as noise; neither, it isn't
-  asked about again.
-- an email: it's filed as urgent (urgent or both), kept (important), or left as it was.
+What the answers do:
+- a sender: urgent, its mail always counts as urgent (E1's urgent senders), and right away,
+  its alerts always come at once; important, its mail is never offered for archiving as
+  noise, and very, it's never marked as read for them either; neither, it isn't asked
+  about again.
+- an email: it's filed as urgent (urgent at all), kept (important), or left as it was.
 
 Emails and the senders' names are shown to the person as they are; none of it reaches the
 model.
@@ -40,13 +43,15 @@ log = logging.getLogger(__name__)
 
 TITLE = "Email audit ({n} to look at)"
 NUDGE_TEXT = "Email audit: {n} to look at, one at a time. Start now, or later?"
-SENDER_TEXT = (
-    "{i} of {n}. Mail from {label} ({address}), {reason}.\nUrgent, important, both or neither?"
-)
-EMAIL_TEXT = (
-    "{i} of {n}. An email from {label}: {subject}\n{summary}\nUrgent, important, both or neither?"
-)
-ANSWERED_TEXT = "{label}: {words}."
+SENDER_TEXT = "{i} of {n}. Mail from {label} ({address}), {reason}."
+EMAIL_TEXT = "{i} of {n}. An email from {label}: {subject}\n{summary}"
+HOW_URGENT = "How urgent is it?"
+HOW_IMPORTANT = "How important is it?"
+URGENCY = ("Not urgent", "Same day", "Right away")  # 0, 1, 2; only ever shown in words
+IMPORTANCE = ("Not important", "Somewhat", "Very")
+URGENCY_WORDS = ("not urgent", "urgent (same day)", "urgent (right away)")
+IMPORTANCE_WORDS = ("not important", "somewhat important", "very important")
+ANSWERED_TEXT = "{label}: {urgency}, {importance}."
 DONE_TEXT = "All {n} sorted: {counts}. That's the email audit done."
 STOPPED_TEXT = "Stopped for now; {n} still to look at. The audit comes back later."
 NOTHING_TEXT = "There's nothing waiting for an email audit."
@@ -111,7 +116,8 @@ class EmailAudit:
         title = TITLE.format(n=waiting)
         if task is None:
             task = await self.board.create(
-                member, title, "text", 1, assignee=member, importance="normal", nudge=False
+                member, title, "text", 1, assignee=member, importance="normal", nudge=False,
+                off_wall=True,
             )
             self.db.execute(
                 "INSERT INTO email_audits (member_id, task_id) VALUES (?, ?) "
@@ -131,15 +137,14 @@ class EmailAudit:
             (member.id,),
         )
 
-    def important_sender(self, account_id: int, address: str) -> bool:
-        """They said this sender's mail is important: never offered for archiving."""
-        return bool(
-            self.db.one(
-                "SELECT 1 FROM email_audit_items WHERE account_id = ? AND address = ? "
-                "AND email_id IS NULL AND answer IN ('important', 'both')",
-                (account_id, address.lower()),
-            )
+    def sender_levels(self, account_id: int, address: str) -> tuple[int, int]:
+        """How urgent and how important they said this sender's mail is (0 if not asked)."""
+        row = self.db.one(
+            "SELECT urgency, importance FROM email_audit_items WHERE account_id = ? "
+            "AND address = ? AND email_id IS NULL AND answer IS NOT NULL",
+            (account_id, address.lower()),
         )
+        return (row["urgency"] or 0, row["importance"] or 0) if row else (0, 0)
 
     def _open_task(self, audit: dict[str, Any] | None) -> Task | None:
         if audit is None:
@@ -191,26 +196,31 @@ class EmailAudit:
         item = waiting[0]
         total = self._in_this_audit(member)
         done = total - len(waiting)
+        text, buttons = self._question(item, done + 1, total)
         await self.services.outbox.send(
             member,
-            self._question(item, done + 1, total),
+            text,
             priority=Priority.REPLY,  # they're going through it now
             kind="email_audit",
-            buttons=[
-                *(
-                    Button(
-                        a.capitalize(),
-                        "email_audit",
-                        {"action": "answer", "item": item["id"], "answer": a},
-                    )
-                    for a in ANSWERS
-                ),
-                Button("Stop for now", "email_audit", {"action": "stop"}),
-            ],
+            buttons=buttons,
         )
         return True
 
-    def _question(self, item: dict[str, Any], i: int, n: int) -> str:
+    def _question(self, item: dict[str, Any], i: int, n: int) -> tuple[str, list[Button]]:
+        """How urgent, or (that answered) how important, with its buttons."""
+        about = self._about(item, i, n)
+        if item["urgency"] is None:
+            scale, labels, question = "urgency", URGENCY, HOW_URGENT
+        else:
+            scale, labels, question = "importance", IMPORTANCE, HOW_IMPORTANT
+        buttons = [
+            Button(label, "email_audit", {"action": scale, "item": item["id"], "level": level})
+            for level, label in enumerate(labels)
+        ]
+        buttons.append(Button("Stop for now", "email_audit", {"action": "stop"}))
+        return f"{about}\n{question}", buttons
+
+    def _about(self, item: dict[str, Any], i: int, n: int) -> str:
         if item["email_id"] is None:
             return SENDER_TEXT.format(
                 i=i, n=n, label=item["label"], address=item["address"], reason=item["reason"]
@@ -231,20 +241,40 @@ class EmailAudit:
             (member.id, since),
         )
 
-    async def answer(self, member: Member, item_id: int, answer: str) -> str | None:
-        """Record one answer and act on it. Returns the line the question becomes."""
-        item = self.db.one(
+    def _item(self, member: Member, item_id: int) -> dict[str, Any] | None:
+        return self.db.one(
             "SELECT * FROM email_audit_items WHERE id = ? AND member_id = ?", (item_id, member.id)
         )
-        if item is None or answer not in ANSWERS:
+
+    def set_urgency(self, member: Member, item_id: int, level: int) -> dict[str, Any] | None:
+        """The first question's answer. Returns the item, to ask the second."""
+        item = self._item(member, item_id)
+        if item is None or item["answer"] is not None or level not in range(len(URGENCY)):
+            return None
+        self.db.execute("UPDATE email_audit_items SET urgency = ? WHERE id = ?", (level, item_id))
+        return self._item(member, item_id)
+
+    def set_importance(self, member: Member, item_id: int, level: int) -> str | None:
+        """The second answer: the item is done and acted on. Returns the line the question
+        becomes."""
+        item = self._item(member, item_id)
+        if item is None or item["urgency"] is None or level not in range(len(IMPORTANCE)):
             return None
         if item["answer"] is None:
+            answer = _quadrant(item["urgency"], level)
             self.db.execute(
-                "UPDATE email_audit_items SET answer = ?, answered_at = ? WHERE id = ?",
-                (answer, _now(), item_id),
+                "UPDATE email_audit_items SET importance = ?, answer = ?, answered_at = ? "
+                "WHERE id = ?",
+                (level, answer, _now(), item_id),
             )
             self._apply(member, item, answer)
-        return ANSWERED_TEXT.format(label=item["label"], words=ANSWER_WORDS[answer])
+        else:
+            level = item["importance"]
+        return ANSWERED_TEXT.format(
+            label=item["label"],
+            urgency=URGENCY_WORDS[item["urgency"]],
+            importance=IMPORTANCE_WORDS[level],
+        )
 
     def _apply(self, member: Member, item: dict[str, Any], answer: str) -> None:
         urgent = answer in ("urgent", "both")
@@ -301,9 +331,18 @@ class EmailAudit:
             if task is not None:
                 self.board.snooze(task.id)
             return
-        line = await self.answer(
-            member, int(event.button.payload["item"]), str(event.button.payload["answer"])
-        )
+        if action not in ("urgency", "importance"):
+            return
+        item_id, level = int(event.button.payload["item"]), int(event.button.payload["level"])
+        if action == "urgency":
+            item = self.set_urgency(member, item_id, level)
+            if item is not None and message_id is not None:
+                total = self._in_this_audit(member)
+                done = total - len(self.waiting(member))
+                text, buttons = self._question(item, done + 1, total)
+                await self.services.outbox.edit(member, message_id, text, buttons)
+            return
+        line = self.set_importance(member, item_id, level)
         if line is None:
             return
         if message_id is not None:
@@ -318,11 +357,17 @@ def _now() -> str:
     return to_utc_iso(clock.now())
 
 
+def _quadrant(urgency: int, importance: int) -> str:
+    if urgency and importance:
+        return "both"
+    return "urgent" if urgency else "important" if importance else "neither"
+
+
 @tool(
     "start_email_audit",
     "Go through the emails and senders Themi wasn't sure about, one at a time, when they "
     "ask ('let's do the email audit', 'which emails did I need to look at?'). Each one comes "
-    "with buttons: urgent, important, both or neither.",
+    "with buttons: how urgent, then how important.",
     {},
 )
 async def start_email_audit(ctx: ToolContext, args: dict[str, Any]) -> str:

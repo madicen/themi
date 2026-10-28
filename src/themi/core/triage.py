@@ -11,6 +11,10 @@ Categories and what follows:
 | receipt      | announce `ReceiptFound` (the pantry and budget, prompt 25)    |
 | routine      | nothing                                                       |
 
+The email audit's answers about a sender (E2, E2b) change that: urgent right away, its
+alerts are always `urgent` priority; important, its noise isn't offered for archiving;
+very important, its confirmations aren't marked as read either.
+
 How it runs:
 - Every stored email starts `pending`. The `email.triage` job sorts pending
   mail per member, several emails per `email_triage` call, on that member's
@@ -367,7 +371,11 @@ class EmailTriage:
             audit.add_email(account, row, verdict.summary)  # E2: asked in the audit instead
             await audit.refresh(member)
             return
-        important = audit is not None and audit.important_sender(account.id, row["from_address"])
+        # E2b: how urgent and how important they said this sender's mail is.
+        urgency, importance = (
+            audit.sender_levels(account.id, row["from_address"]) if audit else (0, 0)
+        )
+        important = importance > 0
         if verdict.category == "urgent":
             await self.services.outbox.send(
                 member,
@@ -377,11 +385,11 @@ class EmailTriage:
                     sender=sender,
                     summary=verdict.summary,
                 ),
-                priority=Priority.URGENT if verdict.severe else Priority.NORMAL,
+                priority=Priority.URGENT if verdict.severe or urgency > 1 else Priority.NORMAL,
                 kind="email",
                 dedupe_key=f"email-urgent:{row['id']}",
             )
-        elif verdict.category == "confirmation":
+        elif verdict.category == "confirmation" and importance < 2:  # very important: theirs
             await stage(
                 "email_mark_read",
                 member,
