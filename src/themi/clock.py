@@ -8,6 +8,7 @@ Business logic must read time from here, never from `datetime.now()` or
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 _frozen: datetime | None = None
@@ -63,3 +64,14 @@ def unfreeze() -> None:
 
 def is_frozen() -> bool:
     return _frozen is not None
+
+
+async def sleep(seconds: float) -> None:
+    """Wait `seconds`. On a frozen clock, wait until the clock has been moved that far,
+    yielding to other tasks meanwhile, so tests advance time instead of sleeping."""
+    if _frozen is None:
+        await asyncio.sleep(seconds)
+        return
+    until = _frozen + timedelta(seconds=seconds)
+    while _frozen is not None and _frozen < until:
+        await asyncio.sleep(0)

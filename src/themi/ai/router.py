@@ -26,6 +26,7 @@ import logging
 import random
 import sqlite3
 from collections.abc import Awaitable, Callable, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, TypeVar
@@ -64,6 +65,8 @@ log = logging.getLogger(__name__)
 
 CONNECTION_TEST_PROMPT = "Reply with the single word OK."
 CALLS_KEPT = timedelta(days=7)  # ai_calls history (bug #29)
+# The reply (P2a's `replies` row) the calls being made now are for, if any.
+current_reply: ContextVar[int | None] = ContextVar("current_reply", default=None)
 
 
 class CircuitOpenError(AIError):
@@ -209,11 +212,12 @@ class AIRouter:
         try:
             db.execute(
                 "INSERT INTO ai_calls (member_id, task, kind, backend, started_at, seconds, "
-                "waited, retries, last_status, ok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "waited, retries, last_status, ok, reply_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     member_id, task.value, kind.value, call.backend, to_utc_iso(call.started),
                     round((now - call.started).total_seconds(), 2), round(call.waited, 2),
-                    call.retries, call.last_status, int(ok),
+                    call.retries, call.last_status, int(ok), current_reply.get(),
                 ),
             )  # fmt: skip
             db.execute("DELETE FROM ai_calls WHERE started_at < ?", (to_utc_iso(now - CALLS_KEPT),))

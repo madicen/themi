@@ -10,15 +10,20 @@ For each inbound event:
   since that item's message. With several waiting, Themi asks which one
   (listing them) instead of guessing. Otherwise the model
   runs a tool loop (at most `max_steps` model calls) and the final text goes
-  out through the outbox as a reply.
+  out through the outbox as a reply. That's timed (P2a, `themi.core.timing`), and if
+  it takes more than ten seconds a short "still coming" message goes first.
 
 Failures are said plainly and briefly, never as error dumps.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
 from themi import clock
@@ -31,6 +36,7 @@ from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
+from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
 from themi.core.tools import ToolContext, choose_groups
 from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
@@ -102,10 +108,18 @@ VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works 
 
 
 class Agent:
-    def __init__(self, services: Services, *, max_steps: int = 8, history: int = 12) -> None:
+    def __init__(
+        self,
+        services: Services,
+        *,
+        max_steps: int = 8,
+        history: int = 12,
+        rng: random.Random | None = None,
+    ) -> None:
         self.services = services
         self.max_steps = max_steps
         self.history = history
+        self._rng = rng or random.Random()
 
     async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
@@ -117,6 +131,7 @@ class Agent:
                 await handler(event)
             return
 
+        timer = ReplyTimer(self.services.store.db, member.id)  # from the message arriving
         if event.kind == "button" and event.button is not None:
             if event.button.kind != "reply":
                 handler = self.services.button_handlers.get(event.button.kind)
@@ -155,10 +170,50 @@ class Agent:
         energy_mark = self.services.store.db.scalar(
             "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
         )
-        async with channel.typing(member):
-            reply = await self._converse(member, text, event)
-        self._catch_energy(member, text, energy_mark)
-        await self._reply(member, reply)
+        timer.start()
+        try:
+            async with channel.typing(member), self._slow_notice(member, event, timer):
+                reply = await self._converse(member, text, event, timer)
+            self._catch_energy(member, text, energy_mark)
+            async with timer.outbox():
+                await self._reply(member, reply)
+        finally:
+            timer.finish()
+
+    @asynccontextmanager
+    async def _slow_notice(
+        self, member: Member, event: InboundEvent, timer: ReplyTimer
+    ) -> AsyncIterator[None]:
+        """Michael's idea: a reply still coming after SLOW_AFTER seconds gets one short
+        message first. Not for button taps. If the reply is ready when the time comes,
+        the message doesn't go."""
+        answered = False
+
+        async def watch() -> None:
+            await clock.sleep(SLOW_AFTER)
+            if answered:
+                return
+            notice = pick_notice(self.services.store.db, member.id, self._rng)
+            timer.notice = notice
+            try:
+                await self.services.outbox.send(
+                    member, notice, priority=Priority.REPLY, kind="slow_notice"
+                )
+            except Exception:
+                log.warning("Couldn't say a reply was slow", exc_info=True)
+
+        if event.kind == "button":
+            yield
+            return
+        watcher = asyncio.create_task(watch())
+        try:
+            yield
+        finally:
+            answered = True
+            if timer.notice is None:
+                watcher.cancel()
+            with suppress(asyncio.CancelledError):
+                await watcher  # a notice on its way goes before the reply
 
     # ----- steps --------------------------------------------------------------
 
@@ -243,7 +298,9 @@ class Agent:
         )
         return any(r["telegram_message_id"] not in cards for r in rows)
 
-    async def _converse(self, member: Member, text: str, event: InboundEvent) -> str:
+    async def _converse(
+        self, member: Member, text: str, event: InboundEvent, timer: ReplyTimer
+    ) -> str:
         services = self.services
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
@@ -272,14 +329,17 @@ class Agent:
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
-            for _ in range(self.max_steps):
+            for step in range(1, self.max_steps + 1):
                 response = await client.chat(system, messages, services.tools.specs(ctx.groups))
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
-                results = [await services.tools.run(call, ctx) for call in response.tool_calls]
+                results = []
+                for call in response.tool_calls:
+                    with timer.tool(call.name, after_model=step):
+                        results.append(await services.tools.run(call, ctx))
                 messages.append(Message.tool_results(*results))
         except RefusalError:
             return DECLINED_TEXT
