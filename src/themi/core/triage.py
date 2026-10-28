@@ -35,6 +35,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from themi import clock
@@ -45,9 +46,10 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import GmailSync
+from themi.core.events import title_matches
 from themi.core.prompts import as_data
 from themi.core.services import Services
-from themi.core.tools import ToolContext, tool
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -57,10 +59,11 @@ BODY_CHARS = 4000  # per email, in the prompt
 MAX_ATTEMPTS = 3  # an email the model keeps leaving out is filed as routine
 CATEGORIES = ("urgent", "confirmation", "receipt", "needs_reply", "routine", "noise")
 EVENT_FIELDS = ("title", "date", "start", "end", "location")
-URGENT_KINDS = ("tenant", "financial", "property", "family", "other")
+URGENT_KINDS = ("tenant", "financial", "property", "family", "security", "other")
 KIND_WORDS = {
     "tenant": "a tenant",
     "financial": "money",
+    "security": "account security",
     "property": "the property",
     "family": "family",
     "other": "something time-sensitive",
@@ -71,7 +74,9 @@ You sort a family's incoming email. For each email in the <data> blocks, choose
 one category:
 - urgent: needs attention within hours. Tenants (leaks, lockouts, complaints),
   financial (fraud alerts, failed payments, overdue notices), property (damage,
-  inspections, insurance), family (school, health, relatives).
+  inspections, insurance), family (school, health, relatives), security (sign-in
+  alerts, new access to an account, a password reset nobody asked for; these are not
+  money unless money moved).
 - confirmation: confirms something already done (a booking, a payment made,
   a password change the person asked for).
 - receipt: a purchase receipt or order total (groceries, takeout, deliveries).
@@ -218,6 +223,7 @@ class EmailTriage:
         s.button_handlers["inbox_setup"] = self.on_setup_button
         s.tools.register(set_urgent_senders)
         s.tools.register(set_inbox_watched)
+        s.tools.register(keep_email)
         if s.google is not None:
             s.google.link_listeners.append(self.on_linked)
 
@@ -477,3 +483,95 @@ async def set_inbox_watched(ctx: ToolContext, args: dict[str, Any]) -> str:
         ctx.member, account.id, watched=bool(args["watched"])
     )
     return f"{updated.address} is {'watched' if updated.watched else 'no longer watched'}."
+
+
+KEEP_WITHIN = timedelta(days=30)  # how far back keep_email looks
+KEEP_OFFER_TEXT = "Should mail from {label} always count as urgent?"
+
+
+@tool(
+    "keep_email",
+    "When someone says one email matters ('the Schwab email is urgent and shouldn't be "
+    "archived', 'don't archive that one'): Themi counts it as urgent, takes back any "
+    "offer to archive it, puts it back in the inbox if Themi archived it, and offers to "
+    "count its sender as urgent from now on. email: words from its sender or subject. "
+    "Never a rule.",
+    {"email": {"type": "string"}},
+)
+async def keep_email(ctx: ToolContext, args: dict[str, Any]) -> str:
+    row = _find_email(ctx, str(args["email"]))
+    if row is None:
+        raise ToolFailed(
+            f"No email from the last month matches {args['email']!r} in their linked inboxes."
+        )
+    db = ctx.services.store.db
+    db.execute("UPDATE emails SET category = 'urgent' WHERE id = ?", (row["id"],))
+    said: list[str] = [f"Kept as urgent: {row['subject'] or 'that email'} (from {_sender(row)})."]
+    payload_key = f'%"email_id": {row["id"]}%'
+    for action in db.query(
+        "SELECT id FROM pending_actions WHERE category = 'email_archive_noise' "
+        "AND status IN ('pending', 'snoozed') AND payload LIKE ?",
+        (payload_key,),
+    ):
+        await ctx.services.autonomy.withdraw(action["id"], "Kept: it isn't noise after all.")
+        said.append("The offer to archive it is taken back.")
+    archived = db.one(
+        "SELECT 1 FROM pending_actions WHERE category = 'email_archive_noise' "
+        "AND status = 'done' AND payload LIKE ?",
+        (payload_key,),
+    )
+    if archived:
+        outcome = await ctx.services.autonomy.stage(
+            "email_keep",
+            ctx.member,
+            f"Back to the inbox: {row['subject'] or 'an email'} (from {_sender(row)})",
+            {"email_id": row["id"]},
+            "gmail.unarchive",
+            interactive=True,
+            requested=True,
+        )
+        said.append(outcome.message)
+    account = ctx.services.store.get_linked_account(row["account_id"])
+    address = str(row["from_address"]).lower()
+    if address in [p.lower() for p in account.urgent_senders]:
+        said.append("Mail from that sender already counts as urgent.")
+    else:
+        label = row["from_name"] or address
+        suggestion = db.execute(
+            "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
+            "VALUES (?, ?, ?, ?)",
+            (account.id, address, label, to_utc_iso(clock.now())),
+        )
+        await ctx.services.outbox.send(
+            ctx.member,
+            KEEP_OFFER_TEXT.format(label=label),
+            priority=Priority.REPLY,
+            kind="email",
+            buttons=[
+                Button(f"Always urgent: {label}"[:40], "urgent_sender", {"suggestion": suggestion})
+            ],
+        )
+        said.append("They were asked, with a button, whether its sender always counts as urgent.")
+    return " ".join(said)
+
+
+def _find_email(ctx: ToolContext, words: str) -> dict[str, Any] | None:
+    """Their newest email from the last month whose sender or subject has every word."""
+    accounts = [a.id for a in ctx.services.store.linked_accounts(ctx.member.id)]
+    if not accounts:
+        return None
+    rows = ctx.services.store.db.query(
+        f"SELECT * FROM emails WHERE account_id IN ({', '.join('?' for _ in accounts)}) "
+        "AND received_at >= ? ORDER BY received_at DESC, id DESC",
+        (*accounts, to_utc_iso(clock.now() - KEEP_WITHIN)),
+    )
+    return next(
+        (
+            r
+            for r in rows
+            if title_matches(
+                words, f"{r['from_name'] or ''} {r['from_address']} {r['subject'] or ''}"
+            )
+        ),
+        None,
+    )

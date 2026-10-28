@@ -212,6 +212,7 @@ TOOL_GROUPS: dict[str, str] = {
             "set_urgent_senders",
             "set_inbox_watched",
             "inbox_setup",
+            "keep_email",
         ),
         "email",
     ),
