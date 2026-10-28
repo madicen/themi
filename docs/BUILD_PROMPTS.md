@@ -77,7 +77,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
-| X1 | Spending: takeout and business expenses | Feedback | [ ] |
+| X1 | Spending: takeout and business expenses | Feedback | [x] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
 | T1 | Tasks: urgent and important | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -3862,7 +3862,7 @@ Notes (2026-10-28):
 - No migration; a restart.
 
 ### X1 · Spending: takeout and business expenses
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F14b, 23
 From Michael's bug #36 ("door dash and eating out messages don't work at all") and idea #37
 ("track business expenses"), 2026-10-27. Read first: "Module behaviour" → D (takeout budget);
@@ -3874,6 +3874,28 @@ prompt 35's takeout rescue needs the month's takeout total.
   monthly list to export (CSV) from the website, with the receipt email linked when there is
   one.
 - Asking ("how much takeout this month?", "what are my business expenses for October?").
+
+Notes (2026-10-28):
+- The plan says receipts keep the takeout budget "so nobody logs spending by hand"; the
+  family asked for chat too (#36), so both feed one table. Migration 0060 `spending`:
+  member, cents, place, kind (takeout, eating_out, other), business, spent_on, email_id
+  (unique), source (chat, email).
+- `themi.core.spending`: `log_spending` (a plain tool: Themi's own record, nothing outside
+  changes), `spending_summary` (month, takeout / eating_out / business / all),
+  `mark_business_expense`, `remove_spending`, in a new "spending" tool group (spent, paid,
+  $, expense, budget, takeout, DoorDash...). A takeout reply carries "Takeout this month:
+  $X of the $Y budget ($Z left)". Money is shown as money; that's not an energy score.
+- The receipt reader asks for `total_cents` now (falls back to the line prices). A takeout
+  receipt becomes a spend; the same amount said in chat within two days is the same meal
+  (the receipt joins it), and a chat spend matching an emailed one is declined.
+- Business expenses are each person's own: listed and exported only for them, changed
+  only by them (an admin can fix another's household takeout, not their business ones).
+  Website: Spending (nav), a month at a time, and `/spending/business.csv?month=YYYY-MM`
+  with a Gmail link to the receipt when there is one.
+- F14b's refusal on list tools now says to use `log_spending`.
+- Prompt 35 can read the month's takeout from `Spending.month(kind="takeout")`.
+- Setup: restart (applies 0060). Michael's $51.97 DoorDash from 2026-10-27 isn't in it;
+  he can say it again.
 
 ### B1 · Breaks: a rest mode that ends with a question
 Status: [ ]
