@@ -79,7 +79,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
 | X1 | Spending: takeout and business expenses | Feedback | [x] |
 | B1 | Breaks: a rest mode that ends with a question | Feedback | [x] |
-| T1 | Tasks: urgent and important | Feedback | [ ] |
+| T1 | Tasks: urgent and important | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3928,7 +3928,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0061).
 
 ### T1 · Tasks: urgent and important
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F12, C2c
 From Erin's idea #44, 2026-10-27: urgent (a hard due date that's soon) and important (there
 are consequences if it's ignored for good) as two separate scales, for tasks, emails and
@@ -3939,6 +3939,22 @@ everything else.
 - Urgency comes from the due date; importance is what F12's `importance` becomes (said, or
   judged at creation and changeable). Email triage's urgent flag maps onto the same two scales.
 - Never shown as numbers or scores.
+
+Notes (2026-10-28):
+- `themi.core.priority`: urgent is a due date today, tomorrow or past (sooner first);
+  important is importance high (normal and low aren't, low last). The order: urgent and
+  important, then an important-only task waiting a week or more since it was made or last
+  done, then urgent only, important only, neither.
+- Where it applies: task nudges are asked one at a time (F10), so when several are waiting,
+  `Outbox.orders["task"]` puts them in that order at each flush (other messages keep their
+  places). A nudge that's due on its own still goes when it's due.
+- Open items (what the model sees) carry the words: "urgent and important", "urgent",
+  "important". A prompt line has the model suggest in that order when asked what's next.
+- F12's "urgent is high" changes: `create_task`'s importance means consequences; "urgent",
+  "asap", "right away" with no date makes it due today (in code, from the message).
+- Email: triage's urgent mail already alerts at once; nothing else changed there. Tasks
+  made from email would carry the same two scales.
+- No migration.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26

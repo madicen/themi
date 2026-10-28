@@ -95,6 +95,9 @@ class Sender(Protocol):
 BlockSource = Callable[["Member", datetime, datetime], list[tuple[datetime, datetime]]]
 # A feature's own hold on a kind of message: (member, when) -> hold until, or None.
 Gate = Callable[["Member", datetime], datetime | None]
+# A feature's order for its own kind of message when several are due at once (T1): a
+# queued row -> a sort key, lower first.
+Order = Callable[[dict[str, Any]], tuple[Any, ...]]
 
 
 class ReceptivityProvider(Protocol):
@@ -141,6 +144,7 @@ class Outbox:
         self._sending: set[int] = set()
         # Holds a feature puts on its own kind ("task": one nudge at a time, idea #11).
         self.gates: dict[str, Gate] = {}
+        self.orders: dict[str, Order] = {}
 
     @property
     def _tz(self) -> str:
@@ -236,6 +240,7 @@ class Outbox:
             (to_utc_iso(now),),
         )
         rows.sort(key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], r["id"]))
+        rows = self._in_their_order(rows)
         sent = 0
         for row in rows:
             if row["id"] in self._sending:
@@ -254,6 +259,19 @@ class Outbox:
             if (await self._deliver(row)).status == "sent":
                 sent += 1
         return sent
+
+    def _in_their_order(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Rows of a kind with its own order (task nudges: urgent and important first) are
+        put in that order among the places they hold; everything else stays put."""
+        for kind, order in self.orders.items():
+            places = [i for i, r in enumerate(rows) if r["kind"] == kind]
+            ordered = sorted(
+                (rows[i] for i in places),
+                key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], order(r), r["id"]),
+            )
+            for i, row in zip(places, ordered, strict=True):
+                rows[i] = row
+        return rows
 
     async def _deliver(self, row: dict[str, Any]) -> OutboxResult:
         if row["id"] in self._sending:
