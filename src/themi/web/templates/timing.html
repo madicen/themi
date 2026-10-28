@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Reply times · Themi{% endblock %}
+{% block content %}
+<h1>How long replies take</h1>
+<p class="muted">The last seven days of replies that went to the AI: the whole time from the
+message arriving, and its parts.</p>
+<section class="card">
+  {% if count %}
+  <p class="summary">{{ count }} {{ "reply" if count == 1 else "replies" }}.
+    {% if noticed %}{{ noticed }} took long enough for a "still coming" message.{% endif %}</p>
+  <ul>
+    <li>Half took longer than {{ medians.seconds }} s in all.</li>
+    <li>The model: {{ medians.model_seconds }} s (median).</li>
+    <li>Tools: {{ medians.tool_seconds }} s (median).</li>
+    <li>Sending: {{ medians.outbox_seconds }} s (median).</li>
+  </ul>
+  {% else %}
+  <p class="muted">No replies yet this week.</p>
+  {% endif %}
+</section>
+{% if slowest %}
+<h2>The slowest</h2>
+{% for reply in slowest %}
+<article class="card">
+  <p class="summary">{{ reply.seconds }} s · {{ names.get(reply.member_id, "Someone") }} ·
+    {{ reply.started_at | local_time }}</p>
+  <ul>
+    {% for step in reply.steps %}
+    <li>{{ step.what }}: {{ step.seconds }} s{% if step.detail %} ({{ step.detail }}){% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% if reply.slow_notice %}<p class="muted">Said first: “{{ reply.slow_notice }}”</p>{% endif %}
+</article>
+{% endfor %}
+{% endif %}
+{% endblock %}

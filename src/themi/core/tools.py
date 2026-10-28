@@ -139,8 +139,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"wall|cozyla|chart|chore|routine",
     ),
     "email": (
-        "inboxes, expected emails, urgent senders",
-        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe",
+        "inboxes, expected emails, urgent senders, the email audit",
+        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|audit",
     ),
     "pantry": (
         "the pantry and meal ideas",
@@ -212,6 +212,8 @@ TOOL_GROUPS: dict[str, str] = {
             "set_urgent_senders",
             "set_inbox_watched",
             "inbox_setup",
+            "keep_email",
+            "start_email_audit",
         ),
         "email",
     ),

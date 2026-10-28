@@ -5,6 +5,7 @@ action can only touch mail Themi has seen in one of the member's accounts.
 
 - `gmail.mark_read`: remove UNREAD.
 - `gmail.archive`: remove INBOX (the mail stays in All Mail; nothing is deleted).
+- `gmail.unarchive`: add INBOX back (bug #53: an email that shouldn't have gone).
 - `gmail.label`: add a label by name, creating it if needed.
 - `gmail.send_reply`: reply in the thread to the sender. A retry never sends
   twice: each action's idempotency key is recorded with the sent message.
@@ -49,6 +50,12 @@ def install_executors(executors: ExecutorRegistry, sync: GmailSync) -> None:
         row = email_for(payload, ctx)
         await sync.client(row["account_id"]).modify(row["gmail_id"], remove=["INBOX"])
         return f"Archived: {row['subject'] or 'an email'}"
+
+    @executors.register("gmail.unarchive")
+    async def unarchive(payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        row = email_for(payload, ctx)
+        await sync.client(row["account_id"]).modify(row["gmail_id"], add=["INBOX"])
+        return f"Back in the inbox: {row['subject'] or 'an email'}"
 
     @executors.register("gmail.label")
     async def label(payload: dict[str, Any], ctx: ExecutionContext) -> str:

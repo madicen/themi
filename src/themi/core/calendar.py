@@ -3,7 +3,9 @@
 - A task that gets a date is staged as `calendar_write` ("Put ... on the
   family calendar?"), so it waits for a yes unless a locked rule made the
   category automatic. Approving records the event and queues it. Not a task
-  someone made for themselves: that's their own reminder (idea #23).
+  someone made for themselves: that's their own reminder (idea #23). Not when
+  the Cozyla wall's to-do lists are synced either: the wall shows the task
+  there, so an event would be the same thing twice (bug #52).
 - The write itself is the queued `calendar.sync` job, so a Google error is
   retried by the job queue with its back-off, and never blocks the task.
 - Once an event is on the calendar, it follows its task: a new date moves
@@ -102,6 +104,8 @@ class TaskCalendar:
             return
         if _personal(task):
             return  # theirs alone: not for the family calendar (Erin's idea #23)
+        if self.services.wall is not None:
+            return  # the wall's own lists show tasks: not an event as well (bug #52)
         if self.sync.account() is None:
             log.info("Task %s has a date, but there's no calendar to put it on yet", task.id)
             return

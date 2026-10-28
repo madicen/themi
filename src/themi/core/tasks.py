@@ -17,7 +17,7 @@ import logging
 import re
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -27,6 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
+from themi.core.events import title_matches
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -47,6 +48,13 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 SNOOZE_FOR = timedelta(hours=4)
+
+
+class Keep:
+    """An argument left as it is (a time that isn't changing)."""
+
+
+KEEP = Keep()
 # One task nudge at a time (idea #11): the next waits while one is unanswered, this long.
 ONE_AT_A_TIME_FOR = timedelta(hours=2)
 # A task someone just added for themselves in chat isn't asked about straight away.
@@ -73,6 +81,10 @@ STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
+MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
+MORNING_LIST_DONE = "This morning's list: all done."
+MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
+MORNING_LIST_BUTTONS = 6
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
 SETTLED_TEXT = "That one's already settled."
@@ -111,6 +123,7 @@ class Task:
     from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
     on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
     progression: Progression | None = None  # an amount that steps up weekly (F9c)
+    off_wall: bool = False  # Themi's own (the email audit): never on the wall's to-do lists
 
     @property
     def repeats(self) -> bool:
@@ -130,6 +143,8 @@ class Run:
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
+# Sends a task's nudge its own way (task, member, not_before, deadline); True if it did.
+OwnNudge = Callable[[Task, Member, datetime | None, datetime | None], Awaitable[bool]]
 # Extra text to send with a task's nudge (a call script, say), or None.
 TaskDetails = Callable[[Task], str | None]
 
@@ -164,6 +179,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         progression=(
             Progression.from_json(json.loads(row["progression"])) if row["progression"] else None
         ),
+        off_wall=bool(row["off_wall"]),
     )
 
 
@@ -191,6 +207,7 @@ class TaskBoard:
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = []  # steps come first, from _steps_for
+        self.own_nudges: list[OwnNudge] = []
         # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.wall_notes: list[Callable[[Task], str | None]] = []
@@ -218,6 +235,7 @@ class TaskBoard:
         s.autonomy.executors.register(STEP_UP_EXECUTOR)(self._step_up)
         self.outbox.gates["task"] = self._one_at_a_time
         self.outbox.orders["task"] = self._nudge_order
+        self.outbox.bundlers["task"] = self._morning_list
 
     def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
         """While a task nudge sent to this person is unanswered (still open, not put off),
@@ -344,6 +362,7 @@ class TaskBoard:
         due_time: time | None = None,
         from_time: time | None = None,
         importance: str = "normal",
+        off_wall: bool = False,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
@@ -365,7 +384,7 @@ class TaskBoard:
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
             "assign_reason, due_on, created_at, steps, check_in, due_time, from_time, "
-            "importance) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "importance, off_wall) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -381,6 +400,7 @@ class TaskBoard:
                 due_time.strftime("%H:%M") if due_on and due_time else None,
                 from_time.strftime("%H:%M") if due_on and from_time else None,
                 importance,
+                int(off_wall),
             ),
         )
         if nudge:
@@ -432,6 +452,9 @@ class TaskBoard:
             member = self.store.get_member(task.assignee)
         if self.held(task, member):
             return  # it gets its nudge when it comes up on the chart
+        for own in self.own_nudges:  # a task with its own kind of nudge (E2's email audit)
+            if await own(task, member, not_before, deadline):
+                return
         parts = [self._steps_for(task, member), *(source(task) for source in self.details)]
         details = "\n\n".join(d for d in parts if d)
         added_by = (
@@ -465,6 +488,11 @@ class TaskBoard:
             if details
             else f"{lead}. Done already, or later?"
         )
+        for queued in self.db.query(  # one nudge per task waiting for them (bug #49)
+            "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
+            (member.id, f"task-{task.id}-%"),
+        ):
+            self.outbox.cancel(queued["id"])
         result = await self.outbox.send(
             member,
             text,
@@ -482,6 +510,83 @@ class TaskBoard:
             self.db.execute(
                 "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
             )
+
+    async def _morning_list(self, member: Member, rows: list[dict[str, Any]]) -> bool:
+        """Bug #49: when quiet hours end with several task nudges waiting, they go as one
+        list, a button per task, instead of one after another. Later in the day they keep
+        coming one at a time (idea #11)."""
+        tz = self._tz()
+        now = clock.now()
+        local = now.astimezone(tz)
+        end = member.quiet_end
+        woke = datetime(local.year, local.month, local.day, end.hour, end.minute, tzinfo=tz)
+        if not woke <= local < woke + MORNING_LIST_WITHIN:
+            return False
+        tasks: list[Task] = []
+        seen: set[int] = set()
+        for row in rows:  # already in their order (T1)
+            task_id = _task_id(row)
+            task = self.get(task_id) if task_id is not None else None
+            if task is not None and task.status == "open" and task.id not in seen:
+                seen.add(task.id)
+                tasks.append(task)
+        if len(tasks) < 2:
+            return False
+        text, buttons = self._list_message(tasks, local.date())
+        result = await self.outbox.send(
+            member,
+            text,
+            priority=Priority.NORMAL,
+            kind="task_summary",
+            buttons=buttons,
+            deadline=now,
+            dedupe_key=f"morning-list-{member.id}-{local.date().isoformat()}",
+        )
+        if result.outbox_id is None:
+            return False
+        for row in rows:
+            self.outbox.cancel(row["id"])
+        for task in tasks:  # the list is their nudge: the next one waits its turn after it
+            self.db.execute(
+                "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
+            )
+        return True
+
+    def _list_message(self, tasks: list[Task], today: date) -> tuple[str, list[Button]]:
+        ids = [t.id for t in tasks]
+        lines = "\n".join(f"- {_label(t, today)}: {t.title}" for t in tasks)
+        buttons = [
+            Button(
+                f"✓ {_short(t.title)}", "task", {"task": t.id, "action": "list_done", "list": ids}
+            )
+            for t in tasks[:MORNING_LIST_BUTTONS]
+        ]
+        return MORNING_LIST_TEXT.format(items=lines), buttons
+
+    async def _list_done(self, event: InboundEvent) -> None:
+        """A tick on the morning list: that one's done, and the list shows the rest."""
+        assert event.button is not None
+        await self.complete(
+            int(event.button.payload["task"]),
+            event.member,
+            interactive=True,
+            tapped=event.button.message_id,
+        )
+        if event.button.message_id is None:
+            return
+        left = []
+        for task_id in event.button.payload.get("list", []):
+            try:
+                task = self.get(int(task_id))
+            except NotFound:
+                continue
+            if task.status == "open":
+                left.append(task)
+        if not left:
+            await self.outbox.edit(event.member, event.button.message_id, MORNING_LIST_DONE)
+            return
+        text, buttons = self._list_message(left, self._today())
+        await self.outbox.edit(event.member, event.button.message_id, text, buttons)
 
     def _deadline(self, task: Task) -> datetime | None:
         """By when a nudge should go out: its time on the due date (the task's, or the
@@ -1078,20 +1183,63 @@ class TaskBoard:
         return CANCELLED_TEXT.format(title=task.title)
 
     async def reschedule(
-        self, task_id: int, due_on: date | None, *, interactive: bool = False
+        self,
+        task_id: int,
+        due_on: date | None,
+        *,
+        due_time: time | Keep | None = KEEP,
+        from_time: time | Keep | None = KEEP,
+        interactive: bool = False,
     ) -> str:
+        """A new date, and a new time if given (bug #54). A snooze ends and the nudge is
+        asked again for the new moment, so nothing comes at the old one. A repeating
+        chore's time is its schedule's: every round takes it (bug #56)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        new_due = task.due_time if isinstance(due_time, Keep) else due_time
+        new_from = task.from_time if isinstance(from_time, Keep) else from_time
+        repeat = task.repeat
+        if repeat is not None and not isinstance(due_time, Keep):
+            repeat, new_due = replace(repeat, at=due_time), None
+        if due_on is None:
+            new_due = new_from = None
+        if new_from and (new_due is None or new_from >= new_due):
+            raise ValueError("a window needs its start before its end")
         self.db.execute(
-            "UPDATE tasks SET due_on = ?, overdue_reminders = 0, overdue_reminded_on = NULL "
-            "WHERE id = ?",
-            (due_on.isoformat() if due_on else None, task_id),
+            "UPDATE tasks SET due_on = ?, due_time = ?, from_time = ?, repeat = ?, "
+            "status = 'open', snoozed_until = NULL, overdue_reminders = 0, "
+            "overdue_reminded_on = NULL WHERE id = ?",
+            (
+                due_on.isoformat() if due_on else None,
+                new_due.strftime("%H:%M") if new_due else None,
+                new_from.strftime("%H:%M") if new_from else None,
+                json.dumps(repeat.to_json()) if repeat else None,
+                task_id,
+            ),
         )
-        await self._changed(self.get(task_id), "rescheduled", interactive)
+        self.withdraw_prompt(task)
+        task = self.get(task_id)
+        if due_on is not None:
+            if task.either:
+                for member in self.store.list_members():
+                    if member.telegram_user_id is not None:
+                        await self.prompt(task, member=member)
+            else:
+                await self.prompt(task)
+        await self._changed(task, "rescheduled", interactive)
         if due_on is None:
             return UNSCHEDULED_TEXT.format(title=task.title)
-        return RESCHEDULED_TEXT.format(title=task.title, due=due_on.isoformat())
+        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task))
+
+    def when_words(self, task: Task) -> str:
+        """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
+        assert task.due_on is not None
+        day = f"{task.due_on:%a %d %b}"
+        at = task.due_time or (task.repeat.at if task.repeat else None)
+        if task.from_time and task.due_time:
+            return f"{day}, {_clock_words(task.from_time)}-{_clock_words(task.due_time)}"
+        return f"{day}, {_clock_words(at)}" if at else day
 
     async def make_either(self, task_id: int) -> Task:
         """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
@@ -1117,7 +1265,10 @@ class TaskBoard:
         )
         self.withdraw_prompt(task)
         if until is not None:
-            when = _clock_words(until.astimezone(self._tz()))
+            local = until.astimezone(self._tz())
+            when = _clock_words(local)
+            if local.date() != self._today():  # bug #54: say which day, when it isn't today
+                when = f"{local:%a %d %b}, {when}"
             return UNTIL_TEXT.format(title=task.title, when=when)
         return LATER_TEXT.format(title=task.title)
 
@@ -1152,6 +1303,9 @@ class TaskBoard:
         assert event.button is not None
         task_id = int(event.button.payload["task"])
         action = event.button.payload.get("action")
+        if action == "list_done":
+            await self._list_done(event)
+            return
         if action == "done":
             reply = await self.complete(
                 task_id, event.member, interactive=True, tapped=event.button.message_id
@@ -1160,6 +1314,16 @@ class TaskBoard:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
+
+
+def _task_id(row: dict[str, Any]) -> int | None:
+    """The task a queued nudge is for, from its dedupe key ("task-12-ab12cd34")."""
+    parts = str(row.get("dedupe_key") or "").split("-")
+    return int(parts[1]) if len(parts) > 2 and parts[0] == "task" and parts[1].isdigit() else None
+
+
+def _short(title: str, limit: int = 28) -> str:
+    return title if len(title) <= limit else title[: limit - 1].rstrip() + "…"
 
 
 def _label(task: Task, today: date) -> str:
@@ -1300,6 +1464,23 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         if chosen is None:
             names = ", ".join(m.name for m in members)
             return f"Not created: there's nobody called {target} in the family ({names})."
+    whose = [chosen] if chosen is not None else ctx.services.store.list_members()
+    same = next(
+        (
+            t
+            for m in whose
+            for t in _board(ctx).open_for(m)
+            if title_matches(args["title"], t.title)
+        ),
+        None,
+    )
+    if same is not None:  # bug #56: a second "Mimi pill" to change the first one's time
+        return (
+            f"Not created: task {same.id} ({same.title}) is already open. To change its day "
+            "or time, use reschedule_task (a repeating chore's time goes for every round); "
+            "its schedule, set_task_schedule. If this is a different job, give it a title "
+            "that says how."
+        )
     try:
         task = await _board(ctx).create(
             ctx.member,
@@ -1463,23 +1644,48 @@ async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "reschedule_task",
-    "Change when a task is due, or take its date away.",
+    "Change when a task is due: its day, its time, or both ('make it Friday at 1pm', "
+    "'earlier on Friday', 'at 2 and 3 tomorrow'), or take its date away. For a repeating "
+    "chore, a time changes every round ('the Mimi pill at 9pm, never before'); never make "
+    "a second task for it. due_date: YYYY-MM-DD, '' to keep it, 'none' to take it away. "
+    "Read the day from the whole conversation: 'tomorrow' or 'Friday' said earlier still "
+    "counts. due_time and from_time: HH:MM (24-hour) as for create_task, '' to keep, "
+    "'none' to clear. Anything put off earlier then waits for the new day and time.",
     {
         "task_id": {"type": "integer"},
-        "due_date": {"type": "string", "description": "YYYY-MM-DD, or '' for no date."},
+        "due_date": {"type": "string"},
+        "due_time": {"type": "string"},
+        "from_time": {"type": "string"},
     },
 )
 async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
-    due = None
-    if args["due_date"]:
-        try:
-            due = date.fromisoformat(args["due_date"])
-        except ValueError:
-            return "Not changed: the due date should look like 2026-11-03."
+    board = _board(ctx)
     try:
-        return await _board(ctx).reschedule(args["task_id"], due, interactive=True)
+        task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    said = str(args["due_date"]).strip().lower()
+    try:
+        due = task.due_on if not said else None if said == "none" else date.fromisoformat(said)
+        due_time = _time_arg(args["due_time"])
+        from_time = _time_arg(args["from_time"])
+    except ValueError as exc:
+        raise ToolFailed("Not changed: dates look like 2026-11-03, and times like 14:30.") from exc
+    if due is None and said != "none":
+        due = board._today() if not isinstance(due_time, Keep) else None  # a time: today
+    try:
+        return await board.reschedule(
+            task.id, due, due_time=due_time, from_time=from_time, interactive=True
+        )
+    except ValueError as exc:
+        raise ToolFailed(f"Not changed: {exc}.") from exc
+
+
+def _time_arg(value: Any) -> time | Keep | None:
+    text = str(value).strip().lower()
+    if not text:
+        return KEEP
+    return None if text == "none" else time.fromisoformat(text)
 
 
 @tool(
@@ -1487,8 +1693,9 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "Put a task off when someone wants it later: until a time they gave ('I'll do it "
     "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
     "or for a few hours (until ''). No nudge or reminder comes before then. Also for a "
-    "nudge at a time about a task they already have ('prompt me to run at 2pm': until "
-    "14:00): never a calendar block.",
+    "nudge later today about a task they already have ('prompt me to run at 2pm': until "
+    "14:00): never a calendar block. Another day, or a new time for it, is "
+    "reschedule_task.",
     {"task_id": {"type": "integer"}, "until": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:

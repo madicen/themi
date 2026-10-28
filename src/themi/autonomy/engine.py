@@ -95,6 +95,7 @@ class Action:
     last_error: str | None
     result: str | None
     created_at: datetime
+    expires_at: datetime | None = None  # no use after then: it lapses (F15b)
 
 
 @dataclass(frozen=True)
@@ -179,6 +180,7 @@ def _action_from_row(row: dict[str, Any]) -> Action:
         last_error=row["last_error"],
         result=row["result"],
         created_at=datetime.fromisoformat(row["created_at"]),
+        expires_at=datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None,
     )
 
 
@@ -254,6 +256,7 @@ class Autonomy:
         *,
         interactive: bool = False,
         requested: bool = False,
+        expires: datetime | None = None,
     ) -> Outcome:
         """Run now (Tier 2) or wait for approval (Tier 1).
 
@@ -261,7 +264,8 @@ class Autonomy:
         approval request can go out as a reply rather than wait for a good moment).
         `requested` says they asked for exactly this in their own words: that counts as
         their yes, but only for categories that may become automatic and aren't
-        escalated. Capped categories always ask.
+        escalated. Capped categories always ask. `expires`: no use after then (an event
+        that's over), so an unanswered card lapses at that moment.
         """
         cat = self.category(category)
         if executor not in self.executors:
@@ -271,7 +275,7 @@ class Autonomy:
         now = to_utc_iso(clock.now())
         action_id = self.db.execute(
             "INSERT INTO pending_actions (category, member_id, summary, executor, payload, status,"
-            " automatic, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " automatic, created_at, updated_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 category,
                 member.id,
@@ -282,6 +286,7 @@ class Autonomy:
                 int(automatic),
                 now,
                 now,
+                to_utc_iso(expires) if expires else None,
             ),
         )
         self._audit(action_id, category, member.id, "staged", member, summary)
@@ -421,12 +426,13 @@ class Autonomy:
         return [self.action(r["id"]) for r in rows]
 
     def expire_stale(self, older_than: timedelta) -> list[Action]:
-        """Pending or snoozed actions nobody answered in time lapse quietly."""
+        """Pending or snoozed actions nobody answered in time lapse quietly, and so do
+        ones past their own `expires_at`."""
         now = clock.now()
         rows = self.db.query(
             "SELECT * FROM pending_actions WHERE status IN ('pending', 'snoozed') "
-            "AND created_at <= ?",
-            (to_utc_iso(now - older_than),),
+            "AND (created_at <= ? OR expires_at <= ?)",
+            (to_utc_iso(now - older_than), to_utc_iso(now)),
         )
         for row in rows:
             self.db.execute(

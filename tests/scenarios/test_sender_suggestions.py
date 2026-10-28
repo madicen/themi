@@ -37,30 +37,27 @@ async def mail(scenario: Scenario, fake: FakeGmail) -> None:
     await scenario.run_periodic("email.triage")
 
 
-async def test_likely_senders_are_offered_and_only_a_tap_adds_one(
+async def test_likely_senders_wait_in_the_audit_and_only_an_answer_adds_one(
     scenario: Scenario, inbox: FakeGmail
 ) -> None:
+    """E2 (idea #50): they wait in the email audit, not a message of their own."""
     await mail(scenario, inbox)
     await scenario.run_periodic("email.senders")
     await scenario.app.outbox.flush()
-    (offer,) = [t for t in scenario.inbox("Erin") if t.startswith("A few senders")]
-    assert offer == (
-        f"A few senders in {ERIN} might always count as urgent: Schwab Alerts (money) and Bob "
-        "Tenant (waiting on replies). Tap any that should; nothing changes otherwise."
-    )
+    assert not any(t.startswith("A few senders") for t in scenario.inbox("Erin"))
     account = scenario.app.store.linked_accounts(scenario.member("Erin").id)[0]
-    assert account.urgent_senders == ()  # nothing until she taps
+    assert account.urgent_senders == ()  # nothing until she answers
 
-    replies = await scenario.tap("Erin", "Schwab Alerts")
-    assert replies == [
-        "Added: mail from Schwab Alerts (alerts@schwab.example) always counts as urgent now."
-    ]
+    await scenario.tap("Erin", "Start")
+    await scenario.tap("Erin", "Same day")  # Schwab Alerts first: the likeliest
+    await scenario.tap("Erin", "Not important")
     account = scenario.app.store.get_linked_account(account.id)
     assert account.urgent_senders == ("alerts@schwab.example",)
 
     await scenario.run_periodic("email.senders")  # each is offered once
-    await scenario.app.outbox.flush()
-    assert len([t for t in scenario.inbox("Erin") if t.startswith("A few senders")]) == 1
+    audit = scenario.app.services.email_audit
+    assert audit is not None
+    assert len(audit.waiting(scenario.member("Erin"))) == 1  # Bob Tenant, still
 
 
 async def test_what_each_inbox_has_set_and_whats_waiting(
@@ -72,7 +69,10 @@ async def test_what_each_inbox_has_set_and_whats_waiting(
 
     await mail(scenario, inbox)
     await scenario.run_periodic("email.senders")
-    await scenario.tap("Erin", "Schwab Alerts")
+    await scenario.app.outbox.flush()
+    await scenario.tap("Erin", "Start")
+    await scenario.tap("Erin", "Same day")  # Schwab Alerts
+    await scenario.tap("Erin", "Not important")
     scenario.primary.queue_tool_call("inbox_setup", {})
     scenario.primary.queue_text("Bob Tenant is the one left.")
     await scenario.say(

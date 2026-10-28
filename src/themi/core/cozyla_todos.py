@@ -124,7 +124,7 @@ class CozylaTodos:
     def where(self, task: Task) -> str | None:
         """Which wall list a task is on, for the model."""
         link = self._link(task.id)
-        if link is None or task.repeats or task.on_chart or task.status not in ("open", "snoozed"):
+        if link is None or _off_the_lists(task) or task.status not in ("open", "snoozed"):
             return None
         lists = self.lists()
         name = lists.get(link["list_id"] or "") or self.client.config.todo_list
@@ -345,7 +345,7 @@ class CozylaTodos:
                 log.warning("Cozyla sync of task %s waits: %s", task.id, exc)
                 self._failed(link, str(exc))
                 continue
-            if task.repeats or task.on_chart:
+            if _off_the_lists(task):
                 self.db.execute(
                     "DELETE FROM cozyla_links WHERE task_id = ? AND version = ?",
                     (task.id, link["version"]),
@@ -363,8 +363,8 @@ class CozylaTodos:
         self, link: dict[str, Any], task: Task, todo: Todo | None, current: dict[str, Todo]
     ) -> str | None:
         """Make the wall match the task; returns its to-do's id, if it still has one."""
-        if task.status == "cancelled" or task.repeats or task.on_chart:
-            if todo is not None:  # gone, or a chore or on the chart: off the to-do lists
+        if task.status == "cancelled" or _off_the_lists(task):
+            if todo is not None:  # gone, or a chore, on the chart, or Themi's own: off the lists
                 await self.client.delete(todo.id)
                 del current[todo.id]
             return None
@@ -555,4 +555,10 @@ async def put_task_on_wall_list(ctx: ToolContext, args: dict[str, Any]) -> str:
 def _not_a_todo(task: Task) -> bool:
     """Chores live on the chart, and a check-in is Themi's own question (bug #41: an extra
     water check-in went on the to-do list)."""
-    return task.repeats or task.on_chart or task.check_in
+    return _off_the_lists(task) or task.check_in
+
+
+def _off_the_lists(task: Task) -> bool:
+    """Taken off the wall's to-do lists if it was on one: a chore, on the chart, or Themi's
+    own (E2b's email audit)."""
+    return task.repeats or task.on_chart or task.off_wall

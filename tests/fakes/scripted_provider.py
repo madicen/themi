@@ -9,16 +9,20 @@
 
 Each operation (chat, structured, transcribe) has its own queue. Running out
 of scripted responses fails the test loudly rather than inventing an answer.
+`take(seconds)` makes the next chat call take that long on the frozen clock.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import timedelta
 from itertools import count
 from typing import Any, Literal
 
+from themi import clock
 from themi.ai.errors import RefusalError, RetryableError, error_for_status
 from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
 from themi.ai.types import (
@@ -69,6 +73,7 @@ class ScriptedProvider:
             "transcribe": deque(),
         }
         self._ids = count(1)
+        self._takes: deque[float] = deque()
 
     # ----- scripting ----------------------------------------------------------
 
@@ -123,6 +128,12 @@ class ScriptedProvider:
     ) -> ScriptedProvider:
         return self.queue_error(RefusalError(category=category), op)
 
+    def take(self, seconds: float) -> ScriptedProvider:
+        """The next chat call moves the frozen clock on by `seconds`, a second at a time,
+        letting other tasks run in between, before it answers."""
+        self._takes.append(seconds)
+        return self
+
     def pending(self, op: Operation = "chat") -> int:
         return len(self._queues[op])
 
@@ -152,6 +163,8 @@ class ScriptedProvider:
                 max_tokens=max_tokens,
             )
         )
+        if self._takes:
+            await _pass(self._takes.popleft())
         result = self._pop("chat")
         assert isinstance(result, ChatResponse)
         return result
@@ -203,3 +216,11 @@ class ScriptedProvider:
         if isinstance(item, Exception):
             raise item
         return item
+
+
+async def _pass(seconds: float) -> None:
+    whole, rest = divmod(seconds, 1)
+    for step in [1.0] * int(whole) + ([rest] if rest else []):
+        for _ in range(20):  # let a waiting task notice, and finish what it starts
+            await asyncio.sleep(0)
+        clock.advance(timedelta(seconds=step))  # the answer comes the moment the time is up

@@ -32,6 +32,7 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 APPROVAL_TTL = timedelta(days=3)
+CARD_WITHIN = timedelta(hours=2)  # a card waits at most this long for a good moment (F15b)
 APPROVE_REACTIONS = frozenset({"✅", "👍", "👌"})
 SNOOZE_REACTIONS = frozenset({"💤", "⏰"})
 
@@ -94,6 +95,8 @@ class ApprovalsUI:
             priority=priority,
             buttons=buttons_for(action),
             kind="approval",
+            deadline=clock.now() + CARD_WITHIN,  # the daily limit doesn't hold it to tomorrow
+            expires=action.expires_at,
         )
         if result.outbox_id is not None:
             self._remember_message(action.id, member.id, result.outbox_id)

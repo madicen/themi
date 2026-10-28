@@ -59,6 +59,10 @@ EVENING_BEFORE_QUIET = timedelta(hours=1)
 CHECKED_PARTS = ("Morning", "Evening")
 ONCE = "today"  # add_to_wall_routine's repeat for just today
 JUST_TODAY = re.compile(r"\b(?:today|tonight|just for|this (?:morning|afternoon|evening))\b")
+EVERY_DAY = re.compile(  # bug #47: these keep an item, whatever the model sent
+    r"\b(?:until further notice|from now on|every (?:day|morning|afternoon|evening|night)|"
+    r"always|for good|permanently)\b"
+)
 CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
 ALL_DONE_TEXT = "{part} routine: all done."
 ROUTINE_SIGNAL = 0.5  # a part of the day done, or not: a small lift or dip
@@ -452,10 +456,11 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         raise ToolFailed("A routine item needs a name.")
     phrase = " ".join(str(args["repeat"]).split())
     said = name_key(ctx.request_text)
-    once = phrase.lower() in (ONCE, "tonight", "just today") or (
-        not phrase and bool(JUST_TODAY.search(said))
-    )  # '' is every day (bug #38), unless they said today or tonight
-    phrase = "" if once else phrase
+    if phrase.lower() in (ONCE, "tonight", "just today"):
+        phrase, once = "", True
+    else:
+        once = not phrase and bool(JUST_TODAY.search(said))  # '' is every day (bug #38)
+    once = once and not EVERY_DAY.search(said)
     if phrase:
         try:
             repeat = parse(phrase, ctx.services.wall_routines._today())

@@ -186,14 +186,22 @@ class Scenario:
         )
 
     async def tap(self, name: str, label: str) -> list[str]:
-        """Tap the most recent button labelled `label` in `name`'s chat."""
+        """Tap the most recent button labelled `label` in `name`'s chat (an edit's
+        buttons replace the message's own)."""
         chat = self.member(name).telegram_user_id
-        for params in reversed(self.telegram.calls("sendMessage")):
+        for method, params in reversed(
+            self.telegram.calls_in_order("sendMessage", "editMessageText")
+        ):
             if int(params["chat_id"]) != chat or not params.get("reply_markup"):
                 continue
             for button in params["reply_markup"]["inline_keyboard"][0]:
                 if button["text"] == label:
-                    token, message_id = button["callback_data"], self._message_id_for(params)
+                    token = button["callback_data"]
+                    message_id = (
+                        int(params["message_id"])
+                        if method == "editMessageText"
+                        else self._message_id_for(params)
+                    )
                     return await self._collect(
                         name, lambda c, t=token, m=message_id: self.telegram.tap(c, t, m)
                     )

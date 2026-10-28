@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
+    from themi.core.email_audit import EmailAudit
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
@@ -133,6 +134,7 @@ class Services:
     task_blocks: TaskBlocks | None = None  # time blocked on calendars for tasks (K5)
     wall_routines: CozylaRoutines | None = None  # the wall's routines (C3, bug #22)
     senders: SenderSuggestions | None = None  # suggesting always-urgent senders (E1)
+    email_audit: EmailAudit | None = None  # the email audit (E2)
     triage: EmailTriage | None = None
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None

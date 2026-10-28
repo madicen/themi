@@ -1,4 +1,5 @@
-"""My AI: each member's own backends, task chains and connection tests.
+"""My AI: each member's own backends, task chains and connection tests. Also, for admins,
+how long replies take (P2a).
 
 Keys are write-only. The page never renders a key, not even masked
 characters of it; it only says whether one is saved. Leaving the key field
@@ -14,10 +15,12 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member, NotFound, PermissionDenied
 from themi.ai.settings import ADAPTER_KINDS, AITask, RouteEntry
+from themi.core.timing import medians, week_of_replies
 from themi.storage.secrets import Secret
 from themi.web.kit import Kit
 
 MAX_CHAIN = 3
+SLOWEST = 10
 TASK_LABELS = {
     AITask.CONVERSATION: "Conversation",
     AITask.PDA_REWRITE: "Rewording messages gently",
@@ -61,6 +64,24 @@ def routes(kit: Kit) -> APIRouter:
     def ai_page(request: Request) -> HTMLResponse:
         session = kit.current(request)
         return kit.with_flash(request, "ai.html", session, **values(session.member))
+
+    @router.get("/ai/timing", response_class=HTMLResponse)
+    def timing_page(request: Request) -> HTMLResponse:
+        """Ideas #51 and #55: the week's replies, the medians, and where the slowest
+        ones' time went."""
+        session = kit.admin(request)
+        replies = week_of_replies(app.db)
+        names = {m.id: m.name for m in app.store.list_members()}
+        return kit.with_flash(
+            request,
+            "timing.html",
+            session,
+            count=len(replies),
+            medians=medians(replies),
+            noticed=sum(1 for r in replies if r.slow_notice),
+            slowest=sorted(replies, key=lambda r: -r.seconds)[:SLOWEST],
+            names=names,
+        )
 
     def backend_fields(form: dict[str, Any]) -> dict[str, Any]:
         timeout = str(form.get("timeout") or "60")

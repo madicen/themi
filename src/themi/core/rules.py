@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -407,12 +408,21 @@ class Rulebook:
         return len(rows)
 
 
+ONE_EMAIL = re.compile(r"\b(?:this|that|the)\s+(?:[\w&.'-]+\s+){0,4}(?:e-?mail|message)\b")
+GENERAL = re.compile(r"\b(?:always|every|all|any|whenever|from now on)\b")
+URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail from X is urgent"
+    r"\b(?:e-?mails?|mail) from\b.*\burgent\b|\b\w+ e-?mails (?:are|count as) (?:always )?urgent\b"
+)
+
+
 @tool(
     "propose_rule",
     "Capture a rule about how Themi itself behaves, as a draft for this person to lock in "
     "('always archive store promos', 'list steps as bullet points'). Chores, schedules and "
     "the steps of a job are tasks (create_task), never rules; ideas for the family to try "
-    "('keep the pacifiers in a basket') are a conversation, never rules. It sends them the "
+    "('keep the pacifiers in a basket') are a conversation, never rules; one email that "
+    "matters is keep_email, and which senders count as urgent is set_urgent_senders. It "
+    "sends them the "
     "proposal; "
     "nothing takes "
     "effect until they lock it in. applies_to: household rules apply to everyone in the "
@@ -452,6 +462,17 @@ class Rulebook:
 async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
     rulebook = ctx.services.rulebook
     assert rulebook is not None
+    said = ctx.request_text.lower()
+    if ONE_EMAIL.search(said) and not GENERAL.search(said):
+        raise ToolFailed(  # bug #53: "the Schwab email is urgent" isn't a rule
+            "That's about one email, not a rule: use keep_email (it keeps that email and "
+            "offers to count its sender as urgent)."
+        )
+    if URGENT_MAIL.search(said):
+        raise ToolFailed(
+            "Which senders count as urgent isn't a rule: use set_urgent_senders, or "
+            "keep_email for one email."
+        )
     try:
         rule = await rulebook.propose(
             ctx.member,

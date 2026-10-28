@@ -200,6 +200,10 @@ class FakeTelegram:
         with self._lock:
             return [c.params for c in self.state.calls if c.method == method]
 
+    def calls_in_order(self, *methods: str) -> list[tuple[str, dict[str, Any]]]:
+        with self._lock:
+            return [(c.method, c.params) for c in self.state.calls if c.method in methods]
+
     def sent_texts(self, chat_id: int) -> list[str]:
         return [p["text"] for p in self.calls("sendMessage") if int(p["chat_id"]) == chat_id]
 
