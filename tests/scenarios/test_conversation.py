@@ -291,3 +291,18 @@ async def test_replies_to_themis_nudges_teach_the_shadow_calendar(scenario: Scen
     await scenario.advance(hours=3)
     assert await scenario.run_periodic("energy.expire_outcomes") == 1
     assert [r["outcome"] for r in tracker.history(erin.id)] == ["acted", "ignored"]
+
+
+async def test_a_message_to_pass_on_isnt_saved_as_a_note(scenario: Scenario) -> None:
+    """Found reading the reports of 2026-10-27: "can you tell Hundo 'I Wuv U'?" was saved as
+    a note and answered "I've saved that for her". Themi can't pass messages on yet."""
+    scenario.primary.queue_tool_call(
+        "remember_fact",
+        {"subject": "message", "fact": "Michael says I Wuv U to Erin.", "about": "household"},
+    )
+    scenario.primary.queue_text("I can't pass messages on yet.")
+    await scenario.say("Husband", "Can you tell Hundo “I Wuv U ❤️”?")
+    result = scenario.primary.last_request.messages[2].content[0]
+    assert isinstance(result, ToolResult)
+    assert "can't pass messages on yet" in result.content
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 0

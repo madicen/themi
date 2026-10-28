@@ -70,6 +70,7 @@ IMPORTANCE = ("low", "normal", "high")  # how often an overdue task is raised (C
 BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
+SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
@@ -550,10 +551,15 @@ class TaskBoard:
             await self._changed(self.get(task_id), "edited", interactive)
         return self.get(task_id)
 
-    async def complete(self, task_id: int, by: Member, *, interactive: bool = False) -> str:
+    async def complete(
+        self, task_id: int, by: Member, *, interactive: bool = False, tapped: int | None = None
+    ) -> str:
+        """Mark it done (a repeating one: this round). `tapped`: the message whose Done
+        button did it, which the caller edits itself."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        await self._settle_sent(task, tapped)
         if task.repeats:
             return await self._complete_round(task, by, interactive)
         self.db.execute(
@@ -563,6 +569,21 @@ class TaskBoard:
         self.withdraw_prompt(task)
         await self._changed(self.get(task_id), "done", interactive)
         return DONE_TEXT.format(title=task.title)
+
+    async def _settle_sent(self, task: Task, tapped: int | None) -> None:
+        """Its nudges already sent stop asking once it's done some other way (bug #40: ticked
+        on the wall, the check-in kept its Done and Later buttons)."""
+        rows = self.db.query(
+            "SELECT member_id, telegram_message_id FROM outbox WHERE status = 'sent' "
+            "AND dedupe_key LIKE ? AND sent_at >= ? AND telegram_message_id IS NOT NULL",
+            (f"task-{task.id}-%", to_utc_iso(clock.now() - SETTLE_WITHIN)),
+        )
+        for row in rows:
+            if row["telegram_message_id"] != tapped:
+                member = self.store.get_member(row["member_id"])
+                await self.outbox.edit(
+                    member, row["telegram_message_id"], DONE_TEXT.format(title=task.title)
+                )
 
     async def reassign(self, task_id: int, member: Member | None, *, shared: bool = False) -> Task:
         """Give a one-off task to someone else, or to both of you (`shared`: on everyone's
@@ -852,6 +873,7 @@ class TaskBoard:
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
     async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
+        self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
         today = self._today()
         end = self.round_end(task)
         on_time = end is None or today <= end
@@ -871,7 +893,6 @@ class TaskBoard:
             "overdue_reminded_on = NULL, prompt_outbox_id = NULL WHERE id = ?",
             (next_due.isoformat(), task.id),
         )
-        self.withdraw_prompt(task)
         fresh = self.get(task.id)
         await self.prompt(fresh, not_before=self._round_starts(fresh))
         await self._changed(fresh, "rescheduled", interactive)
@@ -1107,7 +1128,9 @@ class TaskBoard:
         task_id = int(event.button.payload["task"])
         action = event.button.payload.get("action")
         if action == "done":
-            reply = await self.complete(task_id, event.member, interactive=True)
+            reply = await self.complete(
+                task_id, event.member, interactive=True, tapped=event.button.message_id
+            )
         else:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
@@ -1434,7 +1457,9 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     "snooze_task",
     "Put a task off when someone wants it later: until a time they gave ('I'll do it "
     "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
-    "or for a few hours (until ''). No nudge or reminder comes before then.",
+    "or for a few hours (until ''). No nudge or reminder comes before then. Also for a "
+    "nudge at a time about a task they already have ('prompt me to run at 2pm': until "
+    "14:00): never a calendar block.",
     {"task_id": {"type": "integer"}, "until": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:

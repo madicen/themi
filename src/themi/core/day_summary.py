@@ -15,6 +15,7 @@ plan. Chores waiting their turn for the chart (C2d) are left out.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -55,10 +56,20 @@ class DaySummary:
         lines: list[tuple[tuple[int, datetime], str]] = []
         reader = self.services.calendars
         if reader is not None:
+            shared, seen = self._shared_calendars(), set()
             owners = [m for m in reader.visible_to(member) if m.id == member.id or partner]
-            for owner in owners:
-                whose = "" if owner.id == member.id else f" ({owner.name})"
+            for owner in sorted(owners, key=lambda m: m.id != member.id):  # theirs first
                 for e in reader.entries(owner, start, start + timedelta(days=1)):
+                    if e.event_id and (e.calendar_id, e.event_id) in seen:
+                        continue  # one calendar both read (bug #43)
+                    seen.add((e.calendar_id, e.event_id))
+                    whose = (
+                        f" ({shared[e.calendar_id]})"
+                        if e.calendar_id in shared
+                        else ""
+                        if owner.id == member.id
+                        else f" ({owner.name})"
+                    )
                     text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
                     lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
         for task in self._due(member, day):
@@ -70,6 +81,16 @@ class DaySummary:
             )
             lines.append(((1, when) if when else (2, start), self._task_line(task, day, at)))
         return [text for _, text in sorted(lines, key=lambda line: line[0])]
+
+    def _shared_calendars(self) -> dict[str, str]:
+        """Calendars more than one person reads ("Madicen Family"), by id: their events are
+        the household's, named by the calendar rather than a person."""
+        rows = self.db.query(
+            "SELECT c.calendar_id, MIN(c.name) AS name FROM member_calendars c "
+            "JOIN linked_accounts a ON a.id = c.account_id GROUP BY c.calendar_id "
+            "HAVING COUNT(DISTINCT a.member_id) > 1"
+        )
+        return {r["calendar_id"]: r["name"] for r in rows}
 
     def _due(self, member: Member, day: date) -> list[Task]:
         """Tasks due that day (and, for today, ones still open from before). Chores waiting
@@ -152,6 +173,21 @@ class DaySummary:
         return ZoneInfo(family.timezone if family else "UTC")
 
 
+ABOUT_BOTH = re.compile(
+    r"\b(?:we|us|our|ours|both|together|everyone|family|husband|wife|partner)\b"
+)
+
+
+def _about_both(ctx: ToolContext) -> bool:
+    """The message asks about both of them, or the partner: "what do I have?" is theirs only,
+    whatever the model sent (bug #43)."""
+    said = ctx.request_text.lower()
+    names = [m.name.lower() for m in ctx.services.store.list_members() if m.id != ctx.member.id]
+    return bool(ABOUT_BOTH.search(said)) or any(
+        re.search(rf"\b{re.escape(n)}\b", said) for n in names if n
+    )
+
+
 def _clock(at: time) -> str:
     hour = at.hour % 12 or 12
     suffix = "am" if at.hour < 12 else "pm"
@@ -161,9 +197,9 @@ def _clock(at: time) -> str:
 @tool(
     "day_summary",
     "What's on someone's day: the events on their calendars and what's due. date: "
-    "YYYY-MM-DD from the local date in the context (empty for today). partner: true to "
-    "include the partner's events too, when they share them ('what are we doing "
-    "Saturday?'). Say it back in plain words; never mention energy.",
+    "YYYY-MM-DD from the local date in the context (empty for today). partner: true only "
+    "when they ask about both of them or the partner ('what are we doing Saturday?'; "
+    "theirs show when they share them). Say it back in plain words; never mention energy.",
     {"date": {"type": "string"}, "partner": {"type": "boolean"}},
 )
 async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -175,7 +211,8 @@ async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
         day = date.fromisoformat(raw) if raw else summary.today()
     except ValueError as exc:
         raise ToolFailed(f"'{raw}' isn't a date like 2026-10-30.") from exc
-    text = summary.text(ctx.member, day, partner=bool(args["partner"]))
+    partner = bool(args["partner"]) and _about_both(ctx)
+    text = summary.text(ctx.member, day, partner=partner)
     text = text or f"{day:%a %d %b}: nothing on the calendar, nothing due."
     # Sent as it is (Erin's idea #19: the model had reworded it), so the list keeps its shape.
     await ctx.services.outbox.send(ctx.member, text, priority=Priority.REPLY, kind="summary")

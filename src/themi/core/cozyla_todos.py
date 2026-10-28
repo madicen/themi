@@ -135,7 +135,7 @@ class CozylaTodos:
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
             return
-        if (task.repeats or task.on_chart) and not self._link(task.id):
+        if _not_a_todo(task) and not self._link(task.id):
             return
         self._mark(task.id)
 
@@ -241,9 +241,7 @@ class CozylaTodos:
             for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
                 task = self.board.get(row["id"])
                 link = self._link(task.id)
-                if not (task.repeats or task.on_chart) and (
-                    link is None or link["todo_id"] is None
-                ):
+                if not _not_a_todo(task) and (link is None or link["todo_id"] is None):
                     self._mark(task.id)
 
     async def _maybe_bring_in(self, todo: Todo, before: Seen | None, *, first: bool) -> None:
@@ -430,7 +428,7 @@ class CozylaTodos:
         ):
             if _same(row["title"], title):
                 task = self.board.get(row["id"])
-                if not task.repeats and not task.on_chart:
+                if not _not_a_todo(task):
                     return task
         return None
 
@@ -552,3 +550,9 @@ async def put_task_on_wall_list(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed("Repeating chores stay off the wall's to-do lists.")
     wall.put_on(task.id, list_id)
     return f"Task {task.id} ({task.title}) will be on {title} on the wall within a minute."
+
+
+def _not_a_todo(task: Task) -> bool:
+    """Chores live on the chart, and a check-in is Themi's own question (bug #41: an extra
+    water check-in went on the to-do list)."""
+    return task.repeats or task.on_chart or task.check_in

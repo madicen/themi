@@ -46,6 +46,8 @@ log = logging.getLogger(__name__)
 EXECUTOR = "blocks.add"
 ENDED_TEXT = "The time for {title} is over. Done, or move the block?"
 INTENT = re.compile(r"\b(?:block|calendar|schedule|time for)\b")
+# "Prompt me to run at 2" asks for a nudge then, not time on the calendar (bug #39).
+NUDGE = re.compile(r"\b(?:prompt|remind|nudge|ping|check in with)\b")
 MAX_DAYS = 14
 
 
@@ -249,7 +251,8 @@ def _task(blocks: TaskBlocks, ctx: ToolContext, task_id: int) -> Task:
     "block_time_for_task",
     "Block time on their own calendar for a task ('block Saturday morning for the "
     "bathroom'). date: YYYY-MM-DD; start and end: HH:MM, 24-hour. The task's nudges wait for "
-    "the block. Asked for in their words, it's made at once.",
+    "the block. Asked for in their words, it's made at once. A nudge at a time ('prompt me "
+    "to run at 2') isn't a block: that's snooze_task.",
     {
         "task_id": {"type": "integer"},
         "date": {"type": "string"},
@@ -265,6 +268,12 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     events.own_account(ctx.member)
     if not str(args["start"]).strip():
         raise ToolFailed("A block needs a start time, like 10:00.")
+    said = name_key(ctx.request_text)
+    if NUDGE.search(said) and not INTENT.search(said):
+        raise ToolFailed(
+            "They asked for a nudge at that time, not time on their calendar: use "
+            "snooze_task with until (HH:MM) for an existing task."
+        )
     when = parse_when(args["date"], args["start"], args["end"], events._today(), events._tz())
     proposal = Proposal(
         OWN,
@@ -272,7 +281,6 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         EXECUTOR,
         blocks.payload(task, when),
     )
-    said = name_key(ctx.request_text)
     return replace(proposal, requested=bool(INTENT.search(said)))
 
 

@@ -60,6 +60,7 @@ class FakeCozyla:
         self.chore_ticks: dict[tuple[str, str, str], str] = {}  # (uid, member, day) -> status
         self.routines: dict[int, dict[str, Any]] = {}
         self.routine_ticks: set[tuple[int, str]] = set()  # (routine id, day) ticked
+        self.takes_order = True  # whether a displayOrder sent with a routine is kept
         self.tokens: set[str] = set()
         self.calls: list[Call] = []
         self.locked_for = 0  # seconds of sign-in lockout to report, if any
@@ -205,8 +206,27 @@ class FakeCozyla:
             "startDay": (start or clock.now().date()).isoformat(),
             "endDay": None,
             "description": "",
+            # As the wall numbers them: 1000s in the morning, 2000s, 3000s; new ones last.
+            "displayOrder": max(
+                (
+                    r["displayOrder"]
+                    for r in self.routines.values()
+                    if (r["memberUid"], r["routineType"]) == (member, part)
+                ),
+                default=PART_ORDER[part] - 1,
+            )
+            + 1,
         }
         return routine_id
+
+    def routine_order(self, member: str, part: str) -> list[str]:
+        """A person's routine for a part of the day, as the wall shows it."""
+        mine = [
+            r
+            for r in self.routines.values()
+            if (r["memberUid"], r["routineType"]) == (member, part)
+        ]
+        return [r["routineTitle"] for r in sorted(mine, key=lambda r: r["displayOrder"])]
 
     def tick_routine(self, routine_id: int, day: date, done: bool = True) -> None:
         (self.routine_ticks.add if done else self.routine_ticks.discard)(
@@ -372,12 +392,16 @@ class FakeCozyla:
         for member in body["memberUids"]:
             routine_id = self.add_routine(member, body["routineTitle"], body["routineType"])
             self.routines[routine_id].update({k: body[k] for k in ROUTINE_FIELDS})
+            if self.takes_order and "displayOrder" in body:
+                self.routines[routine_id]["displayOrder"] = body["displayOrder"]
             made.append({"routineId": routine_id, "memberUid": member, "memberId": 1})
         return made
 
     def _update_routine(self, body: dict[str, Any]) -> None:
         routine = self.routines[body["id"]]
         routine.update({k: body[k] for k in ROUTINE_FIELDS})
+        if self.takes_order and "displayOrder" in body:
+            routine["displayOrder"] = body["displayOrder"]
 
     def _delete_routine(self, body: dict[str, Any]) -> None:
         del self.routines[body["id"]]
@@ -450,6 +474,7 @@ CHORE_FIELDS = (
     "choreDeviceId",
     "description",
 )
+PART_ORDER = {"Morning": 1000, "Afternoon": 2000, "Evening": 3000}
 ROUTINE_FIELDS = (
     "routineTitle",
     "routineType",

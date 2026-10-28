@@ -54,6 +54,8 @@ class Entry:
     all_day: bool
     video: bool
     source: str | None  # set for Themi's own events ("task:12")
+    calendar_id: str = ""
+    event_id: str = ""  # with calendar_id: the same event, read through two accounts
 
 
 def _when(value: dict[str, Any], tz: ZoneInfo) -> tuple[datetime, bool] | None:
@@ -228,6 +230,8 @@ class CalendarBusy:
                 bool(r["all_day"]),
                 bool(r["video"]),
                 r["source"],
+                r["calendar_id"],
+                r["event_id"],
             )
             for r in rows
         ]
@@ -247,11 +251,12 @@ class CalendarBusy:
         today = clock.now().astimezone(tz).date()
         start = datetime(today.year, today.month, today.day, tzinfo=tz)
         end = start + timedelta(days=CONTEXT_DAYS)
-        lines = [
-            f"{owner.name} · {event_line(e, tz)}"
-            for owner in self.visible_to(viewer)
-            for e in self.entries(owner, start, end)
-        ]
+        lines, seen = [], set()
+        for owner in self.visible_to(viewer):
+            for e in self.entries(owner, start, end):
+                if not e.event_id or (e.calendar_id, e.event_id) not in seen:  # bug #43
+                    seen.add((e.calendar_id, e.event_id))
+                    lines.append(f"{owner.name} · {event_line(e, tz)}")
         return as_data("calendars", "\n".join(lines)) if lines else ""
 
     def _tz(self) -> ZoneInfo:

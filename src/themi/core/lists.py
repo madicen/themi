@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.groceries import and_list, asks_to_add
+from themi.core.groceries import and_list, asks_to_add, refuse_spending
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
@@ -408,6 +408,7 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
         if skipped:
             raise ToolDeclined(f"Already on {nl.name}: {and_list(skipped)}. Nothing was added.")
         raise ToolFailed("There were no items to add.")
+    refuse_spending(names, ctx.request_text, prices=nl.purpose == THINGS_TO_BUY)
     text = and_list(names)
     summary = f"{text[:1].upper()}{text[1:]} for {nl.name}"
     proposal = Proposal(ADD_CATEGORY, summary, ADD_EXECUTOR, {"list_id": nl.id, "items": names})

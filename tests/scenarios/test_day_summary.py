@@ -178,3 +178,46 @@ async def test_the_settings_page(scenario: Scenario, site: httpx.AsyncClient) ->
     assert erin.morning_summary_empty
     await site.post("/settings", data={**form, "morning_summary": ""})
     assert scenario.member("Erin").morning_summary is None  # blank: off
+
+
+async def test_whose_events_are_whose(
+    scenario: Scenario, linked: FakeGcal, fake_google: FakeGoogle, site: httpx.AsyncClient
+) -> None:
+    """Bug #43: "what else do I have today?" listed the family calendar's bins twice (once
+    as Michael's: both of them read it) and Michael's own Tea Time."""
+    await link(scenario, site, fake_google, "Husband", HUSBAND)
+    husband = scenario.member("Husband")
+    scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
+    linked.add_event(HUSBAND, local(16, 30), local(17), summary="Tea Time!")
+    await scenario.run_periodic("calendar.busy")
+    db = scenario.app.db
+    for member in (scenario.member("Erin"), husband):
+        account = db.scalar("SELECT id FROM linked_accounts WHERE member_id = ?", (member.id,))
+        db.execute(
+            "INSERT INTO member_calendars (account_id, calendar_id, name) VALUES (?, ?, ?)",
+            (account, "family@group.calendar.google.com", "Madicen Family"),
+        )
+        db.execute(
+            "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, title, "
+            "location, starts_at, ends_at, all_day, video, busy, source, fetched_at) "
+            "VALUES (?, ?, ?, 'bins', 'Take out Waste Bins', '', ?, ?, 1, 0, 0, NULL, ?)",
+            (
+                member.id, account, "family@group.calendar.google.com",
+                "2026-10-21T07:00:00+00:00", "2026-10-22T07:00:00+00:00",
+                clock.now().isoformat(),
+            ),
+        )  # fmt: skip
+
+    async def ask(said: str) -> str:
+        scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": True})
+        scenario.primary.queue_text("Okay.")
+        return (await scenario.say("Erin", said))[0]
+
+    assert await ask("What else do I have today?") == (
+        "Wed 21 Oct:\n- all day: Take out Waste Bins (Madicen Family)"
+    )
+    assert await ask("What are we doing today?") == (
+        "Wed 21 Oct:\n"
+        "- all day: Take out Waste Bins (Madicen Family)\n"
+        "- 4:30-5 pm: Tea Time! (Husband)"
+    )

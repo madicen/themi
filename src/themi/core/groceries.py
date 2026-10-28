@@ -62,6 +62,21 @@ def asks_to_add(request_text: str, previous_text: str = "") -> bool:
     return follow_on and bool(ADD_INTENT.search(before))
 
 
+SPENT = re.compile(r"\b(?:spent|paid|cost me|was charged|got charged)\b")
+PRICE = re.compile(r"[$€£]\s?\d|\b\d+\.\d{2}\b")
+SPENT_TEXT = (
+    "That's money spent, not something to buy: nothing was added. Themi doesn't keep track "
+    "of spending yet; say so plainly."
+)
+
+
+def refuse_spending(names: list[str], request_text: str, *, prices: bool = True) -> None:
+    """A spend ("just spent $51.97 on DoorDash") isn't something to buy (bug #36). `prices`:
+    an item with a price counts too (on a shopping list; not on a to-do list)."""
+    if SPENT.search(request_text.lower()) or (prices and any(PRICE.search(n) for n in names)):
+        raise ToolFailed(SPENT_TEXT)
+
+
 def and_list(names: list[str]) -> str:
     if len(names) <= 2:
         return " and ".join(names)
@@ -218,6 +233,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
                 f"{and_list(skipped)}. No new approval was sent."
             )
         raise InvalidValue("no items to add")
+    refuse_spending(names, ctx.request_text)
     # Asked for, if every item is in what they just wrote ("add white miso", "out of eggs");
     # restocking, receipts and items the model inferred still wait for a yes.
     said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).lower()

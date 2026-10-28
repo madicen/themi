@@ -190,3 +190,24 @@ async def test_mentioning_something_isnt_asking_for_it(scenario: Scenario) -> No
         {"items": [{"name": "pacifiers", "store": ""}]},
     )
     assert on_it(scenario) == [("pacifiers", False)]  # asked: straight on
+
+
+async def test_money_spent_isnt_something_to_buy(scenario: Scenario) -> None:
+    """Bug #36: "just spent $51.97 on door dash" was staged for Things to Buy."""
+    to_buy(scenario)  # the list exists, as it did
+    await say(
+        scenario,
+        "Just spent $51.97 on door dash",
+        "add_to_list",
+        {"list": "Things to Buy", "items": ["DoorDash $51.97"]},
+    )
+    assert "money spent, not something to buy" in tool_result(scenario)
+    await say(
+        scenario,
+        "Just spent $51.97 on door dash",
+        "add_to_things_to_buy",
+        {"items": [{"name": "DoorDash", "store": ""}]},
+    )
+    assert "money spent, not something to buy" in tool_result(scenario)
+    assert on_it(scenario) == []
+    assert not scenario.app.db.query("SELECT 1 FROM pending_actions")

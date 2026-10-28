@@ -201,6 +201,7 @@ TOOL_GROUPS: dict[str, str] = {
             "forget_expected_email",
             "set_urgent_senders",
             "set_inbox_watched",
+            "inbox_setup",
         ),
         "email",
     ),

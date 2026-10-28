@@ -422,3 +422,49 @@ async def test_making_a_task_both_of_ours_asks_each_once(scenario: Scenario) -> 
     assert sorted(r["member_id"] for r in rows) == sorted(
         [erin.id, scenario.member("Husband").id]
     )  # her nudge from before was taken back, not doubled
+
+
+def _task_edits(scenario: Scenario, name: str) -> list[tuple[str, bool]]:
+    return [
+        (e["text"], bool(e.get("reply_markup", {}).get("inline_keyboard")))
+        for e in scenario.edits(name)
+    ]
+
+
+async def test_done_somewhere_else_the_nudge_stops_asking(scenario: Scenario) -> None:
+    """Bug #40: the run was ticked on the wall, but the 2 pm check-in kept its Done and Later
+    buttons, so it looked like Themi was still asking."""
+    from datetime import date
+
+    from themi.core.repeat import parse
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    dentist = await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))
+    await scenario.advance(hours=1)
+    assert "Due today: Book the dentist. Done already, or later?" in scenario.inbox("Erin")
+    await board.complete(dentist.id, erin)  # on the wall, say
+
+    run = await board.create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True, nudge=False
+    )
+    await board.set_schedule(run.id, erin, repeat=parse("every day", date(2026, 10, 21)))
+    await scenario.advance(hours=1)
+    assert any(t.startswith("Check-in: Go for a run") for t in scenario.inbox("Erin"))
+    await board.complete(run.id, erin)
+    assert _task_edits(scenario, "Erin") == [
+        ("Marked done: Book the dentist. Thank you.", False),
+        ("Marked done: Go for a run. Thank you.", False),
+    ]
+
+
+async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 21))
+    await scenario.advance(hours=1)
+    await scenario.tap("Erin", "Done")
+    assert _task_edits(scenario, "Erin") == [("Marked done: Book the dentist. Thank you.", False)]

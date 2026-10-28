@@ -27,6 +27,7 @@ them from a button, and never changes them.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -42,6 +43,7 @@ from themi.connectors.cozyla.emoji import better_icon, routine_icon
 from themi.connectors.cozyla.schedule import to_wall, wall_can_say
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
+from themi.core.events import title_matches
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.repeat import RepeatError, parse, read_back
@@ -55,7 +57,9 @@ log = logging.getLogger(__name__)
 MORNING_CHECK = time(12)
 EVENING_BEFORE_QUIET = timedelta(hours=1)
 CHECKED_PARTS = ("Morning", "Evening")
-CHECK_TEXT = "{part} routine: {items} still open. Done already?"
+ONCE = "today"  # add_to_wall_routine's repeat for just today
+JUST_TODAY = re.compile(r"\b(?:today|tonight|just for|this (?:morning|afternoon|evening))\b")
+CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
 ALL_DONE_TEXT = "{part} routine: all done."
 ROUTINE_SIGNAL = 0.5  # a part of the day done, or not: a small lift or dip
 PARTS = ("Morning", "Afternoon", "Evening")
@@ -127,17 +131,64 @@ class CozylaRoutines:
             return "They aren't a member on the wall, so there's no routine to add it to."
         today = self._today()
         phrase = str(payload.get("repeat") or "")
-        repeat = parse(phrase or "every day", today)
+        once = phrase == ONCE or not phrase  # payloads from before F14b: '' was just today
+        if "once" in payload:
+            once = bool(payload["once"])
+        repeat = parse("every day" if once or not phrase else phrase, today)
         title, part = str(payload["title"])[:50], str(payload["part"])
-        made = await self.client.create_routine(member, title, part, to_wall(repeat, today))
-        if not phrase:
+        position = str(payload.get("position") or "end")
+        order, where = await self._order(member, part, position)
+        schedule = to_wall(repeat, today)
+        made = await self.client.create_routine(member, title, part, schedule, order)
+        if order is not None:
+            where = await self._placed(made, title, part, schedule, today, order, where)
+        if once:
             self.db.execute(
                 "INSERT OR REPLACE INTO wall_routine_once (routine_id, member_id, day) "
                 "VALUES (?, ?, ?)",
                 (made, ctx.member.id, today.isoformat()),
             )
-            return f"Added {title} to the {part.lower()} routine on the wall, just for today."
-        return f"Added {title} to the {part.lower()} routine on the wall: {read_back(repeat)}."
+            return (
+                f"Added {title} to the {part.lower()} routine on the wall{where}, just for today."
+            )
+        return (
+            f"Added {title} to the {part.lower()} routine on the wall{where}: {read_back(repeat)}."
+        )
+
+    async def _order(self, member: str, part: str, position: str) -> tuple[float | None, str]:
+        """The displayOrder that puts it there (bug #38), and the words for where; None for
+        the end, where the wall puts new ones itself."""
+        if position == "end":
+            return None, ""
+        mine = sorted(
+            (r for r in await self.client.routines() if (r.member, r.part) == (member, part)),
+            key=_display_order,
+        )
+        if not mine:
+            return None, ""
+        if position == "start":
+            return _display_order(mine[0]) - 1, ", first"
+        words = position.removeprefix("after:").strip()
+        index = next((i for i, r in enumerate(mine) if title_matches(words, r.title)), None)
+        if index is None:
+            return None, f" (no item like '{words}' there, so it went at the end)"
+        here = _display_order(mine[index])
+        after = _display_order(mine[index + 1]) if index + 1 < len(mine) else here + 2
+        return (here + after) / 2, f", after {mine[index].title}"
+
+    async def _placed(
+        self, routine_id: int, title: str, part: str, schedule: Any, today: date,
+        order: float, where: str,
+    ) -> str:  # fmt: skip
+        """Read it back: the wall may keep its own order. Then once more by an update, and
+        if that doesn't take either, say so rather than claim it."""
+        for attempt in (1, 2):
+            made = next((r for r in await self.client.routines() if r.id == routine_id), None)
+            if made is None or _display_order(made) == order:
+                return where
+            if attempt == 1:
+                await self.client.update_routine(made, title, part, schedule, today, order)
+        return " (it went at the end: the wall kept its own order, so it needs moving there)"
 
     async def _expire_once(self, today: date) -> None:
         """Just-for-today items go the day after."""
@@ -276,7 +327,7 @@ class CozylaRoutines:
                     continue
                 await self.services.outbox.send(
                     member,
-                    CHECK_TEXT.format(part=part, items=and_list([r.title for r in still])),
+                    CHECK_TEXT.format(part=part, items=_bullets(still)),
                     priority=Priority.NORMAL,
                     kind="routine",
                     buttons=self._buttons(still, today),
@@ -322,7 +373,7 @@ class CozylaRoutines:
         if event.button.message_id is None:
             return
         if still:
-            text = CHECK_TEXT.format(part=part, items=and_list([r.title for r in still]))
+            text = CHECK_TEXT.format(part=part, items=_bullets(still))
             await self.services.outbox.edit(
                 event.member, event.button.message_id, text, self._buttons(still, day)
             )
@@ -381,13 +432,16 @@ class CozylaRoutines:
 @staged_tool(
     "add_to_wall_routine",
     "Add an item to someone's morning, afternoon or evening routine on the Cozyla wall "
-    "('add replace vacuum water to my evening routine tonight'). repeat: '' for just today, "
-    "or a schedule phrase ('every day', 'every Tue and Thu'). Not a calendar event, a chore "
-    "or a list.",
+    "('add replace vacuum water to my evening routine tonight'). repeat: 'today' for just "
+    "today or tonight, a schedule phrase ('every Tue and Thu'), or '' for every day. "
+    "position: 'end', 'start', or 'after: <item>'; several at the start, in order: the "
+    "first 'start', each next 'after: <the one before>'. Not a calendar event, a chore or "
+    "a list.",
     {
         "title": {"type": "string"},
         "part": {"type": "string", "enum": list(PARTS)},
         "repeat": {"type": "string"},
+        "position": {"type": "string"},
     },
 )
 async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
@@ -397,6 +451,11 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     if not title:
         raise ToolFailed("A routine item needs a name.")
     phrase = " ".join(str(args["repeat"]).split())
+    said = name_key(ctx.request_text)
+    once = phrase.lower() in (ONCE, "tonight", "just today") or (
+        not phrase and bool(JUST_TODAY.search(said))
+    )  # '' is every day (bug #38), unless they said today or tonight
+    phrase = "" if once else phrase
     if phrase:
         try:
             repeat = parse(phrase, ctx.services.wall_routines._today())
@@ -404,14 +463,30 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             raise ToolFailed(str(exc)) from exc
         if not wall_can_say(repeat):
             raise ToolFailed("The wall's routines can't repeat like that; try 'every Tue and Thu'.")
-    when = f", {phrase}" if phrase else ", just today"
-    said = name_key(ctx.request_text)
+    when = ", just today" if once else f", {phrase}" if phrase else ", every day"
+    position = " ".join(str(args.get("position") or "end").split()).lower() or "end"
+    if position not in ("start", "end") and not position.startswith("after:"):
+        raise ToolFailed("position: 'start', 'end' or 'after: <item>'.")
     words = [w for w in name_key(title).split() if len(w) > 2]
     asked = "routine" in said and all(w in said for w in words)
     proposal = Proposal(
         ADD_CATEGORY,
         f"{title} for the {str(args['part']).lower()} routine{when}",
         ADD_EXECUTOR,
-        {"title": title, "part": args["part"], "repeat": phrase},
+        {
+            "title": title,
+            "part": args["part"],
+            "repeat": phrase,
+            "once": once,
+            "position": position,
+        },
     )
     return replace(proposal, requested=asked)
+
+
+def _display_order(routine: Routine) -> float:
+    return float(routine.raw.get("displayOrder") or 0)
+
+
+def _bullets(still: list[RoutineRecord]) -> str:
+    return "\n".join(f"- {r.title}" for r in still)

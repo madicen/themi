@@ -74,6 +74,7 @@ class ApprovalsUI:
     def install(self, services: Services) -> None:
         """Wire approvals into the agent: listeners, buttons, reactions, fast path, /pending."""
         self.autonomy.pending_listeners.append(self.on_pending)
+        self.autonomy.withdrawn_listeners.append(self.on_withdrawn)
         services.button_handlers["approval"] = self.on_button
         services.reaction_handlers.append(self.on_reaction)
         services.awaiting_sources.append(self.awaiting_items)
@@ -117,11 +118,16 @@ class ApprovalsUI:
         await self._show_result(outcome.action, outcome.message)
         return outcome.message
 
+    async def on_withdrawn(self, action: Action, reason: str) -> None:
+        await self._edit_cards(action, f"{action.summary}\n{reason}")
+
     async def _show_result(self, action: Action, message: str) -> None:
         template = RESULT_TEXT.get(action.status)
         if template is None:
             return
-        text = template.format(summary=action.summary, message=message)
+        await self._edit_cards(action, template.format(summary=action.summary, message=message))
+
+    async def _edit_cards(self, action: Action, text: str) -> None:
         for row in self.db.query(
             "SELECT * FROM approval_messages WHERE action_id = ?", (action.id,)
         ):

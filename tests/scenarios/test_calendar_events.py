@@ -231,3 +231,76 @@ async def test_booking_emails_become_cards_then_an_offer_then_automatic(
         "Added to your calendar from an email: Vet visit 4, Thu 29 Oct, 10-10:30 am (at Pet "
         "Clinic)."
     ]
+
+
+async def test_a_newer_card_for_the_same_event_takes_the_older_ones_place(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #35: fixing the time staged a second card and left the first waiting, so a later
+    "go ahead" made the old one too."""
+    party = dentist(
+        title="Block party", date="2026-10-24", start="", location="", calendar="family"
+    )
+    await say(scenario, "There's a block party Saturday", "add_calendar_event", party)
+    replies = await say(
+        scenario, "It's at 2, actually", "add_calendar_event", party | {"start": "14:00"}
+    )
+    assert (
+        replies[0]
+        == "Block party, Sat 24 Oct, 2-3 pm, for the family calendar\nGo ahead, or not now?"
+    )
+    (edit,) = scenario.edits("Erin")
+    assert edit["text"] == (
+        "Block party, Sat 24 Oct, all day, for the family calendar\nReplaced by the newer card."
+    )
+    assert not edit.get("reply_markup", {}).get("inline_keyboard")
+    waiting = scenario.app.db.query(
+        "SELECT summary FROM pending_actions WHERE status IN ('pending', 'snoozed')"
+    )
+    assert [r["summary"] for r in waiting] == [
+        "Block party, Sat 24 Oct, 2-3 pm, for the family calendar"
+    ]
+    await scenario.tap("Erin", "Go ahead")
+    assert [e["start"] for e in linked.events(ERIN, "Themi")] == [
+        {"dateTime": local(14, day=24), "timeZone": "America/Los_Angeles"}
+    ]
+
+
+async def test_an_event_already_on_the_calendar_isnt_added_again(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #35: "go ahead and add to calendar" staged a third copy of the lunch."""
+    party = dentist(title="Block party", date="2026-10-24", start="14:00", location="")
+    await say(
+        scenario, "Put the block party on my calendar Saturday at 2", "add_calendar_event", party
+    )
+    await say(scenario, "Go ahead and add it to my calendar", "add_calendar_event", party)
+    assert "Already on your calendar: Block party, Sat 24 Oct, 2-3 pm." in tool_result(scenario)
+    await say(
+        scenario,
+        "Put the block party on my calendar Saturday at 4",
+        "add_calendar_event",
+        party | {"start": "16:00"},
+    )
+    assert "already on your calendar (Sat 24 Oct, 2-3 pm)" in tool_result(scenario)
+    assert "move_calendar_event" in tool_result(scenario)
+    assert len(on_primary(linked)) == 1
+    assert not scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'")
+
+
+@pytest.mark.parametrize(
+    ("title", "starts"),
+    [("Lunch at Merit", "12:00"), ("Dinner with the Parks", "18:00"), ("Brunch", "10:30")],
+)
+async def test_a_meal_without_a_time_gets_its_usual_one(
+    scenario: Scenario, linked: FakeGcal, title: str, starts: str
+) -> None:
+    """Bug #35: "a lunch at Merit this Sunday" was all day."""
+    await say(
+        scenario,
+        f"Put {title.lower()} on my calendar Sunday",
+        "add_calendar_event",
+        dentist(title=title, date="2026-10-25", start="", location=""),
+    )
+    event = on_primary(linked)[title]
+    assert event["start"]["dateTime"][11:16] == starts

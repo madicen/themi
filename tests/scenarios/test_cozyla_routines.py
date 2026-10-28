@@ -68,7 +68,7 @@ async def test_the_morning_check_lists_whats_open_and_ticks_from_a_button(
     assert routine_texts(scenario, "Erin") == []
     await at(scenario, WED, 12, 1)
     assert routine_texts(scenario, "Erin") == [
-        "Morning routine: Walk dog and Make the bed still open. Done already?"
+        "Morning routine, still open:\n- Walk dog\n- Make the bed\nDone already?"
     ]
     assert scenario.last_buttons("Erin") == ["✓ Walk dog", "✓ Make the bed"]
     assert signals(scenario, "Erin") == [
@@ -80,7 +80,7 @@ async def test_the_morning_check_lists_whats_open_and_ticks_from_a_button(
     await scenario.tap("Erin", "✓ Walk dog")
     assert (walk, WED.isoformat()) in fake_cozyla.routine_ticks
     assert scenario.edits("Erin")[-1]["text"] == (
-        "Morning routine: Make the bed still open. Done already?"
+        "Morning routine, still open:\n- Make the bed\nDone already?"
     )
     await tap_edited(scenario, "Erin", "✓ Make the bed")
     assert scenario.edits("Erin")[-1]["text"] == "Morning routine: all done."
@@ -104,7 +104,7 @@ async def test_the_evening_check_comes_an_hour_before_quiet_hours(
     assert routine_texts(scenario, "Husband") == []
     await at(scenario, WED, 22, 1)
     assert routine_texts(scenario, "Husband") == [
-        "Evening routine: Cycle dishwasher still open. Done already?"
+        "Evening routine, still open:\n- Cycle dishwasher\nDone already?"
     ]
 
 
@@ -147,7 +147,7 @@ async def test_themis_check_ins_are_routines_on_the_wall(
 
 
 async def add(scenario: Scenario, said: str, args: dict[str, str]) -> list[str]:
-    scenario.primary.queue_tool_call("add_to_wall_routine", args)
+    scenario.primary.queue_tool_call("add_to_wall_routine", {"position": "end", **args})
     scenario.primary.queue_text("Done.")
     return await scenario.say("Erin", said)
 
@@ -198,5 +198,59 @@ async def test_mentioned_but_not_asked_its_a_card(
         {"title": "Replace vacuum water", "part": "Evening", "repeat": ""},
     )
     assert replies[0] == (
-        "Replace vacuum water for the evening routine, just today\nGo ahead, or not now?"
+        "Replace vacuum water for the evening routine, every day\nGo ahead, or not now?"
     )
+
+
+async def test_items_go_where_they_were_asked_and_stay(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #38: "add take wegovy and drug a bean as the first two tasks of my morning
+    routine" put them at the end, and only for today."""
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    fake_cozyla.add_routine("m-erin", "Make the bed", "Morning")
+    await at(scenario, WED, 9, 30)
+    said = "Add take wegovy and drug a bean as the first two tasks of my morning routine"
+    scenario.primary.queue_tool_calls(
+        [
+            (
+                "add_to_wall_routine",
+                {"title": "Take wegovy", "part": "Morning", "repeat": "", "position": "start"},
+                None,
+            ),
+            (
+                "add_to_wall_routine",
+                {
+                    "title": "Drug a bean",
+                    "part": "Morning",
+                    "repeat": "",
+                    "position": "after: take wegovy",
+                },
+                None,
+            ),
+        ]
+    )
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", said)
+    assert fake_cozyla.routine_order("m-erin", "Morning") == [
+        "Take wegovy", "Drug a bean", "Walk dog", "Make the bed",
+    ]  # fmt: skip
+    assert scenario.app.db.query("SELECT * FROM wall_routine_once") == []  # every day
+    await at(scenario, WED + timedelta(days=1), 9)
+    assert "Take wegovy" in fake_cozyla.routine_order("m-erin", "Morning")
+
+
+async def test_a_wall_that_keeps_its_own_order_is_said_so(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    fake_cozyla.takes_order = False
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    await at(scenario, WED, 9, 30)
+    await add(
+        scenario,
+        "Put take wegovy first in my morning routine",
+        {"title": "Take wegovy", "part": "Morning", "repeat": "", "position": "start"},
+    )
+    result = scenario.primary.last_request.messages[-1].content[0].content  # type: ignore[union-attr]
+    assert "went at the end" in result
+    assert fake_cozyla.routine_order("m-erin", "Morning") == ["Walk dog", "Take wegovy"]

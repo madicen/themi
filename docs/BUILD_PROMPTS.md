@@ -75,6 +75,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
+| F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
+| F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
+| X1 | Spending: takeout and business expenses | Feedback | [ ] |
+| B1 | Breaks: a rest mode that ends with a question | Feedback | [ ] |
+| T1 | Tasks: urgent and important | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3727,6 +3732,175 @@ Notes (2026-10-27):
   Each call sends about 10,000 tokens (55 tools' schemas are most of it); trimming them is a
   possible follow-up.
 - Setup: restart (applies 0058).
+
+### F14a · Feedback (2026-10-27): one card per event, nudges at a time, check-ins kept in Themi, whose day
+Status: [x] 2026-10-28
+Depends on: K3, K5, C1b, K2
+From the family's reports of 2026-10-27: bugs #35, #39, #40, #41 and #43. F14b takes the
+rest of that day's bugs; ideas #37, #42 and #44 are prompts X1, B1 and T1; #33 (burnout
+recovery mode) and #34 (body double mode) wait for Erin's spec.
+
+What happened, from the database and logs:
+- #35 (Michael: "review this exchange"): "add a lunch at Merit this Sunday" became an
+  all-day card. "It should be at lunch" staged a second card (12-1) and left the all-day one
+  waiting. "Go ahead and add to calendar" then answered the old all-day card with
+  `answer_waiting_item` and staged a third. Now three events: all day, 12-1 and 12-1.
+  Separately, the first write to the family calendar made a new "Themi" calendar on Erin's
+  account (the first admin's), which neither the wall nor Michael sees.
+- #39 (Erin: "prompt me to run at 2pm" staged a calendar block, not a nudge):
+  `block_time_for_task` has nothing telling a nudge at a time from time on the calendar.
+- #40 ("I checked off the run on the wall... it's still asking"): the tick did sync (14:53),
+  but the 14:00 check-in kept its Done/Later buttons. `_complete_round` clears
+  `prompt_outbox_id` before `withdraw_prompt` reads it, and `withdraw_prompt` only cancels
+  unsent nudges.
+- #41 (an extra "drink some water" check-in, just for today, went onto the wall's to-do
+  list): one-off check-ins sync to the wall like any task.
+- #43 ("waste bins and tea time are not mine"): "what else do I have today?" was answered with
+  `partner: true`. Erin now reads the Madicen Family calendar too, so its events came twice,
+  once marked "(Michael)", and Michael's own Tea Time was there.
+
+Build:
+- A newer card for the same event (same title, same day, same calendar, still waiting) takes
+  the older card's place. The older one is withdrawn and its message says it was replaced
+  (`Autonomy.withdraw`, a listener the approvals UI uses to edit the card). An event already
+  on that calendar with the same title and times isn't added again ("already on the family
+  calendar"). One that Themi made, with the same title on the same day but other times, points
+  to `move_calendar_event`.
+- A meal with no time (breakfast, brunch, lunch, dinner) isn't all day: the usual time
+  (8, 10:30, 12, 18), read back on the card so it can be changed.
+- "Prompt me / remind me / nudge me at 2" about an existing task is `snooze_task` until then.
+  `block_time_for_task` refuses a request that asks for a nudge and doesn't mention the
+  calendar or blocking time.
+- A task done anywhere other than its own buttons (the wall, chat, the other person): its
+  check-ins sent in the last day lose their buttons and say it's done. The bug in
+  `_complete_round`'s order is fixed too.
+- A one-off check-in task stays in Themi: never on the wall's to-do list.
+- Day summaries: an event read through two people's accounts shows once. An event on a
+  calendar more than one person reads is marked with that calendar's name ("Madicen Family")
+  instead of a person. Partner events only when the message asks about both of them or the
+  partner (we, us, our, both, the partner's name), whatever the model sent.
+- Tests for each, failing first; a scenario for the replaced card and the summary.
+
+Notes (2026-10-28):
+- #35: `Autonomy.withdraw(action, reason)` declines a waiting action as the system (audit
+  "withdrawn") and tells `withdrawn_listeners`; the approvals UI edits the card to "Replaced
+  by the newer card." with no buttons. `Events.replace_waiting` does this for an
+  `add_calendar_event` card with the same title (`name_key`), local day and calendar; the
+  very same event already waiting is a `ToolDeclined`. `Events.made_that_day` looks only at
+  events Themi made (`themi_events`): same times is "Already on ...", other times points to
+  `move_calendar_event`. Meals are 08:00, 10:30, 12:00, 18:00, an hour long.
+- #39: `block_time_for_task` fails when the message has prompt, remind, nudge, ping or "check
+  in with" and none of block, calendar, schedule or "time for". `snooze_task`'s description
+  covers "prompt me to run at 2pm".
+- #40: `TaskBoard.complete(..., tapped=)`: sent nudges of that task from the last 36 hours
+  are edited to "Marked done: X. Thank you." with no buttons, except the one whose button
+  was tapped (the button handler edits that one itself, as before).
+- #41: `cozyla_todos._not_a_todo`: repeating, on the chart, or a check-in. A check-in
+  already on the wall stays linked until it's done.
+- #43: `Entry` now carries `calendar_id` and `event_id`. Day summaries list an event read
+  through two accounts once; one on a calendar more than one person reads
+  (`member_calendars`) is marked with its name, e.g. "(Madicen Family)", and shows without
+  `partner`. `day_summary`'s `partner` only counts when the message has we, us, our, both,
+  together, everyone, family, husband, wife, partner or the other person's name. The model's
+  calendar context drops the duplicates too.
+- Setup, the family calendar: Themi's first family-calendar write (2026-10-27 11:53) made a
+  new "Themi" calendar on Erin's account, the first admin's, because none had been chosen.
+  The wall and Michael don't see it. On it now: three "Lunch at Merit" events (all day,
+  12-1, 12-1) and "Contact Erin's parents about babysitting". Choose the family calendar on
+  the admin page (Michael's account and "Madicen Family", say, if the wall shows that
+  one), then delete the leftovers. Also waiting: card 78, Erin's 2-3 pm run block (#39),
+  which can be declined. Done 2026-10-28: the family chose "Madicen Family" (no account
+  chosen, so it's Erin's, which owns it too). The 12-1 lunch and the babysitting reminder
+  were copied there with their ids, the other two lunches marked deleted, and the stray
+  "Themi" calendar deleted.
+- No migration; a restart.
+
+### F14b · Feedback (2026-10-27): routine order, email setup, spending isn't shopping, passing messages on
+Status: [x] 2026-10-28
+Depends on: F14a, C3, E1
+From the family's reports of 2026-10-27: bugs #36, #38, #45 and idea #46, plus one found
+while reading them.
+- #38 ("add take wegovy and drug a bean as the first two tasks of my morning routine" went at
+  the end, and only for today): `add_to_wall_routine` gets a position (start, end, or after an
+  item), if the wall's routines keep an order (find out from the client first). "Add to my
+  morning routine" with no "just today" repeats every day.
+- #45 ("remind me which [senders] I needed to evaluate?" got "you haven't set up any watched
+  inboxes"): the model called `list_expected_emails`. A tool that says, per linked inbox,
+  what's set: watched labels, urgent senders, and the sender suggestions still waiting.
+  Michael's "Change them" button answered "None." (10:57) as well.
+- #36 ("just spent $51.97 on door dash" was staged for Things to Buy): a spend isn't
+  something to buy. The list tools refuse an item that's a price or a past purchase. What a
+  spend becomes is prompt X1.
+- #46 (Michael: "show routines as a bulleted list"): the morning and evening routine checks
+  list what's open as bullets, as day summaries do.
+- Found while reading: "can you tell Hundo 'I Wuv U ❤️'?" was saved as a note (`remember_fact`)
+  and answered "I've saved that for her". Until Liaison (prompt 34), Themi says plainly that
+  it can't pass messages on yet, and nothing is saved as a note.
+
+Notes (2026-10-28):
+- #38: the wall keeps each routine's place as `displayOrder` (Morning 1000s, Afternoon
+  2000s, Evening 3000s, new ones last), read from the real wall. `add_to_wall_routine` takes
+  `position` ('end', 'start', 'after: <item>', matched with `events.title_matches`). The
+  executor sends the order on create, reads the routine back, tries once more with an
+  update, and if the wall still keeps its own order says "it went at the end... needs
+  moving there". Not tried against the real wall yet: whether it takes `displayOrder` shows
+  the first time someone asks. `repeat` '' is now every day; 'today' (or '' in a message
+  that says today, tonight, "just for" or "this morning/afternoon/evening") is once. Cards
+  from before keep their old meaning ('' with no `once` field: once). Erin's two items from
+  #38 were deleted the next day as one-offs; they can be added again.
+- #46: routine checks are "Morning routine, still open:" and a bullet per item.
+- #45: `inbox_setup` (email group), from `SenderSuggestions.setup`. Michael's "Change them"
+  tap (10:57) was a quick reply the model made; its "None." was the model's, with nothing
+  to look at. Now there is.
+- #36: `groceries.refuse_spending`: "spent", "paid", "cost me" or "was/got charged" in the
+  message, or a price in an item (grocery and Things to Buy only; not other named lists),
+  fails the add and asks the model to say Themi doesn't track spending yet. X1 is where a
+  spend goes.
+- Relays: `remember_fact` fails when the message opens "tell X ...", "let X know",
+  "message/text/send X ..." (not me, myself or us), and a prompt line says Themi can't pass
+  messages on yet. Liaison (34) will relay them.
+- No migration; a restart.
+
+### X1 · Spending: takeout and business expenses
+Status: [ ]
+Depends on: F14b, 23
+From Michael's bug #36 ("door dash and eating out messages don't work at all") and idea #37
+("track business expenses"), 2026-10-27. Read first: "Module behaviour" → D (takeout budget);
+prompt 35's takeout rescue needs the month's takeout total.
+- "Just spent $51.97 on DoorDash", or a takeout receipt from email (triage already finds them),
+  becomes a spend: amount, where, kind (takeout, eating out, business, other), who, when.
+  Told back with the month's takeout so far against the family's budget, in words.
+- Business expenses: marked as business when they say so ("for work", "business lunch"). A
+  monthly list to export (CSV) from the website, with the receipt email linked when there is
+  one.
+- Asking ("how much takeout this month?", "what are my business expenses for October?").
+
+### B1 · Breaks: a rest mode that ends with a question
+Status: [ ]
+Depends on: 17, F3
+From Erin's idea #42, 2026-10-27: "put Themi into rest/break/busy mode... At the end of the
+designated rest time, Themi will alert the user that time is up, giving the options 'End
+break' or 'Extend break by [amount of time]'. The length of the offered extension should be
+customizable."
+- "I'm taking a break" / "rest for 30 minutes": no task nudges until it ends (what they asked
+  for still comes, and anything set to come during breaks). /pause's machinery, with an end.
+- At the end: "Break's up" with [End break] [Extend by N min]. N is a personal setting
+  (default 15).
+- Later: Themi suggests a break when the Shadow Calendar sees a long run of effort (asked,
+  never started on its own).
+
+### T1 · Tasks: urgent and important
+Status: [ ]
+Depends on: F12, C2c
+From Erin's idea #44, 2026-10-27: urgent (a hard due date that's soon) and important (there
+are consequences if it's ignored for good) as two separate scales, for tasks, emails and
+everything else.
+- Which task to offer next: urgent and important first, then urgent only, then important
+  only, then neither. An important-only task left waiting too long moves ahead of urgent-only
+  ones.
+- Urgency comes from the due date; importance is what F12's `importance` becomes (said, or
+  judged at creation and changeable). Email triage's urgent flag maps onto the same two scales.
+- Never shown as numbers or scores.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
