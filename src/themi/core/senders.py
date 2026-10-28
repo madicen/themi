@@ -16,13 +16,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.accounts import AccountsError, LinkedAccount
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -61,7 +62,33 @@ class SenderSuggestions:
 
     def install(self) -> None:
         self.services.button_handlers["urgent_sender"] = self.on_button
+        self.services.tools.register(inbox_setup)
         self.services.senders = self
+
+    def setup(self, account: LinkedAccount) -> str:
+        """What's set for an inbox, in a line (bug #45)."""
+        waiting = self.db.query(
+            "SELECT DISTINCT label, address FROM sender_suggestions WHERE account_id = ? "
+            "AND added_at IS NULL ORDER BY id",
+            (account.id,),
+        )
+        expected = self.db.query(
+            "SELECT name FROM expected_emails WHERE account_id = ? ORDER BY id", (account.id,)
+        )
+        state = "watched" if account.watched else "not watched"
+        if not account.enabled:
+            state += " (Google stopped accepting it; linking it again fixes it)"
+        urgent = ", ".join(account.urgent_senders) or "none"
+        suggested = and_list(
+            [r["label"] if r["label"] == r["address"] else f"{r['label']} ({r['address']})"
+             for r in waiting
+             if r["address"] not in account.urgent_senders]
+        )  # fmt: skip
+        return (
+            f"{account.address}: {state}. Urgent senders: {urgent}. Suggested, not answered "
+            f"yet: {suggested or 'none'}. Expected emails: "
+            f"{', '.join(r['name'] for r in expected) or 'none'}."
+        )
 
     def candidates(self, account: LinkedAccount) -> list[Candidate]:
         """Likely senders for this inbox, the likeliest first."""
@@ -155,3 +182,23 @@ class SenderSuggestions:
             ADDED_TEXT.format(label=row["label"], address=row["address"]),
             priority=Priority.REPLY,
         )
+
+
+@tool(
+    "inbox_setup",
+    "What's set for each of this person's linked Gmail inboxes: watched or not, the senders "
+    "that always count as urgent, the suggested senders they haven't answered yet, and the "
+    "expected emails. For 'what's my email set up to do?' or 'which senders did I need to "
+    "look at?'; add one with set_urgent_senders when they say so.",
+    {},
+)
+async def inbox_setup(ctx: ToolContext, args: dict[str, Any]) -> str:
+    senders = ctx.services.senders
+    if senders is None:
+        raise ToolFailed("Email isn't set up on this server.")
+    accounts = [
+        a for a in ctx.services.store.linked_accounts(ctx.member.id) if a.provider == "gmail"
+    ]
+    if not accounts:
+        return "They haven't linked a Gmail inbox (My accounts on the website)."
+    return "\n".join(senders.setup(a) for a in accounts)

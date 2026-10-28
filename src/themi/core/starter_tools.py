@@ -12,6 +12,12 @@ from typing import Any
 from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, more_tools, tool
 
 # What the person must have said themselves before the model answers a card for them.
+# "Tell Hundo 'I wuv u'", "let Michael know I'm late": a message to pass on, which isn't a
+# note (Liaison, prompt 34, will relay them).
+RELAY = re.compile(
+    r"^\W*(?:(?:can|could|would|will) you\s+|please\s+)?(?:tell|let|message|text|send)\s+"
+    r"(?!me\b|myself\b|us\b)\w+(?:\s+know\b|\s+a message\b|\s+(?:that\b|[\"“'\u2018])|\s+i\b)"
+)
 _SAID = {
     "yes": re.compile(
         r"\b(?:yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|let'?s|sounds good|lock it in|"
@@ -54,6 +60,11 @@ async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
     fact = args["fact"].strip()
     if not fact:
         return "Nothing to remember: the fact was empty."
+    if RELAY.search(ctx.request_text.lower()):
+        raise ToolFailed(
+            "They asked Themi to pass a message on, and Themi can't pass messages on yet: "
+            "say so plainly (they can send it themselves). Nothing was saved."
+        )
     scope = "member" if args["about"] == "personal" else "family"
     saved = memory.remember(ctx.member, args["subject"], fact, scope=scope)
     return f"Remembered: {saved.fact}"

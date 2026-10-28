@@ -479,7 +479,7 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             "repeat": phrase,
             "once": once,
             "position": position,
-        },  # fmt: skip
+        },
     )
     return replace(proposal, requested=asked)
 
