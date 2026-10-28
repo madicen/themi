@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -81,3 +82,16 @@ def test_unfreeze_clears_a_shift() -> None:
     clock.unfreeze()
     assert clock.shifted_by() == timedelta(0)
     assert clock.now() - datetime.now(UTC) < timedelta(seconds=5)
+
+
+async def test_sleep_on_a_frozen_clock_waits_for_it_to_move() -> None:
+    clock.freeze(datetime(2026, 10, 28, 9, tzinfo=UTC))
+    try:
+        sleeper = asyncio.create_task(clock.sleep(10))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not sleeper.done()
+        clock.advance(timedelta(seconds=10))
+        await asyncio.wait_for(sleeper, timeout=1)
+    finally:
+        clock.unfreeze()
