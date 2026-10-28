@@ -180,3 +180,19 @@ async def test_mentioned_but_not_asked_its_a_card(scenario: Scenario, linked: Fa
     assert replies[0] == (
         "Time for Clean the bathroom: Wed 21 Oct, 1-2 pm, on your calendar\nGo ahead, or not now?"
     )
+
+
+async def test_a_nudge_at_a_time_isnt_a_block(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #39: "can you prompt me to run at 2pm?" staged an hour on her calendar."""
+    task = await bathroom(scenario)
+    await say(
+        scenario,
+        "Can you prompt me to do the bathroom at 2pm?",
+        "block_time_for_task",
+        {"task_id": task.id, "date": "2026-10-21", "start": "14:00", "end": ""},
+    )
+    result = scenario.primary.last_request.messages[-1].content[0]
+    assert "snooze_task" in result.content  # type: ignore[union-attr]
+    assert result.is_error  # type: ignore[union-attr]
+    assert not scenario.app.db.query("SELECT 1 FROM pending_actions")
+    assert [e for e in linked.events(ERIN, ERIN)] == []

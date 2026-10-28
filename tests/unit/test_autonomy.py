@@ -154,6 +154,29 @@ async def test_declining_never_runs_it(
     assert events(autonomy, staged.action.id) == ["staged", "declined"]
 
 
+async def test_a_withdrawn_action_never_runs_and_says_why(
+    autonomy: Autonomy, family: SeededFamily, recorder: Recorder
+) -> None:
+    """Bug #35: a newer card for the same event takes the waiting one's place."""
+    told: list[tuple[int, str]] = []
+
+    async def listener(action: Any, reason: str) -> None:
+        told.append((action.id, reason))
+
+    autonomy.withdrawn_listeners.append(listener)
+    staged = await autonomy.stage(
+        "email_archive_noise", family.erin, "Archive", {}, "gmail.archive"
+    )
+    assert await autonomy.withdraw(staged.action.id, "Replaced by the newer card.")
+    assert autonomy.action(staged.action.id).status == "declined"
+    assert told == [(staged.action.id, "Replaced by the newer card.")]
+    assert not await autonomy.withdraw(staged.action.id, "again")  # answered already
+    with pytest.raises(InvalidTransition):
+        await autonomy.resolve(staged.action.id, Decision.APPROVE, by=family.erin)
+    assert recorder.calls == []
+    assert events(autonomy, staged.action.id) == ["staged", "withdrawn"]
+
+
 async def test_snoozed_actions_resurface_later(
     autonomy: Autonomy, family: SeededFamily, frozen_clock: datetime
 ) -> None:

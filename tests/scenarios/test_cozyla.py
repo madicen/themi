@@ -92,3 +92,20 @@ async def test_erin_sees_one_chore_at_a_time(scenario: Scenario, fake_cozyla: Fa
     await scenario.advance(minutes=1)
     (evening,) = [t for t in scenario.inbox("Erin") if t.startswith("Still open today")]
     assert "Clean upstairs" in evening and "bathroom" not in evening
+
+
+async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    """Bug #41: an extra "drink some water" check-in, just for today, went onto the wall's
+    to-do list. Check-ins are Themi's to ask; jobs still go up."""
+    from datetime import date, time
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    await board.create(
+        erin, "Drink a glass of water", "text", 1, date(2026, 10, 21), assignee=erin,
+        check_in=True, due_time=time(14, 30),
+    )  # fmt: skip
+    await board.create(erin, "Call the vet", "call", 2, assignee=erin)
+    await scenario.run_periodic("cozyla.sync")
+    assert [t["todoTitle"] for t in fake_cozyla.in_list(scenario.cozyla_list)] == ["Call the vet"]
