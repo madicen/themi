@@ -85,7 +85,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
 | Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
 | E2 | Email: an audit instead of single questions | Feedback | [x] |
-| P2 | Response timing, and a word while a reply is slow | Feedback | [ ] |
+| P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
+| P2b | Faster replies, from the numbers | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4165,8 +4166,8 @@ Notes (2026-10-28):
 - Setup: restart (applies 0064). The audit tasks appear at the next `email.senders` run
   (within 6 hours of the restart).
 
-### P2 · Response timing, and a word while a reply is slow
-Status: [ ]
+### P2a · Response timing, and a word while a reply is slow
+Status: [x] 2026-10-28
 Depends on: P1, F13
 From Erin's ideas #51 ("make Themi faster") and #55 ("maintain internal metrics of why
 responses take as long as they do"), 2026-10-28, and Michael's idea the same day.
@@ -4184,8 +4185,35 @@ most, and a reply often takes two or three calls.
   - Gentle phrasing applies, and never an energy score.
   - Not for button taps or scheduled messages.
   - If the reply arrives in the moment the notice would go, the notice doesn't go.
-- Then the speed-ups the numbers point to: a faster model for conversation, fewer tool
-  rounds, smaller prompts.
+
+Notes (2026-10-28):
+- Split: the speed-ups are P2b, once there's a week of these numbers.
+- `themi.core.timing`. Migration 0065: `replies` (each reply that went to the model: its
+  whole time from the message arriving, the outbox's part, the "still coming" message if
+  one went), `reply_tools` (each tool, and the model round that asked for it), and
+  `ai_calls.reply_id` (set from `router.current_reply`). Kept a week.
+- Admin page "Reply times" (`/ai/timing`, in the nav for admins): the week's count, the
+  medians (in all, the model, tools, sending), and the ten slowest, step by step: each
+  model round with its backend, wait and retries, the tools it asked for, any other call
+  (a gentler rewording), then the outbox.
+- The "still coming" message: eight written ones in `SLOW_NOTICES`, half of them about
+  having a slow or low-energy day. It goes after 10 s (`SLOW_AFTER`), once per reply, as
+  a reply (outside the daily limit), through the shield. Not for button taps, and never
+  the same one twice in a row for a person (the last is read from `replies`). If the
+  reply is ready when the 10 s are up, it doesn't go.
+- `clock.sleep`: on a frozen clock it waits for the clock to be moved, so tests advance
+  time instead of sleeping. `ScriptedProvider.take(seconds)` makes a chat call take that
+  long.
+- Not timed: a voice note's transcription is in the reply's whole time but isn't its own
+  step. Quick yes/no answers (no model) aren't recorded.
+- Setup: restart (applies 0065).
+
+### P2b · Faster replies, from the numbers
+Status: [ ]
+Depends on: P2a, and a week of its timings
+Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
+- The speed-ups the numbers point to: a faster model for conversation, fewer tool
+  rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
