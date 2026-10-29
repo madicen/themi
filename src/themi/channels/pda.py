@@ -131,6 +131,8 @@ def _opening_command(sentence: str) -> str | None:
         return None  # "Check-in: ..." or "Due today: ..." labels the message
     if _BULLET.match(sentence):
         return None  # "- Call the vet" in a list names a task; it isn't an order (#19)
+    if sentence.lstrip().startswith(('"', "\u201c")):
+        return None  # '"Refill the water" is off the list' names a task too (#71)
     words = _WORD.findall(sentence.lower())
     if not words:
         return None

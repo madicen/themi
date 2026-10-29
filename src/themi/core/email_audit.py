@@ -18,8 +18,9 @@ What the answers do:
   about again.
 - an email: it's filed as urgent (urgent at all), kept (important), or left as it was.
 
-Emails and the senders' names are shown to the person as they are; none of it reaches the
-model.
+Each item shows the email's exact subject (a sender's latest) and a link to it in Gmail
+(Erin's idea #69). Emails and the senders' names are shown to the person as they are; none
+of it reaches the model.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from themi import clock
 from themi.accounts import LinkedAccount, Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.connectors.gmail.parse import web_link
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
@@ -47,6 +49,7 @@ TITLE = "Email audit ({n} to look at)"
 NUDGE_TEXT = "Email audit: {n} to look at, one at a time. Start now, or later?"
 SENDER_TEXT = "{i} of {n}. Mail from {label} ({address}), {reason}."
 EMAIL_TEXT = "{i} of {n}. An email from {label}: {subject}\n{summary}"
+LATEST_TEXT = 'Latest: "{subject}"'
 HOW_URGENT = "How soon does it need you?"
 HOW_IMPORTANT = "How important is it?"
 # 0, 1, 2; only ever shown in words. "Urgent" is kept for right away (Erin's idea #60).
@@ -247,6 +250,7 @@ class EmailAudit:
             priority=Priority.REPLY,  # they're going through it now
             kind="email_audit",
             buttons=buttons,
+            link_preview=False,  # the Gmail link would preview Google's sign-in page
         )
         return True
 
@@ -265,14 +269,34 @@ class EmailAudit:
         return f"{about}\n{question}", buttons
 
     def _about(self, item: dict[str, Any], i: int, n: int) -> str:
+        email = self._email(item)
         if item["email_id"] is None:
-            return SENDER_TEXT.format(
+            text = SENDER_TEXT.format(
                 i=i, n=n, label=item["label"], address=item["address"], reason=item["reason"]
             )
-        email = self.db.one("SELECT subject FROM emails WHERE id = ?", (item["email_id"],))
-        subject = (email["subject"] if email else "") or "(no subject)"
-        return EMAIL_TEXT.format(
-            i=i, n=n, label=item["label"], subject=subject, summary=item["reason"]
+            if email is not None:  # idea #69: asked for the subject, the model made one up
+                text += "\n" + LATEST_TEXT.format(subject=email["subject"] or "(no subject)")
+        else:
+            subject = (email["subject"] if email else "") or "(no subject)"
+            text = EMAIL_TEXT.format(
+                i=i, n=n, label=item["label"], subject=subject, summary=item["reason"]
+            )
+        if email is not None:
+            text += "\n" + web_link(email["address"], email["gmail_id"])
+        return text
+
+    def _email(self, item: dict[str, Any]) -> dict[str, Any] | None:
+        """The item's email, or a sender's latest, with its inbox's address for the link."""
+        columns = (
+            "SELECT e.subject, e.gmail_id, a.address FROM emails e "
+            "JOIN linked_accounts a ON a.id = e.account_id "
+        )
+        if item["email_id"] is not None:
+            return self.db.one(columns + "WHERE e.id = ?", (item["email_id"],))
+        return self.db.one(
+            columns + "WHERE e.account_id = ? AND lower(e.from_address) = ? "
+            "ORDER BY e.received_at DESC, e.id DESC LIMIT 1",
+            (item["account_id"], item["address"].lower()),
         )
 
     def _in_this_audit(self, member: Member) -> int:

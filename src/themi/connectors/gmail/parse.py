@@ -33,6 +33,11 @@ def in_primary(labels: Iterable[str]) -> bool:
     return "INBOX" in labels and not labels & TABS
 
 
+def web_link(address: str, gmail_id: str) -> str:
+    """The email in Gmail on the web, signed in as `address`."""
+    return f"https://mail.google.com/mail/u/{address}/#all/{gmail_id}"
+
+
 @dataclass(frozen=True)
 class Attachment:
     filename: str

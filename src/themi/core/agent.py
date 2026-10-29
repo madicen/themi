@@ -22,7 +22,7 @@ import asyncio
 import logging
 import random
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
@@ -89,6 +89,24 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     if waiting:
         return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
     return reply
+
+
+# Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
+TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
+
+
+def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
+    """Each "task 50" in a reply becomes the task's name in quotes ("task 7 (Clean the bird
+    cage)" too); a number that isn't a task stays as it is."""
+
+    def named(match: re.Match[str]) -> str:
+        title = title_of(int(match.group(1)))
+        if title is None:
+            return match.group(0)
+        said = match.group(3)  # quoted: a title like "Refill the water" isn't an order
+        return f'"{title}"' if said is None or said.strip() == title else f'"{title}" ({said})'
+
+    return TASK_NUMBER.sub(named, reply)
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
@@ -333,6 +351,7 @@ class Agent:
                 response = await client.chat(system, messages, services.tools.specs(ctx.groups))
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = _by_name(reply, self._task_title)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
@@ -359,6 +378,10 @@ class Agent:
         ):
             recent.pop()
         return recent[-self.history :]
+
+    def _task_title(self, task_id: int) -> str | None:
+        row = self.services.store.db.one("SELECT title FROM tasks WHERE id = ?", (task_id,))
+        return row["title"] if row else None
 
     async def _reply(self, member: Member, text: str) -> None:
         await self.services.outbox.send(member, text, priority=Priority.REPLY)

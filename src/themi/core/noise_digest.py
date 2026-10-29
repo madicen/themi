@@ -38,6 +38,8 @@ from themi.autonomy import Action, Decision
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail.parse import in_primary
+from themi.core.prompts import OpenItem, as_data
+from themi.core.tools import ToolContext, ToolDeclined, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -54,6 +56,7 @@ SLOTS = {"daily": (EVENING,), "twice": (NOON, EVENING), "every_other_day": (EVEN
 SEND_WITHIN = timedelta(hours=3)  # a time missed by more than this (Themi was down) waits
 REBUILD_AFTER = timedelta(hours=1)  # a message still held is made again this often (F16d)
 MAX_LINES = 15
+OPEN_ITEM_LINES = 10  # in the model's open items (#67)
 
 HEADER_ONE = "One email looks like noise:"
 HEADER_MANY = "{count} emails look like noise:"
@@ -77,6 +80,8 @@ class NoiseDigest:
         self.approvals.held.add(CATEGORY)
         self.services.button_handlers["noise"] = self.on_button
         self.services.awaiting_sources.append(self.awaiting_items)
+        self.services.open_item_sources.append(self.open_items)
+        self.services.tools.register(archive_noise_emails)
         self.services.noise = self
 
     # ----- what's waiting -------------------------------------------------------------
@@ -290,6 +295,43 @@ class NoiseDigest:
             )
         ]
 
+    def open_items(self, member: Member) -> list[OpenItem]:
+        """Bug #67: asked "any messages to archive?", the model only saw a queued message
+        cut off at 80 characters. The offers waiting, in full (the first few)."""
+        actions = self.waiting(member)
+        if not actions:
+            return []
+        lines = [f"- {self.line(a)}" for a in actions[:OPEN_ITEM_LINES]]
+        if len(actions) > OPEN_ITEM_LINES:
+            lines.append(f"- and {len(actions) - OPEN_ITEM_LINES} more")
+        return [
+            OpenItem(
+                f"Emails that look like noise, {len(actions)} waiting for a yes to archive "
+                "(archive_noise_emails archives or keeps them; the website's Emails to "
+                "archive page lists them too):\n" + as_data("their inbox", "\n".join(lines))
+            )
+        ]
+
+    def matching(self, member: Member, which: list[str]) -> list[Action]:
+        """Their waiting offers whose sender or subject has any of these words; all, if none."""
+        actions = self.waiting(member)
+        words = [w.strip().lower() for w in which if w.strip()]
+        if not words:
+            return actions
+        return [a for a in actions if any(w in self.line(a).lower() for w in words)]
+
+    async def refresh(self, member: Member) -> None:
+        """After answers from chat: a message still waiting to go is made again (or taken
+        back, when nothing's left), so it never lists what's already settled."""
+        row = self._latest(member)
+        if row is None or not row["outbox_id"] or row["answer"] is not None:
+            return
+        queued = self.db.one(
+            "SELECT 1 FROM outbox WHERE id = ? AND status = 'queued'", (row["outbox_id"],)
+        )
+        if queued:
+            await self.send(member)
+
     # ----- small things ---------------------------------------------------------------
 
     def _latest(self, member: Member) -> dict[str, Any] | None:
@@ -305,3 +347,37 @@ class NoiseDigest:
     def _tz(self) -> ZoneInfo:
         family = self.services.store.get_family()
         return ZoneInfo(family.timezone if family else "UTC")
+
+
+@tool(
+    "archive_noise_emails",
+    "Answer the emails that look like noise (in the open items) from chat: archive them in "
+    "Gmail, or keep them in the inbox. which: words from the senders or subjects they mean "
+    "('the Kickstarter ones', 'LOFT'); empty for all of them.",
+    {
+        "answer": {"type": "string", "enum": ["archive", "keep"]},
+        "which": {"type": "array", "items": {"type": "string"}},
+    },
+)
+async def archive_noise_emails(ctx: ToolContext, args: dict[str, Any]) -> str:
+    noise = ctx.services.noise
+    if noise is None or not noise.waiting(ctx.member):
+        raise ToolDeclined("No emails are waiting to be archived as noise.")
+    actions = noise.matching(ctx.member, list(args["which"]))
+    if not actions:
+        raise ToolDeclined(
+            "None of the emails waiting to be archived match that. Say which ones from the "
+            "open items, or all of them."
+        )
+    ids = [a.id for a in actions]
+    if args["answer"] == "keep":
+        kept = await noise.keep(ctx.member, ids)
+        said = f"Kept {kept} in the inbox."
+    else:
+        done, failed = await noise.archive(ctx.member, ids)
+        said = ARCHIVED_TEXT.format(count=done) + (
+            FAILED_TEXT.format(count=failed) if failed else ""
+        )
+    await noise.refresh(ctx.member)
+    left = len(noise.waiting(ctx.member))
+    return said + (f" {left} still waiting." if left else " None left waiting.")
