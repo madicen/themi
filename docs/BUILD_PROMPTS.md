@@ -83,7 +83,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [x] |
 | F15b | Feedback: summaries and cards on time, one morning message | Feedback | [x] |
 | F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
-| Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
+| Rx1 | Medicines: safe reminders and advice | Feedback | [x] |
 | E2 | Email: an audit instead of single questions | Feedback | [x] |
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
@@ -4104,7 +4104,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0062 and 0063).
 
 ### Rx1 · Medicines: safe reminders and advice
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F15a
 From Erin's idea #48 (CRITICAL), 2026-10-28. "I don't remember if I took the wegovy or just
 thought about taking it" got "Take it if you aren't sure". That's the wrong advice: a
@@ -4119,6 +4119,28 @@ this is built** (#52, Themi's task 40), so the details wait for that conversatio
 - Medicine tasks are marked as medicine, from the title or when said, and change nothing
   else about how they nudge.
 - Scenarios from #48's own conversation.
+
+Notes (2026-10-28):
+- Michael confirmed the four points above after talking with Erin (task 40 done).
+- Migration 0069: `tasks.medicine`, set at creation from the title's whole words
+  (`tasks.MEDICINE`: pill, meds, medicine, medication, Wegovy, Ozempic, insulin, inhaler,
+  tablet, capsule, prescription, dose, tab). Live tasks marked: Mimi pill (1 tab and 1/2
+  tab) and Britney flea meds. `set_task_medicine` (schedules group) for "item 3 is my
+  thyroid medicine".
+- A medicine nudge ends "Taken already, or later?" with [Taken] [Not sure] [Later]. [Not
+  sure] edits it to `NOT_SURE_TEXT` (no second dose until it's checked, or until the
+  doctor or pharmacist says; it stays open) and changes nothing else. The morning list's
+  ticks and the wall's ticks still count as done: they're a clear yes.
+- `complete_task` on a medicine refuses when their message says they aren't sure (`UNSURE`:
+  not sure, don't remember, maybe, might have, think I took...), telling the model what to
+  say instead.
+- The system prompt's medicine rule: never tell anyone to take a dose, no dose advice,
+  unsure means no second dose until checked, general information ends "check with your
+  doctor or pharmacist". The open items say ", medicine".
+- Not done: Themi has no web lookup yet, so "general information" is only the model's own,
+  under that rule. Re-run the evals with a medicine case when there's quota.
+- The plan has a Medicines paragraph after the trust tiers (rev 201).
+- Setup: restart (applies 0069).
 
 ### E2 · Email: an audit instead of single questions
 Status: [x] 2026-10-28
