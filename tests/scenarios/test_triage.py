@@ -305,3 +305,21 @@ async def test_inbox_settings_on_the_website(
         f"/accounts/{account.id}/settings", data={"csrf": csrf, "urgent_senders": "nope nope"}
     )
     assert "isn't an email address or domain" in unescape(await flash(site, "/accounts"))
+
+
+async def test_someone_elses_automatic_archiving_leaves_her_mail_asked(
+    scenario: Scenario, inbox: FakeGmail, site: httpx.AsyncClient
+) -> None:
+    # Bug #58: her husband made archiving automatic, and her noise was archived unasked.
+    csrf = await sign_in(scenario, site, "Husband")
+    await site.post("/tiers/email_archive_noise/automatic", data={"csrf": csrf})
+    (sale,) = await arrive(
+        scenario,
+        inbox,
+        {"sender": "Shop <deals@shop.example>", "subject": "20% off", "html": "<p>Sale</p>"},
+    )
+    scenario.primary.queue_structured({"results": [verdict(sale, "noise")]})
+    await scenario.run_periodic("email.triage")
+    (action,) = scenario.app.db.query(actions())
+    assert action["status"] == "pending"
+    assert inbox.calls_to("modify") == 0

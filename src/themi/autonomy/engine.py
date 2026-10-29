@@ -6,7 +6,8 @@
   its executor; a failed execution stays retryable (approve it again).
 - `grant_tier2()` makes a category automatic, but only through a locked
   rule, and never for a capped category (sending as you, spending money,
-  calling someone).
+  calling someone). A household category becomes automatic for everyone (an
+  admin's call); a personal one only for the person who granted it (F16a).
 - `escalate()` is the Tier 3 anomaly override: the category behaves as
   Tier 1 until `resume()`.
 
@@ -206,21 +207,84 @@ class Autonomy:
             raise NotFound(f"no action category {name!r}")
         return _category_from_row(row)
 
-    def grant_tier2(self, name: str, *, via_rule_id: int, by: Actor) -> Category:
-        """Make a category automatic. Only a locked rule does this."""
+    def grant_tier2(
+        self, name: str, *, via_rule_id: int, by: Actor, member: Member | None = None
+    ) -> Category:
+        """Make a category automatic. Only a locked rule does this.
+
+        A household category becomes automatic for everyone, and only an admin does that.
+        A personal one (scope `member`: their email, their calendar) becomes automatic only
+        for `member` (by default whoever grants it), and only they can do it (F16a, bug #58:
+        an admin's grant archived everyone's mail).
+        """
         category = self.category(name)
         if category.capped:
             raise CappedCategory(f"{category.label} always needs a yes, and can't become automatic")
-        self._require_admin(by)
-        self._set_category(name, tier=2, granted_by_rule=via_rule_id)
-        self._audit(None, name, None, "granted_tier2", by, f"rule {via_rule_id}")
-        return self.category(name)
+        if category.scope == "family":
+            self._require_admin(by)
+            self._set_category(name, tier=2, granted_by_rule=via_rule_id)
+            self._audit(None, name, None, "granted_tier2", by, f"rule {via_rule_id}")
+            return self.category(name)
+        whose = self._whose(by, member)
+        if not isinstance(by, SystemActor) and by.id != whose:
+            raise PermissionDenied("only they can make their own actions automatic")
+        self.db.execute(
+            "INSERT OR REPLACE INTO member_tiers (category, member_id, granted_by_rule, "
+            "created_at) VALUES (?, ?, ?, ?)",
+            (name, whose, via_rule_id, to_utc_iso(clock.now())),
+        )
+        self._audit(None, name, whose, "granted_tier2", by, f"rule {via_rule_id}")
+        return category
 
-    def revoke_tier2(self, name: str, *, by: Actor) -> Category:
-        self._require_admin(by)
-        self._set_category(name, tier=1, granted_by_rule=None)
-        self._audit(None, name, None, "revoked_tier2", by, None)
-        return self.category(name)
+    def revoke_tier2(self, name: str, *, by: Actor, member: Member | None = None) -> Category:
+        """Back to asking first: for everyone, or for one person's own category.
+
+        Turning someone's own category off is theirs to do, or an admin's.
+        """
+        category = self.category(name)
+        if category.scope == "family":
+            self._require_admin(by)
+            self._set_category(name, tier=1, granted_by_rule=None)
+            self._audit(None, name, None, "revoked_tier2", by, None)
+            return self.category(name)
+        whose = self._whose(by, member)
+        if not isinstance(by, SystemActor) and by.id != whose:
+            self._require_admin(by)
+        if self.db.update(
+            "DELETE FROM member_tiers WHERE category = ? AND member_id = ?", (name, whose)
+        ):
+            self._audit(None, name, whose, "revoked_tier2", by, None)
+        return category
+
+    def granted(self, name: str, member: Member) -> bool:
+        """Whether a rule made this automatic for them (an escalation may be pausing it)."""
+        category = self.category(name)
+        if category.scope == "family":
+            return category.tier is Tier.AUTOMATIC
+        return name in self._granted_names(member.id)
+
+    def is_automatic(self, name: str, member: Member) -> bool:
+        """Whether an action of theirs in this category runs without asking, right now."""
+        return self.granted(name, member) and not self.category(name).escalated
+
+    def granted_to(self, name: str) -> list[int]:
+        """Who has made this personal category automatic for themselves."""
+        rows = self.db.query(
+            "SELECT member_id FROM member_tiers WHERE category = ? ORDER BY member_id", (name,)
+        )
+        return [r["member_id"] for r in rows]
+
+    def _granted_names(self, member_id: int) -> set[str]:
+        rows = self.db.query("SELECT category FROM member_tiers WHERE member_id = ?", (member_id,))
+        return {r["category"] for r in rows}
+
+    @staticmethod
+    def _whose(by: Actor, member: Member | None) -> int:
+        if member is not None:
+            return member.id
+        if isinstance(by, SystemActor):
+            raise AutonomyError("say whose actions become automatic")
+        return by.id
 
     def escalate(self, name: str, reason: str) -> Category:
         """Tier 3: something unexpected happened; ask again until someone resumes."""
@@ -270,7 +334,7 @@ class Autonomy:
         cat = self.category(category)
         if executor not in self.executors:
             raise AutonomyError(f"no executor called {executor!r}")
-        automatic = cat.effective_tier is Tier.AUTOMATIC
+        automatic = self.is_automatic(category, member)
         asked = requested and not automatic and not cat.capped and not cat.escalated
         now = to_utc_iso(clock.now())
         action_id = self.db.execute(

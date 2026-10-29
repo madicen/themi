@@ -6,15 +6,16 @@
 - Only the person the rule affects can lock it: their YES (when it's the only
   thing waiting on them) or their tap. The model has no way to lock a rule,
   so a partner's "yes" or a misread conversation can't make one stick.
-- Locking an `autonomy_grant` rule makes its category automatic, which
-  needs an admin and never works for capped categories. Both are checked
-  when the idea is proposed, so nobody is asked to lock something that
-  can't happen.
+- Locking an `autonomy_grant` rule makes its category automatic, never for
+  capped categories. A household category (the grocery list) needs an admin
+  and covers everyone; a personal one (their own email) covers only the person
+  who locks it, and is a personal rule (F16a). Both are checked when the idea
+  is proposed, so nobody is asked to lock something that can't happen.
 - Drafts lapse quietly after 14 days without changes.
 - A rule is for the household (the default) or personal. Locked household
   rules go into the system prompt of every AI request; a personal rule only
-  into its owner's (the person it affects). Autonomy grants change what
-  Themi does for everyone, so they're always household rules.
+  into its owner's (the person it affects). A grant takes its category's
+  scope: household for a household category, personal for a person's own.
 """
 
 from __future__ import annotations
@@ -54,10 +55,6 @@ DISCARDED_TEXT = "Set aside: {summary}."
 LAPSED_TEXT = "This idea lapsed: {summary}. Happy to pick it up again any time."
 STILL_DRAFT_REPLY = "It's still a draft. We can come back to it whenever."
 NOT_YOURS_REPLY = "That one is for the person it affects to lock in."
-GRANTS_ARE_HOUSEHOLD = (
-    "A rule that makes something automatic changes what Themi does for everyone, so it has "
-    "to be a household rule."
-)
 NEEDS_ADMIN = (
     "Making that automatic changes what Themi does for the household, so it takes an admin "
     "to lock in."
@@ -165,9 +162,8 @@ class Rulebook:
         if kind == "standing_reminder":
             raise RuleError("Standing reminders come from context repair, not proposals.")
         if kind == "autonomy_grant":
-            if scope == "personal":
-                raise RuleError(GRANTS_ARE_HOUSEHOLD)
             self._check_grant_possible(member, category)
+            scope = self._grant_scope(category)
         else:
             category = None
         now = to_utc_iso(clock.now())
@@ -217,8 +213,13 @@ class Rulebook:
                 f"{cat.label} always needs a yes from someone, so it can't become automatic. "
                 "Happy to keep asking each time instead."
             )
-        if not self.store.get_member(member.id).is_admin:
+        if cat.scope == "family" and not self.store.get_member(member.id).is_admin:
             raise RuleError(NEEDS_ADMIN)
+
+    def _grant_scope(self, category: str | None) -> RuleScope:
+        """A grant for someone's own actions is their personal rule (F16a)."""
+        assert category is not None
+        return "personal" if self.autonomy.category(category).scope == "member" else "household"
 
     # ----- locking and setting aside ------------------------------------------
 
@@ -231,7 +232,9 @@ class Rulebook:
         if rule.kind == "autonomy_grant":
             assert rule.category is not None
             try:
-                self.autonomy.grant_tier2(rule.category, via_rule_id=rule.id, by=by)
+                self.autonomy.grant_tier2(
+                    rule.category, via_rule_id=rule.id, by=by, member=self._affects(rule)
+                )
             except CappedCategory:
                 return "That kind of action always needs a yes, so it stays a draft."
             except PermissionDenied:
@@ -262,52 +265,66 @@ class Rulebook:
         if rule.status != "locked":
             raise RuleError("Only locked rules can be unlocked.")
         if rule.kind == "autonomy_grant" and rule.category:
-            self.autonomy.revoke_tier2(rule.category, by=by)
+            self.autonomy.revoke_tier2(rule.category, by=by, member=self._affects(rule))
         elif not isinstance(by, SystemActor) and by.id != rule.affects and not by.is_admin:
             raise PermissionDenied("only the person it affects, or an admin, can unlock this")
         self._set_status(rule_id, "unlocked")
         return self.get(rule_id)
 
-    def grant_automatic(self, admin: Member, category: str) -> Rule:
-        """An admin turning on "automatic" on the website: a rule locked by that action.
+    def grant_automatic(self, member: Member, category: str) -> Rule:
+        """Someone turning on "automatic" on the website: a rule locked by that action.
 
         Ticking the switch is the explicit confirmation, so the rule is locked at once
-        (and shows in /rules like any other).
+        (and shows in /rules like any other). A household category takes an admin; a
+        personal one is only ever their own (F16a).
         """
-        self._check_grant_possible(admin, category)
+        self._check_grant_possible(member, category)
         cat = self.autonomy.category(category)
+        scope = self._grant_scope(category)
         now = to_utc_iso(clock.now())
         label = cat.label[:1].lower() + cat.label[1:]
+        whose = f" for {member.name}" if scope == "personal" else ""
         rule_id = self.db.execute(
-            "INSERT INTO rules (summary, text, kind, category, status, proposed_by, affects, "
-            "created_at, updated_at, locked_at, locked_by) "
-            "VALUES (?, ?, 'autonomy_grant', ?, 'locked', ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO rules (summary, text, kind, category, scope, status, proposed_by, "
+            "affects, created_at, updated_at, locked_at, locked_by) "
+            "VALUES (?, ?, 'autonomy_grant', ?, ?, 'locked', ?, ?, ?, ?, ?, ?)",
             (
-                f"Automatic: {cat.label}",
-                f"Themi may {label} without asking first.",
+                f"Automatic{whose}: {cat.label}",
+                f"Themi may {label}{whose} without asking first.",
                 category,
-                admin.id,
-                admin.id,
+                scope,
+                member.id,
+                member.id,
                 now,
                 now,
                 now,
-                f"member:{admin.id}",
+                f"member:{member.id}",
             ),
         )
-        self.autonomy.grant_tier2(category, via_rule_id=rule_id, by=admin)
+        self.autonomy.grant_tier2(category, via_rule_id=rule_id, by=member, member=member)
         return self.get(rule_id)
 
-    def revoke_automatic(self, admin: Member, category: str) -> None:
-        """Turn "automatic" off: retire the rule that granted it (or just the grant)."""
+    def revoke_automatic(self, by: Member, category: str, whose: Member | None = None) -> None:
+        """Turn "automatic" off: retire the rule that granted it (or just the grant).
+
+        For a personal category, it's `whose` (by default `by`'s own).
+        """
+        personal = self._grant_scope(category) == "personal"
+        target = whose or by
         row = self.db.one(
             "SELECT id FROM rules WHERE kind = 'autonomy_grant' AND category = ? "
-            "AND status = 'locked' ORDER BY id DESC LIMIT 1",
-            (category,),
+            "AND status = 'locked' AND (? = 0 OR affects = ?) ORDER BY id DESC LIMIT 1",
+            (category, int(personal), target.id),
         )
         if row is not None:
-            self.unlock(row["id"], admin)
+            self.unlock(row["id"], by)
         else:
-            self.autonomy.revoke_tier2(category, by=admin)
+            self.autonomy.revoke_tier2(category, by=by, member=target if personal else None)
+
+    def _affects(self, rule: Rule) -> Member | None:
+        if rule.affects is None or self._grant_scope(rule.category) == "household":
+            return None
+        return self.store.get_member(rule.affects)
 
     def add_standing_reminder(self, member: Member, summary: str, text: str) -> Rule:
         """Lock a reminder straight away. Used by context repair, which the person asked for."""
@@ -455,7 +472,8 @@ URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail fr
             "type": "string",
             "enum": ["household", "personal"],
             "description": "household for everyone; personal for this person only. "
-            "Automatic-action rules are always household.",
+            "An automatic-action rule about their own things (their email, their calendar) "
+            "is only ever for them; one about shared things (the grocery list) is household.",
         },
     },
 )

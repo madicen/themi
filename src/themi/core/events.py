@@ -5,8 +5,8 @@ The family chose (2026-10-26), as groceries work (F5):
   once, read back from what was stored;
 - mentioned but not asked ("the plumber's coming Thursday morning"): a card;
 - suggested by an email (triage finds the booking in a confirmation): a card, and after
-  several approved in a row, Themi offers to make these automatic (a household rule like
-  any other autonomy grant); made automatically, a message always says so;
+  several approved in a row, Themi offers to make these automatic (their own rule: it covers
+  only their calendar, F16a); made automatically, a message always says so;
 - an event Themi made is changed or deleted at once; any other event only after a card
   (`calendar_event_change` is capped).
 
@@ -472,8 +472,10 @@ class Events:
         """After several email events approved in a row (this one, being made now, and the
         ones before it), offer to make them automatic."""
         rulebook = self.services.rulebook
-        if rulebook is None or self.db.one("SELECT 1 FROM rules WHERE category = ?", (FROM_EMAIL,)):
-            return  # offered before (whatever came of it), or no rules here
+        if rulebook is None or self.db.one(
+            "SELECT 1 FROM rules WHERE category = ? AND affects = ?", (FROM_EMAIL, member.id)
+        ):
+            return  # offered to them before (whatever came of it), or no rules here
         statuses = [
             r["status"]
             for r in self.db.query(
@@ -488,14 +490,14 @@ class Events:
         try:
             await rulebook.propose(
                 member,
-                "Add events from booking emails to our calendars without asking",
+                "Add events from my booking emails to my calendar without asking",
                 "When a booking confirmation email describes an upcoming event, Themi puts it "
-                "on that person's calendar without asking first, and always sends a message "
+                f"on {member.name}'s calendar without asking first, and always sends a message "
                 "saying it did.",
                 "autonomy_grant",
                 FROM_EMAIL,
             )  # as a reply: it comes straight after their yes
-        except RuleError as exc:  # not an admin, say: no offer
+        except RuleError as exc:  # no offer
             log.info("No offer to make email events automatic: %s", exc)
 
     # ----- small things -------------------------------------------------------------------

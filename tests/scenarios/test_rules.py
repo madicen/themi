@@ -109,9 +109,19 @@ async def test_an_autonomy_grant_rule_makes_its_category_automatic(scenario: Sce
     autonomy = scenario.app.services.autonomy
     assert autonomy.category("email_archive_noise").tier is Tier.SUPERVISED  # not until locked
     await scenario.say("Erin", "yes")
-    category = autonomy.category("email_archive_noise")
-    assert category.tier is Tier.AUTOMATIC
-    assert category.granted_by_rule == scenario.app.rulebook.locked()[0].id
+    (rule,) = scenario.app.rulebook.locked()
+    assert autonomy.is_automatic("email_archive_noise", scenario.member("Erin"))
+    assert rule.scope == "personal"  # F16a: her own email, so hers alone
+    assert not autonomy.is_automatic("email_archive_noise", scenario.member("Husband"))
+
+
+async def test_anyone_can_make_their_own_email_automatic(scenario: Scenario) -> None:
+    queue_proposal(scenario, "autonomy_grant", "email_archive_noise")
+    await scenario.say("Husband", "you can just archive my promos without asking")
+    await scenario.say("Husband", "yes")
+    autonomy = scenario.app.services.autonomy
+    assert autonomy.is_automatic("email_archive_noise", scenario.member("Husband"))
+    assert not autonomy.is_automatic("email_archive_noise", scenario.member("Erin"))
 
 
 async def test_capped_categories_are_refused_gently_at_proposal(scenario: Scenario) -> None:

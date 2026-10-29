@@ -94,32 +94,61 @@ async def test_removing_someone_needs_their_name(
 # ----- trust tiers --------------------------------------------------------------
 
 
-async def test_members_can_see_tiers_but_only_admins_change_them(
+async def test_members_can_see_tiers_but_only_admins_change_shared_ones(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
     csrf = await sign_in(scenario, site, "Husband")
     page = (await site.get("/tiers")).text
-    assert "Archive noise emails" in page and "Make automatic" not in page
-    response = await site.post("/tiers/email_archive_noise/automatic", data={"csrf": csrf})
-    assert response.status_code == 403
-    assert scenario.app.services.autonomy.category("email_archive_noise").tier is Tier.SUPERVISED
+    card = page[page.index("Add items to the grocery list") :][:500]
+    assert "Asks first." in card and "Make automatic" not in card
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
+    assert scenario.app.services.autonomy.category("grocery_list_add").tier is Tier.SUPERVISED
+    assert "takes an admin" in (await site.get("/tiers")).text
 
 
 async def test_making_a_category_automatic_locks_a_rule(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
     csrf = await sign_in(scenario, site, "Erin")
-    await site.post("/tiers/email_archive_noise/automatic", data={"csrf": csrf})
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
     autonomy, rulebook = scenario.app.services.autonomy, scenario.app.rulebook
-    assert autonomy.category("email_archive_noise").tier is Tier.AUTOMATIC
+    assert autonomy.category("grocery_list_add").tier is Tier.AUTOMATIC
     (rule,) = rulebook.locked()
-    assert rule.summary == "Automatic: Archive noise emails"
-    assert rule.text == "Themi may archive noise emails without asking first."
+    assert rule.summary == "Automatic: Add items to the grocery list"
+    assert rule.text == "Themi may add items to the grocery list without asking first."
+    assert rule.scope == "household"
     assert "Ask first again" in (await site.get("/tiers")).text
 
-    await site.post("/tiers/email_archive_noise/supervised", data={"csrf": csrf})
-    assert autonomy.category("email_archive_noise").tier is Tier.SUPERVISED
+    await site.post("/tiers/grocery_list_add/supervised", data={"csrf": csrf})
+    assert autonomy.category("grocery_list_add").tier is Tier.SUPERVISED
     assert rulebook.locked() == []
+
+
+async def test_a_personal_category_is_switched_per_person(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    # Bug #58 / idea #62: Erin's switch archives only her own noise.
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/tiers/email_archive_noise/automatic", data={"csrf": csrf})
+    autonomy, rulebook = scenario.app.services.autonomy, scenario.app.rulebook
+    erin, husband = scenario.member("Erin"), scenario.member("Husband")
+    assert autonomy.is_automatic("email_archive_noise", erin)
+    assert not autonomy.is_automatic("email_archive_noise", husband)
+    (rule,) = rulebook.locked()
+    assert rule.summary == "Automatic for Erin: Archive noise emails"
+    assert rule.scope == "personal"
+
+    csrf = await sign_in(scenario, site, "Husband")  # not an admin, and still his to switch
+    page = (await site.get("/tiers")).text
+    card = page[page.index("Archive noise emails") :][:600]
+    assert "For you: asks first." in card and "Automatic for Erin." in card
+    assert "Make automatic for me" in card
+    await site.post("/tiers/email_archive_noise/automatic", data={"csrf": csrf})
+    assert autonomy.granted_to("email_archive_noise") == [erin.id, husband.id]
+    await site.post("/tiers/email_archive_noise/supervised", data={"csrf": csrf})
+    assert autonomy.granted_to("email_archive_noise") == [erin.id]
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
+    assert autonomy.category("grocery_list_add").tier is Tier.SUPERVISED  # shared: admins
 
 
 async def test_capped_categories_have_no_switch_and_refuse_a_forged_one(

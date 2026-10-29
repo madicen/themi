@@ -180,18 +180,32 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/tiers", response_class=HTMLResponse)
     def tiers_page(request: Request) -> HTMLResponse:
         session = kit.current(request)
+        autonomy = app.services.autonomy
+        categories = autonomy.categories()
+        names = {m.id: m.name for m in store.list_members()}
+        # F16a: a personal category is automatic per person, so show theirs and who else's.
+        mine = {c.name for c in categories if autonomy.granted(c.name, session.member)}
+        others = {
+            c.name: [names[i] for i in autonomy.granted_to(c.name) if i != session.member.id]
+            for c in categories
+            if c.scope == "member"
+        }
         return kit.with_flash(
-            request, "tiers.html", session, categories=app.services.autonomy.categories()
+            request, "tiers.html", session, categories=categories, mine=mine, others=others
         )
 
     @router.post("/tiers/{category}/{change}")
     async def change_tier(request: Request, category: str, change: str) -> Response:
-        session, _ = await kit.checked(request, admin=True)
+        session, _ = await kit.checked(request)  # the rulebook checks who may (F16a)
         rulebook, autonomy = app.rulebook, app.services.autonomy
         try:
             if change == "automatic":
-                rulebook.grant_automatic(session.member, category)
-                message = "Automatic from now on. It's listed with the household rules."
+                rule = rulebook.grant_automatic(session.member, category)
+                message = (
+                    "Automatic for you from now on. It's listed with your rules."
+                    if rule.scope == "personal"
+                    else "Automatic from now on. It's listed with the household rules."
+                )
             elif change == "supervised":
                 rulebook.revoke_automatic(session.member, category)
                 message = "Back to asking first."

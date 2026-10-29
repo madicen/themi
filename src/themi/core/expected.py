@@ -44,7 +44,6 @@ from themi.accounts import (
     sender_pattern,
 )
 from themi.accounts.store import SystemActor
-from themi.autonomy import Tier
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import EmailReceived, GmailSync
@@ -399,7 +398,7 @@ class ExpectedEmails:
         member = self.store.get_member(account.member_id)
         current = autonomy.category(category)
         buttons: list[Button] = []
-        if current.tier is Tier.AUTOMATIC:
+        if autonomy.granted(category, member):
             if not current.escalated:
                 autonomy.escalate(category, reason)
             if member.is_admin:
