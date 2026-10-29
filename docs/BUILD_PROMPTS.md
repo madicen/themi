@@ -95,7 +95,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
 | F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
 | F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
-| F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [ ] |
+| F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [ ] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -4614,7 +4614,7 @@ Notes (2026-10-29):
 - Setup: restart. No migration.
 
 ### F18b · Feedback (2026-10-29): routines asked about, the slow note after a card, noise in chat again
-Status: [ ]
+Status: [x] 2026-10-29
 Depends on: F18a, C3, P2a, F17a
 From the family's reports of 2026-10-29 morning: Erin's bugs #76, #77 and #78, Michael's #74.
 - #76 and #78 ("it gave the full day agenda, not my morning routine"; "the morning routine
@@ -4634,6 +4634,31 @@ From the family's reports of 2026-10-29 morning: Erin's bugs #76, #77 and #78, M
 - Tests: the routine question (Cozyla fake), no slow note after a card, the retry's
   question, scenario from #74; eval cases for "what's my morning routine" and "archive my
   email noise".
+
+Notes (2026-10-29):
+- #76/#78: there was no tool that reads a routine, so the model made up "the board has no
+  items". `show_routine(part)` (wall group, read-only) reads the person's routine records
+  on the wall for today (one part of the day or all three), with "(done)" on the ticked
+  ones. "morning/afternoon/evening routine" no longer calls for the calendar group, so
+  `day_summary` isn't offered for it.
+- The 21:15 "Morning routine, still open": the morning check was sendable from noon until
+  quiet hours, with a deadline 15 minutes before them, so a check queued late (after a
+  restart, or held by the daily limit) went out at night. It's now sent only until the
+  evening check is due (an hour before quiet hours) and expires then.
+- #77: the slow note isn't sent once a reply-priority message (a card such as the day's
+  summary) has gone to them in the turn (`Agent._replied_since`).
+- #77's thread: "Will you retry automatically?" got "Yes". Nothing retries a message the
+  AI service was too busy for, so `BUSY_TEXT` says so, and the prompt says to answer it
+  now if it's in the conversation. Deviation from the prompt: no retry was built.
+- #74: not the tool groups. `archive_noise_emails` ran and was declined (declined calls
+  aren't logged as "ran"), because nothing was waiting: all 17 of Michael's overnight
+  noise emails were in Promotions or Updates, which F16d leaves alone. The answer now
+  says how many noise emails from the last week are in Gmail's other tabs, and that only
+  the Primary inbox counts (`NoiseDigest.in_tabs`). If Michael wants those tabs handled
+  too, that's a change to F16d, for him to decide.
+- Evals: `wall-what-is-my-morning-routine` added; not run yet. "Archive my email noise"
+  is covered by #67's cases.
+- Setup: restart. No migration.
 
 ### F18c · Feedback (2026-10-29): button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer
 Status: [ ]
