@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import getaddresses, parseaddr
@@ -21,6 +22,15 @@ from html.parser import HTMLParser
 from typing import Any
 
 MAX_BODY = 20_000
+# Gmail's tabs other than Primary. Mail there is already out of the way: only Primary
+# counts as the inbox (F16d, Michael: "Gmail's primary inbox is the only one that counts").
+TABS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"})
+
+
+def in_primary(labels: Iterable[str]) -> bool:
+    """In the inbox people look at: labelled INBOX, and not in another of Gmail's tabs."""
+    labels = set(labels)
+    return "INBOX" in labels and not labels & TABS
 
 
 @dataclass(frozen=True)

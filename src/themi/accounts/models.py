@@ -81,6 +81,7 @@ class Member:
     morning_summary_empty: bool = False  # sent on days with nothing on, too
     getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)
     leave_heads_up: bool = True  # "time to get ready" for events with a place
+    noise_emails: str = "daily"  # when noise emails are offered for archiving, together (F16b)
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

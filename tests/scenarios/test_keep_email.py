@@ -52,6 +52,7 @@ def labels(inbox: FakeGmail, scenario: Scenario, email: int) -> list[str]:
 
 async def test_an_email_archived_as_noise_comes_back(scenario: Scenario, inbox: FakeGmail) -> None:
     email = await sorted_as(scenario, inbox, "noise")
+    await scenario.say("Erin", "/pending")  # F16b: noise has no card of its own
     await scenario.tap("Erin", "Go ahead")  # archived, as Themi offered
     assert "INBOX" not in labels(inbox, scenario, email)
 
@@ -59,8 +60,8 @@ async def test_an_email_archived_as_noise_comes_back(scenario: Scenario, inbox: 
     assert "INBOX" in labels(inbox, scenario, email)
     assert "Back in the inbox" in tool_result(scenario)
     assert scenario.app.db.scalar("SELECT category FROM emails WHERE id = ?", (email,)) == "urgent"
-    assert "Should mail from Charles Schwab & Co., Inc. always count as urgent?" in replies
-    await scenario.tap("Erin", "Always urgent: Charles Schwab & Co., Inc."[:40])
+    assert "Should mail from Charles Schwab & Co., Inc. always count as time-sensitive?" in replies
+    await scenario.tap("Erin", "Always time-sensitive: Charles Schwab & Co., Inc."[:40])
     account = scenario.app.store.linked_account_by_address("gmail", ERIN)
     assert account is not None and account.urgent_senders == ("donotreply@email.schwab.com",)
 
@@ -120,6 +121,19 @@ async def test_a_security_alert_isnt_called_money(scenario: Scenario, inbox: Fak
     )
     await scenario.run_periodic("email.triage")
     assert any(
-        t.startswith("An email that looks urgent (account security)")
+        t.startswith("An email that looks time-sensitive (account security)")
         for t in scenario.inbox("Erin")
     )
+
+
+async def test_keeping_a_second_email_from_a_sender_asked_about_before(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    # #59's conversation, 28 Oct 14:53: keep_email failed with a UNIQUE constraint, because
+    # the sender had been offered as always urgent a few minutes earlier.
+    await sorted_as(scenario, inbox, "noise")
+    await keep(scenario)
+    await sorted_as(scenario, inbox, "noise")
+    await keep(scenario, "keep this type of email too")
+    assert "asked, with a button" in tool_result(scenario)
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM sender_suggestions") == 1

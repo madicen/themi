@@ -236,3 +236,14 @@ async def test_by_sunset(scenario: Scenario) -> None:
     assert not any("Walk the dog" in t for t in scenario.inbox("Erin"))
     await at(scenario, WED, 17, 21)
     assert any("Walk the dog" in t for t in scenario.inbox("Erin"))
+
+
+async def test_her_open_items_say_the_next_day_and_when_she_last_ran(scenario: Scenario) -> None:
+    # Bug #64: she ran on Tuesday and the next run was due Thursday, but Themi said
+    # "Saturday ... Tuesday was missed". It had only "due 2026-10-29", nothing on the run.
+    run, _ = await runs(scenario)
+    await at(scenario, date(2026, 10, 22), 15)
+    await done(scenario, run)
+    (line,) = [i.summary for i in board(scenario).open_items(scenario.member("Erin"))]
+    assert line.startswith("Task ") and "due Sat 24 Oct" in line
+    assert "Last done Thu 22 Oct." in line

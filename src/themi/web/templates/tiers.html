@@ -3,8 +3,12 @@
 {% block content %}
 <h1>What Themi does on its own</h1>
 <p class="muted">Everything starts by asking first. Some kinds of action can become automatic;
-the rest always need a yes.{% if not member.is_admin %} Admins can change these.{% endif %}</p>
+the rest always need a yes. Things that are your own, like your email, are automatic only
+for whoever turns them on. Shared things are the household's{% if not member.is_admin %},
+and admins change those{% endif %}.</p>
 {% for category in categories %}
+{% set personal = category.scope == "member" %}
+{% set on = category.name in mine %}
 <article class="card">
   <p class="summary">{{ category.label }}</p>
   {% if category.escalated %}
@@ -12,26 +16,29 @@ the rest always need a yes.{% if not member.is_admin %} Admins can change these.
   {% endif %}
   {% if category.capped %}
     <p class="muted">Always asks first. This can't become automatic.</p>
+  {% elif personal %}
+    <p class="muted">For you: {% if on %}automatic{% if category.escalated %} (paused){% endif %}{% else %}asks first{% endif %}.
+    {% if others[category.name] %}Automatic for {{ others[category.name] | join(", ") }}.{% endif %}</p>
   {% elif category.tier == 2 %}
     <p class="muted">Automatic{% if category.escalated %} (paused){% endif %}.</p>
   {% else %}
     <p class="muted">Asks first.</p>
   {% endif %}
-  {% if member.is_admin %}
+  {% if member.is_admin or (personal and not category.capped) %}
   <div class="buttons">
-    {% if category.escalated %}
+    {% if category.escalated and member.is_admin %}
     <form method="post" action="/tiers/{{ category.name }}/resume">
       <input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">Resume automatic</button>
     </form>
     {% endif %}
     {% if not category.capped %}
-      {% if category.tier == 2 %}
+      {% if (personal and on) or (not personal and category.tier == 2) %}
       <form method="post" action="/tiers/{{ category.name }}/supervised">
         <input type="hidden" name="csrf" value="{{ csrf }}"><button>Ask first again</button>
       </form>
       {% else %}
       <form method="post" action="/tiers/{{ category.name }}/automatic">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><button>Make automatic</button>
+        <input type="hidden" name="csrf" value="{{ csrf }}"><button>Make automatic{% if personal %} for me{% endif %}</button>
       </form>
       {% endif %}
     {% endif %}

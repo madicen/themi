@@ -6,7 +6,7 @@ Categories and what follows:
 | ------------ | ------------------------------------------------------------- |
 | urgent       | alert the inbox's owner (`urgent` priority if severe)         |
 | confirmation | stage `email_mark_read` (gmail.mark_read)                     |
-| noise        | stage `email_archive_noise` (gmail.archive)                   |
+| noise        | stage `email_archive_noise` (gmail.archive), Primary only     |
 | needs_reply  | stage `email_reply` with a drafted reply (always needs a yes) |
 | receipt      | announce `ReceiptFound` (the pantry and budget, prompt 25)    |
 | routine      | nothing                                                       |
@@ -50,6 +50,7 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import GmailSync
+from themi.connectors.gmail.parse import in_primary
 from themi.core.events import title_matches
 from themi.core.prompts import as_data
 from themi.core.services import Services
@@ -154,7 +155,9 @@ SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
-ALERT_TEXT = "An email that looks urgent ({kind}) arrived in {address}, from {sender}: {summary}"
+# "urgent" only when it comes at once (severe, or a sender that's urgent); else
+# "time-sensitive" (Erin's idea #60: urgent means drop everything).
+ALERT_TEXT = "An email that looks {how} ({kind}) arrived in {address}, from {sender}: {summary}"
 SETUP_TEXT = "Linked {address}. Shall Themi keep an eye on this inbox?"
 WATCHING_TEXT = (
     "Watching {address}. Are there senders that always count as urgent here, like tenants, "
@@ -377,15 +380,17 @@ class EmailTriage:
         )
         important = importance > 0
         if verdict.category == "urgent":
+            at_once = verdict.severe or urgency > 1
             await self.services.outbox.send(
                 member,
                 ALERT_TEXT.format(
+                    how="urgent" if at_once else "time-sensitive",
                     kind=KIND_WORDS.get(verdict.urgent_kind or "other", KIND_WORDS["other"]),
                     address=account.address,
                     sender=sender,
                     summary=verdict.summary,
                 ),
-                priority=Priority.URGENT if verdict.severe or urgency > 1 else Priority.NORMAL,
+                priority=Priority.URGENT if at_once else Priority.NORMAL,
                 kind="email",
                 dedupe_key=f"email-urgent:{row['id']}",
             )
@@ -397,7 +402,11 @@ class EmailTriage:
                 payload,
                 "gmail.mark_read",
             )
-        elif verdict.category == "noise" and not important:  # E2: they said it matters
+        elif (
+            verdict.category == "noise"
+            and not important  # E2: they said it matters
+            and in_primary(json.loads(row["labels"] or "[]"))  # F16d: a tab is out of the way
+        ):
             await stage(
                 "email_archive_noise",
                 member,
@@ -469,8 +478,9 @@ def _own_account(ctx: ToolContext, address: str) -> LinkedAccount | None:
 
 @tool(
     "set_urgent_senders",
-    "Record which senders always count as urgent for one of this person's linked inboxes, "
-    "when they say so (e.g. after Themi asks during inbox setup). Replaces the list.",
+    "Record which senders always count as time-sensitive for one of this person's linked "
+    "inboxes, when they list them (e.g. after Themi asks during inbox setup). Replaces the "
+    "list. For one sender's levels ('medium urgency', 'very important'), set_sender_levels.",
     {
         "inbox": {"type": "string", "description": "The linked Gmail address."},
         "senders": {
@@ -491,8 +501,8 @@ async def set_urgent_senders(ctx: ToolContext, args: dict[str, Any]) -> str:
     except AccountsError as exc:
         return f"Not saved: {exc}"
     if not updated.urgent_senders:
-        return f"No senders are treated as urgent for {updated.address}."
-    return f"Urgent senders for {updated.address}: {', '.join(updated.urgent_senders)}."
+        return f"No senders are treated as time-sensitive for {updated.address}."
+    return f"Time-sensitive senders for {updated.address}: {', '.join(updated.urgent_senders)}."
 
 
 @tool(
@@ -511,7 +521,7 @@ async def set_inbox_watched(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 KEEP_WITHIN = timedelta(days=30)  # how far back keep_email looks
-KEEP_OFFER_TEXT = "Should mail from {label} always count as urgent?"
+KEEP_OFFER_TEXT = "Should mail from {label} always count as time-sensitive?"
 
 
 @tool(
@@ -524,7 +534,7 @@ KEEP_OFFER_TEXT = "Should mail from {label} always count as urgent?"
     {"email": {"type": "string"}},
 )
 async def keep_email(ctx: ToolContext, args: dict[str, Any]) -> str:
-    row = _find_email(ctx, str(args["email"]))
+    row = find_email(ctx, str(args["email"]))
     if row is None:
         raise ToolFailed(
             f"No email from the last month matches {args['email']!r} in their linked inboxes."
@@ -562,10 +572,18 @@ async def keep_email(ctx: ToolContext, args: dict[str, Any]) -> str:
         said.append("Mail from that sender already counts as urgent.")
     else:
         label = row["from_name"] or address
-        suggestion = db.execute(
-            "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
-            "VALUES (?, ?, ?, ?)",
-            (account.id, address, label, to_utc_iso(clock.now())),
+        offered = db.one(  # asked about before (bug: a second keep failed on UNIQUE)
+            "SELECT id FROM sender_suggestions WHERE account_id = ? AND address = ?",
+            (account.id, address),
+        )
+        suggestion = (
+            offered["id"]
+            if offered
+            else db.execute(
+                "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
+                "VALUES (?, ?, ?, ?)",
+                (account.id, address, label, to_utc_iso(clock.now())),
+            )
         )
         await ctx.services.outbox.send(
             ctx.member,
@@ -573,14 +591,18 @@ async def keep_email(ctx: ToolContext, args: dict[str, Any]) -> str:
             priority=Priority.REPLY,
             kind="email",
             buttons=[
-                Button(f"Always urgent: {label}"[:40], "urgent_sender", {"suggestion": suggestion})
+                Button(
+                    f"Always time-sensitive: {label}"[:40],
+                    "urgent_sender",
+                    {"suggestion": suggestion},
+                )
             ],
         )
         said.append("They were asked, with a button, whether its sender always counts as urgent.")
     return " ".join(said)
 
 
-def _find_email(ctx: ToolContext, words: str) -> dict[str, Any] | None:
+def find_email(ctx: ToolContext, words: str) -> dict[str, Any] | None:
     """Their newest email from the last month whose sender or subject has every word."""
     accounts = [a.id for a in ctx.services.store.linked_accounts(ctx.member.id)]
     if not accounts:

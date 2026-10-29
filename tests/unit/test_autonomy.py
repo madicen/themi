@@ -95,15 +95,63 @@ def test_capped_categories_can_never_become_automatic(
         family.db.execute("UPDATE action_categories SET tier = 2 WHERE name = ?", (name,))
 
 
-def test_only_admins_change_tiers(autonomy: Autonomy, family: SeededFamily) -> None:
+def test_only_admins_change_household_tiers(autonomy: Autonomy, family: SeededFamily) -> None:
     with pytest.raises(PermissionDenied):
-        autonomy.grant_tier2("email_archive_noise", via_rule_id=1, by=family.husband)
-    autonomy.grant_tier2("email_archive_noise", via_rule_id=7, by=family.erin)
-    category = autonomy.category("email_archive_noise")
+        autonomy.grant_tier2("grocery_list_add", via_rule_id=1, by=family.husband)
+    autonomy.grant_tier2("grocery_list_add", via_rule_id=7, by=family.erin)
+    category = autonomy.category("grocery_list_add")
     assert category.tier is Tier.AUTOMATIC and category.granted_by_rule == 7
+    assert autonomy.is_automatic("grocery_list_add", family.husband)
     with pytest.raises(PermissionDenied):
-        autonomy.revoke_tier2("email_archive_noise", by=family.husband)
-    assert autonomy.revoke_tier2("email_archive_noise", by=family.erin).tier is Tier.SUPERVISED
+        autonomy.revoke_tier2("grocery_list_add", by=family.husband)
+    assert autonomy.revoke_tier2("grocery_list_add", by=family.erin).tier is Tier.SUPERVISED
+
+
+async def test_a_personal_category_is_automatic_only_for_whoever_granted_it(
+    autonomy: Autonomy, family: SeededFamily, recorder: Recorder
+) -> None:
+    # Bug #58: an admin's grant archived everyone's noise. Now it covers only their own.
+    autonomy.grant_tier2("email_archive_noise", via_rule_id=17, by=family.erin)
+    assert autonomy.category("email_archive_noise").tier is Tier.SUPERVISED
+    assert autonomy.granted_to("email_archive_noise") == [family.erin.id]
+    hers = await autonomy.stage("email_archive_noise", family.erin, "A", {}, "gmail.archive")
+    his = await autonomy.stage("email_archive_noise", family.husband, "B", {}, "gmail.archive")
+    assert hers.action.status == "done" and his.action.status == "pending"
+    assert len(recorder.calls) == 1
+
+
+async def test_anyone_makes_their_own_personal_category_automatic(
+    autonomy: Autonomy, family: SeededFamily
+) -> None:
+    autonomy.grant_tier2("email_archive_noise", via_rule_id=2, by=family.husband)
+    assert autonomy.is_automatic("email_archive_noise", family.husband)
+    assert not autonomy.is_automatic("email_archive_noise", family.erin)
+    with pytest.raises(PermissionDenied):  # nobody turns it on for someone else
+        autonomy.grant_tier2(
+            "email_archive_noise", via_rule_id=3, by=family.erin, member=family.husband
+        )
+    autonomy.revoke_tier2("email_archive_noise", by=family.erin)  # hers: nothing to undo
+    assert autonomy.is_automatic("email_archive_noise", family.husband)
+    autonomy.revoke_tier2("email_archive_noise", by=family.husband)
+    assert autonomy.granted_to("email_archive_noise") == []
+
+
+def test_an_admin_can_turn_off_someone_elses(autonomy: Autonomy, family: SeededFamily) -> None:
+    autonomy.grant_tier2("email_mark_read", via_rule_id=2, by=family.husband)
+    with pytest.raises(PermissionDenied):
+        autonomy.revoke_tier2("email_mark_read", by=family.husband, member=family.erin)
+    autonomy.revoke_tier2("email_mark_read", by=family.erin, member=family.husband)
+    assert not autonomy.is_automatic("email_mark_read", family.husband)
+
+
+def test_the_database_refuses_a_personal_grant_of_a_capped_category(
+    family: SeededFamily,
+) -> None:
+    with pytest.raises(sqlite3.IntegrityError):
+        family.db.execute(
+            "INSERT INTO member_tiers (category, member_id, created_at) VALUES (?, ?, ?)",
+            ("email_reply", family.erin.id, "2026-10-28T00:00:00+00:00"),
+        )
 
 
 # ----- Tier 1: staged, then resolved --------------------------------------------
@@ -230,7 +278,8 @@ async def test_escalation_makes_a_tier_2_category_ask_again_until_resumed(
     autonomy.grant_tier2("email_mark_read", via_rule_id=3, by=family.erin)
     category = autonomy.escalate("email_mark_read", "the PG&E confirmation didn't arrive")
     assert category.escalated and category.effective_tier is Tier.SUPERVISED
-    assert category.tier is Tier.AUTOMATIC  # the grant itself is kept
+    assert autonomy.granted("email_mark_read", family.erin)  # the grant itself is kept
+    assert not autonomy.is_automatic("email_mark_read", family.erin)
     staged = await autonomy.stage("email_mark_read", family.erin, "Mark read", {}, "gmail.archive")
     assert staged.action.status == "pending" and recorder.calls == []
 

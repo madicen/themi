@@ -104,3 +104,57 @@ def test_bundled_migrations_apply_cleanly() -> None:
     db = open_database(":memory:")
     assert migrations.current_version(db) == bundled[-1].version
     assert {"meta", "app_secrets"} <= table_names(db)
+
+
+def test_a_personal_grant_stays_only_with_whoever_made_it() -> None:
+    # F16a (bug #58): a member category made automatic household-wide by one person's rule
+    # becomes automatic for that person alone, and the rule becomes theirs.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 67])
+    now = "2026-10-27T17:54:33+00:00"
+    for member_id, name in ((1, "Erin"), (2, "Michael")):
+        db.execute(
+            "INSERT INTO members (id, name, role, created_at, updated_at) "
+            "VALUES (?, ?, 'admin', ?, ?)",
+            (member_id, name, now, now),
+        )
+    db.execute(
+        "INSERT INTO rules (id, summary, text, kind, category, status, proposed_by, affects, "
+        "created_at, updated_at) VALUES (17, 'Automatic: Archive noise emails', 'x', "
+        "'autonomy_grant', 'email_archive_noise', 'locked', 2, 2, ?, ?)",
+        (now, now),
+    )
+    db.execute(
+        "UPDATE action_categories SET tier = 2, granted_by_rule = 17 "
+        "WHERE name IN ('email_archive_noise', 'grocery_list_add')"
+    )
+    apply(db, known)
+    assert db.query("SELECT category, member_id, granted_by_rule FROM member_tiers") == [
+        {"category": "email_archive_noise", "member_id": 2, "granted_by_rule": 17}
+    ]
+    tiers = {r["name"]: r["tier"] for r in db.query("SELECT name, tier FROM action_categories")}
+    assert tiers["email_archive_noise"] == 1 and tiers["grocery_list_add"] == 2
+    assert db.scalar("SELECT scope FROM rules WHERE id = 17") == "personal"
+
+
+def test_existing_medicine_tasks_are_marked() -> None:
+    # Rx1: the live tasks "Mimi pill - 1 tab" and "Britney flea meds" become medicines.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 69])
+    now = "2026-10-28T00:00:00+00:00"
+    db.execute(
+        "INSERT INTO members (id, name, role, created_at, updated_at) "
+        "VALUES (1, 'Erin', 'admin', ?, ?)",
+        (now, now),
+    )
+    for title in ("Mimi pill - 1 tab", "Britney flea meds", "Clean the bird cage", "Tabletop"):
+        db.execute(
+            "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
+            "assign_reason, created_at) VALUES (?, 'physical', 1, 1, 1, 1, '', ?)",
+            (title, now),
+        )
+    apply(db, known)
+    rows = db.query("SELECT title FROM tasks WHERE medicine = 1 ORDER BY id")
+    assert [r["title"] for r in rows] == ["Mimi pill - 1 tab", "Britney flea meds"]

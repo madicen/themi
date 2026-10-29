@@ -48,6 +48,18 @@
   </fieldset>
 
   <fieldset>
+    <legend>My email</legend>
+    <label>Ask me about emails that look like noise, all together,
+      <select name="noise_emails">
+        <option value="daily" {% if member.noise_emails == "daily" %}selected{% endif %}>once a day (6 pm)</option>
+        <option value="twice" {% if member.noise_emails == "twice" %}selected{% endif %}>twice a day (noon and 6 pm)</option>
+        <option value="every_other_day" {% if member.noise_emails == "every_other_day" %}selected{% endif %}>every other day (6 pm)</option>
+      </select>
+    </label>
+    <p class="muted">One message lists them, with a button to archive them all. You can also pick on <a href="/email/noise">Emails to archive</a>. Emails you've already moved out of your inbox are left out.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>How Themi says things</legend>
     <label>Style
       <select name="phrasing">

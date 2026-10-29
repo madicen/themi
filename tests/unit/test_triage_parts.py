@@ -160,8 +160,15 @@ async def test_quoted_drafts_are_never_softened(family: SeededFamily) -> None:
 
 def test_triage_texts_pass_the_strictest_pda_check() -> None:
     texts = [
-        triage.ALERT_TEXT.format(
-            kind="a tenant", address="erin@gmail.com", sender="Dana", summary="Leak in unit 2"
+        *(
+            triage.ALERT_TEXT.format(
+                how=how,
+                kind="a tenant",
+                address="erin@gmail.com",
+                sender="Dana",
+                summary="Leak in unit 2",
+            )
+            for how in ("urgent", "time-sensitive")
         ),
         triage.SETUP_TEXT.format(address="erin@gmail.com"),
         triage.WATCHING_TEXT.format(address="erin@gmail.com"),

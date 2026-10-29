@@ -47,6 +47,30 @@ from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
 
+# Rx1 (Erin's idea #48): a medicine task. Its nudge offers [Not sure], which never makes it
+# done, and Themi never advises on doses.
+MEDICINE = re.compile(
+    r"\b(?:pills?|meds|medicines?|medications?|wegovy|ozempic|insulin|inhalers?|tablets?|"
+    r"capsules?|prescriptions?|doses?|tabs?)\b",
+    re.IGNORECASE,
+)
+MEDICINE_ASK = "Taken already, or later?"
+NOT_SURE_TEXT = (
+    "Not sure is okay. The safe way is no second dose until it's checked (a pill box, the "
+    "pen, the pharmacy's record), or until the doctor or pharmacist says. It stays open here."
+)
+UNSURE = re.compile(
+    r"\b(?:not sure|unsure|don'?t (?:remember|recall|know)|can'?t (?:remember|recall)|"
+    r"no idea|forgot (?:if|whether)|maybe|might have|think i (?:took|did|had))\b",
+    re.IGNORECASE,
+)
+
+
+def is_medicine(title: str) -> bool:
+    """A medicine, from the title's words ("Take Wegovy", "Mimi pill - 1 tab")."""
+    return bool(MEDICINE.search(title))
+
+
 SNOOZE_FOR = timedelta(hours=4)
 
 
@@ -124,6 +148,7 @@ class Task:
     on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
     progression: Progression | None = None  # an amount that steps up weekly (F9c)
     off_wall: bool = False  # Themi's own (the email audit): never on the wall's to-do lists
+    medicine: bool = False  # Rx1: "not sure" never makes it done
 
     @property
     def repeats(self) -> bool:
@@ -180,6 +205,7 @@ def _task_from_row(row: dict[str, Any]) -> Task:
             Progression.from_json(json.loads(row["progression"])) if row["progression"] else None
         ),
         off_wall=bool(row["off_wall"]),
+        medicine=bool(row["medicine"]),
     )
 
 
@@ -224,6 +250,7 @@ class TaskBoard:
         s.taskboard = self
         s.tools.register(create_task)
         s.tools.register(complete_task)
+        s.tools.register(set_task_medicine)
         s.tools.register(cancel_task)
         s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
@@ -316,7 +343,7 @@ class TaskBoard:
 
         items, today = [], self._today()
         for t in self.open_for(member):
-            due = f", due {t.due_on.isoformat()}" if t.due_on else ""
+            due = f", due {t.due_on:%a %d %b}" if t.due_on else ""  # the weekday too (#64)
             if t.either:
                 whose = "either of you"
             elif t.shared:
@@ -331,6 +358,9 @@ class TaskBoard:
                         f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
                     )
             schedule = f" {self.summary(t)}." if t.repeats else ""
+            if t.repeats and (last := self._last_done(t)) is not None:
+                # Bug #64: without it, the model guessed a run "was missed".
+                schedule += f" Last done {last.astimezone(self._tz()):%a %d %b}."
             if t.progression is not None:
                 week = t.progression.words_on(self._today())
                 schedule += f" Plan: {plan_read_back(t.progression)}" + (
@@ -339,6 +369,8 @@ class TaskBoard:
             wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
             matters = priority.words(t, today)  # T1: in words, never a score
             matters = f", {matters}" if matters else ""
+            if t.medicine:
+                matters += ", medicine"
             items.append(
                 OpenItem(f"Task {t.id} ({whose}{due}{matters}): {t.title}.{schedule}{wall}{steps}")
             )
@@ -384,7 +416,8 @@ class TaskBoard:
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
             "assign_reason, due_on, created_at, steps, check_in, due_time, from_time, "
-            "importance, off_wall) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "importance, off_wall, medicine) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
                 kind,
@@ -401,6 +434,7 @@ class TaskBoard:
                 from_time.strftime("%H:%M") if due_on and from_time else None,
                 importance,
                 int(off_wall),
+                int(is_medicine(title)),
             ),
         )
         if nudge:
@@ -483,11 +517,8 @@ class TaskBoard:
                     else ""
                 ),
             )
-        text = (
-            f"{lead}.\n\n{details}\n\nDone already, or later?"
-            if details
-            else f"{lead}. Done already, or later?"
-        )
+        ask = MEDICINE_ASK if task.medicine else "Done already, or later?"
+        text = f"{lead}.\n\n{details}\n\n{ask}" if details else f"{lead}. {ask}"
         for queued in self.db.query(  # one nudge per task waiting for them (bug #49)
             "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
             (member.id, f"task-{task.id}-%"),
@@ -499,7 +530,16 @@ class TaskBoard:
             priority=priority,
             kind="task",
             buttons=[
-                Button("Done", "task", {"task": task.id, "action": "done"}),
+                Button(
+                    "Taken" if task.medicine else "Done",
+                    "task",
+                    {"task": task.id, "action": "done"},
+                ),
+                *(
+                    [Button("Not sure", "task", {"task": task.id, "action": "not_sure"})]
+                    if task.medicine
+                    else []
+                ),
                 Button("Later", "task", {"task": task.id, "action": "later"}),
             ],
             deadline=deadline,
@@ -1310,6 +1350,8 @@ class TaskBoard:
             reply = await self.complete(
                 task_id, event.member, interactive=True, tapped=event.button.message_id
             )
+        elif action == "not_sure":
+            reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
         else:
             reply = self.snooze(task_id)
         if event.button.message_id is not None:
@@ -1625,9 +1667,16 @@ def _clock_words(moment: datetime | time) -> str:
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
-        return await _board(ctx).complete(args["task_id"], ctx.member, interactive=True)
+        task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    if task.medicine and UNSURE.search(ctx.request_text):
+        raise ToolFailed(  # Rx1, idea #48: "take it if you aren't sure" was the wrong advice
+            "Not marked done: they aren't sure they took it. Leave it open. Say, gently, that "
+            "the safe way is no second dose until they've checked, or until their doctor or "
+            "pharmacist says; never tell them to take it, and give no other dose advice."
+        )
+    return await _board(ctx).complete(task.id, ctx.member, interactive=True)
 
 
 @tool(
@@ -1752,3 +1801,22 @@ async def set_task_plan(ctx: ToolContext, args: dict[str, Any]) -> str:
         "ask if anything sounds wrong. If they asked for something that read-back doesn't "
         "show, say which part isn't set up and keep it with remember_fact."
     )
+
+
+@tool(
+    "set_task_medicine",
+    "Mark a task as a medicine (or not) when they say so ('item 3 is my thyroid medicine'). "
+    "A medicine's nudge asks 'Taken already?' with a Not sure button, and a 'not sure' never "
+    "makes it done. Tasks whose titles name a pill, meds or a dose are marked already.",
+    {"task_id": {"type": "integer"}, "medicine": {"type": "boolean"}},
+)
+async def set_task_medicine(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
+    try:
+        task = board.get(args["task_id"])
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    board.db.execute(
+        "UPDATE tasks SET medicine = ? WHERE id = ?", (int(bool(args["medicine"])), task.id)
+    )
+    return f"{task.title}: {'a medicine' if args['medicine'] else 'not a medicine'}."

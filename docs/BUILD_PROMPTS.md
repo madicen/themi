@@ -83,11 +83,15 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F15a | Feedback: changing a task's time, one task not two, reminders not events | Feedback | [x] |
 | F15b | Feedback: summaries and cards on time, one morning message | Feedback | [x] |
 | F15c | Feedback: the urgent email that shouldn't need a rule | Feedback | [x] |
-| Rx1 | Medicines: safe reminders and advice | Feedback | [ ] |
+| Rx1 | Medicines: safe reminders and advice | Feedback | [x] |
 | E2 | Email: an audit instead of single questions | Feedback | [x] |
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
+| F16a | Feedback: automatic is per person | Feedback | [x] |
+| F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
+| F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
+| F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4100,7 +4104,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0062 and 0063).
 
 ### Rx1 · Medicines: safe reminders and advice
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F15a
 From Erin's idea #48 (CRITICAL), 2026-10-28. "I don't remember if I took the wegovy or just
 thought about taking it" got "Take it if you aren't sure". That's the wrong advice: a
@@ -4115,6 +4119,28 @@ this is built** (#52, Themi's task 40), so the details wait for that conversatio
 - Medicine tasks are marked as medicine, from the title or when said, and change nothing
   else about how they nudge.
 - Scenarios from #48's own conversation.
+
+Notes (2026-10-28):
+- Michael confirmed the four points above after talking with Erin (task 40 done).
+- Migration 0069: `tasks.medicine`, set at creation from the title's whole words
+  (`tasks.MEDICINE`: pill, meds, medicine, medication, Wegovy, Ozempic, insulin, inhaler,
+  tablet, capsule, prescription, dose, tab). Live tasks marked: Mimi pill (1 tab and 1/2
+  tab) and Britney flea meds. `set_task_medicine` (schedules group) for "item 3 is my
+  thyroid medicine".
+- A medicine nudge ends "Taken already, or later?" with [Taken] [Not sure] [Later]. [Not
+  sure] edits it to `NOT_SURE_TEXT` (no second dose until it's checked, or until the
+  doctor or pharmacist says; it stays open) and changes nothing else. The morning list's
+  ticks and the wall's ticks still count as done: they're a clear yes.
+- `complete_task` on a medicine refuses when their message says they aren't sure (`UNSURE`:
+  not sure, don't remember, maybe, might have, think I took...), telling the model what to
+  say instead.
+- The system prompt's medicine rule: never tell anyone to take a dose, no dose advice,
+  unsure means no second dose until checked, general information ends "check with your
+  doctor or pharmacist". The open items say ", medicine".
+- Not done: Themi has no web lookup yet, so "general information" is only the model's own,
+  under that rule. Re-run the evals with a medicine case when there's quota.
+- The plan has a Medicines paragraph after the trust tiers (rev 201).
+- Setup: restart (applies 0069).
 
 ### E2 · Email: an audit instead of single questions
 Status: [x] 2026-10-28
@@ -4246,6 +4272,187 @@ Depends on: P2a, and a week of its timings
 Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
 - The speed-ups the numbers point to: a faster model for conversation, fewer tool
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
+
+### F16a · Feedback (2026-10-28): automatic is per person
+Status: [x] 2026-10-28
+Depends on: 11, 13, F2
+From Erin's bug #58 and Michael's idea #62, 2026-10-28.
+- #58 ("Themi has been archiving my emails"): Michael turned on "Archive noise emails" as
+  automatic on the website (rule 17, 27 Oct). The category's tier is household-wide, so
+  Erin's noise was archived without a question 11 times until he turned it off (28 Oct,
+  09:28). #62: "automating things like archiving email should be done on a per user basis,
+  not a household one."
+- The plan's trust tiers don't say whose actions a grant covers. Now: a category whose
+  scope is `member` (each person's own email, calendar, routines) becomes automatic per
+  person, and only for the person who locked the rule. A `family` category (the grocery
+  list, the family calendar, Themi's lists) stays household-wide, admins only.
+- A person makes their own categories automatic, admin or not (it's their own mail). The
+  rule says whose it is ("Automatic for Erin: archive noise emails") and is a personal rule
+  (F2), so it is only in that person's conversations.
+- The website's "What Themi does on its own" shows, for a member category, the viewer's own
+  setting with their own switch, and who else has it automatic. Tier 3 (an anomaly) still
+  pauses the whole category for everyone.
+- Migration: a member category that is automatic now becomes automatic for the person whose
+  rule granted it, and no one else.
+- Tests: Michael's grant leaves Erin asked; Erin's own grant; a non-admin can't grant a
+  family category; unlocking undoes only that person's; the migration; a scenario from #58.
+- Plan: the trust tiers section gets a sentence on whose actions a grant covers.
+
+Notes (2026-10-28):
+- Migration 0067: `member_tiers` (category, member, the granting rule). A trigger refuses a
+  capped or household category there. A member category that was automatic moved to its
+  rule's person; `action_categories.tier` is now only for household categories. Locked
+  grants of member categories became personal rules. The live data had none (rule 17 was
+  already unlocked).
+- `Autonomy.grant_tier2(name, via_rule_id, by, member=None)`: a household category needs
+  an admin, as before. A personal one is only ever for `by` themselves. `revoke_tier2` is
+  theirs, or an admin's for anyone's. `granted(name, member)` (ignores a Tier 3 pause),
+  `is_automatic(name, member)` (what `stage` uses) and `granted_to(name)`. Escalation
+  still pauses the whole category for everyone, and only an admin resumes it.
+- Rules: an `autonomy_grant` takes its category's scope whatever `applies_to` says; a
+  member's own needs no admin. `grant_automatic` writes "Automatic for Erin: Archive noise
+  emails". `revoke_automatic(by, category, whose=None)`.
+- Website "What Themi does on its own": a personal category shows "For you: asks
+  first/automatic", who else has it, and [Make automatic for me] for anyone. Shared
+  categories stay admin-only.
+- K3's offer to add events from booking emails is now per person ("Add events from my
+  booking emails to my calendar without asking"), and asked of each person once.
+- The plan's trust tiers paragraph says this (rev 197).
+- Setup: restart (applies 0067). Anyone who wants automatic archiving turns it on for
+  themselves on the website.
+
+### F16b · Feedback (2026-10-28): noise emails in one message, inside the limit
+Status: [x] 2026-10-28
+Depends on: F16a, E2, F15b
+From Michael's idea #61, Erin's idea #63 and Michael's bug #66, 2026-10-28.
+- #61: "email archive messages come in too frequently. We should bundle many archive
+  requests together on the site (archive all button), and make sure ... the message limit"
+  is respected. #63: "by default, non urgent emails should be batched into a single message
+  (default up to once daily, though the frequency should be user customizable) for bulk
+  archiving." #66: of the ten archive cards Michael got on the afternoon of 28 Oct (his
+  daily limit is 3), only one email was still in his inbox.
+- Noise isn't asked about one at a time. Offers to archive wait, without a card, and come
+  together in one message: "6 emails look like noise:" with a line each (sender: subject),
+  and [Archive all] [Not now], plus a pointer to the website to pick.
+- When: each person's setting, "once a day" by default at 6 pm, or twice a day (noon and
+  6 pm), or every other day. It's a normal message: the daily limit, quiet hours and
+  pauses hold it like any other. Nothing to offer, no message.
+- Before the message goes, each email is checked in Gmail: one that is no longer in the inbox
+  (archived, deleted, filed by hand) is dropped and its offer closed quietly. Gmail can't
+  be reached: they're listed anyway.
+- [Archive all] archives them all and edits the message to say so ("Archived 6."). [Not now]
+  leaves them for the next one. An answered offer leaves the list.
+- Website: "Emails to archive" lists each person's own offers with a checkbox each,
+  [Archive all], [Archive the ticked ones] and [Keep the ticked ones] (keeping one is a
+  decline). Linked from the dashboard when something is waiting.
+- Automatic (F16a) still archives at once; this only changes how the asking is done.
+- Tests: no card per email; the digest at the time, with its count; the setting; the daily
+  limit holds it; emails gone from the inbox are left out; archive all; the website
+  page; a scenario from #66.
+
+Notes (2026-10-28):
+- Michael confirmed (2026-10-28): once a day at 6 pm by default, twice a day or every other
+  day as the options; "the one at a time thing" in #66 is the per-email archive cards.
+- `themi.core.noise_digest.NoiseDigest` (`services.noise`, job `email.noise` every 5
+  minutes). Migration 0068: `members.noise_emails` ('daily', 'twice', 'every_other_day')
+  and `noise_digests` (each message, the offers it listed, the answer).
+- `ApprovalsUI.held`: a category another module asks about. It gets no card, isn't
+  re-asked when a snooze ends, and isn't a bare "yes" target. It's still in /pending.
+- The message: "2 emails look like noise:\n- Shop: 20% off\n- ...\nArchive them all? ..."
+  (15 lines at most, then "and N more"), [Archive all] [Not now], a normal message with no
+  deadline, so the daily limit and quiet hours hold it. A newer one replaces one still
+  queued. Archive all (or a bare "yes" while it's the latest) edits it to "Archived N."; Not
+  now to "Left for now. They'll be in the next one."
+- Before it goes, each email is fetched from Gmail: no longer in INBOX (or gone), its
+  offer is withdrawn ("Already out of the inbox."). A Gmail error lists it anyway.
+- Times are fixed (noon, 6 pm); a missed time (Themi down) is caught up within 3 hours.
+  Every other day counts days since the last message.
+- Website: "Emails to archive" (`/email/noise`, `themi.web.email_pages`) with Archive all,
+  Archive the ticked ones, Keep the ticked ones (a decline). The dashboard shows one link
+  instead of a card per email. The setting is under My settings, "My email".
+- Offers still lapse after 3 days unanswered (APPROVAL_TTL), so every-other-day messages
+  can't pile up. The plan's triage bullet says this (rev 198).
+- Setup: restart (applies 0068). The first message goes at 6 pm with whatever is waiting.
+
+### F16c · Feedback (2026-10-28): time-sensitive, explaining email levels, the run, slow notices
+Status: [x] 2026-10-28
+Depends on: E2b, F15c, F9a, P2a
+From Erin's ideas #59, #60 and #65 and bug #64, 2026-10-28.
+- #60: "Urgent as a label feels unnecessarily rushed. I would replace urgent with 'time
+  sensitive' for routine use, and reserve urgent for things that truly need to be dealt
+  with soon." Everything a person reads says "time-sensitive" for what E2b calls urgent
+  (same day): normal alerts ("An email that looks time-sensitive ..."), the audit's
+  buttons ([No rush] [Time-sensitive] [Urgent]), the senders' setting, and replies.
+  "Urgent" is kept for right away: an alert that interrupts. The stored levels and the
+  task levels (T1) don't change.
+- #59 ("Brevity is good, clarity is better"): asked "set similar emails to medium urgency
+  and medium importance", Themi offered "always urgent", then explained urgent as "appear at
+  the top of your inbox or in your daily digest" (neither exists). The model gets what the
+  levels really do, in a few plain lines, and a tool sets a sender's two levels in words
+  (`set_sender_levels`), the same as the audit's answers. Its explanation is said in full.
+  Also: `keep_email` failed when the sender had been offered before (UNIQUE on
+  `sender_suggestions`); it reuses that row.
+- #64 ("I ran yesterday, and this logic on the run spacing is wrong"): the run was recorded
+  done on Tue 27 Oct and is due Thu 29 Oct, but Themi said "Saturday ... Tuesday was
+  missed", with no tool called. The open items give a repeating task's next day with its
+  weekday and when it was last done ("next Thu 29 Oct; last done Tue 27 Oct"), and a
+  calendar card for a time that's past lapses (the Tue run card from before F15b).
+- #65: "increase the required delay for a 'sorry this is slow' message." 10 s → 25 s.
+
+Notes (2026-10-28):
+- #60, the words: an email alert says "time-sensitive" unless it comes at once (severe, or
+  a sender set to urgent), then "urgent". The audit asks "How soon does it need you?" with
+  [No rush] [Time-sensitive] [Urgent], and reads back "time-sensitive" ("All 5 sorted: 2
+  time-sensitive, 1 important."). E1's offers, `keep_email`'s question and button ("Always
+  time-sensitive: ..."), `set_urgent_senders`, `inbox_setup` and the website's inbox
+  setting say time-sensitive too. Stored values, column names and the task levels (T1)
+  are unchanged.
+- #59: `set_sender_levels(sender, urgency, importance)` (email group). It finds the
+  sender from their words (`triage.find_email`, now public), records the levels as an
+  answered audit item ("said in chat"), and keeps the inbox's time-sensitive senders in
+  step (time-sensitive or urgent adds the address; no rush takes off that exact address,
+  never a domain). Its result and `inbox_setup`'s end with `LEVELS_TEXT`: what each level
+  really does, and that nothing in Gmail is moved or highlighted. A system prompt line:
+  asked what something means or why, explain it fully from what the tools say.
+- The `keep_email` crash: a sender already in `sender_suggestions` is reused.
+- #64: a task's open-items line gives the due day with its weekday ("due Thu 29 Oct"), and
+  a repeating task's "Last done Tue 27 Oct." `Proposal.expires` (staged tools):
+  `block_time_for_task` and `find_time_for_task` cards lapse when the block's time has
+  passed. The stale card in #64 came from before this.
+- #65: `SLOW_AFTER` is 25 s. The timing tests take their times from it.
+- Not done: #59's "brevity vs clarity" is a prompt line only; re-run the evals when there's
+  quota. The plan's triage bullet says time-sensitive vs urgent (rev 199).
+- Setup: restart. No migration.
+
+### F16d · Feedback (2026-10-28): only Gmail's Primary inbox counts
+Status: [x] 2026-10-28
+Depends on: F16b
+The rest of Michael's bug #66 ("only the email about Apple IDs is even in my inbox"). After
+the restart, F16b's first message for him listed 18 emails that Gmail still marks INBOX:
+17 in the Promotions tab and 2 in Updates. Michael, 2026-10-28: "Definitely Gmail's primary
+inbox is the only one that counts."
+- In the inbox means Primary: labelled INBOX and none of CATEGORY_PROMOTIONS,
+  CATEGORY_UPDATES, CATEGORY_SOCIAL or CATEGORY_FORUMS. For everyone.
+- Triage doesn't offer to archive noise that isn't in Primary (Gmail has already put it
+  aside). Alerts are unchanged.
+- The noise message checks each email's labels in Gmail as it's made, and leaves out (and
+  closes) any not in Primary.
+- A message still waiting to go out (the daily limit held it) is made again, at most once
+  an hour, so what it lists stays true until it goes.
+- Tests: tab mail isn't offered; an offer whose email moved to a tab is dropped; a held
+  message is rebuilt; a scenario from #66.
+
+Notes (2026-10-28):
+- `themi.connectors.gmail.parse.in_primary(labels)`: INBOX and none of `TABS`. Triage
+  reads the labels stored at sync; the noise message reads them fresh from Gmail.
+- `NoiseDigest._stale`: the latest message is still queued, unanswered, and over an hour
+  old (`REBUILD_AFTER`), so the 5-minute job makes it again (cancelling the queued one).
+- Found live: of Michael's 19 waiting offers, 17 were in Promotions and 2 in Updates. The
+  messages queued for 8 am on 29 Oct are rebuilt within an hour of the restart, and those
+  offers are withdrawn ("Already out of the inbox.").
+- Alerts still come for time-sensitive mail in any tab; only archiving changed.
+- The plan's triage bullet says Primary (rev 200).
+- Setup: restart. No migration.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26

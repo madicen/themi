@@ -4,7 +4,6 @@ import httpx
 
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
-from themi.ai.types import ToolResult
 from themi.core.rules import PERSONAL_PROPOSAL_TEXT, PROPOSAL_TEXT
 
 WORK = "Don't suggest chores during my work hours."
@@ -69,7 +68,8 @@ async def test_rules_command_shows_your_personal_rules_only(scenario: Scenario) 
     assert "Bins on Tuesday" in husband_view and "No chores during work" not in husband_view
 
 
-async def test_an_automatic_action_rule_cant_be_personal(scenario: Scenario) -> None:
+async def test_an_automatic_action_rule_takes_its_categorys_scope(scenario: Scenario) -> None:
+    # F16a: archiving is about her own email, so the grant is personal whatever was asked.
     scenario.primary.queue_tool_call(
         "propose_rule",
         {
@@ -78,15 +78,13 @@ async def test_an_automatic_action_rule_cant_be_personal(scenario: Scenario) -> 
             "kind": "autonomy_grant",
             "category": "email_archive_noise",
             "rule_id": 0,
-            "applies_to": "personal",
+            "applies_to": "household",
         },
     )
-    scenario.primary.queue_text("That one would have to be for the household.")
+    scenario.primary.queue_text("Here it is.")
     await scenario.say("Erin", "archive my promos automatically")
-    result = scenario.primary.last_request.messages[-1].content[0]
-    assert isinstance(result, ToolResult)
-    assert result.content.startswith("Not proposed:") and "household rule" in result.content
-    assert scenario.app.rulebook.locked() == []
+    (draft,) = scenario.app.rulebook.drafts(scenario.member("Erin"))
+    assert draft.scope == "personal"
 
 
 async def test_refining_a_draft_can_change_its_scope(scenario: Scenario) -> None:

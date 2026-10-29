@@ -21,6 +21,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import jsonschema
@@ -57,6 +58,7 @@ class Proposal:
     # The person asked for exactly this in their own words (checked by the tool against
     # what they wrote, never the model's say-so). The trust tiers decide what that allows.
     requested: bool = False
+    expires: datetime | None = None  # no use after then: an unanswered card lapses (#64)
 
 
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
@@ -139,8 +141,9 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"wall|cozyla|chart|chore|routine",
     ),
     "email": (
-        "inboxes, expected emails, urgent senders, the email audit",
-        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|audit",
+        "inboxes, expected emails, time-sensitive and important senders, the email audit",
+        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|audit|"
+        r"time.sensitive",
     ),
     "pantry": (
         "the pantry and meal ideas",
@@ -166,7 +169,13 @@ TOOL_GROUPS: dict[str, str] = {
         "spending",
     ),
     **dict.fromkeys(
-        ("set_task_schedule", "set_task_plan", "set_task_importance", "set_check_in_reviews"),
+        (
+            "set_task_schedule",
+            "set_task_plan",
+            "set_task_importance",
+            "set_check_in_reviews",
+            "set_task_medicine",
+        ),
         "schedules",
     ),
     **dict.fromkeys(
@@ -214,6 +223,7 @@ TOOL_GROUPS: dict[str, str] = {
             "inbox_setup",
             "keep_email",
             "start_email_audit",
+            "set_sender_levels",
         ),
         "email",
     ),
@@ -302,6 +312,7 @@ class ToolRegistry:
             proposal.executor,
             interactive=True,  # tools run inside a conversation
             requested=proposal.requested,
+            expires=proposal.expires,
         )
         action = outcome.action
         if action.status == "pending":

@@ -221,7 +221,7 @@ async def test_booking_emails_become_cards_then_an_offer_then_automatic(
             await booking(n)
         await approve_calendar_card()
     assert {f"Vet visit {n}" for n in (1, 2, 3)} <= set(on_primary(linked))
-    assert any("Add events from booking emails" in t for t in scenario.inbox("Erin"))  # the offer
+    assert any("from my booking emails" in t for t in scenario.inbox("Erin"))  # the offer
 
     await scenario.tap("Erin", "Lock it in")
     await booking(4)

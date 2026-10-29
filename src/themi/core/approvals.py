@@ -12,6 +12,10 @@ so the thread doesn't fill up. "Not now" snoozes rather than declines: the
 action comes back later, which feels gentler than a hard no. Anything left
 unanswered for `ttl` lapses quietly (its message is edited, nothing new is
 sent).
+
+A category in `held` gets no card of its own: another module asks about them
+together (F16b: noise emails, in one message at the person's chosen time). They
+still show in /pending, and a bare "yes" never answers one unseen.
 """
 
 from __future__ import annotations
@@ -71,6 +75,7 @@ class ApprovalsUI:
         self.store = autonomy.store
         self.db = autonomy.db
         self.ttl = ttl
+        self.held: set[str] = set()  # categories asked about elsewhere, together
 
     def install(self, services: Services) -> None:
         """Wire approvals into the agent: listeners, buttons, reactions, fast path, /pending."""
@@ -84,6 +89,8 @@ class ApprovalsUI:
     # ----- asking ---------------------------------------------------------------
 
     async def on_pending(self, action: Action, interactive: bool) -> None:
+        if action.category in self.held:
+            return
         await self.ask(action, priority=Priority.REPLY if interactive else Priority.NORMAL)
 
     async def ask(self, action: Action, *, priority: Priority) -> None:
@@ -183,6 +190,7 @@ class ApprovalsUI:
                 f"action:{a.id}", a.summary, resolver(a.id), self._asked_in(a.id, member.id)
             )
             for a in self.autonomy.awaiting(member)
+            if a.category not in self.held
         ]
 
     def _asked_in(self, action_id: int, member_id: int) -> tuple[int, ...]:
@@ -217,10 +225,12 @@ class ApprovalsUI:
     # ----- housekeeping (scheduler) -------------------------------------------------
 
     async def resurface(self) -> int:
-        """Snoozed actions whose time has come are asked about again."""
+        """Snoozed actions whose time has come are asked about again (held ones wait for
+        their own message)."""
         actions = self.autonomy.resurface_snoozed()
         for action in actions:
-            await self.ask(action, priority=Priority.NORMAL)
+            if action.category not in self.held:
+                await self.ask(action, priority=Priority.NORMAL)
         return len(actions)
 
     async def expire(self) -> int:

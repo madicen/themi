@@ -50,6 +50,7 @@ from themi.core.habits import HabitReserve
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
+from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reminders import Reminders
 from themi.core.rules import Rulebook
@@ -141,6 +142,7 @@ def build_app(
         EmailTriage(services, services.gmail).install()
         SenderSuggestions(services).install()
         ExpectedEmails(services, services.gmail).install()
+        NoiseDigest(services, approvals, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
     lists = Lists(services)
@@ -238,6 +240,8 @@ def build_app(
         periodic.append(PeriodicTask("email.triage", timedelta(minutes=1), services.triage.run))
     if services.senders is not None:
         periodic.append(PeriodicTask("email.senders", timedelta(hours=6), services.senders.offer))
+    if services.noise is not None:
+        periodic.append(PeriodicTask("email.noise", timedelta(minutes=5), services.noise.run))
     if services.triage is not None:
         periodic.append(
             PeriodicTask("pantry.receipts", timedelta(minutes=10), pantry.read_pending_receipts)

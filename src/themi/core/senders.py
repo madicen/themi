@@ -35,10 +35,10 @@ log = logging.getLogger(__name__)
 LOOK_BACK = timedelta(days=90)
 MAX_OFFERED = 4
 OFFER_TEXT = (
-    "A few senders in {address} might always count as urgent: {senders}. Tap any that "
+    "A few senders in {address} might always count as time-sensitive: {senders}. Tap any that "
     "should; nothing changes otherwise."
 )
-ADDED_TEXT = "Added: mail from {label} ({address}) always counts as urgent now."
+ADDED_TEXT = "Added: mail from {label} ({address}) always counts as time-sensitive now."
 WHY = {
     "financial": "money",
     "property": "the property",
@@ -86,8 +86,8 @@ class SenderSuggestions:
              if r["address"] not in account.urgent_senders]
         )  # fmt: skip
         return (
-            f"{account.address}: {state}. Urgent senders: {urgent}. Suggested, not answered "
-            f"yet: {suggested or 'none'}. Expected emails: "
+            f"{account.address}: {state}. Time-sensitive senders: {urgent}. Suggested, not "
+            f"answered yet: {suggested or 'none'}. Expected emails: "
             f"{', '.join(r['name'] for r in expected) or 'none'}."
         )
 
@@ -206,9 +206,10 @@ class SenderSuggestions:
 @tool(
     "inbox_setup",
     "What's set for each of this person's linked Gmail inboxes: watched or not, the senders "
-    "that always count as urgent, the suggested senders they haven't answered yet, and the "
-    "expected emails. For 'what's my email set up to do?' or 'which senders did I need to "
-    "look at?'; add one with set_urgent_senders when they say so.",
+    "that always count as time-sensitive, the suggested senders they haven't answered yet, "
+    "the expected emails, and what time-sensitive, urgent and important do. For 'what's my "
+    "email set up to do?', 'what does urgent mean?' or 'which senders did I need to look "
+    "at?'; set one sender's levels with set_sender_levels.",
     {},
 )
 async def inbox_setup(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -220,4 +221,6 @@ async def inbox_setup(ctx: ToolContext, args: dict[str, Any]) -> str:
     ]
     if not accounts:
         return "They haven't linked a Gmail inbox (My accounts on the website)."
-    return "\n".join(senders.setup(a) for a in accounts)
+    from themi.core.email_audit import LEVELS_TEXT
+
+    return "\n".join([*(senders.setup(a) for a in accounts), LEVELS_TEXT])

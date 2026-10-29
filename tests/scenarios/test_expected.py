@@ -53,9 +53,9 @@ def expect_pge(scenario: Scenario, address: str = ERIN, name: str = "Erin") -> E
     )
 
 
-def automatic(scenario: Scenario) -> None:
-    """Marking confirmations read is automatic, as a locked rule would make it."""
-    scenario.app.services.autonomy.grant_tier2(CATEGORY, via_rule_id=1, by=scenario.member("Erin"))
+def automatic(scenario: Scenario, name: str = "Erin") -> None:
+    """Marking their confirmations read is automatic, as their locked rule would make it."""
+    scenario.app.services.autonomy.grant_tier2(CATEGORY, via_rule_id=1, by=scenario.member(name))
 
 
 async def sort(scenario: Scenario, ids: list[int], category: str = "confirmation") -> None:
@@ -211,8 +211,8 @@ async def test_resume_restores_tier_2(scenario: Scenario, inbox: FakeGmail) -> N
         scenario.edits("Erin")[-1]["text"]
         == '"Mark confirmation emails as read" is automatic again.'
     )
-    category = scenario.app.services.autonomy.category(CATEGORY)
-    assert not category.escalated and category.effective_tier is Tier.AUTOMATIC
+    autonomy = scenario.app.services.autonomy
+    assert autonomy.is_automatic(CATEGORY, scenario.member("Erin"))
 
     await sort(scenario, await arrive(scenario, inbox, HOTEL))
     assert last_action(scenario)["status"] == "done"
@@ -224,7 +224,7 @@ async def test_only_admins_get_the_resume_button(
 ) -> None:
     await link(scenario, site, fake_google, "Husband", "dan@gmail.com")
     await scenario.tap("Husband", "Watch it")
-    automatic(scenario)
+    automatic(scenario, "Husband")
     expect_pge(scenario, "dan@gmail.com", "Husband")
     (alert,) = [t for t in await overdue(scenario, name="Husband") if "hasn't shown up" in t]
     assert "an admin can resume it from the website's Trust page" in alert

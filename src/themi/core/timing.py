@@ -30,7 +30,7 @@ from themi.storage.db import Database
 log = logging.getLogger(__name__)
 
 REPLIES_KEPT = timedelta(days=7)
-SLOW_AFTER = 10.0  # seconds
+SLOW_AFTER = 25.0  # seconds (10 s came too soon, idea #65)
 SLOW_NOTICES = (
     "I'm having a bit of a low-energy day myself. I'll answer as soon as I can.",
     "Still thinking, nearly there.",

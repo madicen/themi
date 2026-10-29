@@ -10,10 +10,13 @@
 
 <section>
   <h2>Waiting on you</h2>
+  {% if noise_count %}
+  <p><a href="/email/noise">{{ noise_count }} email{% if noise_count != 1 %}s{% endif %} that look like noise, to archive or keep</a></p>
+  {% endif %}
   {% for action in actions %}
     {% include "_action_card.html" %}
   {% else %}
-    <p class="muted">Nothing is waiting on you at the moment.</p>
+    {% if not noise_count %}<p class="muted">Nothing is waiting on you at the moment.</p>{% endif %}
   {% endfor %}
 </section>
 

@@ -79,6 +79,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     from themi.web import (
         admin_pages,
         ai_pages,
+        email_pages,
         google_pages,
         knowledge_pages,
         list_pages,
@@ -134,6 +135,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(list_pages.routes(kit))
     web.include_router(week_pages.routes(kit))
     web.include_router(spending_pages.routes(kit))
+    web.include_router(email_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
 
@@ -189,6 +191,9 @@ def core_routes(kit: Kit) -> APIRouter:
     def dashboard_values(member: Member) -> dict[str, Any]:
         autonomy = app.services.autonomy
         actions = autonomy.open_for(member)
+        noise = app.services.noise.waiting(member) if app.services.noise else []
+        held = {a.id for a in noise}  # F16b: one link to their own page, not a card each
+        actions = [a for a in actions if a.id not in held]
         activity = app.db.query(
             "SELECT a.event, a.created_at, p.summary FROM action_audit a "
             "JOIN pending_actions p ON p.id = a.action_id "
@@ -213,6 +218,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
+            "noise_count": len(noise),
             "groceries": app.services.groceries.needed() if app.services.groceries else [],
         }
 
@@ -292,6 +298,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
                 leave_heads_up=form.get("leave_heads_up") == "on",
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
+                noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
             )
         except InvalidValue as exc:

@@ -97,6 +97,7 @@ MAX_BUSY_TIMES = 10
 PHRASING_STYLES = ("plain", "gentle")
 MAX_PHRASING_NOTES = 500
 MAX_CHART_LIMIT = 10
+NOISE_EMAILS = ("daily", "twice", "every_other_day")  # F16b
 
 
 def _busy_json(busy: BusyTime) -> dict[str, Any]:
@@ -147,6 +148,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         calendar_details=row["calendar_details"],
         morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
         morning_summary_empty=bool(row["morning_summary_empty"]),
+        noise_emails=row["noise_emails"],
         getting_ready_minutes=row["getting_ready_minutes"],
         leave_heads_up=bool(row["leave_heads_up"]),
     )
@@ -381,6 +383,7 @@ class AccountStore:
         getting_ready_minutes: int | None = None,
         leave_heads_up: bool | None = None,
         break_extend_minutes: int | None = None,
+        noise_emails: str | None = None,  # one of NOISE_EMAILS
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -452,6 +455,10 @@ class AccountStore:
             changes["getting_ready_minutes"] = getting_ready_minutes
         if leave_heads_up is not None:
             changes["leave_heads_up"] = int(leave_heads_up)
+        if noise_emails is not None:
+            if noise_emails not in NOISE_EMAILS:
+                raise InvalidValue("noise emails come once a day, twice a day or every other day")
+            changes["noise_emails"] = noise_emails
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:

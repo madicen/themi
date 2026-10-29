@@ -6,6 +6,7 @@ from __future__ import annotations
 from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
+from themi.core.email_audit import LEVELS_TEXT
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
@@ -49,7 +50,7 @@ async def test_likely_senders_wait_in_the_audit_and_only_an_answer_adds_one(
     assert account.urgent_senders == ()  # nothing until she answers
 
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Same day")  # Schwab Alerts first: the likeliest
+    await scenario.tap("Erin", "Time-sensitive")  # Schwab Alerts first: the likeliest
     await scenario.tap("Erin", "Not important")
     account = scenario.app.store.get_linked_account(account.id)
     assert account.urgent_senders == ("alerts@schwab.example",)
@@ -71,7 +72,7 @@ async def test_what_each_inbox_has_set_and_whats_waiting(
     await scenario.run_periodic("email.senders")
     await scenario.app.outbox.flush()
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Same day")  # Schwab Alerts
+    await scenario.tap("Erin", "Time-sensitive")  # Schwab Alerts
     await scenario.tap("Erin", "Not important")
     scenario.primary.queue_tool_call("inbox_setup", {})
     scenario.primary.queue_text("Bob Tenant is the one left.")
@@ -85,6 +86,6 @@ async def test_what_each_inbox_has_set_and_whats_waiting(
         if isinstance(b, ToolResult)
     ]
     assert result == (
-        f"{ERIN}: watched. Urgent senders: alerts@schwab.example. Suggested, not answered "
-        "yet: Bob Tenant (bob@example.com). Expected emails: none."
+        f"{ERIN}: watched. Time-sensitive senders: alerts@schwab.example. Suggested, not answered "
+        "yet: Bob Tenant (bob@example.com). Expected emails: none.\n" + LEVELS_TEXT
     )
