@@ -18,7 +18,7 @@ async def water_offer(scenario: Scenario) -> int:
     await scenario.app.services.autonomy.stage(
         CATEGORY,
         erin,
-        "A small daily check-in to try: a glass of water mid-morning",
+        "Something you could try for yourself: a glass of water mid-morning",
         {"habit": habit["id"]},
         EXECUTOR,
     )
