@@ -136,3 +136,25 @@ def test_a_personal_grant_stays_only_with_whoever_made_it() -> None:
     tiers = {r["name"]: r["tier"] for r in db.query("SELECT name, tier FROM action_categories")}
     assert tiers["email_archive_noise"] == 1 and tiers["grocery_list_add"] == 2
     assert db.scalar("SELECT scope FROM rules WHERE id = 17") == "personal"
+
+
+def test_existing_medicine_tasks_are_marked() -> None:
+    # Rx1: the live tasks "Mimi pill - 1 tab" and "Britney flea meds" become medicines.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 69])
+    now = "2026-10-28T00:00:00+00:00"
+    db.execute(
+        "INSERT INTO members (id, name, role, created_at, updated_at) "
+        "VALUES (1, 'Erin', 'admin', ?, ?)",
+        (now, now),
+    )
+    for title in ("Mimi pill - 1 tab", "Britney flea meds", "Clean the bird cage", "Tabletop"):
+        db.execute(
+            "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
+            "assign_reason, created_at) VALUES (?, 'physical', 1, 1, 1, 1, '', ?)",
+            (title, now),
+        )
+    apply(db, known)
+    rows = db.query("SELECT title FROM tasks WHERE medicine = 1 ORDER BY id")
+    assert [r["title"] for r in rows] == ["Mimi pill - 1 tab", "Britney flea meds"]
