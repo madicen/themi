@@ -88,6 +88,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
+| F16a | Feedback: automatic is per person | Feedback | [ ] |
+| F16b | Feedback: noise emails in one message, inside the limit | Feedback | [ ] |
+| F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4246,6 +4249,85 @@ Depends on: P2a, and a week of its timings
 Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
 - The speed-ups the numbers point to: a faster model for conversation, fewer tool
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
+
+### F16a · Feedback (2026-10-28): automatic is per person
+Status: [ ]
+Depends on: 11, 13, F2
+From Erin's bug #58 and Michael's idea #62, 2026-10-28.
+- #58 ("Themi has been archiving my emails"): Michael turned on "Archive noise emails" as
+  automatic on the website (rule 17, 27 Oct). The category's tier is household-wide, so
+  Erin's noise was archived without a question 11 times until he turned it off (28 Oct,
+  09:28). #62: "automating things like archiving email should be done on a per user basis,
+  not a household one."
+- The plan's trust tiers don't say whose actions a grant covers. Now: a category whose
+  scope is `member` (each person's own email, calendar, routines) becomes automatic per
+  person, and only for the person who locked the rule. A `family` category (the grocery
+  list, the family calendar, Themi's lists) stays household-wide, admins only.
+- A person makes their own categories automatic, admin or not (it's their own mail). The
+  rule says whose it is ("Automatic for Erin: archive noise emails") and is a personal rule
+  (F2), so it is only in that person's conversations.
+- The website's "What Themi does on its own" shows, for a member category, the viewer's own
+  setting with their own switch, and who else has it automatic. Tier 3 (an anomaly) still
+  pauses the whole category for everyone.
+- Migration: a member category that is automatic now becomes automatic for the person whose
+  rule granted it, and no one else.
+- Tests: Michael's grant leaves Erin asked; Erin's own grant; a non-admin can't grant a
+  family category; unlocking undoes only that person's; the migration; a scenario from #58.
+- Plan: the trust tiers section gets a sentence on whose actions a grant covers.
+
+### F16b · Feedback (2026-10-28): noise emails in one message, inside the limit
+Status: [ ]
+Depends on: F16a, E2, F15b
+From Michael's idea #61, Erin's idea #63 and Michael's bug #66, 2026-10-28.
+- #61: "email archive messages come in too frequently. We should bundle many archive
+  requests together on the site (archive all button), and make sure ... the message limit"
+  is respected. #63: "by default, non urgent emails should be batched into a single message
+  (default up to once daily, though the frequency should be user customizable) for bulk
+  archiving." #66: of the ten archive cards Michael got on the afternoon of 28 Oct (his
+  daily limit is 3), only one email was still in his inbox.
+- Noise isn't asked about one at a time. Offers to archive wait, without a card, and come
+  together in one message: "6 emails look like noise:" with a line each (sender: subject),
+  and [Archive all] [Not now], plus a pointer to the website to pick.
+- When: each person's setting, "once a day" by default at 6 pm, or twice a day (noon and
+  6 pm), or every other day. It's a normal message: the daily limit, quiet hours and
+  pauses hold it like any other. Nothing to offer, no message.
+- Before the message goes, each email is checked in Gmail: one that is no longer in the inbox
+  (archived, deleted, filed by hand) is dropped and its offer closed quietly. Gmail can't
+  be reached: they're listed anyway.
+- [Archive all] archives them all and edits the message to say so ("Archived 6."). [Not now]
+  leaves them for the next one. An answered offer leaves the list.
+- Website: "Emails to archive" lists each person's own offers with a checkbox each,
+  [Archive all], [Archive the ticked ones] and [Keep the ticked ones] (keeping one is a
+  decline). Linked from the dashboard when something is waiting.
+- Automatic (F16a) still archives at once; this only changes how the asking is done.
+- Tests: no card per email; the digest at the time, with its count; the setting; the daily
+  limit holds it; emails gone from the inbox are left out; archive all; the website
+  page; a scenario from #66.
+
+### F16c · Feedback (2026-10-28): time-sensitive, explaining email levels, the run, slow notices
+Status: [ ]
+Depends on: E2b, F15c, F9a, P2a
+From Erin's ideas #59, #60 and #65 and bug #64, 2026-10-28.
+- #60: "Urgent as a label feels unnecessarily rushed. I would replace urgent with 'time
+  sensitive' for routine use, and reserve urgent for things that truly need to be dealt
+  with soon." Everything a person reads says "time-sensitive" for what E2b calls urgent
+  (same day): normal alerts ("An email that looks time-sensitive ..."), the audit's
+  buttons ([No rush] [Time-sensitive] [Urgent]), the senders' setting, and replies.
+  "Urgent" is kept for right away: an alert that interrupts. The stored levels and the
+  task levels (T1) don't change.
+- #59 ("Brevity is good, clarity is better"): asked "set similar emails to medium urgency
+  and medium importance", Themi offered "always urgent", then explained urgent as "appear at
+  the top of your inbox or in your daily digest" (neither exists). The model gets what the
+  levels really do, in a few plain lines, and a tool sets a sender's two levels in words
+  (`set_sender_levels`), the same as the audit's answers. Its explanation is said in full.
+  Also: `keep_email` failed when the sender had been offered before (UNIQUE on
+  `sender_suggestions`); it reuses that row.
+- #64 ("I ran yesterday, and this logic on the run spacing is wrong"): the run was recorded
+  done on Tue 27 Oct and is due Thu 29 Oct, but Themi said "Saturday ... Tuesday was
+  missed", with no tool called. The open items give a repeating task's next day with its
+  weekday and when it was last done ("next Thu 29 Oct; last done Tue 27 Oct"), and a
+  calendar card for a time that's past lapses (the Tue run card from before F15b).
+- #65: "increase the required delay for a 'sorry this is slow' message." 10 s → 25 s.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
