@@ -4669,6 +4669,14 @@ Notes (2026-10-29):
   category turns out to be in Primary, `EmailTriage.on_tabs_learned` offers the noise from
   the last week that was skipped (6 of his 10; the other 4 are routine, so no offer).
   Setup: restart (applies 0071).
+- Evals (2026-10-29, Gemini 3.5 flash-lite): 47/49 full, PDA-safe 98%; F18a's two new
+  cases pass. Fixed, then the 3 re-run and passing: `task-check-in-run` ("Check-in set
+  for Tuesday..." read as the command "check in": a hyphenated opening word is a noun
+  now, in the PDA checker itself); `energy-plumber` (Gemini sent effect "-3", the schema
+  check refused it and the note was never saved: `tools._as_typed` reads numbers and
+  true/false sent as text by the schema's type, and the scorer reads them the same way);
+  `wall-what-is-my-morning-routine` was skipped for want of a wall: a case's `routine`
+  setup now gets the fake Cozyla.
 - Evals: `wall-what-is-my-morning-routine` added; not run yet. "Archive my email noise"
   is covered by #67's cases.
 - Setup: restart. No migration.
