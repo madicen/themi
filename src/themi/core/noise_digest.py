@@ -12,9 +12,10 @@ lists them, with [Archive all] and [Not now]:
 
 - It's a normal message: the daily limit, quiet hours and pauses hold it like any other.
   A newer one replaces one still waiting to go.
-- Before it goes, each email is looked up in Gmail. One no longer in the inbox (archived,
-  deleted or filed by hand) is left out and its offer closed quietly. If Gmail can't be
-  reached, it's listed anyway.
+- Before it goes, each email is looked up in Gmail. One no longer in the Primary inbox
+  (archived, deleted, filed by hand, or in another of Gmail's tabs, F16d) is left out and
+  its offer closed quietly. If Gmail can't be reached, it's listed anyway. A message the
+  daily limit is holding is made again at most once an hour, so it stays true.
 - [Archive all] (or a bare "yes" to it) archives every one still open and edits the
   message to say so. [Not now] leaves them for the next message.
 - The website's "Emails to archive" page lists the same offers, to archive or keep each.
@@ -36,6 +37,7 @@ from themi.accounts import Member
 from themi.autonomy import Action, Decision
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.connectors.gmail.parse import in_primary
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -50,6 +52,7 @@ CATEGORY = "email_archive_noise"
 NOON, EVENING = time(12), time(18)
 SLOTS = {"daily": (EVENING,), "twice": (NOON, EVENING), "every_other_day": (EVENING,)}
 SEND_WITHIN = timedelta(hours=3)  # a time missed by more than this (Themi was down) waits
+REBUILD_AFTER = timedelta(hours=1)  # a message still held is made again this often (F16d)
 MAX_LINES = 15
 
 HEADER_ONE = "One email looks like noise:"
@@ -108,7 +111,7 @@ class NoiseDigest:
                 log.info("Couldn't check email %s in Gmail (%s)", row["id"], type(exc).__name__)
                 kept.append(action)
                 continue
-            if message is None or "INBOX" not in message.get("labelIds", []):
+            if message is None or not in_primary(message.get("labelIds", [])):
                 await self.autonomy.withdraw(action.id, "Already out of the inbox.")
                 continue
             kept.append(action)
@@ -122,9 +125,10 @@ class NoiseDigest:
         now = clock.now().astimezone(tz)
         sent = 0
         for member in self.services.store.list_members():
-            if member.telegram_user_id is None or not self._due(member, now):
+            if member.telegram_user_id is None:
                 continue
-            if await self.send(member):
+            due = self._due(member, now) or self._stale(member, now)
+            if due and await self.send(member):
                 sent += 1
         return sent
 
@@ -140,6 +144,20 @@ class NoiseDigest:
                 return (now.date() - last.astimezone(now.tzinfo).date()).days >= 2
             return True
         return False
+
+    def _stale(self, member: Member, now: datetime) -> bool:
+        """Their latest message is still waiting to go (the daily limit), and was made over
+        an hour ago: make it again, so what it lists is still in the inbox."""
+        row = self._latest(member)
+        if row is None or not row["outbox_id"] or row["answer"] is not None:
+            return False
+        if datetime.fromisoformat(row["created_at"]) > now - REBUILD_AFTER:
+            return False
+        return bool(
+            self.db.one(
+                "SELECT 1 FROM outbox WHERE id = ? AND status = 'queued'", (row["outbox_id"],)
+            )
+        )
 
     async def send(self, member: Member) -> bool:
         """List what's waiting, in one message. False (and nothing sent) if nothing is."""

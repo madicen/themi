@@ -6,7 +6,7 @@ Categories and what follows:
 | ------------ | ------------------------------------------------------------- |
 | urgent       | alert the inbox's owner (`urgent` priority if severe)         |
 | confirmation | stage `email_mark_read` (gmail.mark_read)                     |
-| noise        | stage `email_archive_noise` (gmail.archive)                   |
+| noise        | stage `email_archive_noise` (gmail.archive), Primary only     |
 | needs_reply  | stage `email_reply` with a drafted reply (always needs a yes) |
 | receipt      | announce `ReceiptFound` (the pantry and budget, prompt 25)    |
 | routine      | nothing                                                       |
@@ -50,6 +50,7 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import GmailSync
+from themi.connectors.gmail.parse import in_primary
 from themi.core.events import title_matches
 from themi.core.prompts import as_data
 from themi.core.services import Services
@@ -401,7 +402,11 @@ class EmailTriage:
                 payload,
                 "gmail.mark_read",
             )
-        elif verdict.category == "noise" and not important:  # E2: they said it matters
+        elif (
+            verdict.category == "noise"
+            and not important  # E2: they said it matters
+            and in_primary(json.loads(row["labels"] or "[]"))  # F16d: a tab is out of the way
+        ):
             await stage(
                 "email_archive_noise",
                 member,

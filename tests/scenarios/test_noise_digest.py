@@ -163,3 +163,44 @@ async def test_if_gmail_cant_be_reached_theyre_listed_anyway(
     (message,) = await at(scenario, 18)
     assert message.startswith("One email looks like noise:")
     assert statuses(scenario) == ["pending"]
+
+
+PROMO = {**SALE, "labels": ("INBOX", "UNREAD", "CATEGORY_PROMOTIONS")}
+
+
+async def test_noise_in_a_gmail_tab_isnt_offered(scenario: Scenario, inbox: FakeGmail) -> None:
+    # F16d (bug #66): only the Primary inbox counts; Promotions is already out of the way.
+    await noise(scenario, inbox, PROMO)
+    assert statuses(scenario) == []
+    assert await at(scenario, 18) == []
+
+
+async def test_an_email_moved_to_a_tab_is_left_out(scenario: Scenario, inbox: FakeGmail) -> None:
+    _, news = await noise(scenario, inbox, SALE, NEWS)
+    gid = scenario.app.db.scalar("SELECT gmail_id FROM emails WHERE id = ?", (news,))
+    inbox.mailbox(ERIN).messages[gid].labels.append("CATEGORY_UPDATES")
+    (message,) = await at(scenario, 18)
+    assert message.startswith("One email looks like noise:\n- Shop: 20% off")
+    assert statuses(scenario) == ["pending", "declined"]
+
+
+async def test_a_held_message_is_made_again_before_it_goes(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    scenario.app.store.update_settings(SYSTEM, scenario.member("Erin").id, daily_limit=0)
+    _, news = await noise(scenario, inbox, SALE, NEWS)
+    await at(scenario, 18)
+    gid = scenario.app.db.scalar("SELECT gmail_id FROM emails WHERE id = ?", (news,))
+    inbox.mailbox(ERIN).messages[gid].labels.remove("INBOX")  # archived by hand that evening
+    clock.advance(timedelta(minutes=30))
+    await scenario.run_periodic("email.noise")
+    (row,) = scenario.app.db.query(
+        "SELECT text FROM outbox WHERE kind = 'email' AND status = 'queued'"
+    )
+    assert row["text"].startswith("2 emails")  # not within the hour
+    clock.advance(timedelta(minutes=31))
+    await scenario.run_periodic("email.noise")
+    (row,) = scenario.app.db.query(
+        "SELECT text FROM outbox WHERE kind = 'email' AND status = 'queued'"
+    )
+    assert row["text"].startswith("One email looks like noise:")
