@@ -316,7 +316,7 @@ class TaskBoard:
 
         items, today = [], self._today()
         for t in self.open_for(member):
-            due = f", due {t.due_on.isoformat()}" if t.due_on else ""
+            due = f", due {t.due_on:%a %d %b}" if t.due_on else ""  # the weekday too (#64)
             if t.either:
                 whose = "either of you"
             elif t.shared:
@@ -331,6 +331,9 @@ class TaskBoard:
                         f" Suggested today: the {_LEVEL_WORD[level]} ({level.title()}) version."
                     )
             schedule = f" {self.summary(t)}." if t.repeats else ""
+            if t.repeats and (last := self._last_done(t)) is not None:
+                # Bug #64: without it, the model guessed a run "was missed".
+                schedule += f" Last done {last.astimezone(self._tz()):%a %d %b}."
             if t.progression is not None:
                 week = t.progression.words_on(self._today())
                 schedule += f" Plan: {plan_read_back(t.progression)}" + (

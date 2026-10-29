@@ -21,6 +21,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import jsonschema
@@ -57,6 +58,7 @@ class Proposal:
     # The person asked for exactly this in their own words (checked by the tool against
     # what they wrote, never the model's say-so). The trust tiers decide what that allows.
     requested: bool = False
+    expires: datetime | None = None  # no use after then: an unanswered card lapses (#64)
 
 
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
@@ -302,6 +304,7 @@ class ToolRegistry:
             proposal.executor,
             interactive=True,  # tools run inside a conversation
             requested=proposal.requested,
+            expires=proposal.expires,
         )
         action = outcome.action
         if action.status == "pending":

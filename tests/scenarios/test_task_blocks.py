@@ -196,3 +196,19 @@ async def test_a_nudge_at_a_time_isnt_a_block(scenario: Scenario, linked: FakeGc
     assert result.is_error  # type: ignore[union-attr]
     assert not scenario.app.db.query("SELECT 1 FROM pending_actions")
     assert [e for e in linked.events(ERIN, ERIN)] == []
+
+
+async def test_a_card_for_a_time_thats_past_lapses(scenario: Scenario, linked: FakeGcal) -> None:
+    # Bug #64: "Time for Go for a run: Tue 27 Oct, 2-3 pm" still waited a day later, and the
+    # model read it as a run not done.
+    task = await bathroom(scenario)
+    await say(
+        scenario,
+        "I might do the bathroom after lunch",
+        "block_time_for_task",
+        {"task_id": task.id, "date": "2026-10-21", "start": "13:00", "end": "14:00"},
+    )
+    await scenario.advance(hours=5)  # 14:00 has been and gone
+    await scenario.run_periodic("approvals.expire")
+    (status,) = [r["status"] for r in scenario.app.db.query("SELECT status FROM pending_actions")]
+    assert status == "expired"

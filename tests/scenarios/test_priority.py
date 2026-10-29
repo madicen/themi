@@ -69,7 +69,7 @@ async def test_the_model_reads_it_in_words(scenario: Scenario) -> None:
     await four_tasks(scenario)
     items = [i.summary for i in board(scenario).open_items(scenario.member("Erin"))]
     assert any("urgent and important): Pay the water bill" in i for i in items)
-    assert any("due 2026-10-21, urgent): Buy stamps" in i for i in items)
+    assert any("due Wed 21 Oct, urgent): Buy stamps" in i for i in items)
     assert any("(theirs, important): Renew the passport" in i for i in items)
     assert any("(theirs): Water the plants" in i for i in items)
 

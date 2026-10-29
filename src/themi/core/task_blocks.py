@@ -281,7 +281,7 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         EXECUTOR,
         blocks.payload(task, when),
     )
-    return replace(proposal, requested=bool(INTENT.search(said)))
+    return replace(proposal, requested=bool(INTENT.search(said)), expires=when.ends)
 
 
 @staged_tool(
@@ -312,4 +312,5 @@ async def find_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         f"Time for {task.title}: {when_words(when, events._tz())}, on your calendar",
         EXECUTOR,
         blocks.payload(task, when),
+        expires=when.ends,  # a time that's past is no use (bug #64's stale card)
     )
