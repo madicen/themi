@@ -91,6 +91,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
+| F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4399,6 +4400,36 @@ Notes (2026-10-28):
 - #65: `SLOW_AFTER` is 25 s. The timing tests take their times from it.
 - Not done: #59's "brevity vs clarity" is a prompt line only; re-run the evals when there's
   quota. The plan's triage bullet says time-sensitive vs urgent (rev 199).
+- Setup: restart. No migration.
+
+### F16d · Feedback (2026-10-28): only Gmail's Primary inbox counts
+Status: [x] 2026-10-28
+Depends on: F16b
+The rest of Michael's bug #66 ("only the email about Apple IDs is even in my inbox"). After
+the restart, F16b's first message for him listed 18 emails that Gmail still marks INBOX:
+17 in the Promotions tab and 2 in Updates. Michael, 2026-10-28: "Definitely Gmail's primary
+inbox is the only one that counts."
+- In the inbox means Primary: labelled INBOX and none of CATEGORY_PROMOTIONS,
+  CATEGORY_UPDATES, CATEGORY_SOCIAL or CATEGORY_FORUMS. For everyone.
+- Triage doesn't offer to archive noise that isn't in Primary (Gmail has already put it
+  aside). Alerts are unchanged.
+- The noise message checks each email's labels in Gmail as it's made, and leaves out (and
+  closes) any not in Primary.
+- A message still waiting to go out (the daily limit held it) is made again, at most once
+  an hour, so what it lists stays true until it goes.
+- Tests: tab mail isn't offered; an offer whose email moved to a tab is dropped; a held
+  message is rebuilt; a scenario from #66.
+
+Notes (2026-10-28):
+- `themi.connectors.gmail.parse.in_primary(labels)`: INBOX and none of `TABS`. Triage
+  reads the labels stored at sync; the noise message reads them fresh from Gmail.
+- `NoiseDigest._stale`: the latest message is still queued, unanswered, and over an hour
+  old (`REBUILD_AFTER`), so the 5-minute job makes it again (cancelling the queued one).
+- Found live: of Michael's 19 waiting offers, 17 were in Promotions and 2 in Updates. The
+  messages queued for 8 am on 29 Oct are rebuilt within an hour of the restart, and those
+  offers are withdrawn ("Already out of the inbox.").
+- Alerts still come for time-sensitive mail in any tab; only archiving changed.
+- The plan's triage bullet says Primary (rev 200).
 - Setup: restart. No migration.
 
 ### K1 · Calendars: read your own, privately
