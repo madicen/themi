@@ -4539,7 +4539,14 @@ Notes (2026-10-28):
   said without one.
 - The live task 50 (Erin's refill) was cancelled already (#71), so she'll need to ask
   again; the follow-up will take it now.
-- Not done: re-run the evals for ask_which_list and add_follow_up when there's quota.
+- Evals (2026-10-29, Gemini 3.5 flash-lite): new cases for #68, #70, #71 and Rx1 pass.
+  The full run was 34/45, 37/45 once scoring allows `more_tools` (P1's, which changes
+  nothing). Found by them and fixed: names said bare ("Book the vet appointment is marked
+  done.") read as orders, so the prompt says names go in quotes; and the follow-up's
+  "straight away" read as pressure, now "as soon as ... is done". Still failing, older:
+  pantry-olive-oil and pantry-bought (grocery list, not update_pantry), rule-bins
+  (propose_rule, not a task), task-pause (start_break, not pause_messages; B1 made that
+  ambiguous), energy-plumber, pantry-spinach-expiry.
 - The plan's task matching bullet has follow-ups and the which-list card (rev 203).
 - Setup: restart (applies 0070).
 
