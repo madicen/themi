@@ -479,3 +479,28 @@ async def test_a_reply_says_the_tasks_name_not_its_number(scenario: Scenario) ->
     scenario.primary.queue_text(f"Task {task.id} is taken off the list.")
     replies = await scenario.say("Erin", "Remove the refill water and food task")
     assert replies[-1] == '"Refill water and food bowls" is taken off the list.'
+
+
+async def test_someone_else_is_the_other_partner(scenario: Scenario) -> None:
+    # Eval energy-plumber: "Can someone else deal with texting the plumber?"
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Text the plumber",
+            "kind": "text",
+            "effort": 1,
+            "due_date": "",
+            "assign_to": "someone else",
+            "steps": [],
+            "check_in": False,
+            "importance": "normal",
+            "due_time": "",
+            "from_time": "",
+        },
+    )
+    scenario.primary.queue_text("Passed on.")
+    await scenario.say("Erin", "I'm exhausted. Can someone else deal with texting the plumber?")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    (task,) = board.open_for(scenario.member("Husband"))
+    assert task.title == "Text the plumber"

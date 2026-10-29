@@ -93,6 +93,7 @@ class Scenario:
         self.family = family
         self.telegram = telegram
         self.google = google
+        self.gmail = gmail
         self.models = ModelBank()
         self.cozyla_list = _cozyla_list(cozyla) if cozyla else 0  # the synced list's id
         self.app: App = build_app(
