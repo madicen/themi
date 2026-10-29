@@ -7,8 +7,10 @@ without a key. `make evals` runs the same code against the real service.
 from __future__ import annotations
 
 from tests.evals.providers import EvalBackend
-from tests.evals.runner import run_case
+from tests.evals.runner import needs_gmail, run_case
 from tests.evals.scoring import load_cases
+from tests.fakes.gmail_api import FakeGmail
+from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.http_ai import FakeAIServer, gemini_function_call, gemini_text
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
@@ -44,3 +46,26 @@ async def test_a_wrong_or_demanding_answer_fails(
     assert not outcome.tools_ok and not outcome.pda_ok
     assert "expected one of log_energy_note, log_energy_level" in outcome.problems
     assert any(p.startswith("looks like a score") for p in outcome.problems)
+
+
+async def test_the_noise_setup_leaves_offers_waiting(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    fake_ai: FakeAIServer,
+    fake_google: FakeGoogle,
+    fake_gmail: FakeGmail,
+) -> None:
+    # The #67 cases: emails waiting to be archived, then "archive the LOFT one".
+    case = CASES["email-noise-archive-them"]
+    assert needs_gmail(case)
+    fake_ai.queue(
+        gemini_function_call("archive_noise_emails", {"answer": "archive", "which": ["loft"]})
+    )
+    fake_ai.queue(gemini_text("Archived it."))
+    scenario = Scenario(family, fake_telegram, fake_google, fake_gmail, real_models=True)
+    outcome = await run_case(scenario, case, fake_gemini(fake_ai))
+    assert outcome.passed, outcome.problems
+    body = fake_ai.requests[0].json
+    assert "Emails that look like noise, 2 waiting" in str(body)
+    statuses = [r["status"] for r in family.db.query("SELECT status FROM pending_actions")]
+    assert sorted(statuses) == ["done", "pending"]

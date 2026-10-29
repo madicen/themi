@@ -6,9 +6,13 @@ from typing import Any
 
 from tests.evals.providers import EvalBackend
 from tests.evals.scoring import Case, Outcome, model_replies, score
+from tests.fakes.google_oauth import _Refresh
 from tests.scenarios.harness import Scenario
+from themi.accounts import Member
 from themi.ai.settings import AITask, RouteEntry
+from themi.connectors.google.oauth import LINK_SCOPES
 from themi.core.groceries import list_summary
+from themi.storage.secrets import Secret
 
 
 def use_backend(scenario: Scenario, chosen: EvalBackend) -> None:
@@ -50,8 +54,44 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
         elif "task" in step:
             assert services.taskboard is not None
             await services.taskboard.create(member, step["task"], "errand", 1)
+        elif "noise" in step:
+            await _noise(scenario, member, step["noise"])
         else:
             raise ValueError(f"unknown setup step {step}")
+
+
+def needs_gmail(case: Case) -> bool:
+    return any("noise" in step for step in case.setup)
+
+
+async def _noise(scenario: Scenario, member: Member, mails: list[dict[str, str]]) -> None:
+    """Their inbox, linked and synced, with these emails offered for archiving as noise, as
+    triage leaves them (bug #67). Needs the Scenario built with the fake Gmail."""
+    services = scenario.app.services
+    google = scenario.google
+    assert google is not None and services.gmail is not None, "this case needs fake Gmail"
+    address = f"{member.name.lower()}@gmail.com"
+    token = f"eval-refresh-{member.id}"
+    google.state.refresh_tokens[token] = _Refresh(address, LINK_SCOPES)
+    account = scenario.app.store.add_linked_account(
+        member, member.id, "gmail", address, Secret(token)
+    )
+    scenario.app.store.update_linked_account(member, account.id, watched=True)
+    gmail = scenario.gmail
+    assert gmail is not None
+    for mail in mails:
+        gmail.deliver(address, sender=mail["sender"], subject=mail["subject"], text=".")
+    await scenario.run_periodic("gmail.poll")
+    for row in scenario.app.db.query(
+        "SELECT * FROM emails WHERE account_id = ? ORDER BY id", (account.id,)
+    ):
+        await services.autonomy.stage(
+            "email_archive_noise",
+            member,
+            f"Probably noise, to archive: {row['subject']} (from {row['from_name']})",
+            {"email_id": row["id"]},
+            "gmail.archive",
+        )
 
 
 def missing_tools(scenario: Scenario, case: Case) -> list[str]:

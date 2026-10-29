@@ -16,7 +16,7 @@ import pytest
 from tests.evals.conftest import OUTCOMES
 from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend
-from tests.evals.runner import missing_tools, run_case
+from tests.evals.runner import missing_tools, needs_gmail, run_case
 from tests.evals.scoring import Case, load_cases
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
@@ -33,11 +33,19 @@ async def test_case(
     fake_telegram: FakeTelegram,
     eval_backend: EvalBackend,
     eval_factory: PacedFactory,
+    request: pytest.FixtureRequest,
 ) -> None:
     recent = OUTCOMES[-GIVE_UP_AFTER:]
     if len(recent) == GIVE_UP_AFTER and all(o.unavailable for o in recent):
         pytest.skip(f"the last {GIVE_UP_AFTER} cases got no AI answer (quota used up?)")
-    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    google, gmail = (
+        (request.getfixturevalue("fake_google"), request.getfixturevalue("fake_gmail"))
+        if needs_gmail(case)
+        else (None, None)
+    )
+    scenario = Scenario(
+        family, fake_telegram, google, gmail, real_models=True, provider_factory=eval_factory
+    )
     missing = missing_tools(scenario, case)
     if missing:
         pytest.skip(f"needs {', '.join(missing)}, which isn't built yet")
