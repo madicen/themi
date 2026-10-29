@@ -5,6 +5,8 @@ emails have been categorized, Themi gives a brief confirmation and ends the emai
 
 from __future__ import annotations
 
+import re
+
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
@@ -17,10 +19,23 @@ __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
 HOW_URGENT = "\nHow soon does it need you?"
 HOW_IMPORTANT = "\nHow important is it?"
-SCHWAB = "1 of 2. Mail from Schwab Alerts (alerts@schwab.example), money."
-BOB = "2 of 2. Mail from Bob Tenant (bob@example.com), waiting on replies."
+LINK = "https://mail.google.com/mail/u/erin@gmail.com/#all/ID"
+# Idea #69: the exact subject (a sender's latest email) and a link to it in Gmail.
+SCHWAB = (
+    "1 of 2. Mail from Schwab Alerts (alerts@schwab.example), money.\n"
+    f'Latest: "Card declined"\n{LINK}'
+)
+BOB = (
+    "2 of 2. Mail from Bob Tenant (bob@example.com), waiting on replies.\n"
+    f'Latest: "Still the sink"\n{LINK}'
+)
 URGENCY = ["No rush", "Time-sensitive", "Urgent", "Stop for now"]
 IMPORTANCE = ["Not important", "Somewhat", "Very", "Stop for now"]
+
+
+def masked(texts: list[str]) -> list[str]:
+    """Gmail's ids in the links, which the fake numbers across tests, as ID."""
+    return [re.sub(r"#all/\w+", "#all/ID", t) for t in texts]
 
 
 def audit(scenario: Scenario) -> EmailAudit:
@@ -56,13 +71,13 @@ async def test_one_task_one_at_a_time_then_a_short_confirmation(
     )
     assert scenario.last_buttons("Erin") == ["Start", "Later"]
 
-    assert await scenario.tap("Erin", "Start") == [SCHWAB + HOW_URGENT]
+    assert masked(await scenario.tap("Erin", "Start")) == [SCHWAB + HOW_URGENT]
     assert scenario.last_buttons("Erin") == URGENCY
     assert await scenario.tap("Erin", "Time-sensitive") == []
     edit = scenario.edits("Erin")[-1]
-    assert edit["text"] == SCHWAB + HOW_IMPORTANT
+    assert masked([edit["text"]]) == [SCHWAB + HOW_IMPORTANT]
     assert [b["text"] for b in edit["reply_markup"]["inline_keyboard"][0]] == IMPORTANCE
-    assert await scenario.tap("Erin", "Somewhat") == [BOB + HOW_URGENT]
+    assert masked(await scenario.tap("Erin", "Somewhat")) == [BOB + HOW_URGENT]
     assert scenario.edits("Erin")[-1]["text"] == (
         "Schwab Alerts: time-sensitive, somewhat important."
     )
@@ -121,8 +136,8 @@ async def test_an_email_triage_isnt_sure_about_waits_in_the_audit(
         t.startswith("An email that looks time-sensitive") for t in scenario.inbox("Erin")
     )
     assert audit_titles(scenario) == ["Email audit (1 to look at)"]
-    assert await scenario.tap("Erin", "Start") == [
-        "1 of 1. An email from Joyous Care: Your invoice\nAn invoice for $120" + HOW_URGENT
+    assert masked(await scenario.tap("Erin", "Start")) == [
+        f"1 of 1. An email from Joyous Care: Your invoice\nAn invoice for $120\n{LINK}" + HOW_URGENT
     ]
     await scenario.tap("Erin", "Time-sensitive")
     await scenario.tap("Erin", "Not important")
@@ -153,7 +168,7 @@ async def test_asked_for_in_chat(scenario: Scenario, inbox: FakeGmail) -> None:
     scenario.primary.queue_tool_call("start_email_audit", {})
     scenario.primary.queue_text("Here's the first.")
     replies = await scenario.say("Erin", "Let's do the email audit")
-    assert replies[0] == SCHWAB + HOW_URGENT
+    assert masked(replies[:1]) == [SCHWAB + HOW_URGENT]
 
 
 async def test_stopping_between_the_two_questions_picks_up_at_the_second(
@@ -167,7 +182,7 @@ async def test_stopping_between_the_two_questions_picks_up_at_the_second(
     scenario.primary.queue_tool_call("start_email_audit", {})
     scenario.primary.queue_text("Here's the first.")
     replies = await scenario.say("Erin", "Let's finish the email audit")
-    assert replies[0] == SCHWAB + HOW_IMPORTANT
+    assert masked(replies[:1]) == [SCHWAB + HOW_IMPORTANT]
 
 
 async def test_right_away_alerts_at_once_and_very_important_isnt_marked_read(
@@ -232,3 +247,11 @@ async def test_one_already_on_the_wall_comes_off(
     await scenario.run_periodic("cozyla.sync")
     assert fake_cozyla.in_list(scenario.cozyla_list) == []
     assert board(scenario).get(task_id).status == "open"
+
+
+async def test_the_link_opens_that_email(scenario: Scenario, inbox: FakeGmail) -> None:
+    # Idea #69: "email audits should have an exact subject for each email and a link".
+    await suggested(scenario, inbox)
+    (question,) = await scenario.tap("Erin", "Start")
+    gmail_id = scenario.app.db.scalar("SELECT gmail_id FROM emails WHERE subject = 'Card declined'")
+    assert f"https://mail.google.com/mail/u/erin@gmail.com/#all/{gmail_id}\n" in question

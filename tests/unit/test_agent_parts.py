@@ -230,3 +230,21 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     assert "ideas for the family to try" in propose_rule.spec.description
     assert "general question worth keeping" in STABLE_SYSTEM  # idea #28
     assert "who calls whom" in STABLE_SYSTEM  # idea #32: Michael's nickname for Erin
+
+
+def test_replies_call_tasks_by_name() -> None:
+    # Bug #71: "Task 50 is taken off the list."
+    titles = {7: "Clean the bird cage", 50: "Refill water and food bowls"}.get
+    by_name = agent_module._by_name
+    assert by_name("Task 50 is taken off the list.", titles) == (
+        '"Refill water and food bowls" is taken off the list.'
+    )
+    assert by_name("task #7 (Clean the bird cage) is due Saturday.", titles) == (
+        '"Clean the bird cage" is due Saturday.'
+    )
+    assert (
+        by_name("Task 7 (the cage) is next.", titles) == '"Clean the bird cage" (the cage) is next.'
+    )
+    assert by_name("Task 99 isn't one.", titles) == "Task 99 isn't one."
+    assert by_name("I tasked 3 people.", titles) == "I tasked 3 people."
+    assert "never by their numbers" in STABLE_SYSTEM

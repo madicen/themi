@@ -204,3 +204,43 @@ async def test_a_held_message_is_made_again_before_it_goes(
         "SELECT text FROM outbox WHERE kind = 'email' AND status = 'queued'"
     )
     assert row["text"].startswith("One email looks like noise:")
+
+
+async def test_asked_in_chat_the_waiting_ones_are_there_to_archive(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    # Bug #67: "Are there any messages to mark read or archive?" got only the two items
+    # waiting on him; the noise offers were in a queued message the model saw cut short.
+    scenario.app.store.update_settings(SYSTEM, scenario.member("Erin").id, daily_limit=0)
+    await noise(scenario, inbox, SALE, NEWS, DICE)
+    await at(scenario, 18)  # held by the daily limit
+    scenario.primary.queue_tool_call("archive_noise_emails", {"answer": "archive", "which": []})
+    scenario.primary.queue_text("Archived all three.")
+    await scenario.say("Erin", "Are there any messages to mark read or archive?")
+    first = scenario.primary.requests[-2]
+    turn = first.messages[0].text
+    assert "Emails that look like noise, 3 waiting for a yes to archive" in turn
+    assert '<data source="their inbox">\n- Shop: 20% off\n- Backerfeed: Hobby knife\n' in turn
+    assert "archive_noise_emails" in [t.name for t in first.tools]
+    assert statuses(scenario) == ["done", "done", "done"]
+    assert inbox.calls_to("modify") == 3
+    held = scenario.app.db.query("SELECT 1 FROM outbox WHERE kind = 'email' AND status = 'queued'")
+    assert held == []  # the held message, with nothing left, is taken back
+
+
+async def test_some_archived_and_some_kept_from_chat(scenario: Scenario, inbox: FakeGmail) -> None:
+    await noise(scenario, inbox, SALE, NEWS, DICE)
+    scenario.primary.queue_tool_calls(
+        [
+            ("archive_noise_emails", {"answer": "keep", "which": ["dice"]}, None),
+            ("archive_noise_emails", {"answer": "archive", "which": ["shop", "hobby"]}, None),
+        ]
+    )
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "Keep the Dice one, archive the rest")
+    assert statuses(scenario) == ["done", "done", "declined"]
+    scenario.primary.queue_tool_call("archive_noise_emails", {"answer": "archive", "which": []})
+    scenario.primary.queue_text("Nothing left.")
+    await scenario.say("Erin", "archive the noise")
+    result = scenario.primary.last_request.messages[-1]
+    assert "No emails are waiting to be archived as noise." in str(result)

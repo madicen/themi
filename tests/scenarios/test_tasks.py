@@ -468,3 +468,14 @@ async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
     await scenario.advance(hours=1)
     await scenario.tap("Erin", "Done")
     assert _task_edits(scenario, "Erin") == [("Marked done: Book the dentist. Thank you.", False)]
+
+
+async def test_a_reply_says_the_tasks_name_not_its_number(scenario: Scenario) -> None:
+    # Bug #71: "Remove the refill water and food task" got "Task 50 is taken off the list."
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(scenario.member("Erin"), "Refill water and food bowls", "physical", 1)
+    scenario.primary.queue_tool_call("cancel_task", {"task_id": task.id})
+    scenario.primary.queue_text(f"Task {task.id} is taken off the list.")
+    replies = await scenario.say("Erin", "Remove the refill water and food task")
+    assert replies[-1] == '"Refill water and food bowls" is taken off the list.'
