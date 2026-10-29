@@ -89,7 +89,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
-| F16b | Feedback: noise emails in one message, inside the limit | Feedback | [ ] |
+| F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -4299,7 +4299,7 @@ Notes (2026-10-28):
   themselves on the website.
 
 ### F16b · Feedback (2026-10-28): noise emails in one message, inside the limit
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F16a, E2, F15b
 From Michael's idea #61, Erin's idea #63 and Michael's bug #66, 2026-10-28.
 - #61: "email archive messages come in too frequently. We should bundle many archive
@@ -4326,6 +4326,30 @@ From Michael's idea #61, Erin's idea #63 and Michael's bug #66, 2026-10-28.
 - Tests: no card per email; the digest at the time, with its count; the setting; the daily
   limit holds it; emails gone from the inbox are left out; archive all; the website
   page; a scenario from #66.
+
+Notes (2026-10-28):
+- Michael confirmed (2026-10-28): once a day at 6 pm by default, twice a day or every other
+  day as the options; "the one at a time thing" in #66 is the per-email archive cards.
+- `themi.core.noise_digest.NoiseDigest` (`services.noise`, job `email.noise` every 5
+  minutes). Migration 0068: `members.noise_emails` ('daily', 'twice', 'every_other_day')
+  and `noise_digests` (each message, the offers it listed, the answer).
+- `ApprovalsUI.held`: a category another module asks about. It gets no card, isn't
+  re-asked when a snooze ends, and isn't a bare "yes" target. It's still in /pending.
+- The message: "2 emails look like noise:\n- Shop: 20% off\n- ...\nArchive them all? ..."
+  (15 lines at most, then "and N more"), [Archive all] [Not now], a normal message with no
+  deadline, so the daily limit and quiet hours hold it. A newer one replaces one still
+  queued. Archive all (or a bare "yes" while it's the latest) edits it to "Archived N."; Not
+  now to "Left for now. They'll be in the next one."
+- Before it goes, each email is fetched from Gmail: no longer in INBOX (or gone), its
+  offer is withdrawn ("Already out of the inbox."). A Gmail error lists it anyway.
+- Times are fixed (noon, 6 pm); a missed time (Themi down) is caught up within 3 hours.
+  Every other day counts days since the last message.
+- Website: "Emails to archive" (`/email/noise`, `themi.web.email_pages`) with Archive all,
+  Archive the ticked ones, Keep the ticked ones (a decline). The dashboard shows one link
+  instead of a card per email. The setting is under My settings, "My email".
+- Offers still lapse after 3 days unanswered (APPROVAL_TTL), so every-other-day messages
+  can't pile up. The plan's triage bullet says this (rev 198).
+- Setup: restart (applies 0068). The first message goes at 6 pm with whatever is waiting.
 
 ### F16c · Feedback (2026-10-28): time-sensitive, explaining email levels, the run, slow notices
 Status: [ ]
