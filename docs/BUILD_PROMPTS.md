@@ -93,7 +93,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
 | F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
 | F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
-| F17b | Feedback: which list, and a reminder after a task is done | Feedback | [ ] |
+| F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4502,7 +4502,7 @@ Notes (2026-10-28):
 - Setup: restart. No migration.
 
 ### F17b · Feedback (2026-10-28): which list, and a reminder after a task is done
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: F17a
 From Erin's idea #68 and bug #70, 2026-10-28.
 - #68 ("if an item could be added to more than one list, provide a prompt with buttons for
@@ -4517,6 +4517,31 @@ From Erin's idea #68 and bug #70, 2026-10-28.
   where it isn't this year, and replies about a date use the context's year.
 - Tests: the list card and its buttons; a follower waiting, then nudged when the first is
   done, each round; scenarios from #68 and #70.
+
+Notes (2026-10-28):
+- #68: `themi.core.which_list`: `ask_which_list(item, lists)` (core) sends "Paper towels:
+  which list?" with a button per list (at most three; "grocery list", Things to Buy, or a
+  named list) and [Not now]. A tap stages the add as asked for (`requested=True`), with
+  the list's own executor (Things to Buy's remembers it isn't food), so the tiers still
+  decide; the card is edited to the result. One list only is refused. The system prompt,
+  `add_to_things_to_buy` and the grocery/Things to Buy refusals point to it instead of
+  "ask".
+- #70: deviation from the prompt: a follow-up isn't a waiting task (a new task status
+  would touch every open-task query, the wall sync and nudges). Migration 0070,
+  `task_follow_ups`: `add_follow_up(after_task_id, title, steps)` and `remove_follow_up`
+  (core). `TaskBoard.done_hooks` run each time a task is done (each round too, from chat,
+  a button or the wall); `FollowUps.on_done` makes a task due today, off the wall, and
+  nudges it (as a reply when they did it in the chat, else normal). Not a second while
+  the last one is still open. A one-off's follow-up goes after once; a cancelled task's
+  goes. The open items say 'Follow-up: once "X" is done, "Y" comes up straight away'.
+- #70's "2020": open items give a task's due day with a year only when it isn't this
+  year (`tasks._day_words`), and the system prompt says dates are the local time's year,
+  said without one.
+- The live task 50 (Erin's refill) was cancelled already (#71), so she'll need to ask
+  again; the follow-up will take it now.
+- Not done: re-run the evals for ask_which_list and add_follow_up when there's quota.
+- The plan's task matching bullet has follow-ups and the which-list card (rev 203).
+- Setup: restart (applies 0070).
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
