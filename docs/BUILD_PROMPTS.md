@@ -90,7 +90,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
-| F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [ ] |
+| F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4352,7 +4352,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0068). The first message goes at 6 pm with whatever is waiting.
 
 ### F16c · Feedback (2026-10-28): time-sensitive, explaining email levels, the run, slow notices
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: E2b, F15c, F9a, P2a
 From Erin's ideas #59, #60 and #65 and bug #64, 2026-10-28.
 - #60: "Urgent as a label feels unnecessarily rushed. I would replace urgent with 'time
@@ -4375,6 +4375,31 @@ From Erin's ideas #59, #60 and #65 and bug #64, 2026-10-28.
   weekday and when it was last done ("next Thu 29 Oct; last done Tue 27 Oct"), and a
   calendar card for a time that's past lapses (the Tue run card from before F15b).
 - #65: "increase the required delay for a 'sorry this is slow' message." 10 s → 25 s.
+
+Notes (2026-10-28):
+- #60, the words: an email alert says "time-sensitive" unless it comes at once (severe, or
+  a sender set to urgent), then "urgent". The audit asks "How soon does it need you?" with
+  [No rush] [Time-sensitive] [Urgent], and reads back "time-sensitive" ("All 5 sorted: 2
+  time-sensitive, 1 important."). E1's offers, `keep_email`'s question and button ("Always
+  time-sensitive: ..."), `set_urgent_senders`, `inbox_setup` and the website's inbox
+  setting say time-sensitive too. Stored values, column names and the task levels (T1)
+  are unchanged.
+- #59: `set_sender_levels(sender, urgency, importance)` (email group). It finds the
+  sender from their words (`triage.find_email`, now public), records the levels as an
+  answered audit item ("said in chat"), and keeps the inbox's time-sensitive senders in
+  step (time-sensitive or urgent adds the address; no rush takes off that exact address,
+  never a domain). Its result and `inbox_setup`'s end with `LEVELS_TEXT`: what each level
+  really does, and that nothing in Gmail is moved or highlighted. A system prompt line:
+  asked what something means or why, explain it fully from what the tools say.
+- The `keep_email` crash: a sender already in `sender_suggestions` is reused.
+- #64: a task's open-items line gives the due day with its weekday ("due Thu 29 Oct"), and
+  a repeating task's "Last done Tue 27 Oct." `Proposal.expires` (staged tools):
+  `block_time_for_task` and `find_time_for_task` cards lapse when the block's time has
+  passed. The stale card in #64 came from before this.
+- #65: `SLOW_AFTER` is 25 s. The timing tests take their times from it.
+- Not done: #59's "brevity vs clarity" is a prompt line only; re-run the evals when there's
+  quota. The plan's triage bullet says time-sensitive vs urgent (rev 199).
+- Setup: restart. No migration.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
