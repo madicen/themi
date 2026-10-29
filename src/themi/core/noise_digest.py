@@ -100,14 +100,16 @@ class NoiseDigest:
         (Promotions, Updates...): never offered (F16d), so worth saying when asked (#74)."""
         since = to_utc_iso(clock.now() - IN_TABS_FOR)
         rows = self.db.query(
-            "SELECT e.labels FROM emails e JOIN linked_accounts a ON a.id = e.account_id "
+            "SELECT e.labels, e.account_id FROM emails e "
+            "JOIN linked_accounts a ON a.id = e.account_id "
             "WHERE a.member_id = ? AND e.category = 'noise' AND e.received_at >= ?",
             (member.id, since),
         )
         return sum(
             1
             for r in rows
-            if "INBOX" in (labels := json.loads(r["labels"] or "[]")) and not in_primary(labels)
+            if "INBOX" in (labels := json.loads(r["labels"] or "[]"))
+            and not in_primary(labels, self.gmail.tabs_shown(r["account_id"]))
         )
 
     def line(self, action: Action) -> str:
@@ -132,7 +134,8 @@ class NoiseDigest:
                 log.info("Couldn't check email %s in Gmail (%s)", row["id"], type(exc).__name__)
                 kept.append(action)
                 continue
-            if message is None or not in_primary(message.get("labelIds", [])):
+            tabs = self.gmail.tabs_shown(row["account_id"])
+            if message is None or not in_primary(message.get("labelIds", []), tabs):
                 await self.autonomy.withdraw(action.id, "Already out of the inbox.")
                 continue
             kept.append(action)

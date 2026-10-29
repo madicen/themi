@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
 from themi import clock
+from themi.connectors.gmail.parse import TABS
 from themi.connectors.google import GoogleConfig
 
 
@@ -56,6 +57,9 @@ class _Mailbox:
     oldest_history: int = 0  # starts below this are "too old" (404)
     labels: dict[str, str] = field(default_factory=dict)  # user label id -> name
     sent: list[dict[str, Any]] = field(default_factory=list)
+    # The category labels this account shows as tabs; the rest show in Primary (Gmail labels
+    # by category either way). All four by default.
+    tabs: set[str] = field(default_factory=lambda: set(TABS))
 
 
 @dataclass
@@ -72,6 +76,7 @@ class FakeGmail:
         self.mailboxes: dict[str, _Mailbox] = {}
         self.failures: dict[str, list[_Failure]] = {}
         self.calls: list[tuple[str, str]] = []  # (endpoint, address)
+        self.list_queries: list[str] = []  # each list call's search, in order
         self.app = FastAPI()
         base = "/gmail/v1/users/me"
         self.app.add_api_route(f"{base}/profile", self._profile, methods=["GET"])
@@ -103,6 +108,7 @@ class FakeGmail:
             self.mailboxes = {}
             self.failures = {}
             self.calls = []
+            self.list_queries = []
 
     # ----- scripting ----------------------------------------------------------
 
@@ -267,9 +273,14 @@ class FakeGmail:
         if box is None:
             return error  # type: ignore[return-value]
         q = request.query_params
+        self.list_queries.append(q.get("q", ""))
         found = sorted(box.messages.values(), key=lambda m: m.internal_ms, reverse=True)
         if label := q.get("labelIds"):
             found = [m for m in found if label in m.labels]
+        if "in:inbox" in q.get("q", ""):
+            found = [m for m in found if "INBOX" in m.labels]
+        if "category:primary" in q.get("q", ""):
+            found = [m for m in found if not set(m.labels) & box.tabs]
         if match := re.search(r"newer_than:(\d+)d", q.get("q", "")):
             cutoff = (clock.now() - timedelta(days=int(match.group(1)))).timestamp() * 1000
             found = [m for m in found if m.internal_ms >= cutoff]

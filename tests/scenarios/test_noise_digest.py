@@ -335,3 +335,35 @@ async def test_themis_own_archiving_isnt_mistaken_for_theirs(
     await scenario.tap("Erin", "Archive all")
     await poll(scenario)  # the history now has Themi's own label changes
     assert statuses(scenario) == ["done", "done"]
+
+
+# ----- tabs an account doesn't show (Michael, 2026-10-29) ---------------------------------
+
+UPDATES = {**NEWS, "labels": ("INBOX", "UNREAD", "CATEGORY_UPDATES")}
+
+
+async def test_noise_labelled_updates_counts_when_updates_isnt_a_tab(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """Michael had ten unread in Primary that Themi never offered: Gmail labels mail
+    CATEGORY_UPDATES even with the Updates tab off, and F16d read the label as a tab."""
+    inbox.mailbox(ERIN).tabs = {"CATEGORY_PROMOTIONS"}
+    await noise(scenario, inbox, PROMO, UPDATES)
+    assert waiting(scenario) == ["email_archive_noise"]
+    (message,) = await at(scenario, 18)
+    assert message.startswith("One email looks like noise:\n- Backerfeed: Hobby knife")
+
+
+async def test_noise_skipped_before_the_tabs_were_known_is_offered_then(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    await noise(scenario, inbox, PROMO, UPDATES)
+    assert waiting(scenario) == []  # Updates is a tab here, so far
+    inbox.mailbox(ERIN).tabs = {"CATEGORY_PROMOTIONS"}  # turned off in Gmail's settings
+    await scenario.advance(minutes=24 * 60)
+    await scenario.run_periodic("gmail.poll")
+    assert waiting(scenario) == ["email_archive_noise"]
+    rows = scenario.app.db.query("SELECT summary FROM pending_actions")
+    assert [r["summary"] for r in rows] == [
+        "Probably noise, to archive: Hobby knife (from Backerfeed <hello@backerfeed.example>)"
+    ]
