@@ -221,6 +221,14 @@ def email_prompt(rows: list[dict[str, Any]], accounts: dict[int, LinkedAccount])
     return f"Sort these {len(rows)} emails.{hint}\n\n" + "\n\n".join(parts)
 
 
+HANDLED_TEXT = "Taken care of in Gmail already."
+HANDLED_CLEARS = {
+    "read": ("email_mark_read", "email_archive_noise"),
+    "archived": ("email_mark_read", "email_archive_noise", "email_reply"),
+    "deleted": ("email_mark_read", "email_archive_noise", "email_reply"),
+}
+
+
 class EmailTriage:
     def __init__(self, services: Services, gmail: GmailSync) -> None:
         self.services = services
@@ -239,6 +247,31 @@ class EmailTriage:
         s.tools.register(keep_email)
         if s.google is not None:
             s.google.link_listeners.append(self.on_linked)
+        self.gmail.handled_listeners.append(self.on_handled)
+
+    async def on_handled(self, account: LinkedAccount, email_id: int, how: str) -> None:
+        """Idea #83: mail read or archived in Gmail itself leaves what Themi has waiting about
+        it: the offer to mark it read or archive it, a reply waiting (once it's archived or
+        deleted) and its audit question."""
+        categories = HANDLED_CLEARS[how]
+        marks = ",".join("?" * len(categories))
+        for action in self.db.query(
+            f"SELECT id FROM pending_actions WHERE category IN ({marks}) "
+            "AND status IN ('pending', 'snoozed') AND payload LIKE ?",
+            (*categories, f'%"email_id": {email_id}%'),
+        ):
+            await self.services.autonomy.withdraw(action["id"], HANDLED_TEXT)
+        member = self.store.get_member(account.member_id)
+        if self.services.noise is not None:
+            await self.services.noise.refresh(member)
+        audit = self.services.email_audit
+        if audit is not None and how != "read":
+            asked = self.db.update(
+                "DELETE FROM email_audit_items WHERE email_id = ? AND answer IS NULL",
+                (email_id,),
+            )
+            if asked:
+                await audit.refresh(member)
 
     # ----- setup --------------------------------------------------------------
 

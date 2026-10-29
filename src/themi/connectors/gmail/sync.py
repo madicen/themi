@@ -12,7 +12,9 @@
   once, through the outbox. Linking it again clears that.
 
 Each new message is stored in `emails` and passed to every `listeners`
-callback as an `EmailReceived` (triage subscribes in prompt 23).
+callback as an `EmailReceived` (triage subscribes in prompt 23). Mail the person
+archived, read or deleted in Gmail (idea #83) has its stored labels brought up to date
+and goes to every `handled_listeners` callback as (account, email id, how).
 """
 
 from __future__ import annotations
@@ -67,6 +69,8 @@ class EmailReceived:
 
 
 EmailListener = Callable[[EmailReceived], Awaitable[None]]
+# Mail dealt with in Gmail: (account, row in `emails`, "archived" | "read" | "deleted").
+HandledListener = Callable[[LinkedAccount, int, str], Awaitable[None]]
 
 
 class GmailSync:
@@ -76,6 +80,7 @@ class GmailSync:
         self.google = google
         self.outbox = outbox
         self.listeners: list[EmailListener] = []
+        self.handled_listeners: list[HandledListener] = []
 
     def client(self, account_id: int) -> GmailClient:
         return GmailClient(
@@ -199,12 +204,32 @@ class GmailSync:
             result = await client.history(history_id, page_token=page)
             for message_id in result.added:
                 found += await self._take(account, client, message_id, initial=False)
+            for message_id, how in result.handled:
+                await self._handled(account, message_id, how)
             latest = result.history_id
             page = result.next_page
             if not page:
                 break
         self._set_history(account, latest)
         return found
+
+    async def _handled(self, account: LinkedAccount, message_id: str, how: str) -> None:
+        row = self.db.one(
+            "SELECT id, labels FROM emails WHERE account_id = ? AND gmail_id = ?",
+            (account.id, message_id),
+        )
+        if row is None:
+            return
+        gone = {"archived": {"INBOX"}, "read": {"UNREAD"}, "deleted": {"INBOX", "UNREAD"}}[how]
+        labels = [label for label in json.loads(row["labels"] or "[]") if label not in gone]
+        self.db.execute(
+            "UPDATE emails SET labels = ? WHERE id = ?", (json.dumps(labels), row["id"])
+        )
+        for listener in self.handled_listeners:
+            try:
+                await listener(account, row["id"], how)
+            except Exception:
+                log.exception("A handled-email listener failed for email %s", row["id"])
 
     def _set_history(self, account: LinkedAccount, history_id: str) -> None:
         self.db.execute(

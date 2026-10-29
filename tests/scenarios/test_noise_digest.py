@@ -260,3 +260,78 @@ async def test_noise_in_gmails_tabs_is_explained_when_asked(
     assert "No emails are waiting to be archived as noise." in result
     assert "2 that look like noise are in Gmail's other tabs" in result
     assert "only the Primary inbox" in result
+
+
+# ----- idea #83: mail dealt with in Gmail itself ------------------------------------------
+
+
+def gmail_id(scenario: Scenario, email_id: int) -> str:
+    return scenario.app.db.scalar("SELECT gmail_id FROM emails WHERE id = ?", (email_id,))
+
+
+async def poll(scenario: Scenario) -> None:
+    await scenario.advance(minutes=3)
+    await scenario.run_periodic("gmail.poll")
+
+
+def waiting(scenario: Scenario) -> list[str]:
+    rows = scenario.app.db.query(
+        "SELECT category FROM pending_actions WHERE status IN ('pending', 'snoozed') ORDER BY id"
+    )
+    return [r["category"] for r in rows]
+
+
+async def test_mail_archived_in_gmail_leaves_themis_list(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    # Erin's idea #83: "emails that have been marked read or archived by the user will be
+    # cleared from Themi's email queue".
+    sale, _ = await noise(scenario, inbox, SALE, NEWS)
+    inbox.by_hand(ERIN, gmail_id(scenario, sale), remove=["INBOX"])
+    await poll(scenario)
+    assert waiting(scenario) == ["email_archive_noise"]  # only the one still in the inbox
+    labels = scenario.app.db.scalar("SELECT labels FROM emails WHERE id = ?", (sale,))
+    assert "INBOX" not in labels
+    (message,) = await at(scenario, 18)
+    assert message.startswith("One email looks like noise:\n- Backerfeed: Hobby knife")
+    assert inbox.calls_to("modify") == 0  # nothing done twice
+
+
+async def test_mail_read_or_deleted_in_gmail_leaves_it_too(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    confirmation, needs_reply = await arrive(
+        scenario,
+        inbox,
+        {"sender": "Clinic <hi@clinic.example>", "subject": "Booked", "text": "See you"},
+        {"sender": "Jenn <jenn@example.com>", "subject": "Tutoring", "text": "Mondays?"},
+    )
+    scenario.primary.queue_structured(
+        {
+            "results": [
+                verdict(confirmation, "confirmation"),
+                verdict(needs_reply, "needs_reply", reply_draft="Mondays work."),
+            ]
+        }
+    )
+    await scenario.run_periodic("email.triage")
+    assert waiting(scenario) == ["email_mark_read", "email_reply"]
+
+    inbox.by_hand(ERIN, gmail_id(scenario, confirmation), remove=["UNREAD"])
+    inbox.by_hand(ERIN, gmail_id(scenario, needs_reply), remove=["UNREAD"])
+    await poll(scenario)
+    assert waiting(scenario) == ["email_reply"]  # read isn't answered
+    inbox.by_hand(ERIN, gmail_id(scenario, needs_reply), delete=True)
+    await poll(scenario)
+    assert waiting(scenario) == []
+    assert scenario.edits("Erin")[-1]["text"].endswith("Taken care of in Gmail already.")
+
+
+async def test_themis_own_archiving_isnt_mistaken_for_theirs(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    await noise(scenario, inbox, SALE, NEWS)
+    await at(scenario, 18)
+    await scenario.tap("Erin", "Archive all")
+    await poll(scenario)  # the history now has Themi's own label changes
+    assert statuses(scenario) == ["done", "done"]

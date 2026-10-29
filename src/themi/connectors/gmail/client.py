@@ -16,7 +16,7 @@ from __future__ import annotations
 import base64
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -51,9 +51,12 @@ class RateLimited(GmailError):
 
 @dataclass(frozen=True)
 class HistoryPage:
-    added: list[str]  # message ids added, in order
+    added: list[str]  # message ids added to the inbox, in order
     history_id: str
     next_page: str | None
+    # Idea #83: mail dealt with in Gmail itself, (message id, "archived" | "read" |
+    # "deleted"), in order. Themi's own archiving and marking read show here too.
+    handled: list[tuple[str, str]] = field(default_factory=list)
 
 
 class GmailClient:
@@ -89,28 +92,34 @@ class GmailClient:
         except _NotFound:
             return None
 
-    async def history(
-        self, start_history_id: str, label: str | None = "INBOX", page_token: str | None = None
-    ) -> HistoryPage:
+    async def history(self, start_history_id: str, page_token: str | None = None) -> HistoryPage:
+        """Mail added to the inbox, and mail archived, read or deleted (idea #83). No label
+        filter: an archived message no longer carries INBOX, so the added ones are picked
+        out by their labels here."""
         params: dict[str, Any] = {
             "startHistoryId": start_history_id,
-            "historyTypes": "messageAdded",
+            "historyTypes": ["messageAdded", "labelRemoved", "messageDeleted"],
             "maxResults": PAGE_SIZE,
         }
-        if label:
-            params["labelId"] = label
         if page_token:
             params["pageToken"] = page_token
         try:
             body = await self._request("GET", "/history", params=params)
         except _NotFound as exc:
             raise HistoryExpired(start_history_id) from exc
-        added = [
-            item["message"]["id"]
-            for record in body.get("history", [])
-            for item in record.get("messagesAdded", [])
-        ]
-        return HistoryPage(added, str(body["historyId"]), body.get("nextPageToken"))
+        added, handled = [], []
+        for record in body.get("history", []):
+            for item in record.get("messagesAdded", []):
+                if "INBOX" in item["message"].get("labelIds", ["INBOX"]):
+                    added.append(item["message"]["id"])
+            for item in record.get("labelsRemoved", []):
+                removed = set(item.get("labelIds", []))
+                how = "archived" if "INBOX" in removed else "read" if "UNREAD" in removed else ""
+                if how:
+                    handled.append((item["message"]["id"], how))
+            for item in record.get("messagesDeleted", []):
+                handled.append((item["message"]["id"], "deleted"))
+        return HistoryPage(added, str(body["historyId"]), body.get("nextPageToken"), handled)
 
     async def labels(self) -> list[dict[str, Any]]:
         return (await self._request("GET", "/labels")).get("labels", [])
