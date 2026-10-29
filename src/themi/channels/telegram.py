@@ -66,6 +66,19 @@ log = logging.getLogger(__name__)
 ALLOWED_UPDATES = ["message", "callback_query", "message_reaction"]
 OFFSET_KEY = "telegram.offset"
 BUTTON_TTL = timedelta(days=7)
+# Erin's idea #80: more than a couple of buttons go on several rows, two a row, or three
+# when every label is short ("Yes", "No", "Later").
+SHORT_LABEL = 8
+
+
+def button_rows(labels: Sequence[str]) -> list[list[int]]:
+    """Which buttons (by index) go on each row."""
+    if len(labels) <= 2:
+        return [list(range(len(labels)))]
+    per_row = 3 if all(len(label) <= SHORT_LABEL for label in labels) else 2
+    return [list(range(i, min(i + per_row, len(labels)))) for i in range(0, len(labels), per_row)]
+
+
 PAIRING_FAILURE_LIMIT = 5
 PAIRING_WINDOW = timedelta(hours=1)
 TYPING_REFRESH_SECONDS = 4.5  # Telegram shows "typing" for about 5 s per action
@@ -467,7 +480,7 @@ class TelegramChannel:
             return None, None
         group_id = secrets.token_urlsafe(9)
         now = clock.now()
-        row = []
+        made = []
         for button in buttons:
             token = secrets.token_urlsafe(12)  # Telegram allows 64 bytes of callback data
             self.store.db.execute(
@@ -484,8 +497,9 @@ class TelegramChannel:
                     (now + BUTTON_TTL).isoformat(),
                 ),
             )
-            row.append(InlineKeyboardButton(button.label, callback_data=token))
-        return group_id, InlineKeyboardMarkup([row])
+            made.append(InlineKeyboardButton(button.label, callback_data=token))
+        rows = [[made[i] for i in row] for row in button_rows([b.label for b in buttons])]
+        return group_id, InlineKeyboardMarkup(rows)
 
     async def _with_flood_retry(self, call: Any, attempts: int = 3) -> Any:
         for attempt in range(attempts):

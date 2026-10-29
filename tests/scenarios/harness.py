@@ -195,7 +195,7 @@ class Scenario:
         ):
             if int(params["chat_id"]) != chat or not params.get("reply_markup"):
                 continue
-            for button in params["reply_markup"]["inline_keyboard"][0]:
+            for button in (b for row in params["reply_markup"]["inline_keyboard"] for b in row):
                 if button["text"] == label:
                     token = button["callback_data"]
                     message_id = (

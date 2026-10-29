@@ -361,3 +361,20 @@ async def test_echo_handler_round_trip(family: SeededFamily, fake_telegram: Fake
     await ch.poll_once()
     await ch.stop()
     assert fake_telegram.sent_texts(ERIN_TELEGRAM_ID) == ["You said: hello"]
+
+
+async def test_more_than_two_buttons_go_on_rows(
+    family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram
+) -> None:
+    # Erin's idea #80: two a row for longer labels, three for short ones.
+    await channel.send_text(
+        family.erin,
+        "Paper towels: which list?",
+        [Button(label, "x") for label in ("Grocery list", "Things to Buy", "Costco", "Not now")],
+    )
+    (call,) = fake_telegram.calls("sendMessage")
+    rows = call["reply_markup"]["inline_keyboard"]
+    assert [[b["text"] for b in row] for row in rows] == [
+        ["Grocery list", "Things to Buy"],
+        ["Costco", "Not now"],
+    ]

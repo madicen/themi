@@ -76,7 +76,9 @@ async def test_one_task_one_at_a_time_then_a_short_confirmation(
     assert await scenario.tap("Erin", "Time-sensitive") == []
     edit = scenario.edits("Erin")[-1]
     assert masked([edit["text"]]) == [SCHWAB + HOW_IMPORTANT]
-    assert [b["text"] for b in edit["reply_markup"]["inline_keyboard"][0]] == IMPORTANCE
+    assert [
+        b["text"] for b in (b for row in edit["reply_markup"]["inline_keyboard"] for b in row)
+    ] == IMPORTANCE
     assert masked(await scenario.tap("Erin", "Somewhat")) == [BOB + HOW_URGENT]
     assert scenario.edits("Erin")[-1]["text"] == (
         "Schwab Alerts: time-sensitive, somewhat important."
