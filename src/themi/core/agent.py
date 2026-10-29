@@ -117,9 +117,12 @@ SETUP_NEEDED_TEXT = (
     "I can't reach an AI service yet. Once an AI key is added in your Themi settings, "
     "I can pick this up."
 )
+# Bug #77's thread: asked "Will you retry automatically?", the model said yes. Nothing
+# retries it, so this says so.
 BUSY_TEXT = (
     "The AI service is busy at the moment, so I couldn't answer that one. "
-    "It usually clears up within a few minutes."
+    "It usually clears up within a few minutes; I won't retry it on my own, so the same "
+    "message works again then."
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
@@ -205,12 +208,14 @@ class Agent:
     ) -> AsyncIterator[None]:
         """Michael's idea: a reply still coming after SLOW_AFTER seconds gets one short
         message first. Not for button taps. If the reply is ready when the time comes,
-        the message doesn't go."""
+        or a card has gone to them in this turn already (bug #77: the day's summary went
+        first, so the word came after the answer had begun), the message doesn't go."""
         answered = False
+        mark = self.services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM outbox")
 
         async def watch() -> None:
             await clock.sleep(SLOW_AFTER)
-            if answered:
+            if answered or self._replied_since(member, mark):
                 return
             notice = pick_notice(self.services.store.db, member.id, self._rng)
             timer.notice = notice
@@ -233,6 +238,15 @@ class Agent:
                 watcher.cancel()
             with suppress(asyncio.CancelledError):
                 await watcher  # a notice on its way goes before the reply
+
+    def _replied_since(self, member: Member, mark: int) -> bool:
+        return bool(
+            self.services.store.db.one(
+                "SELECT 1 FROM outbox WHERE id > ? AND member_id = ? AND priority = 'reply' "
+                "AND kind != 'slow_notice'",
+                (mark, member.id),
+            )
+        )
 
     # ----- steps --------------------------------------------------------------
 

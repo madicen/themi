@@ -128,9 +128,10 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     ),
     "calendar": (
         "calendar events, day summaries, drive times, blocking time",
-        r"calendar|appointment|meeting|event|today|tomorrow|tonight|morning|afternoon|"
-        r"evening|day look|what'?s on|monday|tuesday|wednesday|thursday|friday|saturday|"
-        r"sunday|weekend|drive|leave|traffic|block|time for|find (?:me )?time|summary",
+        r"calendar|appointment|meeting|event|today|tomorrow|tonight|"
+        r"(?:morning|afternoon|evening)(?!s?\s+routines?)|day look|what'?s on|monday|"
+        r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
+        r"block|time for|find (?:me )?time|summary",
     ),
     "lists": (
         "named lists, the wall's lists, usual stores",
@@ -213,6 +214,7 @@ TOOL_GROUPS: dict[str, str] = {
             "set_chore_chart_limit",
             "change_chore_chart",
             "add_to_wall_routine",
+            "show_routine",
         ),
         "wall",
     ),

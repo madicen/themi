@@ -244,3 +244,19 @@ async def test_some_archived_and_some_kept_from_chat(scenario: Scenario, inbox: 
     await scenario.say("Erin", "archive the noise")
     result = scenario.primary.last_request.messages[-1]
     assert "No emails are waiting to be archived as noise." in str(result)
+
+
+async def test_noise_in_gmails_tabs_is_explained_when_asked(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    # Bug #74: "Archive my email noise please" got "No noise emails are waiting right now";
+    # "there definitely are". All 17 overnight were in Promotions and Updates (F16d).
+    updates = {**NEWS, "labels": ("INBOX", "UNREAD", "CATEGORY_UPDATES")}
+    await noise(scenario, inbox, PROMO, updates)
+    scenario.primary.queue_tool_call("archive_noise_emails", {"answer": "archive", "which": []})
+    scenario.primary.queue_text("None in Primary.")
+    await scenario.say("Erin", "Archive my email noise please")
+    result = str(scenario.primary.last_request.messages[-1])
+    assert "No emails are waiting to be archived as noise." in result
+    assert "2 that look like noise are in Gmail's other tabs" in result
+    assert "only the Primary inbox" in result

@@ -55,6 +55,7 @@ NOON, EVENING = time(12), time(18)
 SLOTS = {"daily": (EVENING,), "twice": (NOON, EVENING), "every_other_day": (EVENING,)}
 SEND_WITHIN = timedelta(hours=3)  # a time missed by more than this (Themi was down) waits
 REBUILD_AFTER = timedelta(hours=1)  # a message still held is made again this often (F16d)
+IN_TABS_FOR = timedelta(days=7)  # noise in Gmail's tabs counted when nothing's waiting (#74)
 MAX_LINES = 15
 OPEN_ITEM_LINES = 10  # in the model's open items (#67)
 
@@ -93,6 +94,21 @@ class NoiseDigest:
             for a in self.autonomy.open_for(member)
             if a.category == CATEGORY and a.status in ("pending", "snoozed")
         ]
+
+    def in_tabs(self, member: Member) -> int:
+        """Noise from the last week still in their inbox, but in one of Gmail's other tabs
+        (Promotions, Updates...): never offered (F16d), so worth saying when asked (#74)."""
+        since = to_utc_iso(clock.now() - IN_TABS_FOR)
+        rows = self.db.query(
+            "SELECT e.labels FROM emails e JOIN linked_accounts a ON a.id = e.account_id "
+            "WHERE a.member_id = ? AND e.category = 'noise' AND e.received_at >= ?",
+            (member.id, since),
+        )
+        return sum(
+            1
+            for r in rows
+            if "INBOX" in (labels := json.loads(r["labels"] or "[]")) and not in_primary(labels)
+        )
 
     def line(self, action: Action) -> str:
         """'Shop: 20% off', from the email itself (the summary as a fallback)."""
@@ -361,8 +377,21 @@ class NoiseDigest:
 )
 async def archive_noise_emails(ctx: ToolContext, args: dict[str, Any]) -> str:
     noise = ctx.services.noise
-    if noise is None or not noise.waiting(ctx.member):
+    if noise is None:
         raise ToolDeclined("No emails are waiting to be archived as noise.")
+    if not noise.waiting(ctx.member):
+        tabs = noise.in_tabs(ctx.member)
+        raise ToolDeclined(
+            "No emails are waiting to be archived as noise."
+            + (
+                f" {tabs} that {'looks' if tabs == 1 else 'look'} like noise "
+                f"{'is' if tabs == 1 else 'are'} in Gmail's other tabs (Promotions, Updates "
+                "and the like), which Themi leaves alone: only the Primary inbox counts. Say "
+                "so, so they know why."
+                if tabs
+                else ""
+            )
+        )
     actions = noise.matching(ctx.member, list(args["which"]))
     if not actions:
         raise ToolDeclined(

@@ -306,3 +306,12 @@ async def test_a_message_to_pass_on_isnt_saved_as_a_note(scenario: Scenario) -> 
     assert isinstance(result, ToolResult)
     assert "can't pass messages on yet" in result.content
     assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 0
+
+
+def test_a_busy_reply_doesnt_promise_a_retry() -> None:
+    # Bug #77's thread: "Will you retry automatically?" got "Yes, I will retry that
+    # automatically as soon as the service is clear." Nothing retries it.
+    assert "I won't retry it on my own" in BUSY_TEXT
+    from themi.core.prompts import STABLE_SYSTEM
+
+    assert "isn't retried by Themi" in STABLE_SYSTEM

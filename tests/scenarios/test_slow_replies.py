@@ -97,3 +97,13 @@ async def test_where_the_time_went_is_kept(scenario: Scenario) -> None:
     assert [s.what for s in erin.steps] == ["Model", "Tool list_open_items", "Model", "Outbox"]
     assert husband.seconds == 0.0 and husband.slow_notice is None
     assert medians([erin, husband])["seconds"] == 17.0
+
+
+async def test_no_word_once_a_card_has_gone_out(scenario: Scenario) -> None:
+    """Bug #77: "What is my morning routine?" sent the day's summary card at once, then "Taking
+    me longer than usual today", then the reply: the word came after the answer had begun."""
+    scenario.primary.take(2).queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.take(SLOW_AFTER + 5).queue_text("That's the day.")
+    replies = await scenario.say("Erin", "What's on today?")
+    assert notices(replies) == []
+    assert replies[-1] == "That's the day."

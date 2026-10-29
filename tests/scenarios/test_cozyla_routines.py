@@ -269,3 +269,74 @@ async def test_a_wall_that_keeps_its_own_order_is_said_so(
     result = scenario.primary.last_request.messages[-1].content[0].content  # type: ignore[union-attr]
     assert "went at the end" in result
     assert fake_cozyla.routine_order("m-erin", "Morning") == ["Walk dog", "Take wegovy"]
+
+
+# ----- F18b: asking about a routine, and a morning check that's too late -----------------
+
+
+async def test_the_morning_check_isnt_sent_in_the_evening(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Erin got "Morning routine, still open: Walk dog" at 21:15: queued in the evening (or
+    held until its deadline), it went out just before quiet hours."""
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    fake_cozyla.add_routine("m-erin", "Cycle dishwasher", "Evening")
+    await at(scenario, WED, 20, 43)  # the first sync of the day after a restart
+    assert routine_texts(scenario, "Erin") == [
+        "Evening routine, still open:\n- Cycle dishwasher\nDone already?"
+    ]
+
+
+async def test_a_morning_check_held_back_expires_at_the_evening_check(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    await at(scenario, WED, 12, 1)
+    (row,) = scenario.app.db.query("SELECT expires_at FROM outbox WHERE kind = 'routine'")
+    assert row["expires_at"] is not None
+    assert row["expires_at"] <= "2026-10-22T03:30:00+00:00"  # 20:30 Pacific
+
+
+def routine_question(scenario: Scenario, part: str) -> None:
+    scenario.primary.queue_tool_call("show_routine", {"part": part})
+    scenario.primary.queue_text("Here it is.")
+
+
+def last_result(scenario: Scenario) -> str:
+    return str(scenario.primary.last_request.messages[-1])
+
+
+async def test_asking_about_a_routine_reads_it_from_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bugs #76 and #78: "What is my morning routine?" got the day's summary, then "The
+    morning routine board has no items", though it had Walk dog."""
+    walk = fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    fake_cozyla.add_routine("m-erin", "Make the bed", "Morning")
+    fake_cozyla.add_routine("m-erin", "Cycle dishwasher", "Evening")
+    fake_cozyla.add_routine("m-husband", "Take meds", "Morning")
+    fake_cozyla.tick_routine(walk, WED)
+    routine_question(scenario, "Morning")
+    await scenario.say("Erin", "What is my morning routine?")
+    result = last_result(scenario)
+    assert "Morning routine on the wall, today: Walk dog (done), Make the bed" in result
+    assert "Take meds" not in result and "Cycle dishwasher" not in result
+
+    routine_question(scenario, "")
+    await scenario.say("Erin", "What are my routines?")
+    result = last_result(scenario)
+    assert "Morning routine" in result and "Evening routine" in result
+
+    routine_question(scenario, "Afternoon")
+    await scenario.say("Erin", "And my afternoon routine?")
+    assert "Nothing on the afternoon routine on the wall" in last_result(scenario)
+
+
+async def test_a_routine_question_brings_the_wall_tools_not_the_day(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Erin", "What is my morning routine?")
+    names = {t.name for t in scenario.primary.last_request.tools}
+    assert "show_routine" in names
+    assert "day_summary" not in names

@@ -49,7 +49,7 @@ from themi.core.lists import name_key
 from themi.core.repeat import RepeatError, parse, read_back
 from themi.core.services import Services
 from themi.core.tasks import TaskBoard
-from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool
+from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -93,6 +93,7 @@ class CozylaRoutines:
         self.services.button_handlers["routine"] = self.on_button
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         self.services.tools.register(add_to_wall_routine)
+        self.services.tools.register(show_routine)
         self.services.wall_routines = self
 
     async def sync(self) -> int:
@@ -300,13 +301,17 @@ class CozylaRoutines:
             if uid is None or member.telegram_user_id is None:
                 continue
             quiet = self._quiet_starts(member, now)
+            evening = quiet - EVENING_BEFORE_QUIET
             for part in CHECKED_PARTS:
                 start = (
                     now.replace(hour=MORNING_CHECK.hour, minute=0, second=0, microsecond=0)
                     if part == "Morning"
-                    else quiet - EVENING_BEFORE_QUIET
+                    else evening
                 )
-                if not start <= now < quiet or self._checked(member, today, part):
+                # The morning's check is no use once the evening's is due (it went out at
+                # 21:15, held until its deadline): it isn't sent then, and one waiting expires.
+                end = evening if part == "Morning" else quiet
+                if not start <= now < end or self._checked(member, today, part):
                     continue
                 theirs = [
                     r
@@ -335,8 +340,9 @@ class CozylaRoutines:
                     priority=Priority.NORMAL,
                     kind="routine",
                     buttons=self._buttons(still, today),
-                    deadline=quiet - timedelta(minutes=15),
+                    deadline=end - timedelta(minutes=15),
                     dedupe_key=f"routine-{part}-{today}",
+                    expires=end,
                 )
                 sent += 1
         return sent
@@ -385,6 +391,39 @@ class CozylaRoutines:
             await self.services.outbox.edit(
                 event.member, event.button.message_id, ALL_DONE_TEXT.format(part=part)
             )
+
+    # ----- asked about (bugs #76 and #78) ---------------------------------------------------
+
+    async def describe(self, member: Member, part: str) -> str:
+        """Their routine on the wall today, for one part of the day or all three."""
+        try:
+            members = await self.client.members()
+            records = await self.client.routine_records(self._today())
+        except CozylaError as exc:
+            raise ToolFailed(f"The wall couldn't be reached ({exc}); say so.") from exc
+        uid = next(
+            (
+                u
+                for u, m in member_map(members, self.store.list_members()).items()
+                if m == member.id
+            ),
+            None,
+        )
+        if uid is None:
+            return f"{member.name} isn't a member on the wall, so they have no routines there."
+        lines = []
+        for each in [part] if part in PARTS else PARTS:
+            items = [
+                f"{r.title}{' (done)' if r.completed else ''}"
+                for r in records
+                if r.member == uid and r.part == each
+            ]
+            lines.append(
+                f"{each} routine on the wall, today: {', '.join(items)}."
+                if items
+                else f"Nothing on the {each.lower()} routine on the wall today."
+            )
+        return " ".join(lines) + " Say it in words, as a short list."
 
     # ----- small things -------------------------------------------------------------------
 
@@ -487,6 +526,19 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         },
     )
     return replace(proposal, requested=asked)
+
+
+@tool(
+    "show_routine",
+    "Read someone's routine on the Cozyla wall, as it is today: its items in order, and "
+    "which are done. part: 'Morning', 'Afternoon' or 'Evening', or '' for all three. For "
+    "'what's my morning routine?'; not the day's calendar.",
+    {"part": {"type": "string", "enum": ["", *PARTS]}},
+)
+async def show_routine(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if ctx.services.wall_routines is None:
+        raise ToolFailed("The wall's routines aren't connected.")
+    return await ctx.services.wall_routines.describe(ctx.member, str(args["part"]))
 
 
 def _display_order(routine: Routine) -> float:
