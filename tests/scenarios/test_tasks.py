@@ -515,3 +515,30 @@ async def test_a_text_isnt_a_phone_call(scenario: Scenario) -> None:
     scenario.primary.queue_text("Okay.")
     await scenario.say("Erin", "Can someone text the plumber back about Thursday?")
     assert "not a phone call" in str(scenario.primary.last_request.messages[-1])
+
+
+async def test_having_the_partner_do_something_is_a_task_for_them(scenario: Scenario) -> None:
+    # Bug #82: "Can you have Michael get the pacifier under the couch foot ottoman thing?"
+    # got "Themi can't pass messages between people yet."
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Get the pacifier from under the ottoman",
+            "kind": "physical",
+            "effort": 1,
+            "due_date": "",
+            "assign_to": "Husband",
+            "steps": [],
+            "check_in": False,
+            "importance": "normal",
+            "due_time": "",
+            "from_time": "",
+        },
+    )
+    scenario.primary.queue_text("Okay, that's with him now.")
+    await scenario.say("Erin", "Can you have Husband get the pacifier under the ottoman?")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    (task,) = board.open_for(scenario.member("Husband"))
+    assert task.title == "Get the pacifier from under the ottoman"
+    assert "have the other partner do something" in scenario.primary.last_request.system

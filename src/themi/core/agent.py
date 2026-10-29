@@ -70,10 +70,11 @@ WHICH_TEXT = "Which one did you mean: {items}? Each card above has its own butto
 NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already waiting for a yes."
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
-    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded)\b"
-    r"|^(?:added|done|archived|booked|sent|ordered|scheduled)\b"
+    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
+    r"rescheduled|changed)\b"
+    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
-    r"sent|ordered|scheduled|on the list)\b",
+    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed)\b",
     re.IGNORECASE | re.MULTILINE,
 )
 

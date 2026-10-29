@@ -260,3 +260,12 @@ def test_dates_carry_a_year_only_when_its_another_one() -> None:
     assert _day_words(date(2026, 10, 29), today) == "Thu 29 Oct"
     assert _day_words(date(2027, 1, 5), today) == "Tue 05 Jan 2027"
     assert "with no year unless it's another year" in STABLE_SYSTEM
+
+
+def test_the_prompt_reads_a_task_for_the_partner_and_a_tired_evening() -> None:
+    """Bugs #82 and #72: "can you have Michael get the pacifier" was refused as a message to
+    pass on, and "I'm too tired tonight" got the prompt's own "Dryer now" example back."""
+    assert "have the other partner do something" in STABLE_SYSTEM
+    assert "create_task with assign_to their name" in STABLE_SYSTEM
+    assert "never offer a chore that isn't in the context" in STABLE_SYSTEM
+    assert "I'm too tired tonight" in STABLE_SYSTEM

@@ -65,6 +65,9 @@ MEALS = {"breakfast": "08:00", "brunch": "10:30", "lunch": "12:00", "dinner": "1
          "supper": "18:00"}  # fmt: skip
 MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
 REPLACED_TEXT = "Replaced by the newer card."
+MOVED_SINCE_TEXT = "Not needed now: that event has been changed since."
+# "...plenty of time before tutoring": an event named as the time to fit around (bug #73).
+ANCHOR = re.compile(r"\b(?:before|after|until|till|ahead of|around|than)\s+(?:the\s+|my\s+)?$")
 
 
 @dataclass(frozen=True)
@@ -130,6 +133,15 @@ def title_matches(words: str, title: str) -> bool:
     wanted = [w for w in name_key(words).split() if w not in FILLER]
     have = name_key(title).split()
     return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
+
+
+def named_as_anchor(title: str, request_text: str) -> bool:
+    """The title's words come up in what they said only as the time to fit around ("move
+    that up so there's time before tutoring"): that event isn't the one to move (bug #73)."""
+    said = name_key(request_text).split()
+    words = [w for w in name_key(title).split() if w not in FILLER]
+    hits = [i for i, w in enumerate(said) if any(_same_word(w, t) for t in words)]
+    return bool(hits) and all(ANCHOR.search(" ".join(said[max(0, i - 3) : i]) + " ") for i in hits)
 
 
 def asked_for(title: str, request_text: str) -> bool:
@@ -292,6 +304,17 @@ class Events:
                 raise ToolDeclined("That's already waiting for a yes on its card.")
             await self.services.autonomy.withdraw(row["id"], REPLACED_TEXT)
 
+    async def withdraw_changes(self, event_id: str, keep: int | None = None) -> None:
+        """Cards still waiting to move or delete this event give way: a newer change was
+        asked for or made (bug #81: a declined move came back after another was approved)."""
+        for row in self.db.query(
+            "SELECT id, executor, payload FROM pending_actions WHERE executor IN (?, ?) "
+            "AND status IN ('pending', 'snoozed') ORDER BY id",
+            (MOVE, DELETE),
+        ):
+            if row["id"] != keep and json.loads(row["payload"]).get("event_id") == event_id:
+                await self.services.autonomy.withdraw(row["id"], MOVED_SINCE_TEXT)
+
     # ----- doing it -----------------------------------------------------------------------
 
     async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
@@ -357,6 +380,7 @@ class Events:
             "WHERE event_id = ?",
             (to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day), found.event_id),
         )
+        await self.withdraw_changes(found.event_id, keep=ctx.action_id)
         return f"Moved: {describe(found.title, when, found.location, self._tz())}."
 
     async def _execute_delete(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
@@ -368,6 +392,7 @@ class Events:
                 (to_utc_iso(clock.now()), found.themi_id),
             )
         self.db.execute("DELETE FROM calendar_entries WHERE event_id = ?", (found.event_id,))
+        await self.withdraw_changes(found.event_id, keep=ctx.action_id)
         return f"Deleted from the calendar: {describe(found.title, found.when, '', self._tz())}."
 
     async def _write(
@@ -624,9 +649,11 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
 
 @staged_tool(
     "move_calendar_event",
-    "Move one of their calendar events to a new date or time. event: words from its title; "
-    "on: its current date (YYYY-MM-DD) if there could be more than one, else ''. date, start, "
-    "end as for add_calendar_event. Events Themi made move at once; others need their yes.",
+    "Move one of their calendar events to a new date or time. event: words from the title of "
+    "the event to move, never one named as the time to fit around ('before tutoring'); a "
+    "task (a run, a chore) is reschedule_task, even with a time of day. on: its current date "
+    "(YYYY-MM-DD) if there could be more than one, else ''. date, start, end as for "
+    "add_calendar_event. Events Themi made move at once; others need their yes.",
     {
         "event": {"type": "string"},
         "on": {"type": "string"},
@@ -638,7 +665,14 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
 async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     events = _events(ctx)
     found = events.find(ctx.member, args["event"], args["on"])
+    if named_as_anchor(found.title, ctx.request_text):
+        raise ToolFailed(
+            f"They named {found.title} as the time to fit around, not as the one to move. "
+            "If they meant a task (a run, a chore), reschedule_task changes its time; "
+            "otherwise ask which one."
+        )
     when = parse_when(args["date"], args["start"], args["end"], events._today(), events._tz())
+    await events.withdraw_changes(found.event_id)
     payload = {
         **_found_payload(found),
         "starts": when.starts.isoformat(),
@@ -660,6 +694,7 @@ async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposa
 async def delete_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     events = _events(ctx)
     found = events.find(ctx.member, args["event"], args["on"])
+    await events.withdraw_changes(found.event_id)
     proposal = Proposal(
         OWN if found.themi_id else CHANGE,
         f"Deleting {found.title} ({when_words(found.when, events._tz())}) from the calendar",

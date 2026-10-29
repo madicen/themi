@@ -3,6 +3,7 @@ Wednesday 21 October 2026, 9 am."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -304,3 +305,93 @@ async def test_a_meal_without_a_time_gets_its_usual_one(
     )
     event = on_primary(linked)[title]
     assert event["start"]["dateTime"][11:16] == starts
+
+
+# ----- F18a: the event to move, and moves overtaken -----------------------------------
+
+
+def move(day: str = "2026-10-21", start: str = "12:00") -> dict[str, str]:
+    return {"event": "tutor", "on": "", "date": day, "start": start, "end": ""}
+
+
+async def tutoring(scenario: Scenario, linked: FakeGcal) -> None:
+    linked.add_event(ERIN, local(14), local(15, 20), summary="Tutor Gabriel (Illems)")
+    await scenario.run_periodic("calendar.busy")
+
+
+async def test_an_event_named_as_the_time_to_fit_around_isnt_moved(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #73: "Let's move that up to 12pm so that there's plenty of time before tutoring"
+    (that = her run, a task) staged moving the tutoring."""
+    await tutoring(scenario, linked)
+    await say(
+        scenario,
+        "Let's move that up to 12pm so that there's plenty of time before tutoring",
+        "move_calendar_event",
+        move(),
+    )
+    result = tool_result(scenario)
+    assert "named Tutor Gabriel (Illems) as the time to fit around" in result
+    assert "reschedule_task" in result
+    assert not scenario.app.db.query("SELECT 1 FROM pending_actions")
+    await say(scenario, "Move tutoring to 12", "move_calendar_event", move())
+    assert scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'")
+
+
+async def test_a_move_said_as_done_while_its_card_waits_is_corrected(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #73: "Tutor Gabriel is moved to Thursday, October 29 at 12:00 PM." under a card
+    still waiting for her yes."""
+    await tutoring(scenario, linked)
+    scenario.primary.queue_tool_call("move_calendar_event", move())
+    scenario.primary.queue_text("Tutor Gabriel is moved to Wednesday at 12:00 PM.")
+    replies = await scenario.say("Erin", "Move tutoring to 12")
+    assert replies[-1] == (
+        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 12-1 pm: that's waiting for a yes on "
+        "the card above."
+    )
+
+
+async def test_a_move_put_off_gives_way_to_a_newer_one(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #81: she put off one move with [Not now], then approved another; the first came
+    back the next morning."""
+    await tutoring(scenario, linked)
+    await say(scenario, "Move tutoring to 12", "move_calendar_event", move())
+    await scenario.tap("Erin", "Not now")
+    await say(scenario, "Tutoring at 4 instead", "move_calendar_event", move(start="16:00"))
+    first = scenario.app.db.one("SELECT status FROM pending_actions ORDER BY id LIMIT 1")
+    assert first is not None and first["status"] == "declined"  # won't come back
+    await scenario.tap("Erin", "Go ahead")
+    assert on_primary(linked)["Tutor Gabriel (Illems)"]["start"]["dateTime"] == local(16)
+    waiting = scenario.app.db.query(
+        "SELECT 1 FROM pending_actions WHERE status IN ('pending', 'snoozed')"
+    )
+    assert waiting == []
+
+
+async def test_a_move_made_takes_back_other_cards_for_that_event(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #81, the other way round: a card about the event made elsewhere (the website,
+    a later message) goes once the event has moved."""
+    await tutoring(scenario, linked)
+    await say(scenario, "Move tutoring to 12", "move_calendar_event", move())
+    (first,) = scenario.app.db.query("SELECT id, payload FROM pending_actions")
+    second = await scenario.app.services.autonomy.stage(
+        "calendar_event_change",
+        scenario.member("Erin"),
+        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 4-5 pm",
+        json.loads(first["payload"]) | {"starts": local(16), "ends": local(17)},
+        "calendar.move_event",
+    )
+    await scenario.app.services.autonomy.resolve(
+        second.action.id, Decision.APPROVE, by=scenario.member("Erin")
+    )
+    status = scenario.app.db.scalar(
+        "SELECT status FROM pending_actions WHERE id = ?", (first["id"],)
+    )
+    assert status == "declined"

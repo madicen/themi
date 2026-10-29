@@ -1438,7 +1438,8 @@ def _board(ctx: ToolContext) -> TaskBoard:
     "create_task",
     "Add a household task and nudge whoever does it at a good moment. assign_to says who: "
     "'me' when the person asking will do it ('I want to...', 'I'll...', 'remind me to...'), "
-    "a family member's name when they name someone, 'both' when either of them can do it "
+    "a family member's name when they name someone ('have Michael get the pacifier', 'ask "
+    "him to...'), 'both' when either of them can do it "
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
     "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
     {
