@@ -94,6 +94,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
 | F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
 | F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
+| F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [ ] |
+| F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [ ] |
+| F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [ ] |
+| R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4562,6 +4566,82 @@ Notes (2026-10-28):
   rewritten to this venv's python.
 - The plan's task matching bullet has follow-ups and the which-list card (rev 203).
 - Setup: restart (applies 0070).
+
+### F18a · Feedback (2026-10-29): the wrong event moved, honest staging, a task for the other partner, "too tired"
+Status: [ ]
+Depends on: F17b, K3
+From the family's reports of 2026-10-28/29: Erin's bugs #72, #73, #81 and #82.
+- #73 ("it rescheduled the wrong event"): "When is my next run scheduled?" then "Let's move
+  that up to 12pm so that there's plenty of time before tutoring" staged moving "Tutor
+  Gabriel" to 12-1:20 pm. The run is a repeating task (task 8, 2 pm), so the move belongs
+  to the task's time, not a calendar event; `move_calendar_event` takes an event only when
+  its title matches what they named. The reply also said "Tutor Gabriel is moved" while the
+  move waited for a yes: a staged change is said as staged.
+- #81 ("it's still trying to move my tutoring"): the move she declined with [Not now] came
+  back at 08:00, after she had approved moving that event to 4 pm. A staged calendar move is
+  dropped when the same event has since been moved, or another move of it is staged.
+- #82 ("I thought we implemented this feature already?"): "Can you have Michael get the
+  pacifier under the couch foot ottoman thing?" got "Themi can't pass messages between
+  people yet." Asking Themi to have the other partner do something is a task for them
+  (`create_task`, as "someone else"), not a relay; only "tell/let X know/message X" is.
+- #72 ("this seems wrong"): "I'm too tired tonight" got "Dryer now, or later tomorrow?",
+  the system prompt's example line, with no dryer task. The reply acknowledges it and offers
+  to let tonight's open items wait; examples in the prompt are marked as examples.
+- Tests: the move matched to a task vs an event; a stale staged move dropped; the staged
+  reply's wording; "have X do Y" as a task; scenarios from #72, #73, #81 and #82; eval cases.
+
+### F18b · Feedback (2026-10-29): routines asked about, the slow note after a card, noise in chat again
+Status: [ ]
+Depends on: F18a, C3, P2a, F17a
+From the family's reports of 2026-10-29 morning: Erin's bugs #76, #77 and #78, Michael's #74.
+- #76 and #78 ("it gave the full day agenda, not my morning routine"; "the morning routine
+  does have items"): "What is my morning routine?" ran `day_summary`, then "The morning
+  routine board has no items", though the night before Themi sent "Morning routine, still
+  open: Walk dog". Asking about a routine brings the routine tools and lists that routine's
+  items (from Cozyla); "routine" words don't call for `day_summary`. Check also why a
+  "Morning routine, still open" check went out at 21:15.
+- #77 ("the taking me longer than usual message came in after the reply"): the summary card
+  went first, then the slow note, then the text reply. Once a reply's card or text has gone
+  out, the slow note isn't sent. When a failed message is retried (07:59), the retry
+  answers the question it failed on, not the latest one twice.
+- #74 ("there definitely are", after "Archive my email noise please" got "No noise emails
+  are waiting right now"): #67 again after F17a. The log shows no tool ran, so the model
+  answered without `archive_noise_emails`; find why (tool group words, or the open items
+  missing the waiting offers after a restart) with a failing test first.
+- Tests: the routine question (Cozyla fake), no slow note after a card, the retry's
+  question, scenario from #74; eval cases for "what's my morning routine" and "archive my
+  email noise".
+
+### F18c · Feedback (2026-10-29): button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer
+Status: [ ]
+Depends on: F18b, C1c
+From Erin's ideas #75, #80 and #83 (2026-10-29), and Michael's question about an offer.
+- #80 ("if there are more than 2-3 options, Themi should split push buttons onto multiple
+  lines..."): buttons go in rows, at most 2 a row, or 3 when every label is short (yes, no,
+  ok, later and the like).
+- #75 ("Themi should maintain a custom order of to dos in cozyla based on due date and
+  importance"): the wall's To-do List is kept in order: overdue and due first, urgent and
+  important before the rest, then by due date. Only Themi's own items move; check what the
+  unofficial client can set (C1c's notes).
+- #83 ("emails that have been marked read or archived by the user will be cleared from
+  Themi's email queue"): an email read or archived in Gmail leaves the noise offers, the
+  audit and "waiting on you" items about it (Gmail history already says so), and a queued
+  digest is refreshed.
+- Michael was offered "A small daily check-in to try: a glass of water mid-morning" and
+  read it as Erin's check-in. It's his own copy of the reserve (habits are per person,
+  20), but the card doesn't say so. The offer says it's for them ("Something you could try
+  for yourself: ..."), and an idea the other partner has active comes after the rest.
+- Tests: the row layout (Telegram fake), the order on the wall (Cozyla fake), an email
+  archived in Gmail clearing the queue, the offer's wording and order.
+
+### R1 · Routines kept in Themi
+Status: [ ]
+Depends on: F18c, C3
+From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
+Default morning, afternoon, and evening, but customizable number of routines and when they
+each happen." Read the plan's routine sections and C3's notes first; this needs a design
+pass with the user (how it relates to the wall's routines, and which one wins) before it's
+built. Split it then.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
