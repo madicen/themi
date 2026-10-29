@@ -88,7 +88,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
-| F16a | Feedback: automatic is per person | Feedback | [ ] |
+| F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [ ] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -4251,7 +4251,7 @@ Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
 
 ### F16a · Feedback (2026-10-28): automatic is per person
-Status: [ ]
+Status: [x] 2026-10-28
 Depends on: 11, 13, F2
 From Erin's bug #58 and Michael's idea #62, 2026-10-28.
 - #58 ("Themi has been archiving my emails"): Michael turned on "Archive noise emails" as
@@ -4274,6 +4274,29 @@ From Erin's bug #58 and Michael's idea #62, 2026-10-28.
 - Tests: Michael's grant leaves Erin asked; Erin's own grant; a non-admin can't grant a
   family category; unlocking undoes only that person's; the migration; a scenario from #58.
 - Plan: the trust tiers section gets a sentence on whose actions a grant covers.
+
+Notes (2026-10-28):
+- Migration 0067: `member_tiers` (category, member, the granting rule). A trigger refuses a
+  capped or household category there. A member category that was automatic moved to its
+  rule's person; `action_categories.tier` is now only for household categories. Locked
+  grants of member categories became personal rules. The live data had none (rule 17 was
+  already unlocked).
+- `Autonomy.grant_tier2(name, via_rule_id, by, member=None)`: a household category needs
+  an admin, as before. A personal one is only ever for `by` themselves. `revoke_tier2` is
+  theirs, or an admin's for anyone's. `granted(name, member)` (ignores a Tier 3 pause),
+  `is_automatic(name, member)` (what `stage` uses) and `granted_to(name)`. Escalation
+  still pauses the whole category for everyone, and only an admin resumes it.
+- Rules: an `autonomy_grant` takes its category's scope whatever `applies_to` says; a
+  member's own needs no admin. `grant_automatic` writes "Automatic for Erin: Archive noise
+  emails". `revoke_automatic(by, category, whose=None)`.
+- Website "What Themi does on its own": a personal category shows "For you: asks
+  first/automatic", who else has it, and [Make automatic for me] for anyone. Shared
+  categories stay admin-only.
+- K3's offer to add events from booking emails is now per person ("Add events from my
+  booking emails to my calendar without asking"), and asked of each person once.
+- The plan's trust tiers paragraph says this (rev 197).
+- Setup: restart (applies 0067). Anyone who wants automatic archiving turns it on for
+  themselves on the website.
 
 ### F16b · Feedback (2026-10-28): noise emails in one message, inside the limit
 Status: [ ]
