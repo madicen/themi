@@ -4657,6 +4657,18 @@ Notes (2026-10-29):
   says how many noise emails from the last week are in Gmail's other tabs, and that only
   the Primary inbox counts (`NoiseDigest.in_tabs`). If Michael wants those tabs handled
   too, that's a change to F16d, for him to decide.
+- Follow-up the same day (Michael: "I have 10 unread messages in my inbox that are likely
+  noise"): F16d was wrong for him. Gmail's own `in:inbox is:unread category:primary` found
+  exactly 10, and all carried CATEGORY_UPDATES: his Updates tab is off, so that mail shows
+  in Primary, but Gmail labels it by category anyway. Migration 0071 adds
+  `linked_accounts.gmail_tabs` (category -> shown as a tab) and `gmail_tabs_checked_at`.
+  `GmailSync._learn_tabs` asks Gmail after each sync: daily, and at once for a category
+  not seen before; a category whose inbox mail comes up under `category:primary` isn't a
+  tab. `in_primary(labels, tabs)` takes the account's tabs (`GmailSync.tabs_shown`;
+  unknown is a tab, as before), in triage, the noise message and `in_tabs`. When a
+  category turns out to be in Primary, `EmailTriage.on_tabs_learned` offers the noise from
+  the last week that was skipped (6 of his 10; the other 4 are routine, so no offer).
+  Setup: restart (applies 0071).
 - Evals: `wall-what-is-my-morning-routine` added; not run yet. "Archive my email noise"
   is covered by #67's cases.
 - Setup: restart. No migration.
