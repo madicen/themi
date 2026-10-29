@@ -269,3 +269,33 @@ def test_the_prompt_reads_a_task_for_the_partner_and_a_tired_evening() -> None:
     assert "create_task with assign_to their name" in STABLE_SYSTEM
     assert "never offer a chore that isn't in the context" in STABLE_SYSTEM
     assert "I'm too tired tonight" in STABLE_SYSTEM
+
+
+async def test_numbers_and_switches_sent_as_text_are_read_as_such(family: SeededFamily) -> None:
+    """Eval energy-plumber: Gemini sent log_energy_note's effect as "-3" (its function
+    schemas take only text choices), the check refused it, and the note was never saved."""
+    seen: list[dict] = []
+
+    @tool(
+        "note",
+        "Records",
+        {
+            "effect": {"type": "integer", "enum": [-3, -2, -1, 1, 2, 3]},
+            "share": {"type": "number"},
+            "flag": {"type": "boolean"},
+            "ids": {"type": "array", "items": {"type": "integer"}},
+            "word": {"type": "string"},
+        },
+    )
+    async def note(ctx, args):
+        seen.append(args)
+        return "ok"
+
+    registry = ToolRegistry([note])
+    ctx = ToolContext(family.erin, services=None)  # type: ignore[arg-type]
+    args = {"effect": "-3", "share": "0.5", "flag": "true", "ids": ["4", 5], "word": "7"}
+    result = await registry.run(ToolCall("1", "note", args), ctx)
+    assert not result.is_error
+    assert seen == [{"effect": -3, "share": 0.5, "flag": True, "ids": [4, 5], "word": "7"}]
+    bad = await registry.run(ToolCall("2", "note", {**args, "effect": "lots"}), ctx)
+    assert bad.is_error and bad.content.startswith("Invalid arguments")

@@ -20,7 +20,7 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -285,6 +285,7 @@ class ToolRegistry:
         return result
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
+        call = replace(call, arguments=_as_typed(call.arguments, t.spec.input_schema))
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:
@@ -329,6 +330,32 @@ class ToolRegistry:
         if action.status == "done":
             return f"Done automatically (action {action.id}): {outcome.message}"
         return f"Tried but it failed (action {action.id}); it can be retried: {outcome.message}"
+
+
+_INTEGER = re.compile(r"[+-]?\d+")
+_NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)")
+
+
+def _as_typed(value: Any, schema: dict[str, Any]) -> Any:
+    """Numbers and true/false that came as text, as the schema's type (eval energy-plumber:
+    Gemini sent log_energy_note's effect as "-3"; its function schemas take only text
+    choices). Anything else is left for the schema check to refuse."""
+    kind = schema.get("type")
+    if kind == "object" and isinstance(value, dict):
+        props = schema.get("properties", {})
+        return {k: _as_typed(v, props[k]) if k in props else v for k, v in value.items()}
+    if kind == "array" and isinstance(value, list) and "items" in schema:
+        return [_as_typed(v, schema["items"]) for v in value]
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if kind == "integer" and _INTEGER.fullmatch(text):
+        return int(text)
+    if kind == "number" and _NUMBER.fullmatch(text):
+        return float(text)
+    if kind == "boolean" and text.lower() in ("true", "false"):
+        return text.lower() == "true"
+    return value
 
 
 def dumps(data: Any) -> str:
