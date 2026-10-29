@@ -504,3 +504,14 @@ async def test_someone_else_is_the_other_partner(scenario: Scenario) -> None:
     assert board is not None
     (task,) = board.open_for(scenario.member("Husband"))
     assert task.title == "Text the plumber"
+
+
+async def test_a_text_isnt_a_phone_call(scenario: Scenario) -> None:
+    # Eval task-text-plumber: "Can someone text the plumber back?" became a call script.
+    scenario.primary.queue_tool_call(
+        "draft_vendor_call",
+        {"vendor": "the plumber", "objective": "Text back about Thursday", "details": ""},
+    )
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Erin", "Can someone text the plumber back about Thursday?")
+    assert "not a phone call" in str(scenario.primary.last_request.messages[-1])
