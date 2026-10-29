@@ -92,6 +92,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
 | F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
+| F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
+| F17b | Feedback: which list, and a reminder after a task is done | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -4453,6 +4455,68 @@ Notes (2026-10-28):
 - Alerts still come for time-sensitive mail in any tab; only archiving changed.
 - The plan's triage bullet says Primary (rev 200).
 - Setup: restart. No migration.
+
+### F17a · Feedback (2026-10-28): noise to archive in chat, the audit's subject and link, tasks by name
+Status: [x] 2026-10-28
+Depends on: F16d, E2b
+From the family's reports of 2026-10-28 evening: Michael's bug #67, Erin's idea #69 and bug
+#71. F17b takes #68 and #70.
+- #67 ("noisy emails that were on the site to be archived didn't appear when asking about
+  them in telegram"): asked "Are there any messages to mark read or archive?", Themi listed
+  only the two "waiting on you" items; the 18 noise offers were only in a queued message,
+  cut off at 80 characters. The open items list the noise offers still waiting (sender and
+  subject, a few, then a count), and a tool archives them, or keeps them, from chat
+  (`archive_noise_emails`, all or the ones they name), through the same approvals as the
+  [Archive all] button. "archive", "noise" and "mark as read" call for the email tools.
+- #69 ("email audits should have an exact subject for each email and a link to the email
+  being referenced"): asked for the subject twice, the model made one up ("or similar"). An
+  audit item about a sender shows its latest email's exact subject; every item has a Gmail
+  link to that email.
+- #71 ("it's displaying tasks by number instead of by name"): "Task 50 is taken off the
+  list." The system prompt says to call tasks by their names, never their numbers, and a
+  reply that still says "task 50" gets the task's name in its place.
+- Tests: the open item and the tool (all, by name, keep, nothing waiting), the email words;
+  the audit's subject and link; the reply guard; a scenario from #67 and one from #71.
+
+Notes (2026-10-28):
+- #67: `NoiseDigest.open_items`: "Emails that look like noise, N waiting for a yes to
+  archive", the first 10 as "Sender: subject" inside a `<data>` block (they're email text).
+  `archive_noise_emails(answer, which)` (email group) archives or keeps them through
+  `approvals.resolve`, as the button does; `which` matches words in the sender or subject,
+  empty for all. Afterwards a digest still queued is made again, or taken back when
+  nothing's left (`NoiseDigest.refresh`). The email group's words add archive, noise,
+  junk, spam and "mark as read".
+- #69: an audit card about a sender adds `Latest: "<subject>"` (its newest email in that
+  inbox), and every card ends with a Gmail link (`gmail.parse.web_link`, which spending's
+  receipt links use too). The card is sent without a link preview; the second question is
+  an edit, which Telegram may preview. The model still never sees the audit's emails.
+- #71: a system prompt line (tasks by name, never number), and `agent._by_name` puts the
+  name, in quotes, in place of "task 50" (or "task 7 (Clean the bird cage)") in a reply.
+  The PDA shield now leaves a sentence that opens with a quote alone: '"Refill the water"
+  is off the list' was becoming "Up next: ...".
+- Not done: #67's model reply also called a reply draft "to mark as read"; the clearer open
+  item should help, re-run the evals when there's quota.
+- The plan's triage bullet says noise can be archived or kept from chat (rev 202).
+- Feedback #35-#57 were handled by earlier prompts but never marked reviewed; #33 and #34
+  still wait for Erin's spec. Marked reviewed now: #35-#57 and #67, #69, #71.
+- Setup: restart. No migration.
+
+### F17b · Feedback (2026-10-28): which list, and a reminder after a task is done
+Status: [ ]
+Depends on: F17a
+From Erin's idea #68 and bug #70, 2026-10-28.
+- #68 ("if an item could be added to more than one list, provide a prompt with buttons for
+  the most likely options plus 'not now'"): "paper towels" was staged for the grocery list;
+  she meant Things to Buy. When an item could go on more than one list, one card asks
+  which, with a button per likely list and [Not now]; the tap adds it there.
+- #70 ("Immediately after I indicate that I cleaned the bird cage, remind me to refill the
+  water and replace the food bowls" became a task due the next day, and its date read back
+  as "2020"; "make this work"): a task can follow another: it waits, with no date, until
+  that one is done, then its nudge goes at once (inside quiet hours and the limit). A
+  repeating task's follower comes back each round. Dates the model reads carry the year
+  where it isn't this year, and replies about a date use the context's year.
+- Tests: the list card and its buttons; a follower waiting, then nudged when the first is
+  done, each round; scenarios from #68 and #70.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
