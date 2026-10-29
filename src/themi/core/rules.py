@@ -430,6 +430,7 @@ GENERAL = re.compile(r"\b(?:always|every|all|any|whenever|from now on)\b")
 URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail from X is urgent"
     r"\b(?:e-?mails?|mail) from\b.*\burgent\b|\b\w+ e-?mails (?:are|count as) (?:always )?urgent\b"
 )
+REMINDER = re.compile(r"\bremind (?:me|us|him|her|them|\w+) (?:about|to|of|that)\b")
 
 
 @tool(
@@ -485,6 +486,12 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed(  # bug #53: "the Schwab email is urgent" isn't a rule
             "That's about one email, not a rule: use keep_email (it keeps that email and "
             "offers to count its sender as urgent)."
+        )
+    if REMINDER.search(said):
+        raise ToolFailed(  # eval rule-bins: "always remind me about the bins" became a rule
+            "A reminder is a task, not a rule: create_task, then set_task_schedule for when it "
+            "repeats ('every Tuesday evening'); more_tools brings the schedules group if that "
+            "tool isn't there."
         )
     if URGENT_MAIL.search(said):
         raise ToolFailed(

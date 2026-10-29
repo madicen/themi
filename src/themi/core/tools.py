@@ -123,7 +123,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     "schedules": (
         "repeating chores, plans, importance, check-in reviews",
         r"every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?|"
-        r"twice|once a|important|urgent|priority|check.?in|sunset|routine",
+        r"twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remind|"
+        r"(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|weekends",
     ),
     "calendar": (
         "calendar events, day summaries, drive times, blocking time",
@@ -148,7 +149,9 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     "pantry": (
         "the pantry and meal ideas",
         r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
-        r"running low|ran out|leftover",
+        r"running low|ran out|leftover|used (?:up|the last)|last of|finished the|picked up|"
+        r"bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go(?:es)? off|"
+        r"went off",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
     "spending": (

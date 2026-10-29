@@ -183,7 +183,8 @@ class Meals:
 @tool(
     "suggest_meals",
     "Offer two zero-effort meal ideas from what's in the pantry, as buttons. Use when someone "
-    "asks what to eat or make, or sounds too tired to cook.",
+    "asks what to eat or make, or sounds too tired to cook; not after a pantry update "
+    "(something to use up by Friday is update_pantry with its date, nothing more).",
     {
         "request": {
             "type": "string",

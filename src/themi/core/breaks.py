@@ -160,7 +160,8 @@ def _breaks(ctx: ToolContext) -> Breaks:
     "Start a break when they say they're taking one ('I'm taking a break', 'rest for 30 "
     "minutes', 'I need 20 minutes'): no task nudges or check-ins until it's over, then one "
     "message asks whether to end it or extend it. minutes: what they said, or 0 for the "
-    "usual half hour. A break going on already gets the new end.",
+    "usual half hour. A break going on already gets the new end. Not for 'don't send me "
+    "anything for a couple of hours' or 'hold my messages': that's pause_messages.",
     {"minutes": {"type": "integer"}},
 )
 async def start_break(ctx: ToolContext, args: dict[str, Any]) -> str:

@@ -101,6 +101,7 @@ MISSED = ("roll", "catch_up", "next_day")  # what happens to a round that passes
 IMPORTANCE = ("low", "normal", "high")  # how often an overdue task is raised (C2c)
 URGENT_WORDS = re.compile(r"\b(?:urgent|urgently|asap|right away|straight away)\b")
 BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
+OTHER_WORDS = ("someone else", "somebody else", "the other one", "not me", "my partner")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
@@ -1465,7 +1466,8 @@ def _board(ctx: ToolContext) -> TaskBoard:
         },
         "assign_to": {
             "type": "string",
-            "description": "'me', a family member's name, 'both', or 'anyone'.",
+            "description": "'me', a family member's name, 'both', 'anyone', or "
+            "'someone else' (the other partner).",
         },
         "steps": {
             "type": "array",
@@ -1511,6 +1513,9 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     both = target.lower() in BOTH_WORDS  # bug #26: "one of us" was one person's
     if target.lower() in ("me", "myself", "the person asking"):
         chosen = ctx.member
+    elif target.lower() in OTHER_WORDS:  # "can someone else deal with it?"
+        others = [m for m in ctx.services.store.list_members() if m.id != ctx.member.id]
+        chosen = others[0] if len(others) == 1 else None
     elif not both and target.lower() not in ("anyone", "someone", ""):
         members = ctx.services.store.list_members()
         chosen = next((m for m in members if m.name.lower() == target.lower()), None)
