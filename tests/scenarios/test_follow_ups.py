@@ -60,8 +60,8 @@ async def test_it_waits_then_comes_straight_after(scenario: Scenario) -> None:
     await scenario.say("Erin", "When will that reminder occur?")
     turn = scenario.primary.last_request.messages[0].text
     assert (
-        'Follow-up: once "Clean the bird cage" is done, "Refill water and food bowls" comes up '
-        "straight away, every time (no date of its own)."
+        'Follow-up: "Refill water and food bowls" comes up as soon as "Clean the bird cage" is '
+        "done, every time (no date of its own)."
     ) in turn
 
     scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})

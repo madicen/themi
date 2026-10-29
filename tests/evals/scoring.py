@@ -14,8 +14,10 @@ from themi.core.agent import BUSY_TEXT
 CASES_FILE = Path(__file__).with_name("cases.json")
 # Energy is only ever words: no numbers that look like a score.
 # Lookups that change nothing: calling one is never a mistake.
+# Tools that change nothing, so any case may call them. more_tools (P1) only brings in
+# another group's tools.
 READ_ONLY_TOOLS = frozenset(
-    {"list_open_items", "show_pantry", "show_grocery_list", "list_expected_emails"}
+    {"list_open_items", "show_pantry", "show_grocery_list", "list_expected_emails", "more_tools"}
 )
 APPROVAL_ASK = "Go ahead, or not now?"
 SCORE_PATTERN = re.compile(r"(?i)\b\d{1,3}\s?(%|/\s?100|out of 100)|\bcapacity\b|\benergy score\b")

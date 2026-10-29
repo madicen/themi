@@ -247,7 +247,7 @@ def test_replies_call_tasks_by_name() -> None:
     )
     assert by_name("Task 99 isn't one.", titles) == "Task 99 isn't one."
     assert by_name("I tasked 3 people.", titles) == "I tasked 3 people."
-    assert "never by their numbers" in STABLE_SYSTEM
+    assert "in quotes" in STABLE_SYSTEM and "never by their\n  numbers" in STABLE_SYSTEM
 
 
 def test_dates_carry_a_year_only_when_its_another_one() -> None:
