@@ -96,7 +96,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
 | F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
-| F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [ ] |
+| F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
+| F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -4661,7 +4662,7 @@ Notes (2026-10-29):
 - Setup: restart. No migration.
 
 ### F18c · Feedback (2026-10-29): button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer
-Status: [ ]
+Status: [x] 2026-10-29
 Depends on: F18b, C1c
 From Erin's ideas #75, #80 and #83 (2026-10-29), and Michael's question about an offer.
 - #80 ("if there are more than 2-3 options, Themi should split push buttons onto multiple
@@ -4681,6 +4682,51 @@ From Erin's ideas #75, #80 and #83 (2026-10-29), and Michael's question about an
   for yourself: ..."), and an idea the other partner has active comes after the rest.
 - Tests: the row layout (Telegram fake), the order on the wall (Cozyla fake), an email
   archived in Gmail clearing the queue, the offer's wording and order.
+
+Notes (2026-10-29):
+- #80: `telegram.button_rows(labels)`: one or two buttons on one row; more go two a row,
+  or three when every label is 8 characters or fewer. Every keyboard (sends and edits)
+  uses it. The scenario harness, the Telegram fake and five test helpers read every row
+  now, not just the first; the simulator already did.
+- #75 moved to F18d: nothing Themi knows of the unofficial API sets a to-do's place on
+  the wall (routines have `displayOrder`; to-dos have no such field in what we've seen),
+  and changing due dates to fake an order would change the family's data. F18d starts
+  with a read-only look at the live API.
+- #83: `GmailClient.history` asks for messageAdded, labelRemoved and messageDeleted, with
+  no label filter (an archived message no longer carries INBOX); added mail is picked out
+  by its INBOX label. `HistoryPage.handled` lists (message, "archived" | "read" |
+  "deleted"); `GmailSync` brings the stored labels up to date and tells
+  `handled_listeners`. `EmailTriage.on_handled` withdraws "Taken care of in Gmail
+  already.": read clears the mark-read and noise offers; archived or deleted also clears
+  a drafted reply and the email's unanswered audit question. A queued noise digest is
+  made again. Themi's own archiving shows in the history too, but only open offers are
+  withdrawn, so its own are untouched. The fake Gmail records labelRemoved, labelAdded
+  and messageDeleted as Gmail does, and `FakeGmail.by_hand` changes a message as if in
+  Gmail itself.
+- Michael's habit offer: `habits.OFFER_TEXT` is "Something you could try for yourself:
+  {idea}", and an idea the other partner has active is offered after the rest. His open
+  water offer (habit 5) keeps its old wording; "Not now" or no answer drops it for good.
+- The plan (rev 207): button rows, the routine read and the morning check's end, noise in
+  other tabs and mail handled in Gmail, and the per-person habit reserve.
+- Setup: restart. No migration. Gmail's history now returns label changes too, so each
+  poll reads a little more; nothing to set up.
+
+### F18d · Feedback (2026-10-29): the wall's to-do list in order
+Status: [ ]
+Depends on: F18c, C1c
+From Erin's idea #75: "Themi should maintain a custom order of to dos in cozyla based on
+due date and importance (with the most important and due/overdue tasks at the top of
+the list)."
+- First, read-only: list the To-do List's to-dos from the live API and note every field
+  (is there a sort or display order? does `isFlag` or `todoStars` change where one
+  shows?). Ask the user before writing anything to the wall to test it.
+- If the wall can be ordered: keep Themi's own to-dos in order (overdue and due first,
+  urgent and important before the rest, then by due date) on each sync, without changing
+  their dates. Items Themi didn't make stay where they are.
+- If it can't: tell Erin what the wall can do (flags or stars, if they show), and offer
+  that instead.
+- Tests: the order kept on the wall (Cozyla fake, with the field found), items not
+  Themi's left alone.
 
 ### R1 · Routines kept in Themi
 Status: [ ]
