@@ -52,6 +52,7 @@ def labels(inbox: FakeGmail, scenario: Scenario, email: int) -> list[str]:
 
 async def test_an_email_archived_as_noise_comes_back(scenario: Scenario, inbox: FakeGmail) -> None:
     email = await sorted_as(scenario, inbox, "noise")
+    await scenario.say("Erin", "/pending")  # F16b: noise has no card of its own
     await scenario.tap("Erin", "Go ahead")  # archived, as Themi offered
     assert "INBOX" not in labels(inbox, scenario, email)
 
