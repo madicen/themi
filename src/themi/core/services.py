@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
+    from themi.core.follow_ups import FollowUps
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.lists import Lists
@@ -152,6 +153,7 @@ class Services:
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
+    follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

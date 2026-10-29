@@ -168,6 +168,7 @@ class Run:
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
+DoneHook = Callable[[Task, Member, bool], Awaitable[None]]
 # Sends a task's nudge its own way (task, member, not_before, deadline); True if it did.
 OwnNudge = Callable[[Task, Member, datetime | None, datetime | None], Awaitable[bool]]
 # Extra text to send with a task's nudge (a call script, say), or None.
@@ -239,6 +240,9 @@ class TaskBoard:
         self.wall_notes: list[Callable[[Task], str | None]] = []
         # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
         self.holds: list[Callable[[Task, Member], bool]] = []
+        # Called each time a task is done (a repeating one, each round): (task, by whom,
+        # whether they're in the conversation). F17b's follow-ups.
+        self.done_hooks: list[DoneHook] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -343,7 +347,7 @@ class TaskBoard:
 
         items, today = [], self._today()
         for t in self.open_for(member):
-            due = f", due {t.due_on:%a %d %b}" if t.due_on else ""  # the weekday too (#64)
+            due = f", due {_day_words(t.due_on, today)}" if t.due_on else ""  # weekday (#64)
             if t.either:
                 whose = "either of you"
             elif t.shared:
@@ -731,14 +735,21 @@ class TaskBoard:
             return SETTLED_TEXT
         await self._settle_sent(task, tapped)
         if task.repeats:
-            return await self._complete_round(task, by, interactive)
-        self.db.execute(
-            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
-            (to_utc_iso(clock.now()), task_id),
-        )
-        self.withdraw_prompt(task)
-        await self._changed(self.get(task_id), "done", interactive)
-        return DONE_TEXT.format(title=task.title)
+            said = await self._complete_round(task, by, interactive)
+        else:
+            self.db.execute(
+                "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+                (to_utc_iso(clock.now()), task_id),
+            )
+            self.withdraw_prompt(task)
+            await self._changed(self.get(task_id), "done", interactive)
+            said = DONE_TEXT.format(title=task.title)
+        for hook in self.done_hooks:  # each time it's done, a repeating one's every round
+            try:
+                await hook(task, by, interactive)
+            except Exception:
+                log.exception("A done hook failed for task %s", task.id)
+        return said
 
     async def _settle_sent(self, task: Task, tapped: int | None) -> None:
         """Its nudges already sent stop asking once it's done some other way (bug #40: ticked
@@ -1652,6 +1663,11 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
         "enough, or ask if anything sounds wrong. If they asked for something that read-back "
         "doesn't show, say which part isn't set up and keep it with remember_fact."
     )
+
+
+def _day_words(day: date, today: date) -> str:
+    """ "Thu 29 Oct", with the year only when it isn't this one (bug #70 read "2020")."""
+    return f"{day:%a %d %b}" if day.year == today.year else f"{day:%a %d %b %Y}"
 
 
 def _clock_words(moment: datetime | time) -> str:

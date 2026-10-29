@@ -45,6 +45,7 @@ from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
+from themi.core.follow_ups import FollowUps
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.lists import Lists
@@ -156,6 +157,7 @@ def build_app(
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    FollowUps(services, tasks).install()
     if services.gmail is not None:
         EmailAudit(services, tasks).install()
     reminders = Reminders(services, tasks)
