@@ -27,7 +27,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-SAVED_TEXT = 'Once "{after}" is done, "{title}" comes up straight away{each}.'
+# Never "straight away" or "right away": the PDA shield reads those as pressure.
+SAVED_TEXT = '"{title}" comes up as soon as "{after}" is done{each}.'
 EACH_ROUND = ", every time"
 REMOVED_TEXT = 'No follow-up after "{after}" any more.'
 
@@ -116,8 +117,8 @@ class FollowUps:
             each = EACH_ROUND if after.repeats else ""
             items.append(
                 OpenItem(
-                    f'Follow-up: once "{after.title}" is done, "{row["title"]}" comes up '
-                    f"straight away{each} (no date of its own)."
+                    f'Follow-up: "{row["title"]}" comes up as soon as "{after.title}" is '
+                    f"done{each} (no date of its own)."
                 )
             )
         return items
