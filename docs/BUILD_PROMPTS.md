@@ -4547,6 +4547,19 @@ Notes (2026-10-28):
   pantry-olive-oil and pantry-bought (grocery list, not update_pantry), rule-bins
   (propose_rule, not a task), task-pause (start_break, not pause_messages; B1 made that
   ambiguous), energy-plumber, pantry-spinach-expiry.
+- Evals, second pass (2026-10-29): 44/47 full, then the last 3 fixed and passing (6/6
+  re-run), PDA-safe 100%. Fixes: the pantry group's words take "used the last of",
+  "picked up", "using up" and the like, the schedules group's "always", "remind" and
+  "Tuesdays"/"evenings" (without them the model had no update_pantry or set_task_schedule);
+  `propose_rule` refuses "remind me about/to" (a task); "don't send me anything" is
+  pause_messages, not start_break; `suggest_meals` only when asked; `create_task` reads
+  "someone else" as the other partner; energy is logged first; `draft_vendor_call`
+  refuses a text; "remember that X" is a fact, a chore only when they ask to be
+  reminded. The evals give a case the fake Gmail when its setup needs it (`noise`), with
+  two cases from #67, both passing. Scoring counts `more_tools` as read-only.
+- Found while running them: 25 scripts in `.venv/bin` had a shebang into a
+  `working-memory` checkout that no longer exists (so `.venv/bin/pytest` couldn't start);
+  rewritten to this venv's python.
 - The plan's task matching bullet has follow-ups and the which-list card (rev 203).
 - Setup: restart (applies 0070).
 
