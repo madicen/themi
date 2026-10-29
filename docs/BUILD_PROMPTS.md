@@ -94,7 +94,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
 | F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
 | F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
-| F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [ ] |
+| F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [ ] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [ ] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
@@ -4568,7 +4568,7 @@ Notes (2026-10-28):
 - Setup: restart (applies 0070).
 
 ### F18a · Feedback (2026-10-29): the wrong event moved, honest staging, a task for the other partner, "too tired"
-Status: [ ]
+Status: [x] 2026-10-29
 Depends on: F17b, K3
 From the family's reports of 2026-10-28/29: Erin's bugs #72, #73, #81 and #82.
 - #73 ("it rescheduled the wrong event"): "When is my next run scheduled?" then "Let's move
@@ -4589,6 +4589,29 @@ From the family's reports of 2026-10-28/29: Erin's bugs #72, #73, #81 and #82.
   to let tonight's open items wait; examples in the prompt are marked as examples.
 - Tests: the move matched to a task vs an event; a stale staged move dropped; the staged
   reply's wording; "have X do Y" as a task; scenarios from #72, #73, #81 and #82; eval cases.
+
+Notes (2026-10-29):
+- #73: `events.named_as_anchor(title, said)`: when the event's title words come up in the
+  message only after "before", "after", "until", "ahead of", "around" or "than", it's the
+  time to fit around, and `move_calendar_event` refuses, pointing to `reschedule_task` for
+  a task. A message that doesn't name the event at all ("move that to 4") still goes
+  through: the model decides. The tool's description says the same.
+- #73's "is moved" while the card waited: the reply guard (`agent.CLAIMS_DONE`) now knows
+  moved, rescheduled, changed, deleted and cancelled, so the reply is replaced by "...:
+  that's waiting for a yes on the card above."
+- #81: `Events.withdraw_changes(event_id)`: staging a move or delete of an event withdraws
+  the cards still waiting (or put off) to move or delete it, and so does making one. A
+  card put off with [Not now] has no card left to edit, so it just never comes back.
+- #82: the system prompt says having the other partner do something is `create_task` with
+  their name; only "tell/let X know" is a message to pass on. `create_task`'s description
+  gives "have Michael get the pacifier" as an example. No deterministic guard: the model
+  answered without a tool.
+- #72: the "Dryer now, or later tonight?" example is now tied to a washer that's finished,
+  with "never offer a chore that isn't in the context", and "I'm too tired tonight" gets
+  its own line (it's fine; offer to let today's open items wait).
+- Evals: `energy-too-tired-tonight` and `task-have-partner-do-it` added, not run yet
+  (run them when there's quota, since the prompt changed).
+- Setup: restart. No migration.
 
 ### F18b · Feedback (2026-10-29): routines asked about, the slow note after a card, noise in chat again
 Status: [ ]
