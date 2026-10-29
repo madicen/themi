@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from themi.core.lists import Lists
     from themi.core.meals import Meals
     from themi.core.memory import Memory
+    from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
     from themi.core.rules import Rulebook
     from themi.core.senders import SenderSuggestions
@@ -136,6 +137,7 @@ class Services:
     senders: SenderSuggestions | None = None  # suggesting always-urgent senders (E1)
     email_audit: EmailAudit | None = None  # the email audit (E2)
     triage: EmailTriage | None = None
+    noise: NoiseDigest | None = None  # noise emails offered together (F16b)
     expected: ExpectedEmails | None = None
     feedback: FeedbackChat | None = None
     groceries: GroceryList | None = None

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Emails to archive · Themi{% endblock %}
+{% block content %}
+<h1>Emails to archive</h1>
+<p class="muted">Emails in your inbox that look like noise. Archiving takes them out of the
+inbox; nothing is deleted. Keeping one leaves it where it is.</p>
+{% if rows %}
+<form method="post" action="/email/noise" class="card">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for row in rows %}
+  <label class="check"><input type="checkbox" name="action" value="{{ row.id }}"> {{ row.line }}</label>
+  {% endfor %}
+  <div class="buttons">
+    <button class="primary" name="do" value="all">Archive all {{ rows | length }}</button>
+    <button name="do" value="archive">Archive the ticked ones</button>
+    <button class="quiet" name="do" value="keep">Keep the ticked ones</button>
+  </div>
+</form>
+{% else %}
+<p class="muted">Nothing to archive at the moment.</p>
+{% endif %}
+<p class="muted">How often Themi asks about these is in <a href="/settings">My settings</a>.</p>
+{% endblock %}
