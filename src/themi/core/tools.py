@@ -169,7 +169,13 @@ TOOL_GROUPS: dict[str, str] = {
         "spending",
     ),
     **dict.fromkeys(
-        ("set_task_schedule", "set_task_plan", "set_task_importance", "set_check_in_reviews"),
+        (
+            "set_task_schedule",
+            "set_task_plan",
+            "set_task_importance",
+            "set_check_in_reviews",
+            "set_task_medicine",
+        ),
         "schedules",
     ),
     **dict.fromkeys(
