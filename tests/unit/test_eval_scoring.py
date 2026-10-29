@@ -46,6 +46,9 @@ def test_numeric_argument_rules() -> None:
     c = case(expect=("log_energy_note",), args={"log_energy_note": {"effect": {"lt": 0}}})
     assert score(c, [("log_energy_note", {"effect": -1})], ["Oof."], 2).passed
     assert not score(c, [("log_energy_note", {"effect": 2})], ["Oof."], 2).tools_ok
+    # energy-plumber: Gemini sends "-3"; the tools read it as -3, so the score does too.
+    assert score(c, [("log_energy_note", {"effect": "-3"})], ["Oof."], 2).passed
+    assert not score(c, [("log_energy_note", {"effect": "lots"})], ["Oof."], 2).tools_ok
 
 
 def test_replies_are_checked_for_pda_and_scores_but_quotes_are_exempt() -> None:

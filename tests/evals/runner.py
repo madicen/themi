@@ -56,12 +56,22 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
             await services.taskboard.create(member, step["task"], "errand", 1)
         elif "noise" in step:
             await _noise(scenario, member, step["noise"])
+        elif "routine" in step:
+            assert scenario.cozyla is not None, "a routine case needs the fake wall"
+            uid = f"m-{case.speaker.lower()}"
+            for item in step["routine"]:
+                scenario.cozyla.add_routine(uid, item["title"], item["part"])
         else:
             raise ValueError(f"unknown setup step {step}")
 
 
 def needs_gmail(case: Case) -> bool:
     return any("noise" in step for step in case.setup)
+
+
+def needs_wall(case: Case) -> bool:
+    """A case about the wall's routines gets the fake Cozyla (F18b's show_routine)."""
+    return any("routine" in step for step in case.setup)
 
 
 async def _noise(scenario: Scenario, member: Member, mails: list[dict[str, str]]) -> None:

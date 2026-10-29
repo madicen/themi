@@ -97,6 +97,11 @@ class Outcome:
 
 
 def _check_arg(value: Any, rule: dict[str, Any]) -> bool:
+    if isinstance(value, str) and ("lt" in rule or "gt" in rule):
+        try:  # "-3": the tools read a number sent as text as that number (energy-plumber)
+            value = float(value)
+        except ValueError:
+            return False
     if "lt" in rule:
         return isinstance(value, int | float) and value < rule["lt"]
     if "gt" in rule:

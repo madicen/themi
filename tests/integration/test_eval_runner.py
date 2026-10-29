@@ -7,8 +7,9 @@ without a key. `make evals` runs the same code against the real service.
 from __future__ import annotations
 
 from tests.evals.providers import EvalBackend
-from tests.evals.runner import needs_gmail, run_case
+from tests.evals.runner import needs_gmail, needs_wall, run_case
 from tests.evals.scoring import load_cases
+from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.http_ai import FakeAIServer, gemini_function_call, gemini_text
@@ -69,3 +70,21 @@ async def test_the_noise_setup_leaves_offers_waiting(
     assert "Emails that look like noise, 2 waiting" in str(body)
     statuses = [r["status"] for r in family.db.query("SELECT status FROM pending_actions")]
     assert sorted(statuses) == ["done", "pending"]
+
+
+async def test_the_routine_setup_puts_items_on_the_fake_wall(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    fake_ai: FakeAIServer,
+    fake_cozyla: FakeCozyla,
+) -> None:
+    # F18b's case: "What is my morning routine?" reads the wall (bugs #76, #78).
+    case = CASES["wall-what-is-my-morning-routine"]
+    assert needs_wall(case)
+    fake_ai.queue(gemini_function_call("show_routine", {"part": "Morning"}))
+    fake_ai.queue(gemini_text("Your morning routine: walk the dog, then make the bed."))
+    scenario = Scenario(family, fake_telegram, cozyla=fake_cozyla, real_models=True)
+    outcome = await run_case(scenario, case, fake_gemini(fake_ai))
+    assert outcome.passed, outcome.problems
+    result = str(fake_ai.requests[1].json)
+    assert "Morning routine on the wall, today: Walk dog, Make the bed" in result

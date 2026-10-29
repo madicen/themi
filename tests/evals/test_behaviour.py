@@ -16,7 +16,7 @@ import pytest
 from tests.evals.conftest import OUTCOMES
 from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend
-from tests.evals.runner import missing_tools, needs_gmail, run_case
+from tests.evals.runner import missing_tools, needs_gmail, needs_wall, run_case
 from tests.evals.scoring import Case, load_cases
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
@@ -43,8 +43,15 @@ async def test_case(
         if needs_gmail(case)
         else (None, None)
     )
+    wall = request.getfixturevalue("fake_cozyla") if needs_wall(case) else None
     scenario = Scenario(
-        family, fake_telegram, google, gmail, real_models=True, provider_factory=eval_factory
+        family,
+        fake_telegram,
+        google,
+        gmail,
+        cozyla=wall,
+        real_models=True,
+        provider_factory=eval_factory,
     )
     missing = missing_tools(scenario, case)
     if missing:
