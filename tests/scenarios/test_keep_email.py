@@ -124,3 +124,16 @@ async def test_a_security_alert_isnt_called_money(scenario: Scenario, inbox: Fak
         t.startswith("An email that looks urgent (account security)")
         for t in scenario.inbox("Erin")
     )
+
+
+async def test_keeping_a_second_email_from_a_sender_asked_about_before(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    # #59's conversation, 28 Oct 14:53: keep_email failed with a UNIQUE constraint, because
+    # the sender had been offered as always urgent a few minutes earlier.
+    await sorted_as(scenario, inbox, "noise")
+    await keep(scenario)
+    await sorted_as(scenario, inbox, "noise")
+    await keep(scenario, "keep this type of email too")
+    assert "asked, with a button" in tool_result(scenario)
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM sender_suggestions") == 1

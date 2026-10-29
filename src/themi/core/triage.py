@@ -562,10 +562,18 @@ async def keep_email(ctx: ToolContext, args: dict[str, Any]) -> str:
         said.append("Mail from that sender already counts as urgent.")
     else:
         label = row["from_name"] or address
-        suggestion = db.execute(
-            "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
-            "VALUES (?, ?, ?, ?)",
-            (account.id, address, label, to_utc_iso(clock.now())),
+        offered = db.one(  # asked about before (bug: a second keep failed on UNIQUE)
+            "SELECT id FROM sender_suggestions WHERE account_id = ? AND address = ?",
+            (account.id, address),
+        )
+        suggestion = (
+            offered["id"]
+            if offered
+            else db.execute(
+                "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
+                "VALUES (?, ?, ?, ?)",
+                (account.id, address, label, to_utc_iso(clock.now())),
+            )
         )
         await ctx.services.outbox.send(
             ctx.member,
