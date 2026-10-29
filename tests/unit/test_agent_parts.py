@@ -248,3 +248,15 @@ def test_replies_call_tasks_by_name() -> None:
     assert by_name("Task 99 isn't one.", titles) == "Task 99 isn't one."
     assert by_name("I tasked 3 people.", titles) == "I tasked 3 people."
     assert "never by their numbers" in STABLE_SYSTEM
+
+
+def test_dates_carry_a_year_only_when_its_another_one() -> None:
+    # Bug #70: "due Thu 29 Oct" was read back as "Thursday, October 29, 2020".
+    from datetime import date
+
+    from themi.core.tasks import _day_words
+
+    today = date(2026, 10, 28)
+    assert _day_words(date(2026, 10, 29), today) == "Thu 29 Oct"
+    assert _day_words(date(2027, 1, 5), today) == "Tue 05 Jan 2027"
+    assert "with no year unless it's another year" in STABLE_SYSTEM
