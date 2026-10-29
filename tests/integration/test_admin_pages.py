@@ -350,14 +350,14 @@ async def test_a_new_member_sees_the_free_tier_default(scenario: Scenario) -> No
 async def test_reply_times_show_where_the_time_went(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    scenario.primary.take(6).queue_tool_call("list_open_items", {})
-    scenario.primary.take(8).queue_text("Nothing open.")
+    scenario.primary.take(16).queue_tool_call("list_open_items", {})
+    scenario.primary.take(18).queue_text("Nothing open.")
     await scenario.say("Erin", "What's open?")
     await sign_in(scenario, site, "Erin")
     page = (await site.get("/ai/timing")).text
     assert "1 reply." in page and "still coming" in page
-    assert "14.0 s · Erin" in page
-    assert "Model: 6.0 s (Primary)" in page and "Tool list_open_items: 0.0 s" in page
+    assert "34.0 s · Erin" in page
+    assert "Model: 16.0 s (Primary)" in page and "Tool list_open_items: 0.0 s" in page
 
 
 async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncClient) -> None:

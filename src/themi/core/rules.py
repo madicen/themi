@@ -488,8 +488,8 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
         )
     if URGENT_MAIL.search(said):
         raise ToolFailed(
-            "Which senders count as urgent isn't a rule: use set_urgent_senders, or "
-            "keep_email for one email."
+            "Which senders count as urgent isn't a rule: use set_sender_levels (or "
+            "set_urgent_senders for a list), or keep_email for one email."
         )
     try:
         rule = await rulebook.propose(

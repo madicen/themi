@@ -60,8 +60,8 @@ async def test_an_email_archived_as_noise_comes_back(scenario: Scenario, inbox: 
     assert "INBOX" in labels(inbox, scenario, email)
     assert "Back in the inbox" in tool_result(scenario)
     assert scenario.app.db.scalar("SELECT category FROM emails WHERE id = ?", (email,)) == "urgent"
-    assert "Should mail from Charles Schwab & Co., Inc. always count as urgent?" in replies
-    await scenario.tap("Erin", "Always urgent: Charles Schwab & Co., Inc."[:40])
+    assert "Should mail from Charles Schwab & Co., Inc. always count as time-sensitive?" in replies
+    await scenario.tap("Erin", "Always time-sensitive: Charles Schwab & Co., Inc."[:40])
     account = scenario.app.store.linked_account_by_address("gmail", ERIN)
     assert account is not None and account.urgent_senders == ("donotreply@email.schwab.com",)
 
@@ -121,7 +121,7 @@ async def test_a_security_alert_isnt_called_money(scenario: Scenario, inbox: Fak
     )
     await scenario.run_periodic("email.triage")
     assert any(
-        t.startswith("An email that looks urgent (account security)")
+        t.startswith("An email that looks time-sensitive (account security)")
         for t in scenario.inbox("Erin")
     )
 

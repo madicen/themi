@@ -15,11 +15,11 @@ from themi.core.tasks import TaskBoard
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
-HOW_URGENT = "\nHow urgent is it?"
+HOW_URGENT = "\nHow soon does it need you?"
 HOW_IMPORTANT = "\nHow important is it?"
 SCHWAB = "1 of 2. Mail from Schwab Alerts (alerts@schwab.example), money."
 BOB = "2 of 2. Mail from Bob Tenant (bob@example.com), waiting on replies."
-URGENCY = ["Not urgent", "Same day", "Right away", "Stop for now"]
+URGENCY = ["No rush", "Time-sensitive", "Urgent", "Stop for now"]
 IMPORTANCE = ["Not important", "Somewhat", "Very", "Stop for now"]
 
 
@@ -58,19 +58,19 @@ async def test_one_task_one_at_a_time_then_a_short_confirmation(
 
     assert await scenario.tap("Erin", "Start") == [SCHWAB + HOW_URGENT]
     assert scenario.last_buttons("Erin") == URGENCY
-    assert await scenario.tap("Erin", "Same day") == []
+    assert await scenario.tap("Erin", "Time-sensitive") == []
     edit = scenario.edits("Erin")[-1]
     assert edit["text"] == SCHWAB + HOW_IMPORTANT
     assert [b["text"] for b in edit["reply_markup"]["inline_keyboard"][0]] == IMPORTANCE
     assert await scenario.tap("Erin", "Somewhat") == [BOB + HOW_URGENT]
     assert scenario.edits("Erin")[-1]["text"] == (
-        "Schwab Alerts: urgent (same day), somewhat important."
+        "Schwab Alerts: time-sensitive, somewhat important."
     )
     assert audit_titles(scenario) == ["Email audit (1 to look at)"]
-    await scenario.tap("Erin", "Not urgent")
+    await scenario.tap("Erin", "No rush")
     replies = await scenario.tap("Erin", "Not important")
     assert replies == [
-        "All 2 sorted: 1 urgent and important, 1 neither. That's the email audit done."
+        "All 2 sorted: 1 time-sensitive and important, 1 neither. That's the email audit done."
     ]
     assert audit_titles(scenario) == []
 
@@ -83,7 +83,7 @@ async def test_an_important_sender_isnt_offered_for_archiving(
 ) -> None:
     await suggested(scenario, inbox)
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Not urgent")
+    await scenario.tap("Erin", "No rush")
     await scenario.tap("Erin", "Somewhat")
     (email,) = await arrive(
         scenario,
@@ -117,12 +117,14 @@ async def test_an_email_triage_isnt_sure_about_waits_in_the_audit(
     )
     await scenario.run_periodic("email.triage")
     await scenario.app.outbox.flush()
-    assert not any(t.startswith("An email that looks urgent") for t in scenario.inbox("Erin"))
+    assert not any(
+        t.startswith("An email that looks time-sensitive") for t in scenario.inbox("Erin")
+    )
     assert audit_titles(scenario) == ["Email audit (1 to look at)"]
     assert await scenario.tap("Erin", "Start") == [
         "1 of 1. An email from Joyous Care: Your invoice\nAn invoice for $120" + HOW_URGENT
     ]
-    await scenario.tap("Erin", "Same day")
+    await scenario.tap("Erin", "Time-sensitive")
     await scenario.tap("Erin", "Not important")
     assert scenario.app.db.scalar("SELECT category FROM emails WHERE id = ?", (email,)) == "urgent"
 
@@ -130,7 +132,7 @@ async def test_an_email_triage_isnt_sure_about_waits_in_the_audit(
 async def test_stopping_partway_brings_it_back_later(scenario: Scenario, inbox: FakeGmail) -> None:
     await suggested(scenario, inbox)
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Same day")
+    await scenario.tap("Erin", "Time-sensitive")
     await scenario.tap("Erin", "Not important")
     await scenario.tap("Erin", "Stop for now")
     assert scenario.edits("Erin")[-1]["text"] == (
@@ -159,7 +161,7 @@ async def test_stopping_between_the_two_questions_picks_up_at_the_second(
 ) -> None:
     await suggested(scenario, inbox)
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Right away")
+    await scenario.tap("Erin", "Urgent")
     await scenario.tap("Erin", "Stop for now")
     assert len(audit(scenario).waiting(scenario.member("Erin"))) == 2
     scenario.primary.queue_tool_call("start_email_audit", {})
@@ -173,7 +175,7 @@ async def test_right_away_alerts_at_once_and_very_important_isnt_marked_read(
 ) -> None:
     await suggested(scenario, inbox)
     await scenario.tap("Erin", "Start")
-    await scenario.tap("Erin", "Right away")
+    await scenario.tap("Erin", "Urgent")
     await scenario.tap("Erin", "Very")
     news, receipt = await arrive(
         scenario,

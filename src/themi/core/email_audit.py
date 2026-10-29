@@ -7,7 +7,9 @@ T1's order), with [Start] and [Later]. It's Themi's own, so never on the wall (E
 Started, it goes one at a time: the sender or the email in a line, then two questions on
 sliding scales (E2b, Erin's idea #44), in words: how urgent (not urgent, same day, right
 away), then how important (not important, somewhat, very), with [Stop for now] on each. At
-the end, a short count ("All 5 sorted: 2 urgent, 1 important.") and the task is done.
+the end, a short count ("All 5 sorted: 2 time-sensitive, 1 important.") and the task is
+done. People read "time-sensitive" for the middle level and "urgent" only for right away
+(Erin's idea #60); the stored answers keep their names.
 
 What the answers do:
 - a sender: urgent, its mail always counts as urgent (E1's urgent senders), and right away,
@@ -45,11 +47,12 @@ TITLE = "Email audit ({n} to look at)"
 NUDGE_TEXT = "Email audit: {n} to look at, one at a time. Start now, or later?"
 SENDER_TEXT = "{i} of {n}. Mail from {label} ({address}), {reason}."
 EMAIL_TEXT = "{i} of {n}. An email from {label}: {subject}\n{summary}"
-HOW_URGENT = "How urgent is it?"
+HOW_URGENT = "How soon does it need you?"
 HOW_IMPORTANT = "How important is it?"
-URGENCY = ("Not urgent", "Same day", "Right away")  # 0, 1, 2; only ever shown in words
+# 0, 1, 2; only ever shown in words. "Urgent" is kept for right away (Erin's idea #60).
+URGENCY = ("No rush", "Time-sensitive", "Urgent")
 IMPORTANCE = ("Not important", "Somewhat", "Very")
-URGENCY_WORDS = ("not urgent", "urgent (same day)", "urgent (right away)")
+URGENCY_WORDS = ("no rush", "time-sensitive", "urgent")
 IMPORTANCE_WORDS = ("not important", "somewhat important", "very important")
 ANSWERED_TEXT = "{label}: {urgency}, {importance}."
 DONE_TEXT = "All {n} sorted: {counts}. That's the email audit done."
@@ -57,9 +60,9 @@ STOPPED_TEXT = "Stopped for now; {n} still to look at. The audit comes back late
 NOTHING_TEXT = "There's nothing waiting for an email audit."
 ANSWERS = ("urgent", "important", "both", "neither")
 ANSWER_WORDS = {
-    "urgent": "urgent",
+    "urgent": "time-sensitive",
     "important": "important",
-    "both": "urgent and important",
+    "both": "time-sensitive and important",
     "neither": "neither",
 }
 
@@ -76,6 +79,7 @@ class EmailAudit:
         s.email_audit = self
         s.button_handlers["email_audit"] = self.on_button
         s.tools.register(start_email_audit)
+        s.tools.register(set_sender_levels)
         self.board.own_nudges.append(self._nudge)
 
     # ----- filling it -----------------------------------------------------------------
@@ -88,6 +92,40 @@ class EmailAudit:
             "suggestion_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
             (account.member_id, account.id, address.lower(), label, reason, suggestion, _now()),
         )
+
+    async def set_levels(
+        self, account: LinkedAccount, address: str, label: str, urgency: int, importance: int
+    ) -> None:
+        """A sender's two levels, said in chat (#59): as if answered in the audit. Time-
+        sensitive or urgent puts it among the inbox's always time-sensitive senders; no rush
+        takes it off (an address listed as it is, not a whole domain)."""
+        address = address.lower()
+        self.db.execute(
+            "INSERT INTO email_audit_items (member_id, account_id, address, label, reason, "
+            "created_at, urgency, importance, answer, answered_at) "
+            "VALUES (?, ?, ?, ?, 'said in chat', ?, ?, ?, ?, ?) "
+            "ON CONFLICT (account_id, address) WHERE email_id IS NULL DO UPDATE SET "
+            "urgency = excluded.urgency, importance = excluded.importance, "
+            "answer = excluded.answer, answered_at = excluded.answered_at",
+            (
+                account.member_id,
+                account.id,
+                address,
+                label,
+                _now(),
+                urgency,
+                importance,
+                _quadrant(urgency, importance),
+                _now(),
+            ),
+        )
+        member = self.store.get_member(account.member_id)
+        listed = [p for p in account.urgent_senders if p.lower() != address]
+        if urgency:
+            listed.append(address)
+        if listed != list(account.urgent_senders):
+            self.store.update_linked_account(member, account.id, urgent_senders=listed)
+        await self.refresh(member)
 
     def add_email(self, account: LinkedAccount, row: dict[str, Any], summary: str) -> None:
         self.db.execute(
@@ -373,7 +411,7 @@ def _quadrant(urgency: int, importance: int) -> str:
     "start_email_audit",
     "Go through the emails and senders Themi wasn't sure about, one at a time, when they "
     "ask ('let's do the email audit', 'which emails did I need to look at?'). Each one comes "
-    "with buttons: how urgent, then how important.",
+    "with buttons: how soon it needs them, then how important.",
     {},
 )
 async def start_email_audit(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -383,3 +421,55 @@ async def start_email_audit(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not await audit.start(ctx.member):
         raise ToolDeclined(NOTHING_TEXT)
     return "The first one is on its way to them, with buttons. Say nothing more about it."
+
+
+# What the levels do, said plainly when anyone asks (#59: "highlighted" and "the top of your
+# inbox" were made up). Themi never reorders, highlights or labels anything in Gmail.
+LEVELS_TEXT = (
+    "What the levels do: urgent mail gets a message at once, even in quiet hours. "
+    "Time-sensitive mail gets a message when it arrives, within quiet hours and the daily "
+    "limit. No rush: no message. Somewhat important mail is never offered for archiving; "
+    "very important mail is also never marked as read. Nothing is moved, highlighted or "
+    "reordered in the inbox."
+)
+URGENCY_KEYS = ("no_rush", "time_sensitive", "urgent")
+IMPORTANCE_KEYS = ("not", "somewhat", "very")
+
+
+@tool(
+    "set_sender_levels",
+    "How soon a sender's mail needs this person, and how much it matters, when they say so "
+    "('set Stanford emails to medium urgency and medium importance', 'SoFi can wait'). "
+    "urgency: no_rush (no message); time_sensitive (a message when it comes, within quiet "
+    "hours and the daily limit: 'medium', 'within a day or two'); urgent (a message at once, "
+    "even in quiet hours: only for 'drop everything'). importance: not; somewhat (never "
+    "offered for archiving: 'medium'); very (also never marked as read). sender: words from "
+    "the sender's name or address, as they said them. The result says what the levels do: "
+    "use it to explain them, in full sentences.",
+    {
+        "sender": {"type": "string"},
+        "urgency": {"type": "string", "enum": list(URGENCY_KEYS)},
+        "importance": {"type": "string", "enum": list(IMPORTANCE_KEYS)},
+    },
+)
+async def set_sender_levels(ctx: ToolContext, args: dict[str, Any]) -> str:
+    from themi.core.triage import find_email
+
+    audit = ctx.services.email_audit
+    if audit is None:
+        raise ToolFailed("Email isn't set up.")
+    row = find_email(ctx, str(args["sender"]))
+    if row is None:
+        raise ToolFailed(
+            f"No email from the last month in their linked inboxes is from {args['sender']!r}."
+        )
+    account = ctx.services.store.get_linked_account(row["account_id"])
+    urgency = URGENCY_KEYS.index(args["urgency"])
+    importance = IMPORTANCE_KEYS.index(args["importance"])
+    label = row["from_name"] or row["from_address"]
+    await audit.set_levels(account, row["from_address"], label, urgency, importance)
+    return (
+        f"Set: mail from {label} ({str(row['from_address']).lower()}) is "
+        f"{URGENCY_WORDS[urgency]} and {IMPORTANCE_WORDS[importance]}, in {account.address}. "
+        + LEVELS_TEXT
+    )
