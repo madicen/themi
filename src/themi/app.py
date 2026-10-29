@@ -63,6 +63,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
+from themi.core.which_list import WhichList
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
@@ -148,6 +149,7 @@ def build_app(
     lists = Lists(services)
     lists.install()
     ThingsToBuy(services, lists).install()
+    WhichList(services).install()
     Spending(services).install()
     Breaks(services).install()
     pantry = Pantry(services, groceries)

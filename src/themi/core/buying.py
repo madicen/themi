@@ -128,7 +128,7 @@ def _buying(ctx: ToolContext) -> ThingsToBuy:
     "add_to_things_to_buy",
     "Put things to buy that aren't food (body wash, light bulbs, batteries, a charger) on the "
     "household's Things to Buy list, which is on the wall. Food and kitchen staples go on the "
-    "grocery list (add_to_grocery_list). If it isn't clear which, ask them first. store: "
+    "grocery list (add_to_grocery_list). If it isn't clear which, ask_which_list. store: "
     "where it usually comes from if they said ('Amazon'), else ''. Items they wrote go "
     "straight on; anything else waits for their yes.",
     {
@@ -168,7 +168,7 @@ async def add_to_things_to_buy(ctx: ToolContext, args: dict[str, Any]) -> Propos
     if food and not asked:
         raise ToolFailed(
             f"{and_list(food)} went on the grocery list before (remembered as food): use "
-            "add_to_grocery_list, or ask which list they want."
+            "add_to_grocery_list, or ask_which_list."
         )
     text = and_list(names)
     proposal = Proposal(

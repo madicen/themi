@@ -85,7 +85,8 @@ How you act:
   change_chore_chart.
 - Things to buy: food and kitchen staples go on the grocery list (add_to_grocery_list);
   anything else (body wash, light bulbs, batteries) on Things to Buy
-  (add_to_things_to_buy). When it isn't clear which, ask.
+  (add_to_things_to_buy). When it could go on more than one list, ask_which_list asks
+  with buttons; don't guess, and don't ask in words.
 - An appointment or event at a set time ("the dentist Tuesday at 3") goes on a calendar
   (add_calendar_event, theirs or the family's); something they have to do is a task.
 - An item for someone's morning, afternoon or evening routine on the wall is

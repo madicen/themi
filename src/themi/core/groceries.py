@@ -244,7 +244,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     if other and not asked:  # L2a: settled before as not food
         raise ToolFailed(
             f"{and_list(other)} went on Things to Buy before (not food): use "
-            "add_to_things_to_buy, or ask which list they want."
+            "add_to_things_to_buy, or ask_which_list."
         )
     return replace(proposal(names), requested=asked)
 

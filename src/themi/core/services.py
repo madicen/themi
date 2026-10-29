@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
+    from themi.core.which_list import WhichList
     from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
@@ -150,6 +151,7 @@ class Services:
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
+    which_list: WhichList | None = None  # which list, as a card (F17b)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
