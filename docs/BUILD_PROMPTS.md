@@ -90,7 +90,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
-| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [ ] |
+| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [~] |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [ ] |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
@@ -4391,7 +4391,7 @@ loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong g
 add, and the review labels it a model choice.
 
 ### P5 · Evals that can compare: repeats, timings, and every tool vs groups
-Status: [ ]
+Status: [~]
 Depends on: P3
 From the routing talk (2026-10-29): routing changes get decided by measurement. Today an
 eval run gives one pass or fail per case, with no times, and one run of Gemini can't tell
@@ -4422,6 +4422,22 @@ P1 grouped the tools because 55 tools were about 8,000 tokens a call on the free
 Tests: repeats aggregate (a case passing 2 of 3 is flaky, not failing); timings saved and
 read back by `rescore`; `--routing all` sends every tool and no `more_tools`; the setting
 does the same in a scenario; the comparison picks out always/never differences.
+
+Notes (2026-10-29, in progress: the harness is built, the runs aren't done):
+- The rule was agreed as proposed (2026-10-29). It's written into
+  `tests/evals/compare.py`, which prints the verdict.
+- `THEMI_TOOL_ROUTING` (`Settings.tool_routing`, `Services.tool_routing`, `build_app`,
+  the scenario harness): `all` sends `ToolRegistry.specs_for(groups, "all")`, every tool
+  but `more_tools`. P3 records every group as sent, so its numbers still read right.
+- Evals: `--repeat N` and `--routing groups|all` (parametrized in `tests/evals/conftest.py`,
+  ids `case-run2`). Each result keeps `run`, `model_seconds` (real clock, less the
+  limiter's waits: `MinuteLimiter.waited`), `tools_sent` and `tools_chars` (first
+  conversation call). Results are named `<provider>-<routing>-<stamp>.json`. The summary
+  adds the medians and the flaky cases; `rescore.load_run` reads it all back.
+- Remaining: the two runs and the decision. They need a test Gemini key (not the family's
+  own, per the evals README), about 600 requests in all:
+  `GEMINI_API_KEY=... THEMI_EVAL_MODEL=gemini-3.5-flash-lite THEMI_EVAL_FALLBACK_MODEL=gemini-3.1-flash-lite make evals EVAL_ARGS='--repeat 3'`,
+  the same with `--routing all`, then `python -m tests.evals.compare <groups> <all>`.
 
 ### P6 · Near-twin tools: sent together, told apart, tested both ways
 Status: [ ]
