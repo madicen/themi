@@ -17,7 +17,8 @@ simply compared with what Themi has:
   cage"), or become Themi chores with their schedule, people and end. Ended
   ones are left alone. From then on Themi owns them.
 - A tick on the wall for the current round's day closes the round in Themi,
-  as whoever ticked it; a round done in Themi ticks the doer's day on the wall.
+  as whoever ticked it; a round done in Themi ticks the doer's day on the wall
+  (one done early, once its day comes: the wall says no to days still to come).
   Ticks already acted on are remembered, so none counts twice.
 - Someone who sees only so many chores at a time (C2d, `themi.core.chore_chart`):
   their waiting chores are off the wall (or there only for the other person), and a
@@ -38,6 +39,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member, NotFound, PermissionDenied
 from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
+from themi.connectors.cozyla.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
 from themi.connectors.cozyla.emoji import better_icon, chore_icon
 from themi.connectors.cozyla.schedule import from_wall, to_wall
 from themi.core.chore_chart import ChartQueue, is_routine, on_chart
@@ -263,9 +265,11 @@ class CozylaChores:
                         datetime.fromisoformat(run["done_at"]),
                         self.board.get(link["task_id"]),
                     )
+                    if day > self._today():
+                        break  # done early: the wall won't tick a day to come, so on its day
                     who = member if member in chore.members else chore.members[0]
-                    await self.client.check_chore(chore.uid, who, day, True)
-                    self._first_time(f"{chore.uid}_{who}_{day}")
+                    if await self._check(chore.uid, who, day):
+                        self._first_time(f"{chore.uid}_{who}_{day}")
                 self.db.execute(
                     "UPDATE cozyla_chores SET last_run = ? WHERE task_id = ?",
                     (run["id"], link["task_id"]),
@@ -341,7 +345,19 @@ class CozylaChores:
             return
         who = member if member in chore.members else chore.members[0]
         if self._first_time(f"{chore.uid}_{who}_{day}"):
-            await self.client.check_chore(chore.uid, who, day, True)
+            await self._check(chore.uid, who, day)
+
+    async def _check(self, uid: str, who: str, day: date) -> bool:
+        """Tick a day on the wall. A tick the wall says no to is let go, so it can't stop every
+        sync after it (code 30016, 2026-10-29); one that didn't get through is tried again."""
+        try:
+            await self.client.check_chore(uid, who, day, True)
+        except CozylaError as exc:
+            if exc.code in (-1, WRONG_LOGIN, LOCKED_OUT, *TOKEN_EXPIRED):
+                raise
+            log.warning("Cozyla wouldn't tick chore %s on %s; let go: %s", uid, day, exc)
+            return False
+        return True
 
     def _desired(self, task: Task) -> Desired | None:
         people = self._wall_people(task)

@@ -142,6 +142,44 @@ async def test_ticks_go_both_ways_once(scenario: Scenario, fake_cozyla: FakeCozy
     assert board(scenario).get(kitchen.id).due_on == date(2026, 11, 4)
 
 
+async def test_a_round_done_early_is_ticked_on_its_day(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug: bins done early asked the wall to tick next Wednesday; the wall said no (30016)
+    and every sync stopped there, so nothing else reached the wall all evening."""
+    erin = scenario.member("Erin")
+    kitchen = await chore(scenario, "Clean the kitchen", "every Wednesday")
+    await sync(scenario)
+    uid = fake_cozyla.chore_named("Clean the kitchen")["choreUid"]
+    await board(scenario).complete(kitchen.id, erin)  # today's round
+    await board(scenario).complete(kitchen.id, erin)  # and next week's, early
+    await chore(scenario, "Water the plants", "every Friday")
+    await sync(scenario)
+    assert fake_cozyla.chore_named("Water the plants")  # the rest of the sync ran
+    assert fake_cozyla.chore_ticks[(uid, "m-erin", "2026-10-21")] == "completed"
+    assert (uid, "m-erin", "2026-10-28") not in fake_cozyla.chore_ticks
+
+    await scenario.advance(hours=24 * 7)  # its day comes
+    await sync(scenario)
+    assert fake_cozyla.chore_ticks[(uid, "m-erin", "2026-10-28")] == "completed"
+    assert board(scenario).get(kitchen.id).due_on == date(2026, 11, 4)  # not closed twice
+
+
+async def test_a_tick_the_wall_refuses_doesnt_hold_up_the_sync(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    kitchen = await chore(scenario, "Clean the kitchen", "every Wednesday")
+    await sync(scenario)
+    fake_cozyla.fail("chores/choreCheck/v1", code=30020)
+    await board(scenario).complete(kitchen.id, scenario.member("Erin"))
+    await chore(scenario, "Water the plants", "every Friday")
+    await sync(scenario)
+    assert fake_cozyla.chore_named("Water the plants")
+    calls = len(fake_cozyla.calls)
+    await sync(scenario)
+    assert "rewards/chores/choreCheck/v1" not in fake_cozyla.paths()[calls:]  # let go
+
+
 async def test_either_of_you_and_stopping(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
     bins = await chore(scenario, "Bring the bins in", "every Wednesday", either=True)
     await sync(scenario)

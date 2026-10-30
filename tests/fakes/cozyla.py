@@ -26,6 +26,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -36,6 +37,15 @@ from themi import clock
 
 EMAIL = "family@x.example"
 PASSWORD = "wall-calendar"
+FUTURE_TICK = 30016  # the live wall's answer to a tick on a day still to come (2026-10-29)
+
+
+class Refused(Exception):
+    """A handler saying no, with the code the live service sends."""
+
+    def __init__(self, code: int) -> None:
+        super().__init__(code)
+        self.code = code
 
 
 @dataclass
@@ -269,6 +279,8 @@ class FakeCozyla:
             return _envelope(0, handler(self, body))
         except KeyError:
             return _envelope(1500, None, "not found")
+        except Refused as exc:
+            return _envelope(exc.code, None, "refused")
 
     def _sign_in(self, body: dict[str, Any]) -> httpx.Response:
         if self.locked_for:
@@ -383,6 +395,9 @@ class FakeCozyla:
     def _check_chore(self, body: dict[str, Any]) -> None:
         if body["choreUid"] not in self.chores:
             raise KeyError(body["choreUid"])
+        zone = ZoneInfo(self.calls[-1].headers.get("timezoneid") or "UTC")
+        if date.fromisoformat(body["checkDay"]) > clock.now().astimezone(zone).date():
+            raise Refused(FUTURE_TICK)
         self.chore_ticks[(body["choreUid"], body["memberUid"], body["checkDay"])] = body[
             "choreStatus"
         ]
