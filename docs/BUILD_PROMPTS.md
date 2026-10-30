@@ -103,7 +103,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
-| F18d | Feedback: the wall's to-do list in order | Feedback | [~] |
+| F18d | Feedback: the wall's to-do list in order | Feedback | [x] |
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
@@ -5194,7 +5194,7 @@ Notes (2026-10-29):
   poll reads a little more; nothing to set up.
 
 ### F18d · Feedback (2026-10-29): the wall's to-do list in order
-Status: [~] (2026-10-30: waiting on the live read)
+Status: [x] 2026-10-30
 Depends on: F18c, C1c
 From Erin's idea #75: "Themi should maintain a custom order of to dos in cozyla based on
 due date and importance (with the most important and due/overdue tasks at the top of
@@ -5210,15 +5210,35 @@ the list)."
 - Tests: the order kept on the wall (Cozyla fake, with the field found), items not
   Themi's left alone.
 
-Notes (2026-10-30), in progress:
-- The development checkout has no Cozyla login, so the live read couldn't be done here.
+Notes (2026-10-30):
+- The development checkout had no Cozyla login at first, so the live read couldn't be done here.
   `themi cozyla check --fields` (read-only, tested against the fake) prints every field
   name seen on to-dos, then each open to-do on `COZYLA_TODO_LIST` with all its fields, in
   the order Cozyla sends them.
-- Next: run it where Themi's `.env` is, and compare its order with the wall's. Look for an
-  order or sort field, and see whether the wall's order follows Cozyla's (creation, due
-  date, `isFlag`, `todoStars`). Then ask before any test write to the wall. The rest of
-  this prompt depends on what that shows.
+- Live read (2026-10-30, To-do List: 13 open): to-dos do carry `displayOrder` (and
+  `profileDisplayOrder`, likely the order on each person's own view). Cozyla sends them
+  highest `displayOrder` first (116 down to 67), and the number rises as items are made, so
+  the list runs newest first. `isFlag` and `todoStars` are 0 on every open item. Other
+  fields: `sourceType` ("user", "device_ai"), `version`, `showMemberUidList`.
+- Michael confirmed the wall shows that order, and said yes to a test write. A temporary
+  to-do ("Themi order test (please ignore)") was made, at `displayOrder` 117 and
+  `profileDisplayOrder` 117, the top. Setting `displayOrder` to 66 changed the API's order
+  but not the wall's. Setting `profileDisplayOrder` below the rest moved it to the bottom
+  on the wall. Then it was deleted. So the wall goes by `profileDisplayOrder`, highest on
+  top. The update endpoint takes both, and keeps them when they're left out (unlike the
+  other fields).
+- `CozylaClient.place(todo, display, profile)` sets both, with every other field sent back.
+  After each push, `CozylaTodos._order` ranks Themi's own open to-dos on the configured
+  list: tasks with a creator (wall imports have none). The rank is due or overdue, then
+  importance (high, normal, low), then due date, undated last. They take the
+  `profileDisplayOrder` and `displayOrder` values they already hold, best on top, so to-dos
+  added on the wall keep their exact place. Only those not already in place are written,
+  and dates never change. A to-do just made is placed from the next read.
+- Limit: a wall-made to-do between Themi's isn't jumped over. Themi's most important item
+  goes to the highest place Themi's own already have.
+- The Cozyla fake now gives new to-dos the next order numbers and sends the list highest
+  `displayOrder` first, as live. One wall-lists test compared an import's order and now
+  ignores it.
 
 ### F18e · Feedback (2026-10-29): the chore sync stuck, the wrong task changed, reminders that aren't tasks
 Status: [x] 2026-10-29
