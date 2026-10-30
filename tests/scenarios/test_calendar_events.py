@@ -373,6 +373,22 @@ async def test_a_move_put_off_gives_way_to_a_newer_one(
     assert waiting == []
 
 
+async def test_a_move_card_lapses_once_its_time_has_passed(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #90 ("it's really hung up on rescheduling my tutoring"): a card to move tutoring
+    to 12-1:20 came back at 1:33 pm, its time already gone."""
+    await tutoring(scenario, linked)
+    await say(scenario, "Move tutoring to 12", "move_calendar_event", move())
+    await scenario.tap("Erin", "Not now")
+    await scenario.advance(hours=3, minutes=5)  # 12:05, past the time it would move to
+    await scenario.run_periodic("approvals.expire")
+    await scenario.run_periodic("approvals.resurface")
+    status = scenario.app.db.scalar("SELECT status FROM pending_actions")
+    assert status == "expired"
+    assert not await scenario.advance(hours=6)  # nothing comes back
+
+
 async def test_a_move_made_takes_back_other_cards_for_that_event(
     scenario: Scenario, linked: FakeGcal
 ) -> None:

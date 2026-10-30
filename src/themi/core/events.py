@@ -689,7 +689,8 @@ async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     }
     summary = f"Moving {found.title} to {when_words(when, events._tz())}"
     proposal = Proposal(OWN if found.themi_id else CHANGE, summary, MOVE, payload)
-    return replace(proposal, requested=found.themi_id is not None)
+    # No use once the time it moves to has come (bug #90: it came back at 1:33 for 12).
+    return replace(proposal, requested=found.themi_id is not None, expires=when.starts)
 
 
 @staged_tool(
