@@ -75,6 +75,26 @@ Household facts are shared; personal ones only appear in your own conversations.
 <p class="muted">Nothing remembered yet.</p>
 {% endfor %}
 
+<h2 id="journal">Your journal</h2>
+<p class="muted">Once a day is over, Themi writes down what you talked about and what was decided.
+Only you see your journal; Themi reads it when you ask about an earlier day.</p>
+<form method="get" action="/knowledge#journal" class="inline-field">
+  <label>Search <input type="search" name="q" value="{{ query }}" placeholder="pacifiers"></label>
+  <button>Search</button>
+</form>
+{% for entry in entries %}
+<article class="card">
+  <p class="summary">{{ entry.day.strftime('%A %-d %B') }}</p>
+  {% if entry.topics %}<p>Talked about: {{ entry.topics | join("; ") }}</p>{% endif %}
+  {% if entry.decided %}<p>Decided: {{ entry.decided | join("; ") }}</p>{% endif %}
+  <form method="post" action="/journal/{{ entry.id }}/delete">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Delete</button>
+  </form>
+</article>
+{% else %}
+<p class="muted">{% if query %}Nothing in your journal about that.{% else %}Nothing written yet: the first entry comes the morning after a day you talk with Themi.{% endif %}</p>
+{% endfor %}
+
 {% if repairs %}
 <h2>Times Themi forgot something</h2>
 <ul class="activity">

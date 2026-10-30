@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from themi.core.follow_ups import FollowUps
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
+    from themi.core.journal import Journal
     from themi.core.lists import Lists
     from themi.core.meals import Meals
     from themi.core.memory import Memory
@@ -163,6 +164,7 @@ class Services:
     home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
     reactions: Reactions | None = None  # what lands with each person (S5)
+    journal: Journal | None = None  # each person's private journal of conversations (M1)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

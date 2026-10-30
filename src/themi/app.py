@@ -51,6 +51,7 @@ from themi.core.feedback import FeedbackChat
 from themi.core.follow_ups import FollowUps
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
+from themi.core.journal import Journal
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
@@ -146,6 +147,8 @@ def build_app(
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
     services.memory = Memory(db, rulebook)
+    journal = Journal(services)
+    journal.install()
     if google is not None:
         services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
         services.gmail = GmailSync(store, services.google, outbox)
@@ -216,6 +219,7 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
+        PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
     ]
     if backup is not None:
         backups = BackupJob(store, Backups(backup, cipher), outbox)
