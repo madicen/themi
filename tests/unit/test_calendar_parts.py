@@ -37,3 +37,16 @@ def test_an_event_is_an_all_day_reminder() -> None:
     assert body["transparency"] == "transparent"
     assert body["description"] == "For Husband. From Themi's task list."
     assert event_body(task("done"), None)["summary"] == "Done: Call the plumber"
+
+
+def test_an_event_named_only_as_the_time_to_fit_around_is_an_anchor() -> None:
+    """Bug #73: "plenty of time before tutoring" named the tutoring, but not to move it."""
+    from themi.core.events import named_as_anchor
+
+    title = "Tutor Gabriel (Illems)"
+    said = "Let's move that up to 12pm so that there's plenty of time before tutoring"
+    assert named_as_anchor(title, said)
+    assert named_as_anchor(title, "Run at 12, well ahead of the tutoring")
+    assert not named_as_anchor(title, "Move tutoring to 4pm")
+    assert not named_as_anchor(title, "Move tutoring to 4, after lunch")
+    assert not named_as_anchor(title, "Move that to 4")  # not named at all: the model decides

@@ -14,6 +14,7 @@ and breaks that bring a chosen set of prompts, are follow-ups.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -155,6 +156,14 @@ def _breaks(ctx: ToolContext) -> Breaks:
     return breaks
 
 
+# P6: "don't send me anything tonight" is about Themi's messages (pause_messages), unless
+# they also say they're resting (evals task-pause, twin-pause-tonight).
+HOLD_MESSAGES = re.compile(
+    r"\bdon'?t send me\b|\bstop (?:sending|messaging)\b|\bhold (?:my|the|off|all)\b"
+)
+RESTING = re.compile(r"\bbreak\b|\brest\b|\blie down\b|\bnap\b")
+
+
 @tool(
     "start_break",
     "Start a break when they say they're taking one ('I'm taking a break', 'rest for 30 "
@@ -164,6 +173,12 @@ def _breaks(ctx: ToolContext) -> Breaks:
     {"minutes": {"type": "integer"}},
 )
 async def start_break(ctx: ToolContext, args: dict[str, Any]) -> str:
+    said = ctx.request_text.lower()
+    if HOLD_MESSAGES.search(said) and not RESTING.search(said):
+        raise ToolFailed(
+            "Not started: they asked Themi to hold its messages, which is pause_messages, "
+            "not a break."
+        )
     minutes = int(args["minutes"]) or DEFAULT_MINUTES
     try:
         return await _breaks(ctx).start(ctx.member, minutes)

@@ -19,3 +19,17 @@ async def test_the_limiter_waits_once_a_minute_is_full() -> None:
     moment[0] += 120
     await limiter.wait()
     assert len(waits) == 1
+
+
+async def test_the_limiter_counts_its_waits() -> None:
+    # P5: the evals take pacing out of their model timings.
+    moment = [0.0]
+
+    async def sleep(seconds: float) -> None:
+        moment[0] += seconds
+
+    limiter = MinuteLimiter(1, now=lambda: moment[0], sleep=sleep)
+    await limiter.wait()
+    assert limiter.waited == 0
+    await limiter.wait()
+    assert round(limiter.waited, 1) == 60.1

@@ -27,10 +27,17 @@ MAX_BODY = 20_000
 TABS = frozenset({"CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"})
 
 
-def in_primary(labels: Iterable[str]) -> bool:
-    """In the inbox people look at: labelled INBOX, and not in another of Gmail's tabs."""
+def in_primary(labels: Iterable[str], tabs: Iterable[str] = TABS) -> bool:
+    """In the inbox people look at: labelled INBOX, and not in another of Gmail's tabs.
+    `tabs`: the ones this account shows (`GmailSync.tabs_shown`); Gmail labels mail by
+    category even when its tab is turned off and it shows in Primary."""
     labels = set(labels)
-    return "INBOX" in labels and not labels & TABS
+    return "INBOX" in labels and not labels & set(tabs)
+
+
+def web_link(address: str, gmail_id: str) -> str:
+    """The email in Gmail on the web, signed in as `address`."""
+    return f"https://mail.google.com/mail/u/{address}/#all/{gmail_id}"
 
 
 @dataclass(frozen=True)

@@ -70,6 +70,18 @@ async def test_the_heads_up_comes_when_its_time_to_get_ready(
     ]  # once
 
 
+async def test_the_heads_up_isnt_held_to_the_leave_time(
+    scenario: Scenario, ready: FakeGcal
+) -> None:
+    """Bug #91 ("traffic was considered, but prep time wasn't"): queued at 3:33 to get ready,
+    pacing held it to the leave time, 3:49, so there was no time to get ready."""
+    erin = scenario.member("Erin")
+    scenario.app.db.execute("UPDATE members SET daily_limit = 0 WHERE id = ?", (erin.id,))
+    ready.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(scenario, 14, 10)
+    assert any(t.startswith("Dentist at 3 pm") for t in scenario.inbox("Erin"))
+
+
 async def test_nothing_for_calls_all_day_things_or_home(
     scenario: Scenario, ready: FakeGcal
 ) -> None:

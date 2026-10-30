@@ -360,6 +360,26 @@ async def test_reply_times_show_where_the_time_went(
     assert "Model: 16.0 s (Primary)" in page and "Tool list_open_items: 0.0 s" in page
 
 
+async def test_reply_times_show_how_the_tool_groups_did(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    # P3: a reply where the words chose enough, and one where the model asked for more.
+    scenario.primary.take(2).queue_text("Okay.")
+    await scenario.say("Erin", "Make a packing list for the trip")
+    scenario.primary.take(3).queue_tool_call("more_tools", {"groups": ["pantry"]})
+    scenario.primary.take(4).queue_text("Done.")
+    await scenario.say("Erin", "Hmm, what should we do about that")
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/ai/timing")).text
+    assert "1 of 2 replies needed more tools." in page
+    assert "Replies that needed more: 7.0 s (median)." in page
+    assert "Replies that didn't: 2.0 s (median)." in page
+    assert "Added late: pantry (1)." in page
+    lists = len(scenario.app.services.tools.specs({"lists"}))  # the same for both
+    assert f"Tools sent at the start: {lists} (median)." in page
+    assert "(core, lists), then pantry." in page  # the slowest, step by step
+
+
 async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncClient) -> None:
     await sign_in(scenario, site, "Husband")
     assert (await site.get("/ai/timing")).status_code == 403

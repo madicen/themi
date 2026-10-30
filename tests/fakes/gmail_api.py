@@ -17,7 +17,7 @@ from __future__ import annotations
 import base64
 import re
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from email import message_from_bytes
@@ -31,6 +31,7 @@ from fastapi.responses import JSONResponse
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
 from themi import clock
+from themi.connectors.gmail.parse import TABS
 from themi.connectors.google import GoogleConfig
 
 
@@ -56,6 +57,9 @@ class _Mailbox:
     oldest_history: int = 0  # starts below this are "too old" (404)
     labels: dict[str, str] = field(default_factory=dict)  # user label id -> name
     sent: list[dict[str, Any]] = field(default_factory=list)
+    # The category labels this account shows as tabs; the rest show in Primary (Gmail labels
+    # by category either way). All four by default.
+    tabs: set[str] = field(default_factory=lambda: set(TABS))
 
 
 @dataclass
@@ -72,6 +76,7 @@ class FakeGmail:
         self.mailboxes: dict[str, _Mailbox] = {}
         self.failures: dict[str, list[_Failure]] = {}
         self.calls: list[tuple[str, str]] = []  # (endpoint, address)
+        self.list_queries: list[str] = []  # each list call's search, in order
         self.app = FastAPI()
         base = "/gmail/v1/users/me"
         self.app.add_api_route(f"{base}/profile", self._profile, methods=["GET"])
@@ -103,6 +108,7 @@ class FakeGmail:
             self.mailboxes = {}
             self.failures = {}
             self.calls = []
+            self.list_queries = []
 
     # ----- scripting ----------------------------------------------------------
 
@@ -191,9 +197,36 @@ class FakeGmail:
 
     # ----- plumbing -----------------------------------------------------------
 
-    def _record(self, box: _Mailbox, kind: str, gid: str, labels: list[str]) -> None:
+    def _record(
+        self,
+        box: _Mailbox,
+        kind: str,
+        gid: str,
+        labels: list[str],
+        changed: Sequence[str] = (),
+    ) -> None:
+        """`changed`: the labels a labelAdded or labelRemoved record is about."""
         box.history_id += 1
-        box.history.append({"id": box.history_id, "type": kind, "message": gid, "labels": labels})
+        box.history.append(
+            {"id": box.history_id, "type": kind, "message": gid, "labels": labels,
+             "changed": list(changed)}
+        )  # fmt: skip
+
+    def by_hand(
+        self, address: str, gid: str, *, remove: Sequence[str] = (), delete: bool = False
+    ) -> None:
+        """The person changes a message in Gmail itself: archives it (remove INBOX), reads it
+        (remove UNREAD), or deletes it."""
+        box = self.mailbox(address)
+        message = box.messages[gid]
+        if delete:
+            del box.messages[gid]
+            self._record(box, "messageDeleted", gid, [])
+            return
+        gone = [label for label in remove if label in message.labels]
+        for label in gone:
+            message.labels.remove(label)
+        self._record(box, "labelRemoved", gid, list(message.labels), gone)
 
     def _open(self, request: Request, endpoint: str) -> tuple[_Mailbox | None, JSONResponse | None]:
         token = request.headers.get("Authorization", "").removeprefix("Bearer ")
@@ -240,9 +273,14 @@ class FakeGmail:
         if box is None:
             return error  # type: ignore[return-value]
         q = request.query_params
+        self.list_queries.append(q.get("q", ""))
         found = sorted(box.messages.values(), key=lambda m: m.internal_ms, reverse=True)
         if label := q.get("labelIds"):
             found = [m for m in found if label in m.labels]
+        if "in:inbox" in q.get("q", ""):
+            found = [m for m in found if "INBOX" in m.labels]
+        if "category:primary" in q.get("q", ""):
+            found = [m for m in found if not set(m.labels) & box.tabs]
         if match := re.search(r"newer_than:(\d+)d", q.get("q", "")):
             cutoff = (clock.now() - timedelta(days=int(match.group(1)))).timestamp() * 1000
             found = [m for m in found if m.internal_ms >= cutoff]
@@ -276,6 +314,8 @@ class FakeGmail:
         if start < box.oldest_history:
             return _error(404, "NOT_FOUND", "Requested entity was not found.")
         types = set(q.getlist("historyTypes")) or {"messageAdded"}
+        shapes = {"messageAdded": "messagesAdded", "labelRemoved": "labelsRemoved",
+                  "labelAdded": "labelsAdded", "messageDeleted": "messagesDeleted"}  # fmt: skip
         label = q.get("labelId")
         records = [
             r
@@ -288,7 +328,12 @@ class FakeGmail:
             "history": [
                 {
                     "id": str(r["id"]),
-                    "messagesAdded": [{"message": {"id": r["message"], "labelIds": r["labels"]}}],
+                    shapes[r["type"]]: [
+                        {
+                            "message": {"id": r["message"], "labelIds": r["labels"]},
+                            **({"labelIds": r["changed"]} if r["changed"] else {}),
+                        }
+                    ],
                 }
                 for r in page
             ],
@@ -306,13 +351,15 @@ class FakeGmail:
         if message is None:
             return _error(404, "NOT_FOUND", "Requested entity was not found.")
         change = await request.json()
-        for label in change.get("removeLabelIds", []):
-            if label in message.labels:
-                message.labels.remove(label)
-        for label in change.get("addLabelIds", []):
-            if label not in message.labels:
-                message.labels.append(label)
-        self._record(box, "labelsChanged", mid, list(message.labels))
+        removed = [label for label in change.get("removeLabelIds", []) if label in message.labels]
+        for label in removed:
+            message.labels.remove(label)
+        added = [label for label in change.get("addLabelIds", []) if label not in message.labels]
+        message.labels.extend(added)
+        if removed:
+            self._record(box, "labelRemoved", mid, list(message.labels), removed)
+        if added:
+            self._record(box, "labelAdded", mid, list(message.labels), added)
         return JSONResponse(self._resource(message, box))
 
     async def _labels(self, request: Request) -> JSONResponse:

@@ -88,10 +88,27 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
+| P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
+| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
+| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
+| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
+| P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
+| P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
 | F16d | Feedback: only Gmail's Primary inbox counts | Feedback | [x] |
+| F17a | Feedback: noise to archive in chat, the audit's subject and link, tasks by name | Feedback | [x] |
+| F17b | Feedback: which list, and a reminder after a task is done | Feedback | [x] |
+| F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
+| F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
+| F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
+| F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
+| F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
+| F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
+| F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
+| F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
+| R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -3202,7 +3219,9 @@ Depends on: S1, 28
 From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
 or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
 - Record a reaction on any of Themi's messages with the message's kind (a nudge, a check-in, a
-  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not.
+  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not. If P4 is built, 👎 on
+  a chat reply is its "wrong action" mark, not a judgement of the style: count it only on
+  Themi's other messages.
 - Over time, a per-person picture of what lands ("short nudges do well; long explanations
   don't"), shown to the model as a line of its own, in words, never numbers, and on the
   person's tracking page. A switch, like the other inputs.
@@ -4273,6 +4292,343 @@ Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
 - The speed-ups the numbers point to: a faster model for conversation, fewer tool
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
 
+### P3 · Router metrics: how well the tool groups are chosen
+Status: [x] 2026-10-29
+Depends on: P1, P2a
+From a talk about a "System 1" router (2026-10-29): should a fast classifier (embeddings or
+a small model) choose the tool groups instead of P1's word lists? Not yet: first measure
+how often the word lists miss and what a miss costs, and build a fair way to compare a
+replacement. A router gets built only if these numbers ask for one.
+Already measurable: a miss shows as a `more_tools` row in `reply_tools`, and its extra
+model round is in `ai_calls`. Missing: which groups were offered, so over-sending (the
+token side) can't be seen, and no way to score a candidate router without a model.
+- Each `replies` row keeps the groups `choose_groups` offered at the start, and the groups
+  `more_tools` added during the reply.
+- The admin "Reply times" page (`/ai/timing`) shows the week's router numbers: replies
+  with a miss (a `more_tools` call), the groups most often added late, the tools sent per
+  reply (median), and the median time of replies with a miss and without one.
+- An offline router eval: for each case in `tests/evals/cases.json`, run `choose_groups`
+  over its message (and its history, if any) and check the groups of the tools in
+  `expect`/`expect_any` were offered (recall), and count the tools sent (size). No model
+  calls, so it runs in `make test-all`. It takes the router as a function, so a candidate
+  can be scored the same way, and prints both numbers per category.
+- No message text is kept for this. Keeping texts to replay later is the family's call;
+  ask before adding it.
+
+Tests: groups recorded on a reply, with and without `more_tools`; the page's numbers from
+seeded rows; the offline eval scoring a known router (a perfect one, and one that misses a
+group). Today's `choose_groups` recall goes in the Notes as the baseline.
+
+Notes (2026-10-29):
+- Migration 0072: `replies.groups` (the groups sent at the start, comma-separated, '' for
+  the core only), `groups_added` (what `more_tools` brought in), `tools_sent` (tools with
+  the first model call). NULL on older replies, which the numbers leave out.
+  `ReplyTimer.route()` and `.added()`, called from `Agent._converse`.
+- `themi.core.timing.router_numbers`; "Reply times" has a "Which tools went" section, and
+  each of the slowest replies says which tools went ("Tools sent: 29 (core, lists), then
+  pantry."). A miss is any `more_tools` call, even one that added nothing (it still costs
+  a round).
+- The offline eval is `tests/evals/routing.py` (`route_cases(registry, router, cases)`).
+  It needs a built app's registry, since features register their tools on install, so it
+  runs as `tests/scenarios/test_router_eval.py` with every fake (in `make test-all`).
+  `make router-eval` prints the table. Only the message is routed, not the last four
+  messages, so it's a little stricter than the live agent.
+- Baseline (`choose_groups`, 2026-10-29): 51 of the 55 cases have their tools built; 12
+  of them need a group beyond the core, and 11 got it (92%). Median 27 tools sent (22 for
+  the core only, of about 70). `BASELINE_RECALL` holds it as a floor.
+- The one miss: task-pause ("Please don't send me anything for the next couple of
+  hours") gets no settings group; the words have "stop sending" but not "don't send". The
+  real-model evals still pass it through `more_tools`. Left alone here (this prompt
+  measures); a one-word fix for whoever picks it up.
+- Only 12 cases test routing at all: too few to judge a candidate router on. More cases
+  that need a group (paraphrases, the family's real wording) would help before comparing.
+- Setup: restart (applies 0072). The live numbers fill in over the next week.
+
+### P4 · Wrong actions: marked in chat, labelled in review
+Status: [ ]
+Depends on: P3, F1
+From the router talk (2026-10-29): P3 sees only the misses the model notices itself (a
+`more_tools` call). When Themi confidently does the wrong thing (olive oil on the
+grocery list instead of the pantry), nothing ties it to the reply or the tool. Today those
+turn up only as `/bug` reports, read by hand.
+- **👎 on a reply marks it as wrong.** One tap on Themi's reply, never asked for: Themi
+  doesn't ask "was that right?" and says nothing back. It doesn't change phrasing,
+  approvals or energy.
+- **Phrasing moves to the angry faces.** Decided 2026-10-29: 👎 comes out of
+  `STRICTER_REACTIONS`, so 😠 😡 😤 😣 🙄 make phrasing gentler and 👎 no longer does,
+  anywhere (on a nudge or summary it now does nothing until S5). The plan says only that
+  reactions calibrate phrasing, so it doesn't change. The calibration module's docstring
+  ("a 👎-style reaction") and its test move to 😠.
+- `replies` needs to know its outbox messages (Telegram message ids), so a reaction finds
+  its reply. A reaction on a message that isn't a model reply (a card, a nudge) is ignored
+  for this.
+- A marked reply keeps its row, tools and model calls past the week's clean-up, until it
+  has been labelled.
+- **`/bug` points at the reply.** The snapshot gains the reply it's about (the one it
+  replies to in Telegram, else the latest), with its tools, groups offered and groups added.
+- **Labelling, in review.** `themi feedback` lists marked replies with the snapshot's
+  facts: the message, what Themi said, the tools it ran, the groups it offered. Then
+  `themi feedback --wrong-tool <reply id> <tool>` (the tool it should have used; `none`
+  for "no tool") or `--not-wrong <reply id>`. From the reply's offered groups, a label is
+  saved as one of:
+  - **router miss**: the right tool wasn't sent (its group wasn't chosen);
+  - **model choice**: it was sent and the model used another;
+  - **no tool needed**: it acted where it shouldn't have.
+- The label prints a `cases.json` stub (id, category, the person's message, `expect`) to
+  paste into the evals, so each real mistake becomes a case. The message comes from the
+  stored conversation; nothing new is kept for it.
+- "Reply times" (P3's section) adds the week's marked replies and the labels by kind, so
+  the router misses and the model's choices can be told apart.
+- Setup: tell the family before it ships that 👎 now means "that was the wrong thing" and
+  an angry face means "too pushy".
+- Not here: guessing mistakes from behaviour (an undo soon after, "no, I meant"). Too noisy
+  for one family's numbers; revisit if the marks stay rare.
+
+Tests: a reaction on a model reply marks it, on a card or nudge doesn't; the mark changes
+no phrasing strength; a marked reply survives the clean-up until labelled; `/bug`'s
+snapshot names its reply; 👎 no longer changes phrasing strength and 😠 still does; each
+label kind decided from the offered groups; the case stub
+loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
+add, and the review labels it a model choice.
+
+### P5 · Evals that can compare: repeats, timings, and every tool vs groups
+Status: [x] 2026-10-30
+Depends on: P3
+From the routing talk (2026-10-29): routing changes get decided by measurement. Today an
+eval run gives one pass or fail per case, with no times, and one run of Gemini can't tell
+a real change from noise (47/49 vs 46/49 means nothing on its own). And the cheapest
+answer to "the word lists are fragile" hasn't been tried: send every tool and route nothing.
+P1 grouped the tools because 55 tools were about 8,000 tokens a call on the free tier.
+- **Repeats.** `make evals EVAL_ARGS='--repeat 3'` runs each case that many times. The
+  summary gives each case's pass count (3/3, 2/3...), the pass rate per category and in
+  all, and lists the flaky cases (passed some runs, not others) apart from the failing ones.
+- **Timings per case.** Each result keeps its model calls, the seconds of each, and the
+  tools sent with the first call (count and characters). The summary gives the medians.
+- **Arms.** `--routing groups` (today) or `--routing all` (every tool on every call, no
+  `more_tools` needed). The same switch is a setting, `TOOL_ROUTING` (default `groups`), so
+  "all" can also be tried in the family's chat with P3's numbers watching it. `all` sends
+  `ToolRegistry.specs()` and the agent leaves `more_tools` out.
+- **A comparison.** `tests/evals/rescore.py` (or a small `compare.py`) reads two saved runs
+  and prints, per case, both arms' pass counts, and in all: pass rate, median seconds per
+  case, median model calls. Cases that pass every run in one arm and fail every run in the
+  other are listed first: those are real differences, the rest is noise.
+- **Decide before running.** Proposed rule (confirm or change it before the runs): `all`
+  wins if its pass rate is no lower than `groups`' (within one case), no case goes from
+  always passing to always failing, and its median reply is at most 20% slower. Then P7a and
+  P7b aren't needed, and P1's word lists go (in a follow-up, after a week of `all` in chat).
+- Run both arms, three repeats each, on the family's own model (Gemini flash-lite), and
+  record the numbers and the decision in the Notes. The free tier's pacing makes this slow
+  (`THEMI_EVAL_PACE`); run it in the background.
+
+Tests: repeats aggregate (a case passing 2 of 3 is flaky, not failing); timings saved and
+read back by `rescore`; `--routing all` sends every tool and no `more_tools`; the setting
+does the same in a scenario; the comparison picks out always/never differences.
+
+Notes (2026-10-30):
+- The rule was agreed as proposed (2026-10-29). It's written into
+  `tests/evals/compare.py`, which prints the verdict.
+- `THEMI_TOOL_ROUTING` (`Settings.tool_routing`, `Services.tool_routing`, `build_app`,
+  the scenario harness): `all` sends `ToolRegistry.specs_for(groups, "all")`, every tool
+  but `more_tools`. P3 records every group as sent, so its numbers still read right.
+- Evals: `--repeat N` and `--routing groups|all` (parametrized in `tests/evals/conftest.py`,
+  ids `case-run2`). Each result keeps `run`, `model_seconds` (real clock, less the
+  limiter's waits: `MinuteLimiter.waited`), `tools_sent` and `tools_chars` (first
+  conversation call). Results are named `<provider>-<routing>-<stamp>.json`. The summary
+  adds the medians and the flaky cases; `rescore.load_run` reads it all back.
+- Evals read only `GEMINI_TEST_API_KEY` (env or `.env`) and skip without it; the family's
+  `GEMINI_API_KEY` sits in the same `.env` and was used by mistake for about 10 requests
+  before this. The summary also prints "Failed every run:".
+- Runs (2026-10-30, 3 repeats each). Groups on gemini-3.5-flash-lite (fallback 3.1):
+  142/150, median 2.9 s and 24 tools a case. 3.5's free daily quota then ran out, so both
+  arms went again on gemini-3.1-flash-lite, no fallback. Groups: 142/150 (94.7%), median
+  2.2 s, 24 tools (16,712 characters). All: 49 tools (29,546 characters); its quota ran
+  out after 15 of 55 cases.
+- Compared on the 13 cases both arms ran fully (energy notes and pantry):
+  groups 39/39 runs, all 35/39; median 3.0 s vs 2.0 s. No case flipped always/never;
+  all lost runs on pantry-add-cumin (1/3: said "I've added" with the pantry tools also
+  in reach), energy-husband and energy-meetings (2/3 each). **Verdict: groups stays**
+  (all passes more than one case fewer). Sending every tool wasn't slower, so size isn't
+  the cost; choosing among near-twins is, which is P6's job. P7a/P7b stay on.
+- Confirmed on the full set (2026-10-30), every tool on gemini-3.5-flash-lite (fallback
+  3.1) against the groups run above: all 137/150 (91.3%) vs groups 142/150; mean cases
+  passed 45.7 vs 47.3 of 50; median 2.4 s vs 2.9 s. Always passed with groups, always
+  failed with every tool: energy-husband (no energy note), rule-husband-groceries and
+  rule-thinking-aloud (create_task, and set_task_schedule, picked over propose_rule).
+  The other way: energy-medium-day and task-have-partner-do-it. **Groups stays** on both
+  models. The losses are rule vs task, a near-twin pair: P6.
+- Seen in passing, not P5's: task-have-partner-do-it fails 3/3 on both models because the
+  prompt's example names "Michael" (prompts.py, "can you have Michael get the pacifier")
+  and the eval family's husband is "Husband", so the model copies the example. Reword the
+  examples to "my husband". energy-medium-day's `show_lists` call is reasonable; the case
+  could allow it.
+
+### P6 · Near-twin tools: sent together, told apart, tested both ways
+Status: [x] 2026-10-30
+Depends on: P5
+From the routing talk (2026-10-29). Some tools sound alike and do very different things,
+so they stay separate tools; the work is making sure the model sees both and can tell them
+apart. Today each description already names its twin ("Not for 'don't send me anything':
+that's pause_messages"), but the twins don't always travel together: in the 2026-10-29
+evals `add_to_grocery_list` (core) was sent without `update_pantry` (pantry group), and the
+model used the twin it had. Nothing in the routing knows they belong together.
+- **A second tier: twin sets.** `TWINS` in `themi.core.tools`, each a named set of tools
+  the model confuses, with one short paragraph on how to tell them apart. A starting list
+  (check each against what the tools really do, and add any the evals or P4 find):
+  - *food and buying*: `update_pantry` (what the house has: used up, low, bought),
+    `add_to_grocery_list` (food to buy, when they ask for the list), `add_to_things_to_buy`
+    (non-food to buy), `add_to_list` (a named list).
+  - *quiet time*: `start_break` (the person is resting: nudges and check-ins wait, then one
+    question when it's over), `pause_messages` (hold one kind of message for a while).
+  - *rules or tasks*: `propose_rule` (how Themi itself behaves), `create_task` (something
+    to do, once or repeating), `set_task_schedule` (when a task repeats).
+- **Sent together.** If any tool of a twin set is sent, all of it is, whatever the router
+  chose (in `ToolRegistry.specs`, so every arm of P5 and any later router get it free).
+  Because grocery and task tools are core, this pulls `update_pantry`,
+  `add_to_things_to_buy`, `add_to_list`, `start_break`, `pause_messages` and
+  `set_task_schedule` into every call: P3's "tools sent" shows the cost.
+- **Told apart once.** The set's paragraph goes in the system prompt whenever the set is
+  sent ("Food and buying: ..."), with a pair of examples each way. The descriptions keep
+  what each tool does and drop the long cross-references the paragraph now covers.
+- **Behaviour that differs.** Where the words leave no doubt, a tool may decline in favour
+  of its twin, the way `propose_rule` already declines "remind me to" (only on the person's
+  own words, never the model's, and only for wordings a case covers).
+- **Cases both ways.** A "twins" category in `cases.json`: for each set, at least two cases
+  per tool that need that tool and forbid its twins, and one or two truly ambiguous ones
+  ("out of milk") that allow either. Run P5's harness (3 repeats) before any change, then
+  after: the Notes give both.
+
+Tests: a twin set is sent whole when any member is; the paragraph is in the system prompt
+only with its set; each declining tool declines only the covered wording; the twins cases
+load and their tools exist.
+
+Notes (2026-10-30):
+- `TWINS` in `themi.core.tools`: food and buying (`update_pantry`, `add_to_grocery_list`,
+  `add_to_things_to_buy`, `add_to_list`), quiet time (`start_break`, `pause_messages`),
+  rules or tasks (`propose_rule`, `create_task`, `set_task_schedule`). `ToolRegistry.specs`
+  sends a set whole; the agent adds `twins_text(...)` for the sets sent to each call's
+  system prompt. Food and rules ride on core tools, so they go on every call; quiet time
+  goes with the settings group. The STABLE_SYSTEM bullets and description cross-references
+  they replace are gone.
+- Declines, on the person's words only: `create_task` for "new rule" / "make it a rule"
+  (not with "remind"); `add_to_grocery_list` for "running low", "used the last",
+  "finished the"... unless they also ask for the list ("out of milk" stays either);
+  `start_break` for "don't send me", "hold the..." unless they say break, rest or lie down.
+  The evals still count a declined call against the case: they score the first choice.
+- The examples that named "Michael" (create_task, the prompt) now say "my husband".
+- Evals, gemini-3.1-flash-lite, 3 repeats. Twins (22 cases): before 52/66, after 57/66;
+  twin-pantry-finished went 0/3 to 3/3, twin-pantry-low-coffee and twin-task-husband-door
+  2/3 to 3/3, nothing worse (`gemini-groups-20261030-0810` vs `-0825`). The other cases,
+  against 2026-10-29's 3.1 run on the 36 both finished (quota ran out in tasks): 35/36 vs
+  35/36, no flips. Tools sent per call, median: 24 to 27.
+- Median model seconds went 2.2 to 3.8 on those 36 cases, but the twins runs went 6.4 to
+  2.6 the other way with more tools, so run-to-run timing on the free tier swamps it.
+  P3's timing page will show the real cost in the family's chat.
+- Still failing every run: twin-pause-meals, twin-pause-tonight, twin-break-lie-down.
+  "hold the meal reminders", "don't send me" and "lie down" don't bring the settings
+  group, so neither quiet-time twin is sent and the model reaches for propose_rule. That's
+  routing (P7a/P7b), not telling twins apart. `make router-eval`'s baseline is now 21/25
+  with the twins cases in.
+- Follow-up: run the task and email cases after P6 on a fresh day's quota.
+
+### P7a · Routing data: the family's kinds of message, labelled
+Status: [x] 2026-10-30
+Depends on: P3, P5 (only if P5 keeps routing)
+The router eval (P3) has 12 cases that need a group: too few to compare routers on. An
+embedding router also needs example phrases per group, kept apart from the cases it's
+scored on.
+- **Routing cases**, about 80 to 100, in a new `tests/evals/routing_cases.json`: a message
+  (and the message before it, for follow-ups like "and limes") and the groups it needs.
+  Drafted from the kinds of thing the family says, read from the stored conversation, but
+  written as paraphrases: no names, places, health or money details from their messages go
+  in the repo. Each group gets plain cases, paraphrases, short follow-ups, and messages
+  with two asks ("add milk and remind me Tuesday" needs both).
+- The labels are checked by a person before they count: print them for review, and only
+  reviewed cases go in the file.
+- **Group examples**, 10 to 20 per group, in `themi.core.tools` beside `GROUPS` (they ship
+  with Themi), none copied from the routing cases.
+- P3's eval reads both case files. Today's word lists get scored on the new set; the
+  Notes give the new baseline.
+- Later, P4's labels add to both: a "router miss" becomes a case, and (paraphrased) an
+  example for the group that was missing.
+
+Tests: both files load, every group named exists, no example is also a case, every group
+has examples and cases.
+
+Notes (2026-10-30):
+- `tests/evals/routing_cases.json`: 93 cases (46 plain, 23 paraphrase, 13 follow-up with
+  the message before, 11 two-asks), drafted from the kinds of thing in the family's chat
+  (353 messages read locally) and paraphrased: no names, places, health or money details
+  of theirs. Reviewed by the user, 2026-10-30.
+- Deviation: a case names the *tools* it needs (`tools`, or `any_of` for either), and the
+  groups follow from `TOOL_GROUPS`. Labels survive a tool moving group, and recall counts
+  tools a twin set (P6) brings along.
+- `GROUP_EXAMPLES` in `themi.core.tools`: 12 per group, written fresh; a test checks none
+  is a case.
+- `tests/evals/routing.py` reads both files (`Routable`, `load_routing_cases`); a router
+  gets the message and the one before it.
+- Word lists, new baseline: 74/84 on the routing cases (plain 36/37, paraphrase 14/23,
+  follow-up 13/13, two-asks 11/11), 95/109 with the eval cases; median 33 tools sent.
+  Misses are mostly paraphrases: "lie down", "need a nap", "hold the meal reminders",
+  "turn the laundry nudges back on", "it came to $35", "when could I fit in...".
+
+### P7b · An embedding router, if P5 says routing stays
+Status: [x] 2026-10-30
+Depends on: P7a
+Embeddings instead of word lists: no training, just nearest neighbours. Each group's
+examples become vectors once; each message becomes a vector; every group with an example
+close enough is sent.
+- `themi.ai.embeddings`: an `Embedder` interface (texts in, vectors out). First version:
+  Gemini's embedding API through `themi.ai.router` (a new `AITask.EMBEDDING`, so per-member
+  keys, retries and fallback apply). A local model can replace it later; note that the
+  usual local runtime (onnxruntime) has no wheel for Python 3.15, which the dev venv runs
+  (Docker is 3.13). A fake embedder in `tests/fakes`, so tests make no network calls.
+- The examples' vectors are cached (keyed by model and text), so a restart doesn't embed
+  them again.
+- `choose_groups` adds the embedding pass to the word lists at first (a union, so recall
+  can only rise), over this message and the last few. Every group above the threshold, not
+  just the best, so two asks bring two groups. If the embedding call fails or is slow (over
+  a second), the word lists alone decide: routing never costs a reply. `more_tools` stays.
+- Groups recently used (a tool from it ran in the last few turns) stay sent: short
+  follow-ups carry too little for either method.
+- The threshold is chosen with P3's eval on P7a's cases: print recall and tools sent at
+  several thresholds, pick the lowest tool count with recall at or near 100%, and say why in
+  the Notes.
+- A setting turns it on. After a week with it on, P3's live numbers ("needed more tools",
+  tools sent) against the word lists' week decide whether the word lists go.
+
+Tests: the fake embedder routes paraphrases the word lists miss; two asks bring two groups;
+a failing or slow embedder falls back to the word lists; recently used groups stay; the
+cache is reused across restarts; the routing goes through the router (keys, fallback).
+
+Notes (2026-10-30):
+- Providers gained `embed` (Gemini; Claude and OpenAI-compatible say they can't, so the
+  router skips them). `AITask.EMBEDDING` routes it, so keys, retries, fallback and the
+  `ai_calls` record apply. Migration 0073 rebuilds `ai_routes` (its CHECK listed the tasks)
+  and gives each member an embedding route on the Gemini backends of their conversation
+  chain, model `gemini-embedding-2` at 768 dimensions (it told "lie down" from "oat milk"
+  further apart than -001 did). Gemini-embedding-2 wants one Content per text.
+- `themi.ai.embeddings` (`Embedder`, `RouterEmbedder`, `VectorCache`) and
+  `themi.core.routing` (`EmbeddingRouter`, `recent_groups`). With
+  `THEMI_TOOL_ROUTING=embeddings` the agent sends the word lists' groups, plus every group
+  with an example at least 0.725 similar to this message, the person's last two, or any of
+  their clauses (one vector of "need a nap, then what's for dinner?" sits between the two),
+  plus the groups whose tools ran in their last 3 replies. Over a second, or on any
+  failure, the word lists decide alone; the examples keep warming in the background.
+- Threshold (`tests/evals/test_router_thresholds.py`, 166 cases): word lists alone 95/109,
+  median 33 tools. With embeddings at 0.725: 108/109, still 33 tools; 0.7 is the same
+  recall at 36 tools, 0.75 loses one more case. The one miss: "Nothing from the
+  neighborhood app is ever urgent". Embeddings alone need 0.675 for 99% (38 tools), so
+  the union stays. Each group's examples sit about 0.63 to 0.69 from each other.
+- The free tier counts each embedded text as a request (100 a minute): the 108 examples
+  spill into a second minute once per model (the router's retries wait it out), and recent
+  message vectors stay in memory (never stored) so the last two messages aren't embedded
+  again.
+- Not done: a behaviour eval run with `--routing embeddings` (both models' quotas were
+  spent today); it's wired (`make evals EVAL_ARGS='--routing embeddings'`).
+- Setup for the family: `THEMI_TOOL_ROUTING=embeddings` in `.env`, and a Gemini backend in
+  each person's conversation chain (or an embedding route on the website). Then a week of
+  P3's numbers against the word lists' week decides whether the word lists go.
+
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
 Depends on: 11, 13, F2
@@ -4453,6 +4809,457 @@ Notes (2026-10-28):
 - Alerts still come for time-sensitive mail in any tab; only archiving changed.
 - The plan's triage bullet says Primary (rev 200).
 - Setup: restart. No migration.
+
+### F17a · Feedback (2026-10-28): noise to archive in chat, the audit's subject and link, tasks by name
+Status: [x] 2026-10-28
+Depends on: F16d, E2b
+From the family's reports of 2026-10-28 evening: Michael's bug #67, Erin's idea #69 and bug
+#71. F17b takes #68 and #70.
+- #67 ("noisy emails that were on the site to be archived didn't appear when asking about
+  them in telegram"): asked "Are there any messages to mark read or archive?", Themi listed
+  only the two "waiting on you" items; the 18 noise offers were only in a queued message,
+  cut off at 80 characters. The open items list the noise offers still waiting (sender and
+  subject, a few, then a count), and a tool archives them, or keeps them, from chat
+  (`archive_noise_emails`, all or the ones they name), through the same approvals as the
+  [Archive all] button. "archive", "noise" and "mark as read" call for the email tools.
+- #69 ("email audits should have an exact subject for each email and a link to the email
+  being referenced"): asked for the subject twice, the model made one up ("or similar"). An
+  audit item about a sender shows its latest email's exact subject; every item has a Gmail
+  link to that email.
+- #71 ("it's displaying tasks by number instead of by name"): "Task 50 is taken off the
+  list." The system prompt says to call tasks by their names, never their numbers, and a
+  reply that still says "task 50" gets the task's name in its place.
+- Tests: the open item and the tool (all, by name, keep, nothing waiting), the email words;
+  the audit's subject and link; the reply guard; a scenario from #67 and one from #71.
+
+Notes (2026-10-28):
+- #67: `NoiseDigest.open_items`: "Emails that look like noise, N waiting for a yes to
+  archive", the first 10 as "Sender: subject" inside a `<data>` block (they're email text).
+  `archive_noise_emails(answer, which)` (email group) archives or keeps them through
+  `approvals.resolve`, as the button does; `which` matches words in the sender or subject,
+  empty for all. Afterwards a digest still queued is made again, or taken back when
+  nothing's left (`NoiseDigest.refresh`). The email group's words add archive, noise,
+  junk, spam and "mark as read".
+- #69: an audit card about a sender adds `Latest: "<subject>"` (its newest email in that
+  inbox), and every card ends with a Gmail link (`gmail.parse.web_link`, which spending's
+  receipt links use too). The card is sent without a link preview; the second question is
+  an edit, which Telegram may preview. The model still never sees the audit's emails.
+- #71: a system prompt line (tasks by name, never number), and `agent._by_name` puts the
+  name, in quotes, in place of "task 50" (or "task 7 (Clean the bird cage)") in a reply.
+  The PDA shield now leaves a sentence that opens with a quote alone: '"Refill the water"
+  is off the list' was becoming "Up next: ...".
+- Not done: #67's model reply also called a reply draft "to mark as read"; the clearer open
+  item should help, re-run the evals when there's quota.
+- The plan's triage bullet says noise can be archived or kept from chat (rev 202).
+- Feedback #35-#57 were handled by earlier prompts but never marked reviewed; #33 and #34
+  still wait for Erin's spec. Marked reviewed now: #35-#57 and #67, #69, #71.
+- Setup: restart. No migration.
+
+### F17b · Feedback (2026-10-28): which list, and a reminder after a task is done
+Status: [x] 2026-10-28
+Depends on: F17a
+From Erin's idea #68 and bug #70, 2026-10-28.
+- #68 ("if an item could be added to more than one list, provide a prompt with buttons for
+  the most likely options plus 'not now'"): "paper towels" was staged for the grocery list;
+  she meant Things to Buy. When an item could go on more than one list, one card asks
+  which, with a button per likely list and [Not now]; the tap adds it there.
+- #70 ("Immediately after I indicate that I cleaned the bird cage, remind me to refill the
+  water and replace the food bowls" became a task due the next day, and its date read back
+  as "2020"; "make this work"): a task can follow another: it waits, with no date, until
+  that one is done, then its nudge goes at once (inside quiet hours and the limit). A
+  repeating task's follower comes back each round. Dates the model reads carry the year
+  where it isn't this year, and replies about a date use the context's year.
+- Tests: the list card and its buttons; a follower waiting, then nudged when the first is
+  done, each round; scenarios from #68 and #70.
+
+Notes (2026-10-28):
+- #68: `themi.core.which_list`: `ask_which_list(item, lists)` (core) sends "Paper towels:
+  which list?" with a button per list (at most three; "grocery list", Things to Buy, or a
+  named list) and [Not now]. A tap stages the add as asked for (`requested=True`), with
+  the list's own executor (Things to Buy's remembers it isn't food), so the tiers still
+  decide; the card is edited to the result. One list only is refused. The system prompt,
+  `add_to_things_to_buy` and the grocery/Things to Buy refusals point to it instead of
+  "ask".
+- #70: deviation from the prompt: a follow-up isn't a waiting task (a new task status
+  would touch every open-task query, the wall sync and nudges). Migration 0070,
+  `task_follow_ups`: `add_follow_up(after_task_id, title, steps)` and `remove_follow_up`
+  (core). `TaskBoard.done_hooks` run each time a task is done (each round too, from chat,
+  a button or the wall); `FollowUps.on_done` makes a task due today, off the wall, and
+  nudges it (as a reply when they did it in the chat, else normal). Not a second while
+  the last one is still open. A one-off's follow-up goes after once; a cancelled task's
+  goes. The open items say 'Follow-up: once "X" is done, "Y" comes up straight away'.
+- #70's "2020": open items give a task's due day with a year only when it isn't this
+  year (`tasks._day_words`), and the system prompt says dates are the local time's year,
+  said without one.
+- The live task 50 (Erin's refill) was cancelled already (#71), so she'll need to ask
+  again; the follow-up will take it now.
+- Evals (2026-10-29, Gemini 3.5 flash-lite): new cases for #68, #70, #71 and Rx1 pass.
+  The full run was 34/45, 37/45 once scoring allows `more_tools` (P1's, which changes
+  nothing). Found by them and fixed: names said bare ("Book the vet appointment is marked
+  done.") read as orders, so the prompt says names go in quotes; and the follow-up's
+  "straight away" read as pressure, now "as soon as ... is done". Still failing, older:
+  pantry-olive-oil and pantry-bought (grocery list, not update_pantry), rule-bins
+  (propose_rule, not a task), task-pause (start_break, not pause_messages; B1 made that
+  ambiguous), energy-plumber, pantry-spinach-expiry.
+- Evals, second pass (2026-10-29): 44/47 full, then the last 3 fixed and passing (6/6
+  re-run), PDA-safe 100%. Fixes: the pantry group's words take "used the last of",
+  "picked up", "using up" and the like, the schedules group's "always", "remind" and
+  "Tuesdays"/"evenings" (without them the model had no update_pantry or set_task_schedule);
+  `propose_rule` refuses "remind me about/to" (a task); "don't send me anything" is
+  pause_messages, not start_break; `suggest_meals` only when asked; `create_task` reads
+  "someone else" as the other partner; energy is logged first; `draft_vendor_call`
+  refuses a text; "remember that X" is a fact, a chore only when they ask to be
+  reminded. The evals give a case the fake Gmail when its setup needs it (`noise`), with
+  two cases from #67, both passing. Scoring counts `more_tools` as read-only.
+- Found while running them: 25 scripts in `.venv/bin` had a shebang into a
+  `working-memory` checkout that no longer exists (so `.venv/bin/pytest` couldn't start);
+  rewritten to this venv's python.
+- The plan's task matching bullet has follow-ups and the which-list card (rev 203).
+- Setup: restart (applies 0070).
+
+### F18a · Feedback (2026-10-29): the wrong event moved, honest staging, a task for the other partner, "too tired"
+Status: [x] 2026-10-29
+Depends on: F17b, K3
+From the family's reports of 2026-10-28/29: Erin's bugs #72, #73, #81 and #82.
+- #73 ("it rescheduled the wrong event"): "When is my next run scheduled?" then "Let's move
+  that up to 12pm so that there's plenty of time before tutoring" staged moving "Tutor
+  Gabriel" to 12-1:20 pm. The run is a repeating task (task 8, 2 pm), so the move belongs
+  to the task's time, not a calendar event; `move_calendar_event` takes an event only when
+  its title matches what they named. The reply also said "Tutor Gabriel is moved" while the
+  move waited for a yes: a staged change is said as staged.
+- #81 ("it's still trying to move my tutoring"): the move she declined with [Not now] came
+  back at 08:00, after she had approved moving that event to 4 pm. A staged calendar move is
+  dropped when the same event has since been moved, or another move of it is staged.
+- #82 ("I thought we implemented this feature already?"): "Can you have Michael get the
+  pacifier under the couch foot ottoman thing?" got "Themi can't pass messages between
+  people yet." Asking Themi to have the other partner do something is a task for them
+  (`create_task`, as "someone else"), not a relay; only "tell/let X know/message X" is.
+- #72 ("this seems wrong"): "I'm too tired tonight" got "Dryer now, or later tomorrow?",
+  the system prompt's example line, with no dryer task. The reply acknowledges it and offers
+  to let tonight's open items wait; examples in the prompt are marked as examples.
+- Tests: the move matched to a task vs an event; a stale staged move dropped; the staged
+  reply's wording; "have X do Y" as a task; scenarios from #72, #73, #81 and #82; eval cases.
+
+Notes (2026-10-29):
+- #73: `events.named_as_anchor(title, said)`: when the event's title words come up in the
+  message only after "before", "after", "until", "ahead of", "around" or "than", it's the
+  time to fit around, and `move_calendar_event` refuses, pointing to `reschedule_task` for
+  a task. A message that doesn't name the event at all ("move that to 4") still goes
+  through: the model decides. The tool's description says the same.
+- #73's "is moved" while the card waited: the reply guard (`agent.CLAIMS_DONE`) now knows
+  moved, rescheduled, changed, deleted and cancelled, so the reply is replaced by "...:
+  that's waiting for a yes on the card above."
+- #81: `Events.withdraw_changes(event_id)`: staging a move or delete of an event withdraws
+  the cards still waiting (or put off) to move or delete it, and so does making one. A
+  card put off with [Not now] has no card left to edit, so it just never comes back.
+- #82: the system prompt says having the other partner do something is `create_task` with
+  their name; only "tell/let X know" is a message to pass on. `create_task`'s description
+  gives "have Michael get the pacifier" as an example. No deterministic guard: the model
+  answered without a tool.
+- #72: the "Dryer now, or later tonight?" example is now tied to a washer that's finished,
+  with "never offer a chore that isn't in the context", and "I'm too tired tonight" gets
+  its own line (it's fine; offer to let today's open items wait).
+- Evals: `energy-too-tired-tonight` and `task-have-partner-do-it` added, not run yet
+  (run them when there's quota, since the prompt changed).
+- Setup: restart. No migration.
+
+### F18b · Feedback (2026-10-29): routines asked about, the slow note after a card, noise in chat again
+Status: [x] 2026-10-29
+Depends on: F18a, C3, P2a, F17a
+From the family's reports of 2026-10-29 morning: Erin's bugs #76, #77 and #78, Michael's #74.
+- #76 and #78 ("it gave the full day agenda, not my morning routine"; "the morning routine
+  does have items"): "What is my morning routine?" ran `day_summary`, then "The morning
+  routine board has no items", though the night before Themi sent "Morning routine, still
+  open: Walk dog". Asking about a routine brings the routine tools and lists that routine's
+  items (from Cozyla); "routine" words don't call for `day_summary`. Check also why a
+  "Morning routine, still open" check went out at 21:15.
+- #77 ("the taking me longer than usual message came in after the reply"): the summary card
+  went first, then the slow note, then the text reply. Once a reply's card or text has gone
+  out, the slow note isn't sent. When a failed message is retried (07:59), the retry
+  answers the question it failed on, not the latest one twice.
+- #74 ("there definitely are", after "Archive my email noise please" got "No noise emails
+  are waiting right now"): #67 again after F17a. The log shows no tool ran, so the model
+  answered without `archive_noise_emails`; find why (tool group words, or the open items
+  missing the waiting offers after a restart) with a failing test first.
+- Tests: the routine question (Cozyla fake), no slow note after a card, the retry's
+  question, scenario from #74; eval cases for "what's my morning routine" and "archive my
+  email noise".
+
+Notes (2026-10-29):
+- #76/#78: there was no tool that reads a routine, so the model made up "the board has no
+  items". `show_routine(part)` (wall group, read-only) reads the person's routine records
+  on the wall for today (one part of the day or all three), with "(done)" on the ticked
+  ones. "morning/afternoon/evening routine" no longer calls for the calendar group, so
+  `day_summary` isn't offered for it.
+- The 21:15 "Morning routine, still open": the morning check was sendable from noon until
+  quiet hours, with a deadline 15 minutes before them, so a check queued late (after a
+  restart, or held by the daily limit) went out at night. It's now sent only until the
+  evening check is due (an hour before quiet hours) and expires then.
+- #77: the slow note isn't sent once a reply-priority message (a card such as the day's
+  summary) has gone to them in the turn (`Agent._replied_since`).
+- #77's thread: "Will you retry automatically?" got "Yes". Nothing retries a message the
+  AI service was too busy for, so `BUSY_TEXT` says so, and the prompt says to answer it
+  now if it's in the conversation. Deviation from the prompt: no retry was built.
+- #74: not the tool groups. `archive_noise_emails` ran and was declined (declined calls
+  aren't logged as "ran"), because nothing was waiting: all 17 of Michael's overnight
+  noise emails were in Promotions or Updates, which F16d leaves alone. The answer now
+  says how many noise emails from the last week are in Gmail's other tabs, and that only
+  the Primary inbox counts (`NoiseDigest.in_tabs`). If Michael wants those tabs handled
+  too, that's a change to F16d, for him to decide.
+- Follow-up the same day (Michael: "I have 10 unread messages in my inbox that are likely
+  noise"): F16d was wrong for him. Gmail's own `in:inbox is:unread category:primary` found
+  exactly 10, and all carried CATEGORY_UPDATES: his Updates tab is off, so that mail shows
+  in Primary, but Gmail labels it by category anyway. Migration 0071 adds
+  `linked_accounts.gmail_tabs` (category -> shown as a tab) and `gmail_tabs_checked_at`.
+  `GmailSync._learn_tabs` asks Gmail after each sync: daily, and at once for a category
+  not seen before; a category whose inbox mail comes up under `category:primary` isn't a
+  tab. `in_primary(labels, tabs)` takes the account's tabs (`GmailSync.tabs_shown`;
+  unknown is a tab, as before), in triage, the noise message and `in_tabs`. When a
+  category turns out to be in Primary, `EmailTriage.on_tabs_learned` offers the noise from
+  the last week that was skipped (6 of his 10; the other 4 are routine, so no offer).
+  Setup: restart (applies 0071).
+- Evals (2026-10-29, Gemini 3.5 flash-lite): 47/49 full, PDA-safe 98%; F18a's two new
+  cases pass. Fixed, then the 3 re-run and passing: `task-check-in-run` ("Check-in set
+  for Tuesday..." read as the command "check in": a hyphenated opening word is a noun
+  now, in the PDA checker itself); `energy-plumber` (Gemini sent effect "-3", the schema
+  check refused it and the note was never saved: `tools._as_typed` reads numbers and
+  true/false sent as text by the schema's type, and the scorer reads them the same way);
+  `wall-what-is-my-morning-routine` was skipped for want of a wall: a case's `routine`
+  setup now gets the fake Cozyla.
+- Evals: `wall-what-is-my-morning-routine` added; not run yet. "Archive my email noise"
+  is covered by #67's cases.
+- Setup: restart. No migration.
+
+### F18c · Feedback (2026-10-29): button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer
+Status: [x] 2026-10-29
+Depends on: F18b, C1c
+From Erin's ideas #75, #80 and #83 (2026-10-29), and Michael's question about an offer.
+- #80 ("if there are more than 2-3 options, Themi should split push buttons onto multiple
+  lines..."): buttons go in rows, at most 2 a row, or 3 when every label is short (yes, no,
+  ok, later and the like).
+- #75 ("Themi should maintain a custom order of to dos in cozyla based on due date and
+  importance"): the wall's To-do List is kept in order: overdue and due first, urgent and
+  important before the rest, then by due date. Only Themi's own items move; check what the
+  unofficial client can set (C1c's notes).
+- #83 ("emails that have been marked read or archived by the user will be cleared from
+  Themi's email queue"): an email read or archived in Gmail leaves the noise offers, the
+  audit and "waiting on you" items about it (Gmail history already says so), and a queued
+  digest is refreshed.
+- Michael was offered "A small daily check-in to try: a glass of water mid-morning" and
+  read it as Erin's check-in. It's his own copy of the reserve (habits are per person,
+  20), but the card doesn't say so. The offer says it's for them ("Something you could try
+  for yourself: ..."), and an idea the other partner has active comes after the rest.
+- Tests: the row layout (Telegram fake), the order on the wall (Cozyla fake), an email
+  archived in Gmail clearing the queue, the offer's wording and order.
+
+Notes (2026-10-29):
+- #80: `telegram.button_rows(labels)`: one or two buttons on one row; more go two a row,
+  or three when every label is 8 characters or fewer. Every keyboard (sends and edits)
+  uses it. The scenario harness, the Telegram fake and five test helpers read every row
+  now, not just the first; the simulator already did.
+- #75 moved to F18d: nothing Themi knows of the unofficial API sets a to-do's place on
+  the wall (routines have `displayOrder`; to-dos have no such field in what we've seen),
+  and changing due dates to fake an order would change the family's data. F18d starts
+  with a read-only look at the live API.
+- #83: `GmailClient.history` asks for messageAdded, labelRemoved and messageDeleted, with
+  no label filter (an archived message no longer carries INBOX); added mail is picked out
+  by its INBOX label. `HistoryPage.handled` lists (message, "archived" | "read" |
+  "deleted"); `GmailSync` brings the stored labels up to date and tells
+  `handled_listeners`. `EmailTriage.on_handled` withdraws "Taken care of in Gmail
+  already.": read clears the mark-read and noise offers; archived or deleted also clears
+  a drafted reply and the email's unanswered audit question. A queued noise digest is
+  made again. Themi's own archiving shows in the history too, but only open offers are
+  withdrawn, so its own are untouched. The fake Gmail records labelRemoved, labelAdded
+  and messageDeleted as Gmail does, and `FakeGmail.by_hand` changes a message as if in
+  Gmail itself.
+- Michael's habit offer: `habits.OFFER_TEXT` is "Something you could try for yourself:
+  {idea}", and an idea the other partner has active is offered after the rest. His open
+  water offer (habit 5) keeps its old wording; "Not now" or no answer drops it for good.
+- The plan (rev 207): button rows, the routine read and the morning check's end, noise in
+  other tabs and mail handled in Gmail, and the per-person habit reserve.
+- Setup: restart. No migration. Gmail's history now returns label changes too, so each
+  poll reads a little more; nothing to set up.
+
+### F18d · Feedback (2026-10-29): the wall's to-do list in order
+Status: [ ]
+Depends on: F18c, C1c
+From Erin's idea #75: "Themi should maintain a custom order of to dos in cozyla based on
+due date and importance (with the most important and due/overdue tasks at the top of
+the list)."
+- First, read-only: list the To-do List's to-dos from the live API and note every field
+  (is there a sort or display order? does `isFlag` or `todoStars` change where one
+  shows?). Ask the user before writing anything to the wall to test it.
+- If the wall can be ordered: keep Themi's own to-dos in order (overdue and due first,
+  urgent and important before the rest, then by due date) on each sync, without changing
+  their dates. Items Themi didn't make stay where they are.
+- If it can't: tell Erin what the wall can do (flags or stars, if they show), and offer
+  that instead.
+- Tests: the order kept on the wall (Cozyla fake, with the field found), items not
+  Themi's left alone.
+
+### F18e · Feedback (2026-10-29): the chore sync stuck, the wrong task changed, reminders that aren't tasks
+Status: [x] 2026-10-29
+Depends on: C2b, F15a, F17b
+From the evening's logs (the chore sync warning every five minutes) and Erin's bugs #92
+and #93.
+- The log: "Cozyla chore sync stopped partway ... choreCheck/v1 (code 30016)" all evening.
+  "Bring bins in" was done early for next Wednesday; the wall won't tick a day still to
+  come, and the refusal stopped every sync before chores were pushed. A round done early
+  is ticked once its day comes; a tick the wall says no to is let go (connection and
+  sign-in failures still stop the sync and retry).
+- Behind it: "I brought the bins in" the morning after the round was marked missed counted
+  for next week's round. Done the day after a missed round, while the next hasn't begun,
+  fills the missed one (late).
+- Also behind it: "We contacted Erin's parents" marked the bins done (task 28, not 38).
+- #92 ("review bird cage schedule... I don't think it was supposed to be due? And it
+  misunderstood me asking when I cleaned it last"): Michael's "Yes please" to "Should I
+  reschedule 'Contact Erin's parents' to today at 6 pm?" moved the bird cage to 6 pm, so it
+  came up on Erin's chart and was nudged. Then "Didn't I just clean the bird cage?" and
+  "What no I meant yesterday?" each marked it done.
+- #93 ("event reminders are not tasks"): "extra reminders for the tutoring at 2pm and
+  3pm" were tasks (F15a's choice), each asking "Done already, or later?".
+
+Notes (2026-10-29):
+- `CozylaChores._check` ticks the wall; a refusal (any code but -1 and the sign-in ones)
+  is logged and the run is passed. `_ticks_to_wall` stops at a run whose day is after
+  today and comes back to it. The Cozyla fake refuses a future `checkDay` with 30016.
+- `TaskBoard._just_missed`/`_fill_missed`: the newest run is a missed one whose round
+  ended yesterday and the current round's day is after today: a new late run takes its
+  place (added before the old one is deleted: SQLite reuses the highest id, and the wall
+  sync goes by id). Two days late counts for the next round, as before.
+- `complete_task`, `reschedule_task`, `cancel_task` and `set_task_schedule` refuse a task
+  the conversation names nothing of when it names another open task (two or more title
+  words, `events.words_in_common`), and say which. A message of three words or fewer is
+  read with Themi's last message (`ToolContext.said_before`). Just "done" names nothing.
+- `complete_task` refuses a question ("?" at the end, or starting did/didn't/have/when/
+  was) unless it says it's done too ("done, what's next?", "can you mark it").
+- #93: `add_reminder(text, date, time)` (core, `themi.core.reminders`) queues "Reminder:
+  {text}" for that moment, with no buttons and no task: deadline at the moment (on time
+  past pacing and the day's limit, never in quiet hours or a pause), dropped two hours
+  past it. The system prompt points extra reminders there; "remind me to..." is still a
+  task. Deviation from F15a, at Erin's word.
+- `tasks._clock_words` is public now (`clock_words`).
+- Data repaired in the live database (backups in `data/`): bins (task 28) one late run by
+  Michael for 28 Oct, due 4 Nov; bird cage (task 7) the two runs from questions removed,
+  due 31 Oct with no time (the 6 pm was the misdirected reschedule). Task 38 was done by
+  Erin already.
+- Tool arguments aren't logged, so the misdirected calls were worked out from timings
+  (each tool's log line, the outbox, `reply_tools`). Logging a call's task id would make
+  the next one quicker to find.
+- Not run: the model evals (cases for a question, "Yes please" and an event reminder
+  would be worth adding).
+- Setup: restart. No migration.
+
+### F18f · Feedback (2026-10-29): a wrong year, the summary twice, a task already open, stale cards, the heads-up late
+Status: [x] 2026-10-29
+Depends on: F18e, K3, K4
+From the family's bugs #84, #85, #87, #88, #89, #90 and #91 (2026-10-29).
+- #84, #85, #87 ("Clean upstairs" still on the wall for today after it was moved; "streamline
+  the snooze feature"; "October 30 is tomorrow, but Themi is prompting it as an overdue
+  task"): the model moved it to 2020-10-30, a Friday too, so "Friday 30 Oct" read right.
+  Overdue by six years, it stayed up on Erin's chart (one at a time), each "snooze" set
+  the same date, the chart nudged it "Was due 30 Oct", and the missed round rolled it on
+  to the next Thursday. Also #84: green tea, already due Friday, was listed as moved.
+- #88 ("it should have continued the conversation to update the existing task"): "a task
+  for both of us due today at 6pm" was refused as already open; the model asked instead,
+  and no tool could make an open one-off both of theirs.
+- #89 ("why does this question result in two different day summary messages?"): the model
+  wrote the day out after `day_summary` had sent it; the tool's description said "say it
+  back in plain words", its result "don't repeat it".
+- #90 ("it's really hung up on rescheduling my tutoring"): a card to move tutoring to
+  12-1:20, put off with Not now, came back at 1:33 pm. A later move was approved; the
+  first card predated #81's fix, and nothing made a card lapse once its time had gone.
+- #91 ("traffic was considered, but prep time wasn't"): the heads-up was queued at 3:33,
+  getting-ready time ahead of leaving, but its deadline was the leave time, so pacing held
+  it to 3:49.
+
+Notes (2026-10-29):
+- `tasks.day_arg`: a date the model gives (create_task, reschedule_task, add_reminder) in
+  a past year is this year's, or next year's once that day has gone. `when_words` shows a
+  year that isn't this one. reschedule_task to the day a task has, with no time, says
+  "already due ...; nothing changed".
+- #88: the duplicate refusal says to change the open one now, to everything asked, and
+  names the tools; `update_task` takes `assign_to` (read by `tasks._assignee`, shared with
+  create_task; 'both' is `reassign(shared=True)`). A chore's people stay its schedule's.
+- #89: `ToolContext.answered`: a tool that sends the answer itself (`day_summary`) marks
+  the turn; the model's reply then goes only if it's one short line (`agent.SHORT_LINE`,
+  120 characters), else nothing more is sent. The description no longer says "say it back".
+- #90: move cards expire at the time they move to, add cards when the event ends (task
+  blocks did already, #64).
+- #91: the heads-up's deadline is when it's queued: on time past pacing and the day's
+  limit, still never in quiet hours, a busy time or a pause.
+- Data repaired (backups in `data/`): "Clean upstairs" (task 30) due Fri 30 Oct, its
+  missed 2020 round removed; cards 179 (the tutoring move) and 78 (Tuesday's run) expired.
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### F18g · Feedback (2026-10-29): "no" closed eight tasks, a title that says "today"
+Status: [x] 2026-10-29
+Depends on: F18e, F18f
+From Erin's bugs #95 and #97 (2026-10-29, evening).
+- #97 ("Michael should have been given the task urgently for tonight, why did Themi lie and
+  say it was marked done and why do I still see the task on my list in cozyla?"): to
+  "Morning routine, still open: Walk dog. Done already?" she said "no". The model called
+  complete_task on eight open tasks, the laundry due 9 pm for either of them among them,
+  so its nudges were withdrawn, then ran out of steps.
+- #95 ("make this last exchange more streamlined"): "Tomorrow, remind me to send the
+  invoice from the tutoring session today" became that title, read back as a bare line;
+  she had to ask for the session's name and date in it.
+
+Notes (2026-10-29):
+- `complete_task` refuses a bare no ("no", "nope", "not yet"...), and a task that nothing
+  names: their message, their one before it, Themi's last message (the nudge answered),
+  or "all"/"everything". A bare "done" with no nudge before it no longer closes a task.
+- `create_task`'s result gives the due day and asks for the title and when in one line; a
+  title with "today", "tonight", "tomorrow" or the like, due another day, is to be renamed
+  with update_task to the thing itself and its date.
+- Data repaired (backup in `data/`): the eight tasks reopened through `TaskBoard.reopen`
+  (re-nudged; their wall to-dos marked to sync), from a script whose channel refused to
+  send, so the running app delivered: Michael's laundry nudge went at 9:04 pm. The
+  vacuum's nudge was held to 8 am (she'd said Later at 7:35).
+- Open: the rest of #97 (whether the laundry should have been Michael's alone, as the
+  reply said, rather than on both lists) and idea #96 (a routine check with one item has
+  one button; a "skip today" button, and a morning check held to 8:15 pm).
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### F18h · Feedback (2026-10-30): who has a task, said truly; routine checks with a skip
+Status: [x] 2026-10-30
+Depends on: F18g
+From the rest of Erin's bug #97 and her idea #96 (2026-10-29).
+- #97: "Have one of us cycle the laundry tonight" made a task for either of them, but
+  create_task's result said "assigned to Michael ... Michael gets a gentle nudge", so the
+  reply said "I've put it on Michael's list" while it was on both lists (and her wall).
+  Earlier, "can you get Michael to unclog the vacuum tonight?" ran five task tools, none
+  of which moved it, and the reply said "I've assigned it to Michael for tonight". The
+  user's ask: Themi tells the whole truth about the actions it takes.
+- #96: "Themi should never offer a single push button. This should have been 'walk dog' or
+  'skip today' because it's already evening": the morning routine check, held all
+  afternoon, went at 8:15 pm with one button.
+
+Notes (2026-10-30):
+- `create_task` for "both" now says "created for both of them, on both lists" and that
+  each gets a nudge; `TaskBoard.whose_list` words whose list a task is on.
+- The agent checks each sentence of a reply that hands a task to someone ("assigned ... to
+  Michael", "on Michael's list"): if none of the tasks it names in quotes (or else, that the
+  turn's tools touched; `ToolContext.tasks`) is that person's alone, the sentence is
+  dropped and '"X" is on Erin's list.' (or "both lists") said instead. A name inside a
+  quoted title doesn't count. The system prompt says the same.
+- Routine checks end with a "Skip today" button (edits to "Morning routine: left for
+  today."; nothing is ticked on the wall). The morning check isn't sent after 5 pm, and
+  one held back lapses then.
+- Still single-button: a draft rule's "Lock it in" card, and a task block's "Done".
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### R1 · Routines kept in Themi
+Status: [ ]
+Depends on: F18c, C3
+From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
+Default morning, afternoon, and evening, but customizable number of routines and when they
+each happen." Read the plan's routine sections and C3's notes first; this needs a design
+pass with the user (how it relates to the wall's routines, and which one wins) before it's
+built. Split it then.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26

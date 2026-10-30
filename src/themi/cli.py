@@ -107,6 +107,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
         cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
         travel=TravelClient(settings.tomtom_api_key),
+        tool_routing=settings.tool_routing,
     )
     return Runtime(
         app,

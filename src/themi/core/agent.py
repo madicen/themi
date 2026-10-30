@@ -22,7 +22,7 @@ import asyncio
 import logging
 import random
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
@@ -35,9 +35,10 @@ from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
+from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
-from themi.core.tools import ToolContext, choose_groups
+from themi.core.tools import GROUPS, ToolContext, choose_groups, twins_text
 from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
@@ -70,10 +71,11 @@ WHICH_TEXT = "Which one did you mean: {items}? Each card above has its own butto
 NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already waiting for a yes."
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
-    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded)\b"
-    r"|^(?:added|done|archived|booked|sent|ordered|scheduled)\b"
+    r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
+    r"rescheduled|changed)\b"
+    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
-    r"sent|ordered|scheduled|on the list)\b",
+    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed)\b",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -91,6 +93,35 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+# Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
+# to Michael" when no tool had moved it. A sentence that hands a task to someone is checked
+# against who has it; a wrong one is replaced by whose list it's really on.
+HANDED_TO = (
+    r"\b(?:assigned|reassigned|gave|given|handed|passed|put|added|moved|sent)\b[^.!?\n]*?"
+    r"\b(?:to|on|for)\s+{name}\b|\b{name}'s\s+(?:list|job|task)\b"
+)
+SENTENCE = re.compile(r"(?<=[.!?])\s+")
+QUOTED = re.compile(r'"([^"\n]+)"')
+
+
+# Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
+TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
+
+
+def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
+    """Each "task 50" in a reply becomes the task's name in quotes ("task 7 (Clean the bird
+    cage)" too); a number that isn't a task stays as it is."""
+
+    def named(match: re.Match[str]) -> str:
+        title = title_of(int(match.group(1)))
+        if title is None:
+            return match.group(0)
+        said = match.group(3)  # quoted: a title like "Refill the water" isn't an order
+        return f'"{title}"' if said is None or said.strip() == title else f'"{title}" ({said})'
+
+    return TASK_NUMBER.sub(named, reply)
+
+
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
 LATER_WORDS = frozenset({"not now", "later", "maybe later", "not yet", "💤"})
 
@@ -98,12 +129,16 @@ SETUP_NEEDED_TEXT = (
     "I can't reach an AI service yet. Once an AI key is added in your Themi settings, "
     "I can pick this up."
 )
+# Bug #77's thread: asked "Will you retry automatically?", the model said yes. Nothing
+# retries it, so this says so.
 BUSY_TEXT = (
     "The AI service is busy at the moment, so I couldn't answer that one. "
-    "It usually clears up within a few minutes."
+    "It usually clears up within a few minutes; I won't retry it on my own, so the same "
+    "message works again then."
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
+SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
 
 
@@ -175,8 +210,9 @@ class Agent:
             async with channel.typing(member), self._slow_notice(member, event, timer):
                 reply = await self._converse(member, text, event, timer)
             self._catch_energy(member, text, energy_mark)
-            async with timer.outbox():
-                await self._reply(member, reply)
+            if reply:  # empty when a tool's message was the whole answer
+                async with timer.outbox():
+                    await self._reply(member, reply)
         finally:
             timer.finish()
 
@@ -186,12 +222,14 @@ class Agent:
     ) -> AsyncIterator[None]:
         """Michael's idea: a reply still coming after SLOW_AFTER seconds gets one short
         message first. Not for button taps. If the reply is ready when the time comes,
-        the message doesn't go."""
+        or a card has gone to them in this turn already (bug #77: the day's summary went
+        first, so the word came after the answer had begun), the message doesn't go."""
         answered = False
+        mark = self.services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM outbox")
 
         async def watch() -> None:
             await clock.sleep(SLOW_AFTER)
-            if answered:
+            if answered or self._replied_since(member, mark):
                 return
             notice = pick_notice(self.services.store.db, member.id, self._rng)
             timer.notice = notice
@@ -214,6 +252,15 @@ class Agent:
                 watcher.cancel()
             with suppress(asyncio.CancelledError):
                 await watcher  # a notice on its way goes before the reply
+
+    def _replied_since(self, member: Member, mark: int) -> bool:
+        return bool(
+            self.services.store.db.one(
+                "SELECT 1 FROM outbox WHERE id > ? AND member_id = ? AND priority = 'reply' "
+                "AND kind != 'slow_notice'",
+                (mark, member.id),
+            )
+        )
 
     # ----- steps --------------------------------------------------------------
 
@@ -322,17 +369,42 @@ class Agent:
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
         before = next((m.text for m in reversed(history) if m.direction == "in"), "")
+        said = next((m.text for m in reversed(history) if m.direction == "out"), "")
         # P1: the tools this message and the last few call for; more_tools adds to them.
-        groups = choose_groups([text, *(m.text for m in history[-4:])])
-        ctx = ToolContext(member, services, request_text=text, previous_text=before, groups=groups)
+        # P5's "all" routing sends every group.
+        routing = services.tool_routing
+        recent = [text, *(m.text for m in history[-4:])]
+        groups = set(GROUPS) if routing == "all" else choose_groups(recent)
+        if routing == "embeddings" and services.group_router is not None:
+            # P7b: by meaning too, over this message and the person's last two; and the
+            # groups used lately, which short follow-ups lean on.
+            theirs = [text, *[m.text for m in history if m.direction == "in"][-2:]]
+            groups |= await services.group_router.choose(member.id, theirs)
+            groups |= recent_groups(services.store.db, member.id)
+        ctx = ToolContext(
+            member,
+            services,
+            request_text=text,
+            previous_text=before,
+            said_before=said,
+            groups=groups,
+        )
+        offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
+        timer.route(offered, len(services.tools.specs_for(groups, routing)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for step in range(1, self.max_steps + 1):
-                response = await client.chat(system, messages, services.tools.specs(ctx.groups))
+                tools = services.tools.specs_for(ctx.groups, routing)
+                twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
+                call_system = f"{system}\n\n{twins}" if twins else system
+                response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
+                        return ""  # the tool's message was the answer (bug #89)
+                    reply = self._whole_truth(_by_name(reply, self._task_title), ctx)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
@@ -346,6 +418,8 @@ class Agent:
         except AllProvidersFailed as exc:
             log.warning("No AI backend answered member %s: %s", member.id, exc)
             return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
+        finally:
+            timer.added(ctx.groups - offered)
         log.warning("Agent hit its step limit for member %s", member.id)
         return TANGLED_TEXT
 
@@ -359,6 +433,58 @@ class Agent:
         ):
             recent.pop()
         return recent[-self.history :]
+
+    def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
+        """Each sentence saying a task went to someone is kept only if one of the tasks it
+        names in quotes (or else, that the turn touched) is that person's alone."""
+        board = self.services.taskboard
+        if board is None:
+            return reply
+        members = self.services.store.list_members()
+        touched = [board.get(i) for i in dict.fromkeys(ctx.tasks)]
+        lines, truths = [], []
+        for line in reply.split("\n"):
+            kept = []
+            for sentence in SENTENCE.split(line):
+                bare = QUOTED.sub('""', sentence)  # a name inside a title isn't a handover
+                named = [
+                    m
+                    for m in members
+                    if re.search(HANDED_TO.format(name=re.escape(m.name)), bare, re.IGNORECASE)
+                ]
+                tasks = self._open_titled(QUOTED.findall(sentence)) or touched
+                if (
+                    named
+                    and tasks
+                    and not any(t.assignee == m.id and not t.shared for t in tasks for m in named)
+                ):
+                    truths += [t for t in tasks if t not in truths]
+                else:
+                    kept.append(sentence)
+            if kept or not line.strip():
+                lines.append(" ".join(kept))
+        if not truths:
+            return reply
+        said = " ".join(f'"{t.title}" is on {board.whose_list(t)}.' for t in truths)
+        text = "\n".join(lines).strip()
+        return f"{text}\n{said}" if "\n" in text else f"{text} {said}".strip()
+
+    def _open_titled(self, titles: list[str]) -> list:
+        board = self.services.taskboard
+        assert board is not None
+        rows = [
+            self.services.store.db.one(
+                "SELECT id FROM tasks WHERE lower(title) = lower(?) "
+                "AND status IN ('open', 'snoozed') ORDER BY id DESC LIMIT 1",
+                (title,),
+            )
+            for title in titles
+        ]
+        return [board.get(row["id"]) for row in rows if row]
+
+    def _task_title(self, task_id: int) -> str | None:
+        row = self.services.store.db.one("SELECT title FROM tasks WHERE id = ?", (task_id,))
+        return row["title"] if row else None
 
     async def _reply(self, member: Member, text: str) -> None:
         await self.services.outbox.send(member, text, priority=Priority.REPLY)

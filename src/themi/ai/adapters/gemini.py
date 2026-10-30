@@ -34,6 +34,7 @@ from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StopReason,
     StructuredResponse,
@@ -49,6 +50,9 @@ from themi.storage.secrets import Secret
 # gemini-3.8-flash allowed only 20 free requests a day; flash-lite has room for a household.
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 DEFAULT_TRANSCRIPTION_MODEL = "gemini-3.5-flash-lite"
+# P7b: gemini-embedding-2 told "lie down" from "oat milk" further apart than -001 did.
+DEFAULT_EMBEDDING_MODEL = "gemini-embedding-2"
+EMBEDDING_SIZE = 768  # of 3072: plenty to route on, and a quarter of the cache
 
 REFUSAL_FINISH_REASONS = frozenset(
     {"SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "RECITATION", "IMAGE_SAFETY"}
@@ -150,6 +154,34 @@ class GeminiProvider:
         ]
         response = await self._generate(contents, types.GenerateContentConfig())
         return Transcription(_text(response).strip(), self.name, self.model)
+
+    async def embed(
+        self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
+    ) -> Embeddings:
+        # One Content per text: gemini-embedding-2 reads a list of plain strings as the
+        # parts of a single input and returns one vector.
+        contents = [types.Content(parts=[types.Part(text=t)]) for t in texts]
+        config = types.EmbedContentConfig(
+            task_type="SEMANTIC_SIMILARITY", output_dimensionality=EMBEDDING_SIZE
+        )
+        try:
+            response = await self._client.aio.models.embed_content(
+                model=self.model, contents=contents, config=config
+            )
+        except genai_errors.APIError as exc:
+            raise error_for_status(
+                exc.code,
+                f"gemini returned {exc.code} {exc.status or ''}: {exc.message or ''}".strip(),
+                _retry_after(exc),
+            ) from exc
+        except _TRANSPORT_ERRORS as exc:
+            raise RetryableError(f"gemini transport error: {type(exc).__name__}") from exc
+        vectors = tuple(tuple(e.values or ()) for e in response.embeddings or ())
+        if len(vectors) != len(texts) or not all(vectors):
+            raise MalformedOutputError(
+                f"gemini returned {len(vectors)} embeddings for {len(texts)} texts"
+            )
+        return Embeddings(vectors, self.name, self.model)
 
     # ----- internals ----------------------------------------------------------
 

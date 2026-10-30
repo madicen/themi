@@ -210,7 +210,7 @@ class FakeTelegram:
     def last_keyboard(self, chat_id: int) -> list[dict[str, Any]]:
         for params in reversed(self.calls("sendMessage")):
             if int(params["chat_id"]) == chat_id and params.get("reply_markup"):
-                return params["reply_markup"]["inline_keyboard"][0]
+                return [b for row in params["reply_markup"]["inline_keyboard"] for b in row]
         raise AssertionError(f"no keyboard was sent to {chat_id}")
 
     # ----- the HTTP side ------------------------------------------------------

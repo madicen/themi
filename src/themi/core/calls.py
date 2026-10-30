@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -27,7 +28,7 @@ from themi.channels.outbox import Priority
 from themi.core.prompts import OpenItem, as_data
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
-from themi.core.tools import ToolContext, tool
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -221,6 +222,10 @@ def _calls(ctx: ToolContext) -> VendorCalls:
     return calls
 
 
+NOT_A_CALL = re.compile(r"\b(?:text|texting|message|e-?mail)\b", re.IGNORECASE)
+A_CALL = re.compile(r"\b(?:call|calling|phone|ring)\b", re.IGNORECASE)
+
+
 @tool(
     "draft_vendor_call",
     "When someone needs to phone a vendor (a plumber, a utility, a landlord, an office): "
@@ -235,6 +240,11 @@ def _calls(ctx: ToolContext) -> VendorCalls:
     },
 )
 async def draft_vendor_call(ctx: ToolContext, args: dict[str, Any]) -> str:
+    said = ctx.request_text
+    if NOT_A_CALL.search(said) and not A_CALL.search(said):  # eval task-text-plumber
+        raise ToolFailed(
+            "That's a text or a message, not a phone call: create_task with kind 'text'."
+        )
     try:
         drafted = await _calls(ctx).draft(
             ctx.member, args["vendor"], args["objective"], str(args.get("details") or "")

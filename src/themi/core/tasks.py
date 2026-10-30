@@ -27,7 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
-from themi.core.events import title_matches
+from themi.core.events import title_matches, words_in_common
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -64,6 +64,26 @@ UNSURE = re.compile(
     r"no idea|forgot (?:if|whether)|maybe|might have|think i (?:took|did|had))\b",
     re.IGNORECASE,
 )
+# "Didn't I just clean the bird cage?" asks; it doesn't say it's done (#92).
+QUESTION = re.compile(
+    r"\?\s*$|^\s*(?:did|didn[\u2019']?t|have|haven[\u2019']?t|has|hasn[\u2019']?t|when|was|wasn[\u2019']?t)\b",
+    re.IGNORECASE,
+)
+SAYS_DONE = re.compile(  # ...unless it says so too ("done, what's next?", "can you mark it")
+    r"^\s*(?:done|all done|did it|i did|finished|yes|yep|yeah)\b|"
+    r"\b(?:mark|tick|check (?:it |that )?off|cross (?:it |that )?off|log|note)\b",
+    re.IGNORECASE,
+)
+SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it
+# "no" to "Walk dog... Done already?" marked eight other tasks done (#97).
+NOT_DONE = frozenset(
+    {"no", "n", "nope", "nah", "not yet", "not done", "not today", "no not yet", "nope not yet"}
+)
+_RELATIVE_DAY = re.compile(
+    r"\b(?:today|tonight|yesterday|tomorrow|this (?:morning|afternoon|evening))\b",
+    re.IGNORECASE,
+)
+ALL_OF_THEM = re.compile(r"\b(?:all|everything|every one|both)\b", re.IGNORECASE)
 
 
 def is_medicine(title: str) -> bool:
@@ -101,6 +121,7 @@ MISSED = ("roll", "catch_up", "next_day")  # what happens to a round that passes
 IMPORTANCE = ("low", "normal", "high")  # how often an overdue task is raised (C2c)
 URGENT_WORDS = re.compile(r"\b(?:urgent|urgently|asap|right away|straight away)\b")
 BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
+OTHER_WORDS = ("someone else", "somebody else", "the other one", "not me", "my partner")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
@@ -168,6 +189,7 @@ class Run:
 TaskChange = str
 # (task as it is now, what changed, whether whoever caused it is in the conversation)
 TaskListener = Callable[[Task, TaskChange, bool], Awaitable[None]]
+DoneHook = Callable[[Task, Member, bool], Awaitable[None]]
 # Sends a task's nudge its own way (task, member, not_before, deadline); True if it did.
 OwnNudge = Callable[[Task, Member, datetime | None, datetime | None], Awaitable[bool]]
 # Extra text to send with a task's nudge (a call script, say), or None.
@@ -239,6 +261,9 @@ class TaskBoard:
         self.wall_notes: list[Callable[[Task], str | None]] = []
         # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
         self.holds: list[Callable[[Task, Member], bool]] = []
+        # Called each time a task is done (a repeating one, each round): (task, by whom,
+        # whether they're in the conversation). F17b's follow-ups.
+        self.done_hooks: list[DoneHook] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -343,7 +368,7 @@ class TaskBoard:
 
         items, today = [], self._today()
         for t in self.open_for(member):
-            due = f", due {t.due_on:%a %d %b}" if t.due_on else ""  # the weekday too (#64)
+            due = f", due {_day_words(t.due_on, today)}" if t.due_on else ""  # weekday (#64)
             if t.either:
                 whose = "either of you"
             elif t.shared:
@@ -731,14 +756,21 @@ class TaskBoard:
             return SETTLED_TEXT
         await self._settle_sent(task, tapped)
         if task.repeats:
-            return await self._complete_round(task, by, interactive)
-        self.db.execute(
-            "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
-            (to_utc_iso(clock.now()), task_id),
-        )
-        self.withdraw_prompt(task)
-        await self._changed(self.get(task_id), "done", interactive)
-        return DONE_TEXT.format(title=task.title)
+            said = await self._complete_round(task, by, interactive)
+        else:
+            self.db.execute(
+                "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
+                (to_utc_iso(clock.now()), task_id),
+            )
+            self.withdraw_prompt(task)
+            await self._changed(self.get(task_id), "done", interactive)
+            said = DONE_TEXT.format(title=task.title)
+        for hook in self.done_hooks:  # each time it's done, a repeating one's every round
+            try:
+                await hook(task, by, interactive)
+            except Exception:
+                log.exception("A done hook failed for task %s", task.id)
+        return said
 
     async def _settle_sent(self, task: Task, tapped: int | None) -> None:
         """Its nudges already sent stop asking once it's done some other way (bug #40: ticked
@@ -781,6 +813,14 @@ class TaskBoard:
             await self.prompt(task, member=person)
         await self._changed(task, "reassigned", False)
         return task
+
+    def whose_list(self, task: Task) -> str:
+        """Whose list a task is on, in words (bug #97): "Erin's list", or "both lists"."""
+        if task.shared:
+            return "both lists"
+        if task.assignee is None:
+            return "nobody's list yet"
+        return f"{self.store.get_member(task.assignee).name}'s list"
 
     async def put_on_chart(self, task_id: int, by: Member, on: bool = True) -> Task:
         """Put a one-off task on the wall's chore chart (or take it off, back to the to-do
@@ -946,7 +986,7 @@ class TaskBoard:
         if task.repeat is not None and task.repeat.before_sunset is not None:
             at = self.time_of(task, self._today())
             parts.append(
-                f"today that's about {_clock_words(at)}"
+                f"today that's about {clock_words(at)}"
                 if at
                 else "sunset needs the home address (the Family page)"
             )
@@ -1043,6 +1083,9 @@ class TaskBoard:
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
     async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
+        missed = self._just_missed(task)
+        if missed is not None:
+            return self._fill_missed(task, by, missed)
         self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
         today = self._today()
         end = self.round_end(task)
@@ -1069,6 +1112,35 @@ class TaskBoard:
         await self._maybe_offer_step_up(fresh)
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=next_due.strftime("%a %d %b")
+        )
+
+    def _just_missed(self, task: Task) -> dict[str, Any] | None:
+        """The run of a round that rolled on undone and ended yesterday, while the next hasn't
+        begun: "I brought the bins in" the morning after is for that one, not next week's."""
+        today = self._today()
+        if task.repeat is None or task.due_on is None or task.due_on <= today:
+            return None
+        last = self.db.one(
+            "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1", (task.id,)
+        )
+        if last is None or not last["missed"] or last["due_on"] is None:
+            return None
+        end = round_end(task.repeat, date.fromisoformat(last["due_on"]))
+        return last if end >= today - timedelta(days=1) else None
+
+    def _fill_missed(self, task: Task, by: Member, missed: dict[str, Any]) -> str:
+        """Done a day late: the missed run becomes a late one and the next round stays. It's
+        a new run, not the old one changed, so the wall's sync ticks its day; added before
+        the old one goes, as SQLite would give a newest run's id to the next one."""
+        self.db.execute(
+            "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
+            "VALUES (?, ?, ?, ?, 0)",
+            (task.id, by.id, to_utc_iso(clock.now()), missed["due_on"]),
+        )
+        self.db.execute("DELETE FROM task_runs WHERE id = ?", (missed["id"],))
+        assert task.due_on is not None
+        return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
+            when=task.due_on.strftime("%a %d %b")
         )
 
     async def _finish_course(self, task: Task, interactive: bool) -> None:
@@ -1276,10 +1348,12 @@ class TaskBoard:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
         assert task.due_on is not None
         day = f"{task.due_on:%a %d %b}"
+        if task.due_on.year != self._today().year:  # a wrong year shows (#84)
+            day += f" {task.due_on.year}"
         at = task.due_time or (task.repeat.at if task.repeat else None)
         if task.from_time and task.due_time:
-            return f"{day}, {_clock_words(task.from_time)}-{_clock_words(task.due_time)}"
-        return f"{day}, {_clock_words(at)}" if at else day
+            return f"{day}, {clock_words(task.from_time)}-{clock_words(task.due_time)}"
+        return f"{day}, {clock_words(at)}" if at else day
 
     async def make_either(self, task_id: int) -> Task:
         """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
@@ -1306,7 +1380,7 @@ class TaskBoard:
         self.withdraw_prompt(task)
         if until is not None:
             local = until.astimezone(self._tz())
-            when = _clock_words(local)
+            when = clock_words(local)
             if local.date() != self._today():  # bug #54: say which day, when it isn't today
                 when = f"{local:%a %d %b}, {when}"
             return UNTIL_TEXT.format(title=task.title, when=when)
@@ -1422,11 +1496,17 @@ def _board(ctx: ToolContext) -> TaskBoard:
     return board
 
 
+# P6: "new rule: the grocery order happens on Sundays" became a task (eval
+# rule-husband-groceries). Said as a rule, it's propose_rule, unless it's a reminder.
+CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|this) a rule\b")
+
+
 @tool(
     "create_task",
     "Add a household task and nudge whoever does it at a good moment. assign_to says who: "
     "'me' when the person asking will do it ('I want to...', 'I'll...', 'remind me to...'), "
-    "a family member's name when they name someone, 'both' when either of them can do it "
+    "a family member's name when they name someone ('have my husband get the pacifier', 'ask "
+    "him to...'), 'both' when either of them can do it "
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
     "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
     {
@@ -1454,7 +1534,8 @@ def _board(ctx: ToolContext) -> TaskBoard:
         },
         "assign_to": {
             "type": "string",
-            "description": "'me', a family member's name, 'both', or 'anyone'.",
+            "description": "'me', a family member's name, 'both', 'anyone', or "
+            "'someone else' (the other partner).",
         },
         "steps": {
             "type": "array",
@@ -1478,10 +1559,16 @@ def _board(ctx: ToolContext) -> TaskBoard:
     },
 )
 async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    said = ctx.request_text.lower()
+    if CALLED_A_RULE.search(said) and "remind" not in said:
+        raise ToolFailed(
+            "Not created: they called it a rule, so it's propose_rule (a draft they lock in "
+            "themselves), not a task."
+        )
     due = None
     if args["due_date"]:
         try:
-            due = date.fromisoformat(args["due_date"])
+            due = day_arg(args["due_date"], _board(ctx)._today())
         except ValueError:
             return "Not created: the due date should look like 2026-11-03."
     try:
@@ -1495,17 +1582,10 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         due = _board(ctx)._today()  # a time with no date means today
     if due is None and URGENT_WORDS.search(ctx.request_text.lower()):
         due = _board(ctx)._today()  # T1: urgent is a due date that's soon
-    target = args["assign_to"].strip()
-    chosen: Member | None = None
-    both = target.lower() in BOTH_WORDS  # bug #26: "one of us" was one person's
-    if target.lower() in ("me", "myself", "the person asking"):
-        chosen = ctx.member
-    elif not both and target.lower() not in ("anyone", "someone", ""):
-        members = ctx.services.store.list_members()
-        chosen = next((m for m in members if m.name.lower() == target.lower()), None)
-        if chosen is None:
-            names = ", ".join(m.name for m in members)
-            return f"Not created: there's nobody called {target} in the family ({names})."
+    try:
+        chosen, both = _assignee(ctx, args["assign_to"])
+    except ValueError as exc:
+        return f"Not created: {exc}."
     whose = [chosen] if chosen is not None else ctx.services.store.list_members()
     same = next(
         (
@@ -1517,11 +1597,12 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         None,
     )
     if same is not None:  # bug #56: a second "Mimi pill" to change the first one's time
-        return (
-            f"Not created: task {same.id} ({same.title}) is already open. To change its day "
-            "or time, use reschedule_task (a repeating chore's time goes for every round); "
-            "its schedule, set_task_schedule. If this is a different job, give it a title "
-            "that says how."
+        return (  # bug #88: the model asked instead, and couldn't make it both of theirs
+            f"Not created: task {same.id} ({same.title}) is already open. Change that one "
+            "instead, now, to everything they asked for (don't ask them first): its day or "
+            "time with reschedule_task (a repeating chore's time goes for every round), who "
+            "does it with update_task's assign_to, its schedule with set_task_schedule. If "
+            "this is a different job, give it a title that says how."
         )
     try:
         task = await _board(ctx).create(
@@ -1543,35 +1624,68 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             task = await _board(ctx).make_either(task.id)
     except ValueError as exc:
         return f"Not created: {exc}"
+    ctx.tasks.append(task.id)
     assignee = ctx.services.store.get_member(task.assignee) if task.assignee else ctx.member
-    if assignee.id == ctx.member.id:
-        who, tell = f"{assignee.name} (the person asking)", ""
+    nudged, tell = f"{assignee.name} gets", ""
+    if both:  # bug #97: this said "assigned to Michael", and so did the reply
+        who = "for both of them, on both lists (either can do it; whoever does it closes it)"
+        nudged, tell = "Each of them gets", " Say it's on both lists, not one person's."
+    elif assignee.id == ctx.member.id:
+        who = f"and assigned to {assignee.name} (the person asking)"
     else:
-        who, tell = assignee.name, f" Let {ctx.member.name} know it went to {assignee.name}."
+        who = f"and assigned to {assignee.name}"
+        tell = f" Let {ctx.member.name} know it went to {assignee.name}."
+    due = f", due {_board(ctx).when_words(task)}" if task.due_on else ""
+    said = (
+        _RELATIVE_DAY.search(task.title)
+        if task.due_on and task.due_on != _board(ctx)._today()
+        else None
+    )
+    rename = (  # bug #95: "...the tutoring session today", read tomorrow
+        f' Its title says "{said.group(0)}", which won\'t be true then: rename it now with '
+        "update_task to name the thing itself and its date (from the calendar or the "
+        "conversation, e.g. 'Send the invoice for Tutor Gabriel (Thu 29 Oct)')."
+        if said
+        else ""
+    )
     return (
-        f"Task {task.id} created and assigned to {who}. Why: {task.assign_reason} "
-        f"{assignee.name} gets a gentle nudge at a good moment.{tell}"
+        f"Task {task.id} created {who}{due}."
+        + ("" if both else f" Why: {task.assign_reason}")
+        + f" {nudged} a gentle nudge at a good moment.{tell}{rename} Say its title "
+        "and when in one line."
     )
 
 
 @tool(
     "update_task",
-    "Rename a task or replace its steps (the full new list, in their words), e.g. when someone "
-    "adds, removes or reorders steps of a chore. Empty title or steps keep what's there; "
-    "clear_steps removes them all.",
+    "Rename a task, replace its steps (the full new list, in their words), e.g. when someone "
+    "adds, removes or reorders steps of a chore, or change who does a one-off task. Empty "
+    "title or steps keep what's there; clear_steps removes them all. assign_to as for "
+    "create_task ('me', a name, 'both', 'someone else'), or '' to keep.",
     {
         "task_id": {"type": "integer"},
         "title": {"type": "string", "description": "A new title, or an empty string."},
         "steps": {"type": "array", "items": {"type": "string"}},
         "clear_steps": {"type": "boolean"},
+        "assign_to": {"type": "string"},
     },
 )
 async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
     steps = [] if args["clear_steps"] else (args["steps"] or None)
     try:
-        task = await _board(ctx).update(
+        task = await board.update(
             args["task_id"], ctx.member, title=args["title"], steps=steps, interactive=True
         )
+        if args["assign_to"].strip():
+            if task.repeats:
+                raise ValueError(
+                    "a chore's people are its schedule's: set_task_schedule's either, or "
+                    "assign it when it's made"
+                )
+            chosen, both = _assignee(ctx, args["assign_to"])
+            if chosen is not None or both:
+                task = await board.reassign(task.id, chosen, shared=both)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
     except PermissionDenied as exc:
@@ -1579,7 +1693,32 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     except ValueError as exc:
         raise ToolFailed(str(exc)) from exc
     steps_now = "; ".join(task.steps) if task.steps else "none"
-    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}"
+    if task.shared:
+        who = "both of them (on both lists; whoever does it closes it)"
+    else:
+        who = ctx.services.store.get_member(task.assignee).name if task.assignee else "nobody yet"
+    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}. Who: {who}."
+
+
+def _assignee(ctx: ToolContext, said: str) -> tuple[Member | None, bool]:
+    """Who assign_to names, and whether it's both of them ("one of us", bug #26). Nobody in
+    particular ('anyone', '') is (None, False). ValueError for a name not in the family."""
+    target = said.strip().lower()
+    if target in BOTH_WORDS:
+        return None, True
+    if target in ("me", "myself", "the person asking"):
+        return ctx.member, False
+    if target in OTHER_WORDS:  # "can someone else deal with it?"
+        others = [m for m in ctx.services.store.list_members() if m.id != ctx.member.id]
+        return (others[0] if len(others) == 1 else None), False
+    if target in ("anyone", "someone", ""):
+        return None, False
+    members = ctx.services.store.list_members()
+    chosen = next((m for m in members if m.name.lower() == target), None)
+    if chosen is None:
+        names = ", ".join(m.name for m in members)
+        raise ValueError(f"there's nobody called {said.strip()} in the family ({names})")
+    return chosen, False
 
 
 @tool(
@@ -1616,6 +1755,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
     phrase = args["repeat"].strip()
     try:
+        _check_meant(ctx, board.get(args["task_id"]), "Not changed")
         repeat = parse(phrase, board._today()) if phrase else None
         task = await board.set_schedule(
             args["task_id"],
@@ -1641,7 +1781,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     upcoming = board.next_dates(task, 1) if task.repeat else []
     if upcoming:
         when = upcoming[0]
-        clock_time = f", {_clock_words(when)}" if task.repeat and task.repeat.at else ""
+        clock_time = f", {clock_words(when)}" if task.repeat and task.repeat.at else ""
         text += f" Next: {when:%a %d %b}{clock_time}."
     elif task.due_on is not None and task.due_before_task is not None:
         text += f" Next: {task.due_on:%a %d %b}."
@@ -1654,7 +1794,12 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     )
 
 
-def _clock_words(moment: datetime | time) -> str:
+def _day_words(day: date, today: date) -> str:
+    """ "Thu 29 Oct", with the year only when it isn't this one (bug #70 read "2020")."""
+    return f"{day:%a %d %b}" if day.year == today.year else f"{day:%a %d %b %Y}"
+
+
+def clock_words(moment: datetime | time) -> str:
     hour = moment.hour % 12 or 12
     suffix = "am" if moment.hour < 12 else "pm"
     return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"
@@ -1676,7 +1821,66 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "the safe way is no second dose until they've checked, or until their doctor or "
             "pharmacist says; never tell them to take it, and give no other dose advice."
         )
+    text = ctx.request_text
+    if " ".join(re.findall(r"[a-z]+", text.lower())) in NOT_DONE:
+        raise ToolFailed(
+            "Not marked done: they said no. Nothing is done; leave it open, and offer to move "
+            "it or hand it on only if that helps."
+        )
+    if QUESTION.search(text) and not SAYS_DONE.search(text):
+        raise ToolFailed(  # #92: "Didn't I just clean the bird cage?" marked it done
+            "Not marked done: they asked a question, not said it's done. Answer it (when it "
+            "was last done is in its details); mark it done only when they say it is."
+        )
+    _check_meant(ctx, task, "Not marked done")
+    if not _named(ctx, task):
+        raise ToolFailed(
+            f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
+            "last message. Mark only what they say is done; ask if it isn't clear."
+        )
     return await _board(ctx).complete(task.id, ctx.member, interactive=True)
+
+
+def _named(ctx: ToolContext, task: Task) -> bool:
+    """Something said names this task: their message or the one before it, Themi's last one
+    (the nudge they're answering), or all of them ("all done", "everything") (#97)."""
+    said = (ctx.request_text, ctx.previous_text, ctx.said_before)
+    return any(words_in_common(text, task.title) for text in said) or bool(
+        ALL_OF_THEM.search(ctx.request_text)
+    )
+
+
+def _check_meant(ctx: ToolContext, task: Task, not_done: str) -> None:
+    meant = _meant_instead(ctx, task)
+    if meant is not None:
+        raise ToolFailed(
+            f"{not_done}: what they said names task {meant.id} ({meant.title}), not task "
+            f"{task.id} ({task.title}). Use the one they mean, and say which by name."
+        )
+
+
+def _meant_instead(ctx: ToolContext, task: Task) -> Task | None:
+    """Another open task the conversation names, when it names nothing of this one ("We
+    contacted Erin's parents" marked the bins done, 2026-10-29). A short answer ("Yes please")
+    is read with what Themi asked before it (#92). Just "done" names nothing: no check."""
+    board = _board(ctx)
+    rows = board.db.query(
+        "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND id != ?", (task.id,)
+    )
+    others = [board.get(r["id"]) for r in rows]
+    texts = [ctx.request_text]
+    if len(ctx.request_text.split()) <= SHORT_ANSWER:
+        texts.append(ctx.said_before)
+    for said in texts:
+        if words_in_common(said, task.title):
+            return None
+        scored = [(words_in_common(said, t.title), t) for t in others]
+        best = max(scored, key=lambda pair: pair[0], default=None)
+        if best is not None and best[0] >= 2:
+            return best[1]
+        if best is not None and best[0]:
+            return None  # a word of another's isn't enough to go on
+    return None
 
 
 @tool(
@@ -1686,9 +1890,11 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 )
 async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
-        return await _board(ctx).cancel(args["task_id"], ctx.member, interactive=True)
+        task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _check_meant(ctx, task, "Not taken off")
+    return await _board(ctx).cancel(task.id, ctx.member, interactive=True)
 
 
 @tool(
@@ -1713,13 +1919,20 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _check_meant(ctx, task, "Not changed")
     said = str(args["due_date"]).strip().lower()
     try:
-        due = task.due_on if not said else None if said == "none" else date.fromisoformat(said)
+        today = board._today()
+        due = task.due_on if not said else None if said == "none" else day_arg(said, today)
         due_time = _time_arg(args["due_time"])
         from_time = _time_arg(args["from_time"])
     except ValueError as exc:
         raise ToolFailed("Not changed: dates look like 2026-11-03, and times like 14:30.") from exc
+    if said and due == task.due_on and isinstance(due_time, Keep) and isinstance(from_time, Keep):
+        return (  # bug #84: green tea was due Friday already, and the reply said it moved
+            f"{task.title} is already due {board.when_words(task)}; nothing changed. Say so, "
+            "rather than that it moved."
+        )
     if due is None and said != "none":
         due = board._today() if not isinstance(due_time, Keep) else None  # a time: today
     try:
@@ -1728,6 +1941,17 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         )
     except ValueError as exc:
         raise ToolFailed(f"Not changed: {exc}.") from exc
+
+
+def day_arg(text: str, today: date) -> date:
+    """A date the model gave, YYYY-MM-DD. A past year is this year's, or next year's once
+    that day has gone: nothing is due years ago ("Friday" became 2020-10-30, #84)."""
+    day = date.fromisoformat(text)
+    if day.year < today.year:
+        day = day.replace(year=today.year, day=min(day.day, 28) if day.month == 2 else day.day)
+        if day < today:
+            day = day.replace(year=today.year + 1)
+    return day
 
 
 def _time_arg(value: Any) -> time | Keep | None:

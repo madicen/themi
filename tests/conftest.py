@@ -42,6 +42,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default="gemini",
         help="for --run-evals: gemini, claude, ollama or openai_compat (see tests/evals/README.md)",
     )
+    parser.addoption(
+        "--repeat", type=int, default=1, help="for --run-evals: run each case this many times"
+    )
+    parser.addoption(
+        "--routing",
+        default="groups",
+        choices=("groups", "all", "embeddings"),
+        help="for --run-evals: the tool groups a message calls for (groups), every tool (all), "
+        "or groups by meaning too (embeddings, P7b)",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:

@@ -50,6 +50,7 @@ from themi.ai.settings import AISettingsStore, AITask, ResolvedEntry
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StructuredResponse,
     ToolSpec,
@@ -361,5 +362,17 @@ class TaskClient:
             if not provider.capabilities.audio:
                 raise CapabilityError(f"{provider.name} can't transcribe audio")
             return await provider.transcribe(audio, mime_type, kind=kind)
+
+        return await self._router.run(self.member_id, self.task, kind, operation, on_retry)
+
+    async def embed(
+        self,
+        texts: Sequence[str],
+        *,
+        kind: CallKind = CallKind.INTERACTIVE,
+        on_retry: OnRetry | None = None,
+    ) -> Embeddings:
+        async def operation(provider: Provider) -> Embeddings:
+            return await provider.embed(texts, kind=kind)
 
         return await self._router.run(self.member_id, self.task, kind, operation, on_retry)

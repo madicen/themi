@@ -19,8 +19,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable, Iterable, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -41,8 +41,15 @@ class ToolContext:
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
     previous_text: str = ""  # their message before it, for a follow-up like "and limes"
+    said_before: str = ""  # Themi's last message to them, for an answer like "Yes please"
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
+    # A tool sent the answer itself, word for word (a day summary): the model's reply is
+    # kept only as a short line (bug #89: it wrote the day out again).
+    answered: list[str] = field(default_factory=list)
+    # The tasks this turn's tools made or changed: what a reply says about who has them is
+    # checked against them (bug #97).
+    tasks: list[int] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
     groups: set[str] = field(default_factory=set)
 
@@ -123,13 +130,15 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     "schedules": (
         "repeating chores, plans, importance, check-in reviews",
         r"every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?|"
-        r"twice|once a|important|urgent|priority|check.?in|sunset|routine",
+        r"twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remind|"
+        r"(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|weekends",
     ),
     "calendar": (
         "calendar events, day summaries, drive times, blocking time",
-        r"calendar|appointment|meeting|event|today|tomorrow|tonight|morning|afternoon|"
-        r"evening|day look|what'?s on|monday|tuesday|wednesday|thursday|friday|saturday|"
-        r"sunday|weekend|drive|leave|traffic|block|time for|find (?:me )?time|summary",
+        r"calendar|appointment|meeting|event|today|tomorrow|tonight|"
+        r"(?:morning|afternoon|evening)(?!s?\s+routines?)|day look|what'?s on|monday|"
+        r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
+        r"block|time for|find (?:me )?time|summary",
     ),
     "lists": (
         "named lists, the wall's lists, usual stores",
@@ -143,12 +152,14 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     "email": (
         "inboxes, expected emails, time-sensitive and important senders, the email audit",
         r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|audit|"
-        r"time.sensitive",
+        r"time.sensitive|archive|noise|junk|spam|mark(?:ed)? (?:as )?read",
     ),
     "pantry": (
         "the pantry and meal ideas",
         r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
-        r"running low|ran out|leftover",
+        r"running low|ran out|leftover|used (?:up|the last)|last of|finished the|picked up|"
+        r"bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go(?:es)? off|"
+        r"went off",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
     "spending": (
@@ -160,6 +171,137 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         "pausing messages, breaks, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
         r"plain|pushy|too many|limit|break\b|\brest\b|i'?m back",
+    ),
+}
+# P7a: plain examples of what calls for each group, for an embedding router (P7b) to
+# compare messages with. They ship with Themi, so they're written fresh: never a routing case
+# (tests/evals/routing_cases.json) and never the family's own words.
+GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
+    "schedules": (
+        "Make this chore repeat every Monday",
+        "The gutters need doing twice a year",
+        "Change the dishes task to every other day",
+        "Stop repeating the lawn task",
+        "Mowing the lawn is a weekly thing",
+        "That bill is important, there's a penalty if it's late",
+        "This task matters more than the others",
+        "Raise the importance of filing the taxes",
+        "Increase my run by half a mile each week",
+        "Start at ten push-ups and add two a week",
+        "Check in with me about the garden every few days",
+        "Make it repeat on the first of the month",
+    ),
+    "calendar": (
+        "What's on my calendar today?",
+        "Do I have anything Friday afternoon?",
+        "Give me a rundown of my day",
+        "Add a doctor's visit next Tuesday at ten",
+        "Put the school concert on the family calendar",
+        "Push the meeting back an hour",
+        "Remove the dinner reservation from the calendar",
+        "How long would it take to drive to the airport?",
+        "When should I leave to get there by noon?",
+        "Find me a free hour this week for the taxes",
+        "Set aside Sunday afternoon for meal prep",
+        "What's coming up next week?",
+    ),
+    "lists": (
+        "Make a list for the camping trip",
+        "What lists do I have?",
+        "Add a tent to the camping list",
+        "Cross the batteries off the list",
+        "Clear the finished items off my to-read list",
+        "Remove the lantern from the camping list",
+        "Get rid of the holiday list",
+        "Show the camping list on the wall screen",
+        "We usually buy printer ink from the office supply store",
+        "Start a list of birthday gift ideas",
+        "Tick off everything I already packed",
+        "What's on my wish list?",
+    ),
+    "wall": (
+        "Put flossing in my night routine",
+        "What's in my morning routine?",
+        "Add feeding the fish to the afternoon routine",
+        "Show the dusting task on the chore chart",
+        "Put the trash task on the wall's to-do list",
+        "How many chores show on the chart at once?",
+        "Show two chores at a time on the board",
+        "Swap today's chore for another one",
+        "I don't want that chore today, pick a different one",
+        "Is laundry on the chore chart?",
+        "Take the mirror cleaning off the board",
+        "What's on the wall today?",
+    ),
+    "email": (
+        "Is there anything in my inbox I should see?",
+        "Archive the promotional emails",
+        "Get rid of the newsletters in my inbox",
+        "Mail from my accountant is always urgent",
+        "Treat the store emails as low priority",
+        "Don't archive that email from the landlord",
+        "I'm waiting for a package tracking email",
+        "Which emails are you watching for?",
+        "Forget about the receipt email, it came",
+        "Start watching my personal inbox too",
+        "Let's sort out which senders matter",
+        "Any unread emails that need a reply?",
+    ),
+    "pantry": (
+        "We ran out of flour",
+        "Running low on olive oil",
+        "Picked up apples and bread today",
+        "The chicken needs using by Wednesday",
+        "What do we have in the fridge?",
+        "Is there any pasta left?",
+        "What should we cook tonight?",
+        "Give me a dinner idea with what we have",
+        "Something easy for lunch?",
+        "Finished the cereal this morning",
+        "The milk went off",
+        "Got more coffee beans",
+    ),
+    "calls": (
+        "Write me a script for calling the landlord",
+        "What do I say when I phone the pharmacy about a refill?",
+        "Help me call the electric company about the bill",
+        "I need to ring the garage about the car",
+        "The phone company said they'd credit the account",
+        "Called the school, they'll call back Monday",
+        "Prepare me for a call with the bank",
+        "Log that the vendor agreed to come Thursday",
+        "Draft what to say to the moving company",
+        "The plumber said next week",
+        "I have to phone the clinic, can you help?",
+        "Make me notes for calling customer service",
+    ),
+    "spending": (
+        "We spent $30 on burgers",
+        "Got takeout tonight, $45",
+        "How much have we spent eating out?",
+        "What's our takeout total this month?",
+        "That dinner was a work expense",
+        "Mark the coffee as business",
+        "Delete the pizza from spending",
+        "That charge was logged twice",
+        "Paid $18 for delivery",
+        "Are we over our eating out budget?",
+        "Lunch out with a client, $60",
+        "Show me what we spent this week",
+    ),
+    "settings": (
+        "I'm going to rest for twenty minutes",
+        "Taking five",
+        "I'm done with my break",
+        "Back now",
+        "Pause the laundry reminders for the weekend",
+        "No nudges for the rest of the day",
+        "Stop messaging me for a few hours",
+        "Hold off on the check-ins until Monday",
+        "You can start the meal reminders again",
+        "Use plainer wording with me",
+        "Can you phrase things more softly?",
+        "Too many messages today",
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
@@ -210,6 +352,7 @@ TOOL_GROUPS: dict[str, str] = {
             "set_chore_chart_limit",
             "change_chore_chart",
             "add_to_wall_routine",
+            "show_routine",
         ),
         "wall",
     ),
@@ -224,6 +367,7 @@ TOOL_GROUPS: dict[str, str] = {
             "keep_email",
             "start_email_audit",
             "set_sender_levels",
+            "archive_noise_emails",
         ),
         "email",
     ),
@@ -231,6 +375,79 @@ TOOL_GROUPS: dict[str, str] = {
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }
+
+
+# ----- near-twin tools (P6) --------------------------------------------------------------
+#
+# Some tools sound alike and do very different things, and the model used whichever twin it
+# had (the 2026-10-29 evals: add_to_grocery_list for "used the last of the olive oil",
+# because update_pantry's group wasn't sent). A twin set travels whole, whatever the router
+# chose, and its paragraph goes in the system prompt with it, so the tools' own
+# descriptions say what each does and the paragraph says which is which.
+
+
+@dataclass(frozen=True)
+class Twins:
+    name: str
+    tools: tuple[str, ...]
+    text: str  # how to tell them apart, for the system prompt
+
+
+TWINS: tuple[Twins, ...] = (
+    Twins(
+        "food and buying",
+        ("update_pantry", "add_to_grocery_list", "add_to_things_to_buy", "add_to_list"),
+        """\
+Food and buying are four different places:
+- update_pantry records what the house has: "used the last of the olive oil" is out,
+  "running low on rice" is low, "just picked up eggs" is plenty. It offers low or out
+  staples for the grocery list itself, so don't add them to the list as well.
+- add_to_grocery_list is food someone asks to have on the grocery list ("put cumin on the
+  grocery list", "bananas for this week's shop").
+- add_to_things_to_buy is anything to buy that isn't food ("we need light bulbs", "add AA
+  batteries").
+- add_to_list is one of Themi's named lists, by its name ("add sunscreen to the packing
+  list").
+When it could go on more than one list, ask_which_list asks with buttons; don't guess,
+and don't ask in words.""",
+    ),
+    Twins(
+        "quiet time",
+        ("start_break", "pause_messages"),
+        """\
+Quiet time is two different things:
+- start_break is the person resting ("I'm taking a break", "going to lie down for 30
+  minutes"): task nudges and check-ins wait, then one message asks whether to end or
+  extend it. "I'm back" is end_break.
+- pause_messages holds Themi's own messages for a while ("hold the meal reminders today",
+  "don't send me anything for a couple of hours"): it's about Themi's messages, not their
+  resting.
+Neither is a busy time.""",
+    ),
+    Twins(
+        "rules or tasks",
+        ("propose_rule", "create_task", "set_task_schedule"),
+        """\
+Rules and tasks are different things:
+- propose_rule is how Themi itself behaves ("from now on, give me steps as bullet
+  points", "always archive store promos"), as a draft they lock in themselves. When they
+  call it a rule ("new rule: ...", "make it a rule that ..."), it's propose_rule.
+- create_task is something a person does, once or repeating ("return the library books";
+  "ask my husband to fix the squeaky door" is a task assigned to him). Chores, schedules
+  and the steps of a job are tasks, never rules, even when someone describes how a chore
+  should go from now on.
+- set_task_schedule is when a task repeats: after create_task for a new one ("I water the
+  plants every Sunday" is both, and so is "always remind me about the bins on Tuesdays").""",
+    ),
+)
+
+
+def twins_text(names: Iterable[str]) -> str:
+    """The paragraphs for the twin sets these tools belong to, for the system prompt."""
+    sent = set(names)
+    return "\n\n".join(t.text for t in TWINS if sent & set(t.tools))
+
+
 _GROUP_WORDS = {
     name: re.compile(rf"\b(?:{words})", re.IGNORECASE) for name, (_, words) in GROUPS.items()
 }
@@ -259,13 +476,24 @@ class ToolRegistry:
         self._tools[t.spec.name] = t
 
     def specs(self, groups: set[str] | None = None) -> list[ToolSpec]:
-        """Every tool, or (P1) the core and these groups'. Sorted, so the tool list (part
-        of the cached prompt prefix) is stable."""
-        return [
-            self._tools[name].spec
-            for name in sorted(self._tools)
+        """Every tool, or (P1) the core and these groups', with any twin set (P6) they
+        touch. Sorted, so the tool list (part of the cached prompt prefix) is stable."""
+        chosen = {
+            name
+            for name in self._tools
             if groups is None or TOOL_GROUPS.get(name, "core") in groups | {"core"}
-        ]
+        }
+        for twins in TWINS:  # P6: a twin set goes whole
+            if chosen & set(twins.tools):
+                chosen |= set(twins.tools) & self._tools.keys()
+        return [self._tools[name].spec for name in sorted(chosen)]
+
+    def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
+        """The tools one model call gets. P5's "all" is every tool but more_tools, which
+        would have nothing to add."""
+        if routing == "all":
+            return [spec for spec in self.specs() if spec.name != more_tools.spec.name]
+        return self.specs(groups)
 
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
@@ -276,9 +504,13 @@ class ToolRegistry:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
+        task_id = call.arguments.get("task_id")
+        if outcome == "ok" and isinstance(task_id, int):
+            ctx.tasks.append(task_id)
         return result
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
+        call = replace(call, arguments=_as_typed(call.arguments, t.spec.input_schema))
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:
@@ -323,6 +555,32 @@ class ToolRegistry:
         if action.status == "done":
             return f"Done automatically (action {action.id}): {outcome.message}"
         return f"Tried but it failed (action {action.id}); it can be retried: {outcome.message}"
+
+
+_INTEGER = re.compile(r"[+-]?\d+")
+_NUMBER = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)")
+
+
+def _as_typed(value: Any, schema: dict[str, Any]) -> Any:
+    """Numbers and true/false that came as text, as the schema's type (eval energy-plumber:
+    Gemini sent log_energy_note's effect as "-3"; its function schemas take only text
+    choices). Anything else is left for the schema check to refuse."""
+    kind = schema.get("type")
+    if kind == "object" and isinstance(value, dict):
+        props = schema.get("properties", {})
+        return {k: _as_typed(v, props[k]) if k in props else v for k, v in value.items()}
+    if kind == "array" and isinstance(value, list) and "items" in schema:
+        return [_as_typed(v, schema["items"]) for v in value]
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if kind == "integer" and _INTEGER.fullmatch(text):
+        return int(text)
+    if kind == "number" and _NUMBER.fullmatch(text):
+        return float(text)
+    if kind == "boolean" and text.lower() in ("true", "false"):
+        return text.lower() == "true"
+    return value
 
 
 def dumps(data: Any) -> str:

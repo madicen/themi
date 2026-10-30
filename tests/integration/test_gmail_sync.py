@@ -98,7 +98,8 @@ async def test_then_history_brings_only_new_mail(rig: Rig, fake_gmail: FakeGmail
     assert await rig.later() == 1
     assert rig.subjects() == ["first", "second"]
     assert not rig.events[-1].initial
-    assert fake_gmail.calls_to("list") == 1  # the first sync only
+    syncing = [q for q in fake_gmail.list_queries if "newer_than" in q]  # not tab checks
+    assert syncing == ["newer_than:7d"]  # the first sync only
 
 
 async def test_history_pages_are_all_read(rig: Rig, fake_gmail: FakeGmail) -> None:

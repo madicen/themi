@@ -4,7 +4,7 @@ PYTEST := $(PYTHON) -m pytest
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals cov dev dev-reset dev-invite
+.PHONY: venv install fmt lint test test-all test-live evals router-eval cov dev dev-reset dev-invite
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -36,6 +36,10 @@ test-live:
 PROVIDER ?= gemini
 evals:
 	$(PYTEST) tests/evals --run-evals --provider $(PROVIDER) $(EVAL_ARGS)
+
+# P3: how well the tool groups are chosen, over the eval cases (no model, no keys)
+router-eval:
+	$(PYTEST) tests/scenarios/test_router_eval.py -k recall -s -q
 
 cov:
 	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios

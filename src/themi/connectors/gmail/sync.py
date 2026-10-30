@@ -12,7 +12,9 @@
   once, through the outbox. Linking it again clears that.
 
 Each new message is stored in `emails` and passed to every `listeners`
-callback as an `EmailReceived` (triage subscribes in prompt 23).
+callback as an `EmailReceived` (triage subscribes in prompt 23). Mail the person
+archived, read or deleted in Gmail (idea #83) has its stored labels brought up to date
+and goes to every `handled_listeners` callback as (account, email id, how).
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from themi.connectors.gmail.client import (
     HistoryExpired,
     RateLimited,
 )
-from themi.connectors.gmail.parse import GmailMessage, parse_message
+from themi.connectors.gmail.parse import TABS, GmailMessage, parse_message
 from themi.connectors.google import GoogleAccounts, TokenRevoked
 from themi.localtime import to_utc_iso
 
@@ -67,6 +69,11 @@ class EmailReceived:
 
 
 EmailListener = Callable[[EmailReceived], Awaitable[None]]
+# Mail dealt with in Gmail: (account, row in `emails`, "archived" | "read" | "deleted").
+HandledListener = Callable[[LinkedAccount, int, str], Awaitable[None]]
+# An account turned out to show some category's mail in Primary (it isn't a tab there).
+TabsListener = Callable[[LinkedAccount], Awaitable[None]]
+TABS_EVERY = timedelta(days=1)  # how often which tabs an account shows is checked again
 
 
 class GmailSync:
@@ -76,6 +83,8 @@ class GmailSync:
         self.google = google
         self.outbox = outbox
         self.listeners: list[EmailListener] = []
+        self.handled_listeners: list[HandledListener] = []
+        self.tabs_listeners: list[TabsListener] = []
 
     def client(self, account_id: int) -> GmailClient:
         return GmailClient(
@@ -167,12 +176,15 @@ class GmailSync:
             "SELECT history_id FROM linked_accounts WHERE id = ?", (account.id,)
         )
         if history_id is None:
-            return await self._initial(account)
-        try:
-            return await self._incremental(account, history_id)
-        except HistoryExpired:
-            log.info("Gmail history for account %s expired; resyncing", account.id)
-            return await self._initial(account)
+            found = await self._initial(account)
+        else:
+            try:
+                found = await self._incremental(account, history_id)
+            except HistoryExpired:
+                log.info("Gmail history for account %s expired; resyncing", account.id)
+                found = await self._initial(account)
+        await self._learn_tabs(account, self.client(account.id))
+        return found
 
     async def _initial(self, account: LinkedAccount) -> int:
         client = self.client(account.id)
@@ -199,12 +211,84 @@ class GmailSync:
             result = await client.history(history_id, page_token=page)
             for message_id in result.added:
                 found += await self._take(account, client, message_id, initial=False)
+            for message_id, how in result.handled:
+                await self._handled(account, message_id, how)
             latest = result.history_id
             page = result.next_page
             if not page:
                 break
         self._set_history(account, latest)
         return found
+
+    # ----- which of Gmail's tabs an account shows ------------------------------------
+
+    def tabs_shown(self, account_id: int) -> frozenset[str]:
+        """The category labels that are tabs for this account. Gmail labels mail by category
+        whether or not its tab is on; with Updates off, Updates mail is in Primary (Michael's
+        ten unread, 2026-10-29). Not known yet: a tab, as F16d had it."""
+        known = json.loads(
+            self.db.scalar("SELECT gmail_tabs FROM linked_accounts WHERE id = ?", (account_id,))
+            or "{}"
+        )
+        return frozenset(t for t in TABS if known.get(t, True))
+
+    async def _learn_tabs(self, account: LinkedAccount, client: GmailClient) -> None:
+        """Ask Gmail's own search: a category whose inbox mail comes up under
+        "category:primary" isn't a tab. Checked daily, and as soon as mail arrives with a
+        category not known yet. Any change goes to `tabs_listeners`."""
+        row = self.db.one(
+            "SELECT gmail_tabs, gmail_tabs_checked_at FROM linked_accounts WHERE id = ?",
+            (account.id,),
+        )
+        known: dict[str, bool] = json.loads(row["gmail_tabs"] or "{}") if row else {}
+        checked = row["gmail_tabs_checked_at"] if row else None
+        stale = checked is None or datetime.fromisoformat(checked) <= clock.now() - TABS_EVERY
+        arrived = self.db.query(
+            "SELECT labels FROM emails WHERE account_id = ? AND created_at >= ?",
+            (account.id, checked or ""),
+        )
+        new = {t for r in arrived for t in json.loads(r["labels"] or "[]") if t in TABS}
+        wanted = set(TABS) if stale else new - set(known)
+        if not wanted:
+            return
+        learned = dict(known)
+        for tab in sorted(wanted):
+            in_primary, _ = await client.list_messages(query="in:inbox category:primary", label=tab)
+            if in_primary:
+                learned[tab] = False
+                continue
+            in_inbox, _ = await client.list_messages(query="in:inbox", label=tab)
+            if in_inbox:
+                learned[tab] = True
+        self.db.execute(
+            "UPDATE linked_accounts SET gmail_tabs = ?, gmail_tabs_checked_at = ? WHERE id = ?",
+            (json.dumps(learned, sort_keys=True), to_utc_iso(clock.now()), account.id),
+        )
+        if any(not shown and known.get(t, True) for t, shown in learned.items()):
+            log.info("Gmail account %s shows some category mail in Primary", account.id)
+            for listener in self.tabs_listeners:
+                try:
+                    await listener(account)
+                except Exception:
+                    log.exception("A tabs listener failed for account %s", account.id)
+
+    async def _handled(self, account: LinkedAccount, message_id: str, how: str) -> None:
+        row = self.db.one(
+            "SELECT id, labels FROM emails WHERE account_id = ? AND gmail_id = ?",
+            (account.id, message_id),
+        )
+        if row is None:
+            return
+        gone = {"archived": {"INBOX"}, "read": {"UNREAD"}, "deleted": {"INBOX", "UNREAD"}}[how]
+        labels = [label for label in json.loads(row["labels"] or "[]") if label not in gone]
+        self.db.execute(
+            "UPDATE emails SET labels = ? WHERE id = ?", (json.dumps(labels), row["id"])
+        )
+        for listener in self.handled_listeners:
+            try:
+                await listener(account, row["id"], how)
+            except Exception:
+                log.exception("A handled-email listener failed for email %s", row["id"])
 
     def _set_history(self, account: LinkedAccount, history_id: str) -> None:
         self.db.execute(

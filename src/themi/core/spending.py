@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.accounts.setup import parse_money_to_cents
+from themi.connectors.gmail.parse import web_link
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
@@ -239,7 +240,7 @@ class Spending:
         )
         if row is None:
             return ""
-        return f"https://mail.google.com/mail/u/{row['address']}/#all/{row['gmail_id']}"
+        return web_link(row["address"], row["gmail_id"])
 
     def today(self) -> date:
         return clock.now().astimezone(self._tz()).date()

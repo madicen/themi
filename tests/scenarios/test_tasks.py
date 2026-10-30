@@ -468,3 +468,161 @@ async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
     await scenario.advance(hours=1)
     await scenario.tap("Erin", "Done")
     assert _task_edits(scenario, "Erin") == [("Marked done: Book the dentist. Thank you.", False)]
+
+
+async def test_a_reply_says_the_tasks_name_not_its_number(scenario: Scenario) -> None:
+    # Bug #71: "Remove the refill water and food task" got "Task 50 is taken off the list."
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(scenario.member("Erin"), "Refill water and food bowls", "physical", 1)
+    scenario.primary.queue_tool_call("cancel_task", {"task_id": task.id})
+    scenario.primary.queue_text(f"Task {task.id} is taken off the list.")
+    replies = await scenario.say("Erin", "Remove the refill water and food task")
+    assert replies[-1] == '"Refill water and food bowls" is taken off the list.'
+
+
+async def test_someone_else_is_the_other_partner(scenario: Scenario) -> None:
+    # Eval energy-plumber: "Can someone else deal with texting the plumber?"
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Text the plumber",
+            "kind": "text",
+            "effort": 1,
+            "due_date": "",
+            "assign_to": "someone else",
+            "steps": [],
+            "check_in": False,
+            "importance": "normal",
+            "due_time": "",
+            "from_time": "",
+        },
+    )
+    scenario.primary.queue_text("Passed on.")
+    await scenario.say("Erin", "I'm exhausted. Can someone else deal with texting the plumber?")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    (task,) = board.open_for(scenario.member("Husband"))
+    assert task.title == "Text the plumber"
+
+
+async def test_a_text_isnt_a_phone_call(scenario: Scenario) -> None:
+    # Eval task-text-plumber: "Can someone text the plumber back?" became a call script.
+    scenario.primary.queue_tool_call(
+        "draft_vendor_call",
+        {"vendor": "the plumber", "objective": "Text back about Thursday", "details": ""},
+    )
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Erin", "Can someone text the plumber back about Thursday?")
+    assert "not a phone call" in str(scenario.primary.last_request.messages[-1])
+
+
+async def test_having_the_partner_do_something_is_a_task_for_them(scenario: Scenario) -> None:
+    # Bug #82: "Can you have Michael get the pacifier under the couch foot ottoman thing?"
+    # got "Themi can't pass messages between people yet."
+    scenario.primary.queue_tool_call(
+        "create_task",
+        {
+            "title": "Get the pacifier from under the ottoman",
+            "kind": "physical",
+            "effort": 1,
+            "due_date": "",
+            "assign_to": "Husband",
+            "steps": [],
+            "check_in": False,
+            "importance": "normal",
+            "due_time": "",
+            "from_time": "",
+        },
+    )
+    scenario.primary.queue_text("Okay, that's with him now.")
+    await scenario.say("Erin", "Can you have Husband get the pacifier under the ottoman?")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    (task,) = board.open_for(scenario.member("Husband"))
+    assert task.title == "Get the pacifier from under the ottoman"
+    assert "have the other partner do something" in scenario.primary.last_request.system
+
+
+MADE = {"kind": "physical", "effort": 1, "due_date": "2026-10-21", "due_time": "21:00"}
+MADE |= {"from_time": "", "steps": [], "check_in": False, "importance": "normal"}
+
+
+async def test_one_of_us_is_said_as_both_lists(scenario: Scenario) -> None:
+    """Bug #97: "have one of us cycle the laundry" was on both lists, but create_task's
+    result said "assigned to Michael", so the reply said "I've put it on Michael's list"."""
+    scenario.primary.queue_tool_call(
+        "create_task", {"title": "Cycle the laundry", **MADE, "assign_to": "both"}
+    )
+    scenario.primary.queue_text(
+        "Added: \"Cycle the laundry\", tonight at 9. I've put it on Husband's list."
+    )
+    replies = await scenario.say("Erin", "Remind one of us to cycle the laundry at 9 tonight")
+    result = _last_result(scenario)
+    assert "both lists" in result and "assigned to" not in result
+    reply = replies[-1]
+    assert "Husband's list" not in reply
+    assert '"Cycle the laundry" is on both lists' in reply
+
+
+async def test_a_handover_no_tool_made_isnt_claimed(scenario: Scenario) -> None:
+    """Bug #97: "can you get Michael to unclog the vacuum tonight?" ran five task tools,
+    none of which moved it, and the reply said "I've assigned it to Michael for tonight"."""
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
+    )
+    scenario.primary.queue_tool_call(
+        "set_task_importance", {"task_id": task.id, "importance": "high"}
+    )
+    scenario.primary.queue_text(
+        'Got it. I\'ve assigned "Unclog the robot vacuum" to Husband for tonight.'
+    )
+    replies = await scenario.say("Erin", "Can you get Husband to unclog the vacuum tonight?")
+    reply = replies[-1]
+    assert "assigned" not in reply
+    assert '"Unclog the robot vacuum" is on Erin\'s list.' in reply
+    assert reply.startswith("Got it.")  # the true part stays
+
+
+async def test_a_handover_that_happened_is_said_as_it_was(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
+    )
+    scenario.primary.queue_tool_call(
+        "update_task",
+        {
+            "task_id": task.id,
+            "title": "",
+            "steps": [],
+            "clear_steps": False,
+            "assign_to": "Husband",
+        },
+    )
+    scenario.primary.queue_text('I\'ve given "Unclog the robot vacuum" to Husband for tonight.')
+    replies = await scenario.say("Erin", "Can you get Husband to unclog the vacuum tonight?")
+    assert replies[-1] == 'I\'ve given "Unclog the robot vacuum" to Husband for tonight.'
+    assert board.get(task.id).assignee == scenario.member("Husband").id
+
+
+async def test_a_name_in_a_title_isnt_a_handover(scenario: Scenario) -> None:
+    made = {**MADE, "kind": "errand", "due_time": "", "assign_to": "me"}
+    scenario.primary.queue_tool_call("create_task", {"title": "Buy a gift for Husband", **made})
+    scenario.primary.queue_text('I\'ve added "Buy a gift for Husband" for tomorrow.')
+    replies = await scenario.say("Erin", "Remind me to buy a gift for Husband tomorrow")
+    assert replies[-1] == 'I\'ve added "Buy a gift for Husband" for tomorrow.'
+
+
+def _last_result(scenario: Scenario) -> str:
+    results = [
+        block
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ]
+    return results[-1].content

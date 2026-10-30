@@ -60,3 +60,7 @@ I'm happy to wait on this.
 That can wait until the weekend.
 It's raining, so the garden is watered for today.
 Everything is up to date.
+# Eval task-check-in-run (2026-10-29): a hyphenated noun, not "check in".
+Check-in set for Tuesday and Thursday afternoons.
+Follow-up added for after the bird cage.
+Clean-up day is Saturday.

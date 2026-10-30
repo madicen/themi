@@ -8,6 +8,7 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.channels.outbox import Priority
 from themi.core.tasks import Task, TaskBoard
 
 
@@ -86,6 +87,195 @@ async def test_a_missed_round_rolls_on_by_default(scenario: Scenario) -> None:
     assert board(scenario).get(bins.id).due_on == date(2026, 11, 3)
     (run,) = board(scenario).runs(bins.id)
     assert run.missed and not run.on_time and run.done_by is None
+
+
+async def test_done_the_day_after_a_missed_round_fills_that_round(scenario: Scenario) -> None:
+    """Bug: "I brought the bins in" the morning after the round rolled on counted for next
+    week's round, and the wall was asked to tick a day still to come (2026-10-29)."""
+    bins = await chore(scenario, "Take out the bins")
+    await schedule(scenario, bins, "every Tuesday")
+    await scenario.advance(hours=24 * 7)  # Wednesday after
+    await scenario.run_periodic("tasks.schedules")
+    reply = await board(scenario).complete(bins.id, scenario.member("Erin"))
+    assert "Next round: Tue 03 Nov" in reply
+    assert board(scenario).get(bins.id).due_on == date(2026, 11, 3)  # this week's still due
+    (run,) = board(scenario).runs(bins.id)
+    assert run.due_on == date(2026, 10, 27) and not run.missed and not run.on_time
+    assert run.done_by == scenario.member("Erin").id
+
+
+async def test_done_two_days_after_a_missed_round_counts_for_the_next(scenario: Scenario) -> None:
+    bins = await chore(scenario, "Take out the bins")
+    await schedule(scenario, bins, "every Tuesday")
+    await scenario.advance(hours=24 * 8)  # Thursday after
+    await scenario.run_periodic("tasks.schedules")
+    await board(scenario).complete(bins.id, scenario.member("Erin"))
+    assert board(scenario).get(bins.id).due_on == date(2026, 11, 10)
+    assert [r.missed for r in board(scenario).runs(bins.id)] == [True, False]
+
+
+async def test_done_for_the_wrong_task_number_is_caught(scenario: Scenario) -> None:
+    """Bug: "We contacted Erin's parents" marked the bins done (task 28, not 38), and the
+    reply was just "Done." (2026-10-29)."""
+    bins = await chore(scenario, "Bring bins in")
+    await schedule(scenario, bins, "every Wednesday")
+    erin = scenario.member("Erin")
+    parents = await board(scenario).create(
+        erin, "Contact Erin\u2019s parents about babysitting", "text", 1, assignee=erin
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "We contacted Erin\u2019s parents")
+    assert board(scenario).get(bins.id).due_on == date(2026, 10, 21)  # still this round
+    result = last_tool_result(scenario)
+    assert result.is_error and f"task {parents.id}" in result.content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": parents.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "We contacted Erin\u2019s parents")
+    assert board(scenario).get(parents.id).status == "done"
+    await scenario.app.services.outbox.send(
+        scenario.member("Husband"),
+        "Due today: Bring bins in. Done already, or later?",
+        priority=Priority.REPLY,
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "done")  # the nudge they're answering names it
+    assert board(scenario).get(bins.id).due_on == date(2026, 10, 28)
+
+
+async def test_yes_to_a_question_about_one_task_cant_change_another(scenario: Scenario) -> None:
+    """Bug #92: Michael's "Yes please" to "Should I reschedule 'Contact Erin's parents' to
+    today at 6 pm?" moved the bird cage to 6 pm instead, so Erin was nudged about it."""
+    cage = await chore(scenario, "Clean the bird cage")
+    await schedule(scenario, cage, "twice a week")
+    due = board(scenario).get(cage.id).due_on
+    erin = scenario.member("Erin")
+    parents = await board(scenario).create(
+        erin, "Contact Erin\u2019s parents about babysitting", "text", 1, assignee=erin
+    )
+    scenario.primary.queue_text(
+        "It wasn't made again: \u201cContact Erin\u2019s parents about babysitting\u201d is "
+        "already open. Should I reschedule it to today at 6 pm?"
+    )
+    await scenario.say("Husband", "Did it also become a shared task?")
+    move = {"due_date": "2026-10-21", "due_time": "18:00", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", {"task_id": cage.id, **move})
+    scenario.primary.queue_text("Rescheduled.")
+    await scenario.say("Husband", "Yes please")
+    assert board(scenario).get(cage.id).due_on == due
+    assert board(scenario).get(cage.id).due_time is None
+    result = last_tool_result(scenario)
+    assert result.is_error and f"task {parents.id}" in result.content
+
+
+async def test_a_question_about_a_chore_doesnt_mark_it_done(scenario: Scenario) -> None:
+    """Bug #92: "Didn't I just clean the bird cage?" (she meant a couple of days ago) and
+    "What no I meant yesterday?" each marked it done."""
+    cage = await chore(scenario, "Clean the bird cage")
+    await schedule(scenario, cage, "twice a week")
+    for asked in ("Didn't I just clean the bird cage?", "What no I meant yesterday?"):
+        scenario.primary.queue_tool_call("complete_task", {"task_id": cage.id})
+        scenario.primary.queue_text("Marked done.")
+        await scenario.say("Erin", asked)
+        assert not board(scenario).runs(cage.id)
+        result = last_tool_result(scenario)
+        assert result.is_error and "question" in result.content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": cage.id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "Can you mark the bird cage done?")
+    assert len(board(scenario).runs(cage.id)) == 1
+
+
+async def test_no_to_a_routine_marks_nothing_done(scenario: Scenario) -> None:
+    """Bug #97: "Morning routine, still open: Walk dog. Done already?" got "no", and the
+    model marked eight open tasks done, the laundry Michael had for tonight among them."""
+    erin = scenario.member("Erin")
+    tasks = [
+        await board(scenario).create(erin, title, "errand", 1, assignee=erin)
+        for title in ("Unclog the robot vacuum", "Assemble grocery order", "Cycle the laundry")
+    ]
+    await scenario.app.services.outbox.send(
+        erin, "Morning routine, still open:\n- Walk dog\nDone already?", priority=Priority.REPLY
+    )
+    for task in tasks:
+        scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "no")
+    assert all(board(scenario).get(t.id).status == "open" for t in tasks)
+    assert "they said no" in last_tool_result(scenario).content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": tasks[0].id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "I sorted out the dog walk earlier")
+    assert board(scenario).get(tasks[0].id).status == "open"  # nothing names the vacuum
+    await scenario.app.services.outbox.send(
+        erin,
+        "Due today: Unclog the robot vacuum. Done already, or later?",
+        priority=Priority.REPLY,
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": tasks[0].id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "yes I did that this morning")
+    assert board(scenario).get(tasks[0].id).status == "done"
+
+
+async def test_a_task_already_open_is_changed_as_asked(scenario: Scenario) -> None:
+    """Bug #88 ("it should have continued the conversation to update the existing task"):
+    "a task for both of us due today at 6pm" was refused as already open; the model asked
+    instead, and nothing could make the open one both of theirs."""
+    erin = scenario.member("Erin")
+    title = "Contact Erin\u2019s parents about babysitting"
+    husband = scenario.member("Husband")  # he added it for her, as in the live one
+    parents = await board(scenario).create(husband, title, "text", 1, assignee=erin)
+    made = {"kind": "text", "effort": 1, "due_date": "2026-10-21", "due_time": "18:00"}
+    made |= {"from_time": "", "steps": [], "check_in": False, "importance": "normal"}
+    scenario.primary.queue_tool_call("create_task", {"title": title, "assign_to": "both", **made})
+    change = {"title": "", "steps": [], "clear_steps": False, "assign_to": "both"}
+    scenario.primary.queue_tool_call("update_task", {"task_id": parents.id, **change})
+    scenario.primary.queue_text("It's on both your lists now.")
+    await scenario.say("Husband", "Make contacting Erin\u2019s parents a task for both of us")
+    refusal = next(
+        block.content
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    )
+    assert "update_task" in refusal and "don't ask" in refusal.lower()
+    assert board(scenario).get(parents.id).shared
+    assert "both of them" in last_tool_result(scenario).content
+
+
+async def test_a_date_in_a_past_year_is_this_years(scenario: Scenario) -> None:
+    """Bugs #84, #85 and #87: "Clean upstairs" moved to 2020-10-30 (a Friday too), so it
+    stayed up on the chart as overdue, "snooze" never moved it, it was nudged "Was due 30
+    Oct" the day before, and then rolled on to the next week."""
+    upstairs = await chore(scenario, "Clean upstairs")
+    await schedule(scenario, upstairs, "every Thursday")
+    move = {"task_id": upstairs.id, "due_date": "2020-10-30", "due_time": "", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", move)
+    scenario.primary.queue_text("Moved to Friday.")
+    await scenario.say("Erin", "Can you snooze clean upstairs to Friday?")
+    assert board(scenario).get(upstairs.id).due_on == date(2026, 10, 30)
+    assert "Fri 30 Oct" in last_tool_result(scenario).content
+    await scenario.run_periodic("tasks.schedules")
+    assert not board(scenario).runs(upstairs.id)  # nothing missed
+
+
+async def test_moving_a_task_to_the_day_it_has_says_so(scenario: Scenario) -> None:
+    """Bug #84: "drink green tea was already scheduled for Friday, so there was no need to
+    reschedule it", but the reply listed it as moved."""
+    erin = scenario.member("Erin")
+    tea = await board(scenario).create(
+        erin, "Drink green tea", "physical", 1, date(2026, 10, 23), assignee=erin
+    )
+    move = {"task_id": tea.id, "due_date": "2026-10-23", "due_time": "", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", move)
+    scenario.primary.queue_text("It was already Friday.")
+    await scenario.say("Erin", "Move my non-urgent tasks to Friday")
+    assert "already due Fri 23 Oct" in last_tool_result(scenario).content
 
 
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:

@@ -87,13 +87,16 @@ class Scenario:
         *,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
+        tool_routing: str = "groups",
     ) -> None:
         """`real_models`: the router builds real adapters from each member's AI settings and
         retries with real waits (the evals); otherwise every model is a ScriptedProvider."""
         self.family = family
         self.telegram = telegram
         self.google = google
+        self.gmail = gmail
         self.models = ModelBank()
+        self.cozyla = cozyla
         self.cozyla_list = _cozyla_list(cozyla) if cozyla else 0  # the synced list's id
         self.app: App = build_app(
             family.db,
@@ -113,6 +116,7 @@ class Scenario:
             grocery_list=ourgroceries,
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
             travel=travel.client() if travel else None,
+            tool_routing=tool_routing,
         )
         if not real_models:
             for member in (family.erin, family.husband):
@@ -194,7 +198,7 @@ class Scenario:
         ):
             if int(params["chat_id"]) != chat or not params.get("reply_markup"):
                 continue
-            for button in params["reply_markup"]["inline_keyboard"][0]:
+            for button in (b for row in params["reply_markup"]["inline_keyboard"] for b in row):
                 if button["text"] == label:
                     token = button["callback_data"]
                     message_id = (

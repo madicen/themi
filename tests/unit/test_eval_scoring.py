@@ -1,3 +1,8 @@
+import json
+from pathlib import Path
+
+from tests.evals.compare import arm, compare, flips, verdict
+from tests.evals.rescore import load_run, rescore
 from tests.evals.scoring import Case, format_summary, load_cases, score, summarise
 
 
@@ -46,6 +51,9 @@ def test_numeric_argument_rules() -> None:
     c = case(expect=("log_energy_note",), args={"log_energy_note": {"effect": {"lt": 0}}})
     assert score(c, [("log_energy_note", {"effect": -1})], ["Oof."], 2).passed
     assert not score(c, [("log_energy_note", {"effect": 2})], ["Oof."], 2).tools_ok
+    # energy-plumber: Gemini sends "-3"; the tools read it as -3, so the score does too.
+    assert score(c, [("log_energy_note", {"effect": "-3"})], ["Oof."], 2).passed
+    assert not score(c, [("log_energy_note", {"effect": "lots"})], ["Oof."], 2).tools_ok
 
 
 def test_replies_are_checked_for_pda_and_scores_but_quotes_are_exempt() -> None:
@@ -109,3 +117,103 @@ def test_only_the_models_own_replies_are_scored() -> None:
     assert model_replies(sent) == ["Asked about eggs."]
     # Saved runs from before kinds were recorded: approval cards are recognised by their ask.
     assert model_replies(["Add eggs\nGo ahead, or not now?", "Asked."]) == ["Asked."]
+
+
+# ----- P5: repeats, timings, and comparing two runs ----------------------------------
+
+
+def outcome(case_id: str, passed: bool, run: int = 1, seconds: float = 2.0, tools: int = 20):
+    c = case(id=case_id, expect=("update_pantry",))
+    o = score(c, [("update_pantry", {})] if passed else [], ["Noted."], 2)
+    o.run, o.model_seconds, o.tools_sent, o.tools_chars = run, [seconds], tools, tools * 500
+    return o
+
+
+def test_repeats_tell_flaky_cases_from_failing_ones() -> None:
+    runs = [
+        outcome("steady", True, 1),
+        outcome("steady", True, 2),
+        outcome("wobbly", True, 1),
+        outcome("wobbly", False, 2),
+        outcome("broken", False, 1),
+        outcome("broken", False, 2),
+    ]
+    summary = summarise(runs)
+    assert summary["runs"] == 2 and summary["passed"] == 3 and summary["cases"] == 6
+    assert summary["flaky"] == ["wobbly"] and summary["failing"] == ["broken"]
+    text = format_summary("gemini", summary)
+    assert "Each case ran 2 times" in text and "Flaky (passed some runs): wobbly" in text
+    assert "Failed every run: broken" in text
+
+
+def test_timings_are_summarised_as_medians() -> None:
+    summary = summarise([outcome("a", True, seconds=1.0), outcome("b", True, seconds=5.0)])
+    assert summary["median_seconds"] == 3.0 and summary["median_calls"] == 1
+    assert summary["median_tools_sent"] == 20
+    assert "3.0 s in model calls, 1 calls, 20 tools sent" in format_summary("g", summary)
+
+
+def test_a_run_without_timings_still_summarises() -> None:
+    # Saved runs from before P5 have no timings.
+    o = outcome("old", True)
+    o.model_seconds = []
+    assert summarise([o])["median_calls"] == 0
+    assert "Per case" not in format_summary("g", summarise([o]))
+
+
+def test_rescore_reads_repeats_and_timings_back(tmp_path: Path) -> None:
+    path = tmp_path / "gemini-all-1.json"
+    item = {
+        "id": "pantry-olive-oil",
+        "calls": [["update_pantry", {"items": [{"name": "olive oil", "status": "out"}]}]],
+        "replies": ["Noted, olive oil is out."],
+        "sent": [["chat", "Noted, olive oil is out."]],
+        "run": 2,
+        "model_seconds": [1.5, 0.5],
+        "tools_sent": 31,
+        "tools_chars": 20000,
+    }
+    path.write_text(json.dumps({"provider": "gemini", "routing": "all", "cases": [item]}))
+    details, (o,) = load_run(path)
+    assert details == {"provider": "gemini", "routing": "all"}
+    assert (o.run, o.model_seconds, o.tools_sent, o.tools_chars) == (2, [1.5, 0.5], 31, 20000)
+    assert "gemini, all tools (re-scored)" in rescore(path)
+
+
+def test_compare_lists_real_differences_and_applies_the_rule() -> None:
+    groups = arm(
+        "groups",
+        [outcome("a", True, r) for r in (1, 2)]
+        + [outcome("b", False, r) for r in (1, 2)]
+        + [outcome("c", True, 1), outcome("c", False, 2)],
+    )
+    every = arm(
+        "all",
+        [outcome("a", True, r, seconds=2.2) for r in (1, 2)]
+        + [outcome("b", True, r, seconds=2.2) for r in (1, 2)]
+        + [outcome("c", True, r, seconds=2.2) for r in (1, 2)],
+    )
+    assert flips(groups, every) == ([], ["b"])
+    assert verdict(groups, every) == (True, [])
+    text = compare(groups, every)
+    assert "Always failed, now always passes: b" in text
+    assert "  c: 1/2 -> 2/2" in text and "all wins" in text
+
+
+def test_compare_keeps_groups_when_all_loses_a_case_or_is_slow() -> None:
+    groups = arm("groups", [outcome("a", True, r) for r in (1, 2)])
+    worse = arm("all", [outcome("a", False, r) for r in (1, 2)])
+    wins, reasons = verdict(groups, worse)
+    assert not wins and any("always fails: a" in r for r in reasons)
+    slow = arm("all", [outcome("a", True, r, seconds=2.5) for r in (1, 2)])
+    wins, reasons = verdict(groups, slow)
+    assert not wins and reasons == ["median 2.5 s against 2.0 s: more than 20% slower"]
+    assert "groups stays" in compare(groups, slow)
+
+
+def test_compare_allows_one_case_of_noise() -> None:
+    groups = arm("groups", [outcome(x, True) for x in "abcd"])
+    every = arm("all", [outcome("a", False), *(outcome(x, True) for x in "bcd")])
+    # One case lost on a single run: within one case, though it's also an always/never flip.
+    assert every.passed_cases == groups.passed_cases - 1
+    assert verdict(groups, every)[1] == ["always passed, now always fails: a"]

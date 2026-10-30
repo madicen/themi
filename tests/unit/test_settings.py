@@ -193,3 +193,14 @@ def test_telegram_api_url_points_the_bot_at_another_server() -> None:
     assert settings.telegram_api_url == "http://127.0.0.1:8090"
     with pytest.raises(SettingsError, match="TELEGRAM_API_URL must be an http"):
         Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "TELEGRAM_API_URL": "127.0.0.1:8090"})
+
+
+def test_tool_routing_defaults_to_groups_and_takes_all() -> None:
+    # P5: every tool on every call, to compare with P1's groups.
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).tool_routing == "groups"
+    every = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "ALL"})
+    assert every.tool_routing == "all"
+    meaning = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "embeddings"})
+    assert meaning.tool_routing == "embeddings"  # P7b
+    with pytest.raises(SettingsError, match="THEMI_TOOL_ROUTING must be groups, all or embed"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "some"})

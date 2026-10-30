@@ -214,3 +214,10 @@ def test_a_bulleted_list_is_a_list_not_orders() -> None:
     text = "Tue 27 Oct:\n- 10-11 am: Dentist\n- Call the vet\n- Clean the bird cage"
     assert find_demands(text, 3) == []
     assert find_demands("Call the vet now.", 3)  # a plain sentence still is
+
+
+def test_a_quoted_task_name_isnt_an_order() -> None:
+    # Bug #71: a task's name in a reply, '"Refill the water" is off the list'.
+    assert find_demands('"Refill water and food bowls" is taken off the list.', 3) == []
+    assert find_demands("“Call the vet” is due Friday.", 3) == []
+    assert find_demands("Refill the water bowls.", 3)  # unquoted, still one

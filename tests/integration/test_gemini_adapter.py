@@ -23,6 +23,7 @@ from themi.ai import (
     ToolSpec,
 )
 from themi.ai.adapters.gemini import GeminiProvider
+from themi.ai.errors import MalformedOutputError
 from themi.storage.secrets import Secret
 
 KEY = "AIzaFakeKeyForTheLocalFakeServer0000000"
@@ -220,3 +221,31 @@ async def test_max_tokens_stop(fake_ai: FakeAIServer) -> None:
     fake_ai.queue(gemini_text("partial", finish_reason="MAX_TOKENS"))
     response = await provider(fake_ai).chat("sys", [Message.user("hi")])
     assert response.stop_reason is StopReason.MAX_TOKENS
+
+
+# ----- embeddings (P7b) --------------------------------------------------------------
+
+
+async def test_embeddings_one_vector_per_text(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue({"embeddings": [{"values": [0.6, 0.8]}, {"values": [1.0, 0.0]}]})
+    gemini = provider(fake_ai, model="gemini-embedding-2")
+    got = await gemini.embed(["lie down for a bit", "oat milk"])
+    assert got.vectors == ((0.6, 0.8), (1.0, 0.0))
+    assert (got.provider, got.model) == ("gemini", "gemini-embedding-2")
+    (request,) = fake_ai.requests
+    assert "gemini-embedding-2" in request.path and "mbed" in request.path
+    body = str(request.json)
+    assert "lie down for a bit" in body and "oat milk" in body
+    assert "SEMANTIC_SIMILARITY" in body and "768" in body
+
+
+async def test_embeddings_errors_map_like_chat(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue(gemini_error(429, "RESOURCE_EXHAUSTED", "quota"), status=429)
+    with pytest.raises(RetryableError):
+        await provider(fake_ai, model="gemini-embedding-2").embed(["hi"])
+
+
+async def test_too_few_embeddings_is_malformed(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue({"embeddings": [{"values": [1.0]}]})
+    with pytest.raises(MalformedOutputError):
+        await provider(fake_ai, model="gemini-embedding-2").embed(["one", "two"])

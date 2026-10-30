@@ -262,3 +262,22 @@ async def test_a_failed_action_isnt_reported_as_done(scenario: Scenario) -> None
     scenario.primary.queue_text("I've cleared out those draft rules.")
     replies = await scenario.say("Erin", "delete the draft rules")
     assert replies == [FAILED_TEXT]
+
+
+async def test_a_reminder_isnt_a_rule(scenario: Scenario) -> None:
+    # Eval rule-bins: "Always remind me about the bins on Tuesday evenings" became a draft.
+    scenario.primary.queue_tool_call(
+        "propose_rule",
+        {
+            "summary": "Bins reminder",
+            "text": "Always remind Erin about the bins on Tuesday evenings.",
+            "kind": "policy",
+            "category": "",
+            "rule_id": 0,
+            "applies_to": "personal",
+        },
+    )
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Erin", "Always remind me about the bins on Tuesday evenings")
+    assert "A reminder is a task, not a rule" in str(scenario.primary.last_request.messages[-1])
+    assert scenario.app.db.query("SELECT 1 FROM rules") == []

@@ -205,11 +205,11 @@ def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
 
 
 def test_rules_are_for_how_themi_behaves_and_chores_are_tasks() -> None:
-    from themi.core.prompts import STABLE_SYSTEM
-    from themi.core.rules import propose_rule
+    from themi.core.tools import twins_text
 
-    assert "Chores, schedules and the steps of a job are tasks" in STABLE_SYSTEM
-    assert "never rules" in propose_rule.spec.description
+    # P6: the rules-or-tasks paragraph goes with propose_rule and create_task.
+    rules_or_tasks = twins_text(["propose_rule"])
+    assert "Chores, schedules\n  and the steps of a job are tasks, never rules" in rules_or_tasks
 
 
 def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
@@ -227,6 +227,75 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     assert "never a rule for Themi" in STABLE_SYSTEM
     from themi.core.rules import propose_rule
 
-    assert "ideas for the family to try" in propose_rule.spec.description
+    assert "Ideas for the family to try" in propose_rule.spec.description
     assert "general question worth keeping" in STABLE_SYSTEM  # idea #28
     assert "who calls whom" in STABLE_SYSTEM  # idea #32: Michael's nickname for Erin
+
+
+def test_replies_call_tasks_by_name() -> None:
+    # Bug #71: "Task 50 is taken off the list."
+    titles = {7: "Clean the bird cage", 50: "Refill water and food bowls"}.get
+    by_name = agent_module._by_name
+    assert by_name("Task 50 is taken off the list.", titles) == (
+        '"Refill water and food bowls" is taken off the list.'
+    )
+    assert by_name("task #7 (Clean the bird cage) is due Saturday.", titles) == (
+        '"Clean the bird cage" is due Saturday.'
+    )
+    assert (
+        by_name("Task 7 (the cage) is next.", titles) == '"Clean the bird cage" (the cage) is next.'
+    )
+    assert by_name("Task 99 isn't one.", titles) == "Task 99 isn't one."
+    assert by_name("I tasked 3 people.", titles) == "I tasked 3 people."
+    assert "in quotes" in STABLE_SYSTEM and "never by their\n  numbers" in STABLE_SYSTEM
+
+
+def test_dates_carry_a_year_only_when_its_another_one() -> None:
+    # Bug #70: "due Thu 29 Oct" was read back as "Thursday, October 29, 2020".
+    from datetime import date
+
+    from themi.core.tasks import _day_words
+
+    today = date(2026, 10, 28)
+    assert _day_words(date(2026, 10, 29), today) == "Thu 29 Oct"
+    assert _day_words(date(2027, 1, 5), today) == "Tue 05 Jan 2027"
+    assert "with no year unless it's another year" in STABLE_SYSTEM
+
+
+def test_the_prompt_reads_a_task_for_the_partner_and_a_tired_evening() -> None:
+    """Bugs #82 and #72: "can you have Michael get the pacifier" was refused as a message to
+    pass on, and "I'm too tired tonight" got the prompt's own "Dryer now" example back."""
+    assert "have the other partner do something" in STABLE_SYSTEM
+    assert "create_task with assign_to their name" in STABLE_SYSTEM
+    assert "never offer a chore that isn't in the context" in STABLE_SYSTEM
+    assert "I'm too tired tonight" in STABLE_SYSTEM
+
+
+async def test_numbers_and_switches_sent_as_text_are_read_as_such(family: SeededFamily) -> None:
+    """Eval energy-plumber: Gemini sent log_energy_note's effect as "-3" (its function
+    schemas take only text choices), the check refused it, and the note was never saved."""
+    seen: list[dict] = []
+
+    @tool(
+        "note",
+        "Records",
+        {
+            "effect": {"type": "integer", "enum": [-3, -2, -1, 1, 2, 3]},
+            "share": {"type": "number"},
+            "flag": {"type": "boolean"},
+            "ids": {"type": "array", "items": {"type": "integer"}},
+            "word": {"type": "string"},
+        },
+    )
+    async def note(ctx, args):
+        seen.append(args)
+        return "ok"
+
+    registry = ToolRegistry([note])
+    ctx = ToolContext(family.erin, services=None)  # type: ignore[arg-type]
+    args = {"effect": "-3", "share": "0.5", "flag": "true", "ids": ["4", 5], "word": "7"}
+    result = await registry.run(ToolCall("1", "note", args), ctx)
+    assert not result.is_error
+    assert seen == [{"effect": -3, "share": 0.5, "flag": True, "ids": [4, 5], "word": "7"}]
+    bad = await registry.run(ToolCall("2", "note", {**args, "effect": "lots"}), ctx)
+    assert bad.is_error and bad.content.startswith("Invalid arguments")

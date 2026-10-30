@@ -133,7 +133,9 @@ async def test_nudges_waiting_for_the_morning_go_as_one_list(scenario: Scenario)
         "This morning:\n- Due today: Clean kitchen\n- Due today: Call the vet\n"
         "Tap any that are done; the rest can wait."
     )
-    assert [b["text"] for b in edit["reply_markup"]["inline_keyboard"][0]] == [
+    assert [
+        b["text"] for b in (b for row in edit["reply_markup"]["inline_keyboard"] for b in row)
+    ] == [
         "✓ Clean kitchen",
         "✓ Call the vet",
     ]

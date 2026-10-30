@@ -37,6 +37,9 @@ CATEGORY = "habit_trial"
 # The daily message itself (not the offer) is labelled, as Erin asked in rules 7 and 8.
 CHECK_IN_TEXT = "Check-in: {prompt}"
 EXECUTOR = "habits.activate"
+# Michael read the old "A small daily check-in to try: ..." as Erin's check-in sent to him:
+# each member has their own reserve, so the offer says it's theirs.
+OFFER_TEXT = "Something you could try for yourself: {idea}"
 
 # (idea, the daily message). Worded as offers, never as instructions.
 IDEAS: tuple[tuple[str, str], ...] = (
@@ -117,9 +120,10 @@ class HabitReserve:
             self.seed(member)
             if not self.ready_for_offer(member):
                 continue
-            habit = self.db.one(
-                "SELECT * FROM habits WHERE member_id = ? AND status = 'reserve' "
-                "ORDER BY id LIMIT 1",
+            habit = self.db.one(  # an idea someone else has taken up comes after the rest
+                "SELECT * FROM habits h WHERE member_id = ? AND status = 'reserve' "
+                "ORDER BY EXISTS (SELECT 1 FROM habits o WHERE o.idea = h.idea "
+                "AND o.member_id != h.member_id AND o.status = 'active'), id LIMIT 1",
                 (member.id,),
             )
             if habit is None:
@@ -127,7 +131,7 @@ class HabitReserve:
             outcome = await self.services.autonomy.stage(
                 CATEGORY,
                 member,
-                f"A small daily check-in to try: {habit['idea']}",
+                OFFER_TEXT.format(idea=habit["idea"]),
                 {"habit": habit["id"]},
                 EXECUTOR,
             )

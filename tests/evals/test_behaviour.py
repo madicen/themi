@@ -16,33 +16,50 @@ import pytest
 from tests.evals.conftest import OUTCOMES
 from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend
-from tests.evals.runner import missing_tools, run_case
-from tests.evals.scoring import Case, load_cases
+from tests.evals.runner import missing_tools, needs_gmail, needs_wall, run_case
+from tests.evals.scoring import Case
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 
-CASES = load_cases()
 GIVE_UP_AFTER = 3  # cases in a row with no AI answer: the quota is gone, stop spending it
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c.id for c in CASES])
+# Parametrized by conftest.pytest_generate_tests: every case, --repeat times.
 async def test_case(
     case: Case,
+    run: int,
+    eval_routing: str,
     family: SeededFamily,
     fake_telegram: FakeTelegram,
     eval_backend: EvalBackend,
     eval_factory: PacedFactory,
+    request: pytest.FixtureRequest,
 ) -> None:
     recent = OUTCOMES[-GIVE_UP_AFTER:]
     if len(recent) == GIVE_UP_AFTER and all(o.unavailable for o in recent):
         pytest.skip(f"the last {GIVE_UP_AFTER} cases got no AI answer (quota used up?)")
-    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    google, gmail = (
+        (request.getfixturevalue("fake_google"), request.getfixturevalue("fake_gmail"))
+        if needs_gmail(case)
+        else (None, None)
+    )
+    wall = request.getfixturevalue("fake_cozyla") if needs_wall(case) else None
+    scenario = Scenario(
+        family,
+        fake_telegram,
+        google,
+        gmail,
+        cozyla=wall,
+        real_models=True,
+        provider_factory=eval_factory,
+        tool_routing=eval_routing,
+    )
     missing = missing_tools(scenario, case)
     if missing:
         pytest.skip(f"needs {', '.join(missing)}, which isn't built yet")
     try:
-        outcome = await run_case(scenario, case, eval_backend)
+        outcome = await run_case(scenario, case, eval_backend, eval_factory, run)
     finally:
         if eval_backend.pace:
             await asyncio.sleep(eval_backend.pace)  # opt-in evals only: free-tier rate limits

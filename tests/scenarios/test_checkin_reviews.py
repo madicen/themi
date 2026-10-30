@@ -40,7 +40,9 @@ def asks(scenario: Scenario) -> list[str]:
 async def tap_edited(scenario: Scenario, name: str, label: str) -> None:
     edit = scenario.edits(name)[-1]
     (token,) = [
-        b["callback_data"] for b in edit["reply_markup"]["inline_keyboard"][0] if b["text"] == label
+        b["callback_data"]
+        for b in (b for row in edit["reply_markup"]["inline_keyboard"] for b in row)
+        if b["text"] == label
     ]
     chat = scenario.member(name).telegram_user_id
     assert chat is not None

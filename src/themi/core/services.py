@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
+    from themi.core.follow_ups import FollowUps
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.lists import Lists
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
+    from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
@@ -51,6 +53,7 @@ if TYPE_CHECKING:
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
+    from themi.core.which_list import WhichList
     from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
@@ -120,6 +123,8 @@ class Services:
     event_commands: dict[str, EventCommandHandler] = field(default_factory=dict)
     command_help: dict[str, str] = field(default_factory=dict)
     site_url: str = ""  # the website's base address, for /site links
+    tool_routing: str = "groups"  # P5: or "all", every tool on every call; P7b "embeddings"
+    group_router: EmbeddingRouter | None = None  # P7b, used when tool_routing is "embeddings"
     rulebook: Rulebook | None = None
     memory: Memory | None = None
     outcomes: OutcomeTracker | None = None
@@ -150,6 +155,8 @@ class Services:
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
+    which_list: WhichList | None = None  # which list, as a card (F17b)
+    follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

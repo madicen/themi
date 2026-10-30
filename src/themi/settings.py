@@ -21,6 +21,7 @@ from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+ToolRouting = Literal["groups", "all", "embeddings"]
 
 
 GOOGLE_ENDPOINT_VARIABLES = {
@@ -47,6 +48,9 @@ class Settings(BaseModel):
     # Another Bot API server, only for the local Telegram simulator (`make dev`).
     telegram_api_url: str = ""
     log_level: LogLevel = "INFO"
+    # P5: "groups" sends the core tools and the groups a message calls for (P1); "all"
+    # sends every tool, to compare.
+    tool_routing: ToolRouting = "groups"
     http_host: str = "127.0.0.1"
     http_port: int = 8080
     # Off only for smoke tests and diagnostics: the process runs without polling Telegram.
@@ -134,6 +138,10 @@ class Settings(BaseModel):
         if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
             problems.append(f"THEMI_LOG_LEVEL must be DEBUG, INFO, WARNING or ERROR, not {level}")
 
+        routing = (get("THEMI_TOOL_ROUTING") or "groups").lower()
+        if routing not in ("groups", "all", "embeddings"):
+            problems.append(f"THEMI_TOOL_ROUTING must be groups, all or embeddings, not {routing}")
+
         port_text = get("THEMI_HTTP_PORT") or "8080"
         if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
             problems.append(f"THEMI_HTTP_PORT must be a port number, not {port_text}")
@@ -190,6 +198,7 @@ class Settings(BaseModel):
             telegram_bot_token=Secret(token) if token else None,
             telegram_api_url=telegram_url.rstrip("/"),
             log_level=level,  # type: ignore[arg-type]  # validated above
+            tool_routing=routing,  # type: ignore[arg-type]  # validated above
             http_host=get("THEMI_HTTP_HOST") or "127.0.0.1",
             http_port=int(port_text),
             telegram_enabled=get("THEMI_DISABLE_TELEGRAM").lower() not in ("1", "true", "yes"),

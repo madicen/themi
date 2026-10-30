@@ -1,0 +1,779 @@
+{
+ "cases": [
+  {
+   "id": "sched-weekly",
+   "kind": "plain",
+   "message": "Make the bathroom cleaning happen every Saturday",
+   "tools": [
+    "set_task_schedule"
+   ]
+  },
+  {
+   "id": "sched-important",
+   "kind": "plain",
+   "message": "Paying the water bill is important, there are late fees if we forget",
+   "tools": [
+    "set_task_importance"
+   ]
+  },
+  {
+   "id": "sched-important-para",
+   "kind": "paraphrase",
+   "message": "This one really matters, can you bump it up?",
+   "before": "Renew the car registration",
+   "tools": [
+    "set_task_importance"
+   ]
+  },
+  {
+   "id": "sched-plan",
+   "kind": "plain",
+   "message": "My walks go up a quarter mile each week, starting at one mile",
+   "tools": [
+    "set_task_plan"
+   ]
+  },
+  {
+   "id": "sched-follow",
+   "kind": "follow-up",
+   "message": "actually make it every other week",
+   "before": "Water the plants every Sunday",
+   "tools": [
+    "set_task_schedule"
+   ]
+  },
+  {
+   "id": "sched-both-asks",
+   "kind": "two-asks",
+   "message": "For both of us, important and fairly urgent: replace the smoke alarm battery",
+   "tools": [
+    "create_task",
+    "set_task_importance"
+   ]
+  },
+  {
+   "id": "sched-chart",
+   "kind": "two-asks",
+   "message": "Make vacuuming weekly and put it on the chore chart",
+   "tools": [
+    "set_task_schedule",
+    "put_task_on_chore_chart"
+   ]
+  },
+  {
+   "id": "sched-para",
+   "kind": "paraphrase",
+   "message": "The towels should get washed twice a week",
+   "tools": [
+    "set_task_schedule"
+   ]
+  },
+  {
+   "id": "cal-tomorrow",
+   "kind": "plain",
+   "message": "What's on tomorrow?",
+   "tools": [
+    "day_summary"
+   ]
+  },
+  {
+   "id": "cal-day-look",
+   "kind": "paraphrase",
+   "message": "How's my day looking?",
+   "tools": [
+    "day_summary"
+   ]
+  },
+  {
+   "id": "cal-add",
+   "kind": "plain",
+   "message": "Put a haircut on the calendar Thursday at 3",
+   "tools": [
+    "add_calendar_event"
+   ]
+  },
+  {
+   "id": "cal-drive",
+   "kind": "plain",
+   "message": "How long is the drive to the library?",
+   "tools": [
+    "drive_time"
+   ]
+  },
+  {
+   "id": "cal-move",
+   "kind": "plain",
+   "message": "Move Sunday's lunch to 12:30",
+   "tools": [
+    "move_calendar_event"
+   ]
+  },
+  {
+   "id": "cal-move-follow",
+   "kind": "follow-up",
+   "message": "the one with my sister",
+   "before": "Move Sunday's lunch to 12:30",
+   "tools": [
+    "move_calendar_event"
+   ]
+  },
+  {
+   "id": "cal-block",
+   "kind": "plain",
+   "message": "Block off an hour Saturday morning for the garage task",
+   "tools": [
+    "block_time_for_task"
+   ]
+  },
+  {
+   "id": "cal-find",
+   "kind": "paraphrase",
+   "message": "When could I fit in clearing out the closet this week?",
+   "tools": [
+    "find_time_for_task"
+   ]
+  },
+  {
+   "id": "cal-delete",
+   "kind": "plain",
+   "message": "Cancel the haircut on Friday",
+   "tools": [
+    "delete_calendar_event"
+   ]
+  },
+  {
+   "id": "cal-two-asks",
+   "kind": "two-asks",
+   "message": "Add a playdate Saturday at 10, and how long will it take to get there?",
+   "tools": [
+    "add_calendar_event",
+    "drive_time"
+   ]
+  },
+  {
+   "id": "cal-follow",
+   "kind": "follow-up",
+   "message": "and the day after?",
+   "before": "What do I have tomorrow?",
+   "tools": [
+    "day_summary"
+   ]
+  },
+  {
+   "id": "cal-weekend",
+   "kind": "paraphrase",
+   "message": "Anything going on this weekend?",
+   "tools": [
+    "day_summary"
+   ]
+  },
+  {
+   "id": "lists-create",
+   "kind": "plain",
+   "message": "Start a packing list for the beach trip",
+   "tools": [
+    "create_list"
+   ]
+  },
+  {
+   "id": "lists-show",
+   "kind": "plain",
+   "message": "Show me my lists",
+   "tools": [
+    "show_lists"
+   ]
+  },
+  {
+   "id": "lists-tick",
+   "kind": "follow-up",
+   "message": "Tick off sunscreen and hats",
+   "before": "What's on the packing list?",
+   "tools": [
+    "tick_list_items"
+   ]
+  },
+  {
+   "id": "lists-remove",
+   "kind": "plain",
+   "message": "Take towels off the packing list",
+   "tools": [
+    "remove_from_list"
+   ]
+  },
+  {
+   "id": "lists-store",
+   "kind": "plain",
+   "message": "We get diapers from the warehouse store",
+   "tools": [
+    "set_usual_store"
+   ]
+  },
+  {
+   "id": "lists-wall",
+   "kind": "plain",
+   "message": "Put the gift ideas list on the wall",
+   "tools": [
+    "put_list_on_wall"
+   ]
+  },
+  {
+   "id": "lists-delete",
+   "kind": "plain",
+   "message": "Delete the old party list",
+   "tools": [
+    "delete_list"
+   ]
+  },
+  {
+   "id": "lists-follow",
+   "kind": "follow-up",
+   "message": "and flip flops",
+   "before": "Add sunscreen to the packing list",
+   "tools": [
+    "add_to_list"
+   ]
+  },
+  {
+   "id": "lists-para",
+   "kind": "paraphrase",
+   "message": "Make me somewhere to keep books I want to read",
+   "tools": [
+    "create_list"
+   ]
+  },
+  {
+   "id": "wall-routine-add",
+   "kind": "plain",
+   "message": "Add stretching to my morning routine",
+   "tools": [
+    "add_to_wall_routine"
+   ]
+  },
+  {
+   "id": "wall-routine-show",
+   "kind": "plain",
+   "message": "What's on my evening routine?",
+   "tools": [
+    "show_routine"
+   ]
+  },
+  {
+   "id": "wall-chart",
+   "kind": "plain",
+   "message": "Move vacuuming to the chore chart",
+   "tools": [
+    "put_task_on_chore_chart"
+   ]
+  },
+  {
+   "id": "wall-todo",
+   "kind": "plain",
+   "message": "Put the recycling task on the wall's to-do list",
+   "tools": [
+    "put_task_on_wall_list"
+   ]
+  },
+  {
+   "id": "wall-limit",
+   "kind": "paraphrase",
+   "message": "Only show me one chore at a time on the board",
+   "tools": [
+    "set_chore_chart_limit"
+   ]
+  },
+  {
+   "id": "wall-change",
+   "kind": "paraphrase",
+   "message": "Give me a different one on the chart",
+   "tools": [
+    "change_chore_chart"
+   ]
+  },
+  {
+   "id": "wall-follow",
+   "kind": "follow-up",
+   "message": "no, the one on the wall, not the calendar",
+   "before": "Add stretching to my morning routine",
+   "tools": [
+    "add_to_wall_routine"
+   ]
+  },
+  {
+   "id": "email-archive",
+   "kind": "plain",
+   "message": "Archive the junk emails",
+   "tools": [
+    "archive_noise_emails"
+   ]
+  },
+  {
+   "id": "email-archive-para",
+   "kind": "paraphrase",
+   "message": "Clear out the noisy stuff in my inbox",
+   "tools": [
+    "archive_noise_emails"
+   ]
+  },
+  {
+   "id": "email-audit",
+   "kind": "plain",
+   "message": "Let's go through my email senders",
+   "tools": [
+    "start_email_audit"
+   ]
+  },
+  {
+   "id": "email-urgent",
+   "kind": "plain",
+   "message": "Emails from the school are always urgent",
+   "tools": [],
+   "any_of": [
+    "set_urgent_senders",
+    "set_sender_levels"
+   ]
+  },
+  {
+   "id": "email-keep",
+   "kind": "plain",
+   "message": "Keep the bank email, don't archive it",
+   "tools": [
+    "keep_email"
+   ]
+  },
+  {
+   "id": "email-expect",
+   "kind": "plain",
+   "message": "I'm expecting a confirmation email from the airline",
+   "tools": [
+    "expect_email"
+   ]
+  },
+  {
+   "id": "email-waiting",
+   "kind": "paraphrase",
+   "message": "What emails am I waiting on?",
+   "tools": [
+    "list_expected_emails"
+   ]
+  },
+  {
+   "id": "email-watch",
+   "kind": "plain",
+   "message": "Stop watching my work inbox",
+   "tools": [
+    "set_inbox_watched"
+   ]
+  },
+  {
+   "id": "email-follow",
+   "kind": "follow-up",
+   "message": "yes, archive them all",
+   "before": "Let's look at email to archive",
+   "tools": [
+    "archive_noise_emails"
+   ]
+  },
+  {
+   "id": "email-not-urgent",
+   "kind": "paraphrase",
+   "message": "Nothing from the neighborhood app is ever urgent",
+   "tools": [],
+   "any_of": [
+    "set_sender_levels",
+    "set_urgent_senders"
+   ]
+  },
+  {
+   "id": "pantry-dinner",
+   "kind": "plain",
+   "message": "What can I make for dinner tonight?",
+   "tools": [
+    "suggest_meals"
+   ]
+  },
+  {
+   "id": "pantry-show",
+   "kind": "plain",
+   "message": "What's in the pantry?",
+   "tools": [
+    "show_pantry"
+   ]
+  },
+  {
+   "id": "pantry-out",
+   "kind": "plain",
+   "message": "We're out of eggs",
+   "tools": [
+    "update_pantry"
+   ]
+  },
+  {
+   "id": "pantry-bought",
+   "kind": "paraphrase",
+   "message": "Just got a big bag of rice",
+   "tools": [
+    "update_pantry"
+   ]
+  },
+  {
+   "id": "pantry-expiry",
+   "kind": "paraphrase",
+   "message": "The yogurt goes off Friday",
+   "tools": [
+    "update_pantry"
+   ]
+  },
+  {
+   "id": "pantry-use-up",
+   "kind": "paraphrase",
+   "message": "Any ideas that use up the spinach?",
+   "tools": [
+    "suggest_meals"
+   ]
+  },
+  {
+   "id": "pantry-two-asks",
+   "kind": "two-asks",
+   "message": "Used up the pasta, what else can we have for dinner?",
+   "tools": [
+    "update_pantry",
+    "suggest_meals"
+   ]
+  },
+  {
+   "id": "pantry-follow",
+   "kind": "follow-up",
+   "message": "something quicker",
+   "before": "What can I make for dinner?",
+   "tools": [
+    "suggest_meals"
+   ]
+  },
+  {
+   "id": "pantry-follow-and",
+   "kind": "follow-up",
+   "message": "and butter",
+   "before": "We're out of eggs",
+   "tools": [
+    "update_pantry"
+   ]
+  },
+  {
+   "id": "calls-script",
+   "kind": "plain",
+   "message": "Can you write me a script to call the insurance company?",
+   "tools": [
+    "draft_vendor_call"
+   ]
+  },
+  {
+   "id": "calls-prepare",
+   "kind": "paraphrase",
+   "message": "Help me get ready to talk to the plumber on the phone",
+   "tools": [
+    "draft_vendor_call"
+   ]
+  },
+  {
+   "id": "calls-outcome",
+   "kind": "plain",
+   "message": "I called the internet company, they're sending a tech Tuesday",
+   "tools": [
+    "log_call_outcome"
+   ]
+  },
+  {
+   "id": "calls-follow",
+   "kind": "follow-up",
+   "message": "they said it's sorted",
+   "before": "Script my call to the bank",
+   "tools": [
+    "log_call_outcome"
+   ]
+  },
+  {
+   "id": "calls-para",
+   "kind": "paraphrase",
+   "message": "What should I say when I ring the vet's office?",
+   "tools": [
+    "draft_vendor_call"
+   ]
+  },
+  {
+   "id": "spend-log",
+   "kind": "plain",
+   "message": "Spent $40 on pizza delivery",
+   "tools": [
+    "log_spending"
+   ]
+  },
+  {
+   "id": "spend-summary",
+   "kind": "plain",
+   "message": "How much takeout have we done this month?",
+   "tools": [
+    "spending_summary"
+   ]
+  },
+  {
+   "id": "spend-business",
+   "kind": "follow-up",
+   "message": "That lunch was for work",
+   "before": "Spent $25 on lunch",
+   "tools": [
+    "mark_business_expense"
+   ]
+  },
+  {
+   "id": "spend-remove",
+   "kind": "plain",
+   "message": "Take off that last takeout charge, it was a mistake",
+   "tools": [
+    "remove_spending"
+   ]
+  },
+  {
+   "id": "spend-para",
+   "kind": "paraphrase",
+   "message": "Ordered sushi, it came to $35",
+   "tools": [
+    "log_spending"
+   ]
+  },
+  {
+   "id": "spend-two-asks",
+   "kind": "two-asks",
+   "message": "Spent $20 on tacos and we're out of salsa",
+   "tools": [
+    "log_spending",
+    "update_pantry"
+   ]
+  },
+  {
+   "id": "spend-follow",
+   "kind": "follow-up",
+   "message": "and $12 on coffee",
+   "before": "Spent $40 on pizza delivery",
+   "tools": [
+    "log_spending"
+   ]
+  },
+  {
+   "id": "set-break",
+   "kind": "plain",
+   "message": "I'm taking a break",
+   "tools": [
+    "start_break"
+   ]
+  },
+  {
+   "id": "set-lie-down",
+   "kind": "paraphrase",
+   "message": "Going to lie down for half an hour",
+   "tools": [
+    "start_break"
+   ]
+  },
+  {
+   "id": "set-back",
+   "kind": "plain",
+   "message": "I'm back",
+   "tools": [
+    "end_break"
+   ]
+  },
+  {
+   "id": "set-hold-meals",
+   "kind": "paraphrase",
+   "message": "Hold the meal reminders today",
+   "tools": [
+    "pause_messages"
+   ]
+  },
+  {
+   "id": "set-dont-send",
+   "kind": "paraphrase",
+   "message": "Don't send me anything tonight",
+   "tools": [
+    "pause_messages"
+   ]
+  },
+  {
+   "id": "set-resume",
+   "kind": "plain",
+   "message": "Turn the laundry nudges back on",
+   "tools": [
+    "resume_messages"
+   ]
+  },
+  {
+   "id": "set-gentler",
+   "kind": "plain",
+   "message": "Be gentler with how you word things",
+   "tools": [
+    "set_phrasing"
+   ]
+  },
+  {
+   "id": "set-pushy",
+   "kind": "paraphrase",
+   "message": "You're coming across a bit pushy",
+   "tools": [
+    "set_phrasing"
+   ]
+  },
+  {
+   "id": "set-follow",
+   "kind": "follow-up",
+   "message": "make it 45 minutes",
+   "before": "I'm taking a break",
+   "tools": [
+    "start_break"
+   ]
+  },
+  {
+   "id": "set-nap",
+   "kind": "paraphrase",
+   "message": "Need a nap, give me an hour",
+   "tools": [
+    "start_break"
+   ]
+  },
+  {
+   "id": "set-mute",
+   "kind": "paraphrase",
+   "message": "Mute everything until tomorrow",
+   "tools": [
+    "pause_messages"
+   ]
+  },
+  {
+   "id": "set-two-asks",
+   "kind": "two-asks",
+   "message": "Taking a break, and hold the task nudges till tonight",
+   "tools": [
+    "start_break",
+    "pause_messages"
+   ]
+  },
+  {
+   "id": "core-reminder",
+   "kind": "plain",
+   "message": "Remind me to text my mum at 5",
+   "tools": [
+    "add_reminder"
+   ]
+  },
+  {
+   "id": "core-done",
+   "kind": "plain",
+   "message": "Mark the laundry done",
+   "tools": [
+    "complete_task"
+   ]
+  },
+  {
+   "id": "core-tired",
+   "kind": "plain",
+   "message": "I'm wiped out",
+   "tools": [],
+   "any_of": [
+    "log_energy_note",
+    "log_energy_level"
+   ]
+  },
+  {
+   "id": "core-grocery",
+   "kind": "plain",
+   "message": "Add oat milk to the grocery list",
+   "tools": [
+    "add_to_grocery_list"
+   ]
+  },
+  {
+   "id": "core-buy",
+   "kind": "plain",
+   "message": "We need light bulbs",
+   "tools": [
+    "add_to_things_to_buy"
+   ]
+  },
+  {
+   "id": "core-snooze",
+   "kind": "plain",
+   "message": "Snooze the garage task till next week",
+   "tools": [
+    "snooze_task"
+   ]
+  },
+  {
+   "id": "core-left",
+   "kind": "plain",
+   "message": "What's left for today?",
+   "tools": [
+    "list_open_items"
+   ]
+  },
+  {
+   "id": "core-partner",
+   "kind": "plain",
+   "message": "Have my husband take the bins out tonight",
+   "tools": [
+    "create_task"
+   ]
+  },
+  {
+   "id": "core-rule",
+   "kind": "plain",
+   "message": "From now on, list steps as bullet points",
+   "tools": [
+    "propose_rule"
+   ]
+  },
+  {
+   "id": "two-grocery-cal",
+   "kind": "two-asks",
+   "message": "Add milk to the grocery list and put a vet visit on the calendar Friday at 9",
+   "tools": [
+    "add_to_grocery_list",
+    "add_calendar_event"
+   ]
+  },
+  {
+   "id": "two-list-block",
+   "kind": "two-asks",
+   "message": "Make a packing list and block time Saturday to pack",
+   "tools": [
+    "create_list",
+    "block_time_for_task"
+   ]
+  },
+  {
+   "id": "two-email-day",
+   "kind": "two-asks",
+   "message": "Archive the noise and tell me what's on tomorrow",
+   "tools": [
+    "archive_noise_emails",
+    "day_summary"
+   ]
+  },
+  {
+   "id": "two-meal-spend",
+   "kind": "two-asks",
+   "message": "We spent $60 eating out, so what can I cook from the pantry tomorrow?",
+   "tools": [
+    "log_spending",
+    "suggest_meals"
+   ]
+  },
+  {
+   "id": "two-wall-break",
+   "kind": "two-asks",
+   "message": "Add reading to my evening routine, then I'm taking a break",
+   "tools": [
+    "add_to_wall_routine",
+    "start_break"
+   ]
+  }
+ ]
+}

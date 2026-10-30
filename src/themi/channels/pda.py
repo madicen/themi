@@ -122,6 +122,7 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
 
 _LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
 _BULLET = re.compile(r"^\s*[-•*]\s")
+_FIRST = re.compile(r"^\s*([A-Za-z']+(?:-[A-Za-z']+)*)")
 
 
 def _opening_command(sentence: str) -> str | None:
@@ -131,6 +132,11 @@ def _opening_command(sentence: str) -> str | None:
         return None  # "Check-in: ..." or "Due today: ..." labels the message
     if _BULLET.match(sentence):
         return None  # "- Call the vet" in a list names a task; it isn't an order (#19)
+    if sentence.lstrip().startswith(('"', "\u201c")):
+        return None  # '"Refill the water" is off the list' names a task too (#71)
+    first = _FIRST.match(sentence)
+    if first and "-" in first.group(1):
+        return None  # "Check-in set for Tuesday" opens with a noun, not "check in"
     words = _WORD.findall(sentence.lower())
     if not words:
         return None

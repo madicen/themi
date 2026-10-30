@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from themi.accounts import AccountStore
+from themi.ai.embeddings import RouterEmbedder, VectorCache
 from themi.ai.retry import Sleep
 from themi.ai.router import AIRouter, ProviderFactory
 from themi.ai.settings import AISettingsStore
@@ -45,6 +46,7 @@ from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
+from themi.core.follow_ups import FollowUps
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.lists import Lists
@@ -53,6 +55,7 @@ from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reminders import Reminders
+from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
@@ -63,6 +66,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
+from themi.core.which_list import WhichList
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
@@ -110,6 +114,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     backup: BackupConfig | None = None,
+    tool_routing: str = "groups",
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -120,6 +125,8 @@ def build_app(
     outcomes = OutcomeTracker(store)
     outbox.sent_listeners.append(outcomes.on_sent)
     services = Services(
+        tool_routing=tool_routing,
+        group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db)),
         store=store,
         ai_settings=ai_settings,
         router=router,
@@ -148,12 +155,14 @@ def build_app(
     lists = Lists(services)
     lists.install()
     ThingsToBuy(services, lists).install()
+    WhichList(services).install()
     Spending(services).install()
     Breaks(services).install()
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
     tasks.install()
+    FollowUps(services, tasks).install()
     if services.gmail is not None:
         EmailAudit(services, tasks).install()
     reminders = Reminders(services, tasks)

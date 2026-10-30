@@ -14,7 +14,7 @@ from themi.autonomy import Decision
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.pda import find_demands
-from themi.core.habits import IDEAS, HabitReserve
+from themi.core.habits import IDEAS, OFFER_TEXT, HabitReserve
 
 
 @pytest.fixture
@@ -143,4 +143,29 @@ async def test_answering_keeps_a_habit_going(
 @pytest.mark.parametrize(("idea", "prompt"), IDEAS)
 def test_habit_texts_are_never_demands(idea: str, prompt: str) -> None:
     assert find_demands(prompt, strength=3) == []
-    assert find_demands(f"A small daily check-in to try: {idea}", strength=3) == []
+    assert find_demands(OFFER_TEXT.format(idea=idea), strength=3) == []
+
+
+async def test_an_offer_says_its_for_them_and_skips_the_partners_habits(
+    scenario: Scenario, erin: Member, reserve: HabitReserve
+) -> None:
+    """Michael read "A small daily check-in to try: a glass of water mid-morning" as Erin's
+    check-in sent to him by mistake: it was his own copy of the idea she had taken up."""
+    await answer_prompts(scenario, erin, ["ok", "done", "sure", "ok", "thanks"])
+    await reserve.offer_due()
+    water = reserve.habits(erin)[0]
+    assert "water" in water["idea"]
+    await scenario.app.services.autonomy.resolve(water["action_id"], Decision.APPROVE, by=erin)
+
+    husband = scenario.app.store.update_settings(
+        SYSTEM,
+        scenario.member("Husband").id,
+        tracking={"text_notes": False, "message_timing": False, "device_activity": False},
+    )
+    await answer_prompts(scenario, husband, ["ok", "done", "sure", "ok", "thanks"])
+    assert await reserve.offer_due() == 1
+    (offered,) = [h for h in reserve.habits(husband) if h["status"] == "offered"]
+    assert "water" not in offered["idea"]  # hers comes after the rest
+    assert scenario.inbox("Husband")[-1].startswith(
+        f"Something you could try for yourself: {offered['idea']}"
+    )
