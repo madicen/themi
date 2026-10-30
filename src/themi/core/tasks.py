@@ -75,6 +75,11 @@ SAYS_DONE = re.compile(  # ...unless it says so too ("done, what's next?", "can 
     re.IGNORECASE,
 )
 SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it
+# "no" to "Walk dog... Done already?" marked eight other tasks done (#97).
+NOT_DONE = frozenset(
+    {"no", "n", "nope", "nah", "not yet", "not done", "not today", "no not yet", "nope not yet"}
+)
+ALL_OF_THEM = re.compile(r"\b(?:all|everything|every one|both)\b", re.IGNORECASE)
 
 
 def is_medicine(title: str) -> bool:
@@ -1773,13 +1778,32 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "pharmacist says; never tell them to take it, and give no other dose advice."
         )
     text = ctx.request_text
+    if " ".join(re.findall(r"[a-z]+", text.lower())) in NOT_DONE:
+        raise ToolFailed(
+            "Not marked done: they said no. Nothing is done; leave it open, and offer to move "
+            "it or hand it on only if that helps."
+        )
     if QUESTION.search(text) and not SAYS_DONE.search(text):
         raise ToolFailed(  # #92: "Didn't I just clean the bird cage?" marked it done
             "Not marked done: they asked a question, not said it's done. Answer it (when it "
             "was last done is in its details); mark it done only when they say it is."
         )
     _check_meant(ctx, task, "Not marked done")
+    if not _named(ctx, task):
+        raise ToolFailed(
+            f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
+            "last message. Mark only what they say is done; ask if it isn't clear."
+        )
     return await _board(ctx).complete(task.id, ctx.member, interactive=True)
+
+
+def _named(ctx: ToolContext, task: Task) -> bool:
+    """Something said names this task: their message or the one before it, Themi's last one
+    (the nudge they're answering), or all of them ("all done", "everything") (#97)."""
+    said = (ctx.request_text, ctx.previous_text, ctx.said_before)
+    return any(words_in_common(text, task.title) for text in said) or bool(
+        ALL_OF_THEM.search(ctx.request_text)
+    )
 
 
 def _check_meant(ctx: ToolContext, task: Task, not_done: str) -> None:

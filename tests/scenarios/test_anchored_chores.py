@@ -8,6 +8,7 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.channels.outbox import Priority
 from themi.core.tasks import Task, TaskBoard
 
 
@@ -133,9 +134,14 @@ async def test_done_for_the_wrong_task_number_is_caught(scenario: Scenario) -> N
     scenario.primary.queue_text("Done.")
     await scenario.say("Husband", "We contacted Erin\u2019s parents")
     assert board(scenario).get(parents.id).status == "done"
+    await scenario.app.services.outbox.send(
+        scenario.member("Husband"),
+        "Due today: Bring bins in. Done already, or later?",
+        priority=Priority.REPLY,
+    )
     scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
     scenario.primary.queue_text("Done.")
-    await scenario.say("Husband", "done")  # no words to go on: as before
+    await scenario.say("Husband", "done")  # the nudge they're answering names it
     assert board(scenario).get(bins.id).due_on == date(2026, 10, 28)
 
 
@@ -181,6 +187,39 @@ async def test_a_question_about_a_chore_doesnt_mark_it_done(scenario: Scenario) 
     scenario.primary.queue_text("Marked done.")
     await scenario.say("Erin", "Can you mark the bird cage done?")
     assert len(board(scenario).runs(cage.id)) == 1
+
+
+async def test_no_to_a_routine_marks_nothing_done(scenario: Scenario) -> None:
+    """Bug #97: "Morning routine, still open: Walk dog. Done already?" got "no", and the
+    model marked eight open tasks done, the laundry Michael had for tonight among them."""
+    erin = scenario.member("Erin")
+    tasks = [
+        await board(scenario).create(erin, title, "errand", 1, assignee=erin)
+        for title in ("Unclog the robot vacuum", "Assemble grocery order", "Cycle the laundry")
+    ]
+    await scenario.app.services.outbox.send(
+        erin, "Morning routine, still open:\n- Walk dog\nDone already?", priority=Priority.REPLY
+    )
+    for task in tasks:
+        scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "no")
+    assert all(board(scenario).get(t.id).status == "open" for t in tasks)
+    assert "they said no" in last_tool_result(scenario).content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": tasks[0].id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "I sorted out the dog walk earlier")
+    assert board(scenario).get(tasks[0].id).status == "open"  # nothing names the vacuum
+    await scenario.app.services.outbox.send(
+        erin,
+        "Due today: Unclog the robot vacuum. Done already, or later?",
+        priority=Priority.REPLY,
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": tasks[0].id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "yes I did that this morning")
+    assert board(scenario).get(tasks[0].id).status == "done"
 
 
 async def test_a_task_already_open_is_changed_as_asked(scenario: Scenario) -> None:
