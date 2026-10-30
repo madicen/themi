@@ -88,6 +88,31 @@ async def test_a_missed_round_rolls_on_by_default(scenario: Scenario) -> None:
     assert run.missed and not run.on_time and run.done_by is None
 
 
+async def test_done_the_day_after_a_missed_round_fills_that_round(scenario: Scenario) -> None:
+    """Bug: "I brought the bins in" the morning after the round rolled on counted for next
+    week's round, and the wall was asked to tick a day still to come (2026-10-29)."""
+    bins = await chore(scenario, "Take out the bins")
+    await schedule(scenario, bins, "every Tuesday")
+    await scenario.advance(hours=24 * 7)  # Wednesday after
+    await scenario.run_periodic("tasks.schedules")
+    reply = await board(scenario).complete(bins.id, scenario.member("Erin"))
+    assert "Next round: Tue 03 Nov" in reply
+    assert board(scenario).get(bins.id).due_on == date(2026, 11, 3)  # this week's still due
+    (run,) = board(scenario).runs(bins.id)
+    assert run.due_on == date(2026, 10, 27) and not run.missed and not run.on_time
+    assert run.done_by == scenario.member("Erin").id
+
+
+async def test_done_two_days_after_a_missed_round_counts_for_the_next(scenario: Scenario) -> None:
+    bins = await chore(scenario, "Take out the bins")
+    await schedule(scenario, bins, "every Tuesday")
+    await scenario.advance(hours=24 * 8)  # Thursday after
+    await scenario.run_periodic("tasks.schedules")
+    await board(scenario).complete(bins.id, scenario.member("Erin"))
+    assert board(scenario).get(bins.id).due_on == date(2026, 11, 10)
+    assert [r.missed for r in board(scenario).runs(bins.id)] == [True, False]
+
+
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:
     bins = await chore(scenario, "Take out the bins")
     await schedule(scenario, bins, "every Tuesday", missed="catch_up")

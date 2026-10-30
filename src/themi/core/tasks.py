@@ -1055,6 +1055,9 @@ class TaskBoard:
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
     async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
+        missed = self._just_missed(task)
+        if missed is not None:
+            return self._fill_missed(task, by, missed)
         self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
         today = self._today()
         end = self.round_end(task)
@@ -1081,6 +1084,34 @@ class TaskBoard:
         await self._maybe_offer_step_up(fresh)
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=next_due.strftime("%a %d %b")
+        )
+
+    def _just_missed(self, task: Task) -> dict[str, Any] | None:
+        """The run of a round that rolled on undone and ended yesterday, while the next hasn't
+        begun: "I brought the bins in" the morning after is for that one, not next week's."""
+        today = self._today()
+        if task.repeat is None or task.due_on is None or task.due_on <= today:
+            return None
+        last = self.db.one(
+            "SELECT * FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1", (task.id,)
+        )
+        if last is None or not last["missed"] or last["due_on"] is None:
+            return None
+        end = round_end(task.repeat, date.fromisoformat(last["due_on"]))
+        return last if end >= today - timedelta(days=1) else None
+
+    def _fill_missed(self, task: Task, by: Member, missed: dict[str, Any]) -> str:
+        """Done a day late: the missed run becomes a late one and the next round stays. It's
+        a new run, not the old one changed, so the wall's sync ticks its day."""
+        self.db.execute("DELETE FROM task_runs WHERE id = ?", (missed["id"],))
+        self.db.execute(
+            "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
+            "VALUES (?, ?, ?, ?, 0)",
+            (task.id, by.id, to_utc_iso(clock.now()), missed["due_on"]),
+        )
+        assert task.due_on is not None
+        return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
+            when=task.due_on.strftime("%a %d %b")
         )
 
     async def _finish_course(self, task: Task, interactive: bool) -> None:
