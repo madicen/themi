@@ -337,11 +337,12 @@ async def test_a_false_add_claim_after_a_pantry_offer_is_replaced(scenario: Scen
 
 
 def test_the_grocery_tool_says_low_and_out_items_are_the_pantrys_job() -> None:
-    from themi.core.groceries import add_to_grocery_list
-    from themi.core.pantry import update_pantry
+    from themi.core.tools import twins_text
 
-    assert "not for things running low or out" in add_to_grocery_list.spec.description
-    assert "don't also call add_to_grocery_list" in update_pantry.spec.description
+    # P6: the food-and-buying paragraph says it, whenever either tool is sent.
+    food = twins_text(["add_to_grocery_list"])
+    assert "update_pantry records what the house has" in food
+    assert "so don't add them to the list as well" in food
 
 
 async def test_naming_an_item_without_asking_still_asks(scenario: Scenario) -> None:

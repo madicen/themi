@@ -13,7 +13,9 @@ from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
 from themi.core.tools import GROUPS, TOOL_GROUPS
 
-BASELINE_RECALL = 11 / 12  # choose_groups on 2026-10-29; see P3's Notes
+# choose_groups: 11/12 on 2026-10-29 (P3's Notes); 21/25 once P6 added the twins cases, whose
+# misses are "lie down", "hold the meal reminders" and "don't send me" (the settings group).
+BASELINE_RECALL = 21 / 25
 
 
 def case(id: str, message: str, *expect: str, any_of: tuple[str, ...] = ()) -> Case:
@@ -22,7 +24,7 @@ def case(id: str, message: str, *expect: str, any_of: tuple[str, ...] = ()) -> C
 
 CASES = [
     case("core", "Remind me to call mum", "create_task"),
-    case("pantry", "We're out of olive oil", "update_pantry"),
+    case("pantry", "What can I make for dinner?", "suggest_meals"),
     case("lists", "Add sunscreen to the packing list", "add_to_list"),
     case("either", "Out of milk", any_of=("update_pantry", "add_to_list")),
 ]
@@ -42,10 +44,11 @@ async def test_a_router_that_misses_a_group_is_scored_down(scenario: Scenario) -
     t = totals(routed)
     assert (t.needing, t.offered) == (3, 2)  # "either" passes on the list
     missed = {r.case.id: r.missing for r in routed if not r.offered}
-    assert missed == {"pantry": ("update_pantry",)}
-    assert "missed pantry: update_pantry" in format_routing(routed)
+    assert missed == {"pantry": ("suggest_meals",)}
+    assert "missed pantry: suggest_meals" in format_routing(routed)
     core_only = route_cases(scenario.app.services.tools, lambda _: set(), CASES)
-    assert {r.case.id for r in core_only if r.offered} == {"core"}
+    # P6: add_to_list and update_pantry are twins of the core grocery tool, so they go too.
+    assert {r.case.id for r in core_only if r.offered} == {"core", "lists", "either"}
     assert all(r.tools_sent < t.tools_sent for r in core_only)
 
 

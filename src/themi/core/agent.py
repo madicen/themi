@@ -37,7 +37,7 @@ from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
-from themi.core.tools import GROUPS, ToolContext, choose_groups
+from themi.core.tools import GROUPS, ToolContext, choose_groups, twins_text
 from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
@@ -379,7 +379,9 @@ class Agent:
         try:
             for step in range(1, self.max_steps + 1):
                 tools = services.tools.specs_for(ctx.groups, routing)
-                response = await client.chat(system, messages, tools)
+                twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
+                call_system = f"{system}\n\n{twins}" if twins else system
+                response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):

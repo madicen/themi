@@ -205,11 +205,11 @@ def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
 
 
 def test_rules_are_for_how_themi_behaves_and_chores_are_tasks() -> None:
-    from themi.core.prompts import STABLE_SYSTEM
-    from themi.core.rules import propose_rule
+    from themi.core.tools import twins_text
 
-    assert "Chores, schedules and the steps of a job are tasks" in STABLE_SYSTEM
-    assert "never rules" in propose_rule.spec.description
+    # P6: the rules-or-tasks paragraph goes with propose_rule and create_task.
+    rules_or_tasks = twins_text(["propose_rule"])
+    assert "Chores, schedules\n  and the steps of a job are tasks, never rules" in rules_or_tasks
 
 
 def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
@@ -227,7 +227,7 @@ def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     assert "never a rule for Themi" in STABLE_SYSTEM
     from themi.core.rules import propose_rule
 
-    assert "ideas for the family to try" in propose_rule.spec.description
+    assert "Ideas for the family to try" in propose_rule.spec.description
     assert "general question worth keeping" in STABLE_SYSTEM  # idea #28
     assert "who calls whom" in STABLE_SYSTEM  # idea #32: Michael's nickname for Erin
 

@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -241,6 +241,79 @@ TOOL_GROUPS: dict[str, str] = {
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }
+
+
+# ----- near-twin tools (P6) --------------------------------------------------------------
+#
+# Some tools sound alike and do very different things, and the model used whichever twin it
+# had (the 2026-10-29 evals: add_to_grocery_list for "used the last of the olive oil",
+# because update_pantry's group wasn't sent). A twin set travels whole, whatever the router
+# chose, and its paragraph goes in the system prompt with it, so the tools' own
+# descriptions say what each does and the paragraph says which is which.
+
+
+@dataclass(frozen=True)
+class Twins:
+    name: str
+    tools: tuple[str, ...]
+    text: str  # how to tell them apart, for the system prompt
+
+
+TWINS: tuple[Twins, ...] = (
+    Twins(
+        "food and buying",
+        ("update_pantry", "add_to_grocery_list", "add_to_things_to_buy", "add_to_list"),
+        """\
+Food and buying are four different places:
+- update_pantry records what the house has: "used the last of the olive oil" is out,
+  "running low on rice" is low, "just picked up eggs" is plenty. It offers low or out
+  staples for the grocery list itself, so don't add them to the list as well.
+- add_to_grocery_list is food someone asks to have on the grocery list ("put cumin on the
+  grocery list", "bananas for this week's shop").
+- add_to_things_to_buy is anything to buy that isn't food ("we need light bulbs", "add AA
+  batteries").
+- add_to_list is one of Themi's named lists, by its name ("add sunscreen to the packing
+  list").
+When it could go on more than one list, ask_which_list asks with buttons; don't guess,
+and don't ask in words.""",
+    ),
+    Twins(
+        "quiet time",
+        ("start_break", "pause_messages"),
+        """\
+Quiet time is two different things:
+- start_break is the person resting ("I'm taking a break", "going to lie down for 30
+  minutes"): task nudges and check-ins wait, then one message asks whether to end or
+  extend it. "I'm back" is end_break.
+- pause_messages holds Themi's own messages for a while ("hold the meal reminders today",
+  "don't send me anything for a couple of hours"): it's about Themi's messages, not their
+  resting.
+Neither is a busy time.""",
+    ),
+    Twins(
+        "rules or tasks",
+        ("propose_rule", "create_task", "set_task_schedule"),
+        """\
+Rules and tasks are different things:
+- propose_rule is how Themi itself behaves ("from now on, give me steps as bullet
+  points", "always archive store promos"), as a draft they lock in themselves. When they
+  call it a rule ("new rule: ...", "make it a rule that ..."), it's propose_rule.
+- create_task is something a person does, once or repeating ("return the library books";
+  "ask my husband to fix the squeaky door" is a task assigned to him). Chores, schedules
+  and the steps of a job are tasks, never rules, even when someone describes how a chore
+  should go from now on.
+- set_task_schedule is when a task repeats: after create_task for a new one ("I water the
+  plants every Sunday" is both, and so is "always remind me about the bins on Tuesdays").""",
+    ),
+)
+
+
+def twins_text(names: Iterable[str]) -> str:
+    """The paragraphs for the twin sets these tools belong to, for the system prompt."""
+    sent = set(names)
+    return "\n\n".join(t.text for t in TWINS if sent & set(t.tools))
+
+
 _GROUP_WORDS = {
     name: re.compile(rf"\b(?:{words})", re.IGNORECASE) for name, (_, words) in GROUPS.items()
 }
@@ -269,13 +342,17 @@ class ToolRegistry:
         self._tools[t.spec.name] = t
 
     def specs(self, groups: set[str] | None = None) -> list[ToolSpec]:
-        """Every tool, or (P1) the core and these groups'. Sorted, so the tool list (part
-        of the cached prompt prefix) is stable."""
-        return [
-            self._tools[name].spec
-            for name in sorted(self._tools)
+        """Every tool, or (P1) the core and these groups', with any twin set (P6) they
+        touch. Sorted, so the tool list (part of the cached prompt prefix) is stable."""
+        chosen = {
+            name
+            for name in self._tools
             if groups is None or TOOL_GROUPS.get(name, "core") in groups | {"core"}
-        ]
+        }
+        for twins in TWINS:  # P6: a twin set goes whole
+            if chosen & set(twins.tools):
+                chosen |= set(twins.tools) & self._tools.keys()
+        return [self._tools[name].spec for name in sorted(chosen)]
 
     def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
         """The tools one model call gets. P5's "all" is every tool but more_tools, which

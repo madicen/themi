@@ -436,8 +436,7 @@ REMINDER = re.compile(r"\bremind (?:me|us|him|her|them|\w+) (?:about|to|of|that)
 @tool(
     "propose_rule",
     "Capture a rule about how Themi itself behaves, as a draft for this person to lock in "
-    "('always archive store promos', 'list steps as bullet points'). Chores, schedules and "
-    "the steps of a job are tasks (create_task), never rules; ideas for the family to try "
+    "('always archive store promos', 'list steps as bullet points'). Ideas for the family to try "
     "('keep the pacifiers in a basket') are a conversation, never rules; one email that "
     "matters is keep_email, and which senders count as urgent is set_urgent_senders. It "
     "sends them the "

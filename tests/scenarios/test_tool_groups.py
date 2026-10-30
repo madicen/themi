@@ -19,7 +19,8 @@ async def test_a_plain_message_gets_the_core_only(scenario: Scenario) -> None:
     await scenario.say("Erin", "Good morning")
     names = sent(scenario)
     assert {"create_task", "remember_fact", "propose_rule", "more_tools"} <= names
-    assert not names & {"add_calendar_event", "create_list", "update_pantry", "expect_email"}
+    assert not names & {"add_calendar_event", "create_list", "suggest_meals", "expect_email"}
+    assert {"update_pantry", "set_task_schedule"} <= names  # P6: twins of core tools
     assert len(names) < len(scenario.app.services.tools.specs()) * 0.6
 
 
@@ -39,8 +40,8 @@ async def test_more_tools_brings_a_group_mid_turn(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call("more_tools", {"groups": ["pantry"]})
     scenario.primary.queue_text("Done.")
     await scenario.say("Erin", "Hmm, what should we do about that")
-    assert "update_pantry" not in sent(scenario, -2)
-    assert "update_pantry" in sent(scenario, -1)  # the next step has it
+    assert "suggest_meals" not in sent(scenario, -2)
+    assert "suggest_meals" in sent(scenario, -1)  # the next step has it
 
 
 def test_every_group_is_known_and_has_words() -> None:

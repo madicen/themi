@@ -197,11 +197,20 @@ def proposal(names: list[str]) -> Proposal:
     return Proposal(CATEGORY, list_summary(names), EXECUTOR, {"items": names})
 
 
+# P6: news about what the house has ("running low on rice", "finished the last of the
+# peanut butter") is update_pantry's, unless they also ask for the list. "Out of milk" could
+# be either, so it isn't here.
+HOUSE_NEWS = re.compile(
+    r"\bused (?:up|the last)\b|\b(?:running|getting) low\b|\blow on\b|\bran out\b|"
+    r"\bfinished (?:the|off)\b|\blast of the\b"
+)
+ASKS_FOR_LIST = re.compile(r"\blist\b|\bbuy\b|\border\b|\bget (?:some|more)\b|\bpick up\b")
+
+
 @staged_tool(
     "add_to_grocery_list",
     "Put items on the family's grocery list (it shows in OurGroceries too) when someone asks "
-    "for that. It's not for things running low or out: update_pantry records those and offers "
-    "staples for the list itself.",
+    "for that.",
     {
         "items": {
             "type": "array",
@@ -211,6 +220,12 @@ def proposal(names: list[str]) -> Proposal:
     },
 )
 async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+    said = ctx.request_text.lower()
+    if HOUSE_NEWS.search(said) and not ASKS_FOR_LIST.search(said):
+        raise ToolFailed(
+            "Not added: they said what the house has, not to add it. That's update_pantry, "
+            "which offers low staples for the grocery list itself."
+        )
     groceries = ctx.services.groceries
     assert groceries is not None
     waiting = groceries.awaiting_approval()

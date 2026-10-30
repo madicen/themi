@@ -1488,11 +1488,16 @@ def _board(ctx: ToolContext) -> TaskBoard:
     return board
 
 
+# P6: "new rule: the grocery order happens on Sundays" became a task (eval
+# rule-husband-groceries). Said as a rule, it's propose_rule, unless it's a reminder.
+CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|this) a rule\b")
+
+
 @tool(
     "create_task",
     "Add a household task and nudge whoever does it at a good moment. assign_to says who: "
     "'me' when the person asking will do it ('I want to...', 'I'll...', 'remind me to...'), "
-    "a family member's name when they name someone ('have Michael get the pacifier', 'ask "
+    "a family member's name when they name someone ('have my husband get the pacifier', 'ask "
     "him to...'), 'both' when either of them can do it "
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
     "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
@@ -1546,6 +1551,12 @@ def _board(ctx: ToolContext) -> TaskBoard:
     },
 )
 async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    said = ctx.request_text.lower()
+    if CALLED_A_RULE.search(said) and "remind" not in said:
+        raise ToolFailed(
+            "Not created: they called it a rule, so it's propose_rule (a draft they lock in "
+            "themselves), not a task."
+        )
     due = None
     if args["due_date"]:
         try:
