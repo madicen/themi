@@ -55,6 +55,7 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 MORNING_CHECK = time(12)
+MORNING_CHECK_ENDS = time(17)  # the wall's evening: a morning check after it is no use (#96)
 EVENING_BEFORE_QUIET = timedelta(hours=1)
 CHECKED_PARTS = ("Morning", "Evening")
 ONCE = "today"  # add_to_wall_routine's repeat for just today
@@ -65,6 +66,7 @@ EVERY_DAY = re.compile(  # bug #47: these keep an item, whatever the model sent
 )
 CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
 ALL_DONE_TEXT = "{part} routine: all done."
+SKIPPED_TEXT = "{part} routine: left for today."
 ROUTINE_SIGNAL = 0.5  # a part of the day done, or not: a small lift or dip
 PARTS = ("Morning", "Afternoon", "Evening")
 ADD_CATEGORY, ADD_EXECUTOR = "wall_routine_add", "cozyla.add_routine"
@@ -308,9 +310,19 @@ class CozylaRoutines:
                     if part == "Morning"
                     else evening
                 )
-                # The morning's check is no use once the evening's is due (it went out at
-                # 21:15, held until its deadline): it isn't sent then, and one waiting expires.
-                end = evening if part == "Morning" else quiet
+                # The morning's check is no use once the evening starts (it went out at
+                # 21:15, then 20:15, held until its deadline): it isn't sent then, and one
+                # waiting lapses.
+                end = (
+                    min(
+                        evening,
+                        now.replace(
+                            hour=MORNING_CHECK_ENDS.hour, minute=0, second=0, microsecond=0
+                        ),
+                    )
+                    if part == "Morning"
+                    else quiet
+                )
                 if not start <= now < end or self._checked(member, today, part):
                     continue
                 theirs = [
@@ -339,7 +351,7 @@ class CozylaRoutines:
                     CHECK_TEXT.format(part=part, items=_bullets(still)),
                     priority=Priority.NORMAL,
                     kind="routine",
-                    buttons=self._buttons(still, today),
+                    buttons=self._buttons(still, today, part),
                     deadline=end - timedelta(minutes=15),
                     dedupe_key=f"routine-{part}-{today}",
                     expires=end,
@@ -348,17 +360,25 @@ class CozylaRoutines:
         return sent
 
     @staticmethod
-    def _buttons(still: list[RoutineRecord], day: date) -> list[Button]:
+    def _buttons(still: list[RoutineRecord], day: date, part: str) -> list[Button]:
+        """A tick for each item, and a way to leave the rest (idea #96: never one button)."""
         return [
             Button(
                 f"✓ {r.title}"[:40], "routine", {"routine": r.routine_id, "day": day.isoformat()}
             )
             for r in still
-        ]
+        ] + [Button("Skip today", "routine", {"skip": part, "day": day.isoformat()})]
 
     async def on_button(self, event: InboundEvent) -> None:
-        """A routine's button: tick it on the wall, and show what's left."""
+        """A routine's button: tick it on the wall, and show what's left; or leave them."""
         assert event.button is not None
+        if "skip" in event.button.payload:
+            if event.button.message_id is not None:
+                part = str(event.button.payload["skip"])
+                await self.services.outbox.edit(
+                    event.member, event.button.message_id, SKIPPED_TEXT.format(part=part)
+                )
+            return
         routine_id = int(event.button.payload["routine"])
         day = date.fromisoformat(str(event.button.payload["day"]))
         try:
@@ -385,7 +405,7 @@ class CozylaRoutines:
         if still:
             text = CHECK_TEXT.format(part=part, items=_bullets(still))
             await self.services.outbox.edit(
-                event.member, event.button.message_id, text, self._buttons(still, day)
+                event.member, event.button.message_id, text, self._buttons(still, day, part)
             )
         else:
             await self.services.outbox.edit(

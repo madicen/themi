@@ -72,7 +72,7 @@ async def test_the_morning_check_lists_whats_open_and_ticks_from_a_button(
     assert routine_texts(scenario, "Erin") == [
         "Morning routine, still open:\n- Walk dog\n- Make the bed\nDone already?"
     ]
-    assert scenario.last_buttons("Erin") == ["✓ Walk dog", "✓ Make the bed"]
+    assert scenario.last_buttons("Erin") == ["✓ Walk dog", "✓ Make the bed", "Skip today"]
     assert signals(scenario, "Erin") == [
         (-0.5, "morning routine not finished (Walk dog and Make the bed)")
     ]
@@ -289,14 +289,38 @@ async def test_the_morning_check_isnt_sent_in_the_evening(
     ]
 
 
-async def test_a_morning_check_held_back_expires_at_the_evening_check(
+async def test_a_morning_check_held_back_lapses_when_the_evening_starts(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Idea #96: held all afternoon, Erin's morning check went at 8:15 pm."""
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    await at(scenario, WED, 12, 1)
+    (row,) = scenario.app.db.query("SELECT expires_at, deadline FROM outbox WHERE kind = 'routine'")
+    assert row["expires_at"] == "2026-10-22T00:00:00+00:00"  # 5 pm Pacific
+    assert row["deadline"] < row["expires_at"]
+
+
+async def test_no_morning_check_after_the_afternoon(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:
     fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
+    await at(scenario, WED, 17, 30)  # the first sync of the day after a restart
+    assert routine_texts(scenario, "Erin") == []
+
+
+async def test_a_routine_check_can_be_skipped_for_today(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Idea #96: "Themi should never offer a single push button. This should have been
+    'walk dog' or 'skip today'"."""
+    fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
     await at(scenario, WED, 12, 1)
-    (row,) = scenario.app.db.query("SELECT expires_at FROM outbox WHERE kind = 'routine'")
-    assert row["expires_at"] is not None
-    assert row["expires_at"] <= "2026-10-22T03:30:00+00:00"  # 20:30 Pacific
+    assert scenario.last_buttons("Erin") == ["✓ Walk dog", "Skip today"]
+    await scenario.tap("Erin", "Skip today")
+    edit = scenario.edits("Erin")[-1]
+    assert edit["text"] == "Morning routine: left for today."
+    assert not edit.get("reply_markup", {}).get("inline_keyboard")
+    assert fake_cozyla.routine_ticks == set()  # nothing ticked on the wall
 
 
 def routine_question(scenario: Scenario, part: str) -> None:
