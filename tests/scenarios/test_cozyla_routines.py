@@ -26,6 +26,9 @@ async def at(scenario: Scenario, day: date, hour: int, minute: int = 0) -> None:
     )
     clock.advance(target - clock.now())
     await scenario.run_periodic("cozyla.routines")
+    # R1b: the wall's routines are Themi's now, and Themi checks them.
+    await scenario.run_periodic("routines.wall")
+    await scenario.run_periodic("routines.check")
     await scenario.app.outbox.flush()
 
 

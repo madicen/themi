@@ -131,7 +131,7 @@ async def test_items_on_set_days_and_just_today(scenario: Scenario) -> None:
 
 async def test_a_late_check_isnt_sent(scenario: Scenario) -> None:
     add(scenario, "Erin", "Morning", "Vitamins")
-    await at(scenario, WED, 15, 1)  # more than three hours after the window ended
+    await at(scenario, WED, 17, 1)  # more than five hours after the window ended
     assert checks(scenario, "Erin") == []
 
 

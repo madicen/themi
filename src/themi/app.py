@@ -61,6 +61,7 @@ from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
 from themi.core.reminders import Reminders
 from themi.core.routines import Routines
+from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
@@ -250,9 +251,12 @@ def build_app(
         chart = CozylaChores(services, tasks, cozyla)
         chart.install()
         periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
-        routines = CozylaRoutines(services, tasks, cozyla)
-        routines.install()
-        periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), routines.sync))
+        wall_routines = CozylaRoutines(services, tasks, cozyla)
+        wall_routines.install()
+        periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), wall_routines.sync))
+        mirror = RoutinesWall(services, routines, wall_routines, cozyla)
+        mirror.install()
+        periodic.append(PeriodicTask("routines.wall", timedelta(minutes=5), mirror.sync))
     if home_connect is not None:
         services.home_connect = HomeConnectAccount(db, cipher, home_connect)
         dishwasher = Dishwasher(services, tasks, services.home_connect)

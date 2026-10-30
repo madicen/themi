@@ -90,6 +90,9 @@ class CozylaRoutines:
         self._read_after: datetime | None = None
         self._to_member: dict[str, int] = {}
         self._to_cozyla: dict[int, str] = {}
+        # R1b: Themi checks the routines (they're Themi's, shown on the wall), so the wall's
+        # own checks stop.
+        self.checks_by_themi = False
 
     def install(self) -> None:
         self.services.button_handlers["routine"] = self.on_button
@@ -295,6 +298,8 @@ class CozylaRoutines:
     # ----- the morning and evening checks -----------------------------------------------------
 
     async def _checks(self, today: date, records: list[RoutineRecord]) -> int:
+        if self.checks_by_themi:
+            return 0
         now = clock.now().astimezone(self._tz())
         mine = {r["routine_id"] for r in self.db.query("SELECT routine_id FROM cozyla_routines")}
         sent = 0

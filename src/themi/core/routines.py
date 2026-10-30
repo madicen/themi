@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
@@ -52,7 +53,9 @@ DEFAULTS = (
     ("Afternoon", time(12), time(17)),
     ("Evening", time(17), None),
 )
-CHECK_LATE = timedelta(hours=3)  # a check this long after its window ended isn't sent
+# A check this long after its window ended isn't sent, and one waiting lapses: Morning's
+# at 5 pm, when the evening starts (idea #96).
+CHECK_LATE = timedelta(hours=5)
 DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 ADD_CATEGORY, ADD_EXECUTOR = "routine_item_add", "routines.add_item"
 KIND = "routine"  # the outbox kind, as C3's checks
@@ -119,6 +122,8 @@ class Routines:
         self.services = services
         self.store = services.store
         self.db = services.store.db
+        # Told of each tick made in Themi, so the wall shows it at once (R1b).
+        self.tick_listeners: list[Callable[[Item, date], Awaitable[None]]] = []
 
     def install(self) -> None:
         self.services.routines = self
@@ -160,7 +165,7 @@ class Routines:
             "UPDATE routines SET name = ?, starts = ?, ends = ? WHERE id = ?",
             (title, starts.strftime("%H:%M"), ends.strftime("%H:%M") if ends else None, found.id),
         )
-        return self._get(found.id), False
+        return self.get(found.id), False
 
     def remove(self, routine: Routine) -> None:
         self.db.execute("DELETE FROM routines WHERE id = ?", (routine.id,))
@@ -181,14 +186,18 @@ class Routines:
                 to_utc_iso(clock.now()),
             ),
         )
-        return self._get(routine_id)
+        return self.get(routine_id)
 
-    def _get(self, routine_id: int) -> Routine:
+    def get(self, routine_id: int) -> Routine:
         row = self.db.one("SELECT * FROM routines WHERE id = ?", (routine_id,))
         assert row is not None
         return _routine(row)
 
     # ----- items ------------------------------------------------------------------------
+
+    def item(self, item_id: int) -> Item | None:
+        row = self.db.one("SELECT * FROM routine_items WHERE id = ?", (item_id,))
+        return _item(row) if row else None
 
     def items(self, routine: Routine) -> list[Item]:
         rows = self.db.query(
@@ -234,6 +243,15 @@ class Routines:
             "INSERT OR IGNORE INTO routine_ticks (item_id, day, ticked_at) VALUES (?, ?, ?)",
             (item.id, day.isoformat(), to_utc_iso(clock.now())),
         )
+
+    async def tick_now(self, item: Item, day: date) -> None:
+        """A tick made in Themi (a button, chat), passed on to whoever listens."""
+        self.tick(item, day)
+        for listener in self.tick_listeners:
+            try:
+                await listener(item, day)
+            except Exception:
+                log.warning("A routine tick listener failed for item %s", item.id, exc_info=True)
 
     def ticked(self, item: Item, day: date) -> bool:
         return bool(
@@ -328,7 +346,7 @@ class Routines:
             return
         item = next((i for i in self.items(found) if i.id == int(payload["item"])), None)
         if item is not None:
-            self.tick(item, day)
+            await self.tick_now(item, day)
         still = [i for i in self.today_items(found, day) if not self.ticked(i, day)]
         if message is None:
             return
@@ -566,5 +584,5 @@ async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     item = routines.find_item(ctx.member, str(args["title"]))
     if item is None:
         raise ToolFailed(f"No item like {args['title']} on their routines.")
-    routines.tick(item, routines.today())
+    await routines.tick_now(item, routines.today())
     return f"Ticked {item.title} for today."
