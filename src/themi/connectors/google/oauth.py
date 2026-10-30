@@ -5,7 +5,7 @@ against configurable endpoints, so tests point it at a local fake.
 
 - Sign-in asks only for `openid email`. The verified address must be a
   member's sign-in address.
-- Linking asks for Gmail (`gmail.modify`) and Calendar events, offline, with
+- Linking asks for Gmail (`gmail.modify`), Calendar events and Google Tasks, offline, with
   consent forced so Google returns a refresh token every time. Refresh tokens
   are stored encrypted; access tokens are kept only in memory.
 - The state lives in `oauth_states` (hashed), with the PKCE verifier
@@ -42,8 +42,10 @@ CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events"  # write even
 CALENDAR_LIST_SCOPE = "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 CALENDAR_CREATE_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
 CALENDAR_SCOPES = (CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, CALENDAR_CREATE_SCOPE)
+# GT1a: Google Tasks, which "Hey Google, add a task" fills: read, and delete once handled.
+TASKS_SCOPE = "https://www.googleapis.com/auth/tasks"
 SIGNIN_SCOPES = ("openid", "email")
-LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES)
+LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES, TASKS_SCOPE)
 STATE_TTL = timedelta(minutes=10)
 TIMEOUT = 20.0
 
@@ -58,6 +60,7 @@ class GoogleConfig:
     userinfo_url: str = "https://openidconnect.googleapis.com/v1/userinfo"
     gmail_url: str = "https://gmail.googleapis.com"
     calendar_url: str = "https://www.googleapis.com"
+    tasks_url: str = "https://tasks.googleapis.com"
 
 
 class OAuthError(Exception):

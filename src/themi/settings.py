@@ -33,6 +33,7 @@ GOOGLE_ENDPOINT_VARIABLES = {
     "userinfo_url": "GOOGLE_USERINFO_URL",
     "gmail_url": "GOOGLE_GMAIL_URL",
     "calendar_url": "GOOGLE_CALENDAR_URL",
+    "tasks_url": "GOOGLE_TASKS_URL",
 }
 
 
