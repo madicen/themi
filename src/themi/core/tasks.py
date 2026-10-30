@@ -1113,13 +1113,14 @@ class TaskBoard:
 
     def _fill_missed(self, task: Task, by: Member, missed: dict[str, Any]) -> str:
         """Done a day late: the missed run becomes a late one and the next round stays. It's
-        a new run, not the old one changed, so the wall's sync ticks its day."""
-        self.db.execute("DELETE FROM task_runs WHERE id = ?", (missed["id"],))
+        a new run, not the old one changed, so the wall's sync ticks its day; added before
+        the old one goes, as SQLite would give a newest run's id to the next one."""
         self.db.execute(
             "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
             "VALUES (?, ?, ?, ?, 0)",
             (task.id, by.id, to_utc_iso(clock.now()), missed["due_on"]),
         )
+        self.db.execute("DELETE FROM task_runs WHERE id = ?", (missed["id"],))
         assert task.due_on is not None
         return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
             when=task.due_on.strftime("%a %d %b")

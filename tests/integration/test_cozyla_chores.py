@@ -165,6 +165,23 @@ async def test_a_round_done_early_is_ticked_on_its_day(
     assert board(scenario).get(kitchen.id).due_on == date(2026, 11, 4)  # not closed twice
 
 
+async def test_a_missed_round_done_the_next_day_is_ticked_on_its_day(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """The missed run was the newest run, so its late one took the same id (SQLite reuses
+    the highest), and the sync, already past that id, never ticked the wall."""
+    kitchen = await chore(scenario, "Clean the kitchen", "every Wednesday")
+    await sync(scenario)
+    uid = fake_cozyla.chore_named("Clean the kitchen")["choreUid"]
+    await scenario.advance(hours=24)  # Thursday: Wednesday's round rolled on, missed
+    await scenario.run_periodic("tasks.schedules")
+    await sync(scenario)
+    await board(scenario).complete(kitchen.id, scenario.member("Erin"))
+    await sync(scenario)
+    assert fake_cozyla.chore_ticks[(uid, "m-erin", WED.isoformat())] == "completed"
+    assert board(scenario).get(kitchen.id).due_on == date(2026, 10, 28)
+
+
 async def test_a_tick_the_wall_refuses_doesnt_hold_up_the_sync(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:
