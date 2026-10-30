@@ -23,6 +23,12 @@ someone put it on another (`put_task_on_wall_list`). A task still pending wins
 over a change on the wall. Repeating chores stay off the lists (they're closer
 to Cozyla's chore chart).
 
+Last, Themi's own to-dos on the configured list are put in order (F18d, Erin's
+idea #75): due or overdue first, important before the rest, then by due date. The
+wall goes by each to-do's `profileDisplayOrder`, highest at the top. Themi's own
+swap places among the positions they already have, so to-dos added on the wall
+(their tasks have no creator) stay exactly where they are. Dates never change.
+
 The first sync of a list links open to-dos to open tasks with the same title
 and brings the rest in. Assigned ones are nudged at low priority, so a list the
 family already keeps trickles out within daily limits; unassigned ones come in
@@ -175,6 +181,10 @@ class CozylaTodos:
             self._applying = False
         current = {t.id: t for t in todos}
         done = await self._push(current)
+        try:
+            await self._order(current, default.id)
+        except CozylaError as exc:
+            log.warning("Cozyla to-do order waits: %s", exc)
         if self.wall_lists is not None:
             tasks = {
                 r["todo_id"]
@@ -393,6 +403,28 @@ class CozylaTodos:
             current[todo.id] = replace(todo, completed=False)
         return todo.id
 
+    async def _order(self, current: dict[str, Todo], list_id: str) -> None:
+        """Themi's own open to-dos on the list in order, in the places they already hold."""
+        today = clock.now().astimezone(self._tz).date()
+        mine: list[tuple[Task, Todo]] = []
+        for row in self.db.query(
+            "SELECT l.task_id, l.todo_id FROM cozyla_links l JOIN tasks t ON t.id = l.task_id "
+            "WHERE l.todo_id IS NOT NULL AND t.created_by IS NOT NULL "
+            "AND t.status IN ('open', 'snoozed')"
+        ):
+            todo = current.get(row["todo_id"])
+            if todo is None or todo.list_id != list_id or todo.completed:
+                continue
+            if not isinstance(todo.raw.get("profileDisplayOrder"), int | float):
+                continue  # just made: placed from the next read
+            mine.append((self.board.get(row["task_id"]), todo))
+        ranked = sorted(mine, key=lambda pair: _rank(pair[0], today))
+        profiles = sorted((float(t.raw["profileDisplayOrder"]) for _, t in mine), reverse=True)
+        displays = sorted((float(t.raw.get("displayOrder") or 0) for _, t in mine), reverse=True)
+        for (_, todo), profile, display in zip(ranked, profiles, displays, strict=True):
+            if float(todo.raw["profileDisplayOrder"]) != profile:
+                await self.client.place(todo, display, profile)
+
     def _assignee_for(self, task: Task) -> str | None:
         if task.shared and self._family is not None:
             return self._family
@@ -562,3 +594,12 @@ def _off_the_lists(task: Task) -> bool:
     """Taken off the wall's to-do lists if it was on one: a chore, on the chart, or Themi's
     own (E2b's email audit)."""
     return task.repeats or task.on_chart or task.off_wall
+
+
+IMPORTANCE_RANK = {"high": 0, "normal": 1, "low": 2}
+
+
+def _rank(task: Task, today: date) -> tuple[int, int, date, int]:
+    """Top of the list first: due or overdue, then important, then the soonest due date."""
+    due = task.due_on or date.max
+    return (0 if due <= today else 1, IMPORTANCE_RANK.get(task.importance, 1), due, task.id)

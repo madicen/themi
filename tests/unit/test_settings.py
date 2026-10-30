@@ -121,6 +121,31 @@ def test_ourgroceries_is_off_until_both_login_parts_are_set() -> None:
     assert "pw" not in repr(config)
 
 
+def test_home_connect_is_off_until_both_keys_are_set() -> None:
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).home_connect() is None
+    with pytest.raises(
+        SettingsError, match="HOME_CONNECT_CLIENT_ID and HOME_CONNECT_CLIENT_SECRET"
+    ):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "HOME_CONNECT_CLIENT_ID": "abc"})
+    with pytest.raises(SettingsError, match="HOME_CONNECT_URL must be an https"):
+        Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "HOME_CONNECT_URL": "http://x.example"})
+    config = Settings.from_mapping(
+        {
+            "THEMI_SECRET_KEY": KEY,
+            "HOME_CONNECT_CLIENT_ID": "abc",
+            "HOME_CONNECT_CLIENT_SECRET": "shh",
+            "HOME_CONNECT_URL": "https://simulator.home-connect.com/",
+        }
+    ).home_connect()
+    assert config is not None
+    assert (config.client_id, config.client_secret.reveal(), config.base_url) == (
+        "abc",
+        "shh",
+        "https://simulator.home-connect.com",
+    )
+    assert "shh" not in repr(config)
+
+
 def test_cozyla_is_off_until_both_login_parts_are_set() -> None:
     assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).cozyla() is None
     with pytest.raises(SettingsError, match="COZYLA_EMAIL and COZYLA_PASSWORD"):

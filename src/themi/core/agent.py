@@ -216,6 +216,24 @@ class Agent:
         finally:
             timer.finish()
 
+    async def take_in(self, member: Member, text: str, kind: str) -> bool:
+        """Something a person said somewhere else (a task added by voice, GT1a), handled as if
+        they'd sent it, and answered in their chat. False if no AI backend answered, so the
+        caller can try again later. It isn't timed: nobody is waiting on it."""
+        member = self.services.store.get_member(member.id)
+        self.services.store.log_message(member.id, "in", text, kind)
+        event = InboundEvent(
+            "text", member, member.telegram_user_id or 0, None, clock.now(), 0, text=text
+        )
+        reply = await self._converse(
+            member, text, event, ReplyTimer(self.services.store.db, member.id)
+        )
+        if reply in (BUSY_TEXT, SETUP_NEEDED_TEXT):
+            return False
+        if reply:
+            await self._reply(member, reply)
+        return True
+
     @asynccontextmanager
     async def _slow_notice(
         self, member: Member, event: InboundEvent, timer: ReplyTimer
@@ -365,6 +383,7 @@ class Agent:
             notes=notes,
             timezone=timezone,
             calendars=services.calendar_context(member),
+            lands=services.what_lands(member),
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)

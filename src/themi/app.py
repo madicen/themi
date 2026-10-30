@@ -28,6 +28,7 @@ from themi.connectors.gcal import CalendarSync
 from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
+from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
@@ -42,19 +43,26 @@ from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.day_summary import DaySummary
+from themi.core.dishwasher import Dishwasher
 from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.follow_ups import FollowUps
+from themi.core.google_tasks import GoogleTasksInbox
+from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
+from themi.core.journal import Journal
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
+from themi.core.reactions import Reactions
 from themi.core.reminders import Reminders
+from themi.core.routines import Routines
+from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
@@ -67,6 +75,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.which_list import WhichList
+from themi.core.wrong_replies import WrongReplies
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
@@ -113,6 +122,7 @@ def build_app(
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
+    home_connect: HomeConnectClient | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
 ) -> App:
@@ -142,6 +152,8 @@ def build_app(
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
     services.memory = Memory(db, rulebook)
+    journal = Journal(services)
+    journal.install()
     if google is not None:
         services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
         services.gmail = GmailSync(store, services.google, outbox)
@@ -190,12 +202,20 @@ def build_app(
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
         travel_heads_ups.install()
+    routines = Routines(services)
+    routines.install()
     habits = HabitReserve(services)
     habits.install()
+    Reactions(services).install()
+    WrongReplies(services).install()
     Commands(services).install()
     FeedbackChat(services).install()
     agent = Agent(services)
     channel.handler = agent
+    if services.google is not None and google is not None:
+        inbox = GoogleTasksInbox(services, services.google, google.tasks_url)
+        inbox.task_list = GoogleTaskList(services, tasks)  # GT1b
+        inbox.install(agent)
     periodic = [
         PeriodicTask("outbox.flush", timedelta(seconds=30), outbox.flush),
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
@@ -211,6 +231,8 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
+        PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
+        PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
     ]
     if backup is not None:
         backups = BackupJob(store, Backups(backup, cipher), outbox)
@@ -232,9 +254,24 @@ def build_app(
         chart = CozylaChores(services, tasks, cozyla)
         chart.install()
         periodic.append(PeriodicTask("cozyla.chores", timedelta(minutes=5), chart.sync))
-        routines = CozylaRoutines(services, tasks, cozyla)
-        routines.install()
-        periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), routines.sync))
+        wall_routines = CozylaRoutines(services, tasks, cozyla)
+        wall_routines.install()
+        periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), wall_routines.sync))
+        mirror = RoutinesWall(services, routines, wall_routines, cozyla)
+        mirror.install()
+        periodic.append(PeriodicTask("routines.wall", timedelta(minutes=5), mirror.sync))
+    if home_connect is not None:
+        services.home_connect = HomeConnectAccount(db, cipher, home_connect)
+        dishwasher = Dishwasher(services, tasks, services.home_connect)
+        dishwasher.install()
+        periodic.append(PeriodicTask("devices.dishwasher", timedelta(minutes=5), dishwasher.poll))
+        periodic.append(
+            PeriodicTask("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
+        )
+    if services.google_tasks is not None:
+        periodic.append(
+            PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)
+        )
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:

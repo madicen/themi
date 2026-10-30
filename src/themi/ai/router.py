@@ -221,7 +221,12 @@ class AIRouter:
                     call.retries, call.last_status, int(ok), current_reply.get(),
                 ),
             )  # fmt: skip
-            db.execute("DELETE FROM ai_calls WHERE started_at < ?", (to_utc_iso(now - CALLS_KEPT),))
+            db.execute(  # not a marked reply's, until it's labelled (P4)
+                "DELETE FROM ai_calls WHERE started_at < ? AND (reply_id IS NULL OR reply_id "
+                "NOT IN (SELECT id FROM replies WHERE marked_at IS NOT NULL "
+                "AND labelled_at IS NULL))",
+                (to_utc_iso(now - CALLS_KEPT),),
+            )
         except sqlite3.Error:  # never lose an answer over a note about it
             log.warning("Couldn't record an AI call", exc_info=True)
 

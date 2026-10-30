@@ -44,12 +44,13 @@ def test_strength_stays_within_bounds(family: SeededFamily) -> None:
     assert calibrator.history(family.erin.id) == []
 
 
-def test_thumbs_down_reactions_raise_strictness(family: SeededFamily) -> None:
+def test_angry_faces_raise_strictness_and_thumbs_down_doesnt(family: SeededFamily) -> None:
     calibrator = PdaCalibrator(family.store)
     assert calibrator.observe_reaction(family.husband, ["👍"]) is None
-    change = calibrator.observe_reaction(family.husband, ["👎"])
+    assert calibrator.observe_reaction(family.husband, ["👎"]) is None  # P4: "wrong", not "pushy"
+    change = calibrator.observe_reaction(family.husband, ["😠"])
     assert change is not None and (change.old, change.new) == (1, 2)
-    assert change.reason == "reacted 👎 to a message"
+    assert change.reason == "reacted 😠 to a message"
 
 
 def test_calibration_never_touches_the_other_member(family: SeededFamily) -> None:

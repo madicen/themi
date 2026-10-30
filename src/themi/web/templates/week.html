@@ -16,6 +16,18 @@ and how {{ learned.nudges }} of its messages landed.
 What it notices is up to you: <a href="/settings">My settings</a>.
 </p>
 
+{% if reactions_on %}
+<section class="card">
+  <h2>What lands with you</h2>
+  {% if lands %}
+  <p>From your reactions to its messages: {{ lands }}.</p>
+  {% else %}
+  <p class="muted">Nothing to say yet. A 👍 or 👎 on Themi's messages teaches it which kinds
+  go down well with you.</p>
+  {% endif %}
+</section>
+{% endif %}
+
 {% if moments %}
 <section class="card">
   <h2>Good moments Themi would pick in the next day</h2>

@@ -353,6 +353,13 @@ TOOL_GROUPS: dict[str, str] = {
             "change_chore_chart",
             "add_to_wall_routine",
             "show_routine",
+            # R1a: Themi's own routines, called for by the same words
+            "show_routines",
+            "set_routine",
+            "remove_routine",
+            "add_routine_item",
+            "remove_routine_item",
+            "tick_routine_item",
         ),
         "wall",
     ),

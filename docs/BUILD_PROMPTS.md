@@ -67,13 +67,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
-| H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| H1 | Dishwasher: notice when the household is falling behind | Devices, early | [x] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
 | F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
 | E1 | Email: suggest important senders | Feedback | [x] |
-| S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
-| M1 | Memory: a record of conversations | Feedback | [ ] |
+| S5 | Shadow Calendar: learning from reactions | Feedback | [x] |
+| M1 | Memory: a record of conversations | Feedback | [x] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
@@ -89,7 +89,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
-| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
+| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [x] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
@@ -103,12 +103,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
-| F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
+| F18d | Feedback: the wall's to-do list in order | Feedback | [x] |
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
-| R1 | Routines kept in Themi | Feedback | [ ] |
+| R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
+| R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -131,7 +132,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35 | Meal reminders, takeout rescue, cart staging | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
-| R2 | Research: Google Home | 7 Research | [ ] |
+| R2 | Research: Google Home | 7 Research | [x] |
+| GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
+| GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 
 ## Fixed technical choices
 
@@ -3176,20 +3179,65 @@ Depends on: L2a, 35
   store) as part of the same approval.
 
 ### H1 · Dishwasher: notice when the household is falling behind
-Status: [ ]
-Depends on: 18
+Status: [x] 2026-10-30
+Depends on: 18, C3
 From Erin's idea #4, asking for this sooner than prompt 36's research. She wants Themi to
 notice, without being told, when the household may be running behind.
 
+Asked 2026-10-30: the dishwasher is a Bosch on the Home Connect app, and the family wants
+its cycles read from there. Home Connect has an official cloud API (OAuth 2 authorization
+code flow; `IdentifyAppliance Dishwasher-Monitor`; 1000 requests a day per user, access
+tokens last 24 hours; api-docs.home-connect.com, checked 2026-10-30), so no plug and no
+waiting on prompts 30 or 32.
+
 Build:
-- If C3 is built, the wall's "Cycle Dishwasher" routine already says whether it ran; start
-  there, and add hardware only if that isn't enough.
-- First, ask the user for the dishwasher's make and model and whether it has an app. If it's an
-  LG ThinQ, use prompt 30's connector; otherwise a smart plug that reports power draw (Tuya,
-  prompt 32's work) can detect cycles on any dishwasher.
-- Cycles become energy signals for the Shadow Calendar: fewer runs than usual for the
-  household is a gentle "running behind" sign. The plan's rule holds: people see words, never
-  scores.
+- A Home Connect connector: settings `HOME_CONNECT_CLIENT_ID` and
+  `HOME_CONNECT_CLIENT_SECRET` (and `HOME_CONNECT_URL` for the simulator or a fake). An
+  admin links the family's Home Connect account from the Family page; the refresh token is
+  kept encrypted, and its appliances become devices (`home_connect`), the dishwasher as the
+  `dishwasher` appliance.
+- A job reads the dishwasher's operation state every 5 minutes (about 290 calls a day).
+  Moving into Run starts a cycle; leaving it ends one.
+- A cycle starting checks off today's dishwasher routine on the wall (C3) and any open Themi
+  task about the dishwasher. That is a side effect, so it goes through its own category,
+  supervised until a rule makes it automatic.
+- Cycles become energy signals for the Shadow Calendar: fewer runs this week than usual for
+  the household is a gentle "running behind" sign, as device activity. People see words,
+  never scores.
+
+Tests:
+- The connector against a fake Home Connect: linking, token refresh, appliances, status, an
+  offline appliance, rate limiting.
+- A cycle starting ticks the wall routine (approved, then automatic), and closes a Themi task.
+- The pace signal: fewer runs than usual, and nothing without enough history.
+
+Notes (2026-10-30):
+- `themi.connectors.homeconnect`: `HomeConnectClient` (the wire) and `HomeConnectAccount` (the
+  family's one sign-in: a hashed 10-minute state, the refresh token encrypted in
+  `home_connect_account`, the access token in memory). A refresh's new refresh token
+  replaces the old. A 429 is waited out for its Retry-After without calling again; a 409 is
+  an appliance off the network. Migration 0074 rebuilds `devices` to allow `home_connect`.
+- Linking: Family page, Appliances, "Link Home Connect" (admins only). The callback carries
+  the admin in its state, like Google's. Home Connect's appliances become devices
+  (Dishwasher, Washer, Dryer mapped; only the dishwasher is read).
+- `themi.core.dishwasher`, job `devices.dishwasher` every 5 minutes: Run starts a cycle
+  (`appliance_cycles`), any other state but Offline ends it. A cycle starting stages
+  `dishwasher_done` for today's open wall routine items with "dishwasher" in the title
+  (`CozylaRoutines.open_matching`; Themi's own check-ins are left out, they're tasks) and
+  open Themi tasks about the dishwasher due by today, each to whoever's it is. Supervised
+  until turned on under "What Themi does alone"; the card lapses at midnight.
+- `devices.dishwasher_pace`, hourly, acts once a day from 18:00: runs in the last 7 days
+  against the usual week over up to 28 days before (at least 7 days of history, at least 2
+  runs a week usually). Under 60% of usual: -0.5 device activity for everyone, noted as
+  "the dishwasher ran once this week, fewer than usual (about 7 times)".
+- Not done: Home Connect's event stream (SSE). Polling fits in the daily limit (about 290 of
+  1000 calls) and keeps the scheduler simple; a start is noticed within 5 minutes.
+- The build plan doc couldn't be read from this session (not shared with the account), so
+  this follows the prompt and C3's notes.
+- Setup: register an app at developer.home-connect.com (Authorization Code Grant Flow,
+  redirect `<THEMI_PUBLIC_URL>/auth/home-connect/callback`), set `HOME_CONNECT_CLIENT_ID` and
+  `HOME_CONNECT_CLIENT_SECRET`, restart (applies 0074), and link from the Family page. To
+  skip the cards, turn on "Check off the dishwasher routine when the dishwasher starts".
 
 ### E1 · Email: suggest important senders
 Status: [x] 2026-10-27
@@ -3214,7 +3262,7 @@ Notes (2026-10-27):
 - Setup: restart (applies 0059).
 
 ### S5 · Shadow Calendar: learning from reactions
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: S1, 28
 From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
 or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
@@ -3226,8 +3274,27 @@ or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
   don't"), shown to the model as a line of its own, in words, never numbers, and on the
   person's tracking page. A switch, like the other inputs.
 
+Notes (2026-10-30):
+- `themi.core.reactions.Reactions` is a reaction handler. It finds the outbox message reacted
+  to and records it in `message_reactions` (migration 0075), one per message, the latest
+  reaction winning. It keeps the message's kind in words (nudges, check-ins, summaries, chat
+  replies, heads-ups) and its length (short up to 160 characters, medium-length up to 500,
+  long). A task nudge whose task is a check-in counts as a check-in.
+- Approval and rule cards are left out: a reaction there answers the card.
+- P4 isn't built, so 👎 on a chat reply still counts. When P4 lands, leave chat replies out
+  here.
+- `picture()`, over 90 days: each length-and-kind pair with 3 or more reactions, then each kind
+  not yet covered. Two thirds good means it does well; half or more not good means it
+  doesn't. The result reads like "short nudges do well; long summaries don't", or "" with too
+  little to go on.
+- The model sees it as its own line in the turn's context ("What lands with Erin, from their
+  reactions: ..."). My week has a "What lands with you" card.
+- A new tracking input, `reactions` (on by default, like the others), on My settings and in
+  /tracking. Off stops recording and hides the line; what's recorded stays.
+- The 👎-style reactions still also make PDA shielding stricter (prompt 8), as before.
+
 ### M1 · Memory: a record of conversations
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: 13
 From Erin's ideas #28 and #30, 2026-10-27: "maintain records of general questions/conversations
 in the shadow calendar". F13 keeps a note per answer or settled problem; this is the fuller
@@ -3235,6 +3302,22 @@ record.
 - A daily, private journal per person: the topics talked about and what was decided, written
   at the end of the day from the day's messages, searchable ("what did we decide about the
   pacifiers?"), on the website's Rules & memory page, deletable.
+
+Notes (2026-10-30):
+- `themi.core.journal.Journal`, job `memory.journal` hourly: once a person's local day is over,
+  that day's messages go to the model as a data block: what they said, and Themi's chat
+  replies (not its nudges). The model writes up to 8 topics and 8 decisions (only what they
+  agreed to). It's a background structured call on the "other quick jobs" AI route.
+  Migration 0076: `journal_entries` and a porter-stemmed `journal_fts`.
+- A day with only Themi's messages isn't written. A day with nothing worth keeping gets an
+  empty entry, which isn't shown. If the model doesn't answer, the next hour tries again,
+  for up to three days back.
+- `search_journal` (a core tool, so it's always there) searches only the asker's own entries.
+- The Rules & memory page has "Your journal": the last 14 entries, a search box, and Delete
+  on each. A deleted entry keeps only its date, so it isn't written again.
+- Not done: a tracking switch. It's a record of conversations, not an energy input, and each
+  entry can be deleted. Add one if the family wants the journal off for someone.
+- Setup: restart (applies 0076).
 
 ### P1 · Faster replies: only the tools a message needs
 Status: [x] 2026-10-27
@@ -4345,7 +4428,7 @@ Notes (2026-10-29):
 - Setup: restart (applies 0072). The live numbers fill in over the next week.
 
 ### P4 · Wrong actions: marked in chat, labelled in review
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: P3, F1
 From the router talk (2026-10-29): P3 sees only the misses the model notices itself (a
 `more_tools` call). When Themi confidently does the wrong thing (olive oil on the
@@ -4390,6 +4473,37 @@ snapshot names its reply; 👎 no longer changes phrasing strength and 😠 stil
 label kind decided from the offered groups; the case stub
 loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
 add, and the review labels it a model choice.
+
+Notes (2026-10-30):
+- Migration 0078: `outbox.reply_id` (every message sent while a reply is written, from
+  `router.current_reply`), and `replies.marked_at`, `label`, `right_tool`, `labelled_at`.
+  The week's clean-up of `replies` (with `reply_tools`) and of `ai_calls` skips a marked
+  reply until it's labelled.
+- `themi.core.wrong_replies`:
+    - `WrongReplies` is a reaction handler. A 👎 on a message whose outbox row has a reply,
+      and isn't a card (approval, rule), marks that reply. Nothing is sent back.
+    - `ReplyReview` works on the database alone, for the CLI. `decide()` uses the groups
+      offered at the start and the ones `more_tools` added: a tool `more_tools` brought in
+      was sent, so using another is a model choice. A twin set counts as sent whole (P6).
+- Phrasing: 👎 is out of `STRICTER_REACTIONS`; 😠 😡 😤 😣 🙄 still make shielding stricter.
+  S5's reactions skip a 👎 on a reply (a 👎 on a nudge or summary still counts there; 😕 on
+  a reply too).
+- `/bug`'s snapshot has `reply`: the reply that sent the message it replies to, else the
+  latest. It holds the tools, the groups offered and the groups added; the report prints
+  "About reply N".
+- `themi feedback` lists unlabelled marked replies after the reports. `--wrong-tool <id>
+  <tool|none>` and `--not-wrong <id>` label them, and a label prints a case stub
+  (`review-<id>`, category `from_review`, `expect`, and `forbid` for the tools it used
+  instead). The tool name isn't checked against the registry, since the CLI doesn't build
+  the app.
+- The person's message is the latest inbound message (not a reaction) at or before the
+  reply's start.
+- Reply times: "Marked wrong", with the week's count and labels.
+- The prompt's example (olive oil on the grocery list instead of the pantry) can't happen
+  any more: `add_to_grocery_list` refuses "used the last of". The scenario uses "remind me
+  to buy olive oil tomorrow" put on the list instead of a task, labelled a model choice.
+- Setup: restart (applies 0078), and tell the family that 👎 on a reply now means "that was
+  the wrong thing", and an angry face means "too pushy".
 
 ### P5 · Evals that can compare: repeats, timings, and every tool vs groups
 Status: [x] 2026-10-30
@@ -5081,7 +5195,7 @@ Notes (2026-10-29):
   poll reads a little more; nothing to set up.
 
 ### F18d · Feedback (2026-10-29): the wall's to-do list in order
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: F18c, C1c
 From Erin's idea #75: "Themi should maintain a custom order of to dos in cozyla based on
 due date and importance (with the most important and due/overdue tasks at the top of
@@ -5096,6 +5210,36 @@ the list)."
   that instead.
 - Tests: the order kept on the wall (Cozyla fake, with the field found), items not
   Themi's left alone.
+
+Notes (2026-10-30):
+- The development checkout had no Cozyla login at first, so the live read couldn't be done here.
+  `themi cozyla check --fields` (read-only, tested against the fake) prints every field
+  name seen on to-dos, then each open to-do on `COZYLA_TODO_LIST` with all its fields, in
+  the order Cozyla sends them.
+- Live read (2026-10-30, To-do List: 13 open): to-dos do carry `displayOrder` (and
+  `profileDisplayOrder`, likely the order on each person's own view). Cozyla sends them
+  highest `displayOrder` first (116 down to 67), and the number rises as items are made, so
+  the list runs newest first. `isFlag` and `todoStars` are 0 on every open item. Other
+  fields: `sourceType` ("user", "device_ai"), `version`, `showMemberUidList`.
+- Michael confirmed the wall shows that order, and said yes to a test write. A temporary
+  to-do ("Themi order test (please ignore)") was made, at `displayOrder` 117 and
+  `profileDisplayOrder` 117, the top. Setting `displayOrder` to 66 changed the API's order
+  but not the wall's. Setting `profileDisplayOrder` below the rest moved it to the bottom
+  on the wall. Then it was deleted. So the wall goes by `profileDisplayOrder`, highest on
+  top. The update endpoint takes both, and keeps them when they're left out (unlike the
+  other fields).
+- `CozylaClient.place(todo, display, profile)` sets both, with every other field sent back.
+  After each push, `CozylaTodos._order` ranks Themi's own open to-dos on the configured
+  list: tasks with a creator (wall imports have none). The rank is due or overdue, then
+  importance (high, normal, low), then due date, undated last. They take the
+  `profileDisplayOrder` and `displayOrder` values they already hold, best on top, so to-dos
+  added on the wall keep their exact place. Only those not already in place are written,
+  and dates never change. A to-do just made is placed from the next read.
+- Limit: a wall-made to-do between Themi's isn't jumped over. Themi's most important item
+  goes to the highest place Themi's own already have.
+- The Cozyla fake now gives new to-dos the next order numbers and sends the list highest
+  `displayOrder` first, as live. One wall-lists test compared an import's order and now
+  ignores it.
 
 ### F18e · Feedback (2026-10-29): the chore sync stuck, the wrong task changed, reminders that aren't tasks
 Status: [x] 2026-10-29
@@ -5252,14 +5396,115 @@ Notes (2026-10-30):
 - Not run: the model evals.
 - Setup: restart. No migration.
 
-### R1 · Routines kept in Themi
-Status: [ ]
-Depends on: F18c, C3
+### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
 Default morning, afternoon, and evening, but customizable number of routines and when they
-each happen." Read the plan's routine sections and C3's notes first; this needs a design
-pass with the user (how it relates to the wall's routines, and which one wins) before it's
-built. Split it then.
+each happen."
+
+Decided with Michael (2026-10-30), after reading C3's notes:
+- Themi owns the routines. The wall shows each one under whichever of its three parts
+  (Morning, Afternoon, Evening) the routine's window starts in.
+- Routines are changed in chat and on the wall. A change made on the wall comes into
+  Themi, as the to-do sync does (C1b): an item added, renamed, deleted, moved to another
+  part or given other days there. A change Themi hasn't sent yet wins over one made on the
+  wall.
+- The wall's routines today (walk the dog, Cycle Dishwasher, meds, bins) come into Themi
+  once, on the first sync.
+- A routine is a name and a time window per person ("Before school", 7:00 to 8:00). Its
+  check comes as the window ends, listing what's still open.
+- Everyone starts with Morning, Afternoon and Evening.
+
+### R1a · Routines kept in Themi: routines, items and checks, from chat
+Status: [x] 2026-10-30
+Depends on: R1
+Build:
+- Each person's routines: a name and a window (start and end, local time). Everyone starts
+  with Morning (8:00 to 12:00), Afternoon (12:00 to 17:00) and Evening (17:00 until an hour
+  before quiet hours, as C3's evening check), and can add, rename, re-time or remove them.
+- Items on a routine: a title, and the days it applies (every day by default; set days like
+  "Tue and Thu"; or just today). They're ticked once a day.
+- The check: as a routine's window ends, if any of today's items are open, one message
+  lists them, with a button per item that ticks it, and "Skip today" (C3's wording and
+  buttons). All done: nothing sent. Each check feeds the energy model as C3's does: device
+  activity, a small lift or dip, in words.
+- Chat: tools to show someone's routines, add or remove a routine (with its window), add,
+  move or remove an item, and tick an item ("I walked the dog"). Changes to their own
+  routines need no card (asked for in their own words); someone else's go through a
+  category, as `wall_routine_add` does.
+- The wall isn't touched yet: C3 keeps running as it is until R1b.
+Tests: the defaults; a custom routine checked as its window ends; items on set days; ticking
+from a button and from chat; skip today; the energy signal; changes from chat.
+
+Notes (2026-10-30):
+- `themi.core.routines.Routines`, job `routines.check` every 15 minutes. Migration 0079:
+  `routines` (name unique per person, ignoring case; `ends` NULL is "an hour before quiet
+  hours", as C3), `routine_items` (`days` JSON, empty for every day; `only_on` for just one
+  day), `routine_ticks`, `routine_day_checks`, and category `routine_item_add`.
+- Each person gets the three defaults the first time their routines are read.
+- A check goes once a day per routine, from the window's end until three hours after; one
+  later than that isn't sent. A routine with nothing on it today sends nothing and records
+  no signal. The words and buttons are C3's ("Morning routine, still open: ...", a tick
+  button per item, "Skip today"; the button kind is `routine_item`), and so is the signal
+  (device activity, plus or minus 0.5).
+- Tools, in the "wall" group (the word "routine" calls for it): `show_routines`,
+  `set_routine` (add, re-time or rename), `remove_routine`, `add_routine_item` (staged;
+  their own and named in their words means no card; someone else's asks the requester
+  first), `remove_routine_item` and `tick_routine_item`. Only `add_routine_item` reaches
+  someone else's routines. A twin-set paragraph for these and the wall's routine tools was
+  left out: twin sets need every tool built and two eval cases each. The descriptions name
+  each other instead.
+- Until R1b, a person with items both on the wall and in Themi can get two checks for a
+  part of the day: C3's for the wall's, and this one.
+- Setup: restart (applies 0079).
+
+### R1b · Routines kept in Themi: the wall, both ways
+Status: [x] 2026-10-30
+Depends on: R1a, C3, F18d
+Build:
+- The first sync brings the wall's routines into Themi. Each item goes to the person's
+  routine for its part (Morning, Afternoon, Evening), with its days.
+- Then each sync, both ways. Themi's items go on the wall under the part their routine's
+  window starts in (`part_of_day`), with their days and their order (`displayOrder`, as C3
+  places items). A change on the wall comes into Themi: an item added there goes to the
+  person's first routine starting in that part; renamed, deleted, moved to another part, or
+  given other days, the same. A change Themi hasn't sent yet wins. Ticks go both ways.
+- C3's own checks stop for anyone whose routines are in Themi, so nothing is checked
+  twice. Themi's check-ins (F8) stay as they are.
+Tests: the first import; an item made in Themi shown on the wall in the right part; each kind
+of wall change coming in; a conflict won by Themi's pending change; ticks both ways; no
+double checks.
+
+Notes (2026-10-30):
+- `themi.core.routines_wall.RoutinesWall`, job `routines.wall` every 5 minutes, when the
+  wall's chores are on (`COZYLA_CHORES`). Migration 0080:
+    - `routine_item_links` (item to wall routine, pending or done, with a version), for
+      every item including R1a's.
+    - `routine_wall_deletes` and `routine_wall_seen`.
+    - Triggers mark an item pending when it's made or changed, or when its routine is
+      re-timed. Deleting an item, or a routine with its items, queues its wall routine for
+      deletion. So R1a's code didn't change for this.
+- Pull: an unlinked wall routine (not a C3 check-in) becomes an item in the person's first
+  routine starting in its part, with its days. That's how the first import happens. A
+  linked one that isn't pending and differs from `routine_wall_seen` (title, part, days)
+  is changed in Themi; a part change moves it to the routine for the new part, and a
+  missing routine for a part gets that part's default. One gone from the wall is deleted
+  in Themi, without queuing a wall delete. A routine whose schedule isn't daily or weekly
+  (monthly, every 2 weeks) comes in as every day.
+- Push: queued deletes, then pending items, created or updated with the part from
+  `part_of_day(routine.starts)` and a daily or weekly schedule. A just-for-today item goes
+  out as daily and into C3's `wall_routine_once`, so it's removed the next day (and the pull
+  removes it in Themi).
+- Ticks: a wall tick today ticks the Themi item. A tick in Themi (`Routines.tick_now`, from
+  a check's button or chat) ticks the wall at once, and any missed one goes at the next sync.
+- C3's own checks stop (`CozylaRoutines.checks_by_themi`). Their code stays, unused. C3's
+  scenario tests now run the R1b sync and R1a's check, and pass with the same words and
+  buttons. The late limit is now five hours, so a morning check still lapses at 5 pm (idea
+  #96).
+- Not done: the order of items within a part on the wall (`displayOrder`). New items go
+  last, as the wall puts them. Also, `add_to_wall_routine` and `show_routine` still write
+  and read the wall directly; what they add comes into Themi at the next sync.
+- Setup: restart (applies 0080). The first sync (within 5 minutes) brings the wall's
+  routines into Themi.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
@@ -5646,7 +5891,7 @@ Do:
 Commit when done.
 
 ### R2 · Research: Google Home
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: none
 From Michael's idea #21 ("google home integration", 2026-10-27). Find out what would help and
 what's possible before building anything:
@@ -5659,3 +5904,119 @@ what's possible before building anything:
 - The plan's rule that device connections read status only and never control anything:
   anything beyond reading needs the family's decision and a plan change first.
 
+Notes (2026-10-30), research. Web sources checked that day; where nothing current confirmed a
+detail, it says so.
+- Asking Themi by voice ("Hey Google, ask Themi..."): there's no way in. Conversational
+  Actions were retired in 2023, and Gemini for Home (now on the Nest speakers) has no
+  public SDK for custom voice apps. "Gemini built in" (May 2026) is a program for hardware
+  partners. What does work is GT1a: "Hey Google, add a task ..." lands in Google Tasks, and
+  Themi takes it from there.
+- Themi speaking on a speaker:
+    - Broadcasting from a phone was removed in February 2024.
+    - The Assistant SDK route (Home Assistant's `google_assistant_sdk` broadcast) is
+      unofficial, and nothing confirmed it still works since Gemini replaced the Assistant.
+    - Playing speech over Google Cast (text to speech, cast to the speaker) is what Home
+      Assistant and Node-RED do. It needs Themi, or a small relay, on the home network:
+      Cast is local, so a cloud server can't reach the speaker. Not confirmed on current
+      Gemini speakers.
+- Reading the home's devices as signals:
+    - The Google Home APIs (Device, Structure, Automation) are phone-app SDKs for Android
+      and iOS. A server can't call them without a companion app on a phone.
+    - The Smart Device Management API (Device Access: $5 once, a consumer Google account)
+      is a cloud REST API for Nest thermostats, cameras, doorbells and the Hub Max. It fits
+      Themi's server and the plan's "read status only" rule.
+- The plan's rule holds: device connections only read. Speaking on a speaker isn't control
+  of a device, but it is a new way of reaching people, so it'd need the family's yes and a
+  plan change (quiet hours, PDA phrasing, the outbox's timing).
+- Decided (Michael, 2026-10-30): nothing more for now. The Google Tasks inbox (GT1a) covers
+  voice. Speaking on a speaker and Nest devices as signals can come back as prompts.
+
+
+### GT1a · Google Tasks as an inbox: voice-added items processed, then removed
+Status: [x] 2026-10-30
+Depends on: 21, 26
+Asked by Michael, 2026-10-30. "Hey Google, add a task..." on the family's speakers (Gemini for
+Home) lands in that person's Google Tasks. The family wants Google Tasks used as a
+processing queue: Themi takes each new item as if that person had told it, then removes it.
+Deleting a processed item needs no confirmation (decided 2026-10-30: the list is a queue).
+Part of R2's question about Google Home; R2's other questions stay open.
+
+Build:
+- Linking asks for Google Tasks too (`https://www.googleapis.com/auth/tasks`); accounts linked
+  before need linking again. The OAuth app needs the Tasks API and scope (Michael adds them).
+- A Google Tasks client (tasks v1: lists, tasks, delete), like the Calendar client.
+- A job every minute: each linked account with the scope, whose person is on Telegram, reads
+  its default list ("My Tasks") for open items. Each new one is handled by the agent as that
+  person's message ("Erin asked their Google speaker to add "milk" to Google Tasks"), and its
+  reply goes to them in Telegram. Once handled, the item is deleted from Google Tasks.
+- If no AI backend answers, the item stays and is tried again later (with a wait, so a busy
+  model doesn't send a busy reply every minute). A failed delete is retried without handling
+  the item again.
+
+Tests:
+- The client against a fake Google Tasks API.
+- A voice item becomes a grocery item or a task, and is removed; one already handled isn't
+  handled twice; an AI outage keeps the item; accounts without the scope are left alone.
+
+Notes (2026-10-30):
+- `TASKS_SCOPE` is in `LINK_SCOPES`, and `GoogleConfig.tasks_url` (`GOOGLE_TASKS_URL` for a
+  fake). `themi.connectors.gtasks.TasksClient`: the open tasks on a list (paged, oldest
+  first) and delete; a 401 refreshes the token once, and a 404 on delete counts as done.
+- `themi.core.google_tasks.GoogleTasksInbox`, job `google_tasks.inbox` every minute (the API
+  has no push). For each account with the scope whose person is on Telegram, each new open
+  item on `@default` goes to `Agent.take_in`. That logs it as an inbound message (kind
+  `google_task`, so the journal sees it), runs the usual turn, and replies in Telegram.
+- The message reads 'Erin asked their Google speaker to add "Milk" to Google Tasks, due
+  Friday 23 October, with the note "...". Take it as something they asked for.' The "asked
+  ... to add" makes it count as asked for, so "milk" goes on the grocery list without a card,
+  as if typed. Other actions go through their tiers as usual.
+- Google keeps only a task's date, never its time, so a time said to the speaker doesn't
+  reach Themi.
+- Migration 0077 adds `google_task_inbox`: handled (answered, delete not done yet), removed,
+  or waiting. A deleted item isn't a trust-tier action: the family decided the list is a
+  queue, like the wall's sync clearing just-for-today items.
+- If no AI backend answers, the item waits an hour, and that run stops. Done and empty items
+  are left alone.
+- My accounts says whether Google Tasks is allowed for each account.
+- Not checked against the real API or a real speaker yet. Michael made a few test items by
+  voice; once linked again they're handled within a minute.
+- Setup: enable the Google Tasks API and add the `tasks` scope in the Google Cloud project,
+  restart (applies 0077), and link each Google account again (`/link gmail`).
+
+### GT1b · Themi's tasks on Google Tasks, kept apart from the inbox
+Status: [x] 2026-10-30
+Depends on: GT1a
+Asked by Michael, 2026-10-30, if Themi's own tasks can be told apart from new voice items.
+They can, two ways at once:
+- Themi writes its tasks to a list of its own ("Themi"), never the default list GT1a empties.
+- It keeps the Google id of every task it writes; an id it doesn't know is a new item,
+  whichever list it's in.
+Build: each person's open Themi tasks on their "Themi" list (title, due date); done in Google
+(by voice: "mark call the plumber done") completes it in Themi, and done in Themi completes it
+in Google. Check how Gemini for Home reads and completes tasks on a list that isn't the
+default before relying on voice completion.
+
+Notes (2026-10-30):
+- `themi.core.google_tasks_list.GoogleTaskList`, run inside the `google_tasks.inbox` job, so
+  writing a task and recognising it never race. For each person, their first linked account
+  with Google Tasks allowed gets a "Themi" list (found by name, or made). Migration 0081
+  adds `google_task_lists`, `google_task_links` (task, account, Google id, and whether it
+  was deleted in Google), and `google_task_inbox.list_id`.
+- What goes on the list: `open_for` (theirs, and shared ones), open, not repeating, and
+  not off the wall's lists (the email audit's). Title and due date only; Google keeps no
+  time.
+- Each run:
+    - Done in Google (shown with `showHidden`, so ticks in Google's own apps count): done
+      in Themi.
+    - New in Themi: written there. A title or date changed in Themi: patched; Themi's
+      version wins, and edits made in Google aren't brought back.
+    - Done in Themi: completed there. Cancelled, or not theirs any more: deleted there.
+    - Deleted in Google: left off, not put back.
+- The inbox now reads My Tasks and the Themi list, and skips the ids Themi wrote. Anything
+  else there is a new item, handled and removed, as on My Tasks. Failed deletes are retried
+  once per account per run.
+- Not checked: how Gemini for Home reads and completes tasks on a list that isn't the
+  default. If "mark ... done" by voice only reaches My Tasks, voice completion of Themi's
+  tasks won't work (the app and the web still do).
+- Setup: restart (applies 0081). Accounts already linked with Google Tasks need nothing
+  more.

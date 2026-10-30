@@ -32,6 +32,13 @@ those aren't enough, the model asks for more, which costs it another round.</p>
   </ul>
 </section>
 {% endif %}
+
+<h2>Marked wrong</h2>
+<p class="muted">A 👎 on a reply marks it as the wrong thing. <code>themi feedback</code> lists them
+for labelling, which tells a router miss (the right tool wasn't sent) from the model's choice.</p>
+<section class="card">
+  <p class="summary">{{ marked }} {{ "reply" if marked == 1 else "replies" }} marked this week{% if marked %}: {% for name, n in labels %}{{ name }} ({{ n }}), {% endfor %}{{ unlabelled }} not labelled yet{% endif %}.</p>
+</section>
 {% if slowest %}
 <h2>The slowest</h2>
 {% for reply in slowest %}

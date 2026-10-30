@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.connectors.gcal import CalendarError
-from themi.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
+from themi.connectors.google import CALENDAR_SCOPE, TASKS_SCOPE, GoogleAccounts, OAuthError
 from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import Kit
@@ -107,6 +107,7 @@ def routes(kit: Kit) -> APIRouter:
             if app.services.expected is not None
             else {},
             protectable=[c for c in app.services.autonomy.categories() if not c.capped],
+            tasks_scope=TASKS_SCOPE,
         )
 
     @router.post("/accounts/link")

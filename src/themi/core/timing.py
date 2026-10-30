@@ -120,8 +120,9 @@ class ReplyTimer:
                     "VALUES (?, ?, ?, ?, ?)",
                     (self.reply_id, name, after_model, to_utc_iso(began), seconds),
                 )
-            self.db.execute(
-                "DELETE FROM replies WHERE started_at < ?",
+            self.db.execute(  # a reply marked wrong waits for its label (P4)
+                "DELETE FROM replies WHERE started_at < ? "
+                "AND (marked_at IS NULL OR labelled_at IS NOT NULL)",
                 (to_utc_iso(clock.now() - REPLIES_KEPT),),
             )
         except sqlite3.Error:

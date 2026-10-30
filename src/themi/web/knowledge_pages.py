@@ -24,9 +24,18 @@ def routes(kit: Kit) -> APIRouter:
         return app.services.memory
 
     @router.get("/knowledge", response_class=HTMLResponse)
-    def knowledge_page(request: Request) -> HTMLResponse:
+    def knowledge_page(request: Request, q: str = "") -> HTMLResponse:
         session = kit.current(request)
         member = session.member
+        journal = app.services.journal
+        query = q.strip()[:200]
+        entries = (
+            []
+            if journal is None
+            else journal.search(member, query, limit=20)
+            if query
+            else journal.recent(member)
+        )
         return kit.with_flash(
             request,
             "knowledge.html",
@@ -36,7 +45,19 @@ def routes(kit: Kit) -> APIRouter:
             drafts=app.rulebook.drafts(member),
             facts=memory().visible(member),
             repairs=list(reversed(memory().repairs(member.id)))[:20],
+            entries=entries,
+            query=query,
         )
+
+    # ----- the journal (M1) ---------------------------------------------------------
+
+    @router.post("/journal/{entry_id}/delete")
+    async def delete_entry(request: Request, entry_id: int) -> Response:
+        session, _ = await kit.checked(request)
+        journal = app.services.journal
+        if journal is None or not journal.delete(session.member, entry_id):
+            return kit.redirect("/knowledge", "That entry isn't one of yours.")
+        return kit.redirect("/knowledge", "Deleted that day from your journal.")
 
     # ----- rules ------------------------------------------------------------------
 

@@ -90,6 +90,9 @@ class CozylaRoutines:
         self._read_after: datetime | None = None
         self._to_member: dict[str, int] = {}
         self._to_cozyla: dict[int, str] = {}
+        # R1b: Themi checks the routines (they're Themi's, shown on the wall), so the wall's
+        # own checks stop.
+        self.checks_by_themi = False
 
     def install(self) -> None:
         self.services.button_handlers["routine"] = self.on_button
@@ -295,6 +298,8 @@ class CozylaRoutines:
     # ----- the morning and evening checks -----------------------------------------------------
 
     async def _checks(self, today: date, records: list[RoutineRecord]) -> int:
+        if self.checks_by_themi:
+            return 0
         now = clock.now().astimezone(self._tz())
         mine = {r["routine_id"] for r in self.db.query("SELECT routine_id FROM cozyla_routines")}
         sent = 0
@@ -444,6 +449,25 @@ class CozylaRoutines:
                 else f"Nothing on the {each.lower()} routine on the wall today."
             )
         return " ".join(lines) + " Say it in words, as a short list."
+
+    # ----- ticked by a device (H1) ---------------------------------------------------------
+
+    async def open_matching(self, words: str) -> list[tuple[RoutineRecord, Member | None]]:
+        """Today's items on the wall's routines with these words in the title, not yet
+        ticked, and whose they are. Themi's own check-ins are left out: they're tasks."""
+        members = await self.client.members()
+        records = await self.client.routine_records(self._today())
+        mapped = member_map(members, self.store.list_members())
+        mine = {r["routine_id"] for r in self.db.query("SELECT routine_id FROM cozyla_routines")}
+        return [
+            (r, self.store.get_member(mapped[r.member]) if r.member in mapped else None)
+            for r in records
+            if not r.completed and r.routine_id not in mine and title_matches(words, r.title)
+        ]
+
+    async def tick(self, routine_id: int, day: date) -> None:
+        await self.client.check_routine(routine_id, day, True)
+        self._first_time(f"{routine_id}_{day}")
 
     # ----- small things -------------------------------------------------------------------
 

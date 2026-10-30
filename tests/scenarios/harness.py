@@ -30,6 +30,8 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.gtasks_api import FakeGtasks
+from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
@@ -85,6 +87,8 @@ class Scenario:
         cozyla: FakeCozyla | None = None,
         travel: FakeTravel | None = None,
         *,
+        home_connect: FakeHomeConnect | None = None,
+        gtasks: FakeGtasks | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -112,10 +116,11 @@ class Scenario:
             ),
             provider_factory=(provider_factory if real_models else self.models),
             sleep=asyncio.sleep if real_models else _no_sleep,
-            google=_google_config(google, gmail, gcal),
+            google=_google_config(google, gmail, gcal, gtasks),
             grocery_list=ourgroceries,
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
             travel=travel.client() if travel else None,
+            home_connect=home_connect.client() if home_connect else None,
             tool_routing=tool_routing,
         )
         if not real_models:
@@ -277,10 +282,14 @@ class Scenario:
 
 
 def _google_config(
-    google: FakeGoogle | None, gmail: FakeGmail | None, gcal: FakeGcal | None
+    google: FakeGoogle | None,
+    gmail: FakeGmail | None,
+    gcal: FakeGcal | None,
+    gtasks: FakeGtasks | None = None,
 ) -> GoogleConfig | None:
     config = gmail.config() if gmail else google.config() if google else None
-    return gcal.config(config) if gcal else config
+    config = gcal.config(config) if gcal else config
+    return gtasks.config(config) if gtasks else config
 
 
 @pytest.fixture
@@ -292,7 +301,8 @@ async def scenario(
     Google sign-in and linking are configured when the test also uses `fake_google`, and
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
-    sync (a "Family" list) when it uses `fake_cozyla`.
+    sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
+    `fake_home_connect`.
     """
 
     def optional(name: str) -> Any:
@@ -307,6 +317,8 @@ async def scenario(
         optional("fake_gcal"),
         optional("fake_cozyla"),
         optional("fake_travel"),
+        home_connect=optional("fake_home_connect"),
+        gtasks=optional("fake_gtasks"),
     )
     await s.start()
     yield s

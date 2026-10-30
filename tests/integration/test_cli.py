@@ -179,3 +179,44 @@ def test_feedback_prints_new_reports_and_marks_them_done(tmp_path) -> None:
     assert after.stdout == "No new feedback.\n"
     every = subprocess.run([sys.executable, "-m", "themi", "feedback", "--all"], check=True, **run)
     assert "## Bug #1 from Erin, Sun 25 Oct 2026 14:00 CDT (reviewed)" in every.stdout
+
+
+def test_feedback_lists_and_labels_replies_marked_wrong(tmp_path) -> None:
+    import sqlite3
+
+    env = _env(tmp_path)
+    run = {"capture_output": True, "text": True, "env": env, "cwd": tmp_path}
+    subprocess.run(
+        [sys.executable, "-m", "themi", "init"],
+        input="The Household\nAmerica/Chicago\n0\nErin\n",
+        check=True,
+        **run,
+    )
+    db = sqlite3.connect(tmp_path / "themi.db")
+    db.execute(
+        "INSERT INTO message_log (member_id, direction, text, kind, created_at) "
+        "VALUES (1, 'in', 'lunch with Sam on Sunday', 'chat', '2026-10-25T19:00:00+00:00')"
+    )
+    db.execute(
+        "INSERT INTO replies (id, member_id, started_at, groups, groups_added, marked_at) "
+        "VALUES (7, 1, '2026-10-25T19:00:01+00:00', '', '', '2026-10-25T19:01:00+00:00')"
+    )
+    db.execute(
+        "INSERT INTO reply_tools (reply_id, name, after_model, started_at, seconds) "
+        "VALUES (7, 'create_task', 1, '2026-10-25T19:00:02+00:00', 0.1)"
+    )
+    db.commit()
+    db.close()
+
+    listed = subprocess.run([sys.executable, "-m", "themi", "feedback"], check=True, **run)
+    assert "## Reply 7, to Erin, Sun 25 Oct 14:00" in listed.stdout
+    assert "> lunch with Sam on Sunday" in listed.stdout
+    assert "Tools run: create_task. Groups offered: core." in listed.stdout
+
+    label = [sys.executable, "-m", "themi", "feedback", "--wrong-tool", "7", "add_calendar_event"]
+    labelled = subprocess.run(label, check=True, **run)
+    assert labelled.stdout.startswith("Reply 7: router miss.\nA case for tests/evals/cases.json:")
+    assert '"expect": [\n    "add_calendar_event"\n  ]' in labelled.stdout
+
+    again = subprocess.run([sys.executable, "-m", "themi", "feedback", "--not-wrong", "8"], **run)
+    assert again.returncode == 1 and "Reply 8 isn't marked." in again.stderr

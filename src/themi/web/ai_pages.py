@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse, Response
 from themi.accounts import InvalidValue, Member, NotFound, PermissionDenied
 from themi.ai.settings import ADAPTER_KINDS, AITask, RouteEntry
 from themi.core.timing import medians, router_numbers, week_of_replies
+from themi.core.wrong_replies import LABEL_WORDS, ReplyReview
 from themi.storage.secrets import Secret
 from themi.web.kit import Kit
 
@@ -69,9 +70,11 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/ai/timing", response_class=HTMLResponse)
     def timing_page(request: Request) -> HTMLResponse:
         """Ideas #51 and #55: the week's replies, the medians, and where the slowest
-        ones' time went. P3: how often the tool groups sent at the start were enough."""
+        ones' time went. P3: how often the tool groups sent at the start were enough. P4:
+        the week's replies marked wrong, and their labels."""
         session = kit.admin(request)
         replies = week_of_replies(app.db)
+        marked, labels = ReplyReview(app.db).week()
         names = {m.id: m.name for m in app.store.list_members()}
         return kit.with_flash(
             request,
@@ -81,6 +84,9 @@ def routes(kit: Kit) -> APIRouter:
             medians=medians(replies),
             noticed=sum(1 for r in replies if r.slow_notice),
             router=router_numbers(replies),
+            marked=marked,
+            labels=[(LABEL_WORDS[name], n) for name, n in labels.most_common()],
+            unlabelled=marked - labels.total(),
             slowest=sorted(replies, key=lambda r: -r.seconds)[:SLOWEST],
             names=names,
         )

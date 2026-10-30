@@ -216,6 +216,14 @@ class CozylaClient:
         body.update(todoTitle=title, assignMemberUid=assignee, dueDateTime=_ms(due))
         await self._call("rewards/todosInfo/update", {"todoId": int(todo.id), **body})
 
+    async def place(self, todo: Todo, display: float, profile: float) -> None:
+        """Where it shows on the list (F18d): the wall goes by `profileDisplayOrder`, highest
+        at the top; `displayOrder` (the order Cozyla sends them) moves with it. Every other
+        field is sent back as is."""
+        body = {name: todo.raw[name] for name in UPDATE_FIELDS if name in todo.raw}
+        body.update(displayOrder=display, profileDisplayOrder=profile)
+        await self._call("rewards/todosInfo/update", {"todoId": int(todo.id), **body})
+
     async def set_done(self, todo_id: str, done: bool) -> None:
         await self._call(
             "rewards/todosInfo/checkTodo", {"todoId": int(todo_id), "completeStatus": int(done)}
