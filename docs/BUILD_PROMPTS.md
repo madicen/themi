@@ -4448,9 +4448,13 @@ Notes (2026-10-30):
   in reach), energy-husband and energy-meetings (2/3 each). **Verdict: groups stays**
   (all passes more than one case fewer). Sending every tool wasn't slower, so size isn't
   the cost; choosing among near-twins is, which is P6's job. P7a/P7b stay on.
-- Caveat: one category pair, not the whole set. A full `--routing all` run on 3.5 (on a
-  fresh day's quota) would confirm it; `python -m tests.evals.compare` against
-  `gemini-groups-20261030-0602.json` does the rest.
+- Confirmed on the full set (2026-10-30), every tool on gemini-3.5-flash-lite (fallback
+  3.1) against the groups run above: all 137/150 (91.3%) vs groups 142/150; mean cases
+  passed 45.7 vs 47.3 of 50; median 2.4 s vs 2.9 s. Always passed with groups, always
+  failed with every tool: energy-husband (no energy note), rule-husband-groceries and
+  rule-thinking-aloud (create_task, and set_task_schedule, picked over propose_rule).
+  The other way: energy-medium-day and task-have-partner-do-it. **Groups stays** on both
+  models. The losses are rule vs task, a near-twin pair: P6.
 - Seen in passing, not P5's: task-have-partner-do-it fails 3/3 on both models because the
   prompt's example names "Michael" (prompts.py, "can you have Michael get the pacifier")
   and the eval family's husband is "Husband", so the model copies the example. Reword the
