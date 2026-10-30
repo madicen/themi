@@ -57,3 +57,29 @@ change, and in the nightly job. One slice at a time works too:
 The plumbing has its own dry run in the default test run,
 `tests/integration/test_eval_runner.py`. It uses the real Gemini adapter
 against a fake Gemini over HTTP.
+
+## Comparing two setups (P5)
+
+One run can't tell a real change from noise. To compare, repeat each case and
+time it:
+
+```sh
+make evals EVAL_ARGS='--repeat 3'                   # the tool groups (today)
+make evals EVAL_ARGS='--repeat 3 --routing all'     # every tool on every call
+.venv/bin/python -m tests.evals.compare tests/evals/results/gemini-groups-....json \
+    tests/evals/results/gemini-all-....json
+```
+
+Each result keeps its run number, each model call's seconds (less any wait for
+the per-minute pace) and the tools sent with the first call. The summary gives
+the medians, and lists flaky cases (passed some runs) apart from failing ones.
+
+`compare` scores both runs again with today's cases, lists the cases that always
+passed in one and always failed in the other first (the real differences), and
+gives a verdict under the rule agreed before the runs: the second wins if it
+passes no fewer cases (give or take one), no case goes from always passing to
+always failing, and it's at most 20% slower. `rescore` reads a saved run with
+its repeats and timings too.
+
+Three repeats of both setups is about 600 requests: on the free tier, run it in
+the background, one setup at a time.

@@ -88,3 +88,31 @@ async def test_the_routine_setup_puts_items_on_the_fake_wall(
     assert outcome.passed, outcome.problems
     result = str(fake_ai.requests[1].json)
     assert "Morning routine on the wall, today: Walk dog, Make the bed" in result
+
+
+async def test_each_model_call_is_timed_and_the_tools_counted(
+    family: SeededFamily, fake_telegram: FakeTelegram, fake_ai: FakeAIServer
+) -> None:
+    # P5: timings per case, and what the first call sent.
+    fake_ai.queue(gemini_function_call("log_energy_note", {"effect": -2, "note": "client call"}))
+    fake_ai.queue(gemini_text("That sounds draining."))
+    scenario = Scenario(family, fake_telegram, real_models=True)
+    outcome = await run_case(scenario, CASES["energy-client-call"], fake_gemini(fake_ai), run=2)
+    assert outcome.run == 2
+    assert len(outcome.model_seconds) == 2 and all(s >= 0 for s in outcome.model_seconds)
+    declared = fake_ai.requests[0].json["tools"][0]["functionDeclarations"]
+    assert outcome.tools_sent == len(declared)
+    assert outcome.tools_chars > 1000
+
+
+async def test_every_tool_routing_sends_them_all_without_more_tools(
+    family: SeededFamily, fake_telegram: FakeTelegram, fake_ai: FakeAIServer
+) -> None:
+    fake_ai.queue(gemini_text("Hi!"))
+    every = Scenario(family, fake_telegram, real_models=True, tool_routing="all")
+    outcome = await run_case(every, CASES["energy-client-call"], fake_gemini(fake_ai))
+    names = [d["name"] for d in fake_ai.requests[-1].json["tools"][0]["functionDeclarations"]]
+    assert "more_tools" not in names and "update_pantry" in names
+    registry = every.app.services.tools
+    assert len(names) == len(registry.specs()) - 1 > len(registry.specs(set()))
+    assert outcome.tools_sent == len(names)

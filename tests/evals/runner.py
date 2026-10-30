@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import time
+from collections.abc import Sequence
 from typing import Any
 
+from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend
 from tests.evals.scoring import Case, Outcome, model_replies, score
 from tests.fakes.google_oauth import _Refresh
@@ -108,13 +112,34 @@ def missing_tools(scenario: Scenario, case: Case) -> list[str]:
     return [t for t in case.requires if scenario.app.services.tools.get(t) is None]
 
 
-async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outcome:
-    """Set up, send the message, and score the tool calls and replies."""
+def tools_size(tools: Sequence[Any]) -> int:
+    """The tools' schemas as characters, roughly as they go to the model."""
+    return len(
+        json.dumps(
+            [
+                {"name": t.name, "description": t.description, "schema": t.input_schema}
+                for t in tools
+            ]
+        )
+    )
+
+
+async def run_case(
+    scenario: Scenario,
+    case: Case,
+    chosen: EvalBackend,
+    paced: PacedFactory | None = None,
+    run: int = 1,
+) -> Outcome:
+    """Set up, send the message, and score the tool calls and replies. Each model call is
+    timed with the real clock (Themi's is frozen), less any wait for the per-minute pace."""
     use_backend(scenario, chosen)
     await scenario.start()
     calls: list[tuple[str, dict[str, Any]]] = []
     steps: list[int] = []
     model_steps = [0]
+    seconds: list[float] = []
+    sent_tools: list[Sequence[Any]] = []
     registry = scenario.app.services.tools
     original = registry.run
     router = scenario.app.services.router
@@ -131,7 +156,15 @@ async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outco
 
         async def counted(*args, **kwargs):  # type: ignore[no-untyped-def]
             model_steps[0] += 1
-            return await chat(*args, **kwargs)
+            tools = args[2] if len(args) > 2 else kwargs.get("tools", ())
+            if tools and not sent_tools:
+                sent_tools.append(tools)
+            began, waited = time.monotonic(), paced.waited if paced else 0.0
+            try:
+                return await chat(*args, **kwargs)
+            finally:
+                pacing = (paced.waited if paced else 0.0) - waited
+                seconds.append(round(time.monotonic() - began - pacing, 2))
 
         client.chat = counted  # type: ignore[method-assign]
         return client
@@ -154,6 +187,11 @@ async def run_case(scenario: Scenario, case: Case, chosen: EvalBackend) -> Outco
         outcome = score(case, calls, model_replies(sent), member.pda_strength)
         outcome.sent = sent
         outcome.call_steps = steps
+        outcome.run = run
+        outcome.model_seconds = seconds
+        if sent_tools:
+            outcome.tools_sent = len(sent_tools[0])
+            outcome.tools_chars = tools_size(sent_tools[0])
         return outcome
     finally:
         await scenario.stop()

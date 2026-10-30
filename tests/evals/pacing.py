@@ -32,6 +32,7 @@ class MinuteLimiter:
         self.sleep = sleep
         # No lock: each eval test has its own event loop, and calls run one at a time.
         self.calls: deque[float] = deque()
+        self.waited = 0.0  # seconds spent waiting, kept out of P5's model timings
 
     async def wait(self) -> None:
         while True:
@@ -41,7 +42,9 @@ class MinuteLimiter:
             if len(self.calls) < self.rpm:
                 self.calls.append(moment)
                 return
-            await self.sleep(60 - (moment - self.calls[0]) + 0.1)
+            pause = 60 - (moment - self.calls[0]) + 0.1
+            await self.sleep(pause)
+            self.waited += pause
 
 
 class PacedProvider:
@@ -82,6 +85,11 @@ class PacedFactory:
     def __init__(self, rpm: int) -> None:
         self.rpm = rpm
         self.limiters: dict[str, MinuteLimiter] = {}
+
+    @property
+    def waited(self) -> float:
+        """Seconds every model has spent waiting for its minute so far."""
+        return sum(limiter.waited for limiter in self.limiters.values())
 
     def __call__(self, config: AdapterConfig) -> Provider:
         inner = build_provider(config)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -90,6 +92,10 @@ class Outcome:
     sent: list[tuple[str, str]] = field(default_factory=list)  # everything, with its kind
     # For each call, which model step asked for it (calls sharing a step came together).
     call_steps: list[int] = field(default_factory=list)
+    run: int = 1  # P5: which repeat of the case this was
+    model_seconds: list[float] = field(default_factory=list)  # each model call, not pacing
+    tools_sent: int = 0  # with the first conversation call
+    tools_chars: int = 0  # the same tools' schemas, as characters
 
     @property
     def passed(self) -> bool:
@@ -168,8 +174,24 @@ def score(
     return Outcome(case, tools_ok, not pda_problems, problems, calls, replies)
 
 
+def _median(values: Sequence[float]) -> float:
+    return round(statistics.median(values), 1) if values else 0.0
+
+
+def per_case(outcomes: list[Outcome]) -> dict[str, tuple[int, int]]:
+    """Each case's (passed, runs), over the runs a model answered."""
+    counts: dict[str, tuple[int, int]] = {}
+    for o in outcomes:
+        if not o.unavailable:
+            passed, runs = counts.get(o.case.id, (0, 0))
+            counts[o.case.id] = (passed + o.passed, runs + 1)
+    return counts
+
+
 def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
-    """Pass rates by category, and overall, over the cases a model actually answered."""
+    """Pass rates by category, and overall, over the cases a model actually answered. With
+    repeats (P5), each run counts, and cases that passed some runs and not others are
+    flaky, apart from the ones that never passed."""
     categories: dict[str, dict[str, int]] = {}
     unavailable = sum(o.unavailable for o in outcomes)
     outcomes = [o for o in outcomes if not o.unavailable]
@@ -180,8 +202,17 @@ def summarise(outcomes: list[Outcome]) -> dict[str, Any]:
         c["tools"] += o.tools_ok
         c["pda"] += o.pda_ok
     total = len(outcomes)
+    counts = per_case(outcomes)
+    timed = [o for o in outcomes if o.model_seconds]
     return {
         "categories": categories,
+        "runs": max((runs for _, runs in counts.values()), default=0),
+        "flaky": sorted(c for c, (passed, runs) in counts.items() if 0 < passed < runs),
+        "failing": sorted(c for c, (passed, _) in counts.items() if passed == 0),
+        "median_seconds": _median([sum(o.model_seconds) for o in timed]),
+        "median_calls": _median([len(o.model_seconds) for o in timed]),
+        "median_tools_sent": _median([o.tools_sent for o in timed]),
+        "median_tools_chars": _median([o.tools_chars for o in timed]),
         "cases": total,
         "unavailable": unavailable,
         "passed": sum(o.passed for o in outcomes),
@@ -197,10 +228,20 @@ def format_summary(provider: str, summary: dict[str, Any]) -> str:
     ]
     if summary.get("unavailable"):
         lines.append(f"{summary['unavailable']} couldn't run: no AI backend answered (not counted)")
+    if summary.get("runs", 1) > 1:
+        lines.append(f"Each case ran {summary['runs']} times; every run counts.")
+    if summary.get("median_calls"):
+        lines.append(
+            f"Per case (median): {summary['median_seconds']} s in model calls, "
+            f"{summary['median_calls']:g} calls, {summary['median_tools_sent']:g} tools sent "
+            f"({summary['median_tools_chars']:g} characters)"
+        )
     lines.append(f"{'category':16} {'pass':>9} {'tools':>9} {'pda':>9}")
     for name, c in sorted(summary["categories"].items()):
         n = c["cases"]
         lines.append(
             f"{name:16} {c['passed']:>4}/{n:<4} {c['tools']:>4}/{n:<4} {c['pda']:>4}/{n:<4}"
         )
+    if summary.get("runs", 1) > 1 and summary.get("flaky"):
+        lines.append(f"Flaky (passed some runs): {', '.join(summary['flaky'])}")
     return "\n".join(lines)
