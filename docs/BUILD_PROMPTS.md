@@ -134,7 +134,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
-| GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [ ] |
+| GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 
 ## Fixed technical choices
 
@@ -5984,7 +5984,7 @@ Notes (2026-10-30):
   restart (applies 0077), and link each Google account again (`/link gmail`).
 
 ### GT1b · Themi's tasks on Google Tasks, kept apart from the inbox
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: GT1a
 Asked by Michael, 2026-10-30, if Themi's own tasks can be told apart from new voice items.
 They can, two ways at once:
@@ -5995,3 +5995,28 @@ Build: each person's open Themi tasks on their "Themi" list (title, due date); d
 (by voice: "mark call the plumber done") completes it in Themi, and done in Themi completes it
 in Google. Check how Gemini for Home reads and completes tasks on a list that isn't the
 default before relying on voice completion.
+
+Notes (2026-10-30):
+- `themi.core.google_tasks_list.GoogleTaskList`, run inside the `google_tasks.inbox` job, so
+  writing a task and recognising it never race. For each person, their first linked account
+  with Google Tasks allowed gets a "Themi" list (found by name, or made). Migration 0081
+  adds `google_task_lists`, `google_task_links` (task, account, Google id, and whether it
+  was deleted in Google), and `google_task_inbox.list_id`.
+- What goes on the list: `open_for` (theirs, and shared ones), open, not repeating, and
+  not off the wall's lists (the email audit's). Title and due date only; Google keeps no
+  time.
+- Each run:
+    - Done in Google (shown with `showHidden`, so ticks in Google's own apps count): done
+      in Themi.
+    - New in Themi: written there. A title or date changed in Themi: patched; Themi's
+      version wins, and edits made in Google aren't brought back.
+    - Done in Themi: completed there. Cancelled, or not theirs any more: deleted there.
+    - Deleted in Google: left off, not put back.
+- The inbox now reads My Tasks and the Themi list, and skips the ids Themi wrote. Anything
+  else there is a new item, handled and removed, as on My Tasks. Failed deletes are retried
+  once per account per run.
+- Not checked: how Gemini for Home reads and completes tasks on a list that isn't the
+  default. If "mark ... done" by voice only reaches My Tasks, voice completion of Themi's
+  tasks won't work (the app and the web still do).
+- Setup: restart (applies 0081). Accounts already linked with Google Tasks need nothing
+  more.
