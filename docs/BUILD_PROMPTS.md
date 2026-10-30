@@ -101,6 +101,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
 | F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
+| F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -4903,6 +4904,49 @@ Notes (2026-10-29):
   the next one quicker to find.
 - Not run: the model evals (cases for a question, "Yes please" and an event reminder
   would be worth adding).
+- Setup: restart. No migration.
+
+### F18f · Feedback (2026-10-29): a wrong year, the summary twice, a task already open, stale cards, the heads-up late
+Status: [x] 2026-10-29
+Depends on: F18e, K3, K4
+From the family's bugs #84, #85, #87, #88, #89, #90 and #91 (2026-10-29).
+- #84, #85, #87 ("Clean upstairs" still on the wall for today after it was moved; "streamline
+  the snooze feature"; "October 30 is tomorrow, but Themi is prompting it as an overdue
+  task"): the model moved it to 2020-10-30, a Friday too, so "Friday 30 Oct" read right.
+  Overdue by six years, it stayed up on Erin's chart (one at a time), each "snooze" set
+  the same date, the chart nudged it "Was due 30 Oct", and the missed round rolled it on
+  to the next Thursday. Also #84: green tea, already due Friday, was listed as moved.
+- #88 ("it should have continued the conversation to update the existing task"): "a task
+  for both of us due today at 6pm" was refused as already open; the model asked instead,
+  and no tool could make an open one-off both of theirs.
+- #89 ("why does this question result in two different day summary messages?"): the model
+  wrote the day out after `day_summary` had sent it; the tool's description said "say it
+  back in plain words", its result "don't repeat it".
+- #90 ("it's really hung up on rescheduling my tutoring"): a card to move tutoring to
+  12-1:20, put off with Not now, came back at 1:33 pm. A later move was approved; the
+  first card predated #81's fix, and nothing made a card lapse once its time had gone.
+- #91 ("traffic was considered, but prep time wasn't"): the heads-up was queued at 3:33,
+  getting-ready time ahead of leaving, but its deadline was the leave time, so pacing held
+  it to 3:49.
+
+Notes (2026-10-29):
+- `tasks.day_arg`: a date the model gives (create_task, reschedule_task, add_reminder) in
+  a past year is this year's, or next year's once that day has gone. `when_words` shows a
+  year that isn't this one. reschedule_task to the day a task has, with no time, says
+  "already due ...; nothing changed".
+- #88: the duplicate refusal says to change the open one now, to everything asked, and
+  names the tools; `update_task` takes `assign_to` (read by `tasks._assignee`, shared with
+  create_task; 'both' is `reassign(shared=True)`). A chore's people stay its schedule's.
+- #89: `ToolContext.answered`: a tool that sends the answer itself (`day_summary`) marks
+  the turn; the model's reply then goes only if it's one short line (`agent.SHORT_LINE`,
+  120 characters), else nothing more is sent. The description no longer says "say it back".
+- #90: move cards expire at the time they move to, add cards when the event ends (task
+  blocks did already, #64).
+- #91: the heads-up's deadline is when it's queued: on time past pacing and the day's
+  limit, still never in quiet hours, a busy time or a pause.
+- Data repaired (backups in `data/`): "Clean upstairs" (task 30) due Fri 30 Oct, its
+  missed 2020 round removed; cards 179 (the tutoring move) and 78 (Tuesday's run) expired.
+- Not run: the model evals.
 - Setup: restart. No migration.
 
 ### R1 · Routines kept in Themi
