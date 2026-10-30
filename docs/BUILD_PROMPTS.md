@@ -108,7 +108,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
-| R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [ ] |
+| R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -5415,7 +5415,7 @@ Decided with Michael (2026-10-30), after reading C3's notes:
 - Everyone starts with Morning, Afternoon and Evening.
 
 ### R1a · Routines kept in Themi: routines, items and checks, from chat
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: R1
 Build:
 - Each person's routines: a name and a window (start and end, local time). Everyone starts
@@ -5434,6 +5434,28 @@ Build:
 - The wall isn't touched yet: C3 keeps running as it is until R1b.
 Tests: the defaults; a custom routine checked as its window ends; items on set days; ticking
 from a button and from chat; skip today; the energy signal; changes from chat.
+
+Notes (2026-10-30):
+- `themi.core.routines.Routines`, job `routines.check` every 15 minutes. Migration 0079:
+  `routines` (name unique per person, ignoring case; `ends` NULL is "an hour before quiet
+  hours", as C3), `routine_items` (`days` JSON, empty for every day; `only_on` for just one
+  day), `routine_ticks`, `routine_day_checks`, and category `routine_item_add`.
+- Each person gets the three defaults the first time their routines are read.
+- A check goes once a day per routine, from the window's end until three hours after; one
+  later than that isn't sent. A routine with nothing on it today sends nothing and records
+  no signal. The words and buttons are C3's ("Morning routine, still open: ...", a tick
+  button per item, "Skip today"; the button kind is `routine_item`), and so is the signal
+  (device activity, plus or minus 0.5).
+- Tools, in the "wall" group (the word "routine" calls for it): `show_routines`,
+  `set_routine` (add, re-time or rename), `remove_routine`, `add_routine_item` (staged;
+  their own and named in their words means no card; someone else's asks the requester
+  first), `remove_routine_item` and `tick_routine_item`. Only `add_routine_item` reaches
+  someone else's routines. A twin-set paragraph for these and the wall's routine tools was
+  left out: twin sets need every tool built and two eval cases each. The descriptions name
+  each other instead.
+- Until R1b, a person with items both on the wall and in Themi can get two checks for a
+  part of the day: C3's for the wall's, and this one.
+- Setup: restart (applies 0079).
 
 ### R1b · Routines kept in Themi: the wall, both ways
 Status: [ ]
