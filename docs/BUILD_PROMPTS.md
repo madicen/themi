@@ -89,7 +89,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
-| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
+| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [x] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
@@ -4427,7 +4427,7 @@ Notes (2026-10-29):
 - Setup: restart (applies 0072). The live numbers fill in over the next week.
 
 ### P4 · Wrong actions: marked in chat, labelled in review
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: P3, F1
 From the router talk (2026-10-29): P3 sees only the misses the model notices itself (a
 `more_tools` call). When Themi confidently does the wrong thing (olive oil on the
@@ -4472,6 +4472,37 @@ snapshot names its reply; 👎 no longer changes phrasing strength and 😠 stil
 label kind decided from the offered groups; the case stub
 loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
 add, and the review labels it a model choice.
+
+Notes (2026-10-30):
+- Migration 0078: `outbox.reply_id` (every message sent while a reply is written, from
+  `router.current_reply`), and `replies.marked_at`, `label`, `right_tool`, `labelled_at`.
+  The week's clean-up of `replies` (with `reply_tools`) and of `ai_calls` skips a marked
+  reply until it's labelled.
+- `themi.core.wrong_replies`:
+    - `WrongReplies` is a reaction handler. A 👎 on a message whose outbox row has a reply,
+      and isn't a card (approval, rule), marks that reply. Nothing is sent back.
+    - `ReplyReview` works on the database alone, for the CLI. `decide()` uses the groups
+      offered at the start and the ones `more_tools` added: a tool `more_tools` brought in
+      was sent, so using another is a model choice. A twin set counts as sent whole (P6).
+- Phrasing: 👎 is out of `STRICTER_REACTIONS`; 😠 😡 😤 😣 🙄 still make shielding stricter.
+  S5's reactions skip a 👎 on a reply (a 👎 on a nudge or summary still counts there; 😕 on
+  a reply too).
+- `/bug`'s snapshot has `reply`: the reply that sent the message it replies to, else the
+  latest. It holds the tools, the groups offered and the groups added; the report prints
+  "About reply N".
+- `themi feedback` lists unlabelled marked replies after the reports. `--wrong-tool <id>
+  <tool|none>` and `--not-wrong <id>` label them, and a label prints a case stub
+  (`review-<id>`, category `from_review`, `expect`, and `forbid` for the tools it used
+  instead). The tool name isn't checked against the registry, since the CLI doesn't build
+  the app.
+- The person's message is the latest inbound message (not a reaction) at or before the
+  reply's start.
+- Reply times: "Marked wrong", with the week's count and labels.
+- The prompt's example (olive oil on the grocery list instead of the pantry) can't happen
+  any more: `add_to_grocery_list` refuses "used the last of". The scenario uses "remind me
+  to buy olive oil tomorrow" put on the list instead of a task, labelled a model choice.
+- Setup: restart (applies 0078), and tell the family that 👎 on a reply now means "that was
+  the wrong thing", and an angry face means "too pushy".
 
 ### P5 · Evals that can compare: repeats, timings, and every tool vs groups
 Status: [x] 2026-10-30
