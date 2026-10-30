@@ -4436,7 +4436,7 @@ Notes (2026-10-29, in progress: the harness is built, the runs aren't done):
   adds the medians and the flaky cases; `rescore.load_run` reads it all back.
 - Remaining: the two runs and the decision. They need a test Gemini key (not the family's
   own, per the evals README), about 600 requests in all:
-  `GEMINI_API_KEY=... THEMI_EVAL_MODEL=gemini-3.5-flash-lite THEMI_EVAL_FALLBACK_MODEL=gemini-3.1-flash-lite make evals EVAL_ARGS='--repeat 3'`,
+  `GEMINI_TEST_API_KEY=... THEMI_EVAL_MODEL=gemini-3.5-flash-lite THEMI_EVAL_FALLBACK_MODEL=gemini-3.1-flash-lite make evals EVAL_ARGS='--repeat 3'`,
   the same with `--routing all`, then `python -m tests.evals.compare <groups> <all>`.
 
 ### P6 · Near-twin tools: sent together, told apart, tested both ways

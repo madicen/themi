@@ -2,7 +2,7 @@
 
 | PROVIDER      | Needs                                    | Optional                     |
 | ------------- | ---------------------------------------- | ---------------------------- |
-| gemini        | GEMINI_API_KEY (free tier is fine)       | THEMI_EVAL_MODEL (and below) |
+| gemini        | GEMINI_TEST_API_KEY (free tier is fine)  | THEMI_EVAL_MODEL (and below) |
 | claude        | ANTHROPIC_API_KEY                        | THEMI_EVAL_MODEL             |
 | ollama        | THEMI_EVAL_OLLAMA_MODEL                  | THEMI_EVAL_OLLAMA_URL        |
 | openai_compat | THEMI_EVAL_OPENAI_URL, _MODEL            | THEMI_EVAL_OPENAI_KEY        |
@@ -17,7 +17,9 @@ falls back to it, as in real use). THEMI_EVAL_RPM caps calls per minute for each
 model: 10 by default for Gemini, unlimited otherwise.
 
 These are read from the environment, then from `.env` (the environment wins),
-so a test key can sit in `.env` instead of a shell history.
+so a test key can sit in `.env` instead of a shell history. Gemini's is
+GEMINI_TEST_API_KEY, never GEMINI_API_KEY: that is the family's own key, which
+sits in the same `.env`, and a run would spend their quota.
 """
 
 from __future__ import annotations
@@ -48,13 +50,13 @@ def backend(name: str) -> EvalBackend | str:
     model = env.get("THEMI_EVAL_MODEL", "")
     pace = env.get("THEMI_EVAL_PACE")
     if name == "gemini":
-        if not env.get("GEMINI_API_KEY"):
-            return "set GEMINI_API_KEY to run the evals against Gemini"
+        if not env.get("GEMINI_TEST_API_KEY"):
+            return "set GEMINI_TEST_API_KEY to run the evals against Gemini"
         return EvalBackend(
             "gemini",
             "gemini",
             model,
-            api_key=Secret(env["GEMINI_API_KEY"]),
+            api_key=Secret(env["GEMINI_TEST_API_KEY"]),
             pace=float(pace or 0),
             fallback_model=env.get("THEMI_EVAL_FALLBACK_MODEL", ""),
             rpm=int(env.get("THEMI_EVAL_RPM") or 10),

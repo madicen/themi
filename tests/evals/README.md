@@ -5,13 +5,15 @@ PDA-safe. These evals check that against real models. They're opt-in and never
 part of `make test-all`.
 
 ```sh
-GEMINI_API_KEY=... make evals                  # Gemini (the default; free tier is fine)
+GEMINI_TEST_API_KEY=... make evals             # Gemini (the default; free tier is fine)
 ANTHROPIC_API_KEY=... make evals PROVIDER=claude
 THEMI_EVAL_OLLAMA_MODEL=qwen3:8b make evals PROVIDER=ollama
 ```
 
 `providers.py` lists the environment variables for each provider. Use test
-keys, never the family's own.
+keys, never the family's own. For Gemini the evals read only
+`GEMINI_TEST_API_KEY` (from the environment or `.env`) and skip without it, so
+the family's `GEMINI_API_KEY` in the same `.env` is never used.
 
 ## What a case checks
 
