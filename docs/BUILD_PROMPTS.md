@@ -109,7 +109,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
-| R1b | Routines kept in Themi: the wall, both ways | Feedback | [ ] |
+| R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -5458,7 +5458,7 @@ Notes (2026-10-30):
 - Setup: restart (applies 0079).
 
 ### R1b · Routines kept in Themi: the wall, both ways
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: R1a, C3, F18d
 Build:
 - The first sync brings the wall's routines into Themi. Each item goes to the person's
@@ -5473,6 +5473,38 @@ Build:
 Tests: the first import; an item made in Themi shown on the wall in the right part; each kind
 of wall change coming in; a conflict won by Themi's pending change; ticks both ways; no
 double checks.
+
+Notes (2026-10-30):
+- `themi.core.routines_wall.RoutinesWall`, job `routines.wall` every 5 minutes, when the
+  wall's chores are on (`COZYLA_CHORES`). Migration 0080:
+    - `routine_item_links` (item to wall routine, pending or done, with a version), for
+      every item including R1a's.
+    - `routine_wall_deletes` and `routine_wall_seen`.
+    - Triggers mark an item pending when it's made or changed, or when its routine is
+      re-timed. Deleting an item, or a routine with its items, queues its wall routine for
+      deletion. So R1a's code didn't change for this.
+- Pull: an unlinked wall routine (not a C3 check-in) becomes an item in the person's first
+  routine starting in its part, with its days. That's how the first import happens. A
+  linked one that isn't pending and differs from `routine_wall_seen` (title, part, days)
+  is changed in Themi; a part change moves it to the routine for the new part, and a
+  missing routine for a part gets that part's default. One gone from the wall is deleted
+  in Themi, without queuing a wall delete. A routine whose schedule isn't daily or weekly
+  (monthly, every 2 weeks) comes in as every day.
+- Push: queued deletes, then pending items, created or updated with the part from
+  `part_of_day(routine.starts)` and a daily or weekly schedule. A just-for-today item goes
+  out as daily and into C3's `wall_routine_once`, so it's removed the next day (and the pull
+  removes it in Themi).
+- Ticks: a wall tick today ticks the Themi item. A tick in Themi (`Routines.tick_now`, from
+  a check's button or chat) ticks the wall at once, and any missed one goes at the next sync.
+- C3's own checks stop (`CozylaRoutines.checks_by_themi`). Their code stays, unused. C3's
+  scenario tests now run the R1b sync and R1a's check, and pass with the same words and
+  buttons. The late limit is now five hours, so a morning check still lapses at 5 pm (idea
+  #96).
+- Not done: the order of items within a part on the wall (`displayOrder`). New items go
+  last, as the wall puts them. Also, `add_to_wall_routine` and `show_routine` still write
+  and read the wall directly; what they add comes into Themi at the next sync.
+- Setup: restart (applies 0080). The first sync (within 5 minutes) brings the wall's
+  routines into Themi.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
