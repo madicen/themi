@@ -73,7 +73,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
 | E1 | Email: suggest important senders | Feedback | [x] |
 | S5 | Shadow Calendar: learning from reactions | Feedback | [x] |
-| M1 | Memory: a record of conversations | Feedback | [ ] |
+| M1 | Memory: a record of conversations | Feedback | [x] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
 | F14b | Feedback: routine order, email setup, spending isn't shopping, passing messages on | Feedback | [x] |
@@ -3291,7 +3291,7 @@ Notes (2026-10-30):
 - The 👎-style reactions still also make PDA shielding stricter (prompt 8), as before.
 
 ### M1 · Memory: a record of conversations
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: 13
 From Erin's ideas #28 and #30, 2026-10-27: "maintain records of general questions/conversations
 in the shadow calendar". F13 keeps a note per answer or settled problem; this is the fuller
@@ -3299,6 +3299,22 @@ record.
 - A daily, private journal per person: the topics talked about and what was decided, written
   at the end of the day from the day's messages, searchable ("what did we decide about the
   pacifiers?"), on the website's Rules & memory page, deletable.
+
+Notes (2026-10-30):
+- `themi.core.journal.Journal`, job `memory.journal` hourly: once a person's local day is over,
+  that day's messages go to the model as a data block: what they said, and Themi's chat
+  replies (not its nudges). The model writes up to 8 topics and 8 decisions (only what they
+  agreed to). It's a background structured call on the "other quick jobs" AI route.
+  Migration 0076: `journal_entries` and a porter-stemmed `journal_fts`.
+- A day with only Themi's messages isn't written. A day with nothing worth keeping gets an
+  empty entry, which isn't shown. If the model doesn't answer, the next hour tries again,
+  for up to three days back.
+- `search_journal` (a core tool, so it's always there) searches only the asker's own entries.
+- The Rules & memory page has "Your journal": the last 14 entries, a search box, and Delete
+  on each. A deleted entry keeps only its date, so it isn't written again.
+- Not done: a tracking switch. It's a record of conversations, not an energy input, and each
+  entry can be deleted. Add one if the family wants the journal off for someone.
+- Setup: restart (applies 0076).
 
 ### P1 · Faster replies: only the tools a message needs
 Status: [x] 2026-10-27
