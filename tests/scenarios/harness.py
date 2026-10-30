@@ -87,6 +87,7 @@ class Scenario:
         *,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
+        tool_routing: str = "groups",
     ) -> None:
         """`real_models`: the router builds real adapters from each member's AI settings and
         retries with real waits (the evals); otherwise every model is a ScriptedProvider."""
@@ -115,6 +116,7 @@ class Scenario:
             grocery_list=ourgroceries,
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
             travel=travel.client() if travel else None,
+            tool_routing=tool_routing,
         )
         if not real_models:
             for member in (family.erin, family.husband):

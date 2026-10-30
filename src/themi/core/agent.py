@@ -37,7 +37,7 @@ from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
-from themi.core.tools import ToolContext, choose_groups
+from themi.core.tools import GROUPS, ToolContext, choose_groups
 from themi.energy.remarks import energy_remark
 from themi.localtime import to_local
 
@@ -359,7 +359,10 @@ class Agent:
         before = next((m.text for m in reversed(history) if m.direction == "in"), "")
         said = next((m.text for m in reversed(history) if m.direction == "out"), "")
         # P1: the tools this message and the last few call for; more_tools adds to them.
-        groups = choose_groups([text, *(m.text for m in history[-4:])])
+        # P5's "all" routing sends every group.
+        routing = services.tool_routing
+        recent = [text, *(m.text for m in history[-4:])]
+        groups = set(GROUPS) if routing == "all" else choose_groups(recent)
         ctx = ToolContext(
             member,
             services,
@@ -369,13 +372,14 @@ class Agent:
             groups=groups,
         )
         offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
-        timer.route(offered, len(services.tools.specs(groups)))
+        timer.route(offered, len(services.tools.specs_for(groups, routing)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for step in range(1, self.max_steps + 1):
-                response = await client.chat(system, messages, services.tools.specs(ctx.groups))
+                tools = services.tools.specs_for(ctx.groups, routing)
+                response = await client.chat(system, messages, tools)
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):

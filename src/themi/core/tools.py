@@ -277,6 +277,13 @@ class ToolRegistry:
             if groups is None or TOOL_GROUPS.get(name, "core") in groups | {"core"}
         ]
 
+    def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
+        """The tools one model call gets. P5's "all" is every tool but more_tools, which
+        would have nothing to add."""
+        if routing == "all":
+            return [spec for spec in self.specs() if spec.name != more_tools.spec.name]
+        return self.specs(groups)
+
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 

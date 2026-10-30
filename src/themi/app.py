@@ -112,6 +112,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     backup: BackupConfig | None = None,
+    tool_routing: str = "groups",
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -122,6 +123,7 @@ def build_app(
     outcomes = OutcomeTracker(store)
     outbox.sent_listeners.append(outcomes.on_sent)
     services = Services(
+        tool_routing=tool_routing,
         store=store,
         ai_settings=ai_settings,
         router=router,

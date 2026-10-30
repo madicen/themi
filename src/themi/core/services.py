@@ -122,6 +122,7 @@ class Services:
     event_commands: dict[str, EventCommandHandler] = field(default_factory=dict)
     command_help: dict[str, str] = field(default_factory=dict)
     site_url: str = ""  # the website's base address, for /site links
+    tool_routing: str = "groups"  # P5: or "all", every tool on every call
     rulebook: Rulebook | None = None
     memory: Memory | None = None
     outcomes: OutcomeTracker | None = None

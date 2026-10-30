@@ -3,6 +3,8 @@ when the model finds it needs one."""
 
 from __future__ import annotations
 
+from tests.fakes.telegram_api import FakeTelegram
+from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from themi.core.timing import Reply, router_numbers, week_of_replies
 from themi.core.tools import GROUPS, TOOL_GROUPS
@@ -90,3 +92,22 @@ async def test_a_reply_with_only_the_core_records_no_groups(scenario: Scenario) 
 def test_replies_from_before_p3_are_left_out_of_the_numbers() -> None:
     old = Reply(1, 1, "2026-10-28T09:00:00Z", 4.0, 3.0, 0.0, 1.0, None, ())
     assert router_numbers([old]) is None
+
+
+# ----- P5: every tool, to compare ----------------------------------------------------
+
+
+async def test_every_tool_routing_sends_all_but_more_tools(
+    family: SeededFamily, fake_telegram: FakeTelegram
+) -> None:
+    scenario = Scenario(family, fake_telegram, tool_routing="all")
+    await scenario.start()
+    try:
+        scenario.primary.queue_text("Hi!")
+        await scenario.say("Erin", "Good morning")
+        everything = {spec.name for spec in scenario.app.services.tools.specs()}
+        assert sent(scenario) == everything - {"more_tools"}
+        (reply,) = week_of_replies(scenario.app.db)  # P3 sees every group sent
+        assert reply.groups == tuple(sorted(GROUPS)) and reply.tools_sent == len(everything) - 1
+    finally:
+        await scenario.stop()
