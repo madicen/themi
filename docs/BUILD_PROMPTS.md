@@ -93,7 +93,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
-| P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
+| P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4571,7 +4571,7 @@ Notes (2026-10-30):
   "turn the laundry nudges back on", "it came to $35", "when could I fit in...".
 
 ### P7b · An embedding router, if P5 says routing stays
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: P7a
 Embeddings instead of word lists: no training, just nearest neighbours. Each group's
 examples become vectors once; each message becomes a vector; every group with an example
@@ -4598,6 +4598,35 @@ close enough is sent.
 Tests: the fake embedder routes paraphrases the word lists miss; two asks bring two groups;
 a failing or slow embedder falls back to the word lists; recently used groups stay; the
 cache is reused across restarts; the routing goes through the router (keys, fallback).
+
+Notes (2026-10-30):
+- Providers gained `embed` (Gemini; Claude and OpenAI-compatible say they can't, so the
+  router skips them). `AITask.EMBEDDING` routes it, so keys, retries, fallback and the
+  `ai_calls` record apply. Migration 0073 rebuilds `ai_routes` (its CHECK listed the tasks)
+  and gives each member an embedding route on the Gemini backends of their conversation
+  chain, model `gemini-embedding-2` at 768 dimensions (it told "lie down" from "oat milk"
+  further apart than -001 did). Gemini-embedding-2 wants one Content per text.
+- `themi.ai.embeddings` (`Embedder`, `RouterEmbedder`, `VectorCache`) and
+  `themi.core.routing` (`EmbeddingRouter`, `recent_groups`). With
+  `THEMI_TOOL_ROUTING=embeddings` the agent sends the word lists' groups, plus every group
+  with an example at least 0.725 similar to this message, the person's last two, or any of
+  their clauses (one vector of "need a nap, then what's for dinner?" sits between the two),
+  plus the groups whose tools ran in their last 3 replies. Over a second, or on any
+  failure, the word lists decide alone; the examples keep warming in the background.
+- Threshold (`tests/evals/test_router_thresholds.py`, 166 cases): word lists alone 95/109,
+  median 33 tools. With embeddings at 0.725: 108/109, still 33 tools; 0.7 is the same
+  recall at 36 tools, 0.75 loses one more case. The one miss: "Nothing from the
+  neighborhood app is ever urgent". Embeddings alone need 0.675 for 99% (38 tools), so
+  the union stays. Each group's examples sit about 0.63 to 0.69 from each other.
+- The free tier counts each embedded text as a request (100 a minute): the 108 examples
+  spill into a second minute once per model (the router's retries wait it out), and recent
+  message vectors stay in memory (never stored) so the last two messages aren't embedded
+  again.
+- Not done: a behaviour eval run with `--routing embeddings` (both models' quotas were
+  spent today); it's wired (`make evals EVAL_ARGS='--routing embeddings'`).
+- Setup for the family: `THEMI_TOOL_ROUTING=embeddings` in `.env`, and a Gemini backend in
+  each person's conversation chain (or an embedding route on the website). Then a week of
+  P3's numbers against the word lists' week decides whether the word lists go.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28

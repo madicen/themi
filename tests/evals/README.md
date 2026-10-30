@@ -85,3 +85,18 @@ its repeats and timings too.
 
 Three repeats of both setups is about 600 requests: on the free tier, run it in
 the background, one setup at a time.
+
+## The embedding router's threshold (P7b)
+
+`test_router_thresholds.py` scores the word lists with embeddings added (as
+`THEMI_TOOL_ROUTING=embeddings` runs them), and embeddings alone, on P3's eval
+over the eval and routing cases, at thresholds from 0.5 to 0.9:
+
+```sh
+make evals EVAL_ARGS='-k thresholds -s'
+```
+
+It embeds with `GEMINI_TEST_API_KEY` and keeps the vectors in
+`results/embeddings.db`, so only new or changed texts are embedded again. The
+free tier counts each text as a request (100 a minute), so a first run waits
+out the limit once or twice.
