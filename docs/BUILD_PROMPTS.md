@@ -3211,7 +3211,9 @@ Depends on: S1, 28
 From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
 or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
 - Record a reaction on any of Themi's messages with the message's kind (a nudge, a check-in, a
-  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not.
+  summary, a chat reply) and length; 👍 ❤️ 🙏 as good, 👎 😕 as not. If P4 is built, 👎 on
+  a chat reply is its "wrong action" mark, not a judgement of the style: count it only on
+  Themi's other messages.
 - Over time, a per-person picture of what lands ("short nudges do well; long explanations
   don't"), shown to the model as a line of its own, in words, never numbers, and on the
   person's tracking page. A switch, like the other inputs.
@@ -4341,11 +4343,14 @@ From the router talk (2026-10-29): P3 sees only the misses the model notices its
 `more_tools` call). When Themi confidently does the wrong thing (olive oil on the
 grocery list instead of the pantry), nothing ties it to the reply or the tool. Today those
 turn up only as `/bug` reports, read by hand.
-- **A reaction marks a reply as wrong.** One tap on Themi's reply, never asked for: Themi
-  doesn't ask "was that right?" and says nothing back. 👎 is taken (it makes phrasing
-  gentler, `STRICTER_REACTIONS`), so the mark needs its own emoji from Telegram's reaction
-  set; 🤔 unless the family picks another (ask before starting). It doesn't change
-  phrasing, approvals or energy.
+- **👎 on a reply marks it as wrong.** One tap on Themi's reply, never asked for: Themi
+  doesn't ask "was that right?" and says nothing back. It doesn't change phrasing,
+  approvals or energy.
+- **Phrasing moves to the angry faces.** Decided 2026-10-29: 👎 comes out of
+  `STRICTER_REACTIONS`, so 😠 😡 😤 😣 🙄 make phrasing gentler and 👎 no longer does,
+  anywhere (on a nudge or summary it now does nothing until S5). The plan says only that
+  reactions calibrate phrasing, so it doesn't change. The calibration module's docstring
+  ("a 👎-style reaction") and its test move to 😠.
 - `replies` needs to know its outbox messages (Telegram message ids), so a reaction finds
   its reply. A reaction on a message that isn't a model reply (a card, a nudge) is ignored
   for this.
@@ -4366,12 +4371,15 @@ turn up only as `/bug` reports, read by hand.
   stored conversation; nothing new is kept for it.
 - "Reply times" (P3's section) adds the week's marked replies and the labels by kind, so
   the router misses and the model's choices can be told apart.
+- Setup: tell the family before it ships that 👎 now means "that was the wrong thing" and
+  an angry face means "too pushy".
 - Not here: guessing mistakes from behaviour (an undo soon after, "no, I meant"). Too noisy
   for one family's numbers; revisit if the marks stay rare.
 
 Tests: a reaction on a model reply marks it, on a card or nudge doesn't; the mark changes
 no phrasing strength; a marked reply survives the clean-up until labelled; `/bug`'s
-snapshot names its reply; each label kind decided from the offered groups; the case stub
+snapshot names its reply; 👎 no longer changes phrasing strength and 😠 still does; each
+label kind decided from the offered groups; the case stub
 loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
 add, and the review labels it a model choice.
 
