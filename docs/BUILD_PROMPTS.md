@@ -107,6 +107,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
+| F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -5219,6 +5220,35 @@ Notes (2026-10-29):
 - Open: the rest of #97 (whether the laundry should have been Michael's alone, as the
   reply said, rather than on both lists) and idea #96 (a routine check with one item has
   one button; a "skip today" button, and a morning check held to 8:15 pm).
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### F18h · Feedback (2026-10-30): who has a task, said truly; routine checks with a skip
+Status: [x] 2026-10-30
+Depends on: F18g
+From the rest of Erin's bug #97 and her idea #96 (2026-10-29).
+- #97: "Have one of us cycle the laundry tonight" made a task for either of them, but
+  create_task's result said "assigned to Michael ... Michael gets a gentle nudge", so the
+  reply said "I've put it on Michael's list" while it was on both lists (and her wall).
+  Earlier, "can you get Michael to unclog the vacuum tonight?" ran five task tools, none
+  of which moved it, and the reply said "I've assigned it to Michael for tonight". The
+  user's ask: Themi tells the whole truth about the actions it takes.
+- #96: "Themi should never offer a single push button. This should have been 'walk dog' or
+  'skip today' because it's already evening": the morning routine check, held all
+  afternoon, went at 8:15 pm with one button.
+
+Notes (2026-10-30):
+- `create_task` for "both" now says "created for both of them, on both lists" and that
+  each gets a nudge; `TaskBoard.whose_list` words whose list a task is on.
+- The agent checks each sentence of a reply that hands a task to someone ("assigned ... to
+  Michael", "on Michael's list"): if none of the tasks it names in quotes (or else, that the
+  turn's tools touched; `ToolContext.tasks`) is that person's alone, the sentence is
+  dropped and '"X" is on Erin's list.' (or "both lists") said instead. A name inside a
+  quoted title doesn't count. The system prompt says the same.
+- Routine checks end with a "Skip today" button (edits to "Morning routine: left for
+  today."; nothing is ticked on the wall). The morning check isn't sent after 5 pm, and
+  one held back lapses then.
+- Still single-button: a draft rule's "Lock it in" card, and a task block's "Done".
 - Not run: the model evals.
 - Setup: restart. No migration.
 
