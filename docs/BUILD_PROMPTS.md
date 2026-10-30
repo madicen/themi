@@ -72,7 +72,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
 | F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
 | E1 | Email: suggest important senders | Feedback | [x] |
-| S5 | Shadow Calendar: learning from reactions | Feedback | [ ] |
+| S5 | Shadow Calendar: learning from reactions | Feedback | [x] |
 | M1 | Memory: a record of conversations | Feedback | [ ] |
 | P1 | Faster replies: only the tools a message needs | Feedback | [x] |
 | F14a | Feedback: one card per event, nudges at a time, check-ins kept in Themi, whose day | Feedback | [x] |
@@ -3259,7 +3259,7 @@ Notes (2026-10-27):
 - Setup: restart (applies 0059).
 
 ### S5 · Shadow Calendar: learning from reactions
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: S1, 28
 From Erin's idea #31 ("interpret react emojis to note which types of responses elicit positive
 or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
@@ -3270,6 +3270,25 @@ or negative reactions"), 2026-10-27. Reactions today only answer approval cards.
 - Over time, a per-person picture of what lands ("short nudges do well; long explanations
   don't"), shown to the model as a line of its own, in words, never numbers, and on the
   person's tracking page. A switch, like the other inputs.
+
+Notes (2026-10-30):
+- `themi.core.reactions.Reactions` is a reaction handler. It finds the outbox message reacted
+  to and records it in `message_reactions` (migration 0075), one per message, the latest
+  reaction winning. It keeps the message's kind in words (nudges, check-ins, summaries, chat
+  replies, heads-ups) and its length (short up to 160 characters, medium-length up to 500,
+  long). A task nudge whose task is a check-in counts as a check-in.
+- Approval and rule cards are left out: a reaction there answers the card.
+- P4 isn't built, so 👎 on a chat reply still counts. When P4 lands, leave chat replies out
+  here.
+- `picture()`, over 90 days: each length-and-kind pair with 3 or more reactions, then each kind
+  not yet covered. Two thirds good means it does well; half or more not good means it
+  doesn't. The result reads like "short nudges do well; long summaries don't", or "" with too
+  little to go on.
+- The model sees it as its own line in the turn's context ("What lands with Erin, from their
+  reactions: ..."). My week has a "What lands with you" card.
+- A new tracking input, `reactions` (on by default, like the others), on My settings and in
+  /tracking. Off stops recording and hides the line; what's recorded stays.
+- The 👎-style reactions still also make PDA shielding stricter (prompt 8), as before.
 
 ### M1 · Memory: a record of conversations
 Status: [ ]
