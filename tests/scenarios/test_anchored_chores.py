@@ -139,6 +139,50 @@ async def test_done_for_the_wrong_task_number_is_caught(scenario: Scenario) -> N
     assert board(scenario).get(bins.id).due_on == date(2026, 10, 28)
 
 
+async def test_yes_to_a_question_about_one_task_cant_change_another(scenario: Scenario) -> None:
+    """Bug #92: Michael's "Yes please" to "Should I reschedule 'Contact Erin's parents' to
+    today at 6 pm?" moved the bird cage to 6 pm instead, so Erin was nudged about it."""
+    cage = await chore(scenario, "Clean the bird cage")
+    await schedule(scenario, cage, "twice a week")
+    due = board(scenario).get(cage.id).due_on
+    erin = scenario.member("Erin")
+    parents = await board(scenario).create(
+        erin, "Contact Erin\u2019s parents about babysitting", "text", 1, assignee=erin
+    )
+    scenario.primary.queue_text(
+        "It wasn't made again: \u201cContact Erin\u2019s parents about babysitting\u201d is "
+        "already open. Should I reschedule it to today at 6 pm?"
+    )
+    await scenario.say("Husband", "Did it also become a shared task?")
+    move = {"due_date": "2026-10-21", "due_time": "18:00", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", {"task_id": cage.id, **move})
+    scenario.primary.queue_text("Rescheduled.")
+    await scenario.say("Husband", "Yes please")
+    assert board(scenario).get(cage.id).due_on == due
+    assert board(scenario).get(cage.id).due_time is None
+    result = last_tool_result(scenario)
+    assert result.is_error and f"task {parents.id}" in result.content
+
+
+async def test_a_question_about_a_chore_doesnt_mark_it_done(scenario: Scenario) -> None:
+    """Bug #92: "Didn't I just clean the bird cage?" (she meant a couple of days ago) and
+    "What no I meant yesterday?" each marked it done."""
+    cage = await chore(scenario, "Clean the bird cage")
+    await schedule(scenario, cage, "twice a week")
+    for asked in ("Didn't I just clean the bird cage?", "What no I meant yesterday?"):
+        scenario.primary.queue_tool_call("complete_task", {"task_id": cage.id})
+        scenario.primary.queue_text("Marked done.")
+        await scenario.say("Erin", asked)
+        assert not board(scenario).runs(cage.id)
+        result = last_tool_result(scenario)
+        assert result.is_error and "question" in result.content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": cage.id})
+    scenario.primary.queue_text("Marked done.")
+    await scenario.say("Erin", "Can you mark the bird cage done?")
+    assert len(board(scenario).runs(cage.id)) == 1
+
+
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:
     bins = await chore(scenario, "Take out the bins")
     await schedule(scenario, bins, "every Tuesday", missed="catch_up")

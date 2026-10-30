@@ -64,6 +64,17 @@ UNSURE = re.compile(
     r"no idea|forgot (?:if|whether)|maybe|might have|think i (?:took|did|had))\b",
     re.IGNORECASE,
 )
+# "Didn't I just clean the bird cage?" asks; it doesn't say it's done (#92).
+QUESTION = re.compile(
+    r"\?\s*$|^\s*(?:did|didn[\u2019']?t|have|haven[\u2019']?t|has|hasn[\u2019']?t|when|was|wasn[\u2019']?t)\b",
+    re.IGNORECASE,
+)
+SAYS_DONE = re.compile(  # ...unless it says so too ("done, what's next?", "can you mark it")
+    r"^\s*(?:done|all done|did it|i did|finished|yes|yep|yeah)\b|"
+    r"\b(?:mark|tick|check (?:it |that )?off|cross (?:it |that )?off|log|note)\b",
+    re.IGNORECASE,
+)
+SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it
 
 
 def is_medicine(title: str) -> bool:
@@ -958,7 +969,7 @@ class TaskBoard:
         if task.repeat is not None and task.repeat.before_sunset is not None:
             at = self.time_of(task, self._today())
             parts.append(
-                f"today that's about {_clock_words(at)}"
+                f"today that's about {clock_words(at)}"
                 if at
                 else "sunset needs the home address (the Family page)"
             )
@@ -1321,8 +1332,8 @@ class TaskBoard:
         day = f"{task.due_on:%a %d %b}"
         at = task.due_time or (task.repeat.at if task.repeat else None)
         if task.from_time and task.due_time:
-            return f"{day}, {_clock_words(task.from_time)}-{_clock_words(task.due_time)}"
-        return f"{day}, {_clock_words(at)}" if at else day
+            return f"{day}, {clock_words(task.from_time)}-{clock_words(task.due_time)}"
+        return f"{day}, {clock_words(at)}" if at else day
 
     async def make_either(self, task_id: int) -> Task:
         """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
@@ -1349,7 +1360,7 @@ class TaskBoard:
         self.withdraw_prompt(task)
         if until is not None:
             local = until.astimezone(self._tz())
-            when = _clock_words(local)
+            when = clock_words(local)
             if local.date() != self._today():  # bug #54: say which day, when it isn't today
                 when = f"{local:%a %d %b}, {when}"
             return UNTIL_TEXT.format(title=task.title, when=when)
@@ -1664,6 +1675,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
     phrase = args["repeat"].strip()
     try:
+        _check_meant(ctx, board.get(args["task_id"]), "Not changed")
         repeat = parse(phrase, board._today()) if phrase else None
         task = await board.set_schedule(
             args["task_id"],
@@ -1689,7 +1701,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     upcoming = board.next_dates(task, 1) if task.repeat else []
     if upcoming:
         when = upcoming[0]
-        clock_time = f", {_clock_words(when)}" if task.repeat and task.repeat.at else ""
+        clock_time = f", {clock_words(when)}" if task.repeat and task.repeat.at else ""
         text += f" Next: {when:%a %d %b}{clock_time}."
     elif task.due_on is not None and task.due_before_task is not None:
         text += f" Next: {task.due_on:%a %d %b}."
@@ -1707,7 +1719,7 @@ def _day_words(day: date, today: date) -> str:
     return f"{day:%a %d %b}" if day.year == today.year else f"{day:%a %d %b %Y}"
 
 
-def _clock_words(moment: datetime | time) -> str:
+def clock_words(moment: datetime | time) -> str:
     hour = moment.hour % 12 or 12
     suffix = "am" if moment.hour < 12 else "pm"
     return f"{hour}:{moment.minute:02d} {suffix}" if moment.minute else f"{hour} {suffix}"
@@ -1729,28 +1741,47 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "the safe way is no second dose until they've checked, or until their doctor or "
             "pharmacist says; never tell them to take it, and give no other dose advice."
         )
-    meant = _meant_instead(ctx, task)
-    if meant is not None:
-        raise ToolFailed(
-            f"Not marked done: what they said names task {meant.id} ({meant.title}), not task "
-            f"{task.id} ({task.title}). Mark the one they mean, and say which by name."
+    text = ctx.request_text
+    if QUESTION.search(text) and not SAYS_DONE.search(text):
+        raise ToolFailed(  # #92: "Didn't I just clean the bird cage?" marked it done
+            "Not marked done: they asked a question, not said it's done. Answer it (when it "
+            "was last done is in its details); mark it done only when they say it is."
         )
+    _check_meant(ctx, task, "Not marked done")
     return await _board(ctx).complete(task.id, ctx.member, interactive=True)
 
 
+def _check_meant(ctx: ToolContext, task: Task, not_done: str) -> None:
+    meant = _meant_instead(ctx, task)
+    if meant is not None:
+        raise ToolFailed(
+            f"{not_done}: what they said names task {meant.id} ({meant.title}), not task "
+            f"{task.id} ({task.title}). Use the one they mean, and say which by name."
+        )
+
+
 def _meant_instead(ctx: ToolContext, task: Task) -> Task | None:
-    """Another open task their words name, when they name nothing of this one ("We contacted
-    Erin's parents" marked the bins done, 2026-10-29). Just "done" names nothing: no check."""
-    said = ctx.request_text
-    if words_in_common(said, task.title):
-        return None
+    """Another open task the conversation names, when it names nothing of this one ("We
+    contacted Erin's parents" marked the bins done, 2026-10-29). A short answer ("Yes please")
+    is read with what Themi asked before it (#92). Just "done" names nothing: no check."""
     board = _board(ctx)
     rows = board.db.query(
         "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND id != ?", (task.id,)
     )
-    scored = [(words_in_common(said, t.title), t) for t in map(board.get, (r["id"] for r in rows))]
-    best = max(scored, key=lambda pair: pair[0], default=None)
-    return best[1] if best is not None and best[0] >= 2 else None
+    others = [board.get(r["id"]) for r in rows]
+    texts = [ctx.request_text]
+    if len(ctx.request_text.split()) <= SHORT_ANSWER:
+        texts.append(ctx.said_before)
+    for said in texts:
+        if words_in_common(said, task.title):
+            return None
+        scored = [(words_in_common(said, t.title), t) for t in others]
+        best = max(scored, key=lambda pair: pair[0], default=None)
+        if best is not None and best[0] >= 2:
+            return best[1]
+        if best is not None and best[0]:
+            return None  # a word of another's isn't enough to go on
+    return None
 
 
 @tool(
@@ -1760,9 +1791,11 @@ def _meant_instead(ctx: ToolContext, task: Task) -> Task | None:
 )
 async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     try:
-        return await _board(ctx).cancel(args["task_id"], ctx.member, interactive=True)
+        task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _check_meant(ctx, task, "Not taken off")
+    return await _board(ctx).cancel(task.id, ctx.member, interactive=True)
 
 
 @tool(
@@ -1787,6 +1820,7 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    _check_meant(ctx, task, "Not changed")
     said = str(args["due_date"]).strip().lower()
     try:
         due = task.due_on if not said else None if said == "none" else date.fromisoformat(said)

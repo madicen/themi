@@ -355,9 +355,17 @@ class Agent:
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
         before = next((m.text for m in reversed(history) if m.direction == "in"), "")
+        said = next((m.text for m in reversed(history) if m.direction == "out"), "")
         # P1: the tools this message and the last few call for; more_tools adds to them.
         groups = choose_groups([text, *(m.text for m in history[-4:])])
-        ctx = ToolContext(member, services, request_text=text, previous_text=before, groups=groups)
+        ctx = ToolContext(
+            member,
+            services,
+            request_text=text,
+            previous_text=before,
+            said_before=said,
+            groups=groups,
+        )
         offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
         timer.route(offered, len(services.tools.specs(groups)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).

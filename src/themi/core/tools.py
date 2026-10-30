@@ -41,6 +41,7 @@ class ToolContext:
     services: Services
     request_text: str = ""  # what the person wrote this turn, for "did they ask for it?"
     previous_text: str = ""  # their message before it, for a follow-up like "and limes"
+    said_before: str = ""  # Themi's last message to them, for an answer like "Yes please"
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
