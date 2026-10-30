@@ -3,19 +3,25 @@ word lists set the floor; a change that loses recall fails here."""
 
 from __future__ import annotations
 
-from tests.evals.routing import format_routing, route_cases, totals
-from tests.evals.scoring import Case
+from tests.evals.routing import (
+    KINDS,
+    format_routing,
+    load_routing_cases,
+    route_cases,
+    totals,
+)
+from tests.evals.scoring import Case, load_cases
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
-from themi.core.tools import GROUPS, TOOL_GROUPS
+from themi.core.tools import GROUP_EXAMPLES, GROUPS, TOOL_GROUPS
 
-# choose_groups: 11/12 on 2026-10-29 (P3's Notes); 21/25 once P6 added the twins cases, whose
-# misses are "lie down", "hold the meal reminders" and "don't send me" (the settings group).
-BASELINE_RECALL = 21 / 25
+# choose_groups: 11/12 on 2026-10-29 (P3's Notes); 21/25 once P6 added the twins cases;
+# 95/109 once P7a added the routing cases (74/84 of those; paraphrases miss most).
+BASELINE_RECALL = 95 / 109
 
 
 def case(id: str, message: str, *expect: str, any_of: tuple[str, ...] = ()) -> Case:
@@ -72,3 +78,50 @@ async def test_the_word_lists_keep_their_recall(
     t = totals(routed)
     assert t.needing > 0 and all(name in TOOL_GROUPS for r in routed for name in r.missing)
     assert t.recall >= BASELINE_RECALL
+
+
+# ----- P7a: routing cases and group examples ------------------------------------------
+
+
+def _key(text: str) -> str:
+    return " ".join(text.lower().split()).strip(" ?.!")
+
+
+async def test_the_routing_cases_load_and_name_built_tools(
+    scenario: Scenario,
+    fake_gmail: FakeGmail,
+    fake_gcal: FakeGcal,
+    fake_cozyla: FakeCozyla,
+    fake_ourgroceries: FakeOurGroceries,
+    fake_travel: FakeTravel,
+) -> None:
+    cases = load_routing_cases()
+    assert 80 <= len(cases) <= 110
+    assert len({c.id for c in cases}) == len(cases)
+    assert {c.category for c in cases} == set(KINDS)
+    built = {s.name for s in scenario.app.services.tools.specs()}
+    for c in cases:
+        assert c.needs or c.needs_any, c.id
+        assert set((*c.needs, *c.needs_any)) <= built, c.id
+    assert all(len(c.texts) == 2 for c in cases if c.category == "follow-up")
+
+
+def test_every_group_has_examples_and_cases() -> None:
+    assert set(GROUP_EXAMPLES) == set(GROUPS)
+    for group, examples in GROUP_EXAMPLES.items():
+        assert 10 <= len(examples) <= 20, group
+        assert len({_key(e) for e in examples}) == len(examples), group
+    needed = {
+        TOOL_GROUPS[name]
+        for c in load_routing_cases()
+        for name in (*c.needs, *c.needs_any)
+        if name in TOOL_GROUPS
+    }
+    assert needed == set(GROUPS)
+
+
+def test_no_example_is_also_a_case() -> None:
+    cases = {_key(t) for c in load_routing_cases() for t in c.texts}
+    cases |= {_key(c.message) for c in load_cases()}
+    examples = {_key(e) for examples in GROUP_EXAMPLES.values() for e in examples}
+    assert not examples & cases

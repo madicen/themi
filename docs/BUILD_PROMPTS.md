@@ -92,7 +92,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
-| P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
+| P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
@@ -4530,7 +4530,7 @@ Notes (2026-10-30):
 - Follow-up: run the task and email cases after P6 on a fresh day's quota.
 
 ### P7a · Routing data: the family's kinds of message, labelled
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: P3, P5 (only if P5 keeps routing)
 The router eval (P3) has 12 cases that need a group: too few to compare routers on. An
 embedding router also needs example phrases per group, kept apart from the cases it's
@@ -4552,6 +4552,23 @@ scored on.
 
 Tests: both files load, every group named exists, no example is also a case, every group
 has examples and cases.
+
+Notes (2026-10-30):
+- `tests/evals/routing_cases.json`: 93 cases (46 plain, 23 paraphrase, 13 follow-up with
+  the message before, 11 two-asks), drafted from the kinds of thing in the family's chat
+  (353 messages read locally) and paraphrased: no names, places, health or money details
+  of theirs. Reviewed by the user, 2026-10-30.
+- Deviation: a case names the *tools* it needs (`tools`, or `any_of` for either), and the
+  groups follow from `TOOL_GROUPS`. Labels survive a tool moving group, and recall counts
+  tools a twin set (P6) brings along.
+- `GROUP_EXAMPLES` in `themi.core.tools`: 12 per group, written fresh; a test checks none
+  is a case.
+- `tests/evals/routing.py` reads both files (`Routable`, `load_routing_cases`); a router
+  gets the message and the one before it.
+- Word lists, new baseline: 74/84 on the routing cases (plain 36/37, paraphrase 14/23,
+  follow-up 13/13, two-asks 11/11), 95/109 with the eval cases; median 33 tools sent.
+  Misses are mostly paraphrases: "lie down", "need a nap", "hold the meal reminders",
+  "turn the laundry nudges back on", "it came to $35", "when could I fit in...".
 
 ### P7b · An embedding router, if P5 says routing stays
 Status: [ ]
