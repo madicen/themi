@@ -44,6 +44,9 @@ class ToolContext:
     said_before: str = ""  # Themi's last message to them, for an answer like "Yes please"
     # Each tool call this turn: "ok", "declined" (nothing to do) or "failed".
     outcomes: list[str] = field(default_factory=list)
+    # A tool sent the answer itself, word for word (a day summary): the model's reply is
+    # kept only as a short line (bug #89: it wrote the day out again).
+    answered: list[str] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
     groups: set[str] = field(default_factory=set)
 

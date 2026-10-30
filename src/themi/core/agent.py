@@ -126,6 +126,7 @@ BUSY_TEXT = (
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
+SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
 
 
@@ -197,8 +198,9 @@ class Agent:
             async with channel.typing(member), self._slow_notice(member, event, timer):
                 reply = await self._converse(member, text, event, timer)
             self._catch_energy(member, text, energy_mark)
-            async with timer.outbox():
-                await self._reply(member, reply)
+            if reply:  # empty when a tool's message was the whole answer
+                async with timer.outbox():
+                    await self._reply(member, reply)
         finally:
             timer.finish()
 
@@ -376,6 +378,8 @@ class Agent:
                 response = await client.chat(system, messages, services.tools.specs(ctx.groups))
                 if not response.tool_calls:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
+                        return ""  # the tool's message was the answer (bug #89)
                     reply = _by_name(reply, self._task_title)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True

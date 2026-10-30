@@ -93,6 +93,23 @@ async def test_what_is_on_today_on_request(scenario: Scenario, linked: FakeGcal)
     assert replies[0] == "Thu 22 Oct:\n- 10-11 am: Tomorrow's thing"
 
 
+async def test_the_summary_isnt_said_twice(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #89 ("why does this question result in two different day summary messages?"):
+    the model wrote its own version of the day after the summary had gone."""
+    await erins_day(scenario, linked)
+    scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.queue_text(
+        "Today you have the dentist at 3 pm and a few tasks.\n\nYour tasks due today are "
+        "calling the vet and returning the library books."
+    )
+    replies = await scenario.say("Erin", "What's my schedule for today?")
+    assert replies == [TODAY]
+    scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.queue_text("A full day, but the afternoon is open.")
+    replies = await scenario.say("Erin", "What's on today?")
+    assert replies == [TODAY, "A full day, but the afternoon is open."]  # a short line stays
+
+
 async def test_a_chore_waiting_for_the_chart_is_in_tomorrows_summary(
     scenario: Scenario, linked: FakeGcal
 ) -> None:
