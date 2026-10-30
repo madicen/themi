@@ -90,7 +90,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
-| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [~] |
+| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [ ] |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
@@ -4391,7 +4391,7 @@ loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong g
 add, and the review labels it a model choice.
 
 ### P5 · Evals that can compare: repeats, timings, and every tool vs groups
-Status: [~]
+Status: [x] 2026-10-30
 Depends on: P3
 From the routing talk (2026-10-29): routing changes get decided by measurement. Today an
 eval run gives one pass or fail per case, with no times, and one run of Gemini can't tell
@@ -4423,7 +4423,7 @@ Tests: repeats aggregate (a case passing 2 of 3 is flaky, not failing); timings 
 read back by `rescore`; `--routing all` sends every tool and no `more_tools`; the setting
 does the same in a scenario; the comparison picks out always/never differences.
 
-Notes (2026-10-29, in progress: the harness is built, the runs aren't done):
+Notes (2026-10-30):
 - The rule was agreed as proposed (2026-10-29). It's written into
   `tests/evals/compare.py`, which prints the verdict.
 - `THEMI_TOOL_ROUTING` (`Settings.tool_routing`, `Services.tool_routing`, `build_app`,
@@ -4434,10 +4434,28 @@ Notes (2026-10-29, in progress: the harness is built, the runs aren't done):
   limiter's waits: `MinuteLimiter.waited`), `tools_sent` and `tools_chars` (first
   conversation call). Results are named `<provider>-<routing>-<stamp>.json`. The summary
   adds the medians and the flaky cases; `rescore.load_run` reads it all back.
-- Remaining: the two runs and the decision. They need a test Gemini key (not the family's
-  own, per the evals README), about 600 requests in all:
-  `GEMINI_TEST_API_KEY=... THEMI_EVAL_MODEL=gemini-3.5-flash-lite THEMI_EVAL_FALLBACK_MODEL=gemini-3.1-flash-lite make evals EVAL_ARGS='--repeat 3'`,
-  the same with `--routing all`, then `python -m tests.evals.compare <groups> <all>`.
+- Evals read only `GEMINI_TEST_API_KEY` (env or `.env`) and skip without it; the family's
+  `GEMINI_API_KEY` sits in the same `.env` and was used by mistake for about 10 requests
+  before this. The summary also prints "Failed every run:".
+- Runs (2026-10-30, 3 repeats each). Groups on gemini-3.5-flash-lite (fallback 3.1):
+  142/150, median 2.9 s and 24 tools a case. 3.5's free daily quota then ran out, so both
+  arms went again on gemini-3.1-flash-lite, no fallback. Groups: 142/150 (94.7%), median
+  2.2 s, 24 tools (16,712 characters). All: 49 tools (29,546 characters); its quota ran
+  out after 15 of 55 cases.
+- Compared on the 13 cases both arms ran fully (energy notes and pantry):
+  groups 39/39 runs, all 35/39; median 3.0 s vs 2.0 s. No case flipped always/never;
+  all lost runs on pantry-add-cumin (1/3: said "I've added" with the pantry tools also
+  in reach), energy-husband and energy-meetings (2/3 each). **Verdict: groups stays**
+  (all passes more than one case fewer). Sending every tool wasn't slower, so size isn't
+  the cost; choosing among near-twins is, which is P6's job. P7a/P7b stay on.
+- Caveat: one category pair, not the whole set. A full `--routing all` run on 3.5 (on a
+  fresh day's quota) would confirm it; `python -m tests.evals.compare` against
+  `gemini-groups-20261030-0602.json` does the rest.
+- Seen in passing, not P5's: task-have-partner-do-it fails 3/3 on both models because the
+  prompt's example names "Michael" (prompts.py, "can you have Michael get the pacifier")
+  and the eval family's husband is "Husband", so the model copies the example. Reword the
+  examples to "my husband". energy-medium-day's `show_lists` call is reasonable; the case
+  could allow it.
 
 ### P6 · Near-twin tools: sent together, told apart, tested both ways
 Status: [ ]
