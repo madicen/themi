@@ -80,6 +80,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.connectors.cozyla import CozylaClient
+    from themi.connectors.homeconnect import HomeConnectClient
     from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.connectors.travel import TravelClient
     from themi.runtime import Runtime
@@ -107,6 +108,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
         cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
         travel=TravelClient(settings.tomtom_api_key),
+        home_connect=HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
         tool_routing=settings.tool_routing,
     )
     return Runtime(

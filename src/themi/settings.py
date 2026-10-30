@@ -17,6 +17,8 @@ from themi.backup.s3 import S3Config
 from themi.backup.snapshots import BackupConfig
 from themi.connectors.cozyla.client import CozylaConfig
 from themi.connectors.google.oauth import GoogleConfig
+from themi.connectors.homeconnect.client import BASE_URL as HOME_CONNECT_URL
+from themi.connectors.homeconnect.client import HomeConnectConfig
 from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
@@ -69,6 +71,10 @@ class Settings(BaseModel):
     cozyla_chores: bool = False
     # K4: TomTom's routing with live traffic; without it, a free geocoder and an estimate.
     tomtom_api_key: Secret | None = None
+    # H1: the dishwasher, through Home Connect's API (a developer app's client id and secret).
+    home_connect_client_id: str = ""
+    home_connect_client_secret: Secret | None = None
+    home_connect_url: str = HOME_CONNECT_URL
     backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
@@ -100,6 +106,14 @@ class Settings(BaseModel):
             self.cozyla_todo_list,
             self.cozyla_device_sn,
             chores=self.cozyla_chores,
+        )
+
+    def home_connect(self) -> HomeConnectConfig | None:
+        """Home Connect, if a client id and secret are set."""
+        if not self.home_connect_client_id or self.home_connect_client_secret is None:
+            return None
+        return HomeConnectConfig(
+            self.home_connect_client_id, self.home_connect_client_secret, self.home_connect_url
         )
 
     @classmethod
@@ -155,6 +169,14 @@ class Settings(BaseModel):
             problems.append(
                 "OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD go together; set both or neither"
             )
+        if bool(get("HOME_CONNECT_CLIENT_ID")) != bool(get("HOME_CONNECT_CLIENT_SECRET")):
+            problems.append(
+                "HOME_CONNECT_CLIENT_ID and HOME_CONNECT_CLIENT_SECRET go together; "
+                "set both or neither"
+            )
+        home_connect_url = get("HOME_CONNECT_URL")
+        if home_connect_url and not home_connect_url.startswith(("https://", "http://127.0.0.1")):
+            problems.append(f"HOME_CONNECT_URL must be an https:// address, not {home_connect_url}")
         if bool(get("COZYLA_EMAIL")) != bool(get("COZYLA_PASSWORD")):
             problems.append("COZYLA_EMAIL and COZYLA_PASSWORD go together; set both or neither")
 
@@ -188,6 +210,7 @@ class Settings(BaseModel):
         grocery_password = get("OURGROCERIES_PASSWORD")
         cozyla_password = get("COZYLA_PASSWORD")
         tomtom_key = get("TOMTOM_API_KEY")
+        home_connect_secret = get("HOME_CONNECT_CLIENT_SECRET")
         endpoints = {
             field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
         }
@@ -214,6 +237,11 @@ class Settings(BaseModel):
             cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
             cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
             tomtom_api_key=Secret(tomtom_key) if tomtom_key else None,
+            home_connect_client_id=get("HOME_CONNECT_CLIENT_ID"),
+            home_connect_client_secret=(
+                Secret(home_connect_secret) if home_connect_secret else None
+            ),
+            home_connect_url=home_connect_url.rstrip("/") or HOME_CONNECT_URL,
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),
