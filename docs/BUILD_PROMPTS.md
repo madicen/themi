@@ -132,7 +132,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35 | Meal reminders, takeout rescue, cart staging | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
-| R2 | Research: Google Home | 7 Research | [ ] |
+| R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [ ] |
 
@@ -5891,7 +5891,7 @@ Do:
 Commit when done.
 
 ### R2 · Research: Google Home
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: none
 From Michael's idea #21 ("google home integration", 2026-10-27). Find out what would help and
 what's possible before building anything:
@@ -5903,6 +5903,33 @@ what's possible before building anything:
   unreviewed.
 - The plan's rule that device connections read status only and never control anything:
   anything beyond reading needs the family's decision and a plan change first.
+
+Notes (2026-10-30), research. Web sources checked that day; where nothing current confirmed a
+detail, it says so.
+- Asking Themi by voice ("Hey Google, ask Themi..."): there's no way in. Conversational
+  Actions were retired in 2023, and Gemini for Home (now on the Nest speakers) has no
+  public SDK for custom voice apps. "Gemini built in" (May 2026) is a program for hardware
+  partners. What does work is GT1a: "Hey Google, add a task ..." lands in Google Tasks, and
+  Themi takes it from there.
+- Themi speaking on a speaker:
+    - Broadcasting from a phone was removed in February 2024.
+    - The Assistant SDK route (Home Assistant's `google_assistant_sdk` broadcast) is
+      unofficial, and nothing confirmed it still works since Gemini replaced the Assistant.
+    - Playing speech over Google Cast (text to speech, cast to the speaker) is what Home
+      Assistant and Node-RED do. It needs Themi, or a small relay, on the home network:
+      Cast is local, so a cloud server can't reach the speaker. Not confirmed on current
+      Gemini speakers.
+- Reading the home's devices as signals:
+    - The Google Home APIs (Device, Structure, Automation) are phone-app SDKs for Android
+      and iOS. A server can't call them without a companion app on a phone.
+    - The Smart Device Management API (Device Access: $5 once, a consumer Google account)
+      is a cloud REST API for Nest thermostats, cameras, doorbells and the Hub Max. It fits
+      Themi's server and the plan's "read status only" rule.
+- The plan's rule holds: device connections only read. Speaking on a speaker isn't control
+  of a device, but it is a new way of reaching people, so it'd need the family's yes and a
+  plan change (quiet hours, PDA phrasing, the outbox's timing).
+- Decided (Michael, 2026-10-30): nothing more for now. The Google Tasks inbox (GT1a) covers
+  voice. Speaking on a speaker and Nest devices as signals can come back as prompts.
 
 
 ### GT1a · Google Tasks as an inbox: voice-added items processed, then removed
