@@ -108,7 +108,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
-| R1 | Routines kept in Themi | Feedback | [ ] |
+| R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [ ] |
+| R1b | Routines kept in Themi: the wall, both ways | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
 | K3 | Calendars: creating and changing events | Calendars | [x] |
@@ -5395,14 +5396,61 @@ Notes (2026-10-30):
 - Not run: the model evals.
 - Setup: restart. No migration.
 
-### R1 · Routines kept in Themi
-Status: [ ]
-Depends on: F18c, C3
+### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
 Default morning, afternoon, and evening, but customizable number of routines and when they
-each happen." Read the plan's routine sections and C3's notes first; this needs a design
-pass with the user (how it relates to the wall's routines, and which one wins) before it's
-built. Split it then.
+each happen."
+
+Decided with Michael (2026-10-30), after reading C3's notes:
+- Themi owns the routines. The wall shows each one under whichever of its three parts
+  (Morning, Afternoon, Evening) the routine's window starts in.
+- Routines are changed in chat and on the wall. A change made on the wall comes into
+  Themi, as the to-do sync does (C1b): an item added, renamed, deleted, moved to another
+  part or given other days there. A change Themi hasn't sent yet wins over one made on the
+  wall.
+- The wall's routines today (walk the dog, Cycle Dishwasher, meds, bins) come into Themi
+  once, on the first sync.
+- A routine is a name and a time window per person ("Before school", 7:00 to 8:00). Its
+  check comes as the window ends, listing what's still open.
+- Everyone starts with Morning, Afternoon and Evening.
+
+### R1a · Routines kept in Themi: routines, items and checks, from chat
+Status: [ ]
+Depends on: R1
+Build:
+- Each person's routines: a name and a window (start and end, local time). Everyone starts
+  with Morning (8:00 to 12:00), Afternoon (12:00 to 17:00) and Evening (17:00 until an hour
+  before quiet hours, as C3's evening check), and can add, rename, re-time or remove them.
+- Items on a routine: a title, and the days it applies (every day by default; set days like
+  "Tue and Thu"; or just today). They're ticked once a day.
+- The check: as a routine's window ends, if any of today's items are open, one message
+  lists them, with a button per item that ticks it, and "Skip today" (C3's wording and
+  buttons). All done: nothing sent. Each check feeds the energy model as C3's does: device
+  activity, a small lift or dip, in words.
+- Chat: tools to show someone's routines, add or remove a routine (with its window), add,
+  move or remove an item, and tick an item ("I walked the dog"). Changes to their own
+  routines need no card (asked for in their own words); someone else's go through a
+  category, as `wall_routine_add` does.
+- The wall isn't touched yet: C3 keeps running as it is until R1b.
+Tests: the defaults; a custom routine checked as its window ends; items on set days; ticking
+from a button and from chat; skip today; the energy signal; changes from chat.
+
+### R1b · Routines kept in Themi: the wall, both ways
+Status: [ ]
+Depends on: R1a, C3, F18d
+Build:
+- The first sync brings the wall's routines into Themi. Each item goes to the person's
+  routine for its part (Morning, Afternoon, Evening), with its days.
+- Then each sync, both ways. Themi's items go on the wall under the part their routine's
+  window starts in (`part_of_day`), with their days and their order (`displayOrder`, as C3
+  places items). A change on the wall comes into Themi: an item added there goes to the
+  person's first routine starting in that part; renamed, deleted, moved to another part, or
+  given other days, the same. A change Themi hasn't sent yet wins. Ticks go both ways.
+- C3's own checks stop for anyone whose routines are in Themi, so nothing is checked
+  twice. Themi's check-ins (F8) stay as they are.
+Tests: the first import; an item made in Themi shown on the wall in the right part; each kind
+of wall change coming in; a conflict won by Themi's pending change; ticks both ways; no
+double checks.
 
 ### K1 · Calendars: read your own, privately
 Status: [x] 2026-10-26
