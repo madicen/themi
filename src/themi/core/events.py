@@ -652,7 +652,8 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         ADD,
         payload,
     )
-    return replace(proposal, requested=asked_for(title, ctx.request_text))
+    # Over by then, it's no use (bug #90's thread: Tuesday's card still waited on Thursday).
+    return replace(proposal, requested=asked_for(title, ctx.request_text), expires=when.ends)
 
 
 @staged_tool(

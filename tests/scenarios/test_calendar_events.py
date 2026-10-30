@@ -101,6 +101,21 @@ async def test_mentioned_but_not_asked_its_a_card(scenario: Scenario, linked: Fa
     assert "Plumber" in on_primary(linked)
 
 
+async def test_a_card_to_add_an_event_lapses_once_its_over(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #90's thread: "Time for Go for a run: Tue 27 Oct, 2-3 pm" still waited on Thursday."""
+    await say(
+        scenario,
+        "The plumber's coming at 10",
+        "add_calendar_event",
+        dentist(title="Plumber", date="2026-10-21", start="10:00", location=""),
+    )
+    await scenario.advance(hours=2, minutes=5)  # 11:05, the hour's over
+    await scenario.run_periodic("approvals.expire")
+    assert scenario.app.db.scalar("SELECT status FROM pending_actions") == "expired"
+
+
 async def test_unclear_or_past_times_are_refused(scenario: Scenario, linked: FakeGcal) -> None:
     await say(
         scenario,
