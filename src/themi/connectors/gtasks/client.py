@@ -1,9 +1,10 @@
 """A small Google Tasks REST client (API v1) over `httpx` (GT1a).
 
-Only what Themi needs: the open tasks on a list, and deleting one. "@default" is
-the account's default list ("My Tasks"), where "Hey Google, add a task" puts
-them. The API has no push notifications, so callers poll. Like the Calendar
-client, a 401 drops the cached access token and retries once.
+Only what Themi needs: the open tasks on a list and deleting one (GT1a); the
+lists, making one, and writing tasks to it (GT1b). "@default" is the account's
+default list ("My Tasks"), where "Hey Google, add a task" puts them. The API
+has no push notifications, so callers poll. Like the Calendar client, a 401
+drops the cached access token and retries once.
 """
 
 from __future__ import annotations
@@ -60,6 +61,35 @@ class TasksClient:
             page = body.get("nextPageToken")
             if not page:
                 return sorted(items, key=lambda i: str(i.get("updated", "")))
+
+    async def lists(self) -> list[dict[str, Any]]:
+        body = await self._request("GET", "/users/@me/lists", params={"maxResults": str(PAGE)})
+        return list(body.get("items", []))
+
+    async def create_list(self, title: str) -> str:
+        body = await self._request("POST", "/users/@me/lists", json={"title": title})
+        return str(body["id"])
+
+    async def all_tasks(self, list_id: str) -> list[dict[str, Any]]:
+        """Every task on the list, done ones too (also those done in Google's own apps)."""
+        items: list[dict[str, Any]] = []
+        page: str | None = None
+        while True:
+            params = {"showCompleted": "true", "showHidden": "true", "maxResults": str(PAGE)}
+            if page:
+                params["pageToken"] = page
+            body = await self._request("GET", _tasks(list_id), params=params)
+            items.extend(body.get("items", []))
+            page = body.get("nextPageToken")
+            if not page:
+                return items
+
+    async def insert_task(self, list_id: str, task: dict[str, Any]) -> str:
+        body = await self._request("POST", _tasks(list_id), json=task)
+        return str(body["id"])
+
+    async def patch_task(self, list_id: str, task_id: str, changes: dict[str, Any]) -> None:
+        await self._request("PATCH", f"{_tasks(list_id)}/{quote(task_id, safe='')}", json=changes)
 
     async def delete_task(self, list_id: str, task_id: str) -> None:
         """Gone already counts as done."""

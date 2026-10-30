@@ -1,12 +1,14 @@
-"""A local fake of the Google Tasks API (v1), enough for the inbox (GT1a).
+"""A local fake of the Google Tasks API (v1): the inbox (GT1a) and Themi's own list (GT1b).
 
-    fake_gtasks.add("erin@gmail.com", "Buy milk")          # said to a speaker
+    fake_gtasks.add("erin@gmail.com", "Buy milk")          # said to a speaker: My Tasks
     fake_gtasks.add("erin@gmail.com", "Plumber", due="2026-10-23T00:00:00.000Z")
     fake_gtasks.titles("erin@gmail.com")                  # what's left in My Tasks
+    fake_gtasks.titles("erin@gmail.com", "Themi")         # what's on the Themi list
+    fake_gtasks.complete("erin@gmail.com", "Themi", "Call the vet")  # done in Google
     fake_gtasks.fail("delete", 503)
 
-Requests are authorised with access tokens from the fake Google. Each address
-has its own default list ("@default"), as in Google.
+Requests are authorised with access tokens from the fake Google. Each address has its
+own lists; "@default" is its "My Tasks", as in Google.
 """
 
 from __future__ import annotations
@@ -27,19 +29,30 @@ from tests.fakes.google_oauth import FakeGoogle
 from themi import clock
 from themi.connectors.google import GoogleConfig
 
+DEFAULT = "My Tasks"
+
+
+def _now() -> str:
+    return clock.now().astimezone(UTC).isoformat().replace("+00:00", "Z")
+
 
 class FakeGtasks:
     def __init__(self, google: FakeGoogle) -> None:
         self.google = google
         self._lock = threading.Lock()
         self._ids = count(1)
-        self.tasks: dict[str, dict[str, dict[str, Any]]] = {}  # address -> id -> task
+        # address -> list id -> {"title": ..., "tasks": {task id: task}}
+        self.accounts: dict[str, dict[str, dict[str, Any]]] = {}
         self.failures: dict[str, list[int]] = {}
         self.calls: list[tuple[str, str]] = []  # (endpoint, address)
         self.page_size = 100
         self.app = FastAPI()
+        self.app.add_api_route("/tasks/v1/users/@me/lists", self._lists, methods=["GET"])
+        self.app.add_api_route("/tasks/v1/users/@me/lists", self._make_list, methods=["POST"])
         base = "/tasks/v1/lists/{lid}/tasks"
         self.app.add_api_route(base, self._list, methods=["GET"])
+        self.app.add_api_route(base, self._insert, methods=["POST"])
+        self.app.add_api_route(f"{base}/{{tid}}", self._patch, methods=["PATCH"])
         self.app.add_api_route(f"{base}/{{tid}}", self._delete, methods=["DELETE"])
         self._background = BackgroundServer(self.app)
 
@@ -58,59 +71,117 @@ class FakeGtasks:
 
     def reset(self) -> None:
         with self._lock:
-            self.tasks, self.failures, self.calls = {}, {}, []
+            self.accounts, self.failures, self.calls = {}, {}, []
             self.page_size = 100
 
     # ----- scripting ----------------------------------------------------------
 
     def add(
-        self, address: str, title: str, *, notes: str = "", due: str = "", done: bool = False
+        self,
+        address: str,
+        title: str,
+        *,
+        notes: str = "",
+        due: str = "",
+        done: bool = False,
+        list_title: str = DEFAULT,
     ) -> str:
         task_id = f"t{next(self._ids)}"
         task: dict[str, Any] = {
             "id": task_id,
             "title": title,
             "status": "completed" if done else "needsAction",
-            "updated": clock.now().astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            "updated": _now(),
         }
         if notes:
             task["notes"] = notes
         if due:
             task["due"] = due
-        self.tasks.setdefault(address.lower(), {})[task_id] = task
+        self._named(address, list_title)["tasks"][task_id] = task
         return task_id
 
-    def titles(self, address: str) -> list[str]:
-        return [t["title"] for t in self.tasks.get(address.lower(), {}).values()]
+    def titles(self, address: str, list_title: str = DEFAULT, *, done: bool = False) -> list[str]:
+        """Open tasks on that list (or done ones, with `done`)."""
+        tasks = self._named(address, list_title)["tasks"].values()
+        return [t["title"] for t in tasks if (t["status"] == "completed") == done]
+
+    def task(self, address: str, list_title: str, title: str) -> dict[str, Any]:
+        return next(
+            t for t in self._named(address, list_title)["tasks"].values() if t["title"] == title
+        )
+
+    def complete(self, address: str, list_title: str, title: str) -> None:
+        """Ticked in Google's own app: completed, and hidden from a plain list."""
+        self.task(address, list_title, title).update(status="completed", hidden=True)
+
+    def has_list(self, address: str, title: str) -> bool:
+        return any(lst["title"] == title for lst in self._box(address).values())
 
     def fail(self, endpoint: str, status: int, *, times: int = 1) -> None:
-        """Endpoints: list, delete."""
+        """Endpoints: lists, make_list, list, insert, patch, delete."""
         self.failures.setdefault(endpoint, []).extend([status] * times)
 
     # ----- plumbing -----------------------------------------------------------
 
-    def _open(
-        self, request: Request, endpoint: str, lid: str
-    ) -> tuple[str | None, Response | None]:
+    def _box(self, address: str) -> dict[str, dict[str, Any]]:
+        box = self.accounts.setdefault(address.lower(), {})
+        box.setdefault("default", {"title": DEFAULT, "tasks": {}})
+        return box
+
+    def _named(self, address: str, title: str) -> dict[str, Any]:
+        box = self._box(address)
+        for lst in box.values():
+            if lst["title"] == title:
+                return lst
+        list_id = f"l{next(self._ids)}"
+        box[list_id] = {"title": title, "tasks": {}}
+        return box[list_id]
+
+    def _open(self, request: Request, endpoint: str) -> tuple[str | None, Response | None]:
         token = request.headers.get("Authorization", "").removeprefix("Bearer ")
         address = self.google.state.access_tokens.get(token)
         self.calls.append((endpoint, address or "?"))
         if address is None:
             return None, JSONResponse({"error": {"code": 401}}, status_code=401)
-        if lid != "@default":
-            return None, JSONResponse({"error": {"code": 404}}, status_code=404)
         queued = self.failures.get(endpoint)
         if queued:
             return None, JSONResponse({"error": {"code": queued[0]}}, status_code=queued.pop(0))
         return address.lower(), None
 
-    async def _list(self, request: Request, lid: str) -> Response:
-        address, error = self._open(request, "list", lid)
+    def _list_for(self, address: str, lid: str) -> dict[str, Any] | None:
+        return self._box(address).get("default" if lid == "@default" else lid)
+
+    async def _lists(self, request: Request) -> Response:
+        address, error = self._open(request, "lists")
         if address is None:
             return error  # type: ignore[return-value]
+        items = [{"id": lid, "title": lst["title"]} for lid, lst in self._box(address).items()]
+        return JSONResponse({"kind": "tasks#taskLists", "items": items})
+
+    async def _make_list(self, request: Request) -> Response:
+        address, error = self._open(request, "make_list")
+        if address is None:
+            return error  # type: ignore[return-value]
+        title = (await request.json())["title"]
+        list_id = f"l{next(self._ids)}"
+        self._box(address)[list_id] = {"title": title, "tasks": {}}
+        return JSONResponse({"id": list_id, "title": title})
+
+    async def _list(self, request: Request, lid: str) -> Response:
+        address, error = self._open(request, "list")
+        if address is None:
+            return error  # type: ignore[return-value]
+        lst = self._list_for(address, lid)
+        if lst is None:
+            return JSONResponse({"error": {"code": 404}}, status_code=404)
         params = request.query_params
-        assert params.get("showCompleted") == "false"
-        items = [t for t in self.tasks.get(address, {}).values() if t["status"] != "completed"]
+        done_too = params.get("showCompleted", "true") == "true"
+        hidden_too = params.get("showHidden") == "true"
+        items = [
+            t
+            for t in lst["tasks"].values()
+            if (done_too or t["status"] != "completed") and (hidden_too or not t.get("hidden"))
+        ]
         start = int(params.get("pageToken") or 0)
         page = items[start : start + self.page_size]
         body: dict[str, Any] = {"kind": "tasks#tasks", "items": page}
@@ -118,12 +189,42 @@ class FakeGtasks:
             body["nextPageToken"] = str(start + self.page_size)
         return JSONResponse(body)
 
-    async def _delete(self, request: Request, lid: str, tid: str) -> Response:
-        address, error = self._open(request, "delete", lid)
+    async def _insert(self, request: Request, lid: str) -> Response:
+        address, error = self._open(request, "insert")
         if address is None:
             return error  # type: ignore[return-value]
+        lst = self._list_for(address, lid)
+        if lst is None:
+            return JSONResponse({"error": {"code": 404}}, status_code=404)
+        body = await request.json()
+        task_id = f"t{next(self._ids)}"
+        lst["tasks"][task_id] = {
+            "id": task_id,
+            "status": "needsAction",
+            "updated": _now(),
+            **body,
+        }
+        return JSONResponse(lst["tasks"][task_id])
+
+    async def _patch(self, request: Request, lid: str, tid: str) -> Response:
+        address, error = self._open(request, "patch")
+        if address is None:
+            return error  # type: ignore[return-value]
+        lst = self._list_for(address, lid)
+        task = lst["tasks"].get(tid) if lst else None
+        if task is None:
+            return JSONResponse({"error": {"code": 404}}, status_code=404)
+        task.update(await request.json())
+        task["updated"] = _now()
+        return JSONResponse(task)
+
+    async def _delete(self, request: Request, lid: str, tid: str) -> Response:
+        address, error = self._open(request, "delete")
+        if address is None:
+            return error  # type: ignore[return-value]
+        lst = self._list_for(address, lid)
         with self._lock:
-            if self.tasks.get(address, {}).pop(tid, None) is None:
+            if lst is None or lst["tasks"].pop(tid, None) is None:
                 return JSONResponse({"error": {"code": 404}}, status_code=404)
         return Response(status_code=204)
 

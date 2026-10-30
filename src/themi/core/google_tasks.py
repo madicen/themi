@@ -28,6 +28,7 @@ from themi.accounts import LinkedAccount, Member
 from themi.connectors.google import TASKS_SCOPE, GoogleAccounts, TokenRevoked
 from themi.connectors.google.oauth import OAuthError
 from themi.connectors.gtasks import DEFAULT_LIST, TasksClient, TasksError
+from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
 
@@ -64,6 +65,7 @@ class GoogleTasksInbox:
         self.store = services.store
         self.db = services.store.db
         self.agent: Agent | None = None  # set once the agent exists
+        self.task_list: GoogleTaskList | None = None  # Themi's tasks on Google Tasks (GT1b)
 
     def install(self, agent: Agent) -> None:
         self.agent = agent
@@ -77,21 +79,41 @@ class GoogleTasksInbox:
         )
 
     async def run(self) -> int:
-        """Scheduler job: handle new items in each inbox. Returns how many were handled."""
+        """Scheduler job: keep Themi's list in step (GT1b), then handle new items in each
+        inbox. Returns how many were handled."""
         handled = 0
         for member in self.store.list_members():
             if member.telegram_user_id is None:
                 continue
-            for account in self.store.linked_accounts(member.id):
-                if account.enabled and account.allows(TASKS_SCOPE):
-                    handled += await self._empty(member, account)
+            accounts = [
+                a
+                for a in self.store.linked_accounts(member.id)
+                if a.enabled and a.allows(TASKS_SCOPE)
+            ]
+            for n, account in enumerate(accounts):
+                client = self.client(account.id)
+                lists = [DEFAULT_LIST]
+                if n == 0 and self.task_list is not None:  # their first account holds it
+                    try:
+                        await self.task_list.run(member, account, client)
+                    except (TasksError, TokenRevoked, OAuthError) as exc:
+                        log.warning("Themi's list in account %s waits: %s", account.id, exc)
+                    if (theirs := self.task_list.list_id(account)) is not None:
+                        lists.append(theirs)
+                try:
+                    await self._delete_handled(client, account)
+                except (TasksError, TokenRevoked, OAuthError) as exc:
+                    log.warning("Google Tasks for account %s waits: %s", account.id, exc)
+                    continue
+                for list_id in lists:
+                    handled += await self._empty(member, account, client, list_id)
         return handled
 
-    async def _empty(self, member: Member, account: LinkedAccount) -> int:
-        client = self.client(account.id)
+    async def _empty(
+        self, member: Member, account: LinkedAccount, client: TasksClient, list_id: str
+    ) -> int:
         try:
-            await self._delete_handled(client, account)
-            items = await client.open_tasks(DEFAULT_LIST)
+            items = await client.open_tasks(list_id)
         except (TasksError, TokenRevoked, OAuthError) as exc:
             log.warning("Google Tasks for account %s waits: %s", account.id, exc)
             return 0
@@ -99,6 +121,8 @@ class GoogleTasksInbox:
         now = clock.now()
         for task in items:
             task_id = str(task["id"])
+            if self.task_list is not None and self.task_list.known(account, task_id):
+                continue  # one of Themi's own (GT1b)
             row = self.db.one(
                 "SELECT * FROM google_task_inbox WHERE account_id = ? AND task_id = ?",
                 (account.id, task_id),
@@ -112,12 +136,12 @@ class GoogleTasksInbox:
             assert self.agent is not None
             text = as_message(member, task)
             if not await self.agent.take_in(member, text, KIND):
-                self._note(account, task_id, text, "waiting", now + RETRY_AFTER)
+                self._note(account, list_id, task_id, text, "waiting", now + RETRY_AFTER)
                 return handled  # the model isn't answering: the rest wait too
-            self._note(account, task_id, text, "handled", None)
+            self._note(account, list_id, task_id, text, "handled", None)
             handled += 1
             try:
-                await client.delete_task(DEFAULT_LIST, task_id)
+                await client.delete_task(list_id, task_id)
             except (TasksError, TokenRevoked, OAuthError) as exc:
                 log.warning("Couldn't remove a handled Google Task yet: %s", exc)
                 continue
@@ -127,19 +151,26 @@ class GoogleTasksInbox:
     async def _delete_handled(self, client: TasksClient, account: LinkedAccount) -> None:
         """Items handled earlier whose delete didn't go through."""
         for row in self.db.query(
-            "SELECT task_id FROM google_task_inbox WHERE account_id = ? AND status = 'handled'",
+            "SELECT task_id, list_id FROM google_task_inbox WHERE account_id = ? "
+            "AND status = 'handled'",
             (account.id,),
         ):
-            await client.delete_task(DEFAULT_LIST, row["task_id"])
+            await client.delete_task(row["list_id"], row["task_id"])
             self._removed(account, row["task_id"])
 
     def _note(
-        self, account: LinkedAccount, task_id: str, text: str, status: str, retry: Any
+        self,
+        account: LinkedAccount,
+        list_id: str,
+        task_id: str,
+        text: str,
+        status: str,
+        retry: Any,
     ) -> None:
         self.db.execute(
             "INSERT INTO google_task_inbox (account_id, task_id, text, status, retry_after, "
-            "created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, task_id) DO UPDATE "
-            "SET status = excluded.status, retry_after = excluded.retry_after",
+            "created_at, list_id) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, task_id) "
+            "DO UPDATE SET status = excluded.status, retry_after = excluded.retry_after",
             (
                 account.id,
                 task_id,
@@ -147,6 +178,7 @@ class GoogleTasksInbox:
                 status,
                 to_utc_iso(retry) if retry else None,
                 to_utc_iso(clock.now()),
+                list_id,
             ),
         )
 

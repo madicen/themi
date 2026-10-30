@@ -50,6 +50,7 @@ from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.follow_ups import FollowUps
 from themi.core.google_tasks import GoogleTasksInbox
+from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
@@ -212,7 +213,9 @@ def build_app(
     agent = Agent(services)
     channel.handler = agent
     if services.google is not None and google is not None:
-        GoogleTasksInbox(services, services.google, google.tasks_url).install(agent)
+        inbox = GoogleTasksInbox(services, services.google, google.tasks_url)
+        inbox.task_list = GoogleTaskList(services, tasks)  # GT1b
+        inbox.install(agent)
     periodic = [
         PeriodicTask("outbox.flush", timedelta(seconds=30), outbox.flush),
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
