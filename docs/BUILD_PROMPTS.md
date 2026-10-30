@@ -106,6 +106,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
+| F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -5075,6 +5076,36 @@ Notes (2026-10-29):
   limit, still never in quiet hours, a busy time or a pause.
 - Data repaired (backups in `data/`): "Clean upstairs" (task 30) due Fri 30 Oct, its
   missed 2020 round removed; cards 179 (the tutoring move) and 78 (Tuesday's run) expired.
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### F18g · Feedback (2026-10-29): "no" closed eight tasks, a title that says "today"
+Status: [x] 2026-10-29
+Depends on: F18e, F18f
+From Erin's bugs #95 and #97 (2026-10-29, evening).
+- #97 ("Michael should have been given the task urgently for tonight, why did Themi lie and
+  say it was marked done and why do I still see the task on my list in cozyla?"): to
+  "Morning routine, still open: Walk dog. Done already?" she said "no". The model called
+  complete_task on eight open tasks, the laundry due 9 pm for either of them among them,
+  so its nudges were withdrawn, then ran out of steps.
+- #95 ("make this last exchange more streamlined"): "Tomorrow, remind me to send the
+  invoice from the tutoring session today" became that title, read back as a bare line;
+  she had to ask for the session's name and date in it.
+
+Notes (2026-10-29):
+- `complete_task` refuses a bare no ("no", "nope", "not yet"...), and a task that nothing
+  names: their message, their one before it, Themi's last message (the nudge answered),
+  or "all"/"everything". A bare "done" with no nudge before it no longer closes a task.
+- `create_task`'s result gives the due day and asks for the title and when in one line; a
+  title with "today", "tonight", "tomorrow" or the like, due another day, is to be renamed
+  with update_task to the thing itself and its date.
+- Data repaired (backup in `data/`): the eight tasks reopened through `TaskBoard.reopen`
+  (re-nudged; their wall to-dos marked to sync), from a script whose channel refused to
+  send, so the running app delivered: Michael's laundry nudge went at 9:04 pm. The
+  vacuum's nudge was held to 8 am (she'd said Later at 7:35).
+- Open: the rest of #97 (whether the laundry should have been Michael's alone, as the
+  reply said, rather than on both lists) and idea #96 (a routine check with one item has
+  one button; a "skip today" button, and a morning check held to 8:15 pm).
 - Not run: the model evals.
 - Setup: restart. No migration.
 
