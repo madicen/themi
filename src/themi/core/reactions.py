@@ -3,8 +3,8 @@
 A 👍 ❤️ or 🙏 on one of Themi's messages counts as good, a 👎 or 😕 as not,
 recorded with what kind of message it was (a nudge, a check-in, a summary, a
 chat reply, a heads-up) and how long. Approval cards are left out: a reaction
-there answers the card. A later reaction on the same message replaces the
-earlier one.
+there answers the card. So is a 👎 on a chat reply: that marks it as the wrong
+thing (P4). A later reaction on the same message replaces the earlier one.
 
 Over time that becomes a line in words ("short nudges do well; long
 summaries don't"), for the model and for the person's My week page. The
@@ -83,6 +83,8 @@ class Reactions:
         )
         if row is None or row["kind"] in CARDS:
             return
+        if "👎" in event.reaction.added and row["reply_id"] is not None:
+            return  # on a reply, 👎 marks it as the wrong thing (P4), not how it landed
         self.db.execute(
             "INSERT INTO message_reactions (member_id, outbox_id, kind, length, value, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(member_id, outbox_id) DO UPDATE SET "

@@ -72,6 +72,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.which_list import WhichList
+from themi.core.wrong_replies import WrongReplies
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
@@ -201,6 +202,7 @@ def build_app(
     habits = HabitReserve(services)
     habits.install()
     Reactions(services).install()
+    WrongReplies(services).install()
     Commands(services).install()
     FeedbackChat(services).install()
     agent = Agent(services)

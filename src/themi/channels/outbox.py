@@ -34,6 +34,7 @@ from typing import Any, Literal, Protocol
 
 from themi import clock
 from themi.accounts import AccountStore, Member
+from themi.ai.router import current_reply
 from themi.ai.types import CallKind
 from themi.channels.events import Button
 from themi.channels.pauses import PauseBook
@@ -198,8 +199,8 @@ class Outbox:
         )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
-            "send_after, deadline, created_at, link_preview, expires_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "send_after, deadline, created_at, link_preview, expires_at, reply_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id,
                 text,
@@ -212,6 +213,7 @@ class Outbox:
                 to_utc_iso(now),
                 int(link_preview),
                 to_utc_iso(expires) if expires else None,
+                current_reply.get(),  # P4: sent while a reply was being written
             ),
         )
         if when > now:

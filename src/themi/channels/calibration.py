@@ -3,8 +3,9 @@
 Shielding starts at strength 2 for everyone and moves one step at a time,
 within 0 to 3, when someone says how a message landed:
 
-- "too pushy", "that felt like pressure", "stop telling me…", or a 👎-style
-  reaction to one of Themi's messages: stricter.
+- "too pushy", "that felt like pressure", "stop telling me…", or an angry face
+  (😠 😡 😤 😣 🙄) on one of Themi's messages: stricter. A 👎 doesn't count: it
+  marks a reply as the wrong thing (P4), or how a message landed (S5).
 - "just tell me", "be direct", "that was fine", "you can be blunt": gentler.
 
 Every change is logged with its reason. Turning shielding off entirely stays
@@ -34,7 +35,7 @@ GENTLER = re.compile(
     r"|you can be (?:blunt|direct)|no need to (?:soften|tiptoe)|less (?:fluff|padding))\b",
     re.IGNORECASE,
 )
-STRICTER_REACTIONS = frozenset({"👎", "😠", "😡", "😤", "😣", "🙄"})
+STRICTER_REACTIONS = frozenset({"😠", "😡", "😤", "😣", "🙄"})
 
 
 @dataclass(frozen=True)
