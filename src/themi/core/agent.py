@@ -358,6 +358,8 @@ class Agent:
         # P1: the tools this message and the last few call for; more_tools adds to them.
         groups = choose_groups([text, *(m.text for m in history[-4:])])
         ctx = ToolContext(member, services, request_text=text, previous_text=before, groups=groups)
+        offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
+        timer.route(offered, len(services.tools.specs(groups)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
@@ -380,6 +382,8 @@ class Agent:
         except AllProvidersFailed as exc:
             log.warning("No AI backend answered member %s: %s", member.id, exc)
             return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
+        finally:
+            timer.added(ctx.groups - offered)
         log.warning("Agent hit its step limit for member %s", member.id)
         return TANGLED_TEXT
 

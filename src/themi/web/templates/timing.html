@@ -18,6 +18,20 @@ message arriving, and its parts.</p>
   <p class="muted">No replies yet this week.</p>
   {% endif %}
 </section>
+{% if router %}
+<h2>Which tools went</h2>
+<p class="muted">Each reply sends the core tools and the groups its words call for. When
+those aren't enough, the model asks for more, which costs it another round.</p>
+<section class="card">
+  <p class="summary">{{ router.missed }} of {{ router.count }} {{ "reply" if router.count == 1 else "replies" }} needed more tools.</p>
+  <ul>
+    <li>Tools sent at the start: {{ "%g" | format(router.tools_sent) }} (median).</li>
+    {% if router.seconds_missed is not none %}<li>Replies that needed more: {{ router.seconds_missed }} s (median).</li>{% endif %}
+    {% if router.seconds_hit is not none %}<li>Replies that didn't: {{ router.seconds_hit }} s (median).</li>{% endif %}
+    {% if router.added_late %}<li>Added late: {% for name, n in router.added_late %}{{ name }} ({{ n }}){{ ", " if not loop.last }}{% endfor %}.</li>{% endif %}
+  </ul>
+</section>
+{% endif %}
 {% if slowest %}
 <h2>The slowest</h2>
 {% for reply in slowest %}
@@ -29,6 +43,9 @@ message arriving, and its parts.</p>
     <li>{{ step.what }}: {{ step.seconds }} s{% if step.detail %} ({{ step.detail }}){% endif %}</li>
     {% endfor %}
   </ul>
+  {% if reply.groups is not none %}
+  <p class="muted">Tools sent: {{ reply.tools_sent }} ({{ (("core",) + reply.groups) | join(", ") }}){% if reply.groups_added %}, then {{ reply.groups_added | join(", ") }}{% endif %}.</p>
+  {% endif %}
   {% if reply.slow_notice %}<p class="muted">Said first: “{{ reply.slow_notice }}”</p>{% endif %}
 </article>
 {% endfor %}
