@@ -103,7 +103,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18a | Feedback: the wrong event moved, honest staging, a task for the other partner, "too tired" | Feedback | [x] |
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
-| F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
+| F18d | Feedback: the wall's to-do list in order | Feedback | [~] |
 | F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
@@ -5194,7 +5194,7 @@ Notes (2026-10-29):
   poll reads a little more; nothing to set up.
 
 ### F18d · Feedback (2026-10-29): the wall's to-do list in order
-Status: [ ]
+Status: [~] (2026-10-30: waiting on the live read)
 Depends on: F18c, C1c
 From Erin's idea #75: "Themi should maintain a custom order of to dos in cozyla based on
 due date and importance (with the most important and due/overdue tasks at the top of
@@ -5209,6 +5209,16 @@ the list)."
   that instead.
 - Tests: the order kept on the wall (Cozyla fake, with the field found), items not
   Themi's left alone.
+
+Notes (2026-10-30), in progress:
+- The development checkout has no Cozyla login, so the live read couldn't be done here.
+  `themi cozyla check --fields` (read-only, tested against the fake) prints every field
+  name seen on to-dos, then each open to-do on `COZYLA_TODO_LIST` with all its fields, in
+  the order Cozyla sends them.
+- Next: run it where Themi's `.env` is, and compare its order with the wall's. Look for an
+  order or sort field, and see whether the wall's order follows Cozyla's (creation, due
+  date, `isFlag`, `todoStars`). Then ask before any test write to the wall. The rest of
+  this prompt depends on what that shows.
 
 ### F18e · Feedback (2026-10-29): the chore sync stuck, the wrong task changed, reminders that aren't tasks
 Status: [x] 2026-10-29
