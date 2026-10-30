@@ -116,3 +116,15 @@ async def test_every_tool_routing_sends_them_all_without_more_tools(
     registry = every.app.services.tools
     assert len(names) == len(registry.specs()) - 1 > len(registry.specs(set()))
     assert outcome.tools_sent == len(names)
+
+
+async def test_the_list_setup_makes_a_named_list(
+    family: SeededFamily, fake_telegram: FakeTelegram, fake_ai: FakeAIServer
+) -> None:
+    # P6's twins cases: "add sunscreen to the packing list" needs the list to be there.
+    fake_ai.queue(gemini_function_call("add_to_list", {"list": "packing", "items": ["sunscreen"]}))
+    fake_ai.queue(gemini_text("Sunscreen is on Packing."))
+    scenario = Scenario(family, fake_telegram, real_models=True)
+    outcome = await run_case(scenario, CASES["twin-list-packing"], fake_gemini(fake_ai))
+    assert outcome.passed, outcome.problems
+    assert "Packing" in str(fake_ai.requests[1].json)

@@ -58,6 +58,9 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
         elif "task" in step:
             assert services.taskboard is not None
             await services.taskboard.create(member, step["task"], "errand", 1)
+        elif "list" in step:
+            assert services.lists is not None
+            services.lists.create(member, step["list"], personal=False)
         elif "noise" in step:
             await _noise(scenario, member, step["noise"])
         elif "routine" in step:

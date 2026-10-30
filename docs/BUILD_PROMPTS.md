@@ -91,7 +91,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
-| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [ ] |
+| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [~] |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
@@ -4462,7 +4462,7 @@ Notes (2026-10-30):
   could allow it.
 
 ### P6 · Near-twin tools: sent together, told apart, tested both ways
-Status: [ ]
+Status: [~]
 Depends on: P5
 From the routing talk (2026-10-29). Some tools sound alike and do very different things,
 so they stay separate tools; the work is making sure the model sees both and can tell them
