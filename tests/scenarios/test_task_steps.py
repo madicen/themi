@@ -74,6 +74,7 @@ async def test_steps_can_be_edited_and_the_title_tidied(scenario: Scenario) -> N
             "title": "Clean the kitchen",
             "steps": ["Declutter counters and table", "(Optional/Bonus) Spray with rescue"],
             "clear_steps": False,
+            "assign_to": "",
         },
     )
     scenario.primary.queue_text("Updated.")
@@ -83,14 +84,16 @@ async def test_steps_can_be_edited_and_the_title_tidied(scenario: Scenario) -> N
     assert updated.steps == ("Declutter counters and table", "(Optional/Bonus) Spray with rescue")
 
     scenario.primary.queue_tool_call(
-        "update_task", {"task_id": task.id, "title": "", "steps": [], "clear_steps": False}
+        "update_task",
+        {"task_id": task.id, "title": "", "steps": [], "clear_steps": False, "assign_to": ""},
     )
     scenario.primary.queue_text("Nothing to change.")
     await scenario.say("Erin", "leave it")
     assert board.get(task.id).steps == updated.steps  # empty means keep
 
     scenario.primary.queue_tool_call(
-        "update_task", {"task_id": task.id, "title": "", "steps": [], "clear_steps": True}
+        "update_task",
+        {"task_id": task.id, "title": "", "steps": [], "clear_steps": True, "assign_to": ""},
     )
     scenario.primary.queue_text("Cleared.")
     await scenario.say("Erin", "drop the steps")

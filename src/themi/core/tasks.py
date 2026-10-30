@@ -1552,20 +1552,10 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         due = _board(ctx)._today()  # a time with no date means today
     if due is None and URGENT_WORDS.search(ctx.request_text.lower()):
         due = _board(ctx)._today()  # T1: urgent is a due date that's soon
-    target = args["assign_to"].strip()
-    chosen: Member | None = None
-    both = target.lower() in BOTH_WORDS  # bug #26: "one of us" was one person's
-    if target.lower() in ("me", "myself", "the person asking"):
-        chosen = ctx.member
-    elif target.lower() in OTHER_WORDS:  # "can someone else deal with it?"
-        others = [m for m in ctx.services.store.list_members() if m.id != ctx.member.id]
-        chosen = others[0] if len(others) == 1 else None
-    elif not both and target.lower() not in ("anyone", "someone", ""):
-        members = ctx.services.store.list_members()
-        chosen = next((m for m in members if m.name.lower() == target.lower()), None)
-        if chosen is None:
-            names = ", ".join(m.name for m in members)
-            return f"Not created: there's nobody called {target} in the family ({names})."
+    try:
+        chosen, both = _assignee(ctx, args["assign_to"])
+    except ValueError as exc:
+        return f"Not created: {exc}."
     whose = [chosen] if chosen is not None else ctx.services.store.list_members()
     same = next(
         (
@@ -1577,11 +1567,12 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         None,
     )
     if same is not None:  # bug #56: a second "Mimi pill" to change the first one's time
-        return (
-            f"Not created: task {same.id} ({same.title}) is already open. To change its day "
-            "or time, use reschedule_task (a repeating chore's time goes for every round); "
-            "its schedule, set_task_schedule. If this is a different job, give it a title "
-            "that says how."
+        return (  # bug #88: the model asked instead, and couldn't make it both of theirs
+            f"Not created: task {same.id} ({same.title}) is already open. Change that one "
+            "instead, now, to everything they asked for (don't ask them first): its day or "
+            "time with reschedule_task (a repeating chore's time goes for every round), who "
+            "does it with update_task's assign_to, its schedule with set_task_schedule. If "
+            "this is a different job, give it a title that says how."
         )
     try:
         task = await _board(ctx).create(
@@ -1616,22 +1607,34 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool(
     "update_task",
-    "Rename a task or replace its steps (the full new list, in their words), e.g. when someone "
-    "adds, removes or reorders steps of a chore. Empty title or steps keep what's there; "
-    "clear_steps removes them all.",
+    "Rename a task, replace its steps (the full new list, in their words), e.g. when someone "
+    "adds, removes or reorders steps of a chore, or change who does a one-off task. Empty "
+    "title or steps keep what's there; clear_steps removes them all. assign_to as for "
+    "create_task ('me', a name, 'both', 'someone else'), or '' to keep.",
     {
         "task_id": {"type": "integer"},
         "title": {"type": "string", "description": "A new title, or an empty string."},
         "steps": {"type": "array", "items": {"type": "string"}},
         "clear_steps": {"type": "boolean"},
+        "assign_to": {"type": "string"},
     },
 )
 async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board = _board(ctx)
     steps = [] if args["clear_steps"] else (args["steps"] or None)
     try:
-        task = await _board(ctx).update(
+        task = await board.update(
             args["task_id"], ctx.member, title=args["title"], steps=steps, interactive=True
         )
+        if args["assign_to"].strip():
+            if task.repeats:
+                raise ValueError(
+                    "a chore's people are its schedule's: set_task_schedule's either, or "
+                    "assign it when it's made"
+                )
+            chosen, both = _assignee(ctx, args["assign_to"])
+            if chosen is not None or both:
+                task = await board.reassign(task.id, chosen, shared=both)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
     except PermissionDenied as exc:
@@ -1639,7 +1642,32 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     except ValueError as exc:
         raise ToolFailed(str(exc)) from exc
     steps_now = "; ".join(task.steps) if task.steps else "none"
-    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}"
+    if task.shared:
+        who = "both of them (on both lists; whoever does it closes it)"
+    else:
+        who = ctx.services.store.get_member(task.assignee).name if task.assignee else "nobody yet"
+    return f"Task {task.id} is now: {task.title}. Steps: {steps_now}. Who: {who}."
+
+
+def _assignee(ctx: ToolContext, said: str) -> tuple[Member | None, bool]:
+    """Who assign_to names, and whether it's both of them ("one of us", bug #26). Nobody in
+    particular ('anyone', '') is (None, False). ValueError for a name not in the family."""
+    target = said.strip().lower()
+    if target in BOTH_WORDS:
+        return None, True
+    if target in ("me", "myself", "the person asking"):
+        return ctx.member, False
+    if target in OTHER_WORDS:  # "can someone else deal with it?"
+        others = [m for m in ctx.services.store.list_members() if m.id != ctx.member.id]
+        return (others[0] if len(others) == 1 else None), False
+    if target in ("anyone", "someone", ""):
+        return None, False
+    members = ctx.services.store.list_members()
+    chosen = next((m for m in members if m.name.lower() == target), None)
+    if chosen is None:
+        names = ", ".join(m.name for m in members)
+        raise ValueError(f"there's nobody called {said.strip()} in the family ({names})")
+    return chosen, False
 
 
 @tool(

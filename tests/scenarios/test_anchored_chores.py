@@ -183,6 +183,32 @@ async def test_a_question_about_a_chore_doesnt_mark_it_done(scenario: Scenario) 
     assert len(board(scenario).runs(cage.id)) == 1
 
 
+async def test_a_task_already_open_is_changed_as_asked(scenario: Scenario) -> None:
+    """Bug #88 ("it should have continued the conversation to update the existing task"):
+    "a task for both of us due today at 6pm" was refused as already open; the model asked
+    instead, and nothing could make the open one both of theirs."""
+    erin = scenario.member("Erin")
+    title = "Contact Erin\u2019s parents about babysitting"
+    husband = scenario.member("Husband")  # he added it for her, as in the live one
+    parents = await board(scenario).create(husband, title, "text", 1, assignee=erin)
+    made = {"kind": "text", "effort": 1, "due_date": "2026-10-21", "due_time": "18:00"}
+    made |= {"from_time": "", "steps": [], "check_in": False, "importance": "normal"}
+    scenario.primary.queue_tool_call("create_task", {"title": title, "assign_to": "both", **made})
+    change = {"title": "", "steps": [], "clear_steps": False, "assign_to": "both"}
+    scenario.primary.queue_tool_call("update_task", {"task_id": parents.id, **change})
+    scenario.primary.queue_text("It's on both your lists now.")
+    await scenario.say("Husband", "Make contacting Erin\u2019s parents a task for both of us")
+    refusal = next(
+        block.content
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    )
+    assert "update_task" in refusal and "don't ask" in refusal.lower()
+    assert board(scenario).get(parents.id).shared
+    assert "both of them" in last_tool_result(scenario).content
+
+
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:
     bins = await chore(scenario, "Take out the bins")
     await schedule(scenario, bins, "every Tuesday", missed="catch_up")
