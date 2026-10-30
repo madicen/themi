@@ -152,7 +152,7 @@ class TravelHeadsUps:
             text,
             priority=Priority.NORMAL,
             kind="travel",
-            deadline=max(leave_by, now),
+            deadline=now,  # getting ready starts now; held to leave_by, it left no time (#91)
             dedupe_key=f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}",
         )
 
