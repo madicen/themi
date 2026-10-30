@@ -27,6 +27,7 @@ TASK_LABELS = {
     AITask.EMAIL_TRIAGE: "Email triage",
     AITask.STRUCTURED_MISC: "Other quick jobs (meal ideas, call scripts)",
     AITask.TRANSCRIPTION: "Voice notes",
+    AITask.EMBEDDING: "Choosing which tools a message needs (embeddings, Gemini only)",
 }
 KIND_LABELS = {
     "gemini": "Gemini",

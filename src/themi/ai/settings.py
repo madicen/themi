@@ -27,6 +27,7 @@ from themi.accounts.store import (
     SystemActor,
 )
 from themi.ai.adapters import AdapterConfig, AdapterKind
+from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
 from themi.ai.adapters.gemini import DEFAULT_MODEL as GEMINI_CHAT_MODEL
 from themi.ai.adapters.gemini import DEFAULT_TRANSCRIPTION_MODEL as GEMINI_AUDIO_MODEL
 from themi.storage.db import Database
@@ -39,6 +40,7 @@ class AITask(StrEnum):
     EMAIL_TRIAGE = "email_triage"
     STRUCTURED_MISC = "structured_misc"
     TRANSCRIPTION = "transcription"
+    EMBEDDING = "embedding"  # P7b: which tool groups a message needs
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)
@@ -289,8 +291,12 @@ class AISettingsStore:
                     supports_audio=True,
                 ).id
             )
+            models = {
+                AITask.TRANSCRIPTION: GEMINI_AUDIO_MODEL,
+                AITask.EMBEDDING: GEMINI_EMBEDDING_MODEL,
+            }
             for task in AITask:
-                model = GEMINI_AUDIO_MODEL if task is AITask.TRANSCRIPTION else None
+                model = models.get(task)
                 self.set_chain(SYSTEM, member_id, task, [RouteEntry(backend_id, model)])
 
     def resolve(self, member_id: int, task: AITask) -> list[ResolvedEntry]:

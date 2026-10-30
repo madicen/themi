@@ -158,3 +158,33 @@ def test_existing_medicine_tasks_are_marked() -> None:
     apply(db, known)
     rows = db.query("SELECT title FROM tasks WHERE medicine = 1 ORDER BY id")
     assert [r["title"] for r in rows] == ["Mimi pill - 1 tab", "Britney flea meds"]
+
+
+def test_members_embed_on_the_gemini_backends_of_their_conversation_chain() -> None:
+    # P7b: an embedding route for everyone who has Gemini; Claude has no embeddings API.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 73])
+    now = "2026-10-30T00:00:00+00:00"
+    for member_id, name in ((1, "Erin"), (2, "Husband")):
+        db.execute(
+            "INSERT INTO members (id, name, role, created_at, updated_at) "
+            "VALUES (?, ?, 'admin', ?, ?)",
+            (member_id, name, now, now),
+        )
+    for backend_id, member_id, kind in ((1, 1, "anthropic"), (2, 1, "gemini"), (3, 2, "anthropic")):
+        db.execute(
+            "INSERT INTO ai_backends (id, member_id, label, kind, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (backend_id, member_id, f"b{backend_id}", kind, now, now),
+        )
+    for member_id, position, backend_id in ((1, 0, 1), (1, 1, 2), (2, 0, 3)):
+        db.execute(
+            "INSERT INTO ai_routes (member_id, task, position, backend_id) "
+            "VALUES (?, 'conversation', ?, ?)",
+            (member_id, position, backend_id),
+        )
+    apply(db, known)
+    rows = db.query("SELECT member_id, backend_id, model FROM ai_routes WHERE task = 'embedding'")
+    assert rows == [{"member_id": 1, "backend_id": 2, "model": "gemini-embedding-2"}]
+    assert db.scalar("SELECT COUNT(*) FROM ai_routes WHERE task = 'conversation'") == 3

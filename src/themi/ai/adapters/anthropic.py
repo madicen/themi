@@ -34,6 +34,7 @@ from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StopReason,
     StructuredResponse,
@@ -153,6 +154,11 @@ class AnthropicProvider:
         self, audio: bytes, mime_type: str, *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Transcription:
         raise CapabilityError("Claude doesn't accept audio input; route transcription elsewhere")
+
+    async def embed(
+        self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
+    ) -> Embeddings:
+        raise CapabilityError("Claude has no embeddings API; route embeddings elsewhere")
 
     # ----- internals ----------------------------------------------------------
 

@@ -1,9 +1,10 @@
 """The interface every AI backend implements.
 
-Three operations, all async:
+Four operations, all async:
 - `chat`: one model turn, optionally with tools. The caller runs the tool loop.
 - `structured`: an answer that matches a JSON Schema.
 - `transcribe`: voice note to text.
+- `embed`: texts to vectors (P7b), or `CapabilityError` where there's no such API.
 
 Adapters make exactly one request per call and never retry on their own;
 `themi.ai.retry` owns retries so attempts aren't multiplied.
@@ -18,6 +19,7 @@ from typing import Any, Protocol, runtime_checkable
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StructuredResponse,
     ToolSpec,
@@ -68,3 +70,7 @@ class Provider(Protocol):
     async def transcribe(
         self, audio: bytes, mime_type: str, *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Transcription: ...
+
+    async def embed(
+        self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
+    ) -> Embeddings: ...

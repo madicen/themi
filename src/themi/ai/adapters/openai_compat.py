@@ -34,6 +34,7 @@ from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StopReason,
     StructuredResponse,
@@ -181,6 +182,11 @@ class OpenAICompatProvider:
             )
         )
         return Transcription(result.text.strip(), self.name, self.transcription_model)
+
+    async def embed(
+        self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
+    ) -> Embeddings:
+        raise CapabilityError(f"{self.name}: embeddings aren't supported here yet")
 
     async def _call(self, request: Any) -> Any:
         try:

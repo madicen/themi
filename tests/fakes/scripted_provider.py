@@ -7,8 +7,10 @@
     ...
     assert "vet" in provider.requests[-1].messages[-1].text
 
-Each operation (chat, structured, transcribe) has its own queue. Running out
-of scripted responses fails the test loudly rather than inventing an answer.
+Each operation (chat, structured, transcribe, embed) has its own queue. Running out
+of scripted responses fails the test loudly rather than inventing an answer, except
+`embed`, which falls back to `embed_with` (a text-to-vector function, such as
+`tests.fakes.embedder.TopicEmbedder`) when one is set.
 `take(seconds)` makes the next chat call take that long on the frozen clock.
 """
 
@@ -16,18 +18,19 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import timedelta
 from itertools import count
 from typing import Any, Literal
 
 from themi import clock
-from themi.ai.errors import RefusalError, RetryableError, error_for_status
+from themi.ai.errors import CapabilityError, RefusalError, RetryableError, error_for_status
 from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    Embeddings,
     Message,
     StopReason,
     StructuredResponse,
@@ -38,7 +41,7 @@ from themi.ai.types import (
     Usage,
 )
 
-Operation = Literal["chat", "structured", "transcribe"]
+Operation = Literal["chat", "structured", "transcribe", "embed"]
 
 
 @dataclass
@@ -53,6 +56,7 @@ class RecordedRequest:
     audio: bytes = b""
     mime_type: str = ""
     max_tokens: int = DEFAULT_MAX_TOKENS
+    texts: tuple[str, ...] = ()
 
     @property
     def tool_names(self) -> list[str]:
@@ -65,12 +69,14 @@ class ScriptedProvider:
     model: str = "scripted-1"
     capabilities: Capabilities = field(default_factory=lambda: Capabilities(audio=True))
     requests: list[RecordedRequest] = field(default_factory=list)
+    embed_with: Callable[[str], Sequence[float]] | None = None
 
     def __post_init__(self) -> None:
         self._queues: dict[Operation, deque[object]] = {
             "chat": deque(),
             "structured": deque(),
             "transcribe": deque(),
+            "embed": deque(),
         }
         self._ids = count(1)
         self._takes: deque[float] = deque()
@@ -129,7 +135,7 @@ class ScriptedProvider:
         return self.queue_error(RefusalError(category=category), op)
 
     def take(self, seconds: float) -> ScriptedProvider:
-        """The next chat call moves the frozen clock on by `seconds`, a second at a time,
+        """The next chat or embed call moves the frozen clock on by `seconds`, a second at a time,
         letting other tasks run in between, before it answers."""
         self._takes.append(seconds)
         return self
@@ -199,6 +205,21 @@ class ScriptedProvider:
         result = self._pop("transcribe")
         assert isinstance(result, Transcription)
         return result
+
+    async def embed(
+        self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
+    ) -> Embeddings:
+        self.requests.append(RecordedRequest("embed", kind, texts=tuple(texts)))
+        if self._takes:
+            await _pass(self._takes.popleft())
+        if self._queues["embed"]:
+            result = self._pop("embed")
+            assert isinstance(result, Embeddings)
+            return result
+        if self.embed_with is None:
+            raise CapabilityError(f"{self.name} has no embeddings scripted")
+        vectors = tuple(tuple(self.embed_with(t)) for t in texts)
+        return Embeddings(vectors, self.name, self.model)
 
     # ----- internals ----------------------------------------------------------
 

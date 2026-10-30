@@ -123,3 +123,12 @@ class Transcription:
     text: str
     provider: str
     model: str
+
+
+@dataclass(frozen=True)
+class Embeddings:
+    """One vector per text, in order. Vectors from different models can't be compared."""
+
+    vectors: tuple[tuple[float, ...], ...]
+    provider: str
+    model: str
