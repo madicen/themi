@@ -76,6 +76,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also print every field of each open to-do on COZYLA_TODO_LIST, in Cozyla's order",
     )
+    keep = commands.add_parser(
+        "keep", help="Google Keep, for groceries said to Google Home (unofficial API)"
+    )
+    keep_commands = keep.add_subparsers(dest="keep_command", required=True)
+    keep_link = keep_commands.add_parser(
+        "link", help="link a member's Google Keep: its shopping list goes on the grocery list"
+    )
+    keep_link.add_argument("name")
+    keep_link.add_argument("--list", default="Shopping list", help="the Keep list to watch")
+    keep_unlink = keep_commands.add_parser("unlink", help="forget a member's Google Keep")
+    keep_unlink.add_argument("name")
     return parser
 
 
@@ -94,6 +105,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.connectors.cozyla import CozylaClient
+    from themi.connectors.gkeep import GKeepAccount
     from themi.connectors.homeconnect import HomeConnectClient
     from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.connectors.travel import TravelClient
@@ -123,6 +135,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
         travel=TravelClient(settings.tomtom_api_key),
         home_connect=HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
+        keep=GKeepAccount,
         tool_routing=settings.tool_routing,
     )
     return Runtime(
@@ -314,6 +327,44 @@ def _cozyla_check(titles: bool, fields: bool = False) -> int:
     return 0
 
 
+def _keep(command: str, name: str, list_name: str) -> int:
+    import asyncio
+    from getpass import getpass
+
+    from themi.accounts import AccountsError
+    from themi.connectors.gkeep import GKeepAccount, KeepError, exchange_token
+    from themi.core.keep_groceries import KeepLinks, run_keep_link
+
+    store = _store()
+    member = store.member_by_name(name)
+    if member is None:
+        raise AccountsError(f"there's no member called {name}")
+    links = KeepLinks(store.db, store.cipher)
+    if command == "unlink":
+        gone = links.unlink(member)
+        print(
+            f"Forgot {member.name}'s Google Keep." if gone else f"{member.name} hadn't linked Keep."
+        )
+        return 0
+    try:
+        asyncio.run(
+            run_keep_link(
+                links,
+                member,
+                list_name,
+                lambda q: _ask(q, None),
+                lambda q: getpass(f"{q}: "),
+                exchange_token,
+                GKeepAccount,
+                print,
+            )
+        )
+    except KeepError as exc:
+        print(f"Keep wasn't linked: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -349,6 +400,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _restore(args.snapshot, args.dry_run, args.yes)
         elif args.command == "cozyla":
             return _cozyla_check(args.titles, args.fields)
+        elif args.command == "keep":
+            return _keep(args.keep_command, args.name, getattr(args, "list", ""))
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:

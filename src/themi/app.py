@@ -26,6 +26,7 @@ from themi.channels.telegram import TelegramChannel
 from themi.connectors.cozyla import CozylaClient
 from themi.connectors.gcal import CalendarSync
 from themi.connectors.gcal.busy import CalendarBusy
+from themi.connectors.gkeep import KeepFactory
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
@@ -54,6 +55,7 @@ from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
+from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
@@ -123,6 +125,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     home_connect: HomeConnectClient | None = None,
+    keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
 ) -> App:
@@ -243,6 +246,9 @@ def build_app(
             db, grocery_list, bought=lambda name: pantry.set_status(name, "plenty", source="list")
         )
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
+    if keep is not None:  # GK1: does nothing until someone runs `themi keep link`
+        from_keep = KeepGroceries(db, KeepLinks(db, cipher), groceries, keep)
+        periodic.append(PeriodicTask("groceries.keep", timedelta(minutes=2), from_keep.sync))
     if cozyla is not None:
         family = store.get_family()
         cozyla.timezone = family.timezone if family else cozyla.timezone
