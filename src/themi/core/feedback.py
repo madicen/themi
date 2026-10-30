@@ -4,6 +4,8 @@ Family testing turns into work items. Each report keeps a snapshot of what was
 going on when it was sent, so it can be looked into later without asking:
 
 - the message the person replied to (Telegram's Reply), if any
+- the reply it's about (that message's, else the latest): its tools, and the
+  tool groups it was offered and added (P4)
 - the recent conversation, what's waiting on them, their settings and pauses
 - their AI backend for conversation (never keys), Themi's version
 - Themi's recent log lines, redacted
@@ -28,6 +30,7 @@ from themi.ai.settings import AITask
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.tools import ToolContext, tool
+from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
 from themi.storage.db import Database
@@ -134,6 +137,19 @@ def _item_lines(item: FeedbackItem) -> list[str]:
     if replied:
         lines += ["", f"**In reply to** this message ({replied['at']}, {replied['kind']}):"]
         lines += [f"> {line}" for line in replied["text"].splitlines()]
+    reply = ctx.get("reply")
+    if reply:
+        groups = (
+            "not recorded" if reply["groups"] is None else ", ".join(["core", *reply["groups"]])
+        )
+        added = (
+            f"; added later: {', '.join(reply['groups_added'])}" if reply["groups_added"] else ""
+        )
+        lines += [
+            "",
+            f"**About reply {reply['id']}:** tools run: {', '.join(reply['tools']) or 'none'}; "
+            f"groups offered: {groups}{added}.",
+        ]
     if ctx.get("conversation"):
         lines += ["", "**Recent conversation:**", "", "```"]
         for m in ctx["conversation"]:
@@ -227,6 +243,7 @@ class FeedbackChat:
             "local_time": local(clock.now()),
             "member": {"id": member.id, "name": member.name, "role": member.role.value},
             "replied_to": self._replied_to(member, reply_to_message_id, timezone),
+            "reply": self._reply(member, reply_to_message_id),
             "conversation": conversation,
             "open_items": [item.summary for item in s.open_items(member)],
             "settings": self._settings(member, timezone),
@@ -251,6 +268,23 @@ class FeedbackChat:
             "at": moment.strftime("%a %H:%M"),
             "kind": f"{'from Themi' if row['direction'] == 'out' else 'their own'} {row['kind']}",
             "text": redact(row["text"]),
+        }
+
+    def _reply(self, member: Member, message_id: int | None) -> dict[str, Any] | None:
+        """The model reply a report is about: the one that sent the message it replies to,
+        else the latest."""
+        db = self.services.store.db
+        reply_id = reply_for_message(db, member.id, message_id) if message_id else None
+        if reply_id is None:
+            reply_id = db.scalar("SELECT MAX(id) FROM replies WHERE member_id = ?", (member.id,))
+        reply = ReplyReview(db).get(reply_id) if reply_id else None
+        if reply is None:
+            return None
+        return {
+            "id": reply.id,
+            "tools": list(reply.tools),
+            "groups": None if reply.groups is None else list(reply.groups),
+            "groups_added": list(reply.groups_added),
         }
 
     def _settings(self, member: Member, timezone: str) -> dict[str, str]:

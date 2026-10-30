@@ -42,6 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     feedback.add_argument(
         "--done", type=int, nargs="+", metavar="ID", help="mark these reports reviewed"
     )
+    feedback.add_argument(
+        "--wrong-tool",
+        nargs=2,
+        metavar=("REPLY", "TOOL"),
+        help="label a reply marked 👎: the tool it should have used, or none",
+    )
+    feedback.add_argument(
+        "--not-wrong", type=int, metavar="REPLY", help="clear a 👎 mark: the reply was right"
+    )
     backup = commands.add_parser(
         "backup", help="take an encrypted backup now (or --list the ones in storage)"
     )
@@ -231,15 +240,44 @@ def _bot_username() -> str | None:
         return None
 
 
-def _feedback(include_reviewed: bool, done: list[int] | None) -> None:
+def _feedback(
+    include_reviewed: bool,
+    done: list[int] | None,
+    wrong_tool: list[str] | None = None,
+    not_wrong: int | None = None,
+) -> int:
     from themi.core.feedback import FeedbackBook
+    from themi.core.wrong_replies import LABEL_WORDS, ReplyReview, ReviewError, report, stub_text
 
-    book = FeedbackBook(_store().db)
+    store = _store()
+    book = FeedbackBook(store.db)
+    review = ReplyReview(store.db)
     if done:
         marked = book.mark_reviewed(done)
         print(f"Marked {marked} of {len(done)} as reviewed.")
-        return
+        return 0
+    if wrong_tool or not_wrong is not None:
+        reply_text, tool = wrong_tool if wrong_tool else (str(not_wrong), None)
+        if not reply_text.isdigit():
+            print("The reply is a number, as `themi feedback` lists it.", file=sys.stderr)
+            return 1
+        try:
+            reply, stub = review.label(int(reply_text), tool)
+        except ReviewError as exc:
+            print(exc, file=sys.stderr)
+            return 1
+        assert reply.label is not None
+        print(f"Reply {reply.id}: {LABEL_WORDS[reply.label]}.")
+        if stub is not None:
+            print("A case for tests/evals/cases.json:")
+            print(stub_text(stub))
+        return 0
+    family = store.get_family()
     print(book.report(book.items(include_reviewed)), end="")
+    marked_report = report(review.unlabelled(), family.timezone if family else "UTC")
+    if marked_report:
+        print("\n" + marked_report, end="")
+    return 0
 
 
 def _cozyla_check(titles: bool) -> int:
@@ -299,7 +337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "login-link":
             print(_login_link(args.name))
         elif args.command == "feedback":
-            _feedback(args.all, args.done)
+            return _feedback(args.all, args.done, args.wrong_tool, args.not_wrong)
         elif args.command == "backup":
             _backup(args.list)
         elif args.command == "restore":
