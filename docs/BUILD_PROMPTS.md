@@ -88,6 +88,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
+| P3 | Router metrics: how well the tool groups are chosen | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4279,6 +4280,33 @@ Depends on: P2a, and a week of its timings
 Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
 - The speed-ups the numbers point to: a faster model for conversation, fewer tool
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
+
+### P3 · Router metrics: how well the tool groups are chosen
+Status: [ ]
+Depends on: P1, P2a
+From a talk about a "System 1" router (2026-10-29): should a fast classifier (embeddings or
+a small model) choose the tool groups instead of P1's word lists? Not yet: first measure
+how often the word lists miss and what a miss costs, and build a fair way to compare a
+replacement. A router gets built only if these numbers ask for one.
+Already measurable: a miss shows as a `more_tools` row in `reply_tools`, and its extra
+model round is in `ai_calls`. Missing: which groups were offered, so over-sending (the
+token side) can't be seen, and no way to score a candidate router without a model.
+- Each `replies` row keeps the groups `choose_groups` offered at the start, and the groups
+  `more_tools` added during the reply.
+- The admin "Reply times" page (`/ai/timing`) shows the week's router numbers: replies
+  with a miss (a `more_tools` call), the groups most often added late, the tools sent per
+  reply (median), and the median time of replies with a miss and without one.
+- An offline router eval: for each case in `tests/evals/cases.json`, run `choose_groups`
+  over its message (and its history, if any) and check the groups of the tools in
+  `expect`/`expect_any` were offered (recall), and count the tools sent (size). No model
+  calls, so it runs in `make test-all`. It takes the router as a function, so a candidate
+  can be scored the same way, and prints both numbers per category.
+- No message text is kept for this. Keeping texts to replay later is the family's call;
+  ask before adding it.
+
+Tests: groups recorded on a reply, with and without `more_tools`; the page's numbers from
+seeded rows; the offline eval scoring a known router (a perfect one, and one that misses a
+group). Today's `choose_groups` recall goes in the Notes as the baseline.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
