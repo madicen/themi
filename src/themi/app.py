@@ -56,6 +56,7 @@ from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
+from themi.core.reactions import Reactions
 from themi.core.reminders import Reminders
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
@@ -195,6 +196,7 @@ def build_app(
         travel_heads_ups.install()
     habits = HabitReserve(services)
     habits.install()
+    Reactions(services).install()
     Commands(services).install()
     FeedbackChat(services).install()
     agent = Agent(services)

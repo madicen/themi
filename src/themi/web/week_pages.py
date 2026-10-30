@@ -36,6 +36,8 @@ def routes(kit: Kit) -> APIRouter:
             days=week_view(energy(), member),
             moments=good_moments(energy(), member),
             learned=learned_from(energy(), member),
+            lands=app.services.what_lands(member),
+            reactions_on=member.tracks("reactions"),
             day_names=DAY_NAMES,
             tz_info=ZoneInfo(energy().timezone),
         )

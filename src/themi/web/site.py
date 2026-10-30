@@ -41,6 +41,7 @@ TRACKING_LABELS = {
     "message_timing": "When you tend to reply, and how quickly",
     "device_activity": "Activity from household devices (laundry, feeders, the wall's routines)",
     "calendar": "When your Google calendar says you're busy (never what the events are)",
+    "reactions": "How you react to Themi's messages (👍 or 👎), to learn what lands",
 }
 EVENT_WORDS = {
     "staged": "Asked about",

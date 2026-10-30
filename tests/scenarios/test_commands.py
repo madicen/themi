@@ -71,6 +71,7 @@ async def test_tracking_lists_your_inputs_with_toggles(scenario: Scenario) -> No
         "Stop reply timing",
         "Stop device activity",
         "Stop calendar",  # S2
+        "Stop reactions",  # S5
     ]
     assert await scenario.tap("Erin", "Stop reply timing") == []  # the list is edited instead
     assert not scenario.app.store.get_member(scenario.member("Erin").id).tracks("message_timing")
@@ -84,6 +85,7 @@ async def test_tracking_lists_your_inputs_with_toggles(scenario: Scenario) -> No
         "Start reply timing",
         "Stop device activity",
         "Stop calendar",
+        "Stop reactions",
     ]
 
 

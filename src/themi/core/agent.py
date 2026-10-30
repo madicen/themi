@@ -365,6 +365,7 @@ class Agent:
             notes=notes,
             timezone=timezone,
             calendars=services.calendar_context(member),
+            lands=services.what_lands(member),
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
