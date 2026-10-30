@@ -200,5 +200,7 @@ def test_tool_routing_defaults_to_groups_and_takes_all() -> None:
     assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).tool_routing == "groups"
     every = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "ALL"})
     assert every.tool_routing == "all"
-    with pytest.raises(SettingsError, match="THEMI_TOOL_ROUTING must be groups or all"):
+    meaning = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "embeddings"})
+    assert meaning.tool_routing == "embeddings"  # P7b
+    with pytest.raises(SettingsError, match="THEMI_TOOL_ROUTING must be groups, all or embed"):
         Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "some"})

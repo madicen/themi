@@ -35,6 +35,7 @@ from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.prompts import build_system, build_turn
+from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
 from themi.core.tools import GROUPS, ToolContext, choose_groups, twins_text
@@ -363,6 +364,12 @@ class Agent:
         routing = services.tool_routing
         recent = [text, *(m.text for m in history[-4:])]
         groups = set(GROUPS) if routing == "all" else choose_groups(recent)
+        if routing == "embeddings" and services.group_router is not None:
+            # P7b: by meaning too, over this message and the person's last two; and the
+            # groups used lately, which short follow-ups lean on.
+            theirs = [text, *[m.text for m in history if m.direction == "in"][-2:]]
+            groups |= await services.group_router.choose(member.id, theirs)
+            groups |= recent_groups(services.store.db, member.id)
         ctx = ToolContext(
             member,
             services,

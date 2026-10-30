@@ -48,8 +48,9 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--routing",
         default="groups",
-        choices=("groups", "all"),
-        help="for --run-evals: the tool groups a message calls for (groups) or every tool (all)",
+        choices=("groups", "all", "embeddings"),
+        help="for --run-evals: the tool groups a message calls for (groups), every tool (all), "
+        "or groups by meaning too (embeddings, P7b)",
     )
 
 

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 
 from themi.accounts import AccountStore
+from themi.ai.embeddings import RouterEmbedder, VectorCache
 from themi.ai.retry import Sleep
 from themi.ai.router import AIRouter, ProviderFactory
 from themi.ai.settings import AISettingsStore
@@ -54,6 +55,7 @@ from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reminders import Reminders
+from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
@@ -124,6 +126,7 @@ def build_app(
     outbox.sent_listeners.append(outcomes.on_sent)
     services = Services(
         tool_routing=tool_routing,
+        group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db)),
         store=store,
         ai_settings=ai_settings,
         router=router,

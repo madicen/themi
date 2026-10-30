@@ -21,7 +21,7 @@ from themi.connectors.ourgroceries.client import OurGroceriesConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
-ToolRouting = Literal["groups", "all"]
+ToolRouting = Literal["groups", "all", "embeddings"]
 
 
 GOOGLE_ENDPOINT_VARIABLES = {
@@ -139,8 +139,8 @@ class Settings(BaseModel):
             problems.append(f"THEMI_LOG_LEVEL must be DEBUG, INFO, WARNING or ERROR, not {level}")
 
         routing = (get("THEMI_TOOL_ROUTING") or "groups").lower()
-        if routing not in ("groups", "all"):
-            problems.append(f"THEMI_TOOL_ROUTING must be groups or all, not {routing}")
+        if routing not in ("groups", "all", "embeddings"):
+            problems.append(f"THEMI_TOOL_ROUTING must be groups, all or embeddings, not {routing}")
 
         port_text = get("THEMI_HTTP_PORT") or "8080"
         if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:

@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from themi.core.memory import Memory
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
+    from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
@@ -122,7 +123,8 @@ class Services:
     event_commands: dict[str, EventCommandHandler] = field(default_factory=dict)
     command_help: dict[str, str] = field(default_factory=dict)
     site_url: str = ""  # the website's base address, for /site links
-    tool_routing: str = "groups"  # P5: or "all", every tool on every call
+    tool_routing: str = "groups"  # P5: or "all", every tool on every call; P7b "embeddings"
+    group_router: EmbeddingRouter | None = None  # P7b, used when tool_routing is "embeddings"
     rulebook: Rulebook | None = None
     memory: Memory | None = None
     outcomes: OutcomeTracker | None = None

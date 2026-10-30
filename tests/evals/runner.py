@@ -13,6 +13,7 @@ from tests.evals.scoring import Case, Outcome, model_replies, score
 from tests.fakes.google_oauth import _Refresh
 from tests.scenarios.harness import Scenario
 from themi.accounts import Member
+from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
 from themi.ai.settings import AITask, RouteEntry
 from themi.connectors.google.oauth import LINK_SCOPES
 from themi.core.groceries import list_summary
@@ -38,8 +39,11 @@ def use_backend(scenario: Scenario, chosen: EvalBackend) -> None:
             )
             chain.append(RouteEntry(added.id))
         for task in AITask:
-            if task is not AITask.TRANSCRIPTION:
+            if task not in (AITask.TRANSCRIPTION, AITask.EMBEDDING):
                 ai.set_chain(member, member.id, task, chain)
+        if chosen.kind == "gemini":  # P7b: embeddings need an embedding model
+            embedding = RouteEntry(chain[0].backend_id, GEMINI_EMBEDDING_MODEL)
+            ai.set_chain(member, member.id, AITask.EMBEDDING, [embedding])
 
 
 async def apply_setup(scenario: Scenario, case: Case) -> None:
