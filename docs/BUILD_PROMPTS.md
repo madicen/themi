@@ -3238,6 +3238,11 @@ Notes (2026-10-30):
   redirect `<THEMI_PUBLIC_URL>/auth/home-connect/callback`), set `HOME_CONNECT_CLIENT_ID` and
   `HOME_CONNECT_CLIENT_SECRET`, restart (applies 0074), and link from the Family page. To
   skip the cards, turn on "Check off the dishwasher routine when the dishwasher starts".
+- Fixed 2026-10-30: "Link Home Connect" did nothing in the browser. Home Connect hands its
+  sign-in on to SingleKey ID (`singlekey-id.com`), and the site's `form-action` allowed only
+  Home Connect, so the browser blocked the redirect. `HomeConnectConfig.sign_in_url` is now
+  allowed too. A local redirect (`http://127.0.0.1:8080/...`) works; no public URL is needed
+  to link from the computer running Themi.
 
 ### E1 · Email: suggest important senders
 Status: [x] 2026-10-27

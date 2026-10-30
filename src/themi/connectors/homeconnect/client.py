@@ -37,6 +37,8 @@ from themi.storage.secrets import Cipher, Secret
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.home-connect.com"
+# Home Connect hands its sign-in on to SingleKey ID, so links pass through here too.
+SIGN_IN_URL = "https://singlekey-id.com"
 SCOPES = ("IdentifyAppliance", "Dishwasher-Monitor")
 MEDIA_TYPE = "application/vnd.bsh.sdk.v1+json"
 OPERATION_STATE = "BSH.Common.Status.OperationState"
@@ -52,6 +54,7 @@ class HomeConnectConfig:
     client_id: str
     client_secret: Secret = field(repr=False)
     base_url: str = BASE_URL
+    sign_in_url: str = SIGN_IN_URL
 
 
 class HomeConnectError(Exception):

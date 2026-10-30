@@ -82,6 +82,16 @@ async def test_linking_finds_the_dishwasher(
     )
 
 
+async def test_linking_redirects_are_allowed_by_the_csp(
+    scenario: Scenario, site: httpx.AsyncClient, fake_home_connect: FakeHomeConnect
+) -> None:
+    # Home Connect passes the sign-in on to SingleKey ID; browsers check every hop of a
+    # form's redirects, so the Link button did nothing while SingleKey ID was left out.
+    response = await site.get("/signed-out")
+    form_action = response.headers["Content-Security-Policy"].split("form-action ")[1]
+    assert "https://singlekey-id.com" in form_action.split(";")[0].split()
+
+
 async def test_only_admins_link_it(
     scenario: Scenario, site: httpx.AsyncClient, fake_home_connect: FakeHomeConnect
 ) -> None:
