@@ -159,3 +159,22 @@ def last_result(scenario: Scenario) -> str:
         if isinstance(block, ToolResult)
     ]
     return results[-1].content
+
+
+async def test_a_task_for_another_day_doesnt_keep_saying_today(scenario: Scenario) -> None:
+    """Bug #95: "Tomorrow, remind me to send the invoice from the tutoring session today"
+    became that title, read back as a bare line; Erin had to ask for the session's name
+    and date in it."""
+    made = {"kind": "errand", "effort": 1, "due_date": "2026-10-22", "due_time": ""}
+    made |= {"from_time": "", "assign_to": "me", "steps": [], "check_in": False}
+    title = "Send the invoice from the tutoring session today"
+    scenario.primary.queue_tool_call(
+        "create_task", {"title": title, **made, "importance": "normal"}
+    )
+    scenario.primary.queue_text("Added for tomorrow.")
+    await scenario.say(
+        "Erin", "Tomorrow, remind me to send the invoice from the tutoring session today"
+    )
+    result = last_result(scenario)
+    assert "due Thu 22 Oct" in result
+    assert 'says "today"' in result and "update_task" in result

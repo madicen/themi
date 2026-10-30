@@ -79,6 +79,10 @@ SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked be
 NOT_DONE = frozenset(
     {"no", "n", "nope", "nah", "not yet", "not done", "not today", "no not yet", "nope not yet"}
 )
+_RELATIVE_DAY = re.compile(
+    r"\b(?:today|tonight|yesterday|tomorrow|this (?:morning|afternoon|evening))\b",
+    re.IGNORECASE,
+)
 ALL_OF_THEM = re.compile(r"\b(?:all|everything|every one|both)\b", re.IGNORECASE)
 
 
@@ -1606,9 +1610,23 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         who, tell = f"{assignee.name} (the person asking)", ""
     else:
         who, tell = assignee.name, f" Let {ctx.member.name} know it went to {assignee.name}."
+    due = f", due {_board(ctx).when_words(task)}" if task.due_on else ""
+    said = (
+        _RELATIVE_DAY.search(task.title)
+        if task.due_on and task.due_on != _board(ctx)._today()
+        else None
+    )
+    rename = (  # bug #95: "...the tutoring session today", read tomorrow
+        f' Its title says "{said.group(0)}", which won\'t be true then: rename it now with '
+        "update_task to name the thing itself and its date (from the calendar or the "
+        "conversation, e.g. 'Send the invoice for Tutor Gabriel (Thu 29 Oct)')."
+        if said
+        else ""
+    )
     return (
-        f"Task {task.id} created and assigned to {who}. Why: {task.assign_reason} "
-        f"{assignee.name} gets a gentle nudge at a good moment.{tell}"
+        f"Task {task.id} created and assigned to {who}{due}. Why: {task.assign_reason} "
+        f"{assignee.name} gets a gentle nudge at a good moment.{tell}{rename} Say its title "
+        "and when in one line."
     )
 
 
