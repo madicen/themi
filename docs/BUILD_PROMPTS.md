@@ -132,6 +132,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 35 | Meal reminders, takeout rescue, cart staging | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [ ] |
+| GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
+| GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [ ] |
 
 ## Fixed technical choices
 
@@ -5739,3 +5741,67 @@ what's possible before building anything:
 - The plan's rule that device connections read status only and never control anything:
   anything beyond reading needs the family's decision and a plan change first.
 
+
+### GT1a · Google Tasks as an inbox: voice-added items processed, then removed
+Status: [x] 2026-10-30
+Depends on: 21, 26
+Asked by Michael, 2026-10-30. "Hey Google, add a task..." on the family's speakers (Gemini for
+Home) lands in that person's Google Tasks. The family wants Google Tasks used as a
+processing queue: Themi takes each new item as if that person had told it, then removes it.
+Deleting a processed item needs no confirmation (decided 2026-10-30: the list is a queue).
+Part of R2's question about Google Home; R2's other questions stay open.
+
+Build:
+- Linking asks for Google Tasks too (`https://www.googleapis.com/auth/tasks`); accounts linked
+  before need linking again. The OAuth app needs the Tasks API and scope (Michael adds them).
+- A Google Tasks client (tasks v1: lists, tasks, delete), like the Calendar client.
+- A job every minute: each linked account with the scope, whose person is on Telegram, reads
+  its default list ("My Tasks") for open items. Each new one is handled by the agent as that
+  person's message ("Erin asked their Google speaker to add "milk" to Google Tasks"), and its
+  reply goes to them in Telegram. Once handled, the item is deleted from Google Tasks.
+- If no AI backend answers, the item stays and is tried again later (with a wait, so a busy
+  model doesn't send a busy reply every minute). A failed delete is retried without handling
+  the item again.
+
+Tests:
+- The client against a fake Google Tasks API.
+- A voice item becomes a grocery item or a task, and is removed; one already handled isn't
+  handled twice; an AI outage keeps the item; accounts without the scope are left alone.
+
+Notes (2026-10-30):
+- `TASKS_SCOPE` is in `LINK_SCOPES`, and `GoogleConfig.tasks_url` (`GOOGLE_TASKS_URL` for a
+  fake). `themi.connectors.gtasks.TasksClient`: the open tasks on a list (paged, oldest
+  first) and delete; a 401 refreshes the token once, and a 404 on delete counts as done.
+- `themi.core.google_tasks.GoogleTasksInbox`, job `google_tasks.inbox` every minute (the API
+  has no push). For each account with the scope whose person is on Telegram, each new open
+  item on `@default` goes to `Agent.take_in`. That logs it as an inbound message (kind
+  `google_task`, so the journal sees it), runs the usual turn, and replies in Telegram.
+- The message reads 'Erin asked their Google speaker to add "Milk" to Google Tasks, due
+  Friday 23 October, with the note "...". Take it as something they asked for.' The "asked
+  ... to add" makes it count as asked for, so "milk" goes on the grocery list without a card,
+  as if typed. Other actions go through their tiers as usual.
+- Google keeps only a task's date, never its time, so a time said to the speaker doesn't
+  reach Themi.
+- Migration 0077 adds `google_task_inbox`: handled (answered, delete not done yet), removed,
+  or waiting. A deleted item isn't a trust-tier action: the family decided the list is a
+  queue, like the wall's sync clearing just-for-today items.
+- If no AI backend answers, the item waits an hour, and that run stops. Done and empty items
+  are left alone.
+- My accounts says whether Google Tasks is allowed for each account.
+- Not checked against the real API or a real speaker yet. Michael made a few test items by
+  voice; once linked again they're handled within a minute.
+- Setup: enable the Google Tasks API and add the `tasks` scope in the Google Cloud project,
+  restart (applies 0077), and link each Google account again (`/link gmail`).
+
+### GT1b · Themi's tasks on Google Tasks, kept apart from the inbox
+Status: [ ]
+Depends on: GT1a
+Asked by Michael, 2026-10-30, if Themi's own tasks can be told apart from new voice items.
+They can, two ways at once:
+- Themi writes its tasks to a list of its own ("Themi"), never the default list GT1a empties.
+- It keeps the Google id of every task it writes; an id it doesn't know is a new item,
+  whichever list it's in.
+Build: each person's open Themi tasks on their "Themi" list (title, due date); done in Google
+(by voice: "mark call the plumber done") completes it in Themi, and done in Themi completes it
+in Google. Check how Gemini for Home reads and completes tasks on a list that isn't the
+default before relying on voice completion.

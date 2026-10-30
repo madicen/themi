@@ -78,16 +78,16 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
 
 1. **Project.** At <https://console.cloud.google.com>, create a project (for example
    "Themi Household").
-2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API** and the
-   **Google Calendar API**.
+2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API**, the
+   **Google Calendar API** and the **Google Tasks API**.
 3. **Consent screen.** Under *Google Auth Platform → Branding*, give the app a name
    ("Themi") and a support email. Under *Audience*, choose **External**.
 4. **Scopes.** Under *Data Access*, add `openid`, `.../auth/userinfo.email`,
    `https://www.googleapis.com/auth/gmail.modify`,
    `https://www.googleapis.com/auth/calendar.events`,
    `https://www.googleapis.com/auth/calendar.calendarlist.readonly` (to find the "Themi"
-   calendar) and `https://www.googleapis.com/auth/calendar.app.created` (to make it if
-   it's missing).
+   calendar), `https://www.googleapis.com/auth/calendar.app.created` (to make it if
+   it's missing) and `https://www.googleapis.com/auth/tasks` (the Google Tasks inbox).
 5. **Publish, unverified.** Under *Audience*, press **Publish app** and don't submit it
    for verification. Google shows an "unverified app" warning at sign-in ("Advanced", then
    "Go to Themi" continues). `gmail.modify` is a restricted scope, so an unverified app can
@@ -112,6 +112,10 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
    calendar's name. Themi uses an existing calendar with that name, or makes one; either
    way, add it to Cozyla once so the events show there. An account linked before the
    calendar scopes existed needs linking again; the *Family* page says so.
+11. **Google Tasks inbox.** What someone adds by voice ("Hey Google, add a task...") lands in
+   their Google Tasks. Each minute Themi takes new items from their default list ("My
+   Tasks") as if they'd sent them, answers in Telegram, and deletes them there: the list is
+   a queue. An account linked before this needs linking again; *My accounts* says so.
 
 To try the flow without a Google project, run the fake Google with
 `.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.
