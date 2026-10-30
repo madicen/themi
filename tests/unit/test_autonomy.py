@@ -39,6 +39,7 @@ CAN_BE_AUTOMATIC = {
     "calendar_from_email",
     "wall_routine_add",
     "email_keep",
+    "dishwasher_done",
 }
 
 

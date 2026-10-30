@@ -92,6 +92,9 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     google = ctx.app.services.google
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
     form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
+    home_connect = ctx.app.services.home_connect
+    if home_connect is not None:  # and to Home Connect's, to link it (H1)
+        form_targets = f"{form_targets} {_origin(home_connect.client.config.base_url)}".strip()
     web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @web.middleware("http")

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from themi.connectors.gcal.busy import CalendarBusy
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
+    from themi.connectors.homeconnect import HomeConnectAccount
     from themi.core.breaks import Breaks
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
+    from themi.core.dishwasher import Dishwasher
     from themi.core.email_audit import EmailAudit
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
@@ -157,6 +159,8 @@ class Services:
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
+    home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
+    dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler

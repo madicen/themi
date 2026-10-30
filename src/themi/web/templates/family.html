@@ -47,6 +47,30 @@
 </form>
 {% endif %}
 
+{% if home_connect %}
+<h2>Appliances</h2>
+<div class="card">
+  <p class="muted">Themi reads whether the dishwasher is running from Home Connect, the Bosch
+  app, and nothing else. A cycle starting checks off the dishwasher on the wall's routines.</p>
+  {% if home_connect.linked %}
+  {% for device, state in home_connect.devices %}
+  <p>{{ device.name }}{% if device.appliance %} · {{ device.appliance }}{% endif %}{% if state %} · {{ state | lower }}{% endif %}</p>
+  {% else %}
+  <p>Linked, but no appliances were found.</p>
+  {% endfor %}
+  <form method="post" action="/family/home-connect/unlink">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Unlink Home Connect</button>
+  </form>
+  {% else %}
+  <form method="post" action="/family/home-connect/link">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="primary">Link Home Connect</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <h2>People</h2>
 {% for person in members %}
 <article class="card">

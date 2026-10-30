@@ -28,6 +28,7 @@ from themi.connectors.gcal import CalendarSync
 from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
+from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
@@ -42,6 +43,7 @@ from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.day_summary import DaySummary
+from themi.core.dishwasher import Dishwasher
 from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
@@ -113,6 +115,7 @@ def build_app(
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
+    home_connect: HomeConnectClient | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
 ) -> App:
@@ -235,6 +238,14 @@ def build_app(
         routines = CozylaRoutines(services, tasks, cozyla)
         routines.install()
         periodic.append(PeriodicTask("cozyla.routines", timedelta(minutes=15), routines.sync))
+    if home_connect is not None:
+        services.home_connect = HomeConnectAccount(db, cipher, home_connect)
+        dishwasher = Dishwasher(services, tasks, services.home_connect)
+        dishwasher.install()
+        periodic.append(PeriodicTask("devices.dishwasher", timedelta(minutes=5), dishwasher.poll))
+        periodic.append(
+            PeriodicTask("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
+        )
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))
     if calendar_busy is not None:

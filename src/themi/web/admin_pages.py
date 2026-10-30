@@ -10,11 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError, InvalidValue, Role
 from themi.accounts.setup import pairing_instructions, parse_money_to_cents
 from themi.autonomy import AutonomyError
+from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi.connectors.travel import TravelError
 from themi.core.rules import RuleError
 from themi.web.kit import Kit
@@ -36,6 +37,7 @@ def routes(kit: Kit) -> APIRouter:
             "calendar": calendar_values(),
             "home": app.services.travel.home() if app.services.travel else None,
             "travel": app.services.travel is not None,
+            "home_connect": home_connect_values(),
             **extra,
         }
 
@@ -52,6 +54,60 @@ def routes(kit: Kit) -> APIRouter:
             "using": account.address if account else None,
             "problem": calendar.problem(),
         }
+
+    def home_connect_values() -> dict[str, Any] | None:
+        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        if account is None or dishwasher is None:
+            return None
+        states = {r["device_id"]: r["state"] for r in app.db.query("SELECT * FROM device_states")}
+        return {
+            "linked": account.linked(),
+            "devices": [(d, states.get(d.id)) for d in dishwasher.devices()],
+        }
+
+    # ----- Home Connect (H1) ----------------------------------------------------------------
+
+    @router.post("/family/home-connect/link")
+    async def link_home_connect(request: Request) -> Response:
+        session, _ = await kit.checked(request, admin=True)
+        account = app.services.home_connect
+        if account is None:
+            return kit.redirect("/family", "Home Connect isn't set up on this server.")
+        redirect = HomeConnectAccount.redirect_uri(kit.ctx.base_url)
+        return RedirectResponse(
+            account.authorization_url(session.member, redirect), status_code=303
+        )
+
+    @router.get("/auth/home-connect/callback")
+    async def home_connect_callback(
+        request: Request, state: str = "", code: str = "", error: str = ""
+    ) -> Response:
+        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        if account is None or dishwasher is None:
+            return kit.redirect("/family", "Home Connect isn't set up on this server.")
+        if error or not state or not code:
+            return kit.redirect("/family", "Home Connect wasn't linked, so nothing changed.")
+        try:
+            member_id = await account.complete(
+                state, code, HomeConnectAccount.redirect_uri(kit.ctx.base_url)
+            )
+            added = await dishwasher.add_appliances(store.get_member(member_id))
+        except (HomeConnectError, AccountsError) as exc:
+            return kit.redirect("/family", f"Home Connect wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(
+            "/family", f"Linked Home Connect. Found {names}." if names else "Linked Home Connect."
+        )
+
+    @router.post("/family/home-connect/unlink")
+    async def unlink_home_connect(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.home_connect is not None:
+            app.services.home_connect.unlink()
+        return kit.redirect(
+            "/family",
+            "Unlinked Home Connect. Removing Themi in the Home Connect app's settings finishes it.",
+        )
 
     @router.post("/family/home")
     async def save_home(request: Request) -> Response:
