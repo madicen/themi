@@ -143,6 +143,7 @@ def test_repeats_tell_flaky_cases_from_failing_ones() -> None:
     assert summary["flaky"] == ["wobbly"] and summary["failing"] == ["broken"]
     text = format_summary("gemini", summary)
     assert "Each case ran 2 times" in text and "Flaky (passed some runs): wobbly" in text
+    assert "Failed every run: broken" in text
 
 
 def test_timings_are_summarised_as_medians() -> None:

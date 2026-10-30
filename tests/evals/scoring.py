@@ -244,4 +244,6 @@ def format_summary(provider: str, summary: dict[str, Any]) -> str:
         )
     if summary.get("runs", 1) > 1 and summary.get("flaky"):
         lines.append(f"Flaky (passed some runs): {', '.join(summary['flaky'])}")
+    if summary.get("runs", 1) > 1 and summary.get("failing"):
+        lines.append(f"Failed every run: {', '.join(summary['failing'])}")
     return "\n".join(lines)
