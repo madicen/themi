@@ -100,6 +100,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18b | Feedback: routines asked about, the slow note after a card, noise in chat again | Feedback | [x] |
 | F18c | Feedback: button rows, the wall's to-do order, emails dealt with in Gmail, whose habit offer | Feedback | [x] |
 | F18d | Feedback: the wall's to-do list in order | Feedback | [ ] |
+| F18e | Feedback: the chore sync stuck, the wrong task changed, reminders that aren't tasks | Feedback | [x] |
 | R1 | Routines kept in Themi | Feedback | [ ] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
 | K2 | Calendars: a summary of the day | Calendars | [x] |
@@ -4850,6 +4851,59 @@ the list)."
   that instead.
 - Tests: the order kept on the wall (Cozyla fake, with the field found), items not
   Themi's left alone.
+
+### F18e · Feedback (2026-10-29): the chore sync stuck, the wrong task changed, reminders that aren't tasks
+Status: [x] 2026-10-29
+Depends on: C2b, F15a, F17b
+From the evening's logs (the chore sync warning every five minutes) and Erin's bugs #92
+and #93.
+- The log: "Cozyla chore sync stopped partway ... choreCheck/v1 (code 30016)" all evening.
+  "Bring bins in" was done early for next Wednesday; the wall won't tick a day still to
+  come, and the refusal stopped every sync before chores were pushed. A round done early
+  is ticked once its day comes; a tick the wall says no to is let go (connection and
+  sign-in failures still stop the sync and retry).
+- Behind it: "I brought the bins in" the morning after the round was marked missed counted
+  for next week's round. Done the day after a missed round, while the next hasn't begun,
+  fills the missed one (late).
+- Also behind it: "We contacted Erin's parents" marked the bins done (task 28, not 38).
+- #92 ("review bird cage schedule... I don't think it was supposed to be due? And it
+  misunderstood me asking when I cleaned it last"): Michael's "Yes please" to "Should I
+  reschedule 'Contact Erin's parents' to today at 6 pm?" moved the bird cage to 6 pm, so it
+  came up on Erin's chart and was nudged. Then "Didn't I just clean the bird cage?" and
+  "What no I meant yesterday?" each marked it done.
+- #93 ("event reminders are not tasks"): "extra reminders for the tutoring at 2pm and
+  3pm" were tasks (F15a's choice), each asking "Done already, or later?".
+
+Notes (2026-10-29):
+- `CozylaChores._check` ticks the wall; a refusal (any code but -1 and the sign-in ones)
+  is logged and the run is passed. `_ticks_to_wall` stops at a run whose day is after
+  today and comes back to it. The Cozyla fake refuses a future `checkDay` with 30016.
+- `TaskBoard._just_missed`/`_fill_missed`: the newest run is a missed one whose round
+  ended yesterday and the current round's day is after today: a new late run takes its
+  place (added before the old one is deleted: SQLite reuses the highest id, and the wall
+  sync goes by id). Two days late counts for the next round, as before.
+- `complete_task`, `reschedule_task`, `cancel_task` and `set_task_schedule` refuse a task
+  the conversation names nothing of when it names another open task (two or more title
+  words, `events.words_in_common`), and say which. A message of three words or fewer is
+  read with Themi's last message (`ToolContext.said_before`). Just "done" names nothing.
+- `complete_task` refuses a question ("?" at the end, or starting did/didn't/have/when/
+  was) unless it says it's done too ("done, what's next?", "can you mark it").
+- #93: `add_reminder(text, date, time)` (core, `themi.core.reminders`) queues "Reminder:
+  {text}" for that moment, with no buttons and no task: deadline at the moment (on time
+  past pacing and the day's limit, never in quiet hours or a pause), dropped two hours
+  past it. The system prompt points extra reminders there; "remind me to..." is still a
+  task. Deviation from F15a, at Erin's word.
+- `tasks._clock_words` is public now (`clock_words`).
+- Data repaired in the live database (backups in `data/`): bins (task 28) one late run by
+  Michael for 28 Oct, due 4 Nov; bird cage (task 7) the two runs from questions removed,
+  due 31 Oct with no time (the 6 pm was the misdirected reschedule). Task 38 was done by
+  Erin already.
+- Tool arguments aren't logged, so the misdirected calls were worked out from timings
+  (each tool's log line, the outbox, `reply_tools`). Logging a call's task id would make
+  the next one quicker to find.
+- Not run: the model evals (cases for a question, "Yes please" and an event reminder
+  would be worth adding).
+- Setup: restart. No migration.
 
 ### R1 · Routines kept in Themi
 Status: [ ]
