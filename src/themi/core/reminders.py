@@ -30,8 +30,9 @@ from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
 from themi.core.services import Services
-from themi.core.tasks import IMPORTANCE, Task, TaskBoard
+from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ DAY_END_TEXT = "Still open today: {items}. Done any of them already? Tomorrow's 
 MEDICINE = re.compile(
     r"\b(?:pills?|meds?|medicine|medication|drops|cream|tabs?|insulin|dose)\b", re.IGNORECASE
 )
+REMINDER_TEXT = "Reminder: {text}"
+REMINDER_USEFUL_FOR = timedelta(hours=2)  # held longer (quiet hours, a pause): dropped
 _TAG = re.compile(r"^\((?:low|medium|high|optional[^)]*)\)\s*", re.IGNORECASE)
 
 
@@ -64,6 +67,7 @@ class Reminders:
 
     def install(self) -> None:
         self.services.tools.register(set_task_importance)
+        self.services.tools.register(add_reminder)
 
     # ----- the end of the day ---------------------------------------------------------------
 
@@ -254,3 +258,46 @@ async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
     )
     log.info("Task %s importance: %s", task.id, args["importance"])
     return f"Task {task.id} ({task.title}) is now {args['importance']} importance."
+
+
+@tool(
+    "add_reminder",
+    "A message at a time they ask for, about something that isn't a task to tick off: extra "
+    "reminders before an event ('remind me at 2 and 3 about tutoring': one call each), or "
+    "'remind me at 5 that the plumber's coming'. No Done or Later, and nothing goes on their "
+    "list. Something they need to do ('remind me to call the vet') is create_task. date: "
+    "YYYY-MM-DD, read from the whole conversation (an event's reminders are on its day); "
+    "time: HH:MM, 24-hour; text: short, in their words, with the event's time if it has one "
+    "('Tutoring at 4 pm').",
+    {"text": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}},
+)
+async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
+    try:
+        day = date.fromisoformat(str(args["date"]).strip())
+        at = time.fromisoformat(str(args["time"]).strip())
+    except ValueError as exc:
+        raise ToolFailed("Not set: dates look like 2026-11-03, and times like 14:30.") from exc
+    text = " ".join(str(args["text"]).split())
+    if not text:
+        raise ToolFailed("Not set: say what the reminder is about.")
+    family = ctx.services.store.get_family()
+    tz = ZoneInfo(family.timezone if family else "UTC")
+    moment = datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
+    when = f"{moment:%a %d %b}, {clock_words(moment)}"
+    if moment <= clock.now():
+        raise ToolFailed(f"Not set: {when} has passed. Ask when they'd like it instead.")
+    await ctx.services.outbox.send(
+        ctx.member,
+        REMINDER_TEXT.format(text=text),
+        priority=Priority.NORMAL,
+        kind="reminder",
+        not_before=moment,
+        deadline=moment,  # on time, past the day's limit and pacing; never in quiet hours
+        expires=moment + REMINDER_USEFUL_FOR,
+        dedupe_key=f"reminder-{to_utc_iso(moment)}-{text.casefold()}",
+    )
+    log.info("Reminder for member %s at %s", ctx.member.id, to_utc_iso(moment))
+    return (
+        f'Reminder set for {when}: "{text}". It\'s a message then, not a task: nothing to '
+        "tick off. Tell them the day and time."
+    )

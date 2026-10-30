@@ -10,6 +10,7 @@ from typing import Any
 
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.ai.types import ToolResult
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -122,3 +123,39 @@ async def test_saying_it_matters_sets_the_importance(scenario: Scenario) -> None
     scenario.primary.queue_text("Got it, that one comes first.")
     await scenario.say("Erin", "Mimi's pill really matters")
     assert board(scenario).get(pill.id).importance == "high"
+
+
+async def test_extra_reminders_for_an_event_arent_tasks(scenario: Scenario) -> None:
+    """Bug #93 ("event reminders are not tasks"): "extra reminders for the tutoring at 2pm
+    and 3pm" became two tasks, each asking "Done already, or later?" and needing a tap."""
+    for hour in ("14:00", "15:00"):
+        scenario.primary.queue_tool_call(
+            "add_reminder", {"text": "Tutoring at 4 pm", "date": "2026-10-22", "time": hour}
+        )
+    scenario.primary.queue_text("Reminders set for 2 and 3 pm tomorrow.")
+    await scenario.say("Erin", "Can you add extra reminders for the tutoring at 2pm and 3pm?")
+    assert "Thu 22 Oct, 3 pm" in last_result(scenario)
+    assert not scenario.app.db.scalar("SELECT COUNT(*) FROM tasks")
+
+    assert not await scenario.advance(hours=28, minutes=59)  # Thu 13:59
+    before = len(scenario.telegram.calls("sendMessage"))
+    assert await scenario.advance(minutes=2) == ["Reminder: Tutoring at 4 pm"]
+    assert "reply_markup" not in scenario.telegram.calls("sendMessage")[before]  # no buttons
+    assert await scenario.advance(hours=1) == ["Reminder: Tutoring at 4 pm"]
+
+    scenario.primary.queue_tool_call(
+        "add_reminder", {"text": "Tutoring", "date": "2026-10-22", "time": "09:00"}
+    )
+    scenario.primary.queue_text("That time has passed.")
+    await scenario.say("Erin", "and one at 9am")
+    assert "has passed" in last_result(scenario)
+
+
+def last_result(scenario: Scenario) -> str:
+    results = [
+        block
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ]
+    return results[-1].content
