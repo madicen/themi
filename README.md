@@ -155,6 +155,25 @@ the wall's routines too: after the morning, and an hour before quiet hours, anyo
 routines for that part of the day aren't all done gets one message with a button for each.
 Themi's check-ins (like a run on set days) show on the wall as that person's routine.
 
+### The dishwasher, through Home Connect (optional)
+
+A Bosch (or Siemens, or another Home Connect) dishwasher can tell Themi when it runs. Themi
+only reads whether it's running; it never controls it.
+
+1. At [developer.home-connect.com](https://developer.home-connect.com), register an
+   application with the Authorization Code Grant Flow and the redirect URI
+   `<THEMI_PUBLIC_URL>/auth/home-connect/callback`.
+2. Put its client id and secret in `.env` as `HOME_CONNECT_CLIENT_ID` and
+   `HOME_CONNECT_CLIENT_SECRET`, and restart.
+3. As an admin, open the Family page and press **Link Home Connect**. The dishwasher shows
+   under Appliances.
+
+When a cycle starts, Themi offers to check off the dishwasher on the wall's routines, and
+any open Themi task about the dishwasher, to whoever's item it is. Turning on "Check off the
+dishwasher routine when the dishwasher starts" on the website's "What Themi does alone" page
+makes that automatic. Each evening, a week with fewer runs than usual feeds the energy model
+as device activity, as words, never a score.
+
 ### In the cloud
 
 `docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly

@@ -67,7 +67,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
 | L2b | Things to buy in the carts | Lists | [ ] |
-| H1 | Dishwasher: notice when the household is falling behind | Devices, early | [ ] |
+| H1 | Dishwasher: notice when the household is falling behind | Devices, early | [x] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
 | F13 | Feedback: problems talked through, mentions, nicknames, slow replies | Feedback | [x] |
@@ -3176,20 +3176,65 @@ Depends on: L2a, 35
   store) as part of the same approval.
 
 ### H1 · Dishwasher: notice when the household is falling behind
-Status: [ ]
-Depends on: 18
+Status: [x] 2026-10-30
+Depends on: 18, C3
 From Erin's idea #4, asking for this sooner than prompt 36's research. She wants Themi to
 notice, without being told, when the household may be running behind.
 
+Asked 2026-10-30: the dishwasher is a Bosch on the Home Connect app, and the family wants
+its cycles read from there. Home Connect has an official cloud API (OAuth 2 authorization
+code flow; `IdentifyAppliance Dishwasher-Monitor`; 1000 requests a day per user, access
+tokens last 24 hours; api-docs.home-connect.com, checked 2026-10-30), so no plug and no
+waiting on prompts 30 or 32.
+
 Build:
-- If C3 is built, the wall's "Cycle Dishwasher" routine already says whether it ran; start
-  there, and add hardware only if that isn't enough.
-- First, ask the user for the dishwasher's make and model and whether it has an app. If it's an
-  LG ThinQ, use prompt 30's connector; otherwise a smart plug that reports power draw (Tuya,
-  prompt 32's work) can detect cycles on any dishwasher.
-- Cycles become energy signals for the Shadow Calendar: fewer runs than usual for the
-  household is a gentle "running behind" sign. The plan's rule holds: people see words, never
-  scores.
+- A Home Connect connector: settings `HOME_CONNECT_CLIENT_ID` and
+  `HOME_CONNECT_CLIENT_SECRET` (and `HOME_CONNECT_URL` for the simulator or a fake). An
+  admin links the family's Home Connect account from the Family page; the refresh token is
+  kept encrypted, and its appliances become devices (`home_connect`), the dishwasher as the
+  `dishwasher` appliance.
+- A job reads the dishwasher's operation state every 5 minutes (about 290 calls a day).
+  Moving into Run starts a cycle; leaving it ends one.
+- A cycle starting checks off today's dishwasher routine on the wall (C3) and any open Themi
+  task about the dishwasher. That is a side effect, so it goes through its own category,
+  supervised until a rule makes it automatic.
+- Cycles become energy signals for the Shadow Calendar: fewer runs this week than usual for
+  the household is a gentle "running behind" sign, as device activity. People see words,
+  never scores.
+
+Tests:
+- The connector against a fake Home Connect: linking, token refresh, appliances, status, an
+  offline appliance, rate limiting.
+- A cycle starting ticks the wall routine (approved, then automatic), and closes a Themi task.
+- The pace signal: fewer runs than usual, and nothing without enough history.
+
+Notes (2026-10-30):
+- `themi.connectors.homeconnect`: `HomeConnectClient` (the wire) and `HomeConnectAccount` (the
+  family's one sign-in: a hashed 10-minute state, the refresh token encrypted in
+  `home_connect_account`, the access token in memory). A refresh's new refresh token
+  replaces the old. A 429 is waited out for its Retry-After without calling again; a 409 is
+  an appliance off the network. Migration 0074 rebuilds `devices` to allow `home_connect`.
+- Linking: Family page, Appliances, "Link Home Connect" (admins only). The callback carries
+  the admin in its state, like Google's. Home Connect's appliances become devices
+  (Dishwasher, Washer, Dryer mapped; only the dishwasher is read).
+- `themi.core.dishwasher`, job `devices.dishwasher` every 5 minutes: Run starts a cycle
+  (`appliance_cycles`), any other state but Offline ends it. A cycle starting stages
+  `dishwasher_done` for today's open wall routine items with "dishwasher" in the title
+  (`CozylaRoutines.open_matching`; Themi's own check-ins are left out, they're tasks) and
+  open Themi tasks about the dishwasher due by today, each to whoever's it is. Supervised
+  until turned on under "What Themi does alone"; the card lapses at midnight.
+- `devices.dishwasher_pace`, hourly, acts once a day from 18:00: runs in the last 7 days
+  against the usual week over up to 28 days before (at least 7 days of history, at least 2
+  runs a week usually). Under 60% of usual: -0.5 device activity for everyone, noted as
+  "the dishwasher ran once this week, fewer than usual (about 7 times)".
+- Not done: Home Connect's event stream (SSE). Polling fits in the daily limit (about 290 of
+  1000 calls) and keeps the scheduler simple; a start is noticed within 5 minutes.
+- The build plan doc couldn't be read from this session (not shared with the account), so
+  this follows the prompt and C3's notes.
+- Setup: register an app at developer.home-connect.com (Authorization Code Grant Flow,
+  redirect `<THEMI_PUBLIC_URL>/auth/home-connect/callback`), set `HOME_CONNECT_CLIENT_ID` and
+  `HOME_CONNECT_CLIENT_SECRET`, restart (applies 0074), and link from the Family page. To
+  skip the cards, turn on "Check off the dishwasher routine when the dishwasher starts".
 
 ### E1 · Email: suggest important senders
 Status: [x] 2026-10-27
