@@ -90,6 +90,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
+| P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [ ] |
+| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [ ] |
+| P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
+| P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4384,6 +4388,131 @@ snapshot names its reply; 👎 no longer changes phrasing strength and 😠 stil
 label kind decided from the offered groups; the case stub
 loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
 add, and the review labels it a model choice.
+
+### P5 · Evals that can compare: repeats, timings, and every tool vs groups
+Status: [ ]
+Depends on: P3
+From the routing talk (2026-10-29): routing changes get decided by measurement. Today an
+eval run gives one pass or fail per case, with no times, and one run of Gemini can't tell
+a real change from noise (47/49 vs 46/49 means nothing on its own). And the cheapest
+answer to "the word lists are fragile" hasn't been tried: send every tool and route nothing.
+P1 grouped the tools because 55 tools were about 8,000 tokens a call on the free tier.
+- **Repeats.** `make evals EVAL_ARGS='--repeat 3'` runs each case that many times. The
+  summary gives each case's pass count (3/3, 2/3...), the pass rate per category and in
+  all, and lists the flaky cases (passed some runs, not others) apart from the failing ones.
+- **Timings per case.** Each result keeps its model calls, the seconds of each, and the
+  tools sent with the first call (count and characters). The summary gives the medians.
+- **Arms.** `--routing groups` (today) or `--routing all` (every tool on every call, no
+  `more_tools` needed). The same switch is a setting, `TOOL_ROUTING` (default `groups`), so
+  "all" can also be tried in the family's chat with P3's numbers watching it. `all` sends
+  `ToolRegistry.specs()` and the agent leaves `more_tools` out.
+- **A comparison.** `tests/evals/rescore.py` (or a small `compare.py`) reads two saved runs
+  and prints, per case, both arms' pass counts, and in all: pass rate, median seconds per
+  case, median model calls. Cases that pass every run in one arm and fail every run in the
+  other are listed first: those are real differences, the rest is noise.
+- **Decide before running.** Proposed rule (confirm or change it before the runs): `all`
+  wins if its pass rate is no lower than `groups`' (within one case), no case goes from
+  always passing to always failing, and its median reply is at most 20% slower. Then P7a and
+  P7b aren't needed, and P1's word lists go (in a follow-up, after a week of `all` in chat).
+- Run both arms, three repeats each, on the family's own model (Gemini flash-lite), and
+  record the numbers and the decision in the Notes. The free tier's pacing makes this slow
+  (`THEMI_EVAL_PACE`); run it in the background.
+
+Tests: repeats aggregate (a case passing 2 of 3 is flaky, not failing); timings saved and
+read back by `rescore`; `--routing all` sends every tool and no `more_tools`; the setting
+does the same in a scenario; the comparison picks out always/never differences.
+
+### P6 · Near-twin tools: sent together, told apart, tested both ways
+Status: [ ]
+Depends on: P5
+From the routing talk (2026-10-29). Some tools sound alike and do very different things,
+so they stay separate tools; the work is making sure the model sees both and can tell them
+apart. Today each description already names its twin ("Not for 'don't send me anything':
+that's pause_messages"), but the twins don't always travel together: in the 2026-10-29
+evals `add_to_grocery_list` (core) was sent without `update_pantry` (pantry group), and the
+model used the twin it had. Nothing in the routing knows they belong together.
+- **A second tier: twin sets.** `TWINS` in `themi.core.tools`, each a named set of tools
+  the model confuses, with one short paragraph on how to tell them apart. A starting list
+  (check each against what the tools really do, and add any the evals or P4 find):
+  - *food and buying*: `update_pantry` (what the house has: used up, low, bought),
+    `add_to_grocery_list` (food to buy, when they ask for the list), `add_to_things_to_buy`
+    (non-food to buy), `add_to_list` (a named list).
+  - *quiet time*: `start_break` (the person is resting: nudges and check-ins wait, then one
+    question when it's over), `pause_messages` (hold one kind of message for a while).
+  - *rules or tasks*: `propose_rule` (how Themi itself behaves), `create_task` (something
+    to do, once or repeating), `set_task_schedule` (when a task repeats).
+- **Sent together.** If any tool of a twin set is sent, all of it is, whatever the router
+  chose (in `ToolRegistry.specs`, so every arm of P5 and any later router get it free).
+  Because grocery and task tools are core, this pulls `update_pantry`,
+  `add_to_things_to_buy`, `add_to_list`, `start_break`, `pause_messages` and
+  `set_task_schedule` into every call: P3's "tools sent" shows the cost.
+- **Told apart once.** The set's paragraph goes in the system prompt whenever the set is
+  sent ("Food and buying: ..."), with a pair of examples each way. The descriptions keep
+  what each tool does and drop the long cross-references the paragraph now covers.
+- **Behaviour that differs.** Where the words leave no doubt, a tool may decline in favour
+  of its twin, the way `propose_rule` already declines "remind me to" (only on the person's
+  own words, never the model's, and only for wordings a case covers).
+- **Cases both ways.** A "twins" category in `cases.json`: for each set, at least two cases
+  per tool that need that tool and forbid its twins, and one or two truly ambiguous ones
+  ("out of milk") that allow either. Run P5's harness (3 repeats) before any change, then
+  after: the Notes give both.
+
+Tests: a twin set is sent whole when any member is; the paragraph is in the system prompt
+only with its set; each declining tool declines only the covered wording; the twins cases
+load and their tools exist.
+
+### P7a · Routing data: the family's kinds of message, labelled
+Status: [ ]
+Depends on: P3, P5 (only if P5 keeps routing)
+The router eval (P3) has 12 cases that need a group: too few to compare routers on. An
+embedding router also needs example phrases per group, kept apart from the cases it's
+scored on.
+- **Routing cases**, about 80 to 100, in a new `tests/evals/routing_cases.json`: a message
+  (and the message before it, for follow-ups like "and limes") and the groups it needs.
+  Drafted from the kinds of thing the family says, read from the stored conversation, but
+  written as paraphrases: no names, places, health or money details from their messages go
+  in the repo. Each group gets plain cases, paraphrases, short follow-ups, and messages
+  with two asks ("add milk and remind me Tuesday" needs both).
+- The labels are checked by a person before they count: print them for review, and only
+  reviewed cases go in the file.
+- **Group examples**, 10 to 20 per group, in `themi.core.tools` beside `GROUPS` (they ship
+  with Themi), none copied from the routing cases.
+- P3's eval reads both case files. Today's word lists get scored on the new set; the
+  Notes give the new baseline.
+- Later, P4's labels add to both: a "router miss" becomes a case, and (paraphrased) an
+  example for the group that was missing.
+
+Tests: both files load, every group named exists, no example is also a case, every group
+has examples and cases.
+
+### P7b · An embedding router, if P5 says routing stays
+Status: [ ]
+Depends on: P7a
+Embeddings instead of word lists: no training, just nearest neighbours. Each group's
+examples become vectors once; each message becomes a vector; every group with an example
+close enough is sent.
+- `themi.ai.embeddings`: an `Embedder` interface (texts in, vectors out). First version:
+  Gemini's embedding API through `themi.ai.router` (a new `AITask.EMBEDDING`, so per-member
+  keys, retries and fallback apply). A local model can replace it later; note that the
+  usual local runtime (onnxruntime) has no wheel for Python 3.15, which the dev venv runs
+  (Docker is 3.13). A fake embedder in `tests/fakes`, so tests make no network calls.
+- The examples' vectors are cached (keyed by model and text), so a restart doesn't embed
+  them again.
+- `choose_groups` adds the embedding pass to the word lists at first (a union, so recall
+  can only rise), over this message and the last few. Every group above the threshold, not
+  just the best, so two asks bring two groups. If the embedding call fails or is slow (over
+  a second), the word lists alone decide: routing never costs a reply. `more_tools` stays.
+- Groups recently used (a tool from it ran in the last few turns) stay sent: short
+  follow-ups carry too little for either method.
+- The threshold is chosen with P3's eval on P7a's cases: print recall and tools sent at
+  several thresholds, pick the lowest tool count with recall at or near 100%, and say why in
+  the Notes.
+- A setting turns it on. After a week with it on, P3's live numbers ("needed more tools",
+  tools sent) against the word lists' week decide whether the word lists go.
+
+Tests: the fake embedder routes paraphrases the word lists miss; two asks bring two groups;
+a failing or slow embedder falls back to the word lists; recently used groups stay; the
+cache is reused across restarts; the routing goes through the router (keys, fallback).
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
