@@ -12,6 +12,12 @@ and it only sends after you say yes. You can link as many as you like.</p>
   <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
   {% endif %}
   <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
+  {% if tasks_scope in account.scopes %}
+  <p class="muted">Google Tasks: Themi takes what you add by voice to My Tasks, then clears it.</p>
+  {% else %}
+  <p class="muted">Google Tasks isn't allowed for this account yet. Linking it again lets Themi
+  take what you add to Google Tasks by voice.</p>
+  {% endif %}
   <form method="post" action="/accounts/{{ account.id }}/settings" class="settings">
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>

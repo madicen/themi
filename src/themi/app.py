@@ -49,6 +49,7 @@ from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
 from themi.core.follow_ups import FollowUps
+from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
@@ -204,6 +205,8 @@ def build_app(
     FeedbackChat(services).install()
     agent = Agent(services)
     channel.handler = agent
+    if services.google is not None and google is not None:
+        GoogleTasksInbox(services, services.google, google.tasks_url).install(agent)
     periodic = [
         PeriodicTask("outbox.flush", timedelta(seconds=30), outbox.flush),
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
@@ -251,6 +254,10 @@ def build_app(
         periodic.append(PeriodicTask("devices.dishwasher", timedelta(minutes=5), dishwasher.poll))
         periodic.append(
             PeriodicTask("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
+        )
+    if services.google_tasks is not None:
+        periodic.append(
+            PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)
         )
     if services.gmail is not None:
         periodic.append(PeriodicTask("gmail.poll", timedelta(minutes=1), services.gmail.poll_all))

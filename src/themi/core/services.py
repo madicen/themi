@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
     from themi.core.follow_ups import FollowUps
+    from themi.core.google_tasks import GoogleTasksInbox
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.journal import Journal
@@ -165,6 +166,7 @@ class Services:
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
+    google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
