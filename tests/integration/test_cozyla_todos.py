@@ -298,3 +298,36 @@ async def test_a_time_window_reminds_at_its_start_and_is_due_at_its_end(
     assert not any("tutoring" in t for t in scenario.inbox("Erin")[1:])
     await scenario.advance(minutes=2)  # 14:01
     assert any(t.startswith("Due today: Answer the tutoring email") for t in scenario.inbox("Erin"))
+
+
+async def test_themis_own_to_dos_are_kept_in_order_and_wall_ones_stay_put(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F18d: due or overdue first, important next, then by due date. Only Themi's own move,
+    among the places they hold; one added on the wall keeps its place. Dates don't change."""
+    family = scenario.cozyla_list
+    today = date(2026, 10, 21)
+    await add_task(scenario, "Someday thing")  # no date
+    await add_task(scenario, "Next week", due_on=today + timedelta(days=7))
+    await sync(scenario)
+    fake_cozyla.add_todo(family, "Wall's own")  # made on the wall, between Themi's
+    await add_task(scenario, "Important later", due_on=today + timedelta(days=5), importance="high")
+    await add_task(scenario, "Overdue", due_on=today - timedelta(days=1))
+    await sync(scenario)  # made on the wall
+    await sync(scenario)  # read back with their places, and put in order
+    wall_place = wall(fake_cozyla, scenario)["Wall's own"]["profileDisplayOrder"]
+
+    assert fake_cozyla.wall_order(family) == [
+        "Overdue",
+        "Important later",
+        "Wall's own",
+        "Next week",
+        "Someday thing",
+    ]
+    assert wall(fake_cozyla, scenario)["Wall's own"]["profileDisplayOrder"] == wall_place
+    dues = {t: wall(fake_cozyla, scenario)[t]["dueDateTime"] for t in ("Overdue", "Next week")}
+    assert all(due > 0 for due in dues.values())  # still dated
+
+    start = len(fake_cozyla.paths())
+    await sync(scenario)
+    assert writes_since(fake_cozyla, start) == []  # in order already: nothing sent

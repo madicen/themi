@@ -83,7 +83,11 @@ async def test_changes_go_both_ways(scenario: Scenario, fake_cozyla: FakeCozyla)
     fake_cozyla.tick(todo_id(fake_cozyla, cook, "Lasagna"))  # on the wall
     fake_cozyla.edit(todo_id(fake_cozyla, cook, "Tacos"), todoTitle="Fish tacos")
     await sync(scenario)
-    assert items(scenario, "cook") == [("Lasagna", True), ("Fish tacos", False), ("pho", False)]
+    assert sorted(items(scenario, "cook")) == [  # the wall sends newest first (F18d)
+        ("Fish tacos", False),
+        ("Lasagna", True),
+        ("pho", False),
+    ]
 
     nl = named(scenario, "cook")
     pho = next(i for i in nl.items if i.name == "pho")

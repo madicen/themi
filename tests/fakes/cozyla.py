@@ -107,8 +107,13 @@ class FakeCozyla:
         done: bool = False,
     ) -> int:
         todo_id = next(self._ids)
+        # F18d, as live: each new to-do goes on top (one above the highest), and the wall
+        # shows the list by profileDisplayOrder.
+        top = max((float(t["profileDisplayOrder"]) for t in self.todos.values()), default=0.0)
         self.todos[todo_id] = {
             "todoId": todo_id,
+            "displayOrder": top + 1,
+            "profileDisplayOrder": top + 1,
             "todoListId": list_id,
             "todoTitle": title,
             "todoDesc": "",
@@ -303,10 +308,20 @@ class FakeCozyla:
 
     def _update(self, body: dict[str, Any]) -> dict[str, Any]:
         todo = self.todos[body["todoId"]]
-        # The real API keeps only what's sent: anything left out is cleared.
+        # The real API keeps only what's sent: anything left out is cleared. The order
+        # fields are the exception: left out, they stay (F18d's live test).
         for name in TODO_FIELDS:
             todo[name] = body.get(name, BLANK[name])
+        for name in ("displayOrder", "profileDisplayOrder"):
+            if name in body:
+                todo[name] = float(body[name])
         return {"todoId": todo["todoId"]}
+
+    def wall_order(self, list_id: int) -> list[str]:
+        """The open to-dos' titles as the wall shows them: by profileDisplayOrder, top first."""
+        todos = [t for t in self.todos.values() if t["todoListId"] == list_id]
+        todos = [t for t in todos if not t["completeStatus"]]
+        return [t["todoTitle"] for t in sorted(todos, key=lambda t: -t["profileDisplayOrder"])]
 
     def _check(self, body: dict[str, Any]) -> dict[str, Any]:
         self.tick(body["todoId"], bool(body["completeStatus"]))
@@ -529,7 +544,9 @@ def _occurs(item: dict[str, Any], day: date) -> bool:
 ROUTES = {
     "users/cozUsersMember/queryMembers": lambda f, b: f.members,
     "rewards/todosList/list": lambda f, b: list(f.lists.values()),
-    "rewards/todosInfo/list": lambda f, b: list(f.todos.values()),
+    "rewards/todosInfo/list": lambda f, b: sorted(  # as live: highest displayOrder first
+        f.todos.values(), key=lambda t: -t["displayOrder"]
+    ),
     "rewards/todosInfo/create": FakeCozyla._create,
     "rewards/todosInfo/update": FakeCozyla._update,
     "rewards/todosInfo/checkTodo": FakeCozyla._check,
