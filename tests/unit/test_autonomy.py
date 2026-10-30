@@ -40,6 +40,7 @@ CAN_BE_AUTOMATIC = {
     "wall_routine_add",
     "email_keep",
     "dishwasher_done",
+    "routine_item_add",
 }
 
 

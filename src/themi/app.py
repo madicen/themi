@@ -60,6 +60,7 @@ from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
 from themi.core.reminders import Reminders
+from themi.core.routines import Routines
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.senders import SenderSuggestions
@@ -199,6 +200,8 @@ def build_app(
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
         travel_heads_ups.install()
+    routines = Routines(services)
+    routines.install()
     habits = HabitReserve(services)
     habits.install()
     Reactions(services).install()
@@ -225,6 +228,7 @@ def build_app(
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
+        PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
     ]
     if backup is not None:
         backups = BackupJob(store, Backups(backup, cipher), outbox)

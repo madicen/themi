@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
     from themi.core.reactions import Reactions
+    from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
     from themi.core.senders import SenderSuggestions
@@ -167,6 +168,7 @@ class Services:
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
+    routines: Routines | None = None  # routines kept in Themi (R1a)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
