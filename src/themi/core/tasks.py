@@ -27,7 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
-from themi.core.events import title_matches
+from themi.core.events import title_matches, words_in_common
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -1729,7 +1729,28 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "the safe way is no second dose until they've checked, or until their doctor or "
             "pharmacist says; never tell them to take it, and give no other dose advice."
         )
+    meant = _meant_instead(ctx, task)
+    if meant is not None:
+        raise ToolFailed(
+            f"Not marked done: what they said names task {meant.id} ({meant.title}), not task "
+            f"{task.id} ({task.title}). Mark the one they mean, and say which by name."
+        )
     return await _board(ctx).complete(task.id, ctx.member, interactive=True)
+
+
+def _meant_instead(ctx: ToolContext, task: Task) -> Task | None:
+    """Another open task their words name, when they name nothing of this one ("We contacted
+    Erin's parents" marked the bins done, 2026-10-29). Just "done" names nothing: no check."""
+    said = ctx.request_text
+    if words_in_common(said, task.title):
+        return None
+    board = _board(ctx)
+    rows = board.db.query(
+        "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND id != ?", (task.id,)
+    )
+    scored = [(words_in_common(said, t.title), t) for t in map(board.get, (r["id"] for r in rows))]
+    best = max(scored, key=lambda pair: pair[0], default=None)
+    return best[1] if best is not None and best[0] >= 2 else None
 
 
 @tool(

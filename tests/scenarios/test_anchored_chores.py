@@ -113,6 +113,32 @@ async def test_done_two_days_after_a_missed_round_counts_for_the_next(scenario: 
     assert [r.missed for r in board(scenario).runs(bins.id)] == [True, False]
 
 
+async def test_done_for_the_wrong_task_number_is_caught(scenario: Scenario) -> None:
+    """Bug: "We contacted Erin's parents" marked the bins done (task 28, not 38), and the
+    reply was just "Done." (2026-10-29)."""
+    bins = await chore(scenario, "Bring bins in")
+    await schedule(scenario, bins, "every Wednesday")
+    erin = scenario.member("Erin")
+    parents = await board(scenario).create(
+        erin, "Contact Erin\u2019s parents about babysitting", "text", 1, assignee=erin
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "We contacted Erin\u2019s parents")
+    assert board(scenario).get(bins.id).due_on == date(2026, 10, 21)  # still this round
+    result = last_tool_result(scenario)
+    assert result.is_error and f"task {parents.id}" in result.content
+
+    scenario.primary.queue_tool_call("complete_task", {"task_id": parents.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "We contacted Erin\u2019s parents")
+    assert board(scenario).get(parents.id).status == "done"
+    scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "done")  # no words to go on: as before
+    assert board(scenario).get(bins.id).due_on == date(2026, 10, 28)
+
+
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:
     bins = await chore(scenario, "Take out the bins")
     await schedule(scenario, bins, "every Tuesday", missed="catch_up")

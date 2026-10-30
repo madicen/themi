@@ -161,6 +161,16 @@ def test_titles_match_loosely() -> None:
     assert not title_matches("", "Anything")
 
 
+def test_words_in_common_with_a_title() -> None:
+    from themi.core.events import words_in_common
+
+    title = "Contact Erin\u2019s parents about babysitting"
+    assert words_in_common("We contacted Erin\u2019s parents", title) == 3
+    assert words_in_common("We contacted Erin\u2019s parents", "Bring bins in") == 0
+    assert words_in_common("done", title) == 0
+    assert words_in_common("that's done", "Take out the bins") == 0  # no scraps or fillers
+
+
 def test_times_relative_to_sunset() -> None:
     """F9b, Erin's runs: "an afternoon check-in at least an hour before sunset"."""
     rep = parse("every Tue, Thu and Sat or Sun at 2pm, at least an hour before sunset", WED)

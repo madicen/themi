@@ -135,6 +135,14 @@ def title_matches(words: str, title: str) -> bool:
     return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
 
 
+def words_in_common(said: str, title: str) -> int:
+    """How many of the title's words (bar fillers and scraps like "s") they used, give or
+    take endings ("contacted" and "contact")."""
+    heard = name_key(said).split()
+    words = {w for w in name_key(title).split() if len(w) > 2 and w not in FILLER}
+    return sum(any(_same_word(w, h) for h in heard) for w in words)
+
+
 def named_as_anchor(title: str, request_text: str) -> bool:
     """The title's words come up in what they said only as the time to fit around ("move
     that up so there's time before tutoring"): that event isn't the one to move (bug #73)."""
