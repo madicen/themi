@@ -4,10 +4,16 @@ It shows the account's members and to-do lists with how many items are open
 and done, whether `COZYLA_TODO_LIST` names one of them, and how a few due
 dates come back in local time (Cozyla stores a moment, Themi a date, and this
 shows which time of day the wall uses). Titles only with `titles=True`.
+
+`fields=True` (F18d) prints each open to-do on `COZYLA_TODO_LIST` with every field
+as Cozyla sends it, in the order it sends them, and every field name seen on any
+to-do: to compare with the order the wall shows, and find what (if anything)
+places a to-do there.
 """
 
 from __future__ import annotations
 
+import json
 from zoneinfo import ZoneInfo
 
 from themi.connectors.cozyla.client import CozylaClient
@@ -19,7 +25,7 @@ def _same(a: str, b: str) -> bool:
     return a.strip().lower() == b.strip().lower()
 
 
-async def check(client: CozylaClient, *, titles: bool = False) -> str:
+async def check(client: CozylaClient, *, titles: bool = False, fields: bool = False) -> str:
     members = await client.members()
     lists = await client.lists()
     todos = await client.todos()
@@ -55,4 +61,12 @@ async def check(client: CozylaClient, *, titles: bool = False) -> str:
             t.title for t in todos if chosen and t.list_id == chosen[0].id and not t.completed
         ]
         lines.append(f"Open on {wanted}: " + ("; ".join(open_titles) or "nothing"))
+    if fields and wanted:
+        chosen = [t for t in lists if _same(t.title, wanted)]
+        names = sorted({key for t in todos for key in t.raw})
+        lines.append("Fields on to-dos: " + ", ".join(names))
+        lines.append(f"Open on {wanted}, in the order Cozyla sends them, every field:")
+        for todo in todos:
+            if chosen and todo.list_id == chosen[0].id and not todo.completed:
+                lines.append("  " + json.dumps(todo.raw, ensure_ascii=False))
     return "\n".join(lines)

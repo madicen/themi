@@ -157,6 +157,12 @@ async def test_the_check_shows_what_is_there_without_titles_or_changes(
 
     assert "Open on family: Call the vet" in await check(client, titles=True)
 
+    fields = await check(client, fields=True)  # F18d: every field, in Cozyla's order
+    assert "Fields on to-dos: " in fields and "isFlag" in fields and "todoStars" in fields
+    assert "Open on family, in the order Cozyla sends them, every field:" in fields
+    assert '"todoTitle": "Call the vet"' in fields and "Old thing" not in fields
+    assert not [p for p in fake_cozyla.paths() if p.rsplit("/", 1)[-1] in WRITES]
+
 
 async def test_the_check_says_when_the_list_is_missing_or_unset(fake_cozyla: FakeCozyla) -> None:
     from themi.connectors.cozyla.check import check

@@ -71,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     cozyla_check.add_argument(
         "--titles", action="store_true", help="also list the open to-dos on COZYLA_TODO_LIST"
     )
+    cozyla_check.add_argument(
+        "--fields",
+        action="store_true",
+        help="also print every field of each open to-do on COZYLA_TODO_LIST, in Cozyla's order",
+    )
     return parser
 
 
@@ -280,7 +285,7 @@ def _feedback(
     return 0
 
 
-def _cozyla_check(titles: bool) -> int:
+def _cozyla_check(titles: bool, fields: bool = False) -> int:
     import asyncio
 
     from themi.connectors.cozyla import CozylaClient, CozylaError
@@ -297,7 +302,7 @@ def _cozyla_check(titles: bool) -> int:
 
     async def run() -> str:
         try:
-            return await check(client, titles=titles)
+            return await check(client, titles=titles, fields=fields)
         finally:
             await client.aclose()
 
@@ -343,7 +348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "restore":
             _restore(args.snapshot, args.dry_run, args.yes)
         elif args.command == "cozyla":
-            return _cozyla_check(args.titles)
+            return _cozyla_check(args.titles, args.fields)
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:
