@@ -161,6 +161,16 @@ def test_titles_match_loosely() -> None:
     assert not title_matches("", "Anything")
 
 
+def test_a_date_in_a_past_year_is_this_years() -> None:
+    """Bug #84: "Friday" became 2020-10-30."""
+    from themi.core.tasks import day_arg
+
+    assert day_arg("2020-10-30", WED) == date(2026, 10, 30)
+    assert day_arg("2025-01-04", WED) == date(2027, 1, 4)  # this year's has gone
+    assert day_arg("2024-02-29", WED) == date(2027, 2, 28)
+    assert day_arg("2026-10-01", WED) == date(2026, 10, 1)  # this year: as given
+
+
 def test_words_in_common_with_a_title() -> None:
     from themi.core.events import words_in_common
 

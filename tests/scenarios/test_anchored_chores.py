@@ -209,6 +209,36 @@ async def test_a_task_already_open_is_changed_as_asked(scenario: Scenario) -> No
     assert "both of them" in last_tool_result(scenario).content
 
 
+async def test_a_date_in_a_past_year_is_this_years(scenario: Scenario) -> None:
+    """Bugs #84, #85 and #87: "Clean upstairs" moved to 2020-10-30 (a Friday too), so it
+    stayed up on the chart as overdue, "snooze" never moved it, it was nudged "Was due 30
+    Oct" the day before, and then rolled on to the next week."""
+    upstairs = await chore(scenario, "Clean upstairs")
+    await schedule(scenario, upstairs, "every Thursday")
+    move = {"task_id": upstairs.id, "due_date": "2020-10-30", "due_time": "", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", move)
+    scenario.primary.queue_text("Moved to Friday.")
+    await scenario.say("Erin", "Can you snooze clean upstairs to Friday?")
+    assert board(scenario).get(upstairs.id).due_on == date(2026, 10, 30)
+    assert "Fri 30 Oct" in last_tool_result(scenario).content
+    await scenario.run_periodic("tasks.schedules")
+    assert not board(scenario).runs(upstairs.id)  # nothing missed
+
+
+async def test_moving_a_task_to_the_day_it_has_says_so(scenario: Scenario) -> None:
+    """Bug #84: "drink green tea was already scheduled for Friday, so there was no need to
+    reschedule it", but the reply listed it as moved."""
+    erin = scenario.member("Erin")
+    tea = await board(scenario).create(
+        erin, "Drink green tea", "physical", 1, date(2026, 10, 23), assignee=erin
+    )
+    move = {"task_id": tea.id, "due_date": "2026-10-23", "due_time": "", "from_time": ""}
+    scenario.primary.queue_tool_call("reschedule_task", move)
+    scenario.primary.queue_text("It was already Friday.")
+    await scenario.say("Erin", "Move my non-urgent tasks to Friday")
+    assert "already due Fri 23 Oct" in last_tool_result(scenario).content
+
+
 async def test_a_missed_round_can_be_caught_up(scenario: Scenario) -> None:
     bins = await chore(scenario, "Take out the bins")
     await schedule(scenario, bins, "every Tuesday", missed="catch_up")

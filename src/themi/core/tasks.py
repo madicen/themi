@@ -1331,6 +1331,8 @@ class TaskBoard:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
         assert task.due_on is not None
         day = f"{task.due_on:%a %d %b}"
+        if task.due_on.year != self._today().year:  # a wrong year shows (#84)
+            day += f" {task.due_on.year}"
         at = task.due_time or (task.repeat.at if task.repeat else None)
         if task.from_time and task.due_time:
             return f"{day}, {clock_words(task.from_time)}-{clock_words(task.due_time)}"
@@ -1538,7 +1540,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     due = None
     if args["due_date"]:
         try:
-            due = date.fromisoformat(args["due_date"])
+            due = day_arg(args["due_date"], _board(ctx)._today())
         except ValueError:
             return "Not created: the due date should look like 2026-11-03."
     try:
@@ -1852,11 +1854,17 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     _check_meant(ctx, task, "Not changed")
     said = str(args["due_date"]).strip().lower()
     try:
-        due = task.due_on if not said else None if said == "none" else date.fromisoformat(said)
+        today = board._today()
+        due = task.due_on if not said else None if said == "none" else day_arg(said, today)
         due_time = _time_arg(args["due_time"])
         from_time = _time_arg(args["from_time"])
     except ValueError as exc:
         raise ToolFailed("Not changed: dates look like 2026-11-03, and times like 14:30.") from exc
+    if said and due == task.due_on and isinstance(due_time, Keep) and isinstance(from_time, Keep):
+        return (  # bug #84: green tea was due Friday already, and the reply said it moved
+            f"{task.title} is already due {board.when_words(task)}; nothing changed. Say so, "
+            "rather than that it moved."
+        )
     if due is None and said != "none":
         due = board._today() if not isinstance(due_time, Keep) else None  # a time: today
     try:
@@ -1865,6 +1873,17 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         )
     except ValueError as exc:
         raise ToolFailed(f"Not changed: {exc}.") from exc
+
+
+def day_arg(text: str, today: date) -> date:
+    """A date the model gave, YYYY-MM-DD. A past year is this year's, or next year's once
+    that day has gone: nothing is due years ago ("Friday" became 2020-10-30, #84)."""
+    day = date.fromisoformat(text)
+    if day.year < today.year:
+        day = day.replace(year=today.year, day=min(day.day, 28) if day.month == 2 else day.day)
+        if day < today:
+            day = day.replace(year=today.year + 1)
+    return day
 
 
 def _time_arg(value: Any) -> time | Keep | None:

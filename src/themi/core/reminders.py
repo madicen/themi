@@ -30,7 +30,7 @@ from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
 from themi.core.services import Services
-from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words
+from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
@@ -272,16 +272,16 @@ async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
     {"text": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}},
 )
 async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
+    family = ctx.services.store.get_family()
+    tz = ZoneInfo(family.timezone if family else "UTC")
     try:
-        day = date.fromisoformat(str(args["date"]).strip())
+        day = day_arg(str(args["date"]).strip(), clock.now().astimezone(tz).date())
         at = time.fromisoformat(str(args["time"]).strip())
     except ValueError as exc:
         raise ToolFailed("Not set: dates look like 2026-11-03, and times like 14:30.") from exc
     text = " ".join(str(args["text"]).split())
     if not text:
         raise ToolFailed("Not set: say what the reminder is about.")
-    family = ctx.services.store.get_family()
-    tz = ZoneInfo(family.timezone if family else "UTC")
     moment = datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
     when = f"{moment:%a %d %b}, {clock_words(moment)}"
     if moment <= clock.now():
