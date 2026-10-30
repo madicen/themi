@@ -89,6 +89,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
+| P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4332,6 +4333,47 @@ Notes (2026-10-29):
 - Only 12 cases test routing at all: too few to judge a candidate router on. More cases
   that need a group (paraphrases, the family's real wording) would help before comparing.
 - Setup: restart (applies 0072). The live numbers fill in over the next week.
+
+### P4 · Wrong actions: marked in chat, labelled in review
+Status: [ ]
+Depends on: P3, F1
+From the router talk (2026-10-29): P3 sees only the misses the model notices itself (a
+`more_tools` call). When Themi confidently does the wrong thing (olive oil on the
+grocery list instead of the pantry), nothing ties it to the reply or the tool. Today those
+turn up only as `/bug` reports, read by hand.
+- **A reaction marks a reply as wrong.** One tap on Themi's reply, never asked for: Themi
+  doesn't ask "was that right?" and says nothing back. 👎 is taken (it makes phrasing
+  gentler, `STRICTER_REACTIONS`), so the mark needs its own emoji from Telegram's reaction
+  set; 🤔 unless the family picks another (ask before starting). It doesn't change
+  phrasing, approvals or energy.
+- `replies` needs to know its outbox messages (Telegram message ids), so a reaction finds
+  its reply. A reaction on a message that isn't a model reply (a card, a nudge) is ignored
+  for this.
+- A marked reply keeps its row, tools and model calls past the week's clean-up, until it
+  has been labelled.
+- **`/bug` points at the reply.** The snapshot gains the reply it's about (the one it
+  replies to in Telegram, else the latest), with its tools, groups offered and groups added.
+- **Labelling, in review.** `themi feedback` lists marked replies with the snapshot's
+  facts: the message, what Themi said, the tools it ran, the groups it offered. Then
+  `themi feedback --wrong-tool <reply id> <tool>` (the tool it should have used; `none`
+  for "no tool") or `--not-wrong <reply id>`. From the reply's offered groups, a label is
+  saved as one of:
+  - **router miss**: the right tool wasn't sent (its group wasn't chosen);
+  - **model choice**: it was sent and the model used another;
+  - **no tool needed**: it acted where it shouldn't have.
+- The label prints a `cases.json` stub (id, category, the person's message, `expect`) to
+  paste into the evals, so each real mistake becomes a case. The message comes from the
+  stored conversation; nothing new is kept for it.
+- "Reply times" (P3's section) adds the week's marked replies and the labels by kind, so
+  the router misses and the model's choices can be told apart.
+- Not here: guessing mistakes from behaviour (an undo soon after, "no, I meant"). Too noisy
+  for one family's numbers; revisit if the marks stay rare.
+
+Tests: a reaction on a model reply marks it, on a card or nudge doesn't; the mark changes
+no phrasing strength; a marked reply survives the clean-up until labelled; `/bug`'s
+snapshot names its reply; each label kind decided from the offered groups; the case stub
+loads with `load_cases`; the page's counts. A scenario: Erin reacts to a wrong grocery
+add, and the review labels it a model choice.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
