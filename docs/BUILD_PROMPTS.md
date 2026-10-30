@@ -88,7 +88,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
 | P2b | Faster replies, from the numbers | Feedback | [ ] |
-| P3 | Router metrics: how well the tool groups are chosen | Feedback | [ ] |
+| P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4282,7 +4282,7 @@ Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
 
 ### P3 · Router metrics: how well the tool groups are chosen
-Status: [ ]
+Status: [x] 2026-10-29
 Depends on: P1, P2a
 From a talk about a "System 1" router (2026-10-29): should a fast classifier (embeddings or
 a small model) choose the tool groups instead of P1's word lists? Not yet: first measure
@@ -4307,6 +4307,31 @@ token side) can't be seen, and no way to score a candidate router without a mode
 Tests: groups recorded on a reply, with and without `more_tools`; the page's numbers from
 seeded rows; the offline eval scoring a known router (a perfect one, and one that misses a
 group). Today's `choose_groups` recall goes in the Notes as the baseline.
+
+Notes (2026-10-29):
+- Migration 0072: `replies.groups` (the groups sent at the start, comma-separated, '' for
+  the core only), `groups_added` (what `more_tools` brought in), `tools_sent` (tools with
+  the first model call). NULL on older replies, which the numbers leave out.
+  `ReplyTimer.route()` and `.added()`, called from `Agent._converse`.
+- `themi.core.timing.router_numbers`; "Reply times" has a "Which tools went" section, and
+  each of the slowest replies says which tools went ("Tools sent: 29 (core, lists), then
+  pantry."). A miss is any `more_tools` call, even one that added nothing (it still costs
+  a round).
+- The offline eval is `tests/evals/routing.py` (`route_cases(registry, router, cases)`).
+  It needs a built app's registry, since features register their tools on install, so it
+  runs as `tests/scenarios/test_router_eval.py` with every fake (in `make test-all`).
+  `make router-eval` prints the table. Only the message is routed, not the last four
+  messages, so it's a little stricter than the live agent.
+- Baseline (`choose_groups`, 2026-10-29): 51 of the 55 cases have their tools built; 12
+  of them need a group beyond the core, and 11 got it (92%). Median 27 tools sent (22 for
+  the core only, of about 70). `BASELINE_RECALL` holds it as a floor.
+- The one miss: task-pause ("Please don't send me anything for the next couple of
+  hours") gets no settings group; the words have "stop sending" but not "don't send". The
+  real-model evals still pass it through `more_tools`. Left alone here (this prompt
+  measures); a one-word fix for whoever picks it up.
+- Only 12 cases test routing at all: too few to judge a candidate router on. More cases
+  that need a group (paraphrases, the family's real wording) would help before comparing.
+- Setup: restart (applies 0072). The live numbers fill in over the next week.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
