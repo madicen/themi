@@ -91,7 +91,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [ ] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
-| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [~] |
+| P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [ ] |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
@@ -4462,7 +4462,7 @@ Notes (2026-10-30):
   could allow it.
 
 ### P6 · Near-twin tools: sent together, told apart, tested both ways
-Status: [~]
+Status: [x] 2026-10-30
 Depends on: P5
 From the routing talk (2026-10-29). Some tools sound alike and do very different things,
 so they stay separate tools; the work is making sure the model sees both and can tell them
@@ -4499,6 +4499,35 @@ model used the twin it had. Nothing in the routing knows they belong together.
 Tests: a twin set is sent whole when any member is; the paragraph is in the system prompt
 only with its set; each declining tool declines only the covered wording; the twins cases
 load and their tools exist.
+
+Notes (2026-10-30):
+- `TWINS` in `themi.core.tools`: food and buying (`update_pantry`, `add_to_grocery_list`,
+  `add_to_things_to_buy`, `add_to_list`), quiet time (`start_break`, `pause_messages`),
+  rules or tasks (`propose_rule`, `create_task`, `set_task_schedule`). `ToolRegistry.specs`
+  sends a set whole; the agent adds `twins_text(...)` for the sets sent to each call's
+  system prompt. Food and rules ride on core tools, so they go on every call; quiet time
+  goes with the settings group. The STABLE_SYSTEM bullets and description cross-references
+  they replace are gone.
+- Declines, on the person's words only: `create_task` for "new rule" / "make it a rule"
+  (not with "remind"); `add_to_grocery_list` for "running low", "used the last",
+  "finished the"... unless they also ask for the list ("out of milk" stays either);
+  `start_break` for "don't send me", "hold the..." unless they say break, rest or lie down.
+  The evals still count a declined call against the case: they score the first choice.
+- The examples that named "Michael" (create_task, the prompt) now say "my husband".
+- Evals, gemini-3.1-flash-lite, 3 repeats. Twins (22 cases): before 52/66, after 57/66;
+  twin-pantry-finished went 0/3 to 3/3, twin-pantry-low-coffee and twin-task-husband-door
+  2/3 to 3/3, nothing worse (`gemini-groups-20261030-0810` vs `-0825`). The other cases,
+  against 2026-10-29's 3.1 run on the 36 both finished (quota ran out in tasks): 35/36 vs
+  35/36, no flips. Tools sent per call, median: 24 to 27.
+- Median model seconds went 2.2 to 3.8 on those 36 cases, but the twins runs went 6.4 to
+  2.6 the other way with more tools, so run-to-run timing on the free tier swamps it.
+  P3's timing page will show the real cost in the family's chat.
+- Still failing every run: twin-pause-meals, twin-pause-tonight, twin-break-lie-down.
+  "hold the meal reminders", "don't send me" and "lie down" don't bring the settings
+  group, so neither quiet-time twin is sent and the model reaches for propose_rule. That's
+  routing (P7a/P7b), not telling twins apart. `make router-eval`'s baseline is now 21/25
+  with the twins cases in.
+- Follow-up: run the task and email cases after P6 on a fresh day's quota.
 
 ### P7a · Routing data: the family's kinds of message, labelled
 Status: [ ]
