@@ -47,6 +47,9 @@ class ToolContext:
     # A tool sent the answer itself, word for word (a day summary): the model's reply is
     # kept only as a short line (bug #89: it wrote the day out again).
     answered: list[str] = field(default_factory=list)
+    # The tasks this turn's tools made or changed: what a reply says about who has them is
+    # checked against them (bug #97).
+    tasks: list[int] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
     groups: set[str] = field(default_factory=set)
 
@@ -501,6 +504,9 @@ class ToolRegistry:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
+        task_id = call.arguments.get("task_id")
+        if outcome == "ok" and isinstance(task_id, int):
+            ctx.tasks.append(task_id)
         return result
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:

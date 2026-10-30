@@ -814,6 +814,14 @@ class TaskBoard:
         await self._changed(task, "reassigned", False)
         return task
 
+    def whose_list(self, task: Task) -> str:
+        """Whose list a task is on, in words (bug #97): "Erin's list", or "both lists"."""
+        if task.shared:
+            return "both lists"
+        if task.assignee is None:
+            return "nobody's list yet"
+        return f"{self.store.get_member(task.assignee).name}'s list"
+
     async def put_on_chart(self, task_id: int, by: Member, on: bool = True) -> Task:
         """Put a one-off task on the wall's chore chart (or take it off, back to the to-do
         list). Repeating chores are always on the chart."""
@@ -1616,11 +1624,17 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             task = await _board(ctx).make_either(task.id)
     except ValueError as exc:
         return f"Not created: {exc}"
+    ctx.tasks.append(task.id)
     assignee = ctx.services.store.get_member(task.assignee) if task.assignee else ctx.member
-    if assignee.id == ctx.member.id:
-        who, tell = f"{assignee.name} (the person asking)", ""
+    nudged, tell = f"{assignee.name} gets", ""
+    if both:  # bug #97: this said "assigned to Michael", and so did the reply
+        who = "for both of them, on both lists (either can do it; whoever does it closes it)"
+        nudged, tell = "Each of them gets", " Say it's on both lists, not one person's."
+    elif assignee.id == ctx.member.id:
+        who = f"and assigned to {assignee.name} (the person asking)"
     else:
-        who, tell = assignee.name, f" Let {ctx.member.name} know it went to {assignee.name}."
+        who = f"and assigned to {assignee.name}"
+        tell = f" Let {ctx.member.name} know it went to {assignee.name}."
     due = f", due {_board(ctx).when_words(task)}" if task.due_on else ""
     said = (
         _RELATIVE_DAY.search(task.title)
@@ -1635,8 +1649,9 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         else ""
     )
     return (
-        f"Task {task.id} created and assigned to {who}{due}. Why: {task.assign_reason} "
-        f"{assignee.name} gets a gentle nudge at a good moment.{tell}{rename} Say its title "
+        f"Task {task.id} created {who}{due}."
+        + ("" if both else f" Why: {task.assign_reason}")
+        + f" {nudged} a gentle nudge at a good moment.{tell}{rename} Say its title "
         "and when in one line."
     )
 

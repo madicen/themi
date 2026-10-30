@@ -93,6 +93,17 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+# Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
+# to Michael" when no tool had moved it. A sentence that hands a task to someone is checked
+# against who has it; a wrong one is replaced by whose list it's really on.
+HANDED_TO = (
+    r"\b(?:assigned|reassigned|gave|given|handed|passed|put|added|moved|sent)\b[^.!?\n]*?"
+    r"\b(?:to|on|for)\s+{name}\b|\b{name}'s\s+(?:list|job|task)\b"
+)
+SENTENCE = re.compile(r"(?<=[.!?])\s+")
+QUOTED = re.compile(r'"([^"\n]+)"')
+
+
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
 TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
 
@@ -393,7 +404,7 @@ class Agent:
                     reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
-                    reply = _by_name(reply, self._task_title)
+                    reply = self._whole_truth(_by_name(reply, self._task_title), ctx)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
@@ -422,6 +433,54 @@ class Agent:
         ):
             recent.pop()
         return recent[-self.history :]
+
+    def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
+        """Each sentence saying a task went to someone is kept only if one of the tasks it
+        names in quotes (or else, that the turn touched) is that person's alone."""
+        board = self.services.taskboard
+        if board is None:
+            return reply
+        members = self.services.store.list_members()
+        touched = [board.get(i) for i in dict.fromkeys(ctx.tasks)]
+        lines, truths = [], []
+        for line in reply.split("\n"):
+            kept = []
+            for sentence in SENTENCE.split(line):
+                bare = QUOTED.sub('""', sentence)  # a name inside a title isn't a handover
+                named = [
+                    m
+                    for m in members
+                    if re.search(HANDED_TO.format(name=re.escape(m.name)), bare, re.IGNORECASE)
+                ]
+                tasks = self._open_titled(QUOTED.findall(sentence)) or touched
+                if (
+                    named
+                    and tasks
+                    and not any(t.assignee == m.id and not t.shared for t in tasks for m in named)
+                ):
+                    truths += [t for t in tasks if t not in truths]
+                else:
+                    kept.append(sentence)
+            if kept or not line.strip():
+                lines.append(" ".join(kept))
+        if not truths:
+            return reply
+        said = " ".join(f'"{t.title}" is on {board.whose_list(t)}.' for t in truths)
+        text = "\n".join(lines).strip()
+        return f"{text}\n{said}" if "\n" in text else f"{text} {said}".strip()
+
+    def _open_titled(self, titles: list[str]) -> list:
+        board = self.services.taskboard
+        assert board is not None
+        rows = [
+            self.services.store.db.one(
+                "SELECT id FROM tasks WHERE lower(title) = lower(?) "
+                "AND status IN ('open', 'snoozed') ORDER BY id DESC LIMIT 1",
+                (title,),
+            )
+            for title in titles
+        ]
+        return [board.get(row["id"]) for row in rows if row]
 
     def _task_title(self, task_id: int) -> str | None:
         row = self.services.store.db.one("SELECT title FROM tasks WHERE id = ?", (task_id,))

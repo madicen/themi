@@ -542,3 +542,87 @@ async def test_having_the_partner_do_something_is_a_task_for_them(scenario: Scen
     (task,) = board.open_for(scenario.member("Husband"))
     assert task.title == "Get the pacifier from under the ottoman"
     assert "have the other partner do something" in scenario.primary.last_request.system
+
+
+MADE = {"kind": "physical", "effort": 1, "due_date": "2026-10-21", "due_time": "21:00"}
+MADE |= {"from_time": "", "steps": [], "check_in": False, "importance": "normal"}
+
+
+async def test_one_of_us_is_said_as_both_lists(scenario: Scenario) -> None:
+    """Bug #97: "have one of us cycle the laundry" was on both lists, but create_task's
+    result said "assigned to Michael", so the reply said "I've put it on Michael's list"."""
+    scenario.primary.queue_tool_call(
+        "create_task", {"title": "Cycle the laundry", **MADE, "assign_to": "both"}
+    )
+    scenario.primary.queue_text(
+        "Added: \"Cycle the laundry\", tonight at 9. I've put it on Husband's list."
+    )
+    replies = await scenario.say("Erin", "Remind one of us to cycle the laundry at 9 tonight")
+    result = _last_result(scenario)
+    assert "both lists" in result and "assigned to" not in result
+    reply = replies[-1]
+    assert "Husband's list" not in reply
+    assert '"Cycle the laundry" is on both lists' in reply
+
+
+async def test_a_handover_no_tool_made_isnt_claimed(scenario: Scenario) -> None:
+    """Bug #97: "can you get Michael to unclog the vacuum tonight?" ran five task tools,
+    none of which moved it, and the reply said "I've assigned it to Michael for tonight"."""
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
+    )
+    scenario.primary.queue_tool_call(
+        "set_task_importance", {"task_id": task.id, "importance": "high"}
+    )
+    scenario.primary.queue_text(
+        'Got it. I\'ve assigned "Unclog the robot vacuum" to Husband for tonight.'
+    )
+    replies = await scenario.say("Erin", "Can you get Husband to unclog the vacuum tonight?")
+    reply = replies[-1]
+    assert "assigned" not in reply
+    assert '"Unclog the robot vacuum" is on Erin\'s list.' in reply
+    assert reply.startswith("Got it.")  # the true part stays
+
+
+async def test_a_handover_that_happened_is_said_as_it_was(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(
+        erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
+    )
+    scenario.primary.queue_tool_call(
+        "update_task",
+        {
+            "task_id": task.id,
+            "title": "",
+            "steps": [],
+            "clear_steps": False,
+            "assign_to": "Husband",
+        },
+    )
+    scenario.primary.queue_text('I\'ve given "Unclog the robot vacuum" to Husband for tonight.')
+    replies = await scenario.say("Erin", "Can you get Husband to unclog the vacuum tonight?")
+    assert replies[-1] == 'I\'ve given "Unclog the robot vacuum" to Husband for tonight.'
+    assert board.get(task.id).assignee == scenario.member("Husband").id
+
+
+async def test_a_name_in_a_title_isnt_a_handover(scenario: Scenario) -> None:
+    made = {**MADE, "kind": "errand", "due_time": "", "assign_to": "me"}
+    scenario.primary.queue_tool_call("create_task", {"title": "Buy a gift for Husband", **made})
+    scenario.primary.queue_text('I\'ve added "Buy a gift for Husband" for tomorrow.')
+    replies = await scenario.say("Erin", "Remind me to buy a gift for Husband tomorrow")
+    assert replies[-1] == 'I\'ve added "Buy a gift for Husband" for tomorrow.'
+
+
+def _last_result(scenario: Scenario) -> str:
+    results = [
+        block
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ]
+    return results[-1].content
