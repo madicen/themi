@@ -110,7 +110,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
 | F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
 | F19b | Idea: a word when a task is done | Feedback | [x] |
-| F19c | Idea: a shared task put off by one person stays with the other | Feedback | [ ] |
+| F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
 | O1 | Idea: when it's too much, a few things now and the rest spread out | Feedback | [ ] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
@@ -5506,7 +5506,7 @@ Notes (2026-10-30):
 - Setup: restart (applies 0084).
 
 ### F19c · Idea #86: a shared task put off by one person stays with the other
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: F19a, F4
 Erin's idea #86 (2026-10-29): "for shared tasks, when one user snoozes the task, only snooze
 it for that user (it should remain active for the user who did not snooze the task)."
@@ -5525,6 +5525,26 @@ it for that user (it should remain active for the user who did not snooze the ta
 
 Tests: shared task snoozed by one: the other's nudge and summary unchanged; both snooze;
 the snooze ends; a one-person task as before; a reschedule moves it for both.
+
+Notes (2026-10-30):
+- `task_snoozes` (task, member, until; migration 0085). `TaskBoard.snooze(..., by=)`: a
+  `shared` task (either of you, or escalated to both) put off by `by` gets their row,
+  their queued nudges cancelled, and the task stays open. Later on a nudge and
+  snooze_task pass who it was; the email audit's own snooze doesn't (its task is one
+  person's).
+- `put_off_until(task, member)` counts their own put-off; `prompt()` sends nothing to
+  someone with one; the day summary, the end-of-day list and overdue reminders leave it
+  out for them. `resurface` deletes a row whose time has come and nudges that person.
+- Deviation: when both have put it off, each hears at their own time, not both at the
+  earlier one; each asked for their own.
+- Done (by anyone) or rescheduled ends every row for the task; a reschedule from chat of
+  a shared task says "That's for both of you." The wall (one to-do for both) and the
+  chore chart are untouched.
+- Replies: "No rush on that one (X). It waits for you until 2 pm today. It's still on
+  Michael's list." (or "It'll come back to you in a few hours."). "Put off for you" was
+  reworded by the PDA shield as a command.
+- Not run: the model evals.
+- Setup: restart (applies 0085).
 
 ### O1 · Idea #94: when it's too much, a few things now and the rest spread out
 Status: [ ]
