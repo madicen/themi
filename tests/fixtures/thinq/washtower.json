@@ -1,0 +1,4 @@
+{
+  "washer": {"runState": {"currentState": "END"}, "timer": {"remainHour": 0, "remainMinute": 0}},
+  "dryer": {"runState": {"currentState": "DRYING"}, "timer": {"remainHour": 0, "remainMinute": 40}}
+}

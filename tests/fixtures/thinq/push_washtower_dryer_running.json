@@ -1,0 +1,7 @@
+{
+  "pushType": "DEVICE_STATUS",
+  "deviceId": "lg-tower-1",
+  "deviceType": "DEVICE_WASHTOWER",
+  "timestamp": "2026-10-21T22:45:00.000000",
+  "report": {"dryer": {"runState": {"currentState": "DRYING"}}}
+}

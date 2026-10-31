@@ -1,0 +1,14 @@
+[
+  {
+    "deviceId": "lg-washer-1",
+    "deviceInfo": {"deviceType": "DEVICE_WASHER", "modelName": "WM4000HWA", "alias": "Washer", "reportable": true}
+  },
+  {
+    "deviceId": "lg-dryer-1",
+    "deviceInfo": {"deviceType": "DEVICE_DRYER", "modelName": "DLEX4000W", "alias": "Dryer", "reportable": true}
+  },
+  {
+    "deviceId": "lg-fridge-1",
+    "deviceInfo": {"deviceType": "DEVICE_REFRIGERATOR", "modelName": "LRMVS3006S", "alias": "Fridge", "reportable": true}
+  }
+]

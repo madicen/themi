@@ -1,0 +1,8 @@
+{
+  "pushType": "DEVICE_STATUS",
+  "deviceId": "lg-washer-1",
+  "deviceType": "DEVICE_WASHER",
+  "userNumber": "KR2306081234567",
+  "timestamp": "2026-10-21T22:40:00.000000",
+  "report": [{"location": {"locationName": "MAIN"}, "runState": {"currentState": "END"}}]
+}
