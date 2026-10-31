@@ -108,7 +108,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
-| F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [~] |
+| F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
 | F19b | Idea: a word when a task is done | Feedback | [ ] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [ ] |
 | O1 | Idea: when it's too much, a few things now and the rest spread out | Feedback | [ ] |
@@ -5408,7 +5408,7 @@ Notes (2026-10-30):
 - Setup: restart. No migration.
 
 ### F19a · Feedback (2026-10-30): a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added
-Status: [~]
+Status: [x] 2026-10-30
 Depends on: F18h, K1, K2, C2c
 From the family's bugs #98-#101 and #103-#106 (2026-10-29 and 30). Ideas #86, #94 and #102
 from the same days are F19c, O1 and F19b; #33 and #34 still wait for Erin's spec.
@@ -5437,6 +5437,34 @@ from the same days are F19c, O1 and F19b; #33 and #34 still wait for Erin's spec
 
 Tests: each bug first as a failing test; a scenario for the snooze to tomorrow and for
 yesterday's summary.
+
+Notes (2026-10-30):
+- #104, #106: `snooze_task` takes `day` (YYYY-MM-DD, '' for today; a day alone waits for
+  9 am; a time already gone on a day given is refused). A snooze today reads back "until
+  2 pm today". `TaskBoard.put_off_until`; the day summary leaves out a task put off past
+  the day's end (`Reminders._put_off` shares it).
+- #105: the calendar is read from midnight a week back (`busy.LOOK_BACK`), so today's
+  earlier events stay too. A day gone by lists what was done at the time it was done,
+  "(done)" or "(done by Michael)" for a round someone else did (`TaskBoard.done_between`:
+  rounds from task_runs, one-offs by completed_at; who did a one-off isn't kept), and its
+  open tasks "(still open)". The tool's description says it answers "what happened".
+- #99: `Outbox.refreshers`, per kind: a held message is asked for its text as it goes,
+  or dropped (None). Reminders' refresher writes the end-of-day list again; other
+  task_summary rows (the morning list) go as they are.
+- #98, #100: `agent._unquoted` takes quotes off a whole reply (straight or curly) when
+  that mark isn't used inside it, apostrophes aside, and backticks off a quoted title.
+- #101: `Events._already`: no card for a booking at the very times of an event on their
+  calendars (Themi's or by hand, the family calendar too) or of a card still waiting.
+  Titles aren't compared ("Tutoring (Jennifer)" vs "Tutoring: Malcolm's first session").
+- #103: no fault found. The tick goes through `complete`; the to-do's link says done, no
+  errors (when it reached the wall isn't kept). Cozyla timed out at times that day, and
+  a failed read backs off up to an hour. The edited morning list now starts "Marked done:
+  X." so the tick is seen to have worked.
+- Data not repaired (ask first): cards 221 and 231 (the Malcolm session, already on her
+  calendar) are still waiting; the green tea (task 42) is open, due today, not put off to
+  Saturday afternoon.
+- Not run: the model evals.
+- Setup: restart. No migration.
 
 ### F19b · Idea #102: a word when a task is done
 Status: [ ]
