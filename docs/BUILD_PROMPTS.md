@@ -111,7 +111,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
 | F19b | Idea: a word when a task is done | Feedback | [x] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
-| O1 | Idea: when it's too much, a few things now and the rest spread out | Feedback | [ ] |
+| O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [ ] |
+| O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [ ] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -5546,8 +5547,8 @@ Notes (2026-10-30):
 - Not run: the model evals.
 - Setup: restart (applies 0085).
 
-### O1 · Idea #94: when it's too much, a few things now and the rest spread out
-Status: [ ]
+### O1 · Idea #94: when it's too much (split into O1a and O1b)
+Status: split
 Depends on: F19a, F19c, T1, B1
 Erin's idea #94 (2026-10-29): "a full overhaul of how Themi presents tasks when the user is
 overwhelmed. Something that only surfaces a small number of tasks to focus on for now. And
@@ -5580,6 +5581,41 @@ upstairs", each move one by one and every remaining one read back.
 Tests: the pick (fixed times, medicine kept, the cap); the spread never puts a day over
 its budget and never moves a fixed date; one summary message; a scenario of the
 2026-10-29 morning ("pare it down") in one exchange.
+
+Split (2026-10-30), with the user's direction: it's for anyone who gives a sign of being
+overwhelmed, in any words, not only Erin, and not only when asked by name.
+
+### O1a · Idea #94: when it's too much, a few things now (anyone, any words)
+Status: [ ]
+Depends on: O1, F19c
+- Signals: the message's own words ("overwhelmed", "too much", "can't keep up", "pare it
+  down", "swamped", "drowning"...) put a line in the turn's context; `focus_now` is a core
+  tool, so the model has it whatever the router chose, for overwhelm in other words too.
+  The morning list (several nudges at once) gets a "Too much today" button.
+- `focus_now`: at most three of today's open things (due or overdue, not put off or
+  waiting for the chart): medicines always, then ones with a time today, then urgent and
+  important (T1), then the lightest. One message: those few, and a line that the rest are
+  kept, with [Spread them out] [Leave them for now] (two options, no demand).
+- Wording through the PDA shield; never energy; no "should".
+
+Tests: the pick (medicine kept, the cap, the order); the signal line for overwhelm words,
+none otherwise; the button on the morning list; a scenario for each of the family.
+
+### O1b · Idea #94: when it's too much, the rest spread out under a daily budget
+Status: [ ]
+Depends on: O1a
+- The rest move to the next days, the most pressing first, each to the first day under a
+  budget (open things due that day, chore rounds included): the person's setting, or by
+  default what they usually get done in a day (median of the last four weeks, 2 to 8, 4
+  with no history).
+- Never moved: medicines, deadline chores. A repeating chore goes to its next round
+  rather than stack. A shared task is put off for them alone (F19c) to that day, so it
+  stays with the other.
+- From [Spread them out], or at once when they asked for the rest to be moved (focus_now
+  with spread). Said once, by day, with the names.
+
+Tests: no day over budget; fixed ones stay; a chore skips to its next round; a shared one
+stays on the other's list; the 2026-10-29 morning ("pare it down") in one exchange.
 
 ### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
