@@ -193,6 +193,11 @@ permissions below couldn't control them anyway.
 3. For updates as they happen, install the MQTT library (`pip install -e '.[thinq]'`) and
    restart. Without it Themi reads the appliances every 5 minutes, which works too.
 
+When the washer finishes, whoever has more room gets a gentle nudge to move the load; the
+dryer starting settles it. A load left longer than the fresh hours on the Family page
+(8 by default) gets a rinse suggestion instead, timed to finish when that person has room.
+"/pause laundry" holds these nudges for a while.
+
 ### Groceries said to Google Home, through Google Keep (optional, a trial)
 
 "Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API

@@ -133,7 +133,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F10 | Feedback: due times, one nudge at a time, plain phrasing, check-in reviews | Feedback | [x] |
 | C2d | Cozyla: one chore on the chart at a time | Cozyla | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [x] |
-| 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
+| 31 | Laundry module and rescue protocol | 5 Devices | [x] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
@@ -6146,7 +6146,7 @@ Notes (2026-10-31):
 - Setup: README, "The washer and dryer, through LG ThinQ".
 
 ### 31 · Laundry module and rescue protocol
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 30, 20
 Read first: "Module behaviour" → C (Laundry); "Testing" → Phase 2 row.
 
@@ -6167,6 +6167,36 @@ Tests:
 - Superseding cycles.
 
 Commit when done.
+
+Notes (2026-10-31):
+- `themi.core.laundry`, fed by 30's `ApplianceEvent`s. The washer finishing makes a wet load
+  (`laundry_loads`, migration 0090) and a one-off "Move the wet load to the dryer" task
+  (physical, effort 1). Washer and dryer runs are kept in `appliance_cycles`.
+- "The person with more spare capacity" is `Matcher.roomiest`: the most spare room right
+  now, with no hand-over cost (the laundry has no usual owner, so `assign`'s default owner
+  doesn't fit); ties go to the first member. `TaskBoard.create` takes the `assignment`.
+- The nudge is the task's own (`own_nudges`, like the email audit): "The washer finished at
+  10 am. Into the dryer now, or later?" with Moved it / Later, as the outbox kind `laundry`,
+  so "/pause laundry" holds it. The task stays off the wall's lists (`off_wall`): it comes
+  and goes with the washer.
+- The dryer starting completes the task, which edits the sent nudge ("Marked done").
+  The washer starting again supersedes the load: the task is taken off the list and the
+  nudge says "That load's being washed again". Tapping Moved it, or saying it's done,
+  closes the load too. None of this changes anything outside Themi, so nothing is staged
+  through the trust tiers.
+- `laundry.fresh`, every 15 minutes: a load past the family's fresh hours (Family page,
+  default 8; the rinse length too, default 30 minutes) becomes "Rinse the washer load".
+  The rinse is timed with `next_window` to finish as that person's next good window
+  begins. The message names both times ("started around 6 pm, it'd be done about 6:30
+  pm") and goes out in the half hour before the start, never after (its deadline). A load
+  put off with Later gets the rinse when it comes back.
+- Deviation: when that start falls in quiet hours or a busy time, where nothing can reach
+  them, the rinse starts as soon as a message can (often as quiet hours end, when the
+  window opens) and finishes that much into the window, so the times it names are always
+  ones they can act on.
+- Follow-ups: laundry as an energy input ("device activity", as the plan lists it) isn't
+  done; the cycles are kept for it. A WashCombo is "Not used" until mapped, since its
+  "finished" can mean washed or dried.
 
 ### 32 · SmartLife / Tuya feeders
 Status: [ ]
