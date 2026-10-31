@@ -5621,8 +5621,22 @@ Notes (2026-10-30):
   stays, with a "Too much today" button; Themi offers it when someone's words say it's too much, and
   doesn't start it from its own reading of the day (energy, load). That last could be a
   follow-up.
-- Not run: the model evals (whether the model calls focus_now for overwhelm in other
-  words is theirs to show).
+- Evals (2026-10-31, gemini-3.5-flash-lite, one run; `results/gemini-groups-20261031-0228`):
+  66/73 (90%), PDA-safe 98.6%. New cases: focus-overwhelmed passed; focus-husband-own-
+  words called focus_now for words the signal list lacks (it scored "no reply"; the
+  scorer now counts a tool's own answer, `scoring.ANSWER_KINDS`). Failing as before:
+  twin-break-lie-down, twin-pause-tonight. Failing this once, all passed 3/3 on 10-30 and
+  touch none of today's tools: energy-plumber, energy-medium-day, remember-birthday.
+  task-registration: a whole reply in quotes lost them (#98) and its opening title read
+  as an order; fixed (`Agent._titles_quoted`). The daily quotas ran out before
+  focus-pare-and-move, focus-not-for-soup, snooze-to-tomorrow-afternoon,
+  snooze-shared-task, what-happened-yesterday, task-done-warm-word and
+  twin-rule-or-chore-towels: run `make evals EVAL_ARGS="-k 'focus or snooze or yesterday
+  or warm or towels or energy-plumber or energy-medium-day or remember-birthday or
+  registration'"` when the quota is back.
+- Router (offline, 174 cases): word lists 97/111 (87%), median 35 tools, after
+  "yesterday" joined the calendar group's words. With embeddings at 0.725: 110/111,
+  37 tools; the threshold stays (the one miss is P7b's email-not-urgent).
 - Setup: restart (applies 0087).
 
 ### O1b · Idea #94: when it's too much, the rest spread out under a daily budget
