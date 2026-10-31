@@ -135,6 +135,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
+| GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 
 ## Fixed technical choices
 
@@ -6025,3 +6026,57 @@ Notes (2026-10-30):
   tasks won't work (the app and the web still do).
 - Setup: restart (applies 0081). Accounts already linked with Google Tasks need nothing
   more.
+
+### GK1 · Groceries said to Google Home, from Google Keep
+Status: [x] 2026-10-30
+Depends on: G1, GT1a
+Asked by Michael, 2026-10-30. "Hey Google, add 14oz can of tomatoes to my shopping list"
+goes to Google Keep, never Google Tasks, so GT1a doesn't see it. Google ended other list
+apps for the Assistant on 2023-06-20; Gemini's lists work only with Keep. Google's Keep API
+is Workspace-only: a personal account asking for `keep.readonly` gets "Error 400:
+invalid_scope" (tried 2026-10-30). The family chose the unofficial route, as with
+OurGroceries.
+
+Build:
+- An optional dependency, `gkeepapi` (MIT, unofficial; `pip install 'themi[keep]'`), imported
+  only when the sync first runs. It signs in with a Google master token: a powerful
+  credential that doesn't expire. Kept encrypted per person, never logged, used only for
+  Keep. Without the library, the sync logs and waits.
+- Linking, per person, from the command line: `themi keep link <name>` asks for the Google
+  address and the `oauth_token` cookie from Google's EmbeddedSetup page, exchanges it for a
+  master token (gpsoauth), checks it by reading Keep, shows the lists found, and stores the
+  token and which list to watch (default "Shopping list"). `themi keep unlink <name>`.
+- A job every 2 minutes: for each linked person, the watched list's unchecked items go on
+  Themi's grocery list as theirs, like items added in the OurGroceries app (G1: what the
+  family adds in its own lists isn't staged), then are checked off in Keep. An item already
+  needed isn't added twice. A failed check-off is retried without adding again; an item
+  someone unchecks in Keep is new again.
+- Keep failing (sign-in, network, a change at Google) is logged with backoff up to an hour,
+  per person, and never blocks the grocery list.
+
+Tests:
+- The sync against a fake Keep: new items added and checked off, already-needed items not
+  doubled, a failed check-off not re-added, an unchecked item added again, Keep down with
+  backoff, people without Keep left alone, the library missing.
+- Linking: the token stored encrypted, a wrong list name refused, unlink.
+
+Notes (2026-10-30):
+- `themi.connectors.gkeep`: `GKeepAccount` wraps gkeepapi 0.17 in threads (it's synchronous),
+  signs in once and syncs incrementally after; any library error drops the session so the
+  next call signs in again. `exchange_token` uses gpsoauth (it comes with gkeepapi). Lists
+  are matched by title, ignoring case; trashed lists are skipped.
+- `themi.core.keep_groceries`: `KeepLinks` (migration 0082: `keep_accounts`, the master token
+  encrypted with the device id it was made for; `keep_items`, what was taken) and
+  `KeepGroceries`, job `groceries.keep` every 2 minutes, wired whenever Themi runs; it does
+  nothing until someone links. Items go straight onto the list with `GroceryList.add`, like
+  the OurGroceries mirror's, so no card; the mirror then sends them to OurGroceries.
+  Checked off, not deleted, so Keep keeps a trail. An item with no name Themi can keep (all
+  emoji) is left in Keep until it's edited.
+- Linking reads the list before saving, and says how many items are waiting; a wrong list
+  or a bad cookie saves nothing. A re-link takes effect at the next run, no restart.
+- No message is sent when an item comes in, as with OurGroceries.
+- Not checked against the real Keep yet: the first `themi keep link` is the test.
+- Setup: `pip install -e '.[keep]'`, restart (applies 0082), then `themi keep link <name>`
+  for Erin and Michael. Erin's Google account also lacks the Google Tasks scope (GT1a), so
+  "add a task" in her voice isn't read until she links again.
+
