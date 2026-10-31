@@ -16,6 +16,7 @@ from themi.accounts import AccountsError, InvalidValue, Role
 from themi.accounts.setup import pairing_instructions, parse_money_to_cents
 from themi.autonomy import AutonomyError
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
+from themi.connectors.thinq import ThinqError
 from themi.connectors.travel import TravelError
 from themi.core.rules import RuleError
 from themi.web.kit import Kit
@@ -38,6 +39,7 @@ def routes(kit: Kit) -> APIRouter:
             "home": app.services.travel.home() if app.services.travel else None,
             "travel": app.services.travel is not None,
             "home_connect": home_connect_values(),
+            "thinq": thinq_values(),
             **extra,
         }
 
@@ -64,6 +66,58 @@ def routes(kit: Kit) -> APIRouter:
             "linked": account.linked(),
             "devices": [(d, states.get(d.id)) for d in dishwasher.devices()],
         }
+
+    def thinq_values() -> dict[str, Any] | None:
+        watcher = app.services.thinq
+        if watcher is None:
+            return None
+        states = watcher.states()
+        return {
+            "linked": watcher.account.linked(),
+            "country": watcher.account.country() or "US",
+            "pushes": watcher.push.connected(),
+            "devices": [(d, states.get(d.id)) for d in watcher.devices()],
+        }
+
+    # ----- LG ThinQ (30) ----------------------------------------------------------------
+
+    @router.post("/family/thinq/link")
+    async def link_thinq(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.thinq
+        if watcher is None:
+            return kit.redirect("/family", "LG ThinQ isn't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member, str(form.get("token", "")), str(form.get("country", ""))
+            )
+        except (ThinqError, AccountsError) as exc:
+            return kit.redirect("/family", f"LG ThinQ wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(
+            "/family", f"Linked LG ThinQ. Found {names}." if names else "Linked LG ThinQ."
+        )
+
+    @router.post("/family/thinq/unlink")
+    async def unlink_thinq(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.thinq is not None:
+            await app.services.thinq.unlink()
+        return kit.redirect(
+            "/family", "Unlinked LG ThinQ. Deleting the token on LG's site finishes it."
+        )
+
+    @router.post("/family/thinq/devices/{device_id}")
+    async def map_thinq_device(request: Request, device_id: int) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.thinq
+        if watcher is None or device_id not in {d.id for d in watcher.devices()}:
+            return kit.redirect("/family", "That appliance isn't one of LG ThinQ's.")
+        appliance = str(form.get("appliance", "")) or None
+        if appliance not in (None, "washer", "dryer"):
+            return kit.redirect("/family", "An LG appliance is the washer, the dryer, or neither.")
+        device = store.set_device_appliance(session.member, device_id, appliance)
+        return kit.redirect("/family", f"{device.name}: {appliance or 'not used'}.")
 
     # ----- Home Connect (H1) ----------------------------------------------------------------
 

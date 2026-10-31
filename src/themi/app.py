@@ -31,6 +31,7 @@ from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
@@ -127,6 +128,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     home_connect: HomeConnectClient | None = None,
+    thinq: ThinqConfig | None = None,
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
@@ -285,6 +287,13 @@ def build_app(
         periodic.append(PeriodicTask("devices.dishwasher", timedelta(minutes=5), dishwasher.poll))
         periodic.append(
             PeriodicTask("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
+        )
+    if thinq is not None:
+        account = ThinqAccount(db, cipher, thinq)
+        services.thinq = ThinqWatcher(store, account, ThinqPush(account, thinq.mqtt))
+        periodic.append(PeriodicTask("devices.thinq", timedelta(minutes=5), services.thinq.poll))
+        periodic.append(
+            PeriodicTask("devices.thinq_push", timedelta(minutes=1), services.thinq.listen)
         )
     if services.google_tasks is not None:
         periodic.append(

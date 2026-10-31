@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.connectors.homeconnect import HomeConnectAccount
+    from themi.connectors.thinq import ThinqWatcher
     from themi.core.breaks import Breaks
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
@@ -169,6 +170,7 @@ class Services:
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
     home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
+    thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
