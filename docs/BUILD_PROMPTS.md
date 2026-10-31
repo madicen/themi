@@ -109,7 +109,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
 | F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
-| F19b | Idea: a word when a task is done | Feedback | [ ] |
+| F19b | Idea: a word when a task is done | Feedback | [x] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [ ] |
 | O1 | Idea: when it's too much, a few things now and the rest spread out | Feedback | [ ] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
@@ -5468,7 +5468,7 @@ Notes (2026-10-30):
 - Setup: restart. No migration.
 
 ### F19b · Idea #102: a word when a task is done
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: F19a
 Erin's idea #102 (2026-10-30): "when a user completes a task, Themi should send a
 confirmation message along with a brief 'good job!' or similar message."
@@ -5487,6 +5487,23 @@ confirmation message along with a brief 'good job!' or similar message."
 
 Tests: each path (button, list tick, chat) says it once; the wall says nothing; the
 setting turns it off; the shield keeps the wording.
+
+Notes (2026-10-30):
+- The question for Erin was settled by default, not asked: the wall says nothing (it'd be
+  the only message the wall causes). Change it if she'd like one.
+- `tasks.PRAISE` (five plain words: "Nice work.", "Well done."...), picked by task and
+  minute (`_praise`, no AI call). `TaskBoard.complete` puts one in place of "Thank you."
+  when `interactive` (a tap, a tick, complete_task, a logged call) and the doer's
+  `done_praise` is on; a round's "Next round: ..." follows it. The edit of the nudge is
+  the confirmation, so no second message; the morning list's edit starts with it.
+- Done on the wall, by Google Tasks, the dishwasher or the email audit: the nudges still
+  say "Marked done: X. Thank you.", nothing more.
+- complete_task's result carries the line, and its description says to give it as it is;
+  the model may still word it its own way.
+- Setting: `members.done_praise` (migration 0084), on by default; on the website's
+  settings page. No chat tool for it yet; set_phrasing's notes would be read, not obeyed.
+- Not run: the model evals.
+- Setup: restart (applies 0084).
 
 ### F19c · Idea #86: a shared task put off by one person stays with the other
 Status: [ ]
