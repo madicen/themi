@@ -112,6 +112,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F19b | Idea: a word when a task is done | Feedback | [x] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
 | F19d | Feedback: "remind me to" a small thing at a time is a reminder, not a task | Feedback | [x] |
+| F19e | Feedback: a course that came back, ticks on the end-of-day list, praise at night | Feedback | [x] |
 | O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [x] |
 | O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [x] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
@@ -5580,6 +5581,47 @@ Notes (2026-10-30):
   done yesterday?".
 - Evals (test key, 2026-10-30): reminder-green-tea, task-remind-call-vet and
   snooze-to-tomorrow-afternoon pass, 3/3.
+
+### F19e · Feedback (2026-10-30): a course that came back, ticks on the end-of-day list, praise at night
+Status: [x] 2026-10-30
+Depends on: F19b, F19d
+From Michael's bug #107 (2026-10-30, 10:58 pm) and his message the same night. Ideas #33
+and #34 still wait for Erin's spec.
+- #107 ("Mimi pill is not open today in the slightest"): Michael ticked the course's last
+  dose (task 21, due Fri 30 Oct) at 00:58 that day. The course ended in Themi and `_push`
+  let go of the wall chore, which ends by itself, but it still ran that day. The next sync
+  read it as a chore only on the wall and brought it in as task 60, due that day, for Erin.
+  The 9:15 pm list said it was still open.
+- #107 ("it didn't give an option to mark them as done"): the end-of-day list asked "Done any
+  of them already?" with no buttons.
+- "I marked 3 things off so far tonight and received no messages of praise. Praise doesn't
+  have to follow the rules of quiet time or message restrictions." The three were routine
+  items: Take Meds ticked on the wall at 10:45 pm, Cycle Dishwasher by the dishwasher at
+  10:55 (nothing is said for that, F19b), and Replace the water in the vacuum from the
+  routine check's button at 11:06. Routine ticks had no warm word on any path, and wall
+  praise was held by quiet hours and dropped after two hours.
+
+Tests: each a failing test first. The course isn't brought in again and is let go once it's
+over; the end-of-day list ticks off from buttons, a held list has buttons for what's left;
+praise goes in quiet hours and over the limit; a routine tick from the button and from the
+wall at night get a warm word, and none when it's off.
+
+Notes (2026-10-30):
+- #107, the course: `CozylaChores._push` keeps a finished course linked while its wall chore
+  is still running, so it isn't brought in again; once it's over the link goes.
+- #107, buttons: the end-of-day list has a ✓ per task (up to six, kind `day_end`); a tap
+  completes it as a tap on a nudge would, with a warm word, and the list shows the rest, or
+  "Today's list: all done." A `Refresher` may now return (text, buttons), so a held list
+  goes with buttons for what's left.
+- Praise: `themi.core.praise` holds what F19b put in tasks.py (PRAISE, the wall's word, the
+  bundler), now for routine items too. The outbox sends kind "praise" straight away, outside
+  quiet hours, busy times and the daily limit; a pause the person asked for still holds it.
+  A tick on a routine check's button says "Marked done: X. Nice work." above the rest of the
+  list; a routine item ticked on the wall gets "Ticked off on the wall: X. ..." like a task.
+  The bundler reads titles back from the queued text, so tasks and routine items go together.
+- Not repaired yet: task 60 (the course that came back) is open; see the report.
+- Not run: the model evals (no prompt or tool description changed).
+- Setup: restart. No migration.
 
 ### O1 · Idea #94: when it's too much (split into O1a and O1b)
 Status: [x] 2026-10-30 (as O1a and O1b)
