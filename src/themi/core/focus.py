@@ -5,10 +5,10 @@ For anyone who gives a sign of being overwhelmed, in any words. The message's ow
 `focus_now` is a core tool, so the model has it whatever the router chose. The morning list
 has a "Too much today" button, too.
 
-`focus_now` picks at most three of today's open things (due or overdue, not put off or
-waiting for the chart; what the day summary has): medicines always, then ones with a time
-today, then urgent and important (T1), then the lightest. One message: those few, and a
-line that the rest are kept. Never energy, never "should".
+`focus_now` picks a few of today's open things, three or the person's own number (due or
+overdue, not put off or waiting for the chart; what the day summary has): medicines
+always, then ones with a time today, then urgent and important (T1), then the lightest.
+One message: those few, and a line that the rest are kept. Never energy, never "should".
 
 The rest (O1b) can be spread over the next two weeks, the most pressing first, each to the
 first day with room under a budget: the person's setting, or what they usually get done in
@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from themi.core.day_summary import DaySummary
     from themi.core.services import Services
 
-AT_MOST = 3
 OVERWHELM = re.compile(
     r"\b(?:overwhelm\w*|too much (?:on|to do|today|going on|right now)|"
     r"(?:it'?s|this is|that'?s|everything'?s|all) (?:just )?too much|"
@@ -90,8 +89,8 @@ class Focus:
         self.services.button_handlers["focus"] = self.on_button
 
     def pick(self, member: Member) -> tuple[list[Task], list[Task]]:
-        """Today's few for now, and the rest: medicines, a time today, urgent and important,
-        then the lightest."""
+        """Today's few for now (their own number of them), and the rest: medicines, a time
+        today, urgent and important, then the lightest."""
         today = self.summary.today()
         now = clock.now()
 
@@ -106,7 +105,7 @@ class Focus:
 
         due = sorted(self.summary.due(member, today), key=order)
         medicines = [t for t in due if t.medicine]
-        cut = max(AT_MOST, len(medicines))
+        cut = max(member.focus_count, len(medicines))
         return due[:cut], due[cut:]
 
     def text(self, member: Member, few: list[Task], rest: list[Task], after: str = "") -> str:
@@ -227,12 +226,12 @@ class Focus:
 @tool(
     "focus_now",
     "When someone sounds overwhelmed, in any words ('it's too much', 'I can't do all this', "
-    "'pare today down', 'I'm drowning'): a few of today's things for now (three at most, "
-    "medicines always), and a line that the rest are kept, with an offer to spread them over "
-    "the coming days. spread: true only when they asked for the rest to be moved ('move the "
-    "rest', 'snooze everything else'): then it's done at once, never more on a day than "
-    "they usually manage. It's sent to them as it is: don't list the tasks again; a short "
-    "kind line at most. Never mention energy.",
+    "'pare today down', 'I'm drowning'): a few of today's things for now (their own "
+    "number, three unless they set it; medicines always), and a line that the rest are "
+    "kept, with an offer to spread them over the coming days. spread: true only when they "
+    "asked for the rest to be moved ('move the rest', 'snooze everything else'): then it's "
+    "done at once, never more on a day than they usually manage. It's sent to them as it "
+    "is: don't list the tasks again; a short kind line at most. Never mention energy.",
     {"spread": {"type": "boolean"}},
 )
 async def focus_now(ctx: ToolContext, args: dict[str, Any]) -> str:

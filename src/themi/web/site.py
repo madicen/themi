@@ -298,6 +298,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 checkin_reviews=form.get("checkin_reviews") == "on",
                 done_praise=form.get("done_praise") == "on",
                 day_budget=as_int(form.get("day_budget")),
+                focus_count=as_int(form.get("focus_count")),
                 chart_limit=as_int(form.get("chart_limit")),
                 chart_counts_shared=form.get("chart_counts_shared") == "on",
                 calendar_details=str(form.get("calendar_details", "")) or None,

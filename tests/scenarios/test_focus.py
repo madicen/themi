@@ -263,3 +263,15 @@ async def test_the_budget_is_what_usually_gets_done(scenario: Scenario) -> None:
     assert focus.budget(erin) == 2
     scenario.app.store.update_settings(erin, erin.id, day_budget=5)
     assert focus.budget(scenario.member("Erin")) == 5
+
+
+async def test_how_few_is_their_own_number(scenario: Scenario) -> None:
+    """The family's answer to "how few?": each person sets it (three unless they do)."""
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, focus_count=2)
+    await a_full_day(scenario)
+    focus = scenario.app.services.focus
+    assert focus is not None
+    few, rest = focus.pick(scenario.member("Erin"))
+    assert [t.title for t in few] == ["Mimi pill", "Call the vet"]
+    assert len(rest) == 4

@@ -69,6 +69,7 @@
     </label>
     <label class="check"><input type="checkbox" name="checkin_reviews" {% if member.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>
     <label class="check"><input type="checkbox" name="done_praise" {% if member.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>
+    <label>When it's too much, just <input type="number" name="focus_count" min="1" max="10" value="{{ member.focus_count }}"> things for now</label>
     <label>When it's too much and the rest is spread out, at most <input type="number" name="day_budget" min="0" max="20" value="{{ member.day_budget }}"> things on a day <span class="muted">(0: what I usually get done)</span></label>
     <label>Your own notes on phrasing
       <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
