@@ -24,6 +24,7 @@ class KeepError(Exception):
 class KeepItem:
     id: str
     text: str
+    checked: bool = False
 
 
 @dataclass(frozen=True)
@@ -38,9 +39,16 @@ class KeepAccount(Protocol):
 
     async def lists(self) -> list[str]: ...
 
-    async def unchecked(self, list_name: str) -> list[KeepItem]: ...
+    async def items(self, list_name: str) -> list[KeepItem]:
+        """Every item on the list, checked or not (deleted ones aren't there)."""
+        ...
 
-    async def check_off(self, list_name: str, item_ids: list[str]) -> None: ...
+    async def apply(
+        self, list_name: str, add: list[str], check: list[str], delete: list[str]
+    ) -> list[str]:
+        """Add items (unchecked), check some off and delete some, in one save. Returns the
+        new items' ids, in the order of `add`."""
+        ...
 
 
 KeepFactory = Callable[[KeepLogin], KeepAccount]
@@ -109,21 +117,30 @@ class GKeepAccount:
 
         return await self._call("reading the lists", titles)
 
-    async def unchecked(self, list_name: str) -> list[KeepItem]:
-        def items(keep: Any) -> list[KeepItem]:
-            return [KeepItem(str(i.id), str(i.text)) for i in _find(keep, list_name).unchecked]
+    async def items(self, list_name: str) -> list[KeepItem]:
+        def read(keep: Any) -> list[KeepItem]:
+            return [
+                KeepItem(str(i.id), str(i.text), bool(i.checked))
+                for i in _find(keep, list_name).items
+            ]
 
-        return await self._call("reading the list", items)
+        return await self._call("reading the list", read)
 
-    async def check_off(self, list_name: str, item_ids: list[str]) -> None:
-        def check(keep: Any) -> None:
-            wanted = set(item_ids)
-            for item in _find(keep, list_name).items:
-                if str(item.id) in wanted:
+    async def apply(
+        self, list_name: str, add: list[str], check: list[str], delete: list[str]
+    ) -> list[str]:
+        def write(keep: Any) -> list[str]:
+            note = _find(keep, list_name)
+            for item in note.items:
+                if str(item.id) in check:
                     item.checked = True
+                elif str(item.id) in delete:
+                    item.delete()
+            added = [str(note.add(text, False).id) for text in add]
             keep.sync()
+            return added
 
-        await self._call("checking items off", check)
+        return await self._call("changing the list", write)
 
 
 def _find(keep: Any, list_name: str) -> Any:

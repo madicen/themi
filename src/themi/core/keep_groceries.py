@@ -1,12 +1,20 @@
-"""Groceries said to Google Home, taken from Google Keep (GK1).
+"""The grocery list in Google Keep, both ways (GK1, GK2).
 
-"Hey Google, add tomatoes to my shopping list" lands in the speaker's person's Keep. Each
-sync (the `groceries.keep` job, every 2 minutes) reads each linked person's watched list:
+"Hey Google, add tomatoes to my shopping list" lands in the speaker's person's Keep, so each
+linked person's watched Keep list shows Themi's grocery list. Each sync (the
+`groceries.keep` job, every 2 minutes) first brings in what changed in Keep, like the
+OurGroceries mirror (G1):
 
-- an unchecked item Themi hasn't taken goes on the grocery list as theirs, like an item
-  added in the OurGroceries app (G1), then is checked off in Keep;
-- one taken but not checked off yet (the check-off failed) is only checked off;
-- one Themi checked off that someone unchecked since is new again.
+- an unchecked item Themi doesn't know (the speaker, or someone typing): needed, as theirs,
+  and it stays as that item; one already on the list is a duplicate, deleted from Keep;
+- checked off: bought; deleted: removed; a checked-off one unchecked: needed again.
+
+Then Themi's list goes out: needed with no item in Keep, added; bought, checked off;
+removed, deleted.
+
+Themi wins: a Keep change counts only while Themi hasn't changed that item since. Keep can
+drop a write, so Themi's writes stay unconfirmed until a read shows them; an unconfirmed one
+that isn't there is made again, never read as someone's change.
 
 Keep failing is logged and retried with a backoff per person; it never blocks the list.
 """
@@ -18,10 +26,11 @@ import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from themi import clock
 from themi.accounts import InvalidValue, Member
-from themi.connectors.gkeep import KeepAccount, KeepError, KeepFactory, KeepLogin
+from themi.connectors.gkeep import KeepAccount, KeepError, KeepFactory, KeepItem, KeepLogin
 from themi.connectors.ourgroceries.mirror import backoff
 from themi.core.groceries import GroceryList, item_name
 from themi.localtime import to_utc_iso
@@ -69,6 +78,7 @@ class KeepLinks:
                 to_utc_iso(clock.now()),
             ),
         )
+        self.db.execute("DELETE FROM keep_items WHERE member_id = ?", (member.id,))
 
     def unlink(self, member: Member) -> bool:
         self.db.execute("DELETE FROM keep_items WHERE member_id = ?", (member.id,))
@@ -85,14 +95,30 @@ class KeepLinks:
         ]
 
 
+@dataclass
+class _Changes:
+    """What one sync sends to a person's Keep."""
+
+    add: list[tuple[int, str]]  # (grocery_list id, text)
+    check: list[str]
+    delete: list[str]
+
+
 class KeepGroceries:
     def __init__(
-        self, db: Database, links: KeepLinks, groceries: GroceryList, connect: KeepFactory
+        self,
+        db: Database,
+        links: KeepLinks,
+        groceries: GroceryList,
+        connect: KeepFactory,
+        bought: Callable[[str], object] | None = None,
     ) -> None:
         self.db = db
         self.links = links
         self.groceries = groceries
         self.connect = connect
+        # Checked off in Keep: as the OurGroceries mirror's, the pantry has it again.
+        self.bought = bought
         self._accounts: dict[int, tuple[KeepLogin, KeepAccount]] = {}
         self._failures: dict[int, int] = {}
         self._wait_until: dict[int, datetime] = {}
@@ -105,7 +131,7 @@ class KeepGroceries:
         return known[1]
 
     async def sync(self) -> int:
-        """Scheduler job: returns how many items went on the grocery list."""
+        """Scheduler job: returns how many items Keep put on the grocery list."""
         added = 0
         for link in self.links.all():
             wait = self._wait_until.get(link.member_id)
@@ -126,49 +152,181 @@ class KeepGroceries:
 
     async def _sync_one(self, member: Member, link: KeepLink) -> int:
         account = self._account(link)
-        items = await account.unchecked(link.list_name)
-        taken = {
-            r["item_id"]: (r["status"], r["text"])
-            for r in self.db.query(
-                "SELECT item_id, status, text FROM keep_items WHERE member_id = ?", (member.id,)
-            )
-        }
-        now = to_utc_iso(clock.now())
-        added, to_check = 0, []
-        for item in items:
-            status, text = taken.get(item.id, (None, None))
-            if status == "skipped" and text == item.text:  # edited since: tried again
-                continue
-            if status != "added":  # new, or unchecked again since Themi checked it off
-                try:
-                    name = item_name(item.text)
-                except InvalidValue:
-                    log.info("Keep item %r has no name Themi can keep; left", item.text[:60])
-                    self._remember(member, item.id, item.text, "skipped", now)
-                    continue
-                added += len(self.groceries.add([name], by=member))
-                self._remember(member, item.id, item.text, "added", now)
-            to_check.append(item.id)
-        if to_check:
+        items = await account.items(link.list_name)
+        changes = _Changes([], [], [])
+        added = self._pull(member, items, changes)
+        self._push(member, changes)
+        if changes.add or changes.check or changes.delete:
             try:
-                await account.check_off(link.list_name, to_check)
-            except KeepError as exc:  # they're on the list; only the check-off waits
+                ids = await account.apply(
+                    link.list_name, [t for _, t in changes.add], changes.check, changes.delete
+                )
+            except KeepError as exc:  # Keep's changes are in; Themi's go next time
                 self._failed(member, exc)
                 return added
-            self.db.executemany(
-                "UPDATE keep_items SET status = 'checked' WHERE member_id = ? AND item_id = ?",
-                [(member.id, item_id) for item_id in to_check],
-            )
+            self._wrote(member, changes, ids)
         self._failures.pop(member.id, None)
         self._wait_until.pop(member.id, None)
         return added
 
-    def _remember(self, member: Member, item_id: str, text: str, status: str, now: str) -> None:
+    # ----- what changed in Keep ---------------------------------------------------------
+
+    def _pull(self, member: Member, items: list[KeepItem], changes: _Changes) -> int:
+        rows = {
+            r["item_id"]: r
+            for r in self.db.query("SELECT * FROM keep_items WHERE member_id = ?", (member.id,))
+        }
+        added = 0
+        for item in items:
+            row = rows.pop(item.id, None)
+            if row is None or (row["status"] == "skipped" and row["text"] != item.text):
+                if not item.checked:  # checked ones Themi never knew are history
+                    added += self._new(member, item, changes)
+            elif row["status"] == "shown":
+                self._shown(member, item, row)
+            elif row["status"] == "done" and not item.checked:
+                if row["confirmed"]:  # someone unchecked it: needed again
+                    added += self._new(member, item, changes)
+                else:  # Themi's check-off didn't stick: again
+                    changes.check.append(item.id)
+            elif row["status"] == "done":
+                self._confirm(member, item.id)
+        for row in rows.values():  # not in Keep any more
+            needed = self._needed_row(row["grocery_id"])
+            if row["status"] == "shown" and row["confirmed"] and needed:
+                self.groceries.finish(needed["name"], "removed")  # deleted in Keep
+            self._forget(member, row["item_id"])  # an unconfirmed add is made again below
+        return added
+
+    def _new(self, member: Member, item: KeepItem, changes: _Changes) -> int:
+        """An unchecked item Themi doesn't know: needed, unless it's a duplicate."""
+        try:
+            name = item_name(item.text)
+        except InvalidValue:
+            log.info("Keep item %r has no name Themi can keep; left", item.text[:60])
+            self._remember(member, item, None, "skipped", confirmed=True)
+            return 0
+        needed = self._needed_by_name(name)
+        if needed is not None and self._shows(member, needed["id"]):
+            changes.delete.append(item.id)  # already there: one copy is enough
+            self._forget(member, item.id)
+            return 0
+        added = len(self.groceries.add([name], by=member))
+        needed = self._needed_by_name(name)
+        assert needed is not None  # just added, or already needed
+        self._remember(member, item, needed["id"], "shown", confirmed=True)
+        return added
+
+    def _shown(self, member: Member, item: KeepItem, row: dict[str, Any]) -> None:
+        needed = self._needed_row(row["grocery_id"])
+        if item.checked and needed is not None:  # Themi still needs it: bought in Keep
+            self.groceries.finish(needed["name"], "bought")
+            if self.bought is not None:
+                self.bought(needed["name"])
+            self._remember(member, item, row["grocery_id"], "done", confirmed=True)
+        elif item.checked:  # Themi was done with it too
+            self._remember(member, item, row["grocery_id"], "done", confirmed=True)
+        else:
+            self._confirm(member, item.id)
+
+    # ----- Themi's list, out to Keep ----------------------------------------------------
+
+    def _push(self, member: Member, changes: _Changes) -> None:
+        shown = {
+            r["grocery_id"]: r
+            for r in self.db.query(
+                "SELECT * FROM keep_items WHERE member_id = ? AND status = 'shown'", (member.id,)
+            )
+        }
+        needed = self.db.query(
+            "SELECT id, name FROM grocery_list WHERE status = 'needed' ORDER BY id"
+        )
+        for row in needed:
+            if shown.pop(row["id"], None) is None:
+                changes.add.append((row["id"], row["name"]))
+        for grocery_id, row in shown.items():  # Themi's done with these (Themi wins)
+            if row["item_id"] in changes.delete:
+                continue
+            status = self.db.one("SELECT status FROM grocery_list WHERE id = ?", (grocery_id,))
+            if status is not None and status["status"] == "bought":
+                changes.check.append(row["item_id"])
+            else:
+                changes.delete.append(row["item_id"])
+
+    def _wrote(self, member: Member, changes: _Changes, ids: list[str]) -> None:
+        now = to_utc_iso(clock.now())
+        for (grocery_id, text), item_id in zip(changes.add, ids, strict=True):
+            self._remember(member, KeepItem(item_id, text), grocery_id, "shown", now=now)
+        for item_id in changes.check:
+            self.db.execute(
+                "UPDATE keep_items SET status = 'done', confirmed = 0 "
+                "WHERE member_id = ? AND item_id = ?",
+                (member.id, item_id),
+            )
+        for item_id in changes.delete:
+            self._forget(member, item_id)
+
+    # ----- bookkeeping ------------------------------------------------------------------
+
+    def _needed_row(self, grocery_id: int | None) -> dict[str, Any] | None:
+        if grocery_id is None:
+            return None
+        return self.db.one(
+            "SELECT id, name FROM grocery_list WHERE id = ? AND status = 'needed'", (grocery_id,)
+        )
+
+    def _needed_by_name(self, name: str) -> dict[str, Any] | None:
+        return self.db.one(
+            "SELECT id, name FROM grocery_list WHERE name = ? AND status = 'needed' "
+            "ORDER BY id LIMIT 1",
+            (name,),
+        )
+
+    def _shows(self, member: Member, grocery_id: int) -> bool:
+        return bool(
+            self.db.one(
+                "SELECT 1 FROM keep_items WHERE member_id = ? AND grocery_id = ? "
+                "AND status = 'shown'",
+                (member.id, grocery_id),
+            )
+        )
+
+    def _remember(
+        self,
+        member: Member,
+        item: KeepItem,
+        grocery_id: int | None,
+        status: str,
+        *,
+        confirmed: bool = False,
+        now: str | None = None,
+    ) -> None:
         self.db.execute(
-            "INSERT INTO keep_items (member_id, item_id, text, status, seen_at) "
-            "VALUES (?, ?, ?, ?, ?) ON CONFLICT(member_id, item_id) DO UPDATE SET "
-            "text = excluded.text, status = excluded.status, seen_at = excluded.seen_at",
-            (member.id, item_id, text, status, now),
+            "INSERT INTO keep_items "
+            "(member_id, item_id, text, grocery_id, status, confirmed, seen_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(member_id, item_id) DO UPDATE SET "
+            "text = excluded.text, grocery_id = excluded.grocery_id, status = excluded.status, "
+            "confirmed = excluded.confirmed, seen_at = excluded.seen_at",
+            (
+                member.id,
+                item.id,
+                item.text,
+                grocery_id,
+                status,
+                int(confirmed),
+                now or to_utc_iso(clock.now()),
+            ),
+        )
+
+    def _confirm(self, member: Member, item_id: str) -> None:
+        self.db.execute(
+            "UPDATE keep_items SET confirmed = 1 WHERE member_id = ? AND item_id = ?",
+            (member.id, item_id),
+        )
+
+    def _forget(self, member: Member, item_id: str) -> None:
+        self.db.execute(
+            "DELETE FROM keep_items WHERE member_id = ? AND item_id = ?", (member.id, item_id)
         )
 
 
@@ -209,10 +367,10 @@ async def run_keep_link(
             f"{email}'s Keep has no list called {list_name!r} (lists: {found}). "
             "Nothing was saved; --list picks another."
         )
-    waiting = await account.unchecked(list_name)
+    waiting = [i for i in await account.items(list_name) if not i.checked]
     links.link(member, login, list_name)
     say(
-        f"Linked {member.name}'s Google Keep ({email}). Themi checks {list_name!r} every 2 "
-        f"minutes; {len(waiting)} item{'' if len(waiting) == 1 else 's'} there now will go on "
-        "the grocery list and be checked off in Keep."
+        f"Linked {member.name}'s Google Keep ({email}). Every 2 minutes, {list_name!r} and the "
+        f"grocery list are kept in step; the {len(waiting)} unchecked "
+        f"item{'' if len(waiting) == 1 else 's'} there now will join the grocery list."
     )

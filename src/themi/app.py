@@ -246,8 +246,14 @@ def build_app(
             db, grocery_list, bought=lambda name: pantry.set_status(name, "plenty", source="list")
         )
         periodic.append(PeriodicTask("groceries.mirror", timedelta(minutes=1), mirror.sync))
-    if keep is not None:  # GK1: does nothing until someone runs `themi keep link`
-        from_keep = KeepGroceries(db, KeepLinks(db, cipher), groceries, keep)
+    if keep is not None:  # GK1, GK2: does nothing until someone runs `themi keep link`
+        from_keep = KeepGroceries(
+            db,
+            KeepLinks(db, cipher),
+            groceries,
+            keep,
+            bought=lambda name: pantry.set_status(name, "plenty", source="list"),
+        )
         periodic.append(PeriodicTask("groceries.keep", timedelta(minutes=2), from_keep.sync))
     if cozyla is not None:
         family = store.get_family()
