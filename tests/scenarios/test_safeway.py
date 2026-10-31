@@ -13,6 +13,7 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_things_to_buy import inbox
 from tests.scenarios.test_triage import arrive, verdict
+from themi.core.agent import CLAIMS_DONE, WAITING_TEXT
 from themi.core.safeway import SafewayCart
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
@@ -93,6 +94,25 @@ async def test_fill_the_cart_a_yes_and_the_helper_answers(
     await helper.claim()
     eggs = helper.jobs[1]["items"][0]
     assert eggs["product"] == {"id": "970000000", "name": "Eggs - 1 Each", "size": "1 Each"}
+
+
+async def test_a_reply_saying_the_cart_is_filled_before_the_yes_is_replaced(
+    scenario: Scenario,
+) -> None:
+    """2026-10-31: after "fill the safeway cart" the reply said "Safeway cart filled with the
+    11 items from the grocery list", before anyone had said yes."""
+    on_the_list(scenario, "eggs", "2 oat milk", "bananas")
+    scenario.primary.queue_tool_call("fill_safeway_cart", {})
+    scenario.primary.queue_text(
+        "Safeway cart filled with the 11 items from the grocery list. Ready for your review "
+        "in the browser."
+    )
+    replies = await scenario.say("Erin", "fill the safeway cart")
+    assert replies[-1] == WAITING_TEXT.format(
+        summary="Eggs, 2 oat milk and bananas for the Safeway cart"
+    )
+    for claim in ("I've filled the Safeway cart.", "The cart is now filled.", "Filled the cart!"):
+        assert CLAIMS_DONE.search(claim), claim
 
 
 async def test_one_cart_at_a_time_and_nothing_for_an_empty_list(
