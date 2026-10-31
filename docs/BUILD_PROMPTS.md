@@ -139,7 +139,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
-| 35c | Safeway cart: Themi sends the list to the extension | 6 Liaison and food | [ ] |
+| 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [~] |
+| 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
@@ -6294,7 +6295,7 @@ Notes (2026-10-31):
     - A query with no match still returns ~30 unrelated products with `isExactMatch:
       false`; that counts as not found.
     - The cart "add" **sets** the quantity. The extension reads the cart first and posts
-      current + wanted, so it never lowers anything. 35c's jobs must do the same.
+      current + wanted, so it never lowers anything. 35d's jobs must do the same.
     - Signed out is 401, a bad token 403, a bot check HTML or a dropped connection: all
       stop the fill with "Sign in to Safeway, then try again."
 - "change" adds the newly chosen product and remembers it; the old one stays in the cart
@@ -6310,40 +6311,73 @@ Notes (2026-10-31):
   any you don't want.
 - Follow-up: products sold each but priced by weight (bananas) show a size of "1 lb".
 
-### 35c · Safeway cart: Themi sends the list to the extension
-Status: [ ]
+### 35c · Safeway cart: Themi's side (pairing, jobs, product memory)
+Status: [~]
 Depends on: 35b, 25, G1, 16
-Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D.
+Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D;
+`extension/safeway/NOTES.md`.
+Split on 2026-10-31: 35c is everything in Themi; 35d is the extension's side. The fake
+extension in the tests stands in for 35d.
 
 Build:
 - Pairing: on the website, anyone in the family can "Connect the Safeway helper". This
   creates a token shown once and stored hashed, which can only read and answer Safeway cart
-  jobs. Revoke it from the same page. The extension's options page takes Themi's public
-  address and the token; host access to that address is requested there and then.
+  jobs (and read and set remembered products). Revoke it from the same page.
 - Staging: "fill the Safeway cart" (or the weekly shop) becomes a `safeway_cart` proposal
   (Tier 1, capped): the grocery list items, with a quantity where the list has one. Its yes
-  queues a cart job.
-- Jobs API under `/api/safeway/`: the extension asks for the next job when a safeway.com tab
-  opens and every minute while one is open; it claims it, fills the cart as in 35b, and posts
-  the results. Everything it sends is validated (shape, lengths, counts) and treated as data;
-  product names are escaped on the website and quoted in blocks for the model.
+  queues a cart job. One open job at a time.
+- Jobs API under `/api/safeway/` (bearer token): claim the next job (claimed once), post its
+  results. Everything the extension sends is validated (shape, lengths, counts, item names
+  that are the job's) and treated as data. Product names are escaped on the website and never
+  sent to the model: the message names the family's items, not Safeway's products.
 - Results go out through the outbox: "9 things in the Safeway cart; oat milk was out of
   stock. Ready when you are." No energy words.
 - Product memory moves to Themi (`safeway_products`: item name to product ID, name and
-  size), so both partners' browsers agree. A receipt line matched to a grocery item
-  (`themi.core.pantry`) becomes that item's search words. The website lists the remembered
-  products, with a way to change or forget one.
-- Fallback: no paired extension, or a job not claimed within 2 hours, sends the list once
-  with a Safeway search link per item, and the job expires.
+  size, plus search words), so both partners' browsers agree. A Safeway receipt line matched
+  to a grocery item (`themi.core.pantry`) becomes that item's search words. The website
+  lists the remembered products, with a way to change the search words or forget one.
+- Fallback: no paired helper, or a job not claimed within 2 hours (or claimed and not
+  answered within 30 minutes), sends the list once with a Safeway search link per item, and
+  the job expires.
 
 Tests:
 - Pairing, revoking, and a wrong or revoked token refused.
 - The job lifecycle: queued, claimed once, results, expiry and the links fallback.
-- Bad results from the extension (wrong shape, too long, unknown job) rejected.
-- Product memory: used on the next job, changed and forgotten on the website, learned from a
-  receipt.
+- Bad results from the extension (wrong shape, too long, unknown job, unknown item)
+  rejected.
+- Product memory: sent with the next job, changed and forgotten on the website, learned from
+  a receipt.
 - A scenario: "fill the Safeway cart", a yes, a fake extension claims and answers, and the
   result message arrives.
+
+Commit when done.
+
+### 35d · Safeway cart: the extension takes jobs from Themi
+Status: [ ]
+Depends on: 35c
+Read first: 35b's and 35c's Notes; `extension/safeway/NOTES.md`.
+
+Build (`extension/safeway/`):
+- An options page that takes Themi's public address and the helper token. Host access to
+  that address is requested there and then (`optional_host_permissions`); nothing else is
+  added to the manifest's fixed permissions but `alarms`.
+- A service worker asks Themi for the next job when a safeway.com tab opens and every minute
+  while one is open. It claims it, has the tab fill the cart as in 35b, and posts the
+  results. Calls to Themi go from the worker (the page's CORS rules don't apply there).
+- When paired, remembered products are Themi's (`/api/safeway/products`), for the popup's
+  own fills and "change" too, so both browsers agree. Unpaired, it works as in 35b.
+- The popup shows "Connected to Themi" or a link to the options page, and a job's results
+  like its own.
+
+Tests (`node --test`):
+- Options: address validation (https, or http only for localhost), the token kept in
+  `chrome.storage.local`.
+- The worker: polls only while a Safeway tab is open, claims, posts results, and stops on a
+  401 from Themi ("The helper's connection was revoked").
+- Job items with a remembered product skip the search; ones with search words search those.
+
+Manual check (Notes): pair it with the website, say "fill the Safeway cart", answer yes, and
+see the cart and the message.
 
 Commit when done.
 
