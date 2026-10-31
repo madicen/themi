@@ -5490,15 +5490,20 @@ Tests: each path (button, list tick, chat) says it once; the wall says nothing; 
 setting turns it off; the shield keeps the wording.
 
 Notes (2026-10-30):
-- The question for Erin was settled by default, not asked: the wall says nothing (it'd be
-  the only message the wall causes). Change it if she'd like one.
+- The wall question, settled by the family (2026-10-30): ticks on the wall get a warm
+  word too. `complete(..., wall=True)` from the Cozyla to-do, chore and routine syncs
+  queues "Ticked off on the wall: X. Nice work." a minute later (kind "praise"); the
+  outbox's "praise" bundler makes ticks close together one message. It expires after two
+  hours (held by quiet hours: dropped), and isn't counted in the day's limit
+  (`Outbox.sent_today`). Only when the wall names who: a chart tick's member, the
+  assignee of a one-person to-do or routine; a to-do on both lists says nothing.
 - `tasks.PRAISE` (five plain words: "Nice work.", "Well done."...), picked by task and
   minute (`_praise`, no AI call). `TaskBoard.complete` puts one in place of "Thank you."
   when `interactive` (a tap, a tick, complete_task, a logged call) and the doer's
   `done_praise` is on; a round's "Next round: ..." follows it. The edit of the nudge is
   the confirmation, so no second message; the morning list's edit starts with it.
-- Done on the wall, by Google Tasks, the dishwasher or the email audit: the nudges still
-  say "Marked done: X. Thank you.", nothing more.
+- Done by Google Tasks, the dishwasher or the email audit: the nudges still say "Marked
+  done: X. Thank you.", nothing more.
 - complete_task's result carries the line, and its description says to give it as it is;
   the model may still word it its own way.
 - Setting: `members.done_praise` (migration 0084), on by default; on the website's
@@ -5611,12 +5616,14 @@ Notes (2026-10-30):
   about one person. `focus_now` isn't in a group, so it's core and always sent.
 - The message goes as it is (kind "focus"); the tool marks the turn answered, so a
   long reply after it isn't sent (bug #89's rule).
-- Erin's questions, settled by default: three at most; the morning list stays, with a
-  "Too much today" button; Themi offers it when someone's words say it's too much, and
+- How few: each person's setting (`members.focus_count`, migration 0087; 1-10, three by
+  default; settings page), the family's answer. Settled by default: the morning list
+  stays, with a "Too much today" button; Themi offers it when someone's words say it's too much, and
   doesn't start it from its own reading of the day (energy, load). That last could be a
   follow-up.
 - Not run: the model evals (whether the model calls focus_now for overwhelm in other
   words is theirs to show).
+- Setup: restart (applies 0087).
 
 ### O1b · Idea #94: when it's too much, the rest spread out under a daily budget
 Status: [x] 2026-10-30
