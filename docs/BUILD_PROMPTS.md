@@ -108,6 +108,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
+| F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [~] |
+| F19b | Idea: a word when a task is done | Feedback | [ ] |
+| F19c | Idea: a shared task put off by one person stays with the other | Feedback | [ ] |
+| O1 | Idea: when it's too much, a few things now and the rest spread out | Feedback | [ ] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -5402,6 +5406,114 @@ Notes (2026-10-30):
 - Still single-button: a draft rule's "Lock it in" card, and a task block's "Done".
 - Not run: the model evals.
 - Setup: restart. No migration.
+
+### F19a · Feedback (2026-10-30): a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added
+Status: [~]
+Depends on: F18h, K1, K2, C2c
+From the family's bugs #98-#101 and #103-#106 (2026-10-29 and 30). Ideas #86, #94 and #102
+from the same days are F19c, O1 and F19b; #33 and #34 still wait for Erin's spec.
+- #104, #106 ("I snoozed that one to tomorrow afternoon, it confirmed the snooze, but here
+  it is today"): at 1:37 pm, "Snooze the green tea to tomorrow afternoon" ran snooze_task
+  with until 14:00. snooze_task only takes a time (today, or tomorrow once it's passed), so
+  it waited until 2 pm *today*; the reply said "2 pm tomorrow". At 4:47 the day summary
+  still listed it.
+- #105 ("not even close"): "What happened yesterday?" gave "Thu 29 Oct: Move Mimi's box
+  upstairs for Rosie", the one task still open. The calendar is read from now on, so a past
+  day has no events (Thursday had tutoring), and a summary lists only open tasks, never
+  what was done.
+- #99 ("why does it think cycle the laundry isn't done right after saying it was?"): the
+  end-of-day list was written at 7:36 pm and held by pacing until 9:15; the laundry was
+  ticked at 9:05, and the list went out as written.
+- #98, #100 (quotes around the whole thing): replies came as `"'Copy and review ...' is
+  done."` and `'"Refill whoosh litter" is set up for both of you.'`; earlier, a title in
+  backticks and quotes, `` `"Unclog the robot vacuum"` ``. The model's own text.
+- #101 ("the proposed calendar event is correct, but Themi already added it"): at 7:42 pm
+  she had Themi add "Tutoring (Jennifer)", Mon 9 Nov 4:30-5:50. Fifteen minutes later the
+  booking email made a card for the same times ("Tutoring: Malcolm's first session"), and
+  a second email the next day made another.
+- #103 ("I marked the tutoring invoice as complete and it disappeared from the morning
+  task message, but it is still showing on cozyla"): look into it. The tick on the
+  morning list goes through `complete`, as any Done does.
+
+Tests: each bug first as a failing test; a scenario for the snooze to tomorrow and for
+yesterday's summary.
+
+### F19b · Idea #102: a word when a task is done
+Status: [ ]
+Depends on: F19a
+Erin's idea #102 (2026-10-30): "when a user completes a task, Themi should send a
+confirmation message along with a brief 'good job!' or similar message."
+- Today a Done button edits its nudge to "Marked done: X. Thank you."; a tick on the
+  morning list only takes the line away (F19a adds "Marked done: X." above the list);
+  done in chat, the model's reply says something or nothing; ticked on the wall, nothing
+  is said.
+- Build: one short, warm line when a task is done by any path except the wall itself:
+  plain, never effusive, and never about energy. Varied from a small set (no AI call), so
+  it doesn't read as a stamp. Where the done is already confirmed in place (the nudge's
+  edit), the warm word goes in that edit, not a second message.
+- PDA phrasing applies: praise for having done it, never "keep it up" or anything that
+  asks for more. Off with a setting for whoever finds it too much.
+- Ask Erin before building: done on the wall, should a message come at all (it would be
+  the only message caused by the wall)?
+
+Tests: each path (button, list tick, chat) says it once; the wall says nothing; the
+setting turns it off; the shield keeps the wording.
+
+### F19c · Idea #86: a shared task put off by one person stays with the other
+Status: [ ]
+Depends on: F19a, F4
+Erin's idea #86 (2026-10-29): "for shared tasks, when one user snoozes the task, only snooze
+it for that user (it should remain active for the user who did not snooze the task)."
+- Today a task is snoozed as a whole (`tasks.status = 'snoozed'`, one `snoozed_until`), and
+  a snooze withdraws every queued nudge for it, the other person's too.
+- Build: for a shared or either-of-you task, a snooze is the snoozer's: kept per person (a
+  table of task, member, until), their nudges held, the other's left alone. The task stays
+  open; it's on the snoozer's day summary, end-of-day list and morning list only once
+  their snooze is over. When both have put it off, it waits for the earlier of the two.
+- A one-person task snoozes as today. Rescheduling (a new due day) still moves it for both,
+  and says so.
+- The snooze's reply says who it's put off for when the task is shared ("Put off for you
+  until 2 pm tomorrow; it's still on Michael's list").
+- Check the wall: a Cozyla to-do is one item for both, so a per-person snooze doesn't touch
+  it.
+
+Tests: shared task snoozed by one: the other's nudge and summary unchanged; both snooze;
+the snooze ends; a one-person task as before; a reschedule moves it for both.
+
+### O1 · Idea #94: when it's too much, a few things now and the rest spread out
+Status: [ ]
+Depends on: F19a, F19c, T1, B1
+Erin's idea #94 (2026-10-29): "a full overhaul of how Themi presents tasks when the user is
+overwhelmed. Something that only surfaces a small number of tasks to focus on for now. And
+also reassures the user that all the other tasks are also being remembered and planned for
+future days. And that pushing the remaining tasks to a later day won't lead to having way
+too much on any single later day."
+It came out of the morning of 2026-10-29 (bugs #84, #85): "today's to dos need to be pared
+down", then "snooze everything except the tutoring and the run", then "snooze clean
+upstairs", each move one by one and every remaining one read back.
+- Build, in two parts (split into O1a/O1b before starting if it's big):
+  1. **A short list.** Asked for (an "it's too much" / "pare it down" message, or a
+     button on the morning list), Themi picks at most three things for now: what has a
+     fixed time today (calendar, check-ins with a time), then urgent and important (T1),
+     then the lightest. Medicines are never left out. One message, those few, and a line
+     that the rest are kept and placed ("The other 6 are planned over the next few days;
+     nothing's dropped.").
+  2. **The rest spread out.** What isn't on the short list moves to later days, filled by
+     a daily budget (each day's open count, chores on the chart included, kept under a
+     ceiling: the family's typical day, from task_runs, or a setting). Fixed-date and
+     deadline tasks never move. Repeating chores skip a round rather than stack. Moves
+     go through one reschedule each, but are said once, as a short summary by day
+     ("Fri: 2, Sat: 3, Mon: 1"), with a way to see them.
+- Wording: reassurance, not instruction (the PDA shield's rules); never energy numbers; no
+  "you should". A break (B1) can be offered alongside it, not instead.
+- Ask Erin before building: how few is "a small number" (three?), whether the short list
+  replaces the morning list on such a day, and whether Themi may offer it on its own when
+  a day looks overloaded or only when asked.
+- Linked: #33 burnout recovery mode may fold into this once Erin's spec arrives.
+
+Tests: the pick (fixed times, medicine kept, the cap); the spread never puts a day over
+its budget and never moves a fixed date; one summary message; a scenario of the
+2026-10-29 morning ("pare it down") in one exchange.
 
 ### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
