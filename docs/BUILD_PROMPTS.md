@@ -5460,9 +5460,10 @@ Notes (2026-10-30):
   errors (when it reached the wall isn't kept). Cozyla timed out at times that day, and
   a failed read backs off up to an hour. The edited morning list now starts "Marked done:
   X." so the tick is seen to have worked.
-- Data not repaired (ask first): cards 221 and 231 (the Malcolm session, already on her
-  calendar) are still waiting; the green tea (task 42) is open, due today, not put off to
-  Saturday afternoon.
+- Data repaired (backup `data/themi-before-f19a-repair-2026-10-30.db`), from a script with
+  the app built but not started: cards 221 and 231 (the Malcolm session, already on her
+  calendar) withdrawn ("It's on your calendar already."); the green tea (task 42) put off
+  to Sat 31 Oct, 2 pm. Reports #86, #94 and #98-#106 marked reviewed; #33 and #34 wait.
 - Not run: the model evals.
 - Setup: restart. No migration.
 
