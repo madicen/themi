@@ -242,7 +242,7 @@ class CozylaChores:
                         continue
                     member_id = self._to_member.get(record.member)
                     doer = self.services.store.get_member(member_id) if member_id else self._admin()
-                    await self.board.complete(task.id, doer)
+                    await self.board.complete(task.id, doer, wall=member_id is not None)
                     self._caught_up(task.id)  # that run came from the wall: no tick back
                     closed.add(task.id)
                     break
@@ -303,7 +303,7 @@ class CozylaChores:
                 doer = self.queue.done_on_wall(task)
                 if doer is not None:  # deleted on the wall while up: done (C2d)
                     self.db.execute("DELETE FROM cozyla_chores WHERE task_id = ?", (task.id,))
-                    await self.board.complete(task.id, doer)
+                    await self.board.complete(task.id, doer, wall=True)
                     self._caught_up(task.id)
                     continue
             off_wall = self._waiting(task) and not self._wall_members(task)

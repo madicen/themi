@@ -488,11 +488,12 @@ class Outbox:
         )
 
     def sent_today(self, member_id: int, now: datetime | None = None) -> int:
-        """Proactive messages already sent to the member since local midnight."""
+        """Proactive messages already sent to the member since local midnight. A warm word
+        for a tick on the wall (F19b) is an answer to what they did: it doesn't count."""
         midnight = start_of_local_day(now or clock.now(), self._tz)
         return self.store.db.scalar(
             "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND status = 'sent' "
-            "AND priority IN ('urgent', 'normal', 'low') AND sent_at >= ?",
+            "AND priority IN ('urgent', 'normal', 'low') AND kind != 'praise' AND sent_at >= ?",
             (member_id, to_utc_iso(midnight)),
         )
 

@@ -128,6 +128,11 @@ DONE_TEXT = "Marked done: {title}. Thank you."
 # F19b (Erin's idea #102): done in Themi (a tap, a tick, in chat), a short warm word in place
 # of the thanks. Praise for what's done, never a nudge for more.
 PRAISE = ("Nice work.", "Well done.", "Good job.", "Nicely done.", "That's one off the list.")
+# Ticked on the wall, by someone the wall names: said in a message of its own, a moment
+# later, so ticks close together go as one; dropped if it can't go while it's news.
+WALL_DONE_TEXT = "Ticked off on the wall: {titles}. {praise}"
+WALL_PRAISE_AFTER = timedelta(minutes=1)
+WALL_PRAISE_USEFUL = timedelta(hours=2)
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
 MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
@@ -307,6 +312,7 @@ class TaskBoard:
         self.outbox.gates["task"] = self._one_at_a_time
         self.outbox.orders["task"] = self._nudge_order
         self.outbox.bundlers["task"] = self._morning_list
+        self.outbox.bundlers["praise"] = self._praise_together
 
     def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
         """While a task nudge sent to this person is unanswered (still open, not put off),
@@ -654,6 +660,26 @@ class TaskBoard:
             )
         return True
 
+    async def _praise_together(self, member: Member, rows: list[dict[str, Any]]) -> bool:
+        """Several ticks on the wall at once: one warm word for them all."""
+        tasks = sorted(
+            (self.get(int(str(r["dedupe_key"]).split("-")[1])) for r in rows), key=lambda t: t.id
+        )
+        titles = [t.title for t in tasks]
+        joined = f"{', '.join(titles[:-1])} and {titles[-1]}"
+        result = await self.outbox.send(
+            member,
+            WALL_DONE_TEXT.format(titles=joined, praise=_praise(tasks[0])),
+            priority=Priority.NORMAL,
+            kind="praise",
+            deadline=clock.now(),
+        )
+        if result.outbox_id is None:
+            return False
+        for row in rows:
+            self.outbox.cancel(row["id"])
+        return True
+
     def _list_message(self, tasks: list[Task], today: date) -> tuple[str, list[Button]]:
         ids = [t.id for t in tasks]
         lines = "\n".join(f"- {_label(t, today)}: {t.title}" for t in tasks)
@@ -787,10 +813,17 @@ class TaskBoard:
         return self.get(task_id)
 
     async def complete(
-        self, task_id: int, by: Member, *, interactive: bool = False, tapped: int | None = None
+        self,
+        task_id: int,
+        by: Member,
+        *,
+        interactive: bool = False,
+        tapped: int | None = None,
+        wall: bool = False,
     ) -> str:
         """Mark it done (a repeating one: this round). `tapped`: the message whose Done
-        button did it, which the caller edits itself."""
+        button did it, which the caller edits itself. `wall`: ticked on the wall by `by`
+        (the wall said who), who hears a warm word for it (F19b)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
@@ -809,6 +842,17 @@ class TaskBoard:
         thanks = DONE_TEXT.format(title=task.title)
         if interactive and by.done_praise and said.startswith(thanks):
             said = thanks.removesuffix("Thank you.") + _praise(task) + said.removeprefix(thanks)
+        if wall and by.done_praise and by.telegram_user_id is not None:
+            now = clock.now()
+            await self.outbox.send(
+                by,
+                WALL_DONE_TEXT.format(titles=task.title, praise=_praise(task)),
+                priority=Priority.NORMAL,
+                kind="praise",
+                not_before=now + WALL_PRAISE_AFTER,
+                expires=now + WALL_PRAISE_USEFUL,
+                dedupe_key=f"praise-{task.id}-{secrets.token_hex(4)}",
+            )
         for hook in self.done_hooks:  # each time it's done, a repeating one's every round
             try:
                 await hook(task, by, interactive)

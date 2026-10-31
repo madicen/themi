@@ -418,3 +418,14 @@ async def test_a_refresher_rewrites_or_drops_a_held_message_as_it_goes(
     clock.freeze(at(23, 8))
     assert await outbox.flush() == 0
     assert outbox.queued(family.erin.id) == []
+
+
+async def test_a_warm_word_for_a_tick_doesnt_count_toward_the_day(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    """F19b: an answer to what they did on the wall, not one of Themi's own messages."""
+    clock.freeze(at(21, 9))
+    await outbox.send(
+        family.erin, "Ticked off on the wall: x.", priority=Priority.NORMAL, kind="praise"
+    )
+    assert outbox.sent_today(family.erin.id) == 0
