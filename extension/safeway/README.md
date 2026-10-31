@@ -34,11 +34,31 @@ If it says **"Sign in to Safeway, then try again."**, your Safeway sign-in has e
 Safeway wanted a check that the extension can't do. Sign in again in the tab (or reload it)
 and click **Fill cart** again. Anything already added stays in the cart and is added on top.
 
+## Connect it to Themi (optional)
+
+Then "fill the Safeway cart" in Themi's chat fills it here, and both of your browsers
+remember the same products.
+
+1. On Themi's website, open **Safeway** and click **Connect the Safeway helper**. Copy the
+   token it shows (it's shown only once).
+2. Right-click the extension's icon, choose **Options**, and enter Themi's address (the
+   website's address, `https://...`) and the token. Click **Connect** and allow access to
+   that address when Chrome asks.
+3. Say "fill the Safeway cart" to Themi and answer **Go ahead**. The next time a safeway.com
+   tab is open (signed in), the helper fills the cart within a minute and Themi messages you
+   what it added. If no tab is open within 2 hours, Themi sends the list with Safeway links
+   instead.
+
+Each browser gets its own token, and either can be disconnected on Themi's Safeway page.
+That page also shows the remembered products: change what to search for, or forget one.
+
 ## For developers
 
-- `lib/` holds the logic (list parsing, the Safeway calls, the fill), shared by the content
-  script, the popup and the tests. `page.js` runs in the page's own world to read the
-  store, sign-in token and API keys from safeway.com's globals.
+- `lib/` holds the logic (list parsing, the Safeway calls, the fill, talking to Themi, the
+  worker's polling), shared by the content script, the service worker, the popup and the
+  tests. `background.js` is the service worker: it polls Themi while a Safeway tab is open.
+  `page.js` runs in the page's own world to read the store, sign-in token and API keys from
+  safeway.com's globals.
 - [NOTES.md](NOTES.md) records the requests and how they were found. Safeway changes its
   site; when something breaks, start there.
 - Tests: `node --test extension/safeway/tests/*.test.js`, also run by `make test-all`. They use

@@ -140,7 +140,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
-| 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [ ] |
+| 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [x] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
@@ -6385,7 +6385,7 @@ Notes (2026-10-31):
 - Setup: restart `themi run` for migration 0088. Pairing does nothing useful until 35d.
 
 ### 35d · Safeway cart: the extension takes jobs from Themi
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 35c
 Read first: 35b's and 35c's Notes; `extension/safeway/NOTES.md`.
 
@@ -6412,6 +6412,31 @@ Manual check (Notes): pair it with the website, say "fill the Safeway cart", ans
 see the cart and the message.
 
 Commit when done.
+
+Notes (2026-10-31):
+- Manifest 0.2.0: `permissions` storage and alarms; `optional_host_permissions` https://*/*,
+  http://localhost/* and http://127.0.0.1/*, of which the options page asks for Themi's
+  origin alone, on the Connect click. A `background.js` service worker and `options.html`.
+- `lib/themi.js`: the address check (https, or http on this computer; no user, query or
+  fragment), the API client (bearer token, `credentials: "omit"`, a 401 is `Revoked`),
+  remembered products kept in Themi (read once per fill, set on each new pick) and a fill's
+  result in Themi's shape (only items it got to; `stopped` true or false).
+- `lib/worker.js` (driven by `background.js`): a content script tells the worker when a
+  Safeway tab loads, and a 1-minute alarm runs while one is open. It claims a job, sends it to
+  the tab and is busy until the tab reports back with a fresh message (`job-done`), so a long
+  fill doesn't depend on the worker staying alive; "busy" is in storage and lapses after 30
+  minutes, when Themi gives up on the job too. A tab that can't take the job (opened before
+  the extension was installed) frees it, and Themi sends links when the job runs out. A 401
+  marks the helper revoked and stops polling.
+- Job items are checked in the tab as data (`jobItems`): names up to 80 characters, quantity
+  1-20, a product only with a digits id. A remembered product skips the search; search words
+  are what's searched.
+- Paired, the popup's own fills and "change" use Themi's remembered products too. The popup
+  says whether it's connected, links to the options page, and marks a cart filled for Themi.
+- Tests: 43 `node --test` cases (10 new).
+- Not checked by hand yet: loading the extension, pairing it with the running Themi, and a
+  real "fill the Safeway cart". The user should do that once (README, "Connect it to
+  Themi"). Themi's address must be reachable from the browser over https (or localhost).
 
 ---
 
