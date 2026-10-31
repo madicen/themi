@@ -111,6 +111,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
 | F19b | Idea: a word when a task is done | Feedback | [x] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
+| F19d | Feedback: "remind me to" a small thing at a time is a reminder, not a task | Feedback | [x] |
 | O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [x] |
 | O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [x] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
@@ -5551,6 +5552,34 @@ Notes (2026-10-30):
   reworded by the PDA shield as a command.
 - Not run: the model evals.
 - Setup: restart (applies 0085).
+
+### F19d · "Remind me to" a small thing at a time is a reminder, not a task
+Status: [x] 2026-10-30
+Depends on: F19a
+From the green tea (#84, #104, #106). On 28 Oct Erin said "On Friday afternoon, remind me to
+drink green tea". It became a task: on the wall's to-do list, in day summaries, in the
+low-energy reschedule, nudged with Done or Later, and snoozed. She only wanted a nudge.
+- `add_reminder` (a message at a time, nothing to tick off) already existed, but its
+  description sent every "remind me to..." to create_task.
+- Build: the two descriptions draw the line. A small thing of their own at a time they
+  give, where a nudge is all they want ("remind me to drink green tea on Friday
+  afternoon", "remind me to stretch at 3"), is add_reminder. A job to get done or keep
+  track of, or one with no time ("remind me to call the vet"), is create_task. A part of
+  the day without an hour is morning 09:00, afternoon 14:00, evening 18:00.
+
+Tests: eval cases reminder-green-tea (add_reminder, not create_task) and
+task-remind-call-vet (create_task, not add_reminder).
+
+Notes (2026-10-30):
+- Descriptions only; no code path changed.
+- Data: task 42 (green tea) was cancelled, which took it off the wall, and a reminder
+  for Sat 31 Oct, 2 pm was queued in its place. Backup at
+  data/themi-before-green-tea-reminder-2026-10-30.db.
+- Also fixed: "What happened yesterday?" was both a router example and an eval case
+  (from F19-O1's evals), which test_router_eval forbids; the example is now "What got
+  done yesterday?".
+- Evals (test key, 2026-10-30): reminder-green-tea, task-remind-call-vet and
+  snooze-to-tomorrow-afternoon pass, 3/3.
 
 ### O1 · Idea #94: when it's too much (split into O1a and O1b)
 Status: [x] 2026-10-30 (as O1a and O1b)

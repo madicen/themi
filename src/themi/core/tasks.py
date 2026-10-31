@@ -1671,7 +1671,9 @@ CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|t
     "a family member's name when they name someone ('have my husband get the pacifier', 'ask "
     "him to...'), 'both' when either of them can do it "
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
-    "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
+    "when it just needs doing ('can someone...'); then Themi works out who has room for it. "
+    "A small thing at a set time where a nudge is all they want ('remind me to drink green "
+    "tea at 2') is add_reminder, not a task.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},

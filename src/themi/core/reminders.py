@@ -281,10 +281,13 @@ async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
     "A message at a time they ask for, about something that isn't a task to tick off: extra "
     "reminders before an event ('remind me at 2 and 3 about tutoring': one call each), or "
     "'remind me at 5 that the plumber's coming'. No Done or Later, and nothing goes on their "
-    "list. Something they need to do ('remind me to call the vet') is create_task. date: "
-    "YYYY-MM-DD, read from the whole conversation (an event's reminders are on its day); "
-    "time: HH:MM, 24-hour; text: short, in their words, with the event's time if it has one "
-    "('Tutoring at 4 pm').",
+    "list. Also a small thing of their own at a time they give, where a nudge is all they "
+    "want ('remind me to drink green tea on Friday afternoon', 'remind me to stretch at 3'). "
+    "A job to get done or keep track of, or one with no time ('remind me to call the vet', "
+    "'remind me to pay the water bill'), is create_task. date: YYYY-MM-DD, read from the "
+    "whole conversation (an event's reminders are on its day); time: HH:MM, 24-hour "
+    "(morning 09:00, afternoon 14:00, evening 18:00 when they give no hour); text: short, "
+    "in their words, with the event's time if it has one ('Tutoring at 4 pm').",
     {"text": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}},
 )
 async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
