@@ -159,7 +159,7 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
         r"running low|ran out|leftover|used (?:up|the last)|last of|finished the|picked up|"
         r"bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go(?:es)? off|"
-        r"went off",
+        r"went off|safeway|\bcart\b|weekly shop",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
     "spending": (
@@ -261,6 +261,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Finished the cereal this morning",
         "The milk went off",
         "Got more coffee beans",
+        "Load up the online grocery cart from the list",
     ),
     "calls": (
         "Write me a script for calling the landlord",
@@ -379,7 +380,9 @@ TOOL_GROUPS: dict[str, str] = {
         ),
         "email",
     ),
-    **dict.fromkeys(("update_pantry", "show_pantry", "suggest_meals"), "pantry"),
+    **dict.fromkeys(
+        ("update_pantry", "show_pantry", "suggest_meals", "fill_safeway_cart"), "pantry"
+    ),
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }

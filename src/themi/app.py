@@ -68,6 +68,7 @@ from themi.core.routines import Routines
 from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
+from themi.core.safeway import SafewayCart
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
@@ -168,6 +169,8 @@ def build_app(
         NoiseDigest(services, approvals, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
+    safeway = SafewayCart(services, groceries)
+    safeway.install()
     lists = Lists(services)
     lists.install()
     ThingsToBuy(services, lists).install()
@@ -236,6 +239,7 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
+        PeriodicTask("safeway.expire", timedelta(minutes=5), safeway.expire_stale),
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
     ]

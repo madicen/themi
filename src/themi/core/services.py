@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
+    from themi.core.safeway import SafewayCart
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
     from themi.core.task_blocks import TaskBlocks
@@ -161,6 +162,7 @@ class Services:
     lists: Lists | None = None  # named lists Themi keeps (L1a)
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
+    safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
