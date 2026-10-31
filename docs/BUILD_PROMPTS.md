@@ -138,7 +138,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
-| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [ ] |
+| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [~] |
 | 35c | Safeway cart: Themi sends the list to the extension | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
@@ -6234,7 +6234,7 @@ Tests:
 Commit when done.
 
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
-Status: [ ]
+Status: [~]
 Depends on: none in Themi (it is a separate program)
 Read first: "Integrations" → Safeway/DoorDash row; "Fixed technical choices" (the extension).
 
