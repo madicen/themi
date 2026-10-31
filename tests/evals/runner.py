@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import time
+import time as timer
 from collections.abc import Sequence
+from datetime import date, time, timedelta
 from typing import Any
 
 from tests.evals.pacing import PacedFactory
@@ -60,8 +61,7 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
                 "groceries.add",
             )
         elif "task" in step:
-            assert services.taskboard is not None
-            await services.taskboard.create(member, step["task"], "errand", 1)
+            await _task(scenario, member, step)
         elif "list" in step:
             assert services.lists is not None
             services.lists.create(member, step["list"], personal=False)
@@ -74,6 +74,27 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
                 scenario.cozyla.add_routine(uid, item["title"], item["part"])
         else:
             raise ValueError(f"unknown setup step {step}")
+
+
+async def _task(scenario: Scenario, member: Member, step: dict[str, Any]) -> None:
+    """A task of theirs: {"task": title}, and optionally "due" ("today", "tomorrow" or a
+    date), "at" ("HH:MM") and "both" (either of them, F19c and O1)."""
+    board = scenario.app.services.taskboard
+    assert board is not None
+    if set(step) == {"task"}:  # as the cases before O1 had it: matched, and nudged
+        await board.create(member, step["task"], "errand", 1)
+        return
+    today = scenario.today()
+    due = step.get("due")
+    day = {"today": today, "tomorrow": today + timedelta(days=1)}.get(due) if due else None
+    if due and day is None:
+        day = date.fromisoformat(due)
+    at = time.fromisoformat(step["at"]) if "at" in step else None
+    task = await board.create(
+        member, step["task"], "errand", 1, day, assignee=member, due_time=at, nudge=False
+    )
+    if step.get("both"):
+        await board.make_either(task.id)
 
 
 def needs_gmail(case: Case) -> bool:
@@ -166,12 +187,12 @@ async def run_case(
             tools = args[2] if len(args) > 2 else kwargs.get("tools", ())
             if tools and not sent_tools:
                 sent_tools.append(tools)
-            began, waited = time.monotonic(), paced.waited if paced else 0.0
+            began, waited = timer.monotonic(), paced.waited if paced else 0.0
             try:
                 return await chat(*args, **kwargs)
             finally:
                 pacing = (paced.waited if paced else 0.0) - waited
-                seconds.append(round(time.monotonic() - began - pacing, 2))
+                seconds.append(round(timer.monotonic() - began - pacing, 2))
 
         client.chat = counted  # type: ignore[method-assign]
         return client

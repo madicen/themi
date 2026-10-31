@@ -135,7 +135,7 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     ),
     "calendar": (
         "calendar events, day summaries, drive times, blocking time",
-        r"calendar|appointment|meeting|event|today|tomorrow|tonight|"
+        r"calendar|appointment|meeting|event|today|tomorrow|tonight|yesterday|"
         r"(?:morning|afternoon|evening)(?!s?\s+routines?)|day look|what'?s on|monday|"
         r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
         r"block|time for|find (?:me )?time|summary",
@@ -195,6 +195,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "What's on my calendar today?",
         "Do I have anything Friday afternoon?",
         "Give me a rundown of my day",
+        "What happened yesterday?",
         "Add a doctor's visit next Tuesday at ten",
         "Put the school concert on the family calendar",
         "Push the meeting back an hour",
