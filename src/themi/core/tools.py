@@ -195,7 +195,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "What's on my calendar today?",
         "Do I have anything Friday afternoon?",
         "Give me a rundown of my day",
-        "What happened yesterday?",
+        "What got done yesterday?",
         "Add a doctor's visit next Tuesday at ten",
         "Put the school concert on the family calendar",
         "Push the meeting back an hour",
