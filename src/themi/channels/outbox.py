@@ -106,6 +106,9 @@ Order = Callable[[dict[str, Any]], tuple[Any, ...]]
 # Several queued rows of one kind, ready for one person at once: send them as one message
 # (and take them back) if it suits, returning True; False leaves them as they are.
 Bundler = Callable[["Member", list[dict[str, Any]]], Awaitable[bool]]
+# A held message of one kind, about to go: its text as things stand now, or None if there's
+# nothing left to say (F19a, bug #99: a list written at 7:36 went at 9:15 as written).
+Refresher = Callable[["Member", dict[str, Any]], str | None]
 
 
 class ReceptivityProvider(Protocol):
@@ -155,6 +158,7 @@ class Outbox:
         self.orders: dict[str, Order] = {}
         # Several of a kind waiting at once, sent as one (the morning list, bug #49).
         self.bundlers: dict[str, Bundler] = {}
+        self.refreshers: dict[str, Refresher] = {}
 
     @property
     def _tz(self) -> str:
@@ -273,7 +277,8 @@ class Outbox:
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
                 )
                 continue
-            ready.append((member, row))
+            if (fresh := self._refreshed(member, row)) is not None:
+                ready.append((member, fresh))
         sent += await self._bundle(ready)
         for member, row in ready:
             if self._row_status(row["id"]) != "queued":
@@ -283,6 +288,20 @@ class Outbox:
             if (await self._deliver(row)).status == "sent":
                 sent += 1
         return sent
+
+    def _refreshed(self, member: Member, row: dict[str, Any]) -> dict[str, Any] | None:
+        """The row as its kind's refresher has it now, or None (taken back: nothing left)."""
+        refresh = self.refreshers.get(row["kind"])
+        if refresh is None:
+            return row
+        text = refresh(member, row)
+        if text is None:
+            self.store.db.execute("DELETE FROM outbox WHERE id = ?", (row["id"],))
+            log.info("Dropped message %s: nothing left to say", row["id"])
+            return None
+        if text != row["text"]:
+            self.store.db.execute("UPDATE outbox SET text = ? WHERE id = ?", (text, row["id"]))
+        return {**row, "text": text}
 
     async def _bundle(self, ready: list[tuple[Member, dict[str, Any]]]) -> int:
         """Offer each bundler the rows of its kind that are ready for one person, when

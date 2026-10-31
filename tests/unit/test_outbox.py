@@ -395,3 +395,26 @@ async def test_not_before_holds_a_message_until_then(
     assert reply.status == "sent"  # replies never wait
     clock.advance(timedelta(hours=4))
     assert await outbox.flush() == 1
+
+
+async def test_a_refresher_rewrites_or_drops_a_held_message_as_it_goes(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    """F19a (bug #99): a list written in the evening went out after it had gone stale."""
+    left = ["the laundry", "the dentist"]
+    outbox.refreshers["task_summary"] = lambda member, row: (
+        f"Still open: {' and '.join(left)}." if left else None
+    )
+    clock.freeze(at(21, 22))  # quiet hours: both wait for the morning
+    await outbox.send(family.erin, "Still open: x.", priority=Priority.NORMAL, kind="task_summary")
+    await outbox.send(family.erin, "The feeders are low.", priority=Priority.NORMAL)
+    left.remove("the laundry")
+    clock.freeze(at(22, 8))
+    assert await outbox.flush() == 2
+    assert sender.texts() == ["Still open: the dentist.", "The feeders are low."]
+    left.clear()
+    clock.freeze(at(22, 22))
+    await outbox.send(family.erin, "Still open: x.", priority=Priority.NORMAL, kind="task_summary")
+    clock.freeze(at(23, 8))
+    assert await outbox.flush() == 0
+    assert outbox.queued(family.erin.id) == []
