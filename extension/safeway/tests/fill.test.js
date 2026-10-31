@@ -45,7 +45,7 @@ test("adds on top of what's already in the cart, never lowering it", async () =>
 test("items with no real match are listed as not found", async () => {
   const { fake, client, memory } = setup();
   const result = await fillCart({ items: parseList("qzxjvwk"), client, memory });
-  assert.deepEqual(result.notFound, [{ item: "qzxjvwk" }]);
+  assert.deepEqual(result.notFound, [{ item: "qzxjvwk", qty: 1 }]);
   assert.equal(fake.requests.filter((r) => r.method === "POST").length, 0);
 });
 

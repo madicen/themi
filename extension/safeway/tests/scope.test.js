@@ -10,14 +10,14 @@ const { parseList } = require("../lib/list.js");
 const { fixture, fakeSafeway, fakeStorage, ctx, noSleep } = require("./fakes.js");
 
 const ROOT = path.join(__dirname, "..");
-const SOURCES = ["manifest.json", "page.js", "content.js", "popup.html", "popup.js", "lib/list.js", "lib/safeway.js", "lib/fill.js"];
+const SOURCES = ["manifest.json", "page.js", "content.js", "background.js", "popup.html", "popup.js", "options.html", "options.js", "lib/list.js", "lib/safeway.js", "lib/fill.js", "lib/themi.js", "lib/worker.js"];
 
-test("the manifest asks for storage and safeway.com only", () => {
+test("the manifest asks for storage, alarms and safeway.com; Themi's address only when connecting", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest.json"), "utf8"));
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions, ["storage"]);
+  assert.deepEqual(manifest.permissions, ["storage", "alarms"]);
   assert.deepEqual(manifest.host_permissions, ["https://www.safeway.com/*"]);
-  assert.equal(manifest.optional_host_permissions, undefined);
+  assert.deepEqual(manifest.optional_host_permissions, ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"]);
   for (const cs of manifest.content_scripts) assert.deepEqual(cs.matches, ["https://www.safeway.com/*"]);
 });
 
