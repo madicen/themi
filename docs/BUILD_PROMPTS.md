@@ -139,7 +139,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
-| 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [~] |
+| 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
 | 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
@@ -6312,7 +6312,7 @@ Notes (2026-10-31):
 - Follow-up: products sold each but priced by weight (bananas) show a size of "1 lb".
 
 ### 35c · Safeway cart: Themi's side (pairing, jobs, product memory)
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: 35b, 25, G1, 16
 Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D;
 `extension/safeway/NOTES.md`.
@@ -6351,6 +6351,38 @@ Tests:
   result message arrives.
 
 Commit when done.
+
+Notes (2026-10-31):
+- `themi.core.safeway.SafewayCart`; migration 0088: `safeway_helpers` (token hash, who, last
+  seen, revoked), `safeway_jobs` (queued, claimed, done or expired; items and results as
+  JSON; the action it came from) and `safeway_products` (item to Safeway pid, name, size and
+  search words). The `safeway_cart` category was already in migration 0008 (Tier 1, capped).
+- The tool is `fill_safeway_cart` (no arguments: the whole grocery list), in the pantry tool
+  group, whose words now include "safeway", "cart" and "weekly shop". The card reads "Eggs,
+  2 oat milk and bananas for the Safeway cart" (an imperative "Fill the..." got an "Up
+  next:" label). A quantity comes from the list's name: "2 oat milk", "oat milk x2" or
+  "oat milk (2)". The yes edits the card: "I'll have the Safeway helper fill the cart...",
+  or, with no helper connected, the list with a search link per item.
+- API (bearer token, no cookies, so no CSRF): `POST /api/safeway/claim` (200 with the job,
+  204 when there's none; claiming is one conditional UPDATE, so a job is claimed once),
+  `POST /api/safeway/jobs/{id}/results`, `GET` and `PUT /api/safeway/products`. A bad
+  token is 401; a bad body (over 64 kB, not JSON, the wrong shape, an item not in the job,
+  an item twice, a quantity outside 1-20, a product id that isn't digits, a name over 200
+  characters, someone else's job, answered twice) is 422 and changes nothing.
+- Each job item goes out with `search` (the remembered search words, else its name) and
+  `product` (the remembered one, or null). An added item's product is remembered.
+- The result message uses only the family's item names and code-written words, so nothing
+  the helper sends reaches the model; the website escapes product names (Jinja). `stopped`
+  is true or false, never the helper's own text.
+- Expiry (`safeway.expire`, every 5 minutes): unclaimed for 2 hours, or claimed and
+  unanswered for 30 minutes, sends the links once (deduped per job).
+- Receipts: the receipt schema has `as_written`, the product's name as on the receipt. A
+  grocery receipt from a vendor named Safeway sets that item's search words (a picked
+  product stays). The website's "Save" on search words clears the product so the next fill
+  picks again; "Forget" removes it.
+- Website: "Safeway" in the menu: connect (the token is shown once on the page the POST
+  returns), the connected helpers with Disconnect, and the remembered products.
+- Setup: restart `themi run` for migration 0088. Pairing does nothing useful until 35d.
 
 ### 35d · Safeway cart: the extension takes jobs from Themi
 Status: [ ]
