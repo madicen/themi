@@ -129,7 +129,8 @@ async def test_nudges_waiting_for_the_morning_go_as_one_list(scenario: Scenario)
 
     await scenario.tap("Erin", "✓ Bring bins in")
     edit = scenario.edits("Erin")[-1]
-    assert edit["text"] == (
+    assert edit["text"] == (  # bug #103: a tick only took the line away; was it done?
+        "Marked done: Bring bins in.\n\n"
         "This morning:\n- Due today: Clean kitchen\n- Due today: Call the vet\n"
         "Tap any that are done; the rest can wait."
     )
@@ -143,7 +144,9 @@ async def test_nudges_waiting_for_the_morning_go_as_one_list(scenario: Scenario)
 
     await scenario.tap("Erin", "✓ Clean kitchen")
     await scenario.tap("Erin", "✓ Call the vet")
-    assert scenario.edits("Erin")[-1]["text"] == "This morning's list: all done."
+    assert scenario.edits("Erin")[-1]["text"] == (
+        "Marked done: Call the vet. This morning's list: all done."
+    )
 
 
 async def test_later_in_the_day_nudges_still_come_one_at_a_time(scenario: Scenario) -> None:

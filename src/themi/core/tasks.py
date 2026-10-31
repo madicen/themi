@@ -128,6 +128,7 @@ SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's do
 LAST_ROUND_TEXT = " That was the last one."
 MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
 MORNING_LIST_DONE = "This morning's list: all done."
+MORNING_LIST_TICKED = "Marked done: {title}."
 MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
 MORNING_LIST_BUTTONS = 6
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
@@ -654,16 +655,14 @@ class TaskBoard:
         return MORNING_LIST_TEXT.format(items=lines), buttons
 
     async def _list_done(self, event: InboundEvent) -> None:
-        """A tick on the morning list: that one's done, and the list shows the rest."""
+        """A tick on the morning list: that one's done, said so (bug #103: the line only went
+        away, and the wall was slow, so was it done?), and the list shows the rest."""
         assert event.button is not None
-        await self.complete(
-            int(event.button.payload["task"]),
-            event.member,
-            interactive=True,
-            tapped=event.button.message_id,
-        )
+        task_id = int(event.button.payload["task"])
+        await self.complete(task_id, event.member, interactive=True, tapped=event.button.message_id)
         if event.button.message_id is None:
             return
+        ticked = MORNING_LIST_TICKED.format(title=self.get(task_id).title)
         left = []
         for task_id in event.button.payload.get("list", []):
             try:
@@ -673,10 +672,13 @@ class TaskBoard:
             if task.status == "open":
                 left.append(task)
         if not left:
-            await self.outbox.edit(event.member, event.button.message_id, MORNING_LIST_DONE)
+            done = f"{ticked} {MORNING_LIST_DONE}"
+            await self.outbox.edit(event.member, event.button.message_id, done)
             return
         text, buttons = self._list_message(left, self._today())
-        await self.outbox.edit(event.member, event.button.message_id, text, buttons)
+        await self.outbox.edit(
+            event.member, event.button.message_id, f"{ticked}\n\n{text}", buttons
+        )
 
     def _deadline(self, task: Task) -> datetime | None:
         """By when a nudge should go out: its time on the due date (the task's, or the
