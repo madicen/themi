@@ -50,7 +50,9 @@ remember the same products.
    instead.
 
 If the popup says **Reload your Safeway tab**, that tab was open before the extension was
-installed or reloaded, so the helper can't use it until it's reloaded.
+installed or reloaded, so the helper can't use it until it's reloaded. If it says **Open
+Safeway and sign in**, the Safeway tab is on a sign-in or error page (or signed out): the
+helper only takes a cart in a tab where you're signed in and shopping.
 
 Each browser gets its own token, and either can be disconnected on Themi's Safeway page.
 That page also shows the remembered products: change what to search for, or forget one.

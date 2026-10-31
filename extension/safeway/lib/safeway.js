@@ -16,6 +16,12 @@
     }
   }
 
+  // ctx from page.js. A signed-in shopping page has all of these; Safeway's sign-in and
+  // error pages (like "Not found" at the end of a sign-in) have none.
+  function readyToShop(ctx) {
+    return Boolean(ctx && ctx.storeId && ctx.token && ctx.searchKey && ctx.cartKey);
+  }
+
   // The site's own format: 3 random digits, the time in ms, 3 random digits. The search
   // service refuses other shapes (OSSR0033-R).
   function requestId(now, random) {
@@ -161,7 +167,7 @@
     return { search, readCart, setQuantity };
   }
 
-  const api = { createClient, parseSearch, cartItems, requestId, SignedOut, SIGN_IN_MESSAGE, ORIGIN, SEARCH_PATH, CART_ITEMS_PATH, CART_PATH };
+  const api = { createClient, parseSearch, cartItems, requestId, readyToShop, SignedOut, SIGN_IN_MESSAGE, ORIGIN, SEARCH_PATH, CART_ITEMS_PATH, CART_PATH };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.ThemiSafeway = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

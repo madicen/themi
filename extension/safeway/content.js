@@ -3,7 +3,7 @@
 // page.js, runs the fill and keeps progress and results in chrome.storage.local so the
 // popup can close and reopen.
 (function () {
-  const { createClient } = globalThis.ThemiSafeway;
+  const { createClient, readyToShop } = globalThis.ThemiSafeway;
   const { fillCart, alternatives, choose, createMemory } = globalThis.ThemiFill;
   const { parseList, itemKey } = globalThis.ThemiList;
   const { createRemoteMemory } = globalThis.ThemiLink;
@@ -83,8 +83,9 @@
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (sender.id !== chrome.runtime.id || !msg) return false;
     if (msg.type === "ping") {
-      reply({ ok: true });
-      return false;
+      // Ready only on a signed-in shopping page, not Safeway's sign-in or error pages.
+      pageContext().then((ctx) => reply(readyToShop(ctx) ? { ok: true } : { ok: false, reason: "sign-in" }));
+      return true;
     }
     if (msg.type === "fill") {
       if (running) reply({ ok: false, detail: "Already filling the cart." });

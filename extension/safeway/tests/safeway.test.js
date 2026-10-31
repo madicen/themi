@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createClient, parseSearch, cartItems, requestId, SignedOut, SEARCH_PATH, CART_ITEMS_PATH, CART_PATH } = require("../lib/safeway.js");
+const { createClient, parseSearch, cartItems, requestId, readyToShop, SignedOut, SEARCH_PATH, CART_ITEMS_PATH, CART_PATH } = require("../lib/safeway.js");
 const { fixture, fakeSafeway, ctx, noSleep } = require("./fakes.js");
 
 test("search results: product ID, name, size, price and stock", () => {
@@ -113,4 +113,14 @@ test("requests are paced: a pause before every request after the first", async (
   await client.readCart();
   await client.setQuantity("970597593", 1);
   assert.deepEqual(pauses, [1500, 1500]);
+});
+
+test("a page is ready to shop only with a store, a sign-in and the API keys", () => {
+  // 2026-10-31: Safeway's "Not found" sign-in error page counted as a ready tab.
+  assert.equal(readyToShop(ctx()), true);
+  const errorPage = { storeId: "", banner: "safeway", zipCode: "", channel: "delivery", token: "", searchKey: "", cartKey: "" };
+  assert.equal(readyToShop(errorPage), false);
+  assert.equal(readyToShop({ ...ctx(), token: "" }), false, "signed out");
+  assert.equal(readyToShop({ ...ctx(), storeId: "" }), false, "no store picked");
+  assert.equal(readyToShop(null), false, "page.js didn't answer");
 });

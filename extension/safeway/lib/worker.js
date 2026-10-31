@@ -37,18 +37,22 @@
       await setPolling(false);
     }
 
-    // A Safeway tab the helper can work in; flags the case where there are tabs but none
-    // has the helper's code, so the popup can say to reload one.
+    // A Safeway tab the helper can work in: a signed-in shopping page with the helper's
+    // code. When there's none, themiTab says why, for the popup: "sign-in" (a tab on a
+    // sign-in or error page, or signed out) or "reload" (tabs opened before the extension
+    // was installed or reloaded).
     async function readyTab() {
       const tabs = await safewayTabs();
+      let why = null;
       for (const tab of tabs) {
         const pong = await sendToTab(tab.id, { type: "ping" });
         if (pong && pong.ok) {
-          await storage.set({ themiReloadTab: false });
+          await storage.set({ themiTab: null });
           return tab;
         }
+        if (pong || !why) why = pong ? "sign-in" : "reload";
       }
-      await storage.set({ themiReloadTab: tabs.length > 0 });
+      await storage.set({ themiTab: why });
       return null;
     }
 
@@ -64,8 +68,8 @@
       await setPolling(true);
       const tab = await readyTab();
       if (!tab) {
-        const { themiReloadTab } = await storage.get("themiReloadTab");
-        return themiReloadTab ? "reload-tab" : "no-tab";
+        const { themiTab } = await storage.get("themiTab");
+        return { reload: "reload-tab", "sign-in": "sign-in" }[themiTab] || "no-tab";
       }
       const { themiBusy } = await storage.get("themiBusy");
       if (themiBusy && now() - themiBusy.at < BUSY_FOR_MS) return "busy";

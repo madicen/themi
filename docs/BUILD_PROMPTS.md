@@ -6441,6 +6441,11 @@ Notes (2026-10-31):
   skips one without its code, telling the popup to say "Reload your Safeway tab". The popup
   has an **Open Safeway** button. On Themi's side, "Safeway cart filled with the 11 items"
   went out before the yes: `CLAIMS_DONE` now knows "filled".
+- Also fixed: any safeway.com tab counted as ready, including Safeway's "Not found" page at
+  the end of a sign-in, which would have taken the job and stopped at once. A tab now
+  answers the ping as ready only when page.js reports a store, a sign-in token and both API
+  keys (`readyToShop`); otherwise the popup says "Open Safeway and sign in" (`themiTab`
+  replaced `themiReloadTab`). 47 `node --test` cases.
 - Not checked by hand yet: loading the extension, pairing it with the running Themi, and a
   real "fill the Safeway cart". The user should do that once (README, "Connect it to
   Themi"). Themi's address must be reachable from the browser over https (or localhost).

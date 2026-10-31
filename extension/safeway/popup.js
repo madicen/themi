@@ -142,14 +142,19 @@
           : "Not connected to Themi.";
   }
 
-  storage.get(["draft", "run", "themiUrl", "themiToken", "themiStatus", "themiReloadTab"]).then((s) => {
+  function showTab(why) {
+    $("reload").hidden = why !== "reload";
+    $("sign-in").hidden = why !== "sign-in";
+  }
+
+  storage.get(["draft", "run", "themiUrl", "themiToken", "themiStatus", "themiTab"]).then((s) => {
     if (s.draft) list.value = s.draft;
     render(s.run);
     showThemi(s);
-    $("reload").hidden = !s.themiReloadTab;
+    showTab(s.themiTab);
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.run) render(changes.run.newValue);
-    if (area === "local" && changes.themiReloadTab) $("reload").hidden = !changes.themiReloadTab.newValue;
+    if (area === "local" && changes.themiTab) showTab(changes.themiTab.newValue);
   });
 })();

@@ -9,7 +9,7 @@ const { fixture, fakeSafeway, fakeStorage, ctx, noSleep } = require("./fakes.js"
 const PAIRED = { themiUrl: "https://themi.test", themiToken: "swh_" + "a".repeat(30), themiStatus: "connected" };
 const JOB = { id: 7, items: [{ name: "eggs", qty: 2, search: "eggs", product: null }] };
 
-function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], claim = [200, { job: JOB }], tabTakes = true } = {}) {
+function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], signedOut = [], claim = [200, { job: JOB }], tabTakes = true } = {}) {
   const storage = fakeStorage(settings);
   const posted = [];
   const sentToTab = [];
@@ -29,7 +29,7 @@ function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], claim =
     safewayTabs: async () => tabs,
     sendToTab: async (id, msg) => {
       if (!answering.includes(id)) return null; // no content script in it
-      if (msg.type === "ping") return { ok: true };
+      if (msg.type === "ping") return signedOut.includes(id) ? { ok: false, reason: "sign-in" } : { ok: true };
       sentToTab.push({ id, msg });
       return tabTakes ? { ok: true } : null;
     },
@@ -63,11 +63,24 @@ test("a Safeway tab without the helper's code is skipped and flagged for a reloa
   const stale = setup({ tabs: [{ id: 3 }], answering: [] });
   assert.equal(await stale.worker.poll(), "reload-tab");
   assert.equal(stale.claims(), 0, "nothing claimed that no tab could fill");
-  assert.equal(stale.storage.data.themiReloadTab, true);
+  assert.equal(stale.storage.data.themiTab, "reload");
   const mixed = setup({ tabs: [{ id: 3 }, { id: 4 }], answering: [4] });
   assert.equal(await mixed.worker.poll(), "sent");
   assert.equal(mixed.sentToTab[0].id, 4);
-  assert.equal(mixed.storage.data.themiReloadTab, false);
+  assert.equal(mixed.storage.data.themiTab, null);
+});
+
+test("a Safeway tab that isn't a signed-in shopping page gets no job and asks for a sign-in", async () => {
+  // 2026-10-31: a tab on Safeway's "Not found" sign-in error page said it was ready.
+  const s = setup({ tabs: [{ id: 3 }], signedOut: [3] });
+  assert.equal(await s.worker.poll(), "sign-in");
+  assert.equal(s.claims(), 0);
+  assert.equal(s.storage.data.themiTab, "sign-in");
+  const mixed = setup({ tabs: [{ id: 3 }, { id: 4 }], answering: [3, 4], signedOut: [3] });
+  assert.equal(await mixed.worker.poll(), "sent");
+  assert.equal(mixed.sentToTab[0].id, 4);
+  const both = setup({ tabs: [{ id: 3 }, { id: 4 }], answering: [4], signedOut: [4] });
+  assert.equal(await both.worker.poll(), "sign-in", "a signed-out tab says more than a stale one");
 });
 
 test("claims a job, hands it to the tab, and posts the results", async () => {
