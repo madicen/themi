@@ -119,6 +119,23 @@ def routes(kit: Kit) -> APIRouter:
         device = store.set_device_appliance(session.member, device_id, appliance)
         return kit.redirect("/family", f"{device.name}: {appliance or 'not used'}.")
 
+    @router.post("/family/laundry")
+    async def save_laundry(request: Request) -> Response:
+        """How long a wet load stays fresh, and how long a rinse takes (31)."""
+        session, form = await kit.checked(request, admin=True)
+        try:
+            hours = float(str(form.get("fresh_hours", "")))
+            minutes = int(str(form.get("rinse_minutes", "")))
+        except ValueError:
+            return kit.redirect("/family", "The fresh hours and rinse minutes are numbers.")
+        try:
+            store.update_family(
+                session.member, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes
+            )
+        except AccountsError as exc:
+            return kit.redirect("/family", f"Not saved: {exc}.")
+        return kit.redirect("/family", "Laundry settings saved.")
+
     # ----- Home Connect (H1) ----------------------------------------------------------------
 
     @router.post("/family/home-connect/link")

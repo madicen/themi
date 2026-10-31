@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.journal import Journal
+    from themi.core.laundry import Laundry
     from themi.core.lists import Lists
     from themi.core.meals import Meals
     from themi.core.memory import Memory
@@ -171,6 +172,7 @@ class Services:
     home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
     thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
+    laundry: Laundry | None = None  # wet loads moved, or rescued with a rinse (31)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)

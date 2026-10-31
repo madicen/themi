@@ -58,6 +58,7 @@ from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
+from themi.core.laundry import Laundry
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
@@ -295,6 +296,9 @@ def build_app(
         periodic.append(
             PeriodicTask("devices.thinq_push", timedelta(minutes=1), services.thinq.listen)
         )
+        laundry = Laundry(services, tasks, services.thinq)
+        laundry.install()
+        periodic.append(PeriodicTask("laundry.fresh", timedelta(minutes=15), laundry.check_fresh))
     if services.google_tasks is not None:
         periodic.append(
             PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)

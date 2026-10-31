@@ -453,17 +453,21 @@ class TaskBoard:
         from_time: time | None = None,
         importance: str = "normal",
         off_wall: bool = False,
+        assignment: Assignment | None = None,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
         (after attaching details, like a call script). An `assignee` (someone took it on,
-        or was named) skips matching; without one, matching decides."""
+        or was named) skips matching; so does an `assignment` the caller worked out (the
+        laundry's, 31); without either, matching decides."""
         title = title.strip().rstrip(".")
         if not title:
             raise ValueError("a task needs a title")
         if importance not in IMPORTANCE:
             raise ValueError("importance is low, normal or high")
         cleaned_steps = clean_steps(steps)
-        if assignee is None:
+        if assignment is not None:
+            pass
+        elif assignee is None:
             assignment = self.matcher.assign(kind, effort, requester)
         elif assignee.id == requester.id:
             assignment = Assignment(assignee, assignee, f"{requester.name} said they'd do it.")
