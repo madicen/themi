@@ -89,6 +89,46 @@ async def test_the_end_of_the_day_list_is_as_it_stands_when_it_goes(scenario: Sc
     ]
 
 
+async def test_the_end_of_the_day_list_can_be_ticked_off(scenario: Scenario) -> None:
+    """Bug #107 ("it didn't give an option to mark them as done"): the list asks "Done any
+    of them already?" with no buttons to say so."""
+    dentist = await task(scenario, "Book the dentist", WED, nudge=False)
+    vet = await task(scenario, "Call the vet", WED, nudge=False)
+    await at(scenario, WED, 19, 31)
+    await scenario.app.outbox.flush()
+    assert scenario.last_buttons("Erin") == ["✓ Book the dentist", "✓ Call the vet"]
+
+    await scenario.tap("Erin", "✓ Call the vet")
+    assert board(scenario).get(vet.id).status == "done"
+    edited = scenario.edits("Erin")[-1]
+    assert edited["text"].startswith("Marked done: Call the vet.")
+    assert edited["text"].endswith(
+        "Still open today: Book the dentist. Done any of them already? Tomorrow's fine too."
+    )
+    keyboard = edited["reply_markup"]["inline_keyboard"]
+    assert [b["text"] for row in keyboard for b in row] == ["✓ Book the dentist"]
+
+    await scenario.tap("Erin", "✓ Book the dentist")
+    assert board(scenario).get(dentist.id).status == "done"
+    last = scenario.edits("Erin")[-1]["text"]
+    assert last.startswith("Marked done: Book the dentist.")
+    assert last.endswith("Today's list: all done.")
+
+
+async def test_a_held_end_of_the_day_list_has_buttons_for_whats_left(
+    scenario: Scenario,
+) -> None:
+    erin = scenario.member("Erin")
+    laundry = await task(scenario, "Cycle the laundry", WED)
+    await task(scenario, "Book the dentist", WED)
+    scenario.app.outbox.pauses.pause(erin, "tasks", datetime(2026, 10, 21, 21, 15, tzinfo=PACIFIC))
+    await at(scenario, WED, 19, 36)
+    await board(scenario).complete(laundry.id, erin)
+    await at(scenario, WED, 21, 16)
+    await scenario.app.outbox.flush()
+    assert scenario.last_buttons("Erin") == ["✓ Book the dentist"]
+
+
 async def test_an_end_of_the_day_list_with_nothing_left_isnt_sent(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     laundry = await task(scenario, "Cycle the laundry", WED)

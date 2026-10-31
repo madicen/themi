@@ -1,8 +1,8 @@
 """Reminders that follow how much a task matters (C2c; the family's decision, 2026-10-26).
 
 - End of day: two hours before a person's quiet hours start, one message lists
-  what's due today and still open, low-importance ones left out. Nothing open,
-  nothing sent.
+  what's due today and still open, low-importance ones left out, with a tick
+  for each (bug #107). Nothing open, nothing sent.
 - Overdue: a task whose due date has passed is raised again on a rhythm set by
   its importance (high every day, normal every other day, low every week), and
   each time more specifically:
@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import Member, NotFound
+from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.groceries import and_list
 from themi.core.services import Services
@@ -39,6 +40,8 @@ log = logging.getLogger(__name__)
 CADENCE = {"high": 1, "normal": 2, "low": 7}  # days between overdue reminders
 DAY_END_BEFORE_QUIET = timedelta(hours=2)
 DAY_END_KEY = "day-end-"
+DAY_END_BUTTONS = 6
+DAY_END_DONE = "Today's list: all done."
 DAY_END_TEXT = "Still open today: {items}. Done any of them already? Tomorrow's fine too."
 MEDICINE = re.compile(
     r"\b(?:pills?|meds?|medicine|medication|drops|cream|tabs?|insulin|dose)\b", re.IGNORECASE
@@ -46,6 +49,15 @@ MEDICINE = re.compile(
 REMINDER_TEXT = "Reminder: {text}"
 REMINDER_USEFUL_FOR = timedelta(hours=2)  # held longer (quiet hours, a pause): dropped
 _TAG = re.compile(r"^\((?:low|medium|high|optional[^)]*)\)\s*", re.IGNORECASE)
+
+
+def _day_end(left: list[Task]) -> tuple[str, list[Button]]:
+    ids = [t.id for t in left]
+    buttons = [
+        Button(f"✓ {t.title}"[:40], "day_end", {"task": t.id, "list": ids})
+        for t in left[:DAY_END_BUTTONS]
+    ]
+    return DAY_END_TEXT.format(items=and_list([t.title for t in left])), buttons
 
 
 def _day_words(due: date, today: date) -> str:
@@ -70,6 +82,7 @@ class Reminders:
         self.services.tools.register(set_task_importance)
         self.services.tools.register(add_reminder)
         self.services.outbox.refreshers["task_summary"] = self._as_it_stands
+        self.services.button_handlers["day_end"] = self.on_button
 
     # ----- the end of the day ---------------------------------------------------------------
 
@@ -94,13 +107,15 @@ class Reminders:
                 "INSERT INTO day_end_sent (member_id, day) VALUES (?, ?)",
                 (member.id, today.isoformat()),
             )
-            text = self._day_end_text(member, today)
-            if text is None:
+            message = self._day_end_message(member, today)
+            if message is None:
                 continue
+            text, buttons = message
             await self.services.outbox.send(
                 member,
                 text,
                 priority=Priority.NORMAL,
+                buttons=buttons,
                 kind="task_summary",  # not a nudge, so it doesn't wait its turn (idea #11)
                 deadline=quiet - timedelta(minutes=15),
                 dedupe_key=f"{DAY_END_KEY}{today}",
@@ -108,24 +123,55 @@ class Reminders:
             sent += 1
         return sent
 
-    def _day_end_text(self, member: Member, today: date) -> str | None:
+    def _day_end_message(self, member: Member, today: date) -> tuple[str, list[Button]] | None:
         left = [
-            t.title
+            t
             for t in self.board.open_for(member)
             if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
             and not self._put_off(t, member)
             and t.importance != "low"
             and not self.board.held(t, member)
         ]
-        return DAY_END_TEXT.format(items=and_list(left)) if left else None
+        return _day_end(left) if left else None
 
-    def _as_it_stands(self, member: Member, row: dict[str, Any]) -> str | None:
+    def _as_it_stands(
+        self, member: Member, row: dict[str, Any]
+    ) -> str | tuple[str, list[Button]] | None:
         """A held end-of-day list, written again as it goes (bug #99: the laundry, done at
         9:05, was in the list written at 7:36 and sent at 9:15). Other lists go as they are."""
         key = row["dedupe_key"] or ""
         if not key.startswith(DAY_END_KEY):
             return str(row["text"])
-        return self._day_end_text(member, date.fromisoformat(key.removeprefix(DAY_END_KEY)))
+        return self._day_end_message(member, date.fromisoformat(key.removeprefix(DAY_END_KEY)))
+
+    async def on_button(self, event: InboundEvent) -> None:
+        """A tick on the end-of-day list: that one's done, said so, and the list shows the
+        rest (bug #107: it asked "Done any of them already?" with no way to say so)."""
+        assert event.button is not None
+        ticked = await self.board.complete(
+            int(event.button.payload["task"]),
+            event.member,
+            interactive=True,
+            tapped=event.button.message_id,
+        )
+        if event.button.message_id is None:
+            return
+        left = []
+        for task_id in event.button.payload.get("list", []):
+            try:
+                task = self.board.get(int(task_id))
+            except NotFound:
+                continue
+            if task.status == "open":
+                left.append(task)
+        if not left:
+            done = f"{ticked} {DAY_END_DONE}"
+            await self.services.outbox.edit(event.member, event.button.message_id, done)
+            return
+        text, buttons = _day_end(left)
+        await self.services.outbox.edit(
+            event.member, event.button.message_id, f"{ticked}\n\n{text}", buttons
+        )
 
     def _quiet_starts(self, member: Member, now: datetime) -> datetime:
         at = member.quiet_start
