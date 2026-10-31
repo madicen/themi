@@ -233,3 +233,25 @@ async def test_laundry_nudges_can_be_paused(scenario: Scenario, laundry_room: Fa
     assert [r["status"] for r in held] == ["queued"]  # held, not lost
     texts = await scenario.advance(hours=3)
     assert any(text.startswith("The washer finished at") for text in texts)
+
+
+async def test_a_washer_seen_going_straight_to_off_still_finished(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    """Between reads, the washer finished and powered off: running, then off, is a finished
+    wash all the same."""
+    scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
+    await pushed(scenario, laundry_room, WASHER, "RUNNING")
+    clock.advance(timedelta(hours=1))
+    await pushed(scenario, laundry_room, WASHER, "POWER_OFF")
+    at = clock_words(clock.now().astimezone(TZ))
+    assert scenario.inbox("Husband")[-1] == WASHED_TEXT.format(at=at)
+    assert loads(scenario) == ["wet"]
+
+
+async def test_a_washer_turned_off_without_running_is_not_a_wash(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    await pushed(scenario, laundry_room, WASHER, "END")
+    await pushed(scenario, laundry_room, WASHER, "POWER_OFF")
+    assert loads(scenario) == ["wet"]  # the END made the one load; off adds nothing

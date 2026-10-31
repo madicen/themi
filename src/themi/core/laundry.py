@@ -2,9 +2,9 @@
 
 From the washer and dryer's events (LG ThinQ, 30):
 
-- The washer finishing makes a wet load (`laundry_loads`) and an effort-1 hands-on task,
-  for whoever has the most room right now, nudged gently with two choices: "Into the dryer
-  now, or later?"
+- The washer finishing (or seen running, then off) makes a wet load (`laundry_loads`) and an
+  effort-1 hands-on task, for whoever has the most room right now, nudged gently with two
+  choices: "Into the dryer now, or later?"
 - The dryer starting means the wet load is in it: the task is done.
 - The washer starting again supersedes the wet load (it's being washed again); its task
   goes quietly, and the new wash makes a new load when it finishes.
@@ -28,7 +28,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Button, Priority
-from themi.connectors.thinq import FINISHED, RUNNING, ApplianceEvent, ThinqWatcher
+from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ApplianceEvent, ThinqWatcher
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi.energy.windows import STEP, Projection, next_window
@@ -68,11 +68,16 @@ class Laundry:
     async def on_event(self, event: ApplianceEvent) -> None:
         if event.appliance not in ("washer", "dryer"):
             return
+        # Read every few minutes, a washer can finish and power off between reads: running,
+        # then off, is a finished wash all the same.
+        was_running = self._running(event.device_id) is not None
         self._cycle(event)
         if event.appliance == "washer" and event.state == RUNNING:
             for load in self._wet(washer=event.device_id):
                 await self._supersede(load)
-        elif event.appliance == "washer" and event.state == FINISHED:
+        elif event.appliance == "washer" and (
+            event.state == FINISHED or (event.state == IDLE and was_running)
+        ):
             await self._washed(event)
         elif event.appliance == "dryer" and event.state == RUNNING:
             for load in self._wet():
@@ -80,10 +85,7 @@ class Laundry:
 
     def _cycle(self, event: ApplianceEvent) -> None:
         at = to_utc_iso(event.at)
-        running = self.db.one(
-            "SELECT id FROM appliance_cycles WHERE device_id = ? AND ended_at IS NULL",
-            (event.device_id,),
-        )
+        running = self._running(event.device_id)
         if event.state == RUNNING and running is None:
             self.db.execute(
                 "INSERT INTO appliance_cycles (device_id, started_at) VALUES (?, ?)",
@@ -93,6 +95,12 @@ class Laundry:
             self.db.execute(
                 "UPDATE appliance_cycles SET ended_at = ? WHERE id = ?", (at, running["id"])
             )
+
+    def _running(self, device_id: int) -> dict[str, Any] | None:
+        return self.db.one(
+            "SELECT id FROM appliance_cycles WHERE device_id = ? AND ended_at IS NULL",
+            (device_id,),
+        )
 
     async def _washed(self, event: ApplianceEvent) -> None:
         assignment = self.board.matcher.roomiest("physical", 1, event.at)
