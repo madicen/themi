@@ -7,7 +7,7 @@ const ALARM = "themi-poll";
 
 const worker = ThemiWorker.createWorker({
   storage: chrome.storage.local,
-  findSafewayTab: async () => (await chrome.tabs.query({ url: "https://www.safeway.com/*" }))[0] || null,
+  safewayTabs: () => chrome.tabs.query({ url: "https://www.safeway.com/*" }),
   sendToTab: (tabId, msg) => chrome.tabs.sendMessage(tabId, msg).catch(() => null),
   fetchFn: (url, init) => fetch(url, init),
   setPolling: async (on) => {
@@ -20,11 +20,16 @@ const worker = ThemiWorker.createWorker({
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM) worker.poll();
 });
+// Start checking as soon as Chrome or the extension starts, not only when a Safeway page
+// loads: a tab open before a reload has no content script to say so.
+chrome.runtime.onStartup.addListener(() => worker.poll());
+chrome.runtime.onInstalled.addListener(() => worker.poll());
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || !msg) return false;
   switch (msg.type) {
     case "safeway-tab-ready":
+    case "themi-connected":
       worker.poll();
       return false;
     case "job-done":

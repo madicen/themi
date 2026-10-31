@@ -9,7 +9,7 @@ const { fixture, fakeSafeway, fakeStorage, ctx, noSleep } = require("./fakes.js"
 const PAIRED = { themiUrl: "https://themi.test", themiToken: "swh_" + "a".repeat(30), themiStatus: "connected" };
 const JOB = { id: 7, items: [{ name: "eggs", qty: 2, search: "eggs", product: null }] };
 
-function setup({ settings = PAIRED, tab = { id: 3 }, claim = [200, { job: JOB }], tabTakes = true } = {}) {
+function setup({ settings = PAIRED, tabs = [{ id: 3 }], answering = [3], claim = [200, { job: JOB }], tabTakes = true } = {}) {
   const storage = fakeStorage(settings);
   const posted = [];
   const sentToTab = [];
@@ -26,8 +26,13 @@ function setup({ settings = PAIRED, tab = { id: 3 }, claim = [200, { job: JOB }]
   };
   const worker = createWorker({
     storage: { get: async (k) => { const keys = Array.isArray(k) ? k : [k]; const out = {}; for (const key of keys) Object.assign(out, await storage.get(key)); return out; }, set: storage.set },
-    findSafewayTab: async () => tab,
-    sendToTab: async (id, msg) => (sentToTab.push({ id, msg }), tabTakes ? { ok: true } : null),
+    safewayTabs: async () => tabs,
+    sendToTab: async (id, msg) => {
+      if (!answering.includes(id)) return null; // no content script in it
+      if (msg.type === "ping") return { ok: true };
+      sentToTab.push({ id, msg });
+      return tabTakes ? { ok: true } : null;
+    },
     fetchFn,
     setPolling: async (on) => polling.push(on),
   });
@@ -38,10 +43,31 @@ test("polls only while paired and a Safeway tab is open", async () => {
   const unpaired = setup({ settings: {} });
   assert.equal(await unpaired.worker.poll(), "unpaired");
   assert.equal(unpaired.claims(), 0);
-  const noTab = setup({ tab: null });
+  const noTab = setup({ tabs: [] });
   assert.equal(await noTab.worker.poll(), "no-tab");
-  assert.deepEqual(noTab.polling, [false]);
   assert.equal(noTab.claims(), 0);
+});
+
+test("keeps checking every minute while paired, even before a Safeway tab is open", async () => {
+  // 2026-10-31: the check only started when a Safeway page loaded, so a tab opened before
+  // the extension was reloaded never got a cart.
+  const s = setup({ tabs: [] });
+  await s.worker.poll();
+  assert.deepEqual(s.polling, [true]);
+  const unpaired = setup({ settings: {} });
+  await unpaired.worker.poll();
+  assert.deepEqual(unpaired.polling, [false]);
+});
+
+test("a Safeway tab without the helper's code is skipped and flagged for a reload", async () => {
+  const stale = setup({ tabs: [{ id: 3 }], answering: [] });
+  assert.equal(await stale.worker.poll(), "reload-tab");
+  assert.equal(stale.claims(), 0, "nothing claimed that no tab could fill");
+  assert.equal(stale.storage.data.themiReloadTab, true);
+  const mixed = setup({ tabs: [{ id: 3 }, { id: 4 }], answering: [4] });
+  assert.equal(await mixed.worker.poll(), "sent");
+  assert.equal(mixed.sentToTab[0].id, 4);
+  assert.equal(mixed.storage.data.themiReloadTab, false);
 });
 
 test("claims a job, hands it to the tab, and posts the results", async () => {

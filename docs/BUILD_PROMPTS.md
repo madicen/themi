@@ -6434,6 +6434,13 @@ Notes (2026-10-31):
 - Paired, the popup's own fills and "change" use Themi's remembered products too. The popup
   says whether it's connected, links to the options page, and marks a cart filled for Themi.
 - Tests: 43 `node --test` cases (10 new).
+- Fixed the same day, after the first real try (the job sat queued): the worker only began
+  checking when a Safeway page loaded, so a tab open before the extension was reloaded never
+  started it. It now checks every minute while paired (and on Chrome's start, the
+  extension's install or reload, and right after Connect), pings each Safeway tab, and
+  skips one without its code, telling the popup to say "Reload your Safeway tab". The popup
+  has an **Open Safeway** button. On Themi's side, "Safeway cart filled with the 11 items"
+  went out before the yes: `CLAIMS_DONE` now knows "filled".
 - Not checked by hand yet: loading the extension, pairing it with the running Themi, and a
   real "fill the Safeway cart". The user should do that once (README, "Connect it to
   Themi"). Themi's address must be reachable from the browser over https (or localhost).

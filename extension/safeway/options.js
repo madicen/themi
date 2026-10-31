@@ -40,6 +40,7 @@
     const res = await chrome.runtime.sendMessage({ type: "themi-test" });
     await show();
     status.textContent = res && res.ok ? "Connected to " + base + "." : (res && res.detail) || "Couldn't reach Themi.";
+    if (res && res.ok) chrome.runtime.sendMessage({ type: "themi-connected" });
   });
 
   $("disconnect").addEventListener("click", async () => {

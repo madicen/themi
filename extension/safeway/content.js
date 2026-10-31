@@ -82,6 +82,10 @@
 
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (sender.id !== chrome.runtime.id || !msg) return false;
+    if (msg.type === "ping") {
+      reply({ ok: true });
+      return false;
+    }
     if (msg.type === "fill") {
       if (running) reply({ ok: false, detail: "Already filling the cart." });
       else {

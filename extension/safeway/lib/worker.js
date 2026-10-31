@@ -23,7 +23,9 @@
     return items;
   }
 
-  function createWorker({ storage, findSafewayTab, sendToTab, fetchFn, setPolling, now = () => Date.now() }) {
+  // safewayTabs: the open safeway.com tabs. sendToTab answers null for a tab without the
+  // content script (opened before the extension was installed or reloaded).
+  function createWorker({ storage, safewayTabs, sendToTab, fetchFn, setPolling, now = () => Date.now() }) {
     async function link() {
       const s = await storage.get(["themiUrl", "themiToken", "themiStatus"]);
       if (!s.themiUrl || !s.themiToken || s.themiStatus === "revoked") return null;
@@ -35,19 +37,36 @@
       await setPolling(false);
     }
 
-    // -> what happened, for the tests and the logs.
+    // A Safeway tab the helper can work in; flags the case where there are tabs but none
+    // has the helper's code, so the popup can say to reload one.
+    async function readyTab() {
+      const tabs = await safewayTabs();
+      for (const tab of tabs) {
+        const pong = await sendToTab(tab.id, { type: "ping" });
+        if (pong && pong.ok) {
+          await storage.set({ themiReloadTab: false });
+          return tab;
+        }
+      }
+      await storage.set({ themiReloadTab: tabs.length > 0 });
+      return null;
+    }
+
+    // -> what happened, for the tests and the logs. While paired, it runs every minute
+    // whether or not a Safeway tab is open (2026-10-31: a tab already open when the
+    // extension was reloaded never started the check).
     async function poll() {
       const api = await link();
       if (!api) {
         await setPolling(false);
         return "unpaired";
       }
-      const tab = await findSafewayTab();
-      if (!tab) {
-        await setPolling(false);
-        return "no-tab";
-      }
       await setPolling(true);
+      const tab = await readyTab();
+      if (!tab) {
+        const { themiReloadTab } = await storage.get("themiReloadTab");
+        return themiReloadTab ? "reload-tab" : "no-tab";
+      }
       const { themiBusy } = await storage.get("themiBusy");
       if (themiBusy && now() - themiBusy.at < BUSY_FOR_MS) return "busy";
       let job;

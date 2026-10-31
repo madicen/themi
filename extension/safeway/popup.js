@@ -131,6 +131,7 @@
 
   list.addEventListener("input", () => storage.set({ draft: list.value }));
   $("options").addEventListener("click", () => chrome.runtime.openOptionsPage());
+  $("open").addEventListener("click", () => chrome.tabs.create({ url: "https://www.safeway.com/" }));
 
   function showThemi({ themiUrl, themiToken, themiStatus }) {
     $("themi").textContent =
@@ -141,12 +142,14 @@
           : "Not connected to Themi.";
   }
 
-  storage.get(["draft", "run", "themiUrl", "themiToken", "themiStatus"]).then((s) => {
+  storage.get(["draft", "run", "themiUrl", "themiToken", "themiStatus", "themiReloadTab"]).then((s) => {
     if (s.draft) list.value = s.draft;
     render(s.run);
     showThemi(s);
+    $("reload").hidden = !s.themiReloadTab;
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.run) render(changes.run.newValue);
+    if (area === "local" && changes.themiReloadTab) $("reload").hidden = !changes.themiReloadTab.newValue;
   });
 })();
