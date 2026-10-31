@@ -132,7 +132,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [x] |
 | F10 | Feedback: due times, one nudge at a time, plain phrasing, check-in reviews | Feedback | [x] |
 | C2d | Cozyla: one chore on the chart at a time | Cozyla | [x] |
-| 30 | LG ThinQ connector | 5 Devices | [ ] |
+| 30 | LG ThinQ connector | 5 Devices | [x] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
@@ -6094,7 +6094,7 @@ Notes (2026-10-26):
 ## Milestone 5: Devices (Phase 2)
 
 ### 30 · LG ThinQ connector
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 29
 Read first: "Integrations" → LG ThinQ row; "Setup checklists" → Phase 2.
 
@@ -6113,6 +6113,37 @@ Tests:
 - Credentials encrypted.
 
 Commit when done.
+
+Notes (2026-10-31):
+- Asked for directly on 2026-10-31, ahead of 29 (still `[~]`), as H1 was.
+- `themi.connectors.thinq`, without LG's SDK: it's built on aiohttp and Themi's
+  connectors use httpx, so `ThinqClient` is a small client of its own, with the wire details
+  (headers, LG's public API key, regional servers by country, error codes) taken from the
+  SDK's source (`thinqconnect`, read 2026-10-31). LG publishes no call limit; error 1306
+  is waited out for an hour, an educated guess.
+- `ThinqAccount`: the family's one token, encrypted in `thinq_account` (migration 0089) with
+  its country and a client id made once and kept (LG blocks callers that keep making new
+  ones). Linking checks the token by listing the appliances before keeping it.
+- Discovery: washers and dryers map themselves; anything else (a WashCombo, the fridge) is
+  "Not used" until set on the Family page. A WashTower becomes two devices,
+  `<id>:washer` and `<id>:dryer`.
+- `ApplianceEvent(device_id, appliance, state, at)`; the device id is there as well
+  because a house can have more than one of a kind. States: LG's words in
+  `events.py` (a paused cycle counts as running, wrinkle care as finished, a delayed start
+  as idle); an unknown word is logged and ignored.
+- `ThinqWatcher`: `devices.thinq_push` (every minute) keeps the push connection up and
+  drains what it brought; `devices.thinq` (every 5 minutes) reads each appliance while
+  pushes aren't connected, and hourly when they are. Only a change becomes an event; the
+  first state seen is just the starting point, so linking doesn't announce an old load.
+- Pushes: register the client, a fresh key and signing request traded for a certificate,
+  `/route` for the broker, then MQTT over mutual TLS (`connectors/thinq/mqtt.py`, paho-mqtt,
+  the optional `themi[thinq]` extra). The connection's thread only queues messages, so
+  everything else stays on the loop. A connection that fails is tried again after 15
+  minutes; polling carries on meanwhile.
+- Not tested against LG itself: the payloads in `tests/fixtures/thinq/` follow LG's docs
+  and SDK rather than captures, and the paho connection is only reached for real. When the
+  family's appliances are linked, a captured payload that differs should become a fixture.
+- Setup: README, "The washer and dryer, through LG ThinQ".
 
 ### 31 · Laundry module and rescue protocol
 Status: [ ]
