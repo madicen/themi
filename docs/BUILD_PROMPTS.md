@@ -5619,7 +5619,9 @@ Notes (2026-10-30):
   A tick on a routine check's button says "Marked done: X. Nice work." above the rest of the
   list; a routine item ticked on the wall gets "Ticked off on the wall: X. ..." like a task.
   The bundler reads titles back from the queued text, so tasks and routine items go together.
-- Not repaired yet: task 60 (the course that came back) is open; see the report.
+- Data repaired (backup `data/themi-before-f19e-repair-2026-10-30.db`), with the app
+  stopped: task 60 (the course that came back) set done without a run, so nothing is
+  ticked on the wall; its wall chore lets go after midnight. Report #107 marked reviewed.
 - Not run: the model evals (no prompt or tool description changed).
 - Setup: restart. No migration.
 
