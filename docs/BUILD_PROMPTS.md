@@ -6236,7 +6236,8 @@ Commit when done.
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
 Status: [~]
 Depends on: none in Themi (it is a separate program)
-Read first: "Integrations" → Safeway/DoorDash row; "Fixed technical choices" (the extension).
+Read first: "Integrations" → Safeway/DoorDash row. (The plan has no section on the extension;
+this prompt and `extension/safeway/NOTES.md` are its spec.)
 
 Decided with the user on 2026-10-30, replacing prompt 35's "item search links" only. Safeway
 has no public cart API. A headless browser on the cloud host would face bot checks from a

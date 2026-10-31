@@ -1,0 +1,11 @@
+{
+  "appCode": "[PS: 200]",
+  "appMsg": "[PS: Success.]",
+  "dealIntent": false,
+  "primaryProducts": {
+    "appCode": "400",
+    "appMsg": "Search encountered a problem. Please try again OSSR0033-R",
+    "order": "1",
+    "pgmName": "search-products"
+  }
+}

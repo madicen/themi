@@ -1,0 +1,6 @@
+{
+  "timestamp": "2026-10-31T07:32:00.984+00:00",
+  "status": 403,
+  "error": "Forbidden",
+  "path": "/osms-cartservice/api/v2/cart/items"
+}

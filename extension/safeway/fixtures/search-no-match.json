@@ -1,0 +1,120 @@
+{
+  "appCode": "[PS: 200]",
+  "appMsg": "[PS: Success.]",
+  "dealIntent": false,
+  "primaryProducts": {
+    "appCode": "[GR200#A-CT: 200] [PP: 200] [SD200]",
+    "appMsg": "[GR : SUCCESS., A-CT: Success.] [PP: Skipped Past Purchase service call.] [SD :  Skipped Service Call or Flag is Disabled!]",
+    "order": "1",
+    "pgmName": "search-products",
+    "response": {
+      "disableTracking": false,
+      "isExactMatch": false,
+      "numFound": 531,
+      "start": 0,
+      "miscInfo": {
+        "query": "qzxjvwk"
+      },
+      "docs": [
+        {
+          "status": "active",
+          "name": "Signature SELECT Buns Hot Dog - 13 Oz",
+          "pid": "960506124",
+          "upc": "0002113018530",
+          "id": "960506124",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "1",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/960506124",
+          "price": 3.99,
+          "basePrice": 3.99,
+          "pricePer": 0.31,
+          "basePricePer": 0.31,
+          "aisleName": "Buns & Rolls|1_2_5",
+          "departmentName": "Bread & Bakery",
+          "shelfName": "Hot Dog Buns",
+          "unitOfMeasure": "OZ",
+          "unitQuantity": "OUNCE",
+          "itemSizeQty": "13",
+          "itemPackageQty": "1",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 20,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "1",
+            "pickup": "1",
+            "instore": "1",
+            "deliveryItemQty": 3,
+            "pickupItemQty": 3,
+            "instoreItemQty": 3,
+            "shipping": "0"
+          },
+          "snapEligible": true
+        },
+        {
+          "status": "active",
+          "name": "Signature SELECT White Corn Tortilla Chips - 11 Oz",
+          "pid": "970488661",
+          "upc": "0002113030264",
+          "id": "970488661",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "1",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/970488661",
+          "price": 2.29,
+          "basePrice": 2.49,
+          "pricePer": 0.21,
+          "basePricePer": 0.23,
+          "aisleName": "Chips|1_24_1",
+          "departmentName": "Cookies, Snacks & Candy",
+          "shelfName": "Tortilla Chips",
+          "unitOfMeasure": "OZ",
+          "unitQuantity": "OUNCE",
+          "dispItemSizeQty": "11.0",
+          "dispUnitOfMeasure": "OZ",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 99,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "1",
+            "pickup": "1",
+            "instore": "1",
+            "shipping": "0"
+          },
+          "snapEligible": true,
+          "promoText": " Signature Sale $2.29 Save Up To: $0.2",
+          "promoType": "P",
+          "promoEndDate": "2027-02-23T23:59:00"
+        }
+      ]
+    }
+  }
+}

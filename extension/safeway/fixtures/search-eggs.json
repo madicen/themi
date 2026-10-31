@@ -1,0 +1,206 @@
+{
+  "appCode": "[PS: 200]",
+  "appMsg": "[PS: Success.]",
+  "dealIntent": false,
+  "primaryProducts": {
+    "appCode": "[GR200#A-CT: 200] [PP: 200] [SD200]",
+    "appMsg": "[GR : SUCCESS., A-CT: Success.] [PP: Skipped Past Purchase service call.] [SD :  Skipped Service Call or Flag is Disabled!]",
+    "order": "1",
+    "pgmName": "search-products",
+    "response": {
+      "disableTracking": false,
+      "isExactMatch": true,
+      "numFound": 2273,
+      "start": 0,
+      "miscInfo": {
+        "query": "eggs"
+      },
+      "docs": [
+        {
+          "status": "active",
+          "name": "Lucerne Farms Eggs Cage Free Large - 18 Count",
+          "pid": "960304348",
+          "upc": "0002113003154",
+          "id": "960304348",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "1",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/960304348",
+          "price": 5.99,
+          "basePrice": 5.99,
+          "pricePer": 3.99,
+          "basePricePer": 3.99,
+          "aisleName": "Eggs|1_11_3",
+          "departmentName": "Dairy, Eggs & Cheese",
+          "shelfName": "Eggs",
+          "unitOfMeasure": "CT",
+          "unitQuantity": "DOZEN",
+          "dispItemSizeQty": "18",
+          "dispUnitOfMeasure": "CT",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 20,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "1",
+            "pickup": "1",
+            "instore": "1",
+            "shipping": "0"
+          },
+          "snapEligible": true
+        },
+        {
+          "status": "active",
+          "name": "Lucerne Farms Eggs Large Cage Free - 12 Count",
+          "pid": "960273951",
+          "upc": "0002113003234",
+          "id": "960273951",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "1",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/960273951",
+          "price": 3.99,
+          "basePrice": 3.99,
+          "pricePer": 0.33,
+          "basePricePer": 0.33,
+          "aisleName": "Eggs|1_11_3",
+          "departmentName": "Dairy, Eggs & Cheese",
+          "shelfName": "Eggs",
+          "unitOfMeasure": "CT",
+          "unitQuantity": "COUNT",
+          "dispItemSizeQty": "12",
+          "dispUnitOfMeasure": "CT",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 20,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "1",
+            "pickup": "1",
+            "instore": "1",
+            "shipping": "0"
+          },
+          "snapEligible": true
+        },
+        {
+          "status": "active",
+          "name": "Lucerne Cage Free Grade A Large Eggs - 60 Count",
+          "pid": "970116262",
+          "upc": "0002113016895",
+          "id": "970116262",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "1",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/970116262",
+          "price": 16.99,
+          "basePrice": 16.99,
+          "pricePer": 3.4,
+          "basePricePer": 3.4,
+          "aisleName": "Eggs|1_11_3",
+          "departmentName": "Dairy, Eggs & Cheese",
+          "shelfName": "Eggs",
+          "unitOfMeasure": "CT",
+          "unitQuantity": "DOZEN",
+          "dispItemSizeQty": "60",
+          "dispUnitOfMeasure": "CT",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 20,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "1",
+            "pickup": "1",
+            "instore": "1",
+            "shipping": "0"
+          },
+          "snapEligible": true
+        },
+        {
+          "status": "active",
+          "name": "Vital Farms Organic Eggs Pasture Raised Large Grade A Tray - 12 Count",
+          "pid": "960454622",
+          "upc": "0086174500002",
+          "id": "960454622",
+          "storeId": "1196",
+          "featured": false,
+          "inventoryAvailable": "0",
+          "pastPurchased": false,
+          "previousPurchaseQty": 0,
+          "imageUrl": "https://images.albertsons-media.com/is/image/ABS/960454622",
+          "price": 12.99,
+          "basePrice": 12.99,
+          "pricePer": 1.08,
+          "basePricePer": 1.08,
+          "aisleName": "Eggs|1_11_3",
+          "departmentName": "Dairy, Eggs & Cheese",
+          "shelfName": "Eggs",
+          "unitOfMeasure": "CT",
+          "unitQuantity": "COUNT",
+          "dispItemSizeQty": "12",
+          "dispUnitOfMeasure": "CT",
+          "displayUnitQuantityText": "ea",
+          "maxPurchaseQty": 20,
+          "sellByWeight": "I",
+          "averageWeight": [
+            "0.000"
+          ],
+          "isMtoProduct": false,
+          "isMarketplaceItem": "N",
+          "containsAlcohol": false,
+          "channelEligibility": {
+            "pickUp": true,
+            "delivery": true,
+            "inStore": true,
+            "shipping": false
+          },
+          "channelInventory": {
+            "delivery": "0",
+            "pickup": "0",
+            "instore": "0",
+            "shipping": "0"
+          },
+          "snapEligible": true
+        }
+      ]
+    }
+  }
+}
