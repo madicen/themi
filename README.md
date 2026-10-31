@@ -191,9 +191,12 @@ Google changes Keep; Themi then logs it and retries, and the grocery list carrie
    called "Shopping list") and follow its steps: sign in at Google's EmbeddedSetup page and
    paste the `oauth_token` cookie. Themi needn't be restarted.
 
-Every 2 minutes, each person's unchecked items go on the grocery list as theirs and are
-checked off in Keep. `themi keep unlink <name>` stops it; removing the "Android" sign-in on
-the Google account's security page revokes the token.
+Every 2 minutes, each linked person's Keep list and the grocery list are kept in step, both
+ways. What the speaker (or anyone) adds in Keep joins the grocery list as theirs; checking
+an item off in Keep means bought, deleting it means removed. Themi's own changes show in
+Keep the same way. When both sides changed an item, Themi's change wins. The first sync
+puts the whole grocery list into Keep. `themi keep unlink <name>` stops it; removing the
+"Android" sign-in on the Google account's security page revokes the token.
 
 ### In the cloud
 

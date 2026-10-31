@@ -136,6 +136,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
+| GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
 
 ## Fixed technical choices
 
@@ -6079,4 +6080,52 @@ Notes (2026-10-30):
 - Setup: `pip install -e '.[keep]'`, restart (applies 0082), then `themi keep link <name>`
   for Erin and Michael. Erin's Google account also lacks the Google Tasks scope (GT1a), so
   "add a task" in her voice isn't read until she links again.
+
+### GK2 · Themi's grocery list shown in Keep, both ways
+Status: [x] 2026-10-30
+Depends on: GK1
+Asked by Michael, 2026-10-30, after GK1 worked: the list Themi keeps should appear in Keep
+too. Decided: Themi always wins when both sides changed.
+
+Build:
+- Each linked person's watched Keep list shows Themi's grocery list (the needed items),
+  unchecked. With two people linked, both lists show it; a change in either counts.
+- From Keep, as with OurGroceries (G1): an unchecked item Themi doesn't know is added (the
+  speaker, or someone typing in Keep) and stays there as that item, no longer checked off;
+  one already on the list is a duplicate and is deleted from Keep. Checking an item off is
+  "bought"; deleting it is "removed"; unchecking one checked off is "needed again".
+- To Keep: an item needed in Themi with no item in Keep is added; bought in Themi is checked
+  off; removed in Themi is deleted.
+- Themi wins: a Keep change counts only if Themi hasn't changed that item since the last
+  sync. Keep can drop a write (seen 2026-10-30: a check-off that didn't stick), so Themi's
+  writes stay unconfirmed until a read shows them; an unconfirmed write that isn't there is
+  made again, never read as someone's change.
+
+Tests:
+- Speaker items added and kept; duplicates deleted; checked off in Keep is bought, deleted is
+  removed, unchecked is needed again; Themi's adds, buys and removes reach Keep.
+- Themi wins over a Keep change to the same item; a dropped add or check-off is made again,
+  not taken as a delete or an uncheck; two people's lists stay in step.
+
+Notes (2026-10-30):
+- Migration 0083 rebuilds `keep_items`: each Keep item Themi knows, `shown` (stands for a
+  `grocery_list` row while it's needed), `done` (checked off for a bought item) or
+  `skipped`, and `confirmed` (a read has shown Themi's last write). GK1's rows are dropped;
+  the items they name are checked off in Keep and stay so. Re-linking forgets them too.
+- `KeepAccount` is now `items` (all, with `checked`) and `apply` (adds, check-offs and
+  deletes in one gkeepapi sync, returning the new ids). GK1's `unchecked`/`check_off` went.
+- `KeepGroceries.sync`: pull, then push, then one write. Pull: unknown unchecked items are
+  new (a duplicate of a needed item already shown is deleted); a shown item checked off
+  while still needed is bought (and the pantry has it, as with OurGroceries); a confirmed
+  shown item gone is removed; a confirmed done item unchecked is needed again; an
+  unconfirmed one is written again instead. Push, in list order: needed with no shown
+  item, added; shown but no longer needed, checked off if bought, else deleted.
+- Themi wins because Keep's changes are read against the row Themi still has: once Themi
+  has bought or removed a row, a Keep change to its item is overwritten by the push.
+- Unknown items already checked off (Keep's history) are left alone. Checked-off items
+  aren't cleared from Keep; Keep folds them away.
+- A failed write keeps what was read from Keep; the write is worked out again next time.
+- With two people linked, a change in one Keep reaches the other on its next run.
+- Setup: restart (applies 0083). The first sync puts the whole grocery list into each
+  linked Keep list.
 
