@@ -66,16 +66,21 @@ def load_cases(path: Path = CASES_FILE) -> list[Case]:
     return cases
 
 
+# A tool that sends the answer itself (the day's summary, the few things for now, O1a):
+# that message is the reply, and the model rightly adds little or nothing.
+ANSWER_KINDS = ("summary", "focus")
+
+
 def model_replies(sent: list[tuple[str, str]] | list[str]) -> list[str]:
-    """The replies the model wrote, from (kind, text) pairs. Themi's own approval cards
-    and rule proposals are templates, not the model's words. Older saved runs have bare
-    texts; approval cards are recognised by their ask."""
+    """The replies, from (kind, text) pairs: the model's own, and a tool's answer sent as it
+    is. Themi's own approval cards and rule proposals are templates, not replies. Older
+    saved runs have bare texts; approval cards are recognised by their ask."""
     replies = []
     for entry in sent:
         if isinstance(entry, str):
             if not entry.rstrip().endswith(APPROVAL_ASK):
                 replies.append(entry)
-        elif entry[0] == "chat":
+        elif entry[0] == "chat" or entry[0] in ANSWER_KINDS:
             replies.append(entry[1])
     return replies
 

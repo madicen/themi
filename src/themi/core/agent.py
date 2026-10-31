@@ -442,7 +442,8 @@ class Agent:
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
-                    reply = self._whole_truth(_by_name(reply, self._task_title), ctx)
+                    reply = _by_name(reply, self._task_title)
+                    reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
@@ -471,6 +472,23 @@ class Agent:
         ):
             recent.pop()
         return recent[-self.history :]
+
+    def _titles_quoted(self, reply: str, ctx: ToolContext) -> str:
+        """A line that opens with the title of a task the turn touched has it in quotes: a
+        title is often an order ("Renew the car registration is on both lists"), and the
+        PDA shield would take it for one (the evals of 2026-10-31, once #98's quotes went)."""
+        board = self.services.taskboard
+        if board is None or not ctx.tasks:
+            return reply
+        titles = sorted({board.get(i).title for i in ctx.tasks}, key=len, reverse=True)
+        lines = []
+        for line in reply.split("\n"):
+            for title in titles:
+                if line.lower().startswith(title.lower()) and not line[len(title) :][:1].isalnum():
+                    line = f'"{line[: len(title)]}"{line[len(title) :]}'
+                    break
+            lines.append(line)
+        return "\n".join(lines)
 
     def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
         """Each sentence saying a task went to someone is kept only if one of the tasks it

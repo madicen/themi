@@ -326,3 +326,16 @@ async def test_a_reply_in_quotes_is_sent_without_them(scenario: Scenario) -> Non
     scenario.primary.queue_text(f"'Task {task.id} is set up for both of you.'")
     replies = await scenario.say("Erin", "For both of us, refill whoosh litter")
     assert replies == ['"Refill whoosh litter" is set up for both of you.']
+
+
+async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: Scenario) -> None:
+    """The evals of 2026-10-31: '"Renew the car registration is on both lists..."' lost its
+    quotes (#98), and the title then read as a command to renew it."""
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Renew the car registration", "errand", 1, assignee=erin)
+    scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
+    scenario.primary.queue_text('"Renew the car registration is done now."')
+    replies = await scenario.say("Erin", "I renewed the car registration")
+    assert replies == ['"Renew the car registration" is done now.']
