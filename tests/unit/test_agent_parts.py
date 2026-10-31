@@ -359,5 +359,9 @@ def test_the_focus_words_pass_the_strictest_pda_check() -> None:
         focus.KEPT_ONE_TEXT,
         focus.ALL_TEXT,
         focus.CLEAR_TEXT,
+        focus.SPREAD_TEXT.format(budget=3),
+        focus.STAY_TEXT.format(titles="Mimi pill"),
+        focus.LEFT_TEXT.format(n=3),
+        focus.LEFT_ONE_TEXT,
     ):
         assert find_demands(text, 3) == [], text

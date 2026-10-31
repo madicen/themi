@@ -69,7 +69,7 @@ def turn(scenario: Scenario) -> str:
 async def test_a_few_things_for_now_and_the_rest_kept(scenario: Scenario, name: str) -> None:
     """Anyone in the family, not only the one who asked for it."""
     await a_full_day(scenario, name)
-    scenario.primary.queue_tool_call("focus_now", {})
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
     scenario.primary.queue_text("One thing at a time.")
     replies = await scenario.say(name, "I'm completely overwhelmed today")
     assert SIGNAL in turn(scenario)
@@ -86,7 +86,7 @@ async def test_a_few_things_for_now_and_the_rest_kept(scenario: Scenario, name: 
 
 async def test_a_long_reply_after_it_isnt_sent(scenario: Scenario) -> None:
     await a_full_day(scenario)
-    scenario.primary.queue_tool_call("focus_now", {})
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
     scenario.primary.queue_text("Here are your tasks:\n- Mimi pill\n- Call the vet\n- The rest")
     replies = await scenario.say("Erin", "Can you pare today down?")
     assert len(replies) == 1 and replies[0].startswith("For now, just these:")
@@ -158,3 +158,108 @@ def test_the_words_that_signal_it(said: str) -> None:
 @pytest.mark.parametrize("said", ["Too much salt in the soup", "Add milk to the list"])
 def test_words_that_dont(said: str) -> None:
     assert not overwhelmed(said)
+
+
+# ----- O1b: the rest spread out ------------------------------------------------------------
+
+SPREAD_DAY = (
+    "For now, just these:\n"
+    "- Mimi pill\n"
+    "- 2 pm: Call the vet\n"
+    "- Clean the kitchen\n"
+    "The rest are spread out, no more than 2 on a day:\n"
+    "- Thu 22 Oct: Sort the mail\n"
+    "- Fri 23 Oct: Deep clean the oven, Water the plants"
+)
+
+
+async def busy_week(scenario: Scenario) -> None:
+    """Erin's full day, at most two a day, and Thursday has one already."""
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, day_budget=2)
+    await a_full_day(scenario)
+    await task(scenario, "Erin", "Return the library books", WED + timedelta(days=1))
+
+
+def due_on(scenario: Scenario, title: str) -> date | None:
+    erin = scenario.member("Erin")
+    return next(t for t in board(scenario).open_for(erin) if t.title == title).due_on
+
+
+async def test_pare_it_down_and_move_the_rest_in_one_go(scenario: Scenario) -> None:
+    """The morning of 2026-10-29 (bugs #84, #85): "pare it down", then "snooze everything
+    except...", then one more, each read back; now one exchange."""
+    await busy_week(scenario)
+    scenario.primary.queue_tool_call("focus_now", {"spread": True})
+    scenario.primary.queue_text("Done.")
+    replies = await scenario.say("Erin", "Too much today. Pare it down and move the rest")
+    assert replies == [SPREAD_DAY, "Done."]
+    assert due_on(scenario, "Sort the mail") == WED + timedelta(days=1)
+    assert due_on(scenario, "Deep clean the oven") == WED + timedelta(days=2)
+    assert due_on(scenario, "Mimi pill") == WED  # the few for now stay
+
+
+async def test_the_spread_is_offered_and_waits_for_a_yes(scenario: Scenario) -> None:
+    await busy_week(scenario)
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
+    scenario.primary.queue_text("")
+    await scenario.say("Erin", "I'm overwhelmed")
+    assert scenario.last_buttons("Erin") == ["Spread them out", "Leave them for now"]
+    assert due_on(scenario, "Sort the mail") == WED  # nothing moved yet
+    await scenario.tap("Erin", "Spread them out")
+    assert scenario.edits("Erin")[-1]["text"] == SPREAD_DAY
+    assert due_on(scenario, "Water the plants") == WED + timedelta(days=2)
+
+
+async def test_left_as_they_are(scenario: Scenario) -> None:
+    await busy_week(scenario)
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
+    scenario.primary.queue_text("")
+    await scenario.say("Erin", "I'm overwhelmed")
+    await scenario.tap("Erin", "Leave them for now")
+    edit = scenario.edits("Erin")[-1]
+    assert edit["text"].endswith("The other 3 stay where they are; nothing's dropped.")
+    assert not edit.get("reply_markup", {}).get("inline_keyboard")
+    assert due_on(scenario, "Sort the mail") == WED
+
+
+async def test_a_chore_goes_to_its_next_round_and_a_shared_one_stays_with_the_other(
+    scenario: Scenario,
+) -> None:
+    from themi.core.repeat import parse
+
+    erin, husband = scenario.member("Erin"), scenario.member("Husband")
+    scenario.app.store.update_settings(erin, erin.id, day_budget=2)
+    for n in range(3):
+        await task(scenario, "Erin", f"Errand {n}", importance="high")
+    bins = await task(scenario, "Erin", "Bring bins in", None)
+    await board(scenario).set_schedule(bins.id, erin, repeat=parse("every Wednesday", WED))
+    laundry = await task(scenario, "Erin", "Cycle the laundry")
+    await board(scenario).make_either(laundry.id)
+    focus = scenario.app.services.focus
+    assert focus is not None
+    text = await focus.spread_now(erin)
+    assert "Wed 28 Oct: Bring bins in" in text  # its next round, not stacked on a day
+    assert board(scenario).get(bins.id).due_on == WED + timedelta(days=7)
+    assert board(scenario).get(laundry.id).due_on == WED  # still today, for him
+    summary = scenario.app.services.day_summary
+    assert summary is not None
+    assert "Cycle the laundry" in (summary.text(husband, WED) or "")
+    assert "Cycle the laundry" not in (summary.text(erin, WED) or "")
+
+
+async def test_the_budget_is_what_usually_gets_done(scenario: Scenario) -> None:
+    from themi import clock
+
+    erin = scenario.member("Erin")
+    focus = scenario.app.services.focus
+    assert focus is not None
+    assert focus.budget(erin) == 4  # nothing done yet to go by
+    for day in range(3):  # two things done on each of three days
+        for n in range(2):
+            done = await task(scenario, "Erin", f"Thing {day}-{n}")
+            await board(scenario).complete(done.id, erin)
+        clock.advance(timedelta(days=1))
+    assert focus.budget(erin) == 2
+    scenario.app.store.update_settings(erin, erin.id, day_budget=5)
+    assert focus.budget(scenario.member("Erin")) == 5

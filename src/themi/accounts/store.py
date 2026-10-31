@@ -97,6 +97,7 @@ MAX_BUSY_TIMES = 10
 PHRASING_STYLES = ("plain", "gentle")
 MAX_PHRASING_NOTES = 500
 MAX_CHART_LIMIT = 10
+MAX_DAY_BUDGET = 20  # things on a day, when the rest is spread out (O1b)
 NOISE_EMAILS = ("daily", "twice", "every_other_day")  # F16b
 
 
@@ -143,6 +144,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         phrasing_notes=row["phrasing_notes"],
         checkin_reviews=bool(row["checkin_reviews"]),
         done_praise=bool(row["done_praise"]),
+        day_budget=row["day_budget"],
         chart_limit=row["chart_limit"],
         break_extend_minutes=row["break_extend_minutes"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
@@ -377,6 +379,7 @@ class AccountStore:
         phrasing_notes: str | None = None,
         checkin_reviews: bool | None = None,
         done_praise: bool | None = None,
+        day_budget: int | None = None,
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
         calendar_details: str | None = None,
@@ -459,6 +462,10 @@ class AccountStore:
             changes["leave_heads_up"] = int(leave_heads_up)
         if done_praise is not None:
             changes["done_praise"] = int(done_praise)
+        if day_budget is not None:
+            if not 0 <= day_budget <= MAX_DAY_BUDGET:
+                raise InvalidValue(f"a day's budget is between 0 and {MAX_DAY_BUDGET}")
+            changes["day_budget"] = day_budget
         if noise_emails is not None:
             if noise_emails not in NOISE_EMAILS:
                 raise InvalidValue("noise emails come once a day, twice a day or every other day")
