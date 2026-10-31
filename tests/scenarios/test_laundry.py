@@ -1,7 +1,8 @@
-"""31: the laundry. The washer finishing nudges whoever has more room to move the load; the
-dryer starting settles it; a load left past the fresh hours is offered a rinse timed to
-finish as that person's next good window begins. The clock starts on Wednesday
-21 October 2026, 09:00 (Los Angeles); the washer and dryer are LG's, read through pushes."""
+"""31: the laundry. The washer finishing nudges whoever has more room, half an hour on, to
+move the load (Later: again in an hour); the dryer starting settles it; a load left past the
+fresh hours is offered a rewash timed to finish as that person's next good window begins.
+The clock starts on Wednesday 21 October 2026, 09:00 (Los Angeles); the washer and dryer are
+LG's, read through pushes."""
 
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from tests.fakes.thinq import TOKEN, FakeThinq
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import START, Scenario
 from themi import clock
+from themi.channels.outbox import Priority
 from themi.core.laundry import RESCUE_TEXT, SUPERSEDED_TEXT, WASHED_TEXT, Laundry
 from themi.core.tasks import clock_words
 from themi.energy.windows import next_window
@@ -55,6 +57,11 @@ async def wash(scenario: Scenario, fake: FakeThinq) -> str:
     return clock_words(clock.now().astimezone(TZ))
 
 
+async def nudged(scenario: Scenario) -> list[str]:
+    """The half hour a finished wash's nudge waits."""
+    return await scenario.advance(minutes=30)
+
+
 def loads(scenario: Scenario) -> list[str]:
     return [r["status"] for r in scenario.app.db.query("SELECT status FROM laundry_loads")]
 
@@ -72,21 +79,53 @@ async def test_the_washer_finishing_goes_to_whoever_has_more_room(
     erin, husband = scenario.member("Erin"), scenario.member("Husband")
     scenario.app.services.energy.record(erin, "text_note", -3, "a draining morning")
     at = await wash(scenario, laundry_room)
-    assert scenario.inbox("Husband")[-1] == WASHED_TEXT.format(at=at)
-    assert scenario.last_buttons("Husband") == ["Moved it", "Later"]
-    assert not any("washer" in text for text in scenario.inbox("Erin"))
     ((title, status, assignee),) = tasks(scenario)
     assert (title, status, assignee) == ("Move the wet load to the dryer", "open", husband.id)
     reason = scenario.app.db.scalar("SELECT assign_reason FROM tasks")
     assert reason == "Husband seems to have the most room right now."
     assert not any(ch.isdigit() for ch in reason)
+    # It waits half an hour: the load's often moved by then.
+    assert await scenario.advance(minutes=29) == []
+    assert await scenario.advance(minutes=1) == [WASHED_TEXT.format(at=at)]
+    assert scenario.inbox("Husband")[-1] == WASHED_TEXT.format(at=at)
+    assert scenario.last_buttons("Husband") == ["Moved it", "Later"]
+    assert not any("washer" in text for text in scenario.inbox("Erin"))
 
 
-async def test_the_dryer_starting_settles_the_load(
+async def test_the_dryer_starting_in_the_half_hour_takes_the_nudge_back(
     scenario: Scenario, laundry_room: FakeThinq
 ) -> None:
     await wash(scenario, laundry_room)
-    clock.advance(timedelta(minutes=40))
+    clock.advance(timedelta(minutes=20))
+    await pushed(scenario, laundry_room, DRYER, "DRYING")
+    assert loads(scenario) == ["dried"]
+    assert tasks(scenario)[0][1] == "done"
+    texts = await scenario.advance(hours=2)
+    assert not any("washer" in text for text in texts)  # never sent
+    assert scenario.app.db.query("SELECT status FROM outbox WHERE kind = 'laundry'") == []
+
+
+async def test_the_dryer_already_running_doesnt_settle_a_wash_that_ends_later(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    """Loads back to back: the dryer started before this wash finished, so it's the last
+    load in there, not this one."""
+    await pushed(scenario, laundry_room, DRYER, "DRYING")
+    at = await wash(scenario, laundry_room)
+    assert loads(scenario) == ["wet"]
+    assert await nudged(scenario) == [WASHED_TEXT.format(at=at)]
+    await pushed(scenario, laundry_room, DRYER, "END")  # done drying: still not this load
+    assert loads(scenario) == ["wet"]
+    await pushed(scenario, laundry_room, DRYER, "DRYING")  # this one goes in
+    assert loads(scenario) == ["dried"]
+
+
+async def test_the_dryer_starting_after_the_nudge_settles_it(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    await wash(scenario, laundry_room)
+    await nudged(scenario)
+    clock.advance(timedelta(minutes=10))
     await pushed(scenario, laundry_room, DRYER, "DRYING")
     assert loads(scenario) == ["dried"]
     assert tasks(scenario)[0][1] == "done"
@@ -101,10 +140,41 @@ async def test_the_dryer_starting_settles_the_load(
 async def test_tapping_moved_it_settles_it_too(scenario: Scenario, laundry_room: FakeThinq) -> None:
     scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
     await wash(scenario, laundry_room)
+    await nudged(scenario)
     await scenario.tap("Husband", "Moved it")
     assert loads(scenario) == ["done"]
     clock.advance(timedelta(hours=9))
     assert await scenario.run_periodic("laundry.fresh") == 0
+
+
+async def test_later_asks_again_in_an_hour(scenario: Scenario, laundry_room: FakeThinq) -> None:
+    scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
+    at = await wash(scenario, laundry_room)
+    await nudged(scenario)
+    await scenario.tap("Husband", "Later")
+    back = clock_words((clock.now() + timedelta(hours=1)).astimezone(TZ))
+    assert scenario.edits("Husband")[-1]["text"] == (
+        f"No rush on that one (Move the wet load to the dryer). It waits until {back} today."
+    )
+    sent = len(scenario.inbox("Husband"))
+    clock.advance(timedelta(minutes=59))
+    await scenario.run_periodic("tasks.resurface")
+    assert scenario.inbox("Husband")[sent:] == []
+    clock.advance(timedelta(minutes=1))
+    await scenario.run_periodic("tasks.resurface")
+    assert scenario.inbox("Husband")[sent:] == [WASHED_TEXT.format(at=at)]
+    assert scenario.last_buttons("Husband") == ["Moved it", "Later"]
+
+
+async def test_the_daily_limit_doesnt_hold_the_nudge_to_morning(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    erin, husband = scenario.member("Erin"), scenario.member("Husband")
+    scenario.app.services.energy.record(erin, "text_note", -3, "tired")
+    scenario.app.store.update_settings(husband, husband.id, daily_limit=1)
+    await scenario.app.outbox.send(husband, "Something else today.", priority=Priority.NORMAL)
+    at = await wash(scenario, laundry_room)
+    assert await nudged(scenario) == [WASHED_TEXT.format(at=at)]
 
 
 async def test_a_new_wash_supersedes_the_wet_load(
@@ -112,8 +182,9 @@ async def test_a_new_wash_supersedes_the_wet_load(
 ) -> None:
     scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "tired")
     await wash(scenario, laundry_room)
+    await nudged(scenario)
     clock.advance(timedelta(hours=2))
-    await pushed(scenario, laundry_room, WASHER, "RUNNING")  # washed again, before moving it
+    await pushed(scenario, laundry_room, WASHER, "RUNNING")  # moved out, or washed again
     assert loads(scenario) == ["superseded"]
     assert tasks(scenario)[0][1] == "cancelled"
     assert scenario.edits("Husband")[-1]["text"] == SUPERSEDED_TEXT
@@ -123,19 +194,23 @@ async def test_a_new_wash_supersedes_the_wet_load(
     assert [t[1] for t in tasks(scenario)] == ["cancelled", "open"]
 
 
-async def test_a_load_left_past_eight_hours_is_offered_a_timed_rinse(
+async def test_a_load_left_past_eight_hours_is_offered_a_timed_rewash(
     scenario: Scenario, laundry_room: FakeThinq
 ) -> None:
     erin = scenario.member("Erin")
     scenario.app.services.energy.record(scenario.member("Husband"), "text_note", -3, "tired")
     finished = await wash(scenario, laundry_room)  # 10 am
+    assert await nudged(scenario) == [WASHED_TEXT.format(at=finished)]
+    await scenario.tap("Erin", "Later")
+    clock.advance(timedelta(hours=1))
+    await scenario.run_periodic("tasks.resurface")  # asked again; she lets it sit
     assert scenario.inbox("Erin")[-1] == WASHED_TEXT.format(at=finished)
     await scenario.tap("Erin", "Later")
-    clock.advance(timedelta(hours=7, minutes=45))
+    clock.advance(timedelta(hours=6, minutes=15))  # 8 hours on, less a quarter
     assert await scenario.run_periodic("laundry.fresh") == 0  # still fresh
     clock.advance(timedelta(minutes=15))
     assert await scenario.run_periodic("laundry.fresh") == 1
-    # She put it off, so the rinse is what comes back when that runs out.
+    # She put it off, so the rewash is what comes back when that runs out.
     sent = len(scenario.inbox("Erin"))
     await scenario.run_periodic("tasks.resurface")
     await scenario.app.outbox.flush()
@@ -160,16 +235,16 @@ async def test_a_load_left_past_eight_hours_is_offered_a_timed_rinse(
         assert datetime.fromisoformat(outbox["send_after"]) <= start
         await scenario.advance(minutes=(start - now).total_seconds() / 60)
     assert scenario.inbox("Erin")[sent:] == [expected]
-    assert scenario.last_buttons("Erin") == ["Rinse started", "Later"]
+    assert scenario.last_buttons("Erin") == ["Rewash started", "Later"]
     ((title, status, _),) = tasks(scenario)
-    assert (title, status) == ("Rinse the washer load", "open")
+    assert (title, status) == ("Rewash the washer load", "open")
 
 
-async def test_a_rinse_for_the_morning_is_suggested_in_the_morning(
+async def test_a_rewash_for_the_morning_is_suggested_in_the_morning(
     scenario: Scenario, laundry_room: FakeThinq
 ) -> None:
     """Past the fresh hours at 10 pm, Erin's quiet hours have begun: the next good window is
-    the morning, so the rinse is suggested then, not at night."""
+    the morning, so the rewash is suggested then, not at night."""
     erin, husband = scenario.member("Erin"), scenario.member("Husband")
     scenario.app.store.update_family(erin, laundry_fresh_hours=12)
     scenario.app.services.energy.record(husband, "text_note", -3, "tired")
@@ -181,12 +256,12 @@ async def test_a_rinse_for_the_morning_is_suggested_in_the_morning(
     assert row is not None
     start, ready = (datetime.fromisoformat(row[k]).astimezone(TZ) for k in row)
     window = next_window(model, erin, clock.now() + timedelta(minutes=30))
-    # The window opens as her quiet hours end, so the rinse starts then rather than before,
+    # The window opens as her quiet hours end, so the rewash starts then rather than before,
     # when nothing could reach her, and finishes just into it.
     assert start == window and ready == window + timedelta(minutes=30)
     assert (start.date() - clock.now().astimezone(TZ).date()).days == 1  # tomorrow morning
     texts = await scenario.advance(hours=1)
-    assert not any("rinse" in text for text in texts)  # not at night
+    assert not any("rewash" in text for text in texts)  # not at night
     texts = await scenario.advance(minutes=(start - clock.now()).total_seconds() / 60)
     assert texts == [
         RESCUE_TEXT.format(
@@ -245,6 +320,7 @@ async def test_a_washer_seen_going_straight_to_off_still_finished(
     clock.advance(timedelta(hours=1))
     await pushed(scenario, laundry_room, WASHER, "POWER_OFF")
     at = clock_words(clock.now().astimezone(TZ))
+    await nudged(scenario)
     assert scenario.inbox("Husband")[-1] == WASHED_TEXT.format(at=at)
     assert loads(scenario) == ["wet"]
 

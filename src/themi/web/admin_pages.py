@@ -121,13 +121,13 @@ def routes(kit: Kit) -> APIRouter:
 
     @router.post("/family/laundry")
     async def save_laundry(request: Request) -> Response:
-        """How long a wet load stays fresh, and how long a rinse takes (31)."""
+        """How long a wet load stays fresh, and how long a rewash takes (31)."""
         session, form = await kit.checked(request, admin=True)
         try:
             hours = float(str(form.get("fresh_hours", "")))
             minutes = int(str(form.get("rinse_minutes", "")))
         except ValueError:
-            return kit.redirect("/family", "The fresh hours and rinse minutes are numbers.")
+            return kit.redirect("/family", "The fresh hours and rewash minutes are numbers.")
         try:
             store.update_family(
                 session.member, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes

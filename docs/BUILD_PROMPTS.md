@@ -6197,6 +6197,14 @@ Notes (2026-10-31):
 - Follow-ups: laundry as an energy input ("device activity", as the plan lists it) isn't
   done; the cycles are kept for it. A WashCombo is "Not used" until mapped, since its
   "finished" can mean washed or dried.
+- Changed after first use (Michael, 2026-10-31; the plan says a rinse, Michael's word wins):
+  the first nudge waits half an hour after the wash ends (`MOVE_AFTER`), so a load moved in
+  the meantime never gets one; the dryer starting takes back a nudge not yet sent. Its
+  deadline is its send time, so the daily message limit doesn't hold it to morning (quiet
+  hours, busy times and pauses still do). Later on it asks again in an hour (the button's
+  `minutes`, honoured by `TaskBoard.on_button`), not the usual few hours. The rescue is a
+  rewash, not a rinse ("Rewash the washer load"; the setting's column keeps its name). A
+  washer seen running, then off (a 5-minute read missed the finish) counts as finished.
 
 ### 32 · SmartLife / Tuya feeders
 Status: [ ]

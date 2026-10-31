@@ -1551,6 +1551,9 @@ class TaskBoard:
             )
         elif action == "not_sure":
             reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
+        elif minutes := event.button.payload.get("minutes"):  # a nudge's own Later (laundry)
+            until = clock.now() + timedelta(minutes=int(minutes))
+            reply = self.snooze(task_id, until=until, by=event.member)
         else:
             reply = self.snooze(task_id, by=event.member)
         if event.button.message_id is not None:

@@ -3,15 +3,17 @@
 From the washer and dryer's events (LG ThinQ, 30):
 
 - The washer finishing (or seen running, then off) makes a wet load (`laundry_loads`) and an
-  effort-1 hands-on task, for whoever has the most room right now, nudged gently with two
-  choices: "Into the dryer now, or later?"
-- The dryer starting means the wet load is in it: the task is done.
-- The washer starting again supersedes the wet load (it's being washed again); its task
+  effort-1 hands-on task, for whoever has the most room right now. Its nudge waits half an
+  hour (the load's often moved by then), then asks "Into the dryer now, or later?"; Later
+  asks again in an hour. The family's daily message limit doesn't hold it back.
+- The dryer starting means the wet load is in it: the task is done, and a nudge not yet
+  sent is taken back.
+- The washer starting again supersedes the wet load (moved out, or washed again); its task
   goes quietly, and the new wash makes a new load when it finishes.
 - Past the family's freshness hours (default 8; `laundry.fresh`, every 15 minutes) the
-  task becomes "Rinse the washer load": add soap and run a rinse, timed so it finishes
-  as that person's next good window begins. The message names both times, and goes out
-  in the half hour before the start (a rinse for the morning isn't suggested at night).
+  task becomes "Rewash the washer load", timed so the rewash finishes as that person's
+  next good window begins. The message names both times, and goes out in the half hour
+  before the start (a rewash for the morning isn't suggested at night).
 
 Washer and dryer runs are kept as cycles (`appliance_cycles`), like the dishwasher's.
 Nothing here changes anything outside Themi: the task and its nudges are Themi's own.
@@ -38,15 +40,17 @@ log = logging.getLogger(__name__)
 
 KIND = "laundry"  # the outbox kind: "/pause laundry" holds these
 TITLE = "Move the wet load to the dryer"
-RESCUE_TITLE = "Rinse the washer load"
+RESCUE_TITLE = "Rewash the washer load"
 WASHED_TEXT = "The washer finished at {at}. Into the dryer now, or later?"
 RESCUE_TEXT = (
-    "The washer load has been sitting since {at}. A splash of soap and a rinse would freshen "
-    "it: started around {start}, it'd be done about {ready}. Rinse it, or leave it for now?"
+    "The washer load has been sitting since {at}, so it'll want a rewash: started around "
+    "{start}, it'd be done about {ready}. Rewash it, or leave it for now?"
 )
-SUPERSEDED_TEXT = "That load's being washed again, so nothing to move for now."
-MOVED, LATER, RINSED = "Moved it", "Later", "Rinse started"
-RESCUE_LEAD = timedelta(minutes=30)  # a rinse suggestion goes out at most this long before
+SUPERSEDED_TEXT = "The washer's running again, so nothing to move for now."
+MOVED, LATER, REWASHED = "Moved it", "Later", "Rewash started"
+MOVE_AFTER = timedelta(minutes=30)  # the first nudge waits this long after the wash ends
+LATER_FOR = 60  # minutes: Later on a laundry nudge asks again in an hour
+RESCUE_LEAD = timedelta(minutes=30)  # a rewash suggestion goes out at most this long before
 
 
 class Laundry:
@@ -137,7 +141,7 @@ class Laundry:
     # ----- the freshness check ----------------------------------------------------------
 
     async def check_fresh(self) -> int:
-        """Scheduler job: a wet load past the fresh hours is offered a rinse, once.
+        """Scheduler job: a wet load past the fresh hours is offered a rewash, once.
         Returns how many."""
         family = self.store.get_family()
         hours = family.laundry_fresh_hours if family else 8.0
@@ -157,13 +161,13 @@ class Laundry:
                 continue
             member = self.store.get_member(task.assignee)
             task = await self.board.update(task.id, member, title=RESCUE_TITLE)
-            # Put off ("Later"), it waits: the rinse is what comes back when that runs out.
+            # Put off ("Later"), it waits: the rewash is what comes back when that runs out.
             if task.status == "open":
                 await self.board.prompt(task)
         return len(rows)
 
     def rinse_times(self, member: Member, now: datetime) -> tuple[datetime, datetime]:
-        """(start, finish) for a rinse that finishes as their next good window begins. When
+        """(start, finish) for a rewash that finishes as their next good window begins. When
         that start falls in quiet hours or a busy time, where no message can reach them, it
         starts as soon as one can and finishes that much into the window."""
         family = self.store.get_family()
@@ -191,6 +195,10 @@ class Laundry:
         if load["rescue_at"] is None:
             text = WASHED_TEXT.format(at=self._when(finished, now.astimezone(tz).date()))
             done = MOVED
+            # Time-bound: due when it may go, so the daily limit doesn't hold it to morning.
+            # Quiet hours, busy times and a pause still do.
+            not_before = max(now, finished + MOVE_AFTER, not_before or now)
+            deadline = not_before
         else:
             start, ready = self.rinse_times(member, max(now, not_before or now))
             self.db.execute(
@@ -205,7 +213,7 @@ class Laundry:
                 start=self._when(start.astimezone(tz), day),
                 ready=self._when(ready.astimezone(tz), day),
             )
-            done = RINSED
+            done = REWASHED
             not_before = max(now, start - RESCUE_LEAD)
             deadline = min(deadline or start, start)
         self.board.withdraw_prompt(task)  # one nudge per load waiting for them
@@ -216,7 +224,7 @@ class Laundry:
             kind=KIND,
             buttons=[
                 Button(done, "task", {"task": task.id, "action": "done"}),
-                Button(LATER, "task", {"task": task.id, "action": "later"}),
+                Button(LATER, "task", {"task": task.id, "action": "later", "minutes": LATER_FOR}),
             ],
             not_before=not_before,
             deadline=deadline,

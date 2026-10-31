@@ -303,7 +303,7 @@ class AccountStore:
             changes["laundry_fresh_hours"] = float(laundry_fresh_hours)
         if laundry_rinse_minutes is not None:
             if not 5 <= laundry_rinse_minutes <= 180:
-                raise InvalidValue("a rinse takes 5 to 180 minutes")
+                raise InvalidValue("a rewash takes 5 to 180 minutes")
             changes["laundry_rinse_minutes"] = int(laundry_rinse_minutes)
         if changes:
             changes["updated_at"] = _iso(clock.now())
