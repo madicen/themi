@@ -134,6 +134,7 @@ MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can
 MORNING_LIST_DONE = "This morning's list: all done."
 MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
 MORNING_LIST_BUTTONS = 6
+TOO_MUCH = "Too much today"
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
 # F19c: a shared task put off by one of them, for them alone.
@@ -662,6 +663,7 @@ class TaskBoard:
             )
             for t in tasks[:MORNING_LIST_BUTTONS]
         ]
+        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus"}))  # O1a, Erin's idea #94
         return MORNING_LIST_TEXT.format(items=lines), buttons
 
     async def _list_done(self, event: InboundEvent) -> None:

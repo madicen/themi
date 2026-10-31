@@ -347,3 +347,17 @@ def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
     for text in (tasks.YOURS_UNTIL_TEXT, tasks.YOURS_LATER_TEXT, tasks.STILL_ON_TEXT):
         said = text.format(title="Bring bins in", when="2 pm today", whose="Michael's")
         assert find_demands(said, 3) == [], said
+
+
+def test_the_focus_words_pass_the_strictest_pda_check() -> None:
+    """O1a: reassurance, never instruction."""
+    from themi.core import focus
+
+    for text in (
+        focus.FOCUS_TEXT.format(these="these", items="- Call the vet"),
+        focus.KEPT_TEXT.format(n=3),
+        focus.KEPT_ONE_TEXT,
+        focus.ALL_TEXT,
+        focus.CLEAR_TEXT,
+    ):
+        assert find_demands(text, 3) == [], text

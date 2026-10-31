@@ -49,6 +49,7 @@ from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
+from themi.core.focus import Focus
 from themi.core.follow_ups import FollowUps
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
@@ -184,6 +185,7 @@ def build_app(
     reminders.install()
     day_summary = DaySummary(services, tasks)
     day_summary.install()
+    Focus(services, tasks, day_summary).install()
     reviews = CheckinReviews(services)
     reviews.install()
     Meals(services, pantry).install()

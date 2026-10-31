@@ -34,6 +34,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import focus
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
@@ -401,6 +402,7 @@ class Agent:
             timezone=timezone,
             calendars=services.calendar_context(member),
             lands=services.what_lands(member),
+            signals=[focus.SIGNAL] if focus.overwhelmed(text) else [],
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)

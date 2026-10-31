@@ -73,7 +73,7 @@ class DaySummary:
                     )
                     text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
                     lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
-        for task in self._due(member, day):
+        for task in self.due(member, day):
             at = self.board.time_of(task)
             when = (
                 datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
@@ -103,7 +103,7 @@ class DaySummary:
         )
         return {r["calendar_id"]: r["name"] for r in rows}
 
-    def _due(self, member: Member, day: date) -> list[Task]:
+    def due(self, member: Member, day: date) -> list[Task]:
         """Tasks due that day (and, for today, ones still open from before). Chores waiting
         their turn for the chart are left out today; on a later day they'll be up. So is one
         put off past the day's end (bug #106: the tea snoozed to tomorrow was still on)."""
