@@ -113,7 +113,7 @@ class Reminders:
             t.title
             for t in self.board.open_for(member)
             if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
-            and not self._put_off(t)
+            and not self._put_off(t, member)
             and t.importance != "low"
             and not self.board.held(t, member)
         ]
@@ -161,7 +161,11 @@ class Reminders:
                 if task.shared
                 else [self._doer(task)]
             )
-            people = [p for p in people if p is None or not self.board.held(task, p)]
+            people = [
+                p
+                for p in people
+                if p is None or not (self.board.held(task, p) or self._put_off(task, p))
+            ]
             if not people:
                 continue  # waiting its turn for the chart (C2d): raised once it comes up
             for person in people:
@@ -173,9 +177,10 @@ class Reminders:
             raised += 1
         return raised
 
-    def _put_off(self, task: Task) -> bool:
-        """Put off until a time that hasn't come ("tonight at 9", #18): not raised before."""
-        return self.board.put_off_until(task) is not None
+    def _put_off(self, task: Task, member: Member | None = None) -> bool:
+        """Put off until a time that hasn't come ("tonight at 9", #18): not raised before.
+        With a member, their own put-off of a shared task too (F19c)."""
+        return self.board.put_off_until(task, member) is not None
 
     def _doer(self, task: Task) -> Member | None:
         return self.store.get_member(task.assignee) if task.assignee is not None else None

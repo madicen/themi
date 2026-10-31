@@ -136,6 +136,11 @@ MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the mornin
 MORNING_LIST_BUTTONS = 6
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
+# F19c: a shared task put off by one of them, for them alone.
+YOURS_UNTIL_TEXT = "No rush on that one ({title}). It waits for you until {when}."
+YOURS_LATER_TEXT = "No rush on that one ({title}). It'll come back to you in a few hours."
+STILL_ON_TEXT = " It's still on {whose} list."
+BOTH_MOVED_TEXT = " That's for both of you."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
@@ -540,6 +545,8 @@ class TaskBoard:
             member = self.store.get_member(task.assignee)
         if self.held(task, member):
             return  # it gets its nudge when it comes up on the chart
+        if self._own_snooze(task, member) is not None:
+            return  # they put it off themselves (F19c): asked again when that runs out
         for own in self.own_nudges:  # a task with its own kind of nudge (E2's email audit)
             if await own(task, member, not_before, deadline):
                 return
@@ -785,6 +792,7 @@ class TaskBoard:
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        self._end_own_snoozes(task.id)
         await self._settle_sent(task, tapped)
         if task.repeats:
             said = await self._complete_round(task, by, interactive)
@@ -1365,6 +1373,7 @@ class TaskBoard:
             ),
         )
         self.withdraw_prompt(task)
+        self._end_own_snoozes(task_id)  # a new day is for everyone who has it (F19c)
         task = self.get(task_id)
         if due_on is not None:
             if task.either:
@@ -1374,9 +1383,10 @@ class TaskBoard:
             else:
                 await self.prompt(task)
         await self._changed(task, "rescheduled", interactive)
+        both = BOTH_MOVED_TEXT if task.shared and interactive else ""
         if due_on is None:
-            return UNSCHEDULED_TEXT.format(title=task.title)
-        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task))
+            return UNSCHEDULED_TEXT.format(title=task.title) + both
+        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
     def when_words(self, task: Task) -> str:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
@@ -1401,31 +1411,82 @@ class TaskBoard:
         return task
 
     def snooze(
-        self, task_id: int, for_: timedelta = SNOOZE_FOR, *, until: datetime | None = None
+        self,
+        task_id: int,
+        for_: timedelta = SNOOZE_FOR,
+        *,
+        until: datetime | None = None,
+        by: Member | None = None,
     ) -> str:
-        """Put a task off for a few hours, or until a time they gave ("tonight at 9", #18)."""
+        """Put a task off for a few hours, or until a time they gave ("tonight at 9", #18).
+        On both lists, it's put off for `by` alone (F19c, idea #86)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        if by is not None and task.shared:
+            return self._snooze_for(task, by, until or clock.now() + for_, said=until is not None)
         self.db.execute(
             "UPDATE tasks SET status = 'snoozed', snoozed_until = ? WHERE id = ?",
             (to_utc_iso(until or clock.now() + for_), task_id),
         )
         self.withdraw_prompt(task)
         if until is not None:
-            local = until.astimezone(self._tz())
-            when = clock_words(local)
-            # Bug #54: which day, when it isn't today; #104: "until 2 pm" became "tomorrow".
-            when = f"{local:%a %d %b}, {when}" if local.date() != self._today() else f"{when} today"
-            return UNTIL_TEXT.format(title=task.title, when=when)
+            return UNTIL_TEXT.format(title=task.title, when=self._until_words(until))
         return LATER_TEXT.format(title=task.title)
 
-    def put_off_until(self, task: Task) -> datetime | None:
-        """When a snooze that hasn't ended runs out ("tonight at 9", #18), else None."""
+    def _snooze_for(self, task: Task, by: Member, until: datetime, *, said: bool) -> str:
+        """Erin's idea #86: "only snooze it for that user". Their nudges wait; the task stays
+        open, on the other's list and the wall as it was."""
+        self.db.execute(
+            "INSERT INTO task_snoozes (task_id, member_id, until) VALUES (?, ?, ?) "
+            "ON CONFLICT (task_id, member_id) DO UPDATE SET until = excluded.until",
+            (task.id, by.id, to_utc_iso(until)),
+        )
+        for queued in self.db.query(
+            "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
+            (by.id, f"task-{task.id}-%"),
+        ):
+            self.outbox.cancel(queued["id"])
+        text = (
+            YOURS_UNTIL_TEXT.format(title=task.title, when=self._until_words(until))
+            if said
+            else YOURS_LATER_TEXT.format(title=task.title)
+        )
+        others = [
+            m.name
+            for m in self.store.list_members()
+            if m.id != by.id and m.telegram_user_id is not None and not self._own_snooze(task, m)
+        ]
+        if others:
+            text += STILL_ON_TEXT.format(whose=" and ".join(f"{n}'s" for n in others))
+        return text
+
+    def _until_words(self, until: datetime) -> str:
+        local = until.astimezone(self._tz())
+        when = clock_words(local)
+        # Bug #54: which day, when it isn't today; #104: "until 2 pm" became "tomorrow".
+        return f"{local:%a %d %b}, {when}" if local.date() != self._today() else f"{when} today"
+
+    def put_off_until(self, task: Task, member: Member | None = None) -> datetime | None:
+        """When a snooze that hasn't ended runs out ("tonight at 9", #18), else None. With a
+        `member`, their own put-off of a shared task counts too (F19c)."""
         until = self.db.scalar(
             "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
         )
-        return when if until and (when := datetime.fromisoformat(until)) > clock.now() else None
+        if until and (when := datetime.fromisoformat(until)) > clock.now():
+            return when
+        return self._own_snooze(task, member) if member is not None else None
+
+    def _own_snooze(self, task: Task, member: Member) -> datetime | None:
+        until = self.db.scalar(
+            "SELECT until FROM task_snoozes WHERE task_id = ? AND member_id = ? AND until > ?",
+            (task.id, member.id, to_utc_iso(clock.now())),
+        )
+        return datetime.fromisoformat(until) if until else None
+
+    def _end_own_snoozes(self, task_id: int) -> None:
+        """Done, or moved to a new day: nobody's own put-off of it stands (F19c)."""
+        self.db.execute("DELETE FROM task_snoozes WHERE task_id = ?", (task_id,))
 
     def withdraw_prompt(self, task: Task) -> bool:
         """Take back any of the task's nudges that haven't gone out yet (shared ones too).
@@ -1442,17 +1503,27 @@ class TaskBoard:
         return withdrawn
 
     async def resurface(self) -> int:
-        """Snoozed tasks whose time has come are offered again."""
+        """Snoozed tasks whose time has come are offered again; one person's put-off of a
+        shared task, to that person (F19c)."""
+        now = to_utc_iso(clock.now())
         rows = self.db.query(
-            "SELECT * FROM tasks WHERE status = 'snoozed' AND snoozed_until <= ?",
-            (to_utc_iso(clock.now()),),
+            "SELECT * FROM tasks WHERE status = 'snoozed' AND snoozed_until <= ?", (now,)
         )
         for row in rows:
             self.db.execute(
                 "UPDATE tasks SET status = 'open', snoozed_until = NULL WHERE id = ?", (row["id"],)
             )
             await self.prompt(self.get(row["id"]))
-        return len(rows)
+        own = self.db.query("SELECT * FROM task_snoozes WHERE until <= ?", (now,))
+        for row in own:
+            self.db.execute(
+                "DELETE FROM task_snoozes WHERE task_id = ? AND member_id = ?",
+                (row["task_id"], row["member_id"]),
+            )
+            task = self.get(row["task_id"])
+            if task.status == "open" and task.shared:
+                await self.prompt(task, member=self.store.get_member(row["member_id"]))
+        return len(rows) + len(own)
 
     async def on_button(self, event: InboundEvent) -> None:
         assert event.button is not None
@@ -1468,7 +1539,7 @@ class TaskBoard:
         elif action == "not_sure":
             reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
         else:
-            reply = self.snooze(task_id)
+            reply = self.snooze(task_id, by=event.member)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
 
@@ -2037,7 +2108,7 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         elif until <= now:
             raise ToolFailed("That time has passed; ask when they'd like it.")
     try:
-        return board.snooze(args["task_id"], until=until)
+        return board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
 

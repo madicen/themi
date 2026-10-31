@@ -338,3 +338,12 @@ def test_the_warm_words_pass_the_strictest_pda_check() -> None:
 
     for word in PRAISE:
         assert find_demands(word, 3) == [], word
+
+
+def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
+    """F19c: the reply to a snooze of a task on both lists."""
+    from themi.core import tasks
+
+    for text in (tasks.YOURS_UNTIL_TEXT, tasks.YOURS_LATER_TEXT, tasks.STILL_ON_TEXT):
+        said = text.format(title="Bring bins in", when="2 pm today", whose="Michael's")
+        assert find_demands(said, 3) == [], said

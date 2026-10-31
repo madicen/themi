@@ -114,7 +114,7 @@ class DaySummary:
         for task in self.board.open_for(member):
             if task.due_on is None or (day == today and self.board.held(task, member)):
                 continue
-            if (until := self.board.put_off_until(task)) is not None and until >= ends:
+            if (until := self.board.put_off_until(task, member)) is not None and until >= ends:
                 continue
             late = day == today and task.due_on < today and day not in self.board.round_days(task)
             if late or day in self.board.round_days(task):
