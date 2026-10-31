@@ -138,7 +138,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
-| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [~] |
+| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi sends the list to the extension | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
@@ -6234,7 +6234,7 @@ Tests:
 Commit when done.
 
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: none in Themi (it is a separate program)
 Read first: "Integrations" → Safeway/DoorDash row. (The plan has no section on the extension;
 this prompt and `extension/safeway/NOTES.md` are its spec.)
@@ -6280,6 +6280,35 @@ Manual check (Notes): load it unpacked, fill a three-item cart, and check the ca
 safeway.com. Write install steps in `extension/safeway/README.md`.
 
 Commit when done.
+
+Notes (2026-10-31):
+- Spike passed in the family's signed-in Chrome (driven through Claude in Chrome): the
+  extension calls safeway.com's own search and cart APIs with `fetch`; no button clicking.
+  `extension/safeway/NOTES.md` has the requests; `fixtures/` the redacted responses.
+- What the spike found that the prompt didn't expect:
+    - The sign-in token and API keys are page globals (`AB.userInfo.SWY_SHOP_TOKEN`,
+      `SWY.CONFIGSERVICE`), so `page.js` runs in the page's MAIN world (Chrome 111+) and
+      hands them to the content script. Nothing is hardcoded or stored.
+    - Search refuses a `request-id` not in the site's format (3 digits, ms time, 3 digits).
+    - `featured=true` puts sponsored products first; the extension asks for `false`.
+    - A query with no match still returns ~30 unrelated products with `isExactMatch:
+      false`; that counts as not found.
+    - The cart "add" **sets** the quantity. The extension reads the cart first and posts
+      current + wanted, so it never lowers anything. 35c's jobs must do the same.
+    - Signed out is 401, a bad token 403, a bot check HTML or a dropped connection: all
+      stop the fill with "Sign in to Safeway, then try again."
+- "change" adds the newly chosen product and remembers it; the old one stays in the cart
+  (the extension never removes) and the popup tells them to remove it on safeway.com.
+- An out-of-stock top result is reported, not swapped for the next one.
+- Tests: 33 `node --test` cases in `extension/safeway/tests/` (Node 18 is enough), run by
+  `make test-all` after pytest, skipped with a notice without Node.
+- Manual check: the extension's real `lib/` code run in a signed-in safeway.com tab filled
+  "eggs / 2 bananas / oat milk" in 15 s (Lucerne 18-count eggs, 2 bananas, Oatly 64 oz),
+  and the cart page on safeway.com showed them. Loading it unpacked and using the popup
+  is not yet checked: the user should follow `extension/safeway/README.md` once.
+- The family's cart now has those three plus one Just Egg (16 oz) from the spike; remove
+  any you don't want.
+- Follow-up: products sold each but priced by weight (bananas) show a size of "1 lb".
 
 ### 35c · Safeway cart: Themi sends the list to the extension
 Status: [ ]
