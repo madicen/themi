@@ -32,6 +32,7 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
+from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
@@ -89,6 +90,7 @@ class Scenario:
         *,
         home_connect: FakeHomeConnect | None = None,
         gtasks: FakeGtasks | None = None,
+        keep: FakeKeep | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -121,6 +123,7 @@ class Scenario:
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
             travel=travel.client() if travel else None,
             home_connect=home_connect.client() if home_connect else None,
+            keep=keep.connect if keep else None,
             tool_routing=tool_routing,
         )
         if not real_models:
@@ -302,7 +305,7 @@ async def scenario(
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
-    `fake_home_connect`.
+    `fake_home_connect`, and Google Keep (GK1) when it uses `fake_keep`.
     """
 
     def optional(name: str) -> Any:
@@ -319,6 +322,7 @@ async def scenario(
         optional("fake_travel"),
         home_connect=optional("fake_home_connect"),
         gtasks=optional("fake_gtasks"),
+        keep=optional("fake_keep"),
     )
     await s.start()
     yield s
