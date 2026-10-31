@@ -104,6 +104,23 @@ SENTENCE = re.compile(r"(?<=[.!?])\s+")
 QUOTED = re.compile(r'"([^"\n]+)"')
 
 
+# Bugs #98, #100: '"Refill whoosh litter" is set up for both of you.' A whole reply in quotes
+# loses them, when that quote mark isn't used inside it too (an apostrophe doesn't count).
+WRAPPING = {'"': '"', "'": "'", "\u201c": "\u201d", "\u2018": "\u2019"}  # and curly ones
+APOSTROPHE = re.compile(r"(?<=\w)['\u2019](?=\w)")
+TICKED_TITLE = re.compile(r'`("[^"`\n]+")`')  # `"Unclog the robot vacuum"`
+
+
+def _unquoted(reply: str) -> str:
+    text = TICKED_TITLE.sub(r"\1", reply.strip())
+    while len(text) > 2 and WRAPPING.get(text[0]) == text[-1]:
+        inner = APOSTROPHE.sub("", text[1:-1])
+        if text[0] in inner or text[-1] in inner:
+            break
+        text = text[1:-1].strip()
+    return text
+
+
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
 TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
 
@@ -420,7 +437,7 @@ class Agent:
                 call_system = f"{system}\n\n{twins}" if twins else system
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
-                    reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
                     reply = self._whole_truth(_by_name(reply, self._task_title), ctx)
