@@ -107,6 +107,7 @@
     status.textContent = r.stopped ? "" : `Added ${(r.added || []).length} of ${
       (r.added || []).length + (r.notFound || []).length + (r.outOfStock || []).length + (r.failed || []).length
     }.`;
+    if (run.fromThemi) results.append(el("p", "This cart was filled for Themi.", "muted"));
     if (r.stopped) results.append(el("p", r.stopped, "stopped"));
     section("Added", r.added || [], (e) => `${e.qty} × ${describe(e.product)}`, true, true);
     section("Out of stock", r.outOfStock || [], (e) => `${e.item}: ${describe(e.product)}`, true, false);
@@ -129,10 +130,21 @@
   });
 
   list.addEventListener("input", () => storage.set({ draft: list.value }));
+  $("options").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
-  storage.get(["draft", "run"]).then(({ draft, run }) => {
-    if (draft) list.value = draft;
-    render(run);
+  function showThemi({ themiUrl, themiToken, themiStatus }) {
+    $("themi").textContent =
+      themiStatus === "revoked"
+        ? "Themi disconnected this helper."
+        : themiUrl && themiToken
+          ? "Connected to Themi: it fills the cart here when you ask it to."
+          : "Not connected to Themi.";
+  }
+
+  storage.get(["draft", "run", "themiUrl", "themiToken", "themiStatus"]).then((s) => {
+    if (s.draft) list.value = s.draft;
+    render(s.run);
+    showThemi(s);
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.run) render(changes.run.newValue);

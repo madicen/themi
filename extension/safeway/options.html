@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Safeway helper: connect to Themi</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body {
+        width: auto;
+        max-width: 520px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        margin-bottom: 10px;
+        padding: 6px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Connect to Themi</h1>
+    <p class="muted">With this, "fill the Safeway cart" in Themi fills it here whenever a
+    safeway.com tab is open, and both of your browsers remember the same products. Get a
+    token on Themi's website: Safeway, then "Connect the Safeway helper".</p>
+    <label for="url">Themi's address</label>
+    <input id="url" type="url" placeholder="https://themi.example.com" autocomplete="off" />
+    <label for="token">Token</label>
+    <input id="token" type="password" placeholder="swh_..." autocomplete="off" />
+    <div class="row">
+      <button id="save" type="button">Connect</button>
+      <button id="disconnect" type="button" class="link">Disconnect</button>
+    </div>
+    <p id="status" role="status"></p>
+    <script src="lib/themi.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

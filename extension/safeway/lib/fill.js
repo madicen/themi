@@ -40,7 +40,8 @@
     return { ok: true, product: { ...product, name: line.product.name || product.name, price: line.product.price ?? product.price } };
   }
 
-  // items: [{ key, name, qty }] from parseList.
+  // items: [{ key, name, qty }] from parseList. A job from Themi adds `search` (what to search
+  // for) and `product` (the remembered one) to each.
   // -> { added, notFound, outOfStock, failed, stopped } where stopped is a message or null.
   async function fillCart({ items, client, memory, onProgress = () => {} }) {
     const result = { added: [], notFound: [], outOfStock: [], failed: [], stopped: null };
@@ -48,16 +49,16 @@
       const cart = await client.readCart();
       for (const [i, item] of items.entries()) {
         onProgress({ done: i, total: items.length, item: item.name });
-        let product = await memory.get(item.key);
+        let product = item.product || (await memory.get(item.key));
         const remembered = Boolean(product);
         if (!product) {
-          const found = await client.search(item.name);
+          const found = await client.search(item.search || item.name);
           if (found.status === "error") {
-            result.failed.push({ item: item.name, detail: found.detail });
+            result.failed.push({ item: item.name, qty: item.qty, detail: found.detail });
             continue;
           }
           if (!found.products.length) {
-            result.notFound.push({ item: item.name });
+            result.notFound.push({ item: item.name, qty: item.qty });
             continue;
           }
           product = found.products[0];
@@ -68,12 +69,12 @@
         }
         const added = await addOnTop(client, cart, product, item.qty);
         if (added.ok) {
-          if (!remembered) await memory.set(item.key, added.product);
+          if (!remembered) await memory.set(item.key, added.product, item.name);
           result.added.push({ item: item.name, key: item.key, qty: item.qty, product: added.product, remembered });
         } else if (added.outOfStock) {
           result.outOfStock.push({ item: item.name, key: item.key, qty: item.qty, product: added.product || product });
         } else {
-          result.failed.push({ item: item.name, detail: added.detail });
+          result.failed.push({ item: item.name, qty: item.qty, detail: added.detail });
         }
       }
       onProgress({ done: items.length, total: items.length, item: null });
