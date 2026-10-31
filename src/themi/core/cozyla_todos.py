@@ -278,8 +278,8 @@ class CozylaTodos:
         if before is None or task.status == "cancelled":
             return
         if todo.completed and not before.completed:
-            if task.status in ("open", "snoozed"):
-                await self.board.complete(task.id, self._doer(task))
+            if task.status in ("open", "snoozed"):  # whose tick, when it's one person's
+                await self.board.complete(task.id, self._doer(task), wall=not task.shared)
             return
         if before.completed and not todo.completed and task.status == "done":
             task = await self.board.reopen(task.id)

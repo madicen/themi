@@ -108,6 +108,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F18f | Feedback: a wrong year, the summary twice, a task already open, stale cards, the heads-up late | Feedback | [x] |
 | F18g | Feedback: "no" closed eight tasks, a title that says "today" | Feedback | [x] |
 | F18h | Feedback: replies that say who has a task truly, routine checks with a skip | Feedback | [x] |
+| F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
+| F19b | Idea: a word when a task is done | Feedback | [x] |
+| F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
+| F19d | Feedback: "remind me to" a small thing at a time is a reminder, not a task | Feedback | [x] |
+| O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [x] |
+| O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [x] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -135,6 +141,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
+| GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
+| GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
 
 ## Fixed technical choices
 
@@ -3238,6 +3246,11 @@ Notes (2026-10-30):
   redirect `<THEMI_PUBLIC_URL>/auth/home-connect/callback`), set `HOME_CONNECT_CLIENT_ID` and
   `HOME_CONNECT_CLIENT_SECRET`, restart (applies 0074), and link from the Family page. To
   skip the cards, turn on "Check off the dishwasher routine when the dishwasher starts".
+- Fixed 2026-10-30: "Link Home Connect" did nothing in the browser. Home Connect hands its
+  sign-in on to SingleKey ID (`singlekey-id.com`), and the site's `form-action` allowed only
+  Home Connect, so the browser blocked the redirect. `HomeConnectConfig.sign_in_url` is now
+  allowed too. A local redirect (`http://127.0.0.1:8080/...`) works; no public URL is needed
+  to link from the computer running Themi.
 
 ### E1 · Email: suggest important senders
 Status: [x] 2026-10-27
@@ -5396,6 +5409,308 @@ Notes (2026-10-30):
 - Not run: the model evals.
 - Setup: restart. No migration.
 
+### F19a · Feedback (2026-10-30): a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added
+Status: [x] 2026-10-30
+Depends on: F18h, K1, K2, C2c
+From the family's bugs #98-#101 and #103-#106 (2026-10-29 and 30). Ideas #86, #94 and #102
+from the same days are F19c, O1 and F19b; #33 and #34 still wait for Erin's spec.
+- #104, #106 ("I snoozed that one to tomorrow afternoon, it confirmed the snooze, but here
+  it is today"): at 1:37 pm, "Snooze the green tea to tomorrow afternoon" ran snooze_task
+  with until 14:00. snooze_task only takes a time (today, or tomorrow once it's passed), so
+  it waited until 2 pm *today*; the reply said "2 pm tomorrow". At 4:47 the day summary
+  still listed it.
+- #105 ("not even close"): "What happened yesterday?" gave "Thu 29 Oct: Move Mimi's box
+  upstairs for Rosie", the one task still open. The calendar is read from now on, so a past
+  day has no events (Thursday had tutoring), and a summary lists only open tasks, never
+  what was done.
+- #99 ("why does it think cycle the laundry isn't done right after saying it was?"): the
+  end-of-day list was written at 7:36 pm and held by pacing until 9:15; the laundry was
+  ticked at 9:05, and the list went out as written.
+- #98, #100 (quotes around the whole thing): replies came as `"'Copy and review ...' is
+  done."` and `'"Refill whoosh litter" is set up for both of you.'`; earlier, a title in
+  backticks and quotes, `` `"Unclog the robot vacuum"` ``. The model's own text.
+- #101 ("the proposed calendar event is correct, but Themi already added it"): at 7:42 pm
+  she had Themi add "Tutoring (Jennifer)", Mon 9 Nov 4:30-5:50. Fifteen minutes later the
+  booking email made a card for the same times ("Tutoring: Malcolm's first session"), and
+  a second email the next day made another.
+- #103 ("I marked the tutoring invoice as complete and it disappeared from the morning
+  task message, but it is still showing on cozyla"): look into it. The tick on the
+  morning list goes through `complete`, as any Done does.
+
+Tests: each bug first as a failing test; a scenario for the snooze to tomorrow and for
+yesterday's summary.
+
+Notes (2026-10-30):
+- #104, #106: `snooze_task` takes `day` (YYYY-MM-DD, '' for today; a day alone waits for
+  9 am; a time already gone on a day given is refused). A snooze today reads back "until
+  2 pm today". `TaskBoard.put_off_until`; the day summary leaves out a task put off past
+  the day's end (`Reminders._put_off` shares it).
+- #105: the calendar is read from midnight a week back (`busy.LOOK_BACK`), so today's
+  earlier events stay too. A day gone by lists what was done at the time it was done,
+  "(done)" or "(done by Michael)" for a round someone else did (`TaskBoard.done_between`:
+  rounds from task_runs, one-offs by completed_at; who did a one-off isn't kept), and its
+  open tasks "(still open)". The tool's description says it answers "what happened".
+- #99: `Outbox.refreshers`, per kind: a held message is asked for its text as it goes,
+  or dropped (None). Reminders' refresher writes the end-of-day list again; other
+  task_summary rows (the morning list) go as they are.
+- #98, #100: `agent._unquoted` takes quotes off a whole reply (straight or curly) when
+  that mark isn't used inside it, apostrophes aside, and backticks off a quoted title.
+- #101: `Events._already`: no card for a booking at the very times of an event on their
+  calendars (Themi's or by hand, the family calendar too) or of a card still waiting.
+  Titles aren't compared ("Tutoring (Jennifer)" vs "Tutoring: Malcolm's first session").
+- #103: no fault found. The tick goes through `complete`; the to-do's link says done, no
+  errors (when it reached the wall isn't kept). Cozyla timed out at times that day, and
+  a failed read backs off up to an hour. The edited morning list now starts "Marked done:
+  X." so the tick is seen to have worked.
+- Data repaired (backup `data/themi-before-f19a-repair-2026-10-30.db`), from a script with
+  the app built but not started: cards 221 and 231 (the Malcolm session, already on her
+  calendar) withdrawn ("It's on your calendar already."); the green tea (task 42) put off
+  to Sat 31 Oct, 2 pm. Reports #86, #94 and #98-#106 marked reviewed; #33 and #34 wait.
+- Not run: the model evals.
+- Setup: restart. No migration.
+
+### F19b · Idea #102: a word when a task is done
+Status: [x] 2026-10-30
+Depends on: F19a
+Erin's idea #102 (2026-10-30): "when a user completes a task, Themi should send a
+confirmation message along with a brief 'good job!' or similar message."
+- Today a Done button edits its nudge to "Marked done: X. Thank you."; a tick on the
+  morning list only takes the line away (F19a adds "Marked done: X." above the list);
+  done in chat, the model's reply says something or nothing; ticked on the wall, nothing
+  is said.
+- Build: one short, warm line when a task is done by any path except the wall itself:
+  plain, never effusive, and never about energy. Varied from a small set (no AI call), so
+  it doesn't read as a stamp. Where the done is already confirmed in place (the nudge's
+  edit), the warm word goes in that edit, not a second message.
+- PDA phrasing applies: praise for having done it, never "keep it up" or anything that
+  asks for more. Off with a setting for whoever finds it too much.
+- Ask Erin before building: done on the wall, should a message come at all (it would be
+  the only message caused by the wall)?
+
+Tests: each path (button, list tick, chat) says it once; the wall says nothing; the
+setting turns it off; the shield keeps the wording.
+
+Notes (2026-10-30):
+- The wall question, settled by the family (2026-10-30): ticks on the wall get a warm
+  word too. `complete(..., wall=True)` from the Cozyla to-do, chore and routine syncs
+  queues "Ticked off on the wall: X. Nice work." a minute later (kind "praise"); the
+  outbox's "praise" bundler makes ticks close together one message. It expires after two
+  hours (held by quiet hours: dropped), and isn't counted in the day's limit
+  (`Outbox.sent_today`). Only when the wall names who: a chart tick's member, the
+  assignee of a one-person to-do or routine; a to-do on both lists says nothing.
+- `tasks.PRAISE` (five plain words: "Nice work.", "Well done."...), picked by task and
+  minute (`_praise`, no AI call). `TaskBoard.complete` puts one in place of "Thank you."
+  when `interactive` (a tap, a tick, complete_task, a logged call) and the doer's
+  `done_praise` is on; a round's "Next round: ..." follows it. The edit of the nudge is
+  the confirmation, so no second message; the morning list's edit starts with it.
+- Done by Google Tasks, the dishwasher or the email audit: the nudges still say "Marked
+  done: X. Thank you.", nothing more.
+- complete_task's result carries the line, and its description says to give it as it is;
+  the model may still word it its own way.
+- Setting: `members.done_praise` (migration 0084), on by default; on the website's
+  settings page. No chat tool for it yet; set_phrasing's notes would be read, not obeyed.
+- Not run: the model evals.
+- Setup: restart (applies 0084).
+
+### F19c · Idea #86: a shared task put off by one person stays with the other
+Status: [x] 2026-10-30
+Depends on: F19a, F4
+Erin's idea #86 (2026-10-29): "for shared tasks, when one user snoozes the task, only snooze
+it for that user (it should remain active for the user who did not snooze the task)."
+- Today a task is snoozed as a whole (`tasks.status = 'snoozed'`, one `snoozed_until`), and
+  a snooze withdraws every queued nudge for it, the other person's too.
+- Build: for a shared or either-of-you task, a snooze is the snoozer's: kept per person (a
+  table of task, member, until), their nudges held, the other's left alone. The task stays
+  open; it's on the snoozer's day summary, end-of-day list and morning list only once
+  their snooze is over. When both have put it off, it waits for the earlier of the two.
+- A one-person task snoozes as today. Rescheduling (a new due day) still moves it for both,
+  and says so.
+- The snooze's reply says who it's put off for when the task is shared ("Put off for you
+  until 2 pm tomorrow; it's still on Michael's list").
+- Check the wall: a Cozyla to-do is one item for both, so a per-person snooze doesn't touch
+  it.
+
+Tests: shared task snoozed by one: the other's nudge and summary unchanged; both snooze;
+the snooze ends; a one-person task as before; a reschedule moves it for both.
+
+Notes (2026-10-30):
+- `task_snoozes` (task, member, until; migration 0085). `TaskBoard.snooze(..., by=)`: a
+  `shared` task (either of you, or escalated to both) put off by `by` gets their row,
+  their queued nudges cancelled, and the task stays open. Later on a nudge and
+  snooze_task pass who it was; the email audit's own snooze doesn't (its task is one
+  person's).
+- `put_off_until(task, member)` counts their own put-off; `prompt()` sends nothing to
+  someone with one; the day summary, the end-of-day list and overdue reminders leave it
+  out for them. `resurface` deletes a row whose time has come and nudges that person.
+- Deviation: when both have put it off, each hears at their own time, not both at the
+  earlier one; each asked for their own.
+- Done (by anyone) or rescheduled ends every row for the task; a reschedule from chat of
+  a shared task says "That's for both of you." The wall (one to-do for both) and the
+  chore chart are untouched.
+- Replies: "No rush on that one (X). It waits for you until 2 pm today. It's still on
+  Michael's list." (or "It'll come back to you in a few hours."). "Put off for you" was
+  reworded by the PDA shield as a command.
+- Not run: the model evals.
+- Setup: restart (applies 0085).
+
+### F19d · "Remind me to" a small thing at a time is a reminder, not a task
+Status: [x] 2026-10-30
+Depends on: F19a
+From the green tea (#84, #104, #106). On 28 Oct Erin said "On Friday afternoon, remind me to
+drink green tea". It became a task: on the wall's to-do list, in day summaries, in the
+low-energy reschedule, nudged with Done or Later, and snoozed. She only wanted a nudge.
+- `add_reminder` (a message at a time, nothing to tick off) already existed, but its
+  description sent every "remind me to..." to create_task.
+- Build: the two descriptions draw the line. A small thing of their own at a time they
+  give, where a nudge is all they want ("remind me to drink green tea on Friday
+  afternoon", "remind me to stretch at 3"), is add_reminder. A job to get done or keep
+  track of, or one with no time ("remind me to call the vet"), is create_task. A part of
+  the day without an hour is morning 09:00, afternoon 14:00, evening 18:00.
+
+Tests: eval cases reminder-green-tea (add_reminder, not create_task) and
+task-remind-call-vet (create_task, not add_reminder).
+
+Notes (2026-10-30):
+- Descriptions only; no code path changed.
+- Data: task 42 (green tea) was cancelled, which took it off the wall, and a reminder
+  for Sat 31 Oct, 2 pm was queued in its place. Backup at
+  data/themi-before-green-tea-reminder-2026-10-30.db.
+- Also fixed: "What happened yesterday?" was both a router example and an eval case
+  (from F19-O1's evals), which test_router_eval forbids; the example is now "What got
+  done yesterday?".
+- Evals (test key, 2026-10-30): reminder-green-tea, task-remind-call-vet and
+  snooze-to-tomorrow-afternoon pass, 3/3.
+
+### O1 · Idea #94: when it's too much (split into O1a and O1b)
+Status: [x] 2026-10-30 (as O1a and O1b)
+Depends on: F19a, F19c, T1, B1
+Erin's idea #94 (2026-10-29): "a full overhaul of how Themi presents tasks when the user is
+overwhelmed. Something that only surfaces a small number of tasks to focus on for now. And
+also reassures the user that all the other tasks are also being remembered and planned for
+future days. And that pushing the remaining tasks to a later day won't lead to having way
+too much on any single later day."
+It came out of the morning of 2026-10-29 (bugs #84, #85): "today's to dos need to be pared
+down", then "snooze everything except the tutoring and the run", then "snooze clean
+upstairs", each move one by one and every remaining one read back.
+- Build, in two parts (split into O1a/O1b before starting if it's big):
+  1. **A short list.** Asked for (an "it's too much" / "pare it down" message, or a
+     button on the morning list), Themi picks at most three things for now: what has a
+     fixed time today (calendar, check-ins with a time), then urgent and important (T1),
+     then the lightest. Medicines are never left out. One message, those few, and a line
+     that the rest are kept and placed ("The other 6 are planned over the next few days;
+     nothing's dropped.").
+  2. **The rest spread out.** What isn't on the short list moves to later days, filled by
+     a daily budget (each day's open count, chores on the chart included, kept under a
+     ceiling: the family's typical day, from task_runs, or a setting). Fixed-date and
+     deadline tasks never move. Repeating chores skip a round rather than stack. Moves
+     go through one reschedule each, but are said once, as a short summary by day
+     ("Fri: 2, Sat: 3, Mon: 1"), with a way to see them.
+- Wording: reassurance, not instruction (the PDA shield's rules); never energy numbers; no
+  "you should". A break (B1) can be offered alongside it, not instead.
+- Ask Erin before building: how few is "a small number" (three?), whether the short list
+  replaces the morning list on such a day, and whether Themi may offer it on its own when
+  a day looks overloaded or only when asked.
+- Linked: #33 burnout recovery mode may fold into this once Erin's spec arrives.
+
+Tests: the pick (fixed times, medicine kept, the cap); the spread never puts a day over
+its budget and never moves a fixed date; one summary message; a scenario of the
+2026-10-29 morning ("pare it down") in one exchange.
+
+Split (2026-10-30), with the user's direction: it's for anyone who gives a sign of being
+overwhelmed, in any words, not only Erin, and not only when asked by name.
+
+### O1a · Idea #94: when it's too much, a few things now (anyone, any words)
+Status: [x] 2026-10-30
+Depends on: O1, F19c
+- Signals: the message's own words ("overwhelmed", "too much", "can't keep up", "pare it
+  down", "swamped", "drowning"...) put a line in the turn's context; `focus_now` is a core
+  tool, so the model has it whatever the router chose, for overwhelm in other words too.
+  The morning list (several nudges at once) gets a "Too much today" button.
+- `focus_now`: at most three of today's open things (due or overdue, not put off or
+  waiting for the chart): medicines always, then ones with a time today, then urgent and
+  important (T1), then the lightest. One message: those few, and a line that the rest are
+  kept, with [Spread them out] [Leave them for now] (two options, no demand).
+- Wording through the PDA shield; never energy; no "should".
+
+Tests: the pick (medicine kept, the cap, the order); the signal line for overwhelm words,
+none otherwise; the button on the morning list; a scenario for each of the family.
+
+Notes (2026-10-30):
+- `themi.core.focus`: `Focus.pick` takes the day summary's own list for today
+  (`DaySummary.due`, made public): due or overdue, not put off past today, not waiting
+  for the chart. Order: medicines, a time today, `priority.rank` (T1), effort. Three at
+  most; every medicine, even past three.
+- Signals: `focus.overwhelmed(text)` (OVERWHELM words) adds "What X's message signals:
+  they sound overwhelmed..." to the turn (`build_turn(signals=)`). Nothing in it is
+  about one person. `focus_now` isn't in a group, so it's core and always sent.
+- The message goes as it is (kind "focus"); the tool marks the turn answered, so a
+  long reply after it isn't sent (bug #89's rule).
+- How few: each person's setting (`members.focus_count`, migration 0087; 1-10, three by
+  default; settings page), the family's answer. Settled by default: the morning list
+  stays, with a "Too much today" button; Themi offers it when someone's words say it's too much, and
+  doesn't start it from its own reading of the day (energy, load). That last could be a
+  follow-up.
+- Evals (2026-10-31, gemini-3.5-flash-lite, one run; `results/gemini-groups-20261031-0228`):
+  66/73 (90%), PDA-safe 98.6%. New cases: focus-overwhelmed passed; focus-husband-own-
+  words called focus_now for words the signal list lacks (it scored "no reply"; the
+  scorer now counts a tool's own answer, `scoring.ANSWER_KINDS`). Failing as before:
+  twin-break-lie-down, twin-pause-tonight. Failing this once, all passed 3/3 on 10-30 and
+  touch none of today's tools: energy-plumber, energy-medium-day, remember-birthday.
+  task-registration: a whole reply in quotes lost them (#98) and its opening title read
+  as an order; fixed (`Agent._titles_quoted`). The daily quotas ran out before
+  focus-pare-and-move, focus-not-for-soup, snooze-to-tomorrow-afternoon,
+  snooze-shared-task, what-happened-yesterday, task-done-warm-word and
+  twin-rule-or-chore-towels: run `make evals EVAL_ARGS="-k 'focus or snooze or yesterday
+  or warm or towels or energy-plumber or energy-medium-day or remember-birthday or
+  registration'"` when the quota is back.
+- The rest (2026-10-31, a test key in its own project; `results/gemini-groups-20261031-0255`):
+  13/14, PDA-safe 100%. All eight new cases passed (focus 4/4: the pare-and-move spread at
+  once, 'too much salt' didn't call focus_now; both snoozes; yesterday; the warm word), and
+  task-registration with its title quoted. energy-plumber and energy-medium-day passed:
+  last run's misses were noise. remember-birthday failed again: no group was chosen,
+  the model called add_calendar_event anyway (refused), asked for the calendar group
+  with more_tools, and added it (remember_fact too). Not today's tools; a follow-up.
+- The test key and the family's key had shared one Google project, so the evals spent
+  Themi's own daily quota (2026-10-30 evening). The test key is in its own project now.
+- Router (offline, 174 cases): word lists 97/111 (87%), median 35 tools, after
+  "yesterday" joined the calendar group's words. With embeddings at 0.725: 110/111,
+  37 tools; the threshold stays (the one miss is P7b's email-not-urgent).
+- Setup: restart (applies 0087).
+
+### O1b · Idea #94: when it's too much, the rest spread out under a daily budget
+Status: [x] 2026-10-30
+Depends on: O1a
+- The rest move to the next days, the most pressing first, each to the first day under a
+  budget (open things due that day, chore rounds included): the person's setting, or by
+  default what they usually get done in a day (median of the last four weeks, 2 to 8, 4
+  with no history).
+- Never moved: medicines, deadline chores. A repeating chore goes to its next round
+  rather than stack. A shared task is put off for them alone (F19c) to that day, so it
+  stays with the other.
+- From [Spread them out], or at once when they asked for the rest to be moved (focus_now
+  with spread). Said once, by day, with the names.
+
+Tests: no day over budget; fixed ones stay; a chore skips to its next round; a shared one
+stays on the other's list; the 2026-10-29 morning ("pare it down") in one exchange.
+
+Notes (2026-10-30):
+- `Focus.spread_now`: each day's load (`DaySummary.due` for that day) counted before
+  anything moves; the rest in pick order to the first of the next 14 days under budget
+  (else the least loaded). Moves are `TaskBoard.reschedule(..., interactive=True)`, so
+  the wall and Google Tasks follow. A repeating chore goes to its next round (no missed
+  run is recorded). A shared task gets the person's own snooze (F19c) to 9 am that day:
+  its due date and the other's list are untouched. Medicines and deadline chores stay,
+  said in a line.
+- `budget`: `members.day_budget` (migration 0086; settings page; 0 by default), else the
+  median of things done per day (`done_between`) over the four weeks before today, 2-8,
+  or 4 with none.
+- The offer is [Spread them out] [Leave them for now]; Leave edits to "The other N stay
+  where they are; nothing's dropped." focus_now's `spread` does it at once.
+- "No more than N on a day" counts what's due that day; a chore's next round can still
+  land on a full day.
+- Not run: the model evals.
+- Setup: restart (applies 0086).
+
 ### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
 Default morning, afternoon, and evening, but customizable number of routines and when they
@@ -6020,3 +6335,105 @@ Notes (2026-10-30):
   tasks won't work (the app and the web still do).
 - Setup: restart (applies 0081). Accounts already linked with Google Tasks need nothing
   more.
+
+### GK1 · Groceries said to Google Home, from Google Keep
+Status: [x] 2026-10-30
+Depends on: G1, GT1a
+Asked by Michael, 2026-10-30. "Hey Google, add 14oz can of tomatoes to my shopping list"
+goes to Google Keep, never Google Tasks, so GT1a doesn't see it. Google ended other list
+apps for the Assistant on 2023-06-20; Gemini's lists work only with Keep. Google's Keep API
+is Workspace-only: a personal account asking for `keep.readonly` gets "Error 400:
+invalid_scope" (tried 2026-10-30). The family chose the unofficial route, as with
+OurGroceries.
+
+Build:
+- An optional dependency, `gkeepapi` (MIT, unofficial; `pip install 'themi[keep]'`), imported
+  only when the sync first runs. It signs in with a Google master token: a powerful
+  credential that doesn't expire. Kept encrypted per person, never logged, used only for
+  Keep. Without the library, the sync logs and waits.
+- Linking, per person, from the command line: `themi keep link <name>` asks for the Google
+  address and the `oauth_token` cookie from Google's EmbeddedSetup page, exchanges it for a
+  master token (gpsoauth), checks it by reading Keep, shows the lists found, and stores the
+  token and which list to watch (default "Shopping list"). `themi keep unlink <name>`.
+- A job every 2 minutes: for each linked person, the watched list's unchecked items go on
+  Themi's grocery list as theirs, like items added in the OurGroceries app (G1: what the
+  family adds in its own lists isn't staged), then are checked off in Keep. An item already
+  needed isn't added twice. A failed check-off is retried without adding again; an item
+  someone unchecks in Keep is new again.
+- Keep failing (sign-in, network, a change at Google) is logged with backoff up to an hour,
+  per person, and never blocks the grocery list.
+
+Tests:
+- The sync against a fake Keep: new items added and checked off, already-needed items not
+  doubled, a failed check-off not re-added, an unchecked item added again, Keep down with
+  backoff, people without Keep left alone, the library missing.
+- Linking: the token stored encrypted, a wrong list name refused, unlink.
+
+Notes (2026-10-30):
+- `themi.connectors.gkeep`: `GKeepAccount` wraps gkeepapi 0.17 in threads (it's synchronous),
+  signs in once and syncs incrementally after; any library error drops the session so the
+  next call signs in again. `exchange_token` uses gpsoauth (it comes with gkeepapi). Lists
+  are matched by title, ignoring case; trashed lists are skipped.
+- `themi.core.keep_groceries`: `KeepLinks` (migration 0082: `keep_accounts`, the master token
+  encrypted with the device id it was made for; `keep_items`, what was taken) and
+  `KeepGroceries`, job `groceries.keep` every 2 minutes, wired whenever Themi runs; it does
+  nothing until someone links. Items go straight onto the list with `GroceryList.add`, like
+  the OurGroceries mirror's, so no card; the mirror then sends them to OurGroceries.
+  Checked off, not deleted, so Keep keeps a trail. An item with no name Themi can keep (all
+  emoji) is left in Keep until it's edited.
+- Linking reads the list before saving, and says how many items are waiting; a wrong list
+  or a bad cookie saves nothing. A re-link takes effect at the next run, no restart.
+- No message is sent when an item comes in, as with OurGroceries.
+- Not checked against the real Keep yet: the first `themi keep link` is the test.
+- Setup: `pip install -e '.[keep]'`, restart (applies 0082), then `themi keep link <name>`
+  for Erin and Michael. Erin's Google account also lacks the Google Tasks scope (GT1a), so
+  "add a task" in her voice isn't read until she links again.
+
+### GK2 · Themi's grocery list shown in Keep, both ways
+Status: [x] 2026-10-30
+Depends on: GK1
+Asked by Michael, 2026-10-30, after GK1 worked: the list Themi keeps should appear in Keep
+too. Decided: Themi always wins when both sides changed.
+
+Build:
+- Each linked person's watched Keep list shows Themi's grocery list (the needed items),
+  unchecked. With two people linked, both lists show it; a change in either counts.
+- From Keep, as with OurGroceries (G1): an unchecked item Themi doesn't know is added (the
+  speaker, or someone typing in Keep) and stays there as that item, no longer checked off;
+  one already on the list is a duplicate and is deleted from Keep. Checking an item off is
+  "bought"; deleting it is "removed"; unchecking one checked off is "needed again".
+- To Keep: an item needed in Themi with no item in Keep is added; bought in Themi is checked
+  off; removed in Themi is deleted.
+- Themi wins: a Keep change counts only if Themi hasn't changed that item since the last
+  sync. Keep can drop a write (seen 2026-10-30: a check-off that didn't stick), so Themi's
+  writes stay unconfirmed until a read shows them; an unconfirmed write that isn't there is
+  made again, never read as someone's change.
+
+Tests:
+- Speaker items added and kept; duplicates deleted; checked off in Keep is bought, deleted is
+  removed, unchecked is needed again; Themi's adds, buys and removes reach Keep.
+- Themi wins over a Keep change to the same item; a dropped add or check-off is made again,
+  not taken as a delete or an uncheck; two people's lists stay in step.
+
+Notes (2026-10-30):
+- Migration 0083 rebuilds `keep_items`: each Keep item Themi knows, `shown` (stands for a
+  `grocery_list` row while it's needed), `done` (checked off for a bought item) or
+  `skipped`, and `confirmed` (a read has shown Themi's last write). GK1's rows are dropped;
+  the items they name are checked off in Keep and stay so. Re-linking forgets them too.
+- `KeepAccount` is now `items` (all, with `checked`) and `apply` (adds, check-offs and
+  deletes in one gkeepapi sync, returning the new ids). GK1's `unchecked`/`check_off` went.
+- `KeepGroceries.sync`: pull, then push, then one write. Pull: unknown unchecked items are
+  new (a duplicate of a needed item already shown is deleted); a shown item checked off
+  while still needed is bought (and the pantry has it, as with OurGroceries); a confirmed
+  shown item gone is removed; a confirmed done item unchecked is needed again; an
+  unconfirmed one is written again instead. Push, in list order: needed with no shown
+  item, added; shown but no longer needed, checked off if bought, else deleted.
+- Themi wins because Keep's changes are read against the row Themi still has: once Themi
+  has bought or removed a row, a Keep change to its item is overwritten by the push.
+- Unknown items already checked off (Keep's history) are left alone. Checked-off items
+  aren't cleared from Keep; Keep folds them away.
+- A failed write keeps what was read from Keep; the write is worked out again next time.
+- With two people linked, a change in one Keep reaches the other on its next run.
+- Setup: restart (applies 0083). The first sync puts the whole grocery list into each
+  linked Keep list.
+

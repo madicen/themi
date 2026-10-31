@@ -178,6 +178,26 @@ dishwasher routine when the dishwasher starts" on the website's "What Themi does
 makes that automatic. Each evening, a week with fewer runs than usual feeds the energy model
 as device activity, as words, never a score.
 
+### Groceries said to Google Home, through Google Keep (optional, a trial)
+
+"Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API
+isn't open to personal accounts, so Themi reads Keep with the unofficial `gkeepapi` library
+and a master token per person. That token can do nearly anything to its Google account and
+doesn't expire: Themi keeps it encrypted and uses it only for Keep. The library may break if
+Google changes Keep; Themi then logs it and retries, and the grocery list carries on.
+
+1. Install the library: `pip install -e '.[keep]'`.
+2. For each person, run `themi keep link <name>` (add `--list "<name>"` if their list isn't
+   called "Shopping list") and follow its steps: sign in at Google's EmbeddedSetup page and
+   paste the `oauth_token` cookie. Themi needn't be restarted.
+
+Every 2 minutes, each linked person's Keep list and the grocery list are kept in step, both
+ways. What the speaker (or anyone) adds in Keep joins the grocery list as theirs; checking
+an item off in Keep means bought, deleting it means removed. Themi's own changes show in
+Keep the same way. When both sides changed an item, Themi's change wins. The first sync
+puts the whole grocery list into Keep. `themi keep unlink <name>` stops it; removing the
+"Android" sign-in on the Google account's security page revokes the token.
+
 ### In the cloud
 
 `docs/DEPLOY.md` covers a small cloud server, Tailscale Funnel for the website, nightly

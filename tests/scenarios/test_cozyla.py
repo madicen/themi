@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 
@@ -54,7 +56,8 @@ async def test_a_chore_ticked_on_the_chart_isnt_asked_about(
     fake_cozyla.tick_chore(uid, "m-erin", date(2026, 10, 21))
     await scenario.run_periodic("cozyla.chores")
     await scenario.advance(hours=6, minutes=1)  # 18:01
-    assert not any("kitchen" in t for t in scenario.inbox("Erin")[before:])
+    later = [t for t in scenario.inbox("Erin")[before:] if not t.startswith("Ticked off")]
+    assert not any("kitchen" in t for t in later)
     assert board.get(kitchen.id).due_on == date(2026, 10, 28)
 
 
@@ -109,3 +112,51 @@ async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCo
     await board.create(erin, "Call the vet", "call", 2, assignee=erin)
     await scenario.run_periodic("cozyla.sync")
     assert [t["todoTitle"] for t in fake_cozyla.in_list(scenario.cozyla_list)] == ["Call the vet"]
+
+
+def _praised(text: str, titles: str) -> bool:
+    from themi.core.tasks import PRAISE
+
+    return any(text == f"Ticked off on the wall: {titles}. {word}" for word in PRAISE)
+
+
+async def test_ticks_on_the_wall_get_a_warm_word_together(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F19b, the family's answer: "Ticks on the wall should get a nice work message"."""
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    for title in ("Call the vet", "Book the dentist"):
+        await board.create(erin, title, "call", 2, assignee=erin, nudge=False)
+    await scenario.run_periodic("cozyla.sync")
+    for todo in fake_cozyla.in_list(scenario.cozyla_list):
+        fake_cozyla.tick(todo["todoId"])
+    await scenario.run_periodic("cozyla.sync")
+    assert not any(t.startswith("Ticked off") for t in scenario.inbox("Erin"))  # a moment
+    await scenario.advance(minutes=2)
+    ticked = [t for t in scenario.inbox("Erin") if t.startswith("Ticked off")]
+    assert len(ticked) == 1
+    assert _praised(ticked[0], "Call the vet and Book the dentist")
+
+
+@pytest.mark.parametrize("case", ["off", "either of them"])
+async def test_no_warm_word_when_its_off_or_whose_tick_is_unknown(
+    scenario: Scenario, fake_cozyla: FakeCozyla, case: str
+) -> None:
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    task = await board.create(erin, "Bring bins in", "errand", 1, assignee=erin, nudge=False)
+    if case == "off":
+        scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+    else:
+        await board.make_either(task.id)  # either of them could have ticked it
+    await scenario.run_periodic("cozyla.sync")
+    for todo in fake_cozyla.in_list(scenario.cozyla_list):
+        fake_cozyla.tick(todo["todoId"])
+    await scenario.run_periodic("cozyla.sync")
+    await scenario.advance(minutes=2)
+    assert board.get(task.id).status == "done"
+    for name in ("Erin", "Husband"):
+        assert not any(t.startswith("Ticked off") for t in scenario.inbox(name))

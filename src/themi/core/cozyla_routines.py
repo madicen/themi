@@ -230,7 +230,9 @@ class CozylaRoutines:
                 if not self._first_time(f"{record.routine_id}_{record.day}"):
                     continue
                 doer = self.store.get_member(task.assignee) if task.assignee else self._admin()
-                await self.board.complete(task.id, doer)
+                await self.board.complete(
+                    task.id, doer, wall=bool(task.assignee) and not task.shared
+                )
                 self._caught_up(task.id)
                 break
 

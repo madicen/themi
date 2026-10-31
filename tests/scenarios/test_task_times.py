@@ -71,7 +71,7 @@ async def test_reminders_moved_to_tomorrow_wait_for_tomorrow(scenario: Scenario)
         "Erin",
         "remind me at 2",
         "snooze_task",
-        {"task_id": tutoring.id, "until": "14:00"},
+        {"task_id": tutoring.id, "until": "14:00", "day": ""},
     )
     result = await call(
         scenario, "Erin", "They should have been for 2 tomorrow", "reschedule_task",
@@ -107,9 +107,55 @@ async def test_earlier_on_the_same_day(scenario: Scenario) -> None:
 async def test_put_off_to_another_day_says_which(scenario: Scenario) -> None:
     tea = await reminder(scenario, "Drink green tea", date(2026, 10, 21), "10:00")
     result = await call(
-        scenario, "Erin", "tomorrow at 8", "snooze_task", {"task_id": tea.id, "until": "08:00"}
+        scenario,
+        "Erin",
+        "tomorrow at 8",
+        "snooze_task",
+        {"task_id": tea.id, "until": "08:00", "day": ""},
     )
     assert result == "No rush on that one (Drink green tea). It waits until Thu 22 Oct, 8 am."
+
+
+async def test_put_off_to_tomorrow_afternoon_waits_for_tomorrow(scenario: Scenario) -> None:
+    """Bugs #104, #106: at 1:37 pm, "snooze the green tea to tomorrow afternoon" ran
+    snooze_task with until 14:00 (it took only a time), so the tea came back at 2 pm that
+    day, the reply said "2 pm tomorrow", and the day's summary still had it."""
+    tea = await reminder(scenario, "Drink green tea", date(2026, 10, 21), "13:00")
+    await until(scenario, 21, 13, 37)
+    asked = len(nudges(scenario, "green tea"))
+    result = await call(
+        scenario, "Erin", "Snooze the green tea to tomorrow afternoon", "snooze_task",
+        {"task_id": tea.id, "until": "14:00", "day": "2026-10-22"},
+    )  # fmt: skip
+    assert result == "No rush on that one (Drink green tea). It waits until Thu 22 Oct, 2 pm."
+    summary = scenario.app.services.day_summary
+    assert summary is not None
+    assert "green tea" not in (summary.text(scenario.member("Erin"), date(2026, 10, 21)) or "")
+    await until(scenario, 21, 14, 1)
+    await until(scenario, 22, 13, 59)
+    assert len(nudges(scenario, "green tea")) == asked
+    await until(scenario, 22, 14, 1)
+    assert scenario.inbox("Erin")[-1] == (
+        "Was due yesterday: Drink green tea. Done already, or later?"
+    )
+
+
+async def test_put_off_until_later_today_says_today(scenario: Scenario) -> None:
+    """Bug #104: the result said "until 2 pm", and the reply made it "2 pm tomorrow"."""
+    tea = await reminder(scenario, "Drink green tea", date(2026, 10, 21), "10:00")
+    result = await call(
+        scenario, "Erin", "at 2", "snooze_task", {"task_id": tea.id, "until": "14:00", "day": ""}
+    )
+    assert result == "No rush on that one (Drink green tea). It waits until 2 pm today."
+
+
+async def test_put_off_to_a_day_without_a_time_is_its_morning(scenario: Scenario) -> None:
+    tea = await reminder(scenario, "Drink green tea", date(2026, 10, 21), "10:00")
+    result = await call(
+        scenario, "Erin", "Friday", "snooze_task",
+        {"task_id": tea.id, "until": "", "day": "2026-10-23"},
+    )  # fmt: skip
+    assert result == "No rush on that one (Drink green tea). It waits until Fri 23 Oct, 9 am."
 
 
 async def test_a_repeating_chores_time_is_every_rounds(scenario: Scenario) -> None:

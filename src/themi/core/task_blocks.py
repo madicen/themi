@@ -202,7 +202,7 @@ class TaskBlocks:
                 "SELECT MAX(read_at) FROM calendar_reads WHERE member_id = ?", (member.id,)
             )
             # Gone only from a read that would have had it: made since the block, and before
-            # the block ended (reads start from "now", so a block that's over drops out).
+            # the block ended (reads keep only a week back, so an old block drops out).
             if read and row["created_at"] < read < row["ends_at"] and member.tracks("calendar"):
                 self.db.execute(
                     "UPDATE task_blocks SET removed_at = ? WHERE id = ?",

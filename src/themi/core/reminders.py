@@ -38,6 +38,7 @@ log = logging.getLogger(__name__)
 
 CADENCE = {"high": 1, "normal": 2, "low": 7}  # days between overdue reminders
 DAY_END_BEFORE_QUIET = timedelta(hours=2)
+DAY_END_KEY = "day-end-"
 DAY_END_TEXT = "Still open today: {items}. Done any of them already? Tomorrow's fine too."
 MEDICINE = re.compile(
     r"\b(?:pills?|meds?|medicine|medication|drops|cream|tabs?|insulin|dose)\b", re.IGNORECASE
@@ -68,6 +69,7 @@ class Reminders:
     def install(self) -> None:
         self.services.tools.register(set_task_importance)
         self.services.tools.register(add_reminder)
+        self.services.outbox.refreshers["task_summary"] = self._as_it_stands
 
     # ----- the end of the day ---------------------------------------------------------------
 
@@ -92,26 +94,38 @@ class Reminders:
                 "INSERT INTO day_end_sent (member_id, day) VALUES (?, ?)",
                 (member.id, today.isoformat()),
             )
-            left = [
-                t.title
-                for t in self.board.open_for(member)
-                if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
-                and not self._put_off(t)
-                and t.importance != "low"
-                and not self.board.held(t, member)
-            ]
-            if not left:
+            text = self._day_end_text(member, today)
+            if text is None:
                 continue
             await self.services.outbox.send(
                 member,
-                DAY_END_TEXT.format(items=and_list(left)),
+                text,
                 priority=Priority.NORMAL,
                 kind="task_summary",  # not a nudge, so it doesn't wait its turn (idea #11)
                 deadline=quiet - timedelta(minutes=15),
-                dedupe_key=f"day-end-{today}",
+                dedupe_key=f"{DAY_END_KEY}{today}",
             )
             sent += 1
         return sent
+
+    def _day_end_text(self, member: Member, today: date) -> str | None:
+        left = [
+            t.title
+            for t in self.board.open_for(member)
+            if today in self.board.round_days(t)  # Sunday, for a Saturday-or-Sunday round
+            and not self._put_off(t, member)
+            and t.importance != "low"
+            and not self.board.held(t, member)
+        ]
+        return DAY_END_TEXT.format(items=and_list(left)) if left else None
+
+    def _as_it_stands(self, member: Member, row: dict[str, Any]) -> str | None:
+        """A held end-of-day list, written again as it goes (bug #99: the laundry, done at
+        9:05, was in the list written at 7:36 and sent at 9:15). Other lists go as they are."""
+        key = row["dedupe_key"] or ""
+        if not key.startswith(DAY_END_KEY):
+            return str(row["text"])
+        return self._day_end_text(member, date.fromisoformat(key.removeprefix(DAY_END_KEY)))
 
     def _quiet_starts(self, member: Member, now: datetime) -> datetime:
         at = member.quiet_start
@@ -147,7 +161,11 @@ class Reminders:
                 if task.shared
                 else [self._doer(task)]
             )
-            people = [p for p in people if p is None or not self.board.held(task, p)]
+            people = [
+                p
+                for p in people
+                if p is None or not (self.board.held(task, p) or self._put_off(task, p))
+            ]
             if not people:
                 continue  # waiting its turn for the chart (C2d): raised once it comes up
             for person in people:
@@ -159,12 +177,10 @@ class Reminders:
             raised += 1
         return raised
 
-    def _put_off(self, task: Task) -> bool:
-        """Put off until a time that hasn't come ("tonight at 9", #18): not raised before."""
-        until = self.db.scalar(
-            "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
-        )
-        return bool(until) and datetime.fromisoformat(until) > clock.now()
+    def _put_off(self, task: Task, member: Member | None = None) -> bool:
+        """Put off until a time that hasn't come ("tonight at 9", #18): not raised before.
+        With a member, their own put-off of a shared task too (F19c)."""
+        return self.board.put_off_until(task, member) is not None
 
     def _doer(self, task: Task) -> Member | None:
         return self.store.get_member(task.assignee) if task.assignee is not None else None
@@ -265,10 +281,13 @@ async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
     "A message at a time they ask for, about something that isn't a task to tick off: extra "
     "reminders before an event ('remind me at 2 and 3 about tutoring': one call each), or "
     "'remind me at 5 that the plumber's coming'. No Done or Later, and nothing goes on their "
-    "list. Something they need to do ('remind me to call the vet') is create_task. date: "
-    "YYYY-MM-DD, read from the whole conversation (an event's reminders are on its day); "
-    "time: HH:MM, 24-hour; text: short, in their words, with the event's time if it has one "
-    "('Tutoring at 4 pm').",
+    "list. Also a small thing of their own at a time they give, where a nudge is all they "
+    "want ('remind me to drink green tea on Friday afternoon', 'remind me to stretch at 3'). "
+    "A job to get done or keep track of, or one with no time ('remind me to call the vet', "
+    "'remind me to pay the water bill'), is create_task. date: YYYY-MM-DD, read from the "
+    "whole conversation (an event's reminders are on its day); time: HH:MM, 24-hour "
+    "(morning 09:00, afternoon 14:00, evening 18:00 when they give no hour); text: short, "
+    "in their words, with the event's time if it has one ('Tutoring at 4 pm').",
     {"text": {"type": "string"}, "date": {"type": "string"}, "time": {"type": "string"}},
 )
 async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:

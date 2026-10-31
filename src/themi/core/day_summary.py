@@ -9,7 +9,8 @@
 
 Events come from K1's calendar reader; tasks from the task board: anything due that day
 (or still open from before, for today), the time of a check-in, the week's amount of a
-plan. Chores waiting their turn for the chart (C2d) are left out.
+plan. Chores waiting their turn for the chart (C2d) are left out. A day that's gone also
+has what was done, at the time it was done, and what's still open from it (F19a).
 """
 
 from __future__ import annotations
@@ -50,7 +51,7 @@ class DaySummary:
 
     def items(self, member: Member, day: date, *, partner: bool = False) -> list[str]:
         """What's on, one line each, in the order of the day: all-day events, then events and
-        tasks with a time, then tasks for any time."""
+        tasks with a time (on a day gone by, what was done too), then tasks for any time."""
         tz = self._tz()
         start = datetime(day.year, day.month, day.day, tzinfo=tz)
         lines: list[tuple[tuple[int, datetime], str]] = []
@@ -72,14 +73,24 @@ class DaySummary:
                     )
                     text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
                     lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
-        for task in self._due(member, day):
+        for task in self.due(member, day):
             at = self.board.time_of(task)
             when = (
                 datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
                 if at
                 else None
             )
-            lines.append(((1, when) if when else (2, start), self._task_line(task, day, at)))
+            text = self._task_line(task, day, at)
+            if day < self.today():
+                text += " (still open)"
+            lines.append(((1, when) if when else (2, start), text))
+        if day < self.today():  # bug #105: what happened that day, done things included
+            names = {m.id: m.name for m in self.services.store.list_members()}
+            for done in self.board.done_between(member, start, start + timedelta(days=1)):
+                by = f" by {names[done.by]}" if done.by not in (None, member.id) else ""
+                at = done.at.astimezone(tz)
+                text = f"{_clock(at.time())}: {done.task.title} (done{by})"
+                lines.append(((1, at), text))
         return [text for _, text in sorted(lines, key=lambda line: line[0])]
 
     def _shared_calendars(self) -> dict[str, str]:
@@ -92,13 +103,18 @@ class DaySummary:
         )
         return {r["calendar_id"]: r["name"] for r in rows}
 
-    def _due(self, member: Member, day: date) -> list[Task]:
+    def due(self, member: Member, day: date) -> list[Task]:
         """Tasks due that day (and, for today, ones still open from before). Chores waiting
-        their turn for the chart are left out today; on a later day they'll be up."""
+        their turn for the chart are left out today; on a later day they'll be up. So is one
+        put off past the day's end (bug #106: the tea snoozed to tomorrow was still on)."""
         today = self.today()
+        tz = self._tz()
+        ends = datetime(day.year, day.month, day.day, tzinfo=tz) + timedelta(days=1)
         found = []
         for task in self.board.open_for(member):
             if task.due_on is None or (day == today and self.board.held(task, member)):
+                continue
+            if (until := self.board.put_off_until(task, member)) is not None and until >= ends:
                 continue
             late = day == today and task.due_on < today and day not in self.board.round_days(task)
             if late or day in self.board.round_days(task):
@@ -198,7 +214,8 @@ def _clock(at: time) -> str:
 
 @tool(
     "day_summary",
-    "What's on someone's day: the events on their calendars and what's due. date: "
+    "What's on someone's day: the events on their calendars and what's due; for a day gone "
+    "by ('what happened yesterday?'), what was done too. date: "
     "YYYY-MM-DD from the local date in the context (empty for today). partner: true only "
     "when they ask about both of them or the partner ('what are we doing Saturday?'; "
     "theirs show when they share them). It's sent to them as it is: don't say it back; a "

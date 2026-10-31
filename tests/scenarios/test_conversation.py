@@ -315,3 +315,27 @@ def test_a_busy_reply_doesnt_promise_a_retry() -> None:
     from themi.core.prompts import STABLE_SYSTEM
 
     assert "isn't retried by Themi" in STABLE_SYSTEM
+
+
+async def test_a_reply_in_quotes_is_sent_without_them(scenario: Scenario) -> None:
+    """Bugs #98 and #100 ("why are there quotes around the whole thing?")."""
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Refill whoosh litter", "errand", 1, assignee=erin)
+    scenario.primary.queue_text(f"'Task {task.id} is set up for both of you.'")
+    replies = await scenario.say("Erin", "For both of us, refill whoosh litter")
+    assert replies == ['"Refill whoosh litter" is set up for both of you.']
+
+
+async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: Scenario) -> None:
+    """The evals of 2026-10-31: '"Renew the car registration is on both lists..."' lost its
+    quotes (#98), and the title then read as a command to renew it."""
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Renew the car registration", "errand", 1, assignee=erin)
+    scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
+    scenario.primary.queue_text('"Renew the car registration is done now."')
+    replies = await scenario.say("Erin", "I renewed the car registration")
+    assert replies == ['"Renew the car registration" is done now.']

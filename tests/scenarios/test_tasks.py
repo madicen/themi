@@ -345,7 +345,9 @@ async def test_put_off_until_a_time_waits_for_that_time(scenario: Scenario) -> N
     task = await board.create(
         erin, "Mimi pill", "physical", 1, date(2026, 10, 21), assignee=erin, nudge=False
     )
-    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "21:00"})
+    scenario.primary.queue_tool_call(
+        "snooze_task", {"task_id": task.id, "until": "21:00", "day": ""}
+    )
     scenario.primary.queue_text("Okay, at 9.")
     await scenario.say("Erin", "I'll do it tonight around 9")
     assert "waits until 9 pm" in str(scenario.primary.last_request.messages[-1].content[0])
@@ -371,7 +373,7 @@ async def test_put_off_without_a_time_is_a_few_hours(scenario: Scenario) -> None
     board = scenario.app.services.taskboard
     assert board is not None
     task = await board.create(erin, "Mimi pill", "physical", 1, assignee=erin, nudge=False)
-    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": ""})
+    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "", "day": ""})
     scenario.primary.queue_text("Later then.")
     await scenario.say("Erin", "later")
     assert board.get(task.id).status == "snoozed"
@@ -465,6 +467,51 @@ async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
     board = scenario.app.services.taskboard
     assert board is not None
     await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 21))
+    await scenario.advance(hours=1)
+    await scenario.tap("Erin", "Done")
+    ((text, buttons),) = _task_edits(scenario, "Erin")
+    assert not buttons and _praised(text, "Book the dentist")
+
+
+def _praised(text: str, title: str) -> bool:
+    """F19b (Erin's idea #102): "Marked done: X." and a short warm word from the set."""
+    from themi.core.tasks import PRAISE
+
+    return any(text == f"Marked done: {title}. {word}" for word in PRAISE)
+
+
+async def test_done_in_chat_says_a_warm_word_and_the_wall_doesnt(scenario: Scenario) -> None:
+    """F19b: "when a user completes a task, Themi should send a confirmation message along
+    with a brief 'good job!'". Done on the wall, nothing new is said."""
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    vet = await board.create(erin, "Call the vet", "call", 1, date(2026, 10, 21), nudge=False)
+    scenario.primary.queue_tool_call("complete_task", {"task_id": vet.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "I called the vet")
+    result = [
+        b.content
+        for m in scenario.primary.last_request.messages
+        for b in m.content
+        if isinstance(b, ToolResult)
+    ][-1]
+    assert _praised(str(result), "Call the vet")
+    bins = await board.create(erin, "Bring bins in", "errand", 1, date(2026, 10, 21))
+    await scenario.advance(hours=1)
+    assert await board.complete(bins.id, erin) == "Marked done: Bring bins in. Thank you."
+
+
+async def test_the_warm_word_can_be_turned_off(scenario: Scenario) -> None:
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+    await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))
     await scenario.advance(hours=1)
     await scenario.tap("Erin", "Done")
     assert _task_edits(scenario, "Erin") == [("Marked done: Book the dentist. Thank you.", False)]

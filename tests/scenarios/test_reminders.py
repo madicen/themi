@@ -5,8 +5,9 @@ her end-of-day message comes from 19:30; her husband's start at 23:00 (from 21:0
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from tests.scenarios.harness import Scenario
 from themi import clock
@@ -15,6 +16,7 @@ from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)
+PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def board(scenario: Scenario) -> TaskBoard:
@@ -66,6 +68,36 @@ async def test_the_end_of_the_day_lists_whats_still_open(scenario: Scenario) -> 
         r["member_id"] == scenario.member("Husband").id
         for r in scenario.app.db.query("SELECT member_id FROM outbox WHERE text LIKE 'Still%'")
     )
+
+
+async def test_the_end_of_the_day_list_is_as_it_stands_when_it_goes(scenario: Scenario) -> None:
+    """Bug #99 ("why does it think cycle the laundry isn't done right after saying it was?"):
+    the list was written at 7:36 pm and held until 9:15; the laundry was done at 9:05, and
+    the list went out as written."""
+    erin = scenario.member("Erin")
+    laundry = await task(scenario, "Cycle the laundry", WED)
+    await task(scenario, "Book the dentist", WED)
+    scenario.app.outbox.pauses.pause(erin, "tasks", datetime(2026, 10, 21, 21, 15, tzinfo=PACIFIC))
+    await at(scenario, WED, 19, 36)
+    await at(scenario, WED, 21, 5)
+    await board(scenario).complete(laundry.id, erin)
+    await at(scenario, WED, 21, 16)
+    await scenario.app.outbox.flush()
+    sent = [t for t in scenario.inbox("Erin") if t.startswith("Still open today")]
+    assert sent == [
+        "Still open today: Book the dentist. Done any of them already? Tomorrow's fine too."
+    ]
+
+
+async def test_an_end_of_the_day_list_with_nothing_left_isnt_sent(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    laundry = await task(scenario, "Cycle the laundry", WED)
+    scenario.app.outbox.pauses.pause(erin, "tasks", datetime(2026, 10, 21, 21, 15, tzinfo=PACIFIC))
+    await at(scenario, WED, 19, 36)
+    await board(scenario).complete(laundry.id, erin)
+    await at(scenario, WED, 21, 16)
+    await scenario.app.outbox.flush()
+    assert not any(t.startswith("Still open today") for t in scenario.inbox("Erin"))
 
 
 async def test_overdue_reminders_get_more_specific(scenario: Scenario) -> None:

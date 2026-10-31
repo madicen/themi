@@ -94,8 +94,10 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
     form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
     home_connect = ctx.app.services.home_connect
-    if home_connect is not None:  # and to Home Connect's, to link it (H1)
-        form_targets = f"{form_targets} {_origin(home_connect.client.config.base_url)}".strip()
+    if home_connect is not None:  # and to Home Connect's and SingleKey ID's, to link it (H1)
+        config = home_connect.client.config
+        hops = f"{_origin(config.base_url)} {_origin(config.sign_in_url)}"
+        form_targets = f"{form_targets} {hops}".strip()
     web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @web.middleware("http")
@@ -294,6 +296,9 @@ def core_routes(kit: Kit) -> APIRouter:
                 phrasing=str(form.get("phrasing", "")) or None,
                 phrasing_notes=str(form.get("phrasing_notes", "")),
                 checkin_reviews=form.get("checkin_reviews") == "on",
+                done_praise=form.get("done_praise") == "on",
+                day_budget=as_int(form.get("day_budget")),
+                focus_count=as_int(form.get("focus_count")),
                 chart_limit=as_int(form.get("chart_limit")),
                 chart_counts_shared=form.get("chart_counts_shared") == "on",
                 calendar_details=str(form.get("calendar_details", "")) or None,

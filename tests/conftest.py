@@ -22,6 +22,7 @@ pytest_plugins = [
     "tests.fakes.home_connect",
     "tests.fakes.travel",
     "tests.fakes.ourgroceries",
+    "tests.fakes.keep",
     "tests.fakes.s3_api",
     "tests.scenarios.harness",
     "tests.fixtures.web",

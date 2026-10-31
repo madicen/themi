@@ -125,11 +125,15 @@ async def test_nudges_waiting_for_the_morning_go_as_one_list(scenario: Scenario)
         "This morning:\n- Due today: Clean kitchen\n- Due today: Bring bins in\n"
         "- Due today: Call the vet\nTap any that are done; the rest can wait."
     ]
-    assert scenario.last_buttons("Erin") == ["✓ Clean kitchen", "✓ Bring bins in", "✓ Call the vet"]
+    assert scenario.last_buttons("Erin") == [
+        "✓ Clean kitchen", "✓ Bring bins in", "✓ Call the vet", "Too much today",
+    ]  # fmt: skip
 
     await scenario.tap("Erin", "✓ Bring bins in")
     edit = scenario.edits("Erin")[-1]
-    assert edit["text"] == (
+    ticked, rest = edit["text"].split("\n\n")  # bug #103: a tick only took the line away
+    assert ticked.startswith("Marked done: Bring bins in. ")  # and a warm word (F19b)
+    assert rest == (
         "This morning:\n- Due today: Clean kitchen\n- Due today: Call the vet\n"
         "Tap any that are done; the rest can wait."
     )
@@ -138,12 +142,15 @@ async def test_nudges_waiting_for_the_morning_go_as_one_list(scenario: Scenario)
     ] == [
         "✓ Clean kitchen",
         "✓ Call the vet",
+        "Too much today",  # O1a
     ]
     assert not any(t.startswith("Due today:") for t in await scenario.advance(hours=1))
 
     await scenario.tap("Erin", "✓ Clean kitchen")
     await scenario.tap("Erin", "✓ Call the vet")
-    assert scenario.edits("Erin")[-1]["text"] == "This morning's list: all done."
+    last = scenario.edits("Erin")[-1]["text"]
+    assert last.startswith("Marked done: Call the vet. ")
+    assert last.endswith(" This morning's list: all done.")
 
 
 async def test_later_in_the_day_nudges_still_come_one_at_a_time(scenario: Scenario) -> None:

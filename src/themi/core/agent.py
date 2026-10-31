@@ -34,6 +34,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import focus
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
@@ -102,6 +103,23 @@ HANDED_TO = (
 )
 SENTENCE = re.compile(r"(?<=[.!?])\s+")
 QUOTED = re.compile(r'"([^"\n]+)"')
+
+
+# Bugs #98, #100: '"Refill whoosh litter" is set up for both of you.' A whole reply in quotes
+# loses them, when that quote mark isn't used inside it too (an apostrophe doesn't count).
+WRAPPING = {'"': '"', "'": "'", "\u201c": "\u201d", "\u2018": "\u2019"}  # and curly ones
+APOSTROPHE = re.compile(r"(?<=\w)['\u2019](?=\w)")
+TICKED_TITLE = re.compile(r'`("[^"`\n]+")`')  # `"Unclog the robot vacuum"`
+
+
+def _unquoted(reply: str) -> str:
+    text = TICKED_TITLE.sub(r"\1", reply.strip())
+    while len(text) > 2 and WRAPPING.get(text[0]) == text[-1]:
+        inner = APOSTROPHE.sub("", text[1:-1])
+        if text[0] in inner or text[-1] in inner:
+            break
+        text = text[1:-1].strip()
+    return text
 
 
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
@@ -384,6 +402,7 @@ class Agent:
             timezone=timezone,
             calendars=services.calendar_context(member),
             lands=services.what_lands(member),
+            signals=[focus.SIGNAL] if focus.overwhelmed(text) else [],
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
@@ -420,10 +439,11 @@ class Agent:
                 call_system = f"{system}\n\n{twins}" if twins else system
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
-                    reply = response.text.strip() or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
-                    reply = self._whole_truth(_by_name(reply, self._task_title), ctx)
+                    reply = _by_name(reply, self._task_title)
+                    reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
                 used_tools = True
                 messages.append(response.message)
@@ -452,6 +472,23 @@ class Agent:
         ):
             recent.pop()
         return recent[-self.history :]
+
+    def _titles_quoted(self, reply: str, ctx: ToolContext) -> str:
+        """A line that opens with the title of a task the turn touched has it in quotes: a
+        title is often an order ("Renew the car registration is on both lists"), and the
+        PDA shield would take it for one (the evals of 2026-10-31, once #98's quotes went)."""
+        board = self.services.taskboard
+        if board is None or not ctx.tasks:
+            return reply
+        titles = sorted({board.get(i).title for i in ctx.tasks}, key=len, reverse=True)
+        lines = []
+        for line in reply.split("\n"):
+            for title in titles:
+                if line.lower().startswith(title.lower()) and not line[len(title) :][:1].isalnum():
+                    line = f'"{line[: len(title)]}"{line[len(title) :]}'
+                    break
+            lines.append(line)
+        return "\n".join(lines)
 
     def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
         """Each sentence saying a task went to someone is kept only if one of the tasks it

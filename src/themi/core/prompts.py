@@ -186,6 +186,7 @@ def build_turn(
     timezone: str,
     calendars: str = "",
     lands: str = "",
+    signals: Sequence[str] = (),
 ) -> str:
     items = "\n".join(f"- {i.summary}" for i in open_items) if open_items else "none"
     lines = []
@@ -206,6 +207,9 @@ def build_turn(
         else ""
     )
     lands_part = f"What lands with {member.name}, from their reactions: {lands}\n" if lands else ""
+    signals_part = (  # O1a: overwhelm, from the message's own words
+        f"What {member.name}'s message signals: {'; '.join(signals)}\n" if signals else ""
+    )
     return (
         "<context>\n"
         f"Talking with: {member.name}{' (admin)' if member.is_admin else ''}\n"
@@ -213,6 +217,7 @@ def build_turn(
         f"Themi's own messages wait for: {'; '.join(holds)}\n"
         f"How {member.name} seems: {energy_label}\n"
         f"How {member.name} likes things said: {phrasing}\n"
+        f"{signals_part}"
         f"{lands_part}"
         f"Open items:\n{items}\n"
         f"{calendar_part}"

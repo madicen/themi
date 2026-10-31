@@ -93,6 +93,35 @@ async def test_what_is_on_today_on_request(scenario: Scenario, linked: FakeGcal)
     assert replies[0] == "Thu 22 Oct:\n- 10-11 am: Tomorrow's thing"
 
 
+async def test_what_happened_yesterday(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #105 ("not even close"): "What happened yesterday?" gave only the one task still
+    open. The calendar was read from now on, so yesterday had no events, and what was done
+    was never in a summary."""
+    await erins_day(scenario, linked)
+    erin = scenario.member("Erin")
+    letter = await board(scenario).create(erin, "Post the letter", "errand", 1, WED, assignee=erin)
+    vet = next(t for t in board(scenario).open_for(erin) if t.title == "Call the vet")
+    run = next(t for t in board(scenario).open_for(erin) if t.title == "Go for a run")
+    clock.advance(datetime(2026, 10, 21, 14, 30, tzinfo=PACIFIC) - clock.now())
+    await board(scenario).complete(run.id, erin)
+    clock.advance(timedelta(minutes=30))
+    await board(scenario).complete(vet.id, erin)
+    clock.advance(datetime(2026, 10, 22, 15, 38, tzinfo=PACIFIC) - clock.now())
+    await scenario.run_periodic("calendar.busy")  # read again: from now on, it had no Wednesday
+    scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-21", "partner": False})
+    scenario.primary.queue_text("That was yesterday.")
+    replies = await scenario.say("Erin", "What happened yesterday?")
+    assert replies[0] == (
+        "Wed 21 Oct:\n"
+        "- 10-11 am: Dentist (at Smile Dental)\n"
+        "- 12-1 pm: Standup (video call)\n"
+        "- 2:30 pm: Go for a run (done)\n"
+        "- 3 pm: Call the vet (done)\n"
+        "- Post the letter (still open)"
+    )
+    assert board(scenario).get(letter.id).status == "open"
+
+
 async def test_the_summary_isnt_said_twice(scenario: Scenario, linked: FakeGcal) -> None:
     """Bug #89 ("why does this question result in two different day summary messages?"):
     the model wrote its own version of the day after the summary had gone."""

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
+    from themi.core.focus import Focus
     from themi.core.follow_ups import FollowUps
     from themi.core.google_tasks import GoogleTasksInbox
     from themi.core.groceries import GroceryList
@@ -161,6 +162,7 @@ class Services:
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
+    focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
     home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)

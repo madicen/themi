@@ -299,3 +299,69 @@ async def test_numbers_and_switches_sent_as_text_are_read_as_such(family: Seeded
     assert seen == [{"effect": -3, "share": 0.5, "flag": True, "ids": [4, 5], "word": "7"}]
     bad = await registry.run(ToolCall("2", "note", {**args, "effect": "lots"}), ctx)
     assert bad.is_error and bad.content.startswith("Invalid arguments")
+
+
+@pytest.mark.parametrize(
+    ("said", "sent"),
+    [  # bugs #98 and #100: the model put its whole reply in quotes
+        (
+            "\"'Copy and review the conversation with Fletcher' is done.\"",
+            "'Copy and review the conversation with Fletcher' is done.",
+        ),
+        (
+            "'\"Refill whoosh litter\" is set up for both of you.'",
+            '"Refill whoosh litter" is set up for both of you.',
+        ),
+        (
+            "'\"Move Mimi's box upstairs for Rosie\" is set up for both of you.'",
+            '"Move Mimi\'s box upstairs for Rosie" is set up for both of you.',
+        ),
+        ("“All done.”", "All done."),
+        (
+            'I\'ve assigned `"Unclog the robot vacuum"` to Michael.',
+            'I\'ve assigned "Unclog the robot vacuum" to Michael.',
+        ),
+        # Quotes that aren't around the whole reply stay.
+        ('"Milk" and "eggs" are on the list.', '"Milk" and "eggs" are on the list.'),
+        ("'Milk' and 'eggs' are on the list.", "'Milk' and 'eggs' are on the list."),
+        ('"Milk" is on the list.', '"Milk" is on the list.'),
+        ("Done.", "Done."),
+    ],
+)
+def test_a_reply_in_quotes_loses_them(said: str, sent: str) -> None:
+    assert agent_module._unquoted(said) == sent
+
+
+def test_the_warm_words_pass_the_strictest_pda_check() -> None:
+    """F19b: praise for what's done, never a nudge for more."""
+    from themi.core.tasks import PRAISE
+
+    for word in PRAISE:
+        assert find_demands(word, 3) == [], word
+
+
+def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
+    """F19c: the reply to a snooze of a task on both lists."""
+    from themi.core import tasks
+
+    for text in (tasks.YOURS_UNTIL_TEXT, tasks.YOURS_LATER_TEXT, tasks.STILL_ON_TEXT):
+        said = text.format(title="Bring bins in", when="2 pm today", whose="Michael's")
+        assert find_demands(said, 3) == [], said
+
+
+def test_the_focus_words_pass_the_strictest_pda_check() -> None:
+    """O1a: reassurance, never instruction."""
+    from themi.core import focus
+
+    for text in (
+        focus.FOCUS_TEXT.format(these="these", items="- Call the vet"),
+        focus.KEPT_TEXT.format(n=3),
+        focus.KEPT_ONE_TEXT,
+        focus.ALL_TEXT,
+        focus.CLEAR_TEXT,
+        focus.SPREAD_TEXT.format(budget=3),
+        focus.STAY_TEXT.format(titles="Mimi pill"),
+        focus.LEFT_TEXT.format(n=3),
+        focus.LEFT_ONE_TEXT,
+    ):
+        assert find_demands(text, 3) == [], text

@@ -16,6 +16,7 @@ import json
 import logging
 import re
 import secrets
+import zlib
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
@@ -124,18 +125,41 @@ BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
 OTHER_WORDS = ("someone else", "somebody else", "the other one", "not me", "my partner")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
+# F19b (Erin's idea #102): done in Themi (a tap, a tick, in chat), a short warm word in place
+# of the thanks. Praise for what's done, never a nudge for more.
+PRAISE = ("Nice work.", "Well done.", "Good job.", "Nicely done.", "That's one off the list.")
+# Ticked on the wall, by someone the wall names: said in a message of its own, a moment
+# later, so ticks close together go as one; dropped if it can't go while it's news.
+WALL_DONE_TEXT = "Ticked off on the wall: {titles}. {praise}"
+WALL_PRAISE_AFTER = timedelta(minutes=1)
+WALL_PRAISE_USEFUL = timedelta(hours=2)
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
 MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
 MORNING_LIST_DONE = "This morning's list: all done."
 MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
 MORNING_LIST_BUTTONS = 6
+TOO_MUCH = "Too much today"
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
 UNTIL_TEXT = "No rush on that one ({title}). It waits until {when}."
+# F19c: a shared task put off by one of them, for them alone.
+YOURS_UNTIL_TEXT = "No rush on that one ({title}). It waits for you until {when}."
+YOURS_LATER_TEXT = "No rush on that one ({title}). It'll come back to you in a few hours."
+STILL_ON_TEXT = " It's still on {whose} list."
+BOTH_MOVED_TEXT = " That's for both of you."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
 UNSCHEDULED_TEXT = "{title} no longer has a date."
+
+
+@dataclass(frozen=True)
+class Done:
+    """A task, or a round of one, done at a moment (by someone, for a repeating one)."""
+
+    task: Task
+    at: datetime
+    by: int | None
 
 
 @dataclass(frozen=True)
@@ -288,6 +312,7 @@ class TaskBoard:
         self.outbox.gates["task"] = self._one_at_a_time
         self.outbox.orders["task"] = self._nudge_order
         self.outbox.bundlers["task"] = self._morning_list
+        self.outbox.bundlers["praise"] = self._praise_together
 
     def _one_at_a_time(self, member: Member, when: datetime) -> datetime | None:
         """While a task nudge sent to this person is unanswered (still open, not put off),
@@ -353,6 +378,22 @@ class TaskBoard:
             )
             for r in rows
         ]
+
+    def done_between(self, member: Member, start: datetime, end: datetime) -> list[Done]:
+        """What was done in [start, end) on this person's list, soonest first: one-off
+        tasks, and each round of a repeating one (bug #105: "what happened yesterday?")."""
+        span = (to_utc_iso(start), to_utc_iso(end))
+        rows = self.db.query(
+            "SELECT t.*, r.done_at AS at, r.done_by AS by FROM task_runs r "
+            "JOIN tasks t ON t.id = r.task_id WHERE r.missed = 0 AND r.done_at >= ? "
+            "AND r.done_at < ? AND (r.done_by = ? OR t.assignee = ? OR t.shared = 1) "
+            "UNION ALL SELECT t.*, t.completed_at AS at, NULL AS by FROM tasks t "
+            "WHERE t.status = 'done' AND t.completed_at >= ? AND t.completed_at < ? "
+            "AND (t.assignee = ? OR t.shared = 1) "
+            "AND NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = t.id) ORDER BY at",
+            (*span, member.id, member.id, *span, member.id),
+        )
+        return [Done(_task_from_row(r), datetime.fromisoformat(r["at"]), r["by"]) for r in rows]
 
     def added_by(self, member: Member) -> list[Task]:
         """Open tasks this member added, whoever is doing them."""
@@ -511,6 +552,8 @@ class TaskBoard:
             member = self.store.get_member(task.assignee)
         if self.held(task, member):
             return  # it gets its nudge when it comes up on the chart
+        if self._own_snooze(task, member) is not None:
+            return  # they put it off themselves (F19c): asked again when that runs out
         for own in self.own_nudges:  # a task with its own kind of nudge (E2's email audit)
             if await own(task, member, not_before, deadline):
                 return
@@ -617,6 +660,26 @@ class TaskBoard:
             )
         return True
 
+    async def _praise_together(self, member: Member, rows: list[dict[str, Any]]) -> bool:
+        """Several ticks on the wall at once: one warm word for them all."""
+        tasks = sorted(
+            (self.get(int(str(r["dedupe_key"]).split("-")[1])) for r in rows), key=lambda t: t.id
+        )
+        titles = [t.title for t in tasks]
+        joined = f"{', '.join(titles[:-1])} and {titles[-1]}"
+        result = await self.outbox.send(
+            member,
+            WALL_DONE_TEXT.format(titles=joined, praise=_praise(tasks[0])),
+            priority=Priority.NORMAL,
+            kind="praise",
+            deadline=clock.now(),
+        )
+        if result.outbox_id is None:
+            return False
+        for row in rows:
+            self.outbox.cancel(row["id"])
+        return True
+
     def _list_message(self, tasks: list[Task], today: date) -> tuple[str, list[Button]]:
         ids = [t.id for t in tasks]
         lines = "\n".join(f"- {_label(t, today)}: {t.title}" for t in tasks)
@@ -626,16 +689,16 @@ class TaskBoard:
             )
             for t in tasks[:MORNING_LIST_BUTTONS]
         ]
+        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus"}))  # O1a, Erin's idea #94
         return MORNING_LIST_TEXT.format(items=lines), buttons
 
     async def _list_done(self, event: InboundEvent) -> None:
-        """A tick on the morning list: that one's done, and the list shows the rest."""
+        """A tick on the morning list: that one's done, said so (bug #103: the line only went
+        away, and the wall was slow, so was it done?), and the list shows the rest."""
         assert event.button is not None
-        await self.complete(
-            int(event.button.payload["task"]),
-            event.member,
-            interactive=True,
-            tapped=event.button.message_id,
+        task_id = int(event.button.payload["task"])
+        ticked = await self.complete(
+            task_id, event.member, interactive=True, tapped=event.button.message_id
         )
         if event.button.message_id is None:
             return
@@ -648,10 +711,13 @@ class TaskBoard:
             if task.status == "open":
                 left.append(task)
         if not left:
-            await self.outbox.edit(event.member, event.button.message_id, MORNING_LIST_DONE)
+            done = f"{ticked} {MORNING_LIST_DONE}"
+            await self.outbox.edit(event.member, event.button.message_id, done)
             return
         text, buttons = self._list_message(left, self._today())
-        await self.outbox.edit(event.member, event.button.message_id, text, buttons)
+        await self.outbox.edit(
+            event.member, event.button.message_id, f"{ticked}\n\n{text}", buttons
+        )
 
     def _deadline(self, task: Task) -> datetime | None:
         """By when a nudge should go out: its time on the due date (the task's, or the
@@ -747,13 +813,21 @@ class TaskBoard:
         return self.get(task_id)
 
     async def complete(
-        self, task_id: int, by: Member, *, interactive: bool = False, tapped: int | None = None
+        self,
+        task_id: int,
+        by: Member,
+        *,
+        interactive: bool = False,
+        tapped: int | None = None,
+        wall: bool = False,
     ) -> str:
         """Mark it done (a repeating one: this round). `tapped`: the message whose Done
-        button did it, which the caller edits itself."""
+        button did it, which the caller edits itself. `wall`: ticked on the wall by `by`
+        (the wall said who), who hears a warm word for it (F19b)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        self._end_own_snoozes(task.id)
         await self._settle_sent(task, tapped)
         if task.repeats:
             said = await self._complete_round(task, by, interactive)
@@ -765,6 +839,20 @@ class TaskBoard:
             self.withdraw_prompt(task)
             await self._changed(self.get(task_id), "done", interactive)
             said = DONE_TEXT.format(title=task.title)
+        thanks = DONE_TEXT.format(title=task.title)
+        if interactive and by.done_praise and said.startswith(thanks):
+            said = thanks.removesuffix("Thank you.") + _praise(task) + said.removeprefix(thanks)
+        if wall and by.done_praise and by.telegram_user_id is not None:
+            now = clock.now()
+            await self.outbox.send(
+                by,
+                WALL_DONE_TEXT.format(titles=task.title, praise=_praise(task)),
+                priority=Priority.NORMAL,
+                kind="praise",
+                not_before=now + WALL_PRAISE_AFTER,
+                expires=now + WALL_PRAISE_USEFUL,
+                dedupe_key=f"praise-{task.id}-{secrets.token_hex(4)}",
+            )
         for hook in self.done_hooks:  # each time it's done, a repeating one's every round
             try:
                 await hook(task, by, interactive)
@@ -1331,6 +1419,7 @@ class TaskBoard:
             ),
         )
         self.withdraw_prompt(task)
+        self._end_own_snoozes(task_id)  # a new day is for everyone who has it (F19c)
         task = self.get(task_id)
         if due_on is not None:
             if task.either:
@@ -1340,9 +1429,10 @@ class TaskBoard:
             else:
                 await self.prompt(task)
         await self._changed(task, "rescheduled", interactive)
+        both = BOTH_MOVED_TEXT if task.shared and interactive else ""
         if due_on is None:
-            return UNSCHEDULED_TEXT.format(title=task.title)
-        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task))
+            return UNSCHEDULED_TEXT.format(title=task.title) + both
+        return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
     def when_words(self, task: Task) -> str:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
@@ -1367,24 +1457,82 @@ class TaskBoard:
         return task
 
     def snooze(
-        self, task_id: int, for_: timedelta = SNOOZE_FOR, *, until: datetime | None = None
+        self,
+        task_id: int,
+        for_: timedelta = SNOOZE_FOR,
+        *,
+        until: datetime | None = None,
+        by: Member | None = None,
     ) -> str:
-        """Put a task off for a few hours, or until a time they gave ("tonight at 9", #18)."""
+        """Put a task off for a few hours, or until a time they gave ("tonight at 9", #18).
+        On both lists, it's put off for `by` alone (F19c, idea #86)."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
+        if by is not None and task.shared:
+            return self._snooze_for(task, by, until or clock.now() + for_, said=until is not None)
         self.db.execute(
             "UPDATE tasks SET status = 'snoozed', snoozed_until = ? WHERE id = ?",
             (to_utc_iso(until or clock.now() + for_), task_id),
         )
         self.withdraw_prompt(task)
         if until is not None:
-            local = until.astimezone(self._tz())
-            when = clock_words(local)
-            if local.date() != self._today():  # bug #54: say which day, when it isn't today
-                when = f"{local:%a %d %b}, {when}"
-            return UNTIL_TEXT.format(title=task.title, when=when)
+            return UNTIL_TEXT.format(title=task.title, when=self._until_words(until))
         return LATER_TEXT.format(title=task.title)
+
+    def _snooze_for(self, task: Task, by: Member, until: datetime, *, said: bool) -> str:
+        """Erin's idea #86: "only snooze it for that user". Their nudges wait; the task stays
+        open, on the other's list and the wall as it was."""
+        self.db.execute(
+            "INSERT INTO task_snoozes (task_id, member_id, until) VALUES (?, ?, ?) "
+            "ON CONFLICT (task_id, member_id) DO UPDATE SET until = excluded.until",
+            (task.id, by.id, to_utc_iso(until)),
+        )
+        for queued in self.db.query(
+            "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
+            (by.id, f"task-{task.id}-%"),
+        ):
+            self.outbox.cancel(queued["id"])
+        text = (
+            YOURS_UNTIL_TEXT.format(title=task.title, when=self._until_words(until))
+            if said
+            else YOURS_LATER_TEXT.format(title=task.title)
+        )
+        others = [
+            m.name
+            for m in self.store.list_members()
+            if m.id != by.id and m.telegram_user_id is not None and not self._own_snooze(task, m)
+        ]
+        if others:
+            text += STILL_ON_TEXT.format(whose=" and ".join(f"{n}'s" for n in others))
+        return text
+
+    def _until_words(self, until: datetime) -> str:
+        local = until.astimezone(self._tz())
+        when = clock_words(local)
+        # Bug #54: which day, when it isn't today; #104: "until 2 pm" became "tomorrow".
+        return f"{local:%a %d %b}, {when}" if local.date() != self._today() else f"{when} today"
+
+    def put_off_until(self, task: Task, member: Member | None = None) -> datetime | None:
+        """When a snooze that hasn't ended runs out ("tonight at 9", #18), else None. With a
+        `member`, their own put-off of a shared task counts too (F19c)."""
+        until = self.db.scalar(
+            "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
+        )
+        if until and (when := datetime.fromisoformat(until)) > clock.now():
+            return when
+        return self._own_snooze(task, member) if member is not None else None
+
+    def _own_snooze(self, task: Task, member: Member) -> datetime | None:
+        until = self.db.scalar(
+            "SELECT until FROM task_snoozes WHERE task_id = ? AND member_id = ? AND until > ?",
+            (task.id, member.id, to_utc_iso(clock.now())),
+        )
+        return datetime.fromisoformat(until) if until else None
+
+    def _end_own_snoozes(self, task_id: int) -> None:
+        """Done, or moved to a new day: nobody's own put-off of it stands (F19c)."""
+        self.db.execute("DELETE FROM task_snoozes WHERE task_id = ?", (task_id,))
 
     def withdraw_prompt(self, task: Task) -> bool:
         """Take back any of the task's nudges that haven't gone out yet (shared ones too).
@@ -1401,17 +1549,27 @@ class TaskBoard:
         return withdrawn
 
     async def resurface(self) -> int:
-        """Snoozed tasks whose time has come are offered again."""
+        """Snoozed tasks whose time has come are offered again; one person's put-off of a
+        shared task, to that person (F19c)."""
+        now = to_utc_iso(clock.now())
         rows = self.db.query(
-            "SELECT * FROM tasks WHERE status = 'snoozed' AND snoozed_until <= ?",
-            (to_utc_iso(clock.now()),),
+            "SELECT * FROM tasks WHERE status = 'snoozed' AND snoozed_until <= ?", (now,)
         )
         for row in rows:
             self.db.execute(
                 "UPDATE tasks SET status = 'open', snoozed_until = NULL WHERE id = ?", (row["id"],)
             )
             await self.prompt(self.get(row["id"]))
-        return len(rows)
+        own = self.db.query("SELECT * FROM task_snoozes WHERE until <= ?", (now,))
+        for row in own:
+            self.db.execute(
+                "DELETE FROM task_snoozes WHERE task_id = ? AND member_id = ?",
+                (row["task_id"], row["member_id"]),
+            )
+            task = self.get(row["task_id"])
+            if task.status == "open" and task.shared:
+                await self.prompt(task, member=self.store.get_member(row["member_id"]))
+        return len(rows) + len(own)
 
     async def on_button(self, event: InboundEvent) -> None:
         assert event.button is not None
@@ -1427,7 +1585,7 @@ class TaskBoard:
         elif action == "not_sure":
             reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
         else:
-            reply = self.snooze(task_id)
+            reply = self.snooze(task_id, by=event.member)
         if event.button.message_id is not None:
             await self.outbox.edit(event.member, event.button.message_id, reply)
 
@@ -1436,6 +1594,11 @@ def _task_id(row: dict[str, Any]) -> int | None:
     """The task a queued nudge is for, from its dedupe key ("task-12-ab12cd34")."""
     parts = str(row.get("dedupe_key") or "").split("-")
     return int(parts[1]) if len(parts) > 2 and parts[0] == "task" and parts[1].isdigit() else None
+
+
+def _praise(task: Task) -> str:
+    """One of PRAISE, varied by task and moment, so it doesn't read as a stamp."""
+    return PRAISE[zlib.crc32(f"{task.id}-{clock.now():%Y%m%d%H%M}".encode()) % len(PRAISE)]
 
 
 def _short(title: str, limit: int = 28) -> str:
@@ -1508,7 +1671,9 @@ CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|t
     "a family member's name when they name someone ('have my husband get the pacifier', 'ask "
     "him to...'), 'both' when either of them can do it "
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
-    "when it just needs doing ('can someone...'); then Themi works out who has room for it.",
+    "when it just needs doing ('can someone...'); then Themi works out who has room for it. "
+    "A small thing at a set time where a nudge is all they want ('remind me to drink green "
+    "tea at 2') is add_reminder, not a task.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},
@@ -1807,7 +1972,8 @@ def clock_words(moment: datetime | time) -> str:
 
 @tool(
     "complete_task",
-    "Mark a task done when someone says it's been taken care of.",
+    "Mark a task done when someone says it's been taken care of. The result is what to tell "
+    "them, its warm word included; say it as it is.",
     {"task_id": {"type": "integer"}},
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1964,28 +2130,33 @@ def _time_arg(value: Any) -> time | Keep | None:
 @tool(
     "snooze_task",
     "Put a task off when someone wants it later: until a time they gave ('I'll do it "
-    "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
-    "or for a few hours (until ''). No nudge or reminder comes before then. Also for a "
-    "nudge later today about a task they already have ('prompt me to run at 2pm': until "
-    "14:00): never a calendar block. Another day, or a new time for it, is "
-    "reschedule_task.",
-    {"task_id": {"type": "integer"}, "until": {"type": "string"}},
+    "tonight around 9': until 21:00; HH:MM, 24-hour), on the day they gave ('tomorrow "
+    "afternoon': day tomorrow's YYYY-MM-DD, until 14:00; a day alone is its morning), or "
+    "for a few hours (both ''). With no day, the time is today's, or tomorrow's if that's "
+    "passed. No nudge or reminder comes before then. Also for a nudge later today about a "
+    "task they already have ('prompt me to run at 2pm': until 14:00): never a calendar "
+    "block. A new due date or time for it is reschedule_task.",
+    {"task_id": {"type": "integer"}, "until": {"type": "string"}, "day": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
+    tz = board._tz()
+    now = clock.now().astimezone(tz)
+    said, day = str(args["until"]).strip(), str(args["day"]).strip()
     until = None
-    if str(args["until"]).strip():
-        try:
-            at = time.fromisoformat(str(args["until"]).strip())
-        except ValueError as exc:
-            raise ToolFailed("The time should look like 21:00.") from exc
-        tz = board._tz()
-        now = clock.now().astimezone(tz)
-        until = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
-        if until <= now:
-            until += timedelta(days=1)
     try:
-        return board.snooze(args["task_id"], until=until)
+        at = time.fromisoformat(said) if said else time(9) if day else None
+        on = day_arg(day, now.date()) if day else now.date()
+    except ValueError as exc:
+        raise ToolFailed("Times look like 21:00, and days like 2026-11-03.") from exc
+    if at is not None:  # bug #104: "tomorrow afternoon" waited for 2 pm that day
+        until = datetime(on.year, on.month, on.day, at.hour, at.minute, tzinfo=tz)
+        if until <= now and not day:
+            until += timedelta(days=1)
+        elif until <= now:
+            raise ToolFailed("That time has passed; ask when they'd like it.")
+    try:
+        return board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
 
