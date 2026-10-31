@@ -16,16 +16,24 @@ LOGIN = KeepLogin("erin@example.com", Secret("aas_et/master"), "0123456789abcdef
 
 class Item:
     def __init__(self, item_id: str, text: str, checked: bool = False) -> None:
-        self.id, self.text, self.checked = item_id, text, checked
+        self.id, self.text, self.checked, self.deleted = item_id, text, checked, False
+
+    def delete(self) -> None:
+        self.deleted = True
 
 
 class List:
     def __init__(self, title: str, items: list[Item], trashed: bool = False) -> None:
-        self.title, self.items, self.trashed, self.archived = title, items, trashed, False
+        self.title, self.children, self.trashed, self.archived = title, items, trashed, False
 
     @property
-    def unchecked(self) -> list[Item]:
-        return [i for i in self.items if not i.checked]
+    def items(self) -> list[Item]:  # as the library's: deleted items aren't there
+        return [i for i in self.children if not i.deleted]
+
+    def add(self, text: str, checked: bool = False) -> Item:
+        item = Item(f"new-{len(self.children)}", text, checked)
+        self.children.append(item)
+        return item
 
 
 class Note:
@@ -54,18 +62,33 @@ def library(notes: list[Any], fail_sync: bool = False) -> types.ModuleType:
     return module
 
 
-async def test_reads_unchecked_items_and_checks_them_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    shopping = List("Shopping list", [Item("1", "Eggs"), Item("2", "Milk", checked=True)])
+async def test_reads_the_list_and_changes_it_in_one_save(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    eggs, milk, jam = Item("1", "Eggs"), Item("2", "Milk", checked=True), Item("3", "Jam")
+    shopping = List("Shopping list", [eggs, milk, jam])
     old = List("Shopping list", [Item("9", "Old")], trashed=True)
     lib = library([old, Note(), shopping])
     monkeypatch.setitem(sys.modules, "gkeepapi", lib)
     account = GKeepAccount(LOGIN)
 
-    assert [i.text for i in await account.unchecked(" shopping LIST")] == ["Eggs"]
+    read = await account.items(" shopping LIST")
+    assert [(i.id, i.text, i.checked) for i in read] == [
+        ("1", "Eggs", False),
+        ("2", "Milk", True),
+        ("3", "Jam", False),
+    ]
     assert await account.lists() == ["Shopping list"]
-    await account.check_off("Shopping list", ["1"])
+    syncs = lib.calls.count("sync")  # type: ignore[attr-defined]
+    assert await account.apply("Shopping list", ["rice"], ["1"], ["3"]) == ["new-3"]
 
-    assert shopping.items[0].checked
+    assert eggs.checked and jam.deleted
+    assert [(i.text, i.checked) for i in shopping.items] == [
+        ("Eggs", True),
+        ("Milk", True),
+        ("rice", False),
+    ]
+    assert lib.calls.count("sync") == syncs + 2  # type: ignore[attr-defined]  # read, save
     assert lib.calls[0] == "authenticate erin@example.com aas_et/master 0123456789abcdef"  # type: ignore[attr-defined]
     assert lib.calls.count("authenticate erin@example.com aas_et/master 0123456789abcdef") == 1  # type: ignore[attr-defined]
 
@@ -75,15 +98,15 @@ async def test_a_missing_list_or_library_failure_is_a_keep_error(
 ) -> None:
     monkeypatch.setitem(sys.modules, "gkeepapi", library([Note()]))
     with pytest.raises(KeepError, match="no list called 'Shopping list'"):
-        await GKeepAccount(LOGIN).unchecked("Shopping list")
+        await GKeepAccount(LOGIN).items("Shopping list")
 
     lib = library([List("Shopping list", [])], fail_sync=True)
     monkeypatch.setitem(sys.modules, "gkeepapi", lib)
     account = GKeepAccount(LOGIN)
-    await account.unchecked("Shopping list")  # signs in; no sync yet
+    await account.items("Shopping list")  # signs in; no sync yet
     with pytest.raises(KeepError, match=r"Keep reading the list failed \(RuntimeError\)"):
-        await account.unchecked("Shopping list")
-    await account.unchecked("Shopping list")  # signs in again
+        await account.items("Shopping list")
+    await account.items("Shopping list")  # signs in again
     assert sum(c.startswith("authenticate") for c in lib.calls) == 2  # type: ignore[attr-defined]
 
 
@@ -92,7 +115,7 @@ async def test_without_the_library_it_says_how_to_install_it(
 ) -> None:
     monkeypatch.setitem(sys.modules, "gkeepapi", None)
     with pytest.raises(KeepError, match=r"pip install 'themi\[keep\]'"):
-        await GKeepAccount(LOGIN).unchecked("Shopping list")
+        await GKeepAccount(LOGIN).items("Shopping list")
     with pytest.raises(KeepError, match=r"pip install 'themi\[keep\]'"):
         exchange_token("erin@example.com", Secret("oauth2_4/x"), "0123456789abcdef")
 

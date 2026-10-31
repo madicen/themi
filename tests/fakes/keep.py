@@ -2,8 +2,9 @@
 
 Keep is reached only through the unofficial library, so this fake sits at the
 `KeepAccount` interface rather than over HTTP. Each Google address has its own
-lists. Tests act as the speaker (`put`), as someone in Keep (`uncheck`, `edit`),
-make calls fail (`fail("check_off")`) and look at what each list holds.
+lists. Tests act as the speaker (`put`), as someone in Keep (`check`, `uncheck`,
+`delete`, `edit`), make calls fail (`fail("apply")`) or lose a save
+(`drop_next_write`), and look at what each list holds.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ class FakeKeep:
         self.calls: Counter[str] = Counter()
         self.logins: list[KeepLogin] = []
         self._failures: Counter[str] = Counter()
+        self._drop_writes = 0
         self._ids = itertools.count(1)
 
     # ----- the test's controls ----------------------------------------------------------
@@ -60,11 +62,28 @@ class FakeKeep:
     def uncheck(self, email: str, item_id: str) -> None:
         self.item(email, item_id).checked = False
 
+    def check(self, email: str, item_id: str) -> None:
+        self.item(email, item_id).checked = True
+
+    def delete(self, email: str, item_id: str) -> None:
+        items = self.users[email].lists["Shopping list"]
+        items.remove(self.item(email, item_id))
+
+    def find(self, email: str, text: str) -> FakeItem:
+        return next(i for i in self.users[email].lists["Shopping list"] if i.text == text)
+
+    def drop_next_write(self) -> None:
+        """Keep says the next save worked, but loses it (seen with the real Keep)."""
+        self._drop_writes += 1
+
     def edit(self, email: str, item_id: str, text: str) -> None:
         self.item(email, item_id).text = text
 
     def unchecked_texts(self, email: str, list_name: str = "Shopping list") -> list[str]:
         return [i.text for i in self.users[email].lists[list_name] if not i.checked]
+
+    def checked_texts(self, email: str, list_name: str = "Shopping list") -> list[str]:
+        return [i.text for i in self.users[email].lists[list_name] if i.checked]
 
     def fail(self, op: str, times: int = 1) -> None:
         self._failures[op] += times
@@ -105,16 +124,25 @@ class FakeKeepAccount:
         self.fake._maybe_fail("lists")
         return list(self.fake.users.get(self.login.email, FakeKeepUser()).lists)
 
-    async def unchecked(self, list_name: str) -> list[KeepItem]:
-        self.fake._maybe_fail("unchecked")
-        items = self.fake._list(self.login, list_name)
-        return [KeepItem(i.id, i.text) for i in items if not i.checked]
+    async def items(self, list_name: str) -> list[KeepItem]:
+        self.fake._maybe_fail("items")
+        return [KeepItem(i.id, i.text, i.checked) for i in self.fake._list(self.login, list_name)]
 
-    async def check_off(self, list_name: str, item_ids: list[str]) -> None:
-        self.fake._maybe_fail("check_off")
-        for item in self.fake._list(self.login, list_name):
-            if item.id in item_ids:
+    async def apply(
+        self, list_name: str, add: list[str], check: list[str], delete: list[str]
+    ) -> list[str]:
+        self.fake._maybe_fail("apply")
+        items = self.fake._list(self.login, list_name)
+        ids = [f"item-{next(self.fake._ids)}" for _ in add]
+        if self.fake._drop_writes:
+            self.fake._drop_writes -= 1
+            return ids
+        for item in items:
+            if item.id in check:
                 item.checked = True
+        items[:] = [i for i in items if i.id not in delete]
+        items.extend(FakeItem(item_id, text) for item_id, text in zip(ids, add, strict=True))
+        return ids
 
 
 @pytest.fixture
