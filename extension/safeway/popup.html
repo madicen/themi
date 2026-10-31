@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fill the Safeway cart</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <label for="list">One item per line. A number in front sets the quantity.</label>
+    <textarea id="list" rows="8" placeholder="eggs&#10;2 oat milk&#10;bananas"></textarea>
+    <div class="row">
+      <button id="fill" type="button">Fill cart</button>
+      <span id="status" role="status"></span>
+    </div>
+    <div id="results"></div>
+    <p class="small">This only adds to your cart. You check out on safeway.com.</p>
+    <script src="lib/list.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
