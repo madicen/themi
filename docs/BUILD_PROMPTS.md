@@ -137,7 +137,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
-| 35 | Meal reminders, takeout rescue, cart staging | 6 Liaison and food | [ ] |
+| 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
+| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [ ] |
+| 35c | Safeway cart: Themi sends the list to the extension | 6 Liaison and food | [ ] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
@@ -166,6 +168,11 @@ and record the change here.
   Changed from prompt 05's `gemini-3.8-flash` with the user's agreement on 2026-10-25: that
   model allowed 20 free requests a day, and flash-lite scored well in prompt 28's evals. The
   plan named no Gemini model before; its provider table now lists flash-lite.
+- The Safeway cart helper is a Chrome extension in the family's own browser (Manifest V3,
+  plain JavaScript, no build step and no npm packages), chosen with the user on 2026-10-30
+  over a headless browser on the server or a local daemon: it uses the session they already
+  signed into, so Themi stores no Safeway password and bot checks see a real browser. It
+  tests with Node's built-in `node --test`.
 
 ---
 
@@ -3183,8 +3190,8 @@ Notes (2026-10-26):
 
 ### L2b · Things to buy in the carts
 Status: [ ]
-Depends on: L2a, 35
-- When prompt 35 stages a cart, it offers the matching "things to buy" items (by usual
+Depends on: L2a, 35c
+- When prompt 35c stages a cart, it offers the matching "things to buy" items (by usual
   store) as part of the same approval.
 
 ### H1 · Dishwasher: notice when the household is falling behind
@@ -6201,10 +6208,11 @@ Tests:
 
 Commit when done.
 
-### 35 · Meal reminders, takeout rescue, cart staging
+### 35a · Meal reminders and takeout rescue
 Status: [ ]
 Depends on: 27, 19
 Read first: "Module behaviour" → D; "Integrations" → Safeway/DoorDash row.
+Split from prompt 35 on 2026-10-30; the Safeway cart moved to 35b and 35c.
 
 Build:
 - Meal reminders: log meals (text, plus a device hook), learn each person's usual gap (median
@@ -6215,7 +6223,6 @@ Build:
   monthly budget and stage a DoorDash order (Tier 1, capped). It sends a store link and the
   items, and a person does the checkout.
 - Spending comes from DoorDash receipts (prompt 23).
-- Safeway cart staging: the grocery list becomes a staged cart message with item search links.
 - Saved favourites are managed on the website.
 
 Tests:
@@ -6223,6 +6230,90 @@ Tests:
 - One nudge per gap.
 - All the takeout preconditions, including budget exhaustion.
 - Spending updates from receipts.
+
+Commit when done.
+
+### 35b · Safeway cart: a Chrome extension that fills the cart on its own
+Status: [ ]
+Depends on: none in Themi (it is a separate program)
+Read first: "Integrations" → Safeway/DoorDash row; "Fixed technical choices" (the extension).
+
+Decided with the user on 2026-10-30, replacing prompt 35's "item search links" only. Safeway
+has no public cart API. A headless browser on the cloud host would face bot checks from a
+datacenter address and need the Safeway password stored. Instead, an extension in the family's
+own Chrome fills the cart using the session they're already signed into, and a person still
+checks out. This prompt makes it work with no Themi at all. 35c connects it.
+
+Do first, with the user (a spike; stop and report if it fails):
+- Signed in on safeway.com with DevTools open, record the requests the site makes to search
+  for a product and to add one to the cart. Note the endpoints, required headers and the
+  product ID field in `extension/safeway/NOTES.md`. Save one search response and one
+  add-to-cart response as fixtures, with account IDs, tokens, names and addresses removed.
+- Check that a content script's `fetch` to those endpoints, using the page's cookies, works.
+  If the site needs per-request signatures a content script can't produce, fall back to
+  clicking the site's own buttons, and say so in the Notes. If neither works, stop: 35c then
+  ships only the links fallback.
+
+Build (`extension/safeway/`):
+- Manifest V3; permissions `storage` plus host access to `https://www.safeway.com/*` only.
+  It is loaded unpacked; no store listing.
+- A popup with a text box: one item per line, an optional quantity ("2 oat milk"). "Fill
+  cart" searches each item, adds the top result, and lists what was added (product name,
+  size, price), what wasn't found, and what was out of stock.
+- A remembered choice per item, kept in `chrome.storage.local`: once "eggs" became a
+  product, later fills add that product by ID without searching. The results list has a
+  "change" link that shows the other search results.
+- The extension never touches checkout, payment, delivery slots or addresses. There is no
+  code path for them, and the cart is only ever added to, never emptied.
+- Paced like a person: one request at a time with a short pause; it stops on the first
+  sign-in or bot-check response and says "Sign in to Safeway, then try again."
+
+Tests (`node --test`, run from `make test-all`; skipped with a notice when Node isn't
+installed):
+- Parsing the list (quantities, blank lines, duplicates).
+- Reading the saved search and add-to-cart fixtures, including no results, out of stock and
+  a signed-out response.
+- Remembered choices are used before searching.
+
+Manual check (Notes): load it unpacked, fill a three-item cart, and check the cart on
+safeway.com. Write install steps in `extension/safeway/README.md`.
+
+Commit when done.
+
+### 35c · Safeway cart: Themi sends the list to the extension
+Status: [ ]
+Depends on: 35b, 25, G1, 16
+Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D.
+
+Build:
+- Pairing: on the website, anyone in the family can "Connect the Safeway helper". This
+  creates a token shown once and stored hashed, which can only read and answer Safeway cart
+  jobs. Revoke it from the same page. The extension's options page takes Themi's public
+  address and the token; host access to that address is requested there and then.
+- Staging: "fill the Safeway cart" (or the weekly shop) becomes a `safeway_cart` proposal
+  (Tier 1, capped): the grocery list items, with a quantity where the list has one. Its yes
+  queues a cart job.
+- Jobs API under `/api/safeway/`: the extension asks for the next job when a safeway.com tab
+  opens and every minute while one is open; it claims it, fills the cart as in 35b, and posts
+  the results. Everything it sends is validated (shape, lengths, counts) and treated as data;
+  product names are escaped on the website and quoted in blocks for the model.
+- Results go out through the outbox: "9 things in the Safeway cart; oat milk was out of
+  stock. Ready when you are." No energy words.
+- Product memory moves to Themi (`safeway_products`: item name to product ID, name and
+  size), so both partners' browsers agree. A receipt line matched to a grocery item
+  (`themi.core.pantry`) becomes that item's search words. The website lists the remembered
+  products, with a way to change or forget one.
+- Fallback: no paired extension, or a job not claimed within 2 hours, sends the list once
+  with a Safeway search link per item, and the job expires.
+
+Tests:
+- Pairing, revoking, and a wrong or revoked token refused.
+- The job lifecycle: queued, claimed once, results, expiry and the links fallback.
+- Bad results from the extension (wrong shape, too long, unknown job) rejected.
+- Product memory: used on the next job, changed and forgotten on the website, learned from a
+  receipt.
+- A scenario: "fill the Safeway cart", a yes, a fake extension claims and answers, and the
+  result message arrives.
 
 Commit when done.
 
