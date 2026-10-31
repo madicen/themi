@@ -111,8 +111,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F19a | Feedback: a snooze to tomorrow, yesterday's summary, a stale end-of-day list, quotes, an event already added | Feedback | [x] |
 | F19b | Idea: a word when a task is done | Feedback | [x] |
 | F19c | Idea: a shared task put off by one person stays with the other | Feedback | [x] |
-| O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [ ] |
-| O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [ ] |
+| O1a | Idea: when it's too much, a few things now (anyone, any words) | Feedback | [x] |
+| O1b | Idea: when it's too much, the rest spread out under a daily budget | Feedback | [x] |
 | R1a | Routines kept in Themi: routines, items and checks, from chat | Feedback | [x] |
 | R1b | Routines kept in Themi: the wall, both ways | Feedback | [x] |
 | K1 | Calendars: read your own, privately | Calendars | [x] |
@@ -5548,7 +5548,7 @@ Notes (2026-10-30):
 - Setup: restart (applies 0085).
 
 ### O1 · Idea #94: when it's too much (split into O1a and O1b)
-Status: split
+Status: [x] 2026-10-30 (as O1a and O1b)
 Depends on: F19a, F19c, T1, B1
 Erin's idea #94 (2026-10-29): "a full overhaul of how Themi presents tasks when the user is
 overwhelmed. Something that only surfaces a small number of tasks to focus on for now. And
@@ -5586,7 +5586,7 @@ Split (2026-10-30), with the user's direction: it's for anyone who gives a sign 
 overwhelmed, in any words, not only Erin, and not only when asked by name.
 
 ### O1a · Idea #94: when it's too much, a few things now (anyone, any words)
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: O1, F19c
 - Signals: the message's own words ("overwhelmed", "too much", "can't keep up", "pare it
   down", "swamped", "drowning"...) put a line in the turn's context; `focus_now` is a core
@@ -5601,8 +5601,25 @@ Depends on: O1, F19c
 Tests: the pick (medicine kept, the cap, the order); the signal line for overwhelm words,
 none otherwise; the button on the morning list; a scenario for each of the family.
 
+Notes (2026-10-30):
+- `themi.core.focus`: `Focus.pick` takes the day summary's own list for today
+  (`DaySummary.due`, made public): due or overdue, not put off past today, not waiting
+  for the chart. Order: medicines, a time today, `priority.rank` (T1), effort. Three at
+  most; every medicine, even past three.
+- Signals: `focus.overwhelmed(text)` (OVERWHELM words) adds "What X's message signals:
+  they sound overwhelmed..." to the turn (`build_turn(signals=)`). Nothing in it is
+  about one person. `focus_now` isn't in a group, so it's core and always sent.
+- The message goes as it is (kind "focus"); the tool marks the turn answered, so a
+  long reply after it isn't sent (bug #89's rule).
+- Erin's questions, settled by default: three at most; the morning list stays, with a
+  "Too much today" button; Themi offers it when someone's words say it's too much, and
+  doesn't start it from its own reading of the day (energy, load). That last could be a
+  follow-up.
+- Not run: the model evals (whether the model calls focus_now for overwhelm in other
+  words is theirs to show).
+
 ### O1b · Idea #94: when it's too much, the rest spread out under a daily budget
-Status: [ ]
+Status: [x] 2026-10-30
 Depends on: O1a
 - The rest move to the next days, the most pressing first, each to the first day under a
   budget (open things due that day, chore rounds included): the person's setting, or by
@@ -5616,6 +5633,24 @@ Depends on: O1a
 
 Tests: no day over budget; fixed ones stay; a chore skips to its next round; a shared one
 stays on the other's list; the 2026-10-29 morning ("pare it down") in one exchange.
+
+Notes (2026-10-30):
+- `Focus.spread_now`: each day's load (`DaySummary.due` for that day) counted before
+  anything moves; the rest in pick order to the first of the next 14 days under budget
+  (else the least loaded). Moves are `TaskBoard.reschedule(..., interactive=True)`, so
+  the wall and Google Tasks follow. A repeating chore goes to its next round (no missed
+  run is recorded). A shared task gets the person's own snooze (F19c) to 9 am that day:
+  its due date and the other's list are untouched. Medicines and deadline chores stay,
+  said in a line.
+- `budget`: `members.day_budget` (migration 0086; settings page; 0 by default), else the
+  median of things done per day (`done_between`) over the four weeks before today, 2-8,
+  or 4 with none.
+- The offer is [Spread them out] [Leave them for now]; Leave edits to "The other N stay
+  where they are; nothing's dropped." focus_now's `spread` does it at once.
+- "No more than N on a day" counts what's due that day; a chore's next round can still
+  land on a full day.
+- Not run: the model evals.
+- Setup: restart (applies 0086).
 
 ### R1 · Routines kept in Themi (split into R1a and R1b)
 From Erin's idea #79 (2026-10-29): "Themi should maintain internal routine tracking.
