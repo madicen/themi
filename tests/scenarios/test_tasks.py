@@ -475,7 +475,7 @@ async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
 
 def _praised(text: str, title: str) -> bool:
     """F19b (Erin's idea #102): "Marked done: X." and a short warm word from the set."""
-    from themi.core.tasks import PRAISE
+    from themi.core.praise import PRAISE
 
     return any(text == f"Marked done: {title}. {word}" for word in PRAISE)
 

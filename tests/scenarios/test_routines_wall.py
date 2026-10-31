@@ -137,6 +137,26 @@ async def test_ticks_go_both_ways(scenario: Scenario, fake_cozyla: FakeCozyla) -
     assert (pills, WED.isoformat()) in fake_cozyla.routine_ticks  # at once, not next sync
 
 
+async def test_a_tick_on_the_wall_at_night_gets_a_warm_word(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Michael, 2026-10-30: three routine items ticked in the evening, no praise. Ticked on
+    the wall, after quiet hours have started."""
+    from datetime import timedelta
+
+    from themi.core.praise import PRAISE
+
+    pills = fake_cozyla.add_routine("m-erin", "Take meds", "Evening")
+    await sync(scenario)
+    clock.advance(timedelta(hours=13, minutes=45))  # 22:45, her quiet hours started at 21:30
+    fake_cozyla.tick_routine(pills, WED)
+    await sync(scenario)
+    await scenario.advance(minutes=2)
+    ticked = [t for t in scenario.inbox("Erin") if t.startswith("Ticked off")]
+    assert len(ticked) == 1
+    assert any(ticked[0] == f"Ticked off on the wall: Take meds. {w}" for w in PRAISE)
+
+
 async def test_only_themi_checks_the_routines(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
     fake_cozyla.add_routine("m-erin", "Walk dog", "Morning")
     await sync(scenario)

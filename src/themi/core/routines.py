@@ -32,6 +32,7 @@ from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import praise
 from themi.core.cozyla_routines import (
     ALL_DONE_TEXT,
     CHECK_TEXT,
@@ -59,6 +60,7 @@ CHECK_LATE = timedelta(hours=5)
 DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 ADD_CATEGORY, ADD_EXECUTOR = "routine_item_add", "routines.add_item"
 KIND = "routine"  # the outbox kind, as C3's checks
+TICKED_TEXT = "Marked done: {title}. {praise}"  # a tick on the check, said with a warm word
 
 
 @dataclass(frozen=True)
@@ -345,21 +347,26 @@ class Routines:
                 )
             return
         item = next((i for i in self.items(found) if i.id == int(payload["item"])), None)
-        if item is not None:
+        said = ""
+        if item is not None and not self.ticked(item, day):
             await self.tick_now(item, day)
+            if event.member.done_praise:  # a warm word, as for a task (F19b)
+                said = TICKED_TEXT.format(title=item.title, praise=praise.word(f"r{item.id}"))
         still = [i for i in self.today_items(found, day) if not self.ticked(i, day)]
         if message is None:
             return
         if still:
+            text = CHECK_TEXT.format(part=found.name, items=_bullets(still))
             await self.services.outbox.edit(
                 event.member,
                 message,
-                CHECK_TEXT.format(part=found.name, items=_bullets(still)),
+                f"{said}\n\n{text}" if said else text,
                 _buttons(found, still, day),
             )
         else:
+            text = ALL_DONE_TEXT.format(part=found.name)
             await self.services.outbox.edit(
-                event.member, message, ALL_DONE_TEXT.format(part=found.name)
+                event.member, message, f"{said} {text}" if said else text
             )
 
     # ----- small things -------------------------------------------------------------------

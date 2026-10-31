@@ -84,11 +84,11 @@ async def test_the_morning_check_lists_whats_open_and_ticks_from_a_button(
 
     await scenario.tap("Erin", "✓ Walk dog")
     assert (walk, WED.isoformat()) in fake_cozyla.routine_ticks
-    assert scenario.edits("Erin")[-1]["text"] == (
-        "Morning routine, still open:\n- Make the bed\nDone already?"
+    assert scenario.edits("Erin")[-1]["text"].endswith(  # after a warm word (F19b)
+        "\n\nMorning routine, still open:\n- Make the bed\nDone already?"
     )
     await tap_edited(scenario, "Erin", "✓ Make the bed")
-    assert scenario.edits("Erin")[-1]["text"] == "Morning routine: all done."
+    assert scenario.edits("Erin")[-1]["text"].endswith(" Morning routine: all done.")
 
 
 async def test_nothing_is_sent_when_its_all_done(

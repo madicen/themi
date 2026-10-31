@@ -140,6 +140,28 @@ async def test_the_daily_limit_holds_extra_messages_until_tomorrow(
     assert sender.texts() == ["one", "two", "urgent one", "three"]
 
 
+async def test_a_warm_word_goes_in_quiet_hours_and_over_the_limit(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    """Michael, 2026-10-30: "I marked 3 things off so far tonight and received no messages of
+    praise. Praise doesn't have to follow the rules of quiet time or message restrictions." """
+    erin = family.store.update_settings(SYSTEM, family.erin.id, daily_limit=1)
+    clock.freeze(at(21, 10))
+    assert (await outbox.send(erin, "one", priority=Priority.NORMAL)).status == "sent"
+    clock.freeze(at(21, 23))  # quiet hours, and the day's one message has gone
+    praise = await outbox.send(
+        erin,
+        "Ticked off on the wall: Take meds. Nice work.",
+        priority=Priority.NORMAL,
+        kind="praise",
+        not_before=at(21, 23, 1),
+    )
+    assert praise.status == "queued" and praise.send_after == at(21, 23, 1)
+    clock.freeze(at(21, 23, 1))
+    assert await outbox.flush() == 1
+    assert sender.texts() == ["one", "Ticked off on the wall: Take meds. Nice work."]
+
+
 async def test_the_daily_count_resets_at_local_midnight(
     family: SeededFamily, outbox: Outbox
 ) -> None:

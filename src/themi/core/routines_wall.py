@@ -30,6 +30,7 @@ from typing import Any
 from themi import clock
 from themi.accounts import Member
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, WallSchedule
+from themi.core import praise
 from themi.core.cozyla_routines import CozylaRoutines, part_of_day
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.repeat import DAY_NAMES
@@ -230,6 +231,8 @@ class RoutinesWall:
             ticked = self.routines.ticked(item, today)
             if link["wall_id"] in done_on_wall and not ticked:
                 self.routines.tick(item, today)
+                member = self.store.get_member(self.routines.get(item.routine_id).member_id)
+                await praise.from_wall(self.services.outbox, member, item.title, f"r{item.id}")
             elif ticked and link["wall_id"] not in done_on_wall:
                 await self.client.check_routine(link["wall_id"], today, True)
 
