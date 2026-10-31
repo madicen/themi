@@ -5634,6 +5634,15 @@ Notes (2026-10-30):
   twin-rule-or-chore-towels: run `make evals EVAL_ARGS="-k 'focus or snooze or yesterday
   or warm or towels or energy-plumber or energy-medium-day or remember-birthday or
   registration'"` when the quota is back.
+- The rest (2026-10-31, a test key in its own project; `results/gemini-groups-20261031-0255`):
+  13/14, PDA-safe 100%. All eight new cases passed (focus 4/4: the pare-and-move spread at
+  once, 'too much salt' didn't call focus_now; both snoozes; yesterday; the warm word), and
+  task-registration with its title quoted. energy-plumber and energy-medium-day passed:
+  last run's misses were noise. remember-birthday failed again: no group was chosen,
+  the model called add_calendar_event anyway (refused), asked for the calendar group
+  with more_tools, and added it (remember_fact too). Not today's tools; a follow-up.
+- The test key and the family's key had shared one Google project, so the evals spent
+  Themi's own daily quota (2026-10-30 evening). The test key is in its own project now.
 - Router (offline, 174 cases): word lists 97/111 (87%), median 35 tools, after
   "yesterday" joined the calendar group's words. With embeddings at 0.725: 110/111,
   37 tools; the threshold stays (the one miss is P7b's email-not-urgent).
