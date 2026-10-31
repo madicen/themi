@@ -249,6 +249,45 @@ async def test_booking_emails_become_cards_then_an_offer_then_automatic(
     ]
 
 
+async def test_a_booking_already_on_the_calendar_gets_no_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Bug #101 ("the proposed calendar event is correct, but Themi already added it"): Erin
+    had Themi add the tutoring at 7:42 pm; the booking email made a card for the same times
+    at 7:57, and a second email made another."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await say(
+        scenario,
+        "Add Jennifer's proposed session, 80 minutes",
+        "add_calendar_event",
+        dentist(title="Tutoring (Jennifer)", start="16:30", end="17:50", location=""),
+    )
+    linked.add_event(ERIN, local(11, day=28), local(12, day=28), summary="Haircut")
+    await scenario.run_periodic("calendar.busy")
+
+    async def booking(n: int, title: str, day: str, start: str, end: str) -> None:
+        (email,) = await arrive(
+            scenario,
+            fake_gmail,
+            {"sender": "Tutor <t@example.com>", "subject": f"Booked #{n}", "text": "See you"},
+        )
+        event = {"title": title, "date": day, "start": start, "end": end, "location": "Online"}
+        scenario.primary.queue_structured(
+            {"results": [verdict(email, "confirmation", "A booking", event=event)]}
+        )
+        await scenario.run_periodic("email.triage")
+
+    await booking(1, "Tutoring: Malcolm's first session", "2026-10-27", "16:30", "17:50")
+    await booking(2, "Tutoring: Malcolm's first session", "2026-10-27", "16:30", "17:50")
+    await booking(3, "Haircut at Supercuts", "2026-10-28", "11:00", "12:00")  # added by hand
+    assert not [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
+    await booking(4, "Piano", "2026-10-29", "16:00", "17:00")
+    await booking(5, "Piano lesson", "2026-10-29", "16:00", "17:00")  # the same, again
+    cards = [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
+    assert len(cards) == 1 and "Piano" in cards[0]
+
+
 async def test_a_newer_card_for_the_same_event_takes_the_older_ones_place(
     scenario: Scenario, linked: FakeGcal
 ) -> None:

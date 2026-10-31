@@ -477,14 +477,43 @@ class Events:
             log.info("Email %s's booking had no usable date or time", row["id"])
             return
         title = event["title"][:MAX_TITLE]
+        payload = _add_payload(title, event["location"], when, "mine", source)
+        if self._already(member, payload):
+            log.info("Email %s's booking is on the calendar, or waiting, already", row["id"])
+            return
         await self.services.autonomy.stage(
             FROM_EMAIL,
             member,
             f"From an email: {describe(title, when, event['location'], self._tz())}, for your "
             "calendar",
-            _add_payload(title, event["location"], when, "mine", source),
+            payload,
             ADD,
             expires=when.ends,  # a card about a delivery that's been and gone: no use (F15b)
+        )
+
+    def _already(self, member: Member, payload: dict[str, Any]) -> bool:
+        """Something at those very times is on their calendars, or waiting on a card (bug
+        #101: the tutoring she'd had added came back as a card, twice, from its emails).
+        Titles aren't compared: the email's rarely says it the way she did."""
+        span = (
+            to_utc_iso(datetime.fromisoformat(payload["starts"])),
+            to_utc_iso(datetime.fromisoformat(payload["ends"])),
+        )
+        if self.db.one(
+            "SELECT 1 FROM calendar_entries WHERE member_id = ? AND starts_at = ? AND ends_at = ? "
+            "UNION ALL SELECT 1 FROM themi_events WHERE deleted_at IS NULL "
+            "AND (member_id = ? OR calendar_id != 'primary') AND starts_at = ? AND ends_at = ?",
+            (member.id, *span, member.id, *span),
+        ):
+            return True
+        return any(
+            (old["starts"], old["ends"]) == (payload["starts"], payload["ends"])
+            for row in self.db.query(
+                "SELECT payload FROM pending_actions WHERE member_id = ? AND executor = ? "
+                "AND status IN ('pending', 'snoozed')",
+                (member.id, ADD),
+            )
+            if (old := json.loads(row["payload"]))
         )
 
     async def _after_email_event(self, ctx: ExecutionContext, text: str) -> None:
