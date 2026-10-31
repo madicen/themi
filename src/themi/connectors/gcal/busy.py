@@ -1,7 +1,9 @@
 """Each person's own calendars: busy blocks (S2) and, since K1, what's on them.
 
 Every 15 minutes, for each linked account with calendar access, the calendars the
-person chose (the primary one if they haven't) are read for the next two weeks.
+person chose (the primary one if they haven't) are read for the next two weeks, and
+the week before from its start (F19a, bug #105: "what happened yesterday?" had no
+events, and the morning's were gone from today).
 What's kept, per event: its title, place, start and end, whether it's all day and
 whether it's a video call, and which of Themi's own events it is. Never
 descriptions or attendees: what others write into an invitation is the riskiest
@@ -38,6 +40,7 @@ from themi.localtime import to_utc_iso
 log = logging.getLogger(__name__)
 
 LOOK_AHEAD = timedelta(days=14)
+LOOK_BACK = timedelta(days=7)  # from midnight: today's earlier events, and the week before
 CONTEXT_DAYS = 2  # today and tomorrow, for the model
 TASK_BLOCK = "task-block:"  # K5: time Themi blocked for a task; never busy
 MAX_TEXT = 200
@@ -106,11 +109,13 @@ class CalendarBusy:
     # ----- reading Google ---------------------------------------------------------------
 
     async def refresh(self) -> int:
-        """Scheduler job: re-read everyone's next two weeks. Returns how many accounts were
-        read."""
+        """Scheduler job: re-read everyone's last week and next two. Returns how many
+        accounts were read."""
         read = 0
         now = clock.now()
         tz = self._tz()
+        local = now.astimezone(tz)
+        since = datetime(local.year, local.month, local.day, tzinfo=tz) - LOOK_BACK
         for member in self.store.list_members():
             if not member.tracks("calendar"):
                 self.db.execute("DELETE FROM calendar_busy WHERE member_id = ?", (member.id,))
@@ -124,7 +129,7 @@ class CalendarBusy:
                 try:
                     for calendar_id, _ in self.calendars(account.id):
                         events = await client.list_events(
-                            calendar_id, to_utc_iso(now), to_utc_iso(now + LOOK_AHEAD)
+                            calendar_id, to_utc_iso(since), to_utc_iso(now + LOOK_AHEAD)
                         )
                         found += [(calendar_id, e) for ev in events if (e := _entry(ev, tz))]
                 except Exception as exc:  # keep what we knew; try again next time

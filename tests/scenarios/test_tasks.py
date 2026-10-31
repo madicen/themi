@@ -345,7 +345,9 @@ async def test_put_off_until_a_time_waits_for_that_time(scenario: Scenario) -> N
     task = await board.create(
         erin, "Mimi pill", "physical", 1, date(2026, 10, 21), assignee=erin, nudge=False
     )
-    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "21:00"})
+    scenario.primary.queue_tool_call(
+        "snooze_task", {"task_id": task.id, "until": "21:00", "day": ""}
+    )
     scenario.primary.queue_text("Okay, at 9.")
     await scenario.say("Erin", "I'll do it tonight around 9")
     assert "waits until 9 pm" in str(scenario.primary.last_request.messages[-1].content[0])
@@ -371,7 +373,7 @@ async def test_put_off_without_a_time_is_a_few_hours(scenario: Scenario) -> None
     board = scenario.app.services.taskboard
     assert board is not None
     task = await board.create(erin, "Mimi pill", "physical", 1, assignee=erin, nudge=False)
-    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": ""})
+    scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "", "day": ""})
     scenario.primary.queue_text("Later then.")
     await scenario.say("Erin", "later")
     assert board.get(task.id).status == "snoozed"

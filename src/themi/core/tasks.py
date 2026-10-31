@@ -139,6 +139,15 @@ UNSCHEDULED_TEXT = "{title} no longer has a date."
 
 
 @dataclass(frozen=True)
+class Done:
+    """A task, or a round of one, done at a moment (by someone, for a repeating one)."""
+
+    task: Task
+    at: datetime
+    by: int | None
+
+
+@dataclass(frozen=True)
 class Task:
     id: int
     title: str
@@ -353,6 +362,22 @@ class TaskBoard:
             )
             for r in rows
         ]
+
+    def done_between(self, member: Member, start: datetime, end: datetime) -> list[Done]:
+        """What was done in [start, end) on this person's list, soonest first: one-off
+        tasks, and each round of a repeating one (bug #105: "what happened yesterday?")."""
+        span = (to_utc_iso(start), to_utc_iso(end))
+        rows = self.db.query(
+            "SELECT t.*, r.done_at AS at, r.done_by AS by FROM task_runs r "
+            "JOIN tasks t ON t.id = r.task_id WHERE r.missed = 0 AND r.done_at >= ? "
+            "AND r.done_at < ? AND (r.done_by = ? OR t.assignee = ? OR t.shared = 1) "
+            "UNION ALL SELECT t.*, t.completed_at AS at, NULL AS by FROM tasks t "
+            "WHERE t.status = 'done' AND t.completed_at >= ? AND t.completed_at < ? "
+            "AND (t.assignee = ? OR t.shared = 1) "
+            "AND NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = t.id) ORDER BY at",
+            (*span, member.id, member.id, *span, member.id),
+        )
+        return [Done(_task_from_row(r), datetime.fromisoformat(r["at"]), r["by"]) for r in rows]
 
     def added_by(self, member: Member) -> list[Task]:
         """Open tasks this member added, whoever is doing them."""
@@ -1381,10 +1406,17 @@ class TaskBoard:
         if until is not None:
             local = until.astimezone(self._tz())
             when = clock_words(local)
-            if local.date() != self._today():  # bug #54: say which day, when it isn't today
-                when = f"{local:%a %d %b}, {when}"
+            # Bug #54: which day, when it isn't today; #104: "until 2 pm" became "tomorrow".
+            when = f"{local:%a %d %b}, {when}" if local.date() != self._today() else f"{when} today"
             return UNTIL_TEXT.format(title=task.title, when=when)
         return LATER_TEXT.format(title=task.title)
+
+    def put_off_until(self, task: Task) -> datetime | None:
+        """When a snooze that hasn't ended runs out ("tonight at 9", #18), else None."""
+        until = self.db.scalar(
+            "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
+        )
+        return when if until and (when := datetime.fromisoformat(until)) > clock.now() else None
 
     def withdraw_prompt(self, task: Task) -> bool:
         """Take back any of the task's nudges that haven't gone out yet (shared ones too).
@@ -1964,26 +1996,31 @@ def _time_arg(value: Any) -> time | Keep | None:
 @tool(
     "snooze_task",
     "Put a task off when someone wants it later: until a time they gave ('I'll do it "
-    "tonight around 9': until 21:00; HH:MM, 24-hour, today, or tomorrow if that's passed), "
-    "or for a few hours (until ''). No nudge or reminder comes before then. Also for a "
-    "nudge later today about a task they already have ('prompt me to run at 2pm': until "
-    "14:00): never a calendar block. Another day, or a new time for it, is "
-    "reschedule_task.",
-    {"task_id": {"type": "integer"}, "until": {"type": "string"}},
+    "tonight around 9': until 21:00; HH:MM, 24-hour), on the day they gave ('tomorrow "
+    "afternoon': day tomorrow's YYYY-MM-DD, until 14:00; a day alone is its morning), or "
+    "for a few hours (both ''). With no day, the time is today's, or tomorrow's if that's "
+    "passed. No nudge or reminder comes before then. Also for a nudge later today about a "
+    "task they already have ('prompt me to run at 2pm': until 14:00): never a calendar "
+    "block. A new due date or time for it is reschedule_task.",
+    {"task_id": {"type": "integer"}, "until": {"type": "string"}, "day": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
+    tz = board._tz()
+    now = clock.now().astimezone(tz)
+    said, day = str(args["until"]).strip(), str(args["day"]).strip()
     until = None
-    if str(args["until"]).strip():
-        try:
-            at = time.fromisoformat(str(args["until"]).strip())
-        except ValueError as exc:
-            raise ToolFailed("The time should look like 21:00.") from exc
-        tz = board._tz()
-        now = clock.now().astimezone(tz)
-        until = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
-        if until <= now:
+    try:
+        at = time.fromisoformat(said) if said else time(9) if day else None
+        on = day_arg(day, now.date()) if day else now.date()
+    except ValueError as exc:
+        raise ToolFailed("Times look like 21:00, and days like 2026-11-03.") from exc
+    if at is not None:  # bug #104: "tomorrow afternoon" waited for 2 pm that day
+        until = datetime(on.year, on.month, on.day, at.hour, at.minute, tzinfo=tz)
+        if until <= now and not day:
             until += timedelta(days=1)
+        elif until <= now:
+            raise ToolFailed("That time has passed; ask when they'd like it.")
     try:
         return board.snooze(args["task_id"], until=until)
     except NotFound as exc:

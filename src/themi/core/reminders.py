@@ -161,10 +161,7 @@ class Reminders:
 
     def _put_off(self, task: Task) -> bool:
         """Put off until a time that hasn't come ("tonight at 9", #18): not raised before."""
-        until = self.db.scalar(
-            "SELECT snoozed_until FROM tasks WHERE id = ? AND status = 'snoozed'", (task.id,)
-        )
-        return bool(until) and datetime.fromisoformat(until) > clock.now()
+        return self.board.put_off_until(task) is not None
 
     def _doer(self, task: Task) -> Member | None:
         return self.store.get_member(task.assignee) if task.assignee is not None else None
