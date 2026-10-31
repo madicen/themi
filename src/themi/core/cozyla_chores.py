@@ -318,6 +318,10 @@ class CozylaChores:
             if task.status == "done":  # a course that's over ends on the wall by itself
                 if chore is not None and not task.repeats:
                     await self._tick_one_off(task, chore)  # done in Themi: ticked there too
+                elif chore is not None and chore.active_on(self._today()):
+                    # Linked until its last day is over, or it's brought in again as a new
+                    # chore (bug #107: the last dose, ticked on its day, came back open).
+                    continue
                 self.db.execute("DELETE FROM cozyla_chores WHERE task_id = ?", (task.id,))
                 continue
             desired = self._desired(task)

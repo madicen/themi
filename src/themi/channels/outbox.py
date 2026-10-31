@@ -78,6 +78,7 @@ class Priority(StrEnum):
 
 PROACTIVE = (Priority.URGENT, Priority.NORMAL, Priority.LOW)
 IMMEDIATE = (Priority.REPLY, Priority.URGENT)
+PRAISE_KIND = "praise"  # a warm word for something done (F19b): goes when it's news
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
 
@@ -106,9 +107,10 @@ Order = Callable[[dict[str, Any]], tuple[Any, ...]]
 # Several queued rows of one kind, ready for one person at once: send them as one message
 # (and take them back) if it suits, returning True; False leaves them as they are.
 Bundler = Callable[["Member", list[dict[str, Any]]], Awaitable[bool]]
-# A held message of one kind, about to go: its text as things stand now, or None if there's
-# nothing left to say (F19a, bug #99: a list written at 7:36 went at 9:15 as written).
-Refresher = Callable[["Member", dict[str, Any]], str | None]
+# A held message of one kind, about to go: its text as things stand now (with its buttons,
+# if they change too), or None if there's nothing left to say (F19a, bug #99: a list written
+# at 7:36 went at 9:15 as written).
+Refresher = Callable[["Member", dict[str, Any]], str | tuple[str, Sequence[Button]] | None]
 
 
 class ReceptivityProvider(Protocol):
@@ -294,14 +296,20 @@ class Outbox:
         refresh = self.refreshers.get(row["kind"])
         if refresh is None:
             return row
-        text = refresh(member, row)
-        if text is None:
+        fresh = refresh(member, row)
+        if fresh is None:
             self.store.db.execute("DELETE FROM outbox WHERE id = ?", (row["id"],))
             log.info("Dropped message %s: nothing left to say", row["id"])
             return None
-        if text != row["text"]:
-            self.store.db.execute("UPDATE outbox SET text = ? WHERE id = ?", (text, row["id"]))
-        return {**row, "text": text}
+        if isinstance(fresh, str):
+            text, buttons = fresh, row["buttons"]
+        else:
+            text, buttons = fresh[0], json.dumps([_button_json(b) for b in fresh[1]])
+        if (text, buttons) != (row["text"], row["buttons"]):
+            self.store.db.execute(
+                "UPDATE outbox SET text = ?, buttons = ? WHERE id = ?", (text, buttons, row["id"])
+            )
+        return {**row, "text": text, "buttons": buttons}
 
     async def _bundle(self, ready: list[tuple[Member, dict[str, Any]]]) -> int:
         """Offer each bundler the rows of its kind that are ready for one person, when
@@ -447,6 +455,10 @@ class Outbox:
     ) -> datetime:
         if priority in IMMEDIATE:
             return now
+        if kind == PRAISE_KIND:
+            # A warm word answers what they just did: no quiet hours, busy times or daily
+            # limit (Michael, 2026-10-30). A pause they asked for still holds it.
+            return max(now, self.pauses.held_until(member, kind) or now)
         tz = self._tz
         overdue = deadline is not None and deadline <= now
         blocks = (
@@ -493,8 +505,8 @@ class Outbox:
         midnight = start_of_local_day(now or clock.now(), self._tz)
         return self.store.db.scalar(
             "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND status = 'sent' "
-            "AND priority IN ('urgent', 'normal', 'low') AND kind != 'praise' AND sent_at >= ?",
-            (member_id, to_utc_iso(midnight)),
+            "AND priority IN ('urgent', 'normal', 'low') AND kind != ? AND sent_at >= ?",
+            (member_id, PRAISE_KIND, to_utc_iso(midnight)),
         )
 
     def _is_duplicate(self, member_id: int, key: str, now: datetime) -> bool:

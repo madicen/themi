@@ -8,6 +8,7 @@ from datetime import date, time, timedelta
 
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core.praise import PRAISE
 from themi.core.routines import Routines
 
 WED = date(2026, 10, 21)
@@ -82,11 +83,27 @@ async def test_the_check_comes_as_the_window_ends_and_ticks_from_buttons(
     await at(scenario, WED, 12, 30)
     assert len(checks(scenario, "Erin")) == 1  # once a day
 
-    await scenario.tap("Erin", "✓ Vitamins")
-    assert scenario.edits("Erin")[-1]["text"] == (
-        "Morning routine, still open:\n- Make the bed\nDone already?"
+    await scenario.tap("Erin", "✓ Vitamins")  # a warm word too, as for a task (F19b)
+    edited = scenario.edits("Erin")[-1]["text"]
+    assert any(
+        edited
+        == f"Marked done: Vitamins. {word}\n\n"
+        + ("Morning routine, still open:\n- Make the bed\nDone already?")
+        for word in PRAISE
     )
     await scenario.tap("Erin", "✓ Make the bed")
+    edited = scenario.edits("Erin")[-1]["text"]
+    assert any(
+        edited == f"Marked done: Make the bed. {word} Morning routine: all done." for word in PRAISE
+    )
+
+
+async def test_no_warm_word_for_a_routine_tick_when_its_off(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+    add(scenario, "Erin", "Morning", "Vitamins")
+    await at(scenario, WED, 12, 0)
+    await scenario.tap("Erin", "✓ Vitamins")
     assert scenario.edits("Erin")[-1]["text"] == "Morning routine: all done."
 
 

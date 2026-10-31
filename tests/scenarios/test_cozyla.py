@@ -115,7 +115,7 @@ async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCo
 
 
 def _praised(text: str, titles: str) -> bool:
-    from themi.core.tasks import PRAISE
+    from themi.core.praise import PRAISE
 
     return any(text == f"Ticked off on the wall: {titles}. {word}" for word in PRAISE)
 

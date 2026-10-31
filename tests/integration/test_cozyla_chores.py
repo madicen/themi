@@ -312,3 +312,41 @@ async def test_wall_items_get_a_fitting_emoji_and_the_familys_stay(
     calls = len(fake_cozyla.calls)
     await sync(scenario)
     assert not any("chores/update" in p for p in fake_cozyla.paths()[calls:])
+
+
+async def test_a_course_done_in_themi_isnt_brought_in_again(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #107 ("Mimi pill is not open today in the slightest"): the last dose was ticked
+    in Themi just after midnight on its last day. The course ended in Themi, and the wall
+    chore, which ends by itself, still ran that day: the next sync brought it in as a new
+    chore, due that day."""
+    from datetime import timedelta
+
+    fake_cozyla.add_chore(
+        "Mimi pill",
+        ["m-husband", "m-erin"],
+        kind="AnyOne",
+        every="Daily",
+        count=2,
+        start=WED,
+        end=WED + timedelta(days=2),
+        forever=False,
+    )
+    await sync(scenario)
+    (pill,) = open_chores(scenario).values()
+    husband = scenario.member("Husband")
+    await board(scenario).complete(pill.id, husband)  # Wednesday's
+    await scenario.advance(hours=24 * 2)  # Friday, its last day
+    await board(scenario).complete(pill.id, husband)
+    assert board(scenario).get(pill.id).status == "done"
+
+    await sync(scenario)
+    await sync(scenario)  # the next sync, still on Friday
+    assert open_chores(scenario) == {}
+    await scenario.advance(hours=24)  # Saturday: the wall chore is over
+    await sync(scenario)
+    await sync(scenario)
+    assert open_chores(scenario) == {}
+    linked = scenario.app.db.scalar("SELECT COUNT(*) FROM cozyla_chores")
+    assert linked == 0  # let go once it's over
