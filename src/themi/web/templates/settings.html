@@ -68,6 +68,7 @@
       </select>
     </label>
     <label class="check"><input type="checkbox" name="checkin_reviews" {% if member.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>
+    <label class="check"><input type="checkbox" name="done_praise" {% if member.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>
     <label>Your own notes on phrasing
       <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
     </label>

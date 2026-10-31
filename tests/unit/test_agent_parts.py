@@ -330,3 +330,11 @@ async def test_numbers_and_switches_sent_as_text_are_read_as_such(family: Seeded
 )
 def test_a_reply_in_quotes_loses_them(said: str, sent: str) -> None:
     assert agent_module._unquoted(said) == sent
+
+
+def test_the_warm_words_pass_the_strictest_pda_check() -> None:
+    """F19b: praise for what's done, never a nudge for more."""
+    from themi.core.tasks import PRAISE
+
+    for word in PRAISE:
+        assert find_demands(word, 3) == [], word

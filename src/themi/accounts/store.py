@@ -142,6 +142,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         phrasing=row["phrasing"],
         phrasing_notes=row["phrasing_notes"],
         checkin_reviews=bool(row["checkin_reviews"]),
+        done_praise=bool(row["done_praise"]),
         chart_limit=row["chart_limit"],
         break_extend_minutes=row["break_extend_minutes"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
@@ -375,6 +376,7 @@ class AccountStore:
         phrasing: str | None = None,
         phrasing_notes: str | None = None,
         checkin_reviews: bool | None = None,
+        done_praise: bool | None = None,
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
         calendar_details: str | None = None,
@@ -455,6 +457,8 @@ class AccountStore:
             changes["getting_ready_minutes"] = getting_ready_minutes
         if leave_heads_up is not None:
             changes["leave_heads_up"] = int(leave_heads_up)
+        if done_praise is not None:
+            changes["done_praise"] = int(done_praise)
         if noise_emails is not None:
             if noise_emails not in NOISE_EMAILS:
                 raise InvalidValue("noise emails come once a day, twice a day or every other day")

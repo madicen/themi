@@ -16,6 +16,7 @@ import json
 import logging
 import re
 import secrets
+import zlib
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
@@ -124,11 +125,13 @@ BOTH_WORDS = ("both", "either", "either of us", "one of us", "both of us")
 OTHER_WORDS = ("someone else", "somebody else", "the other one", "not me", "my partner")
 STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
+# F19b (Erin's idea #102): done in Themi (a tap, a tick, in chat), a short warm word in place
+# of the thanks. Praise for what's done, never a nudge for more.
+PRAISE = ("Nice work.", "Well done.", "Good job.", "Nicely done.", "That's one off the list.")
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
 MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
 MORNING_LIST_DONE = "This morning's list: all done."
-MORNING_LIST_TICKED = "Marked done: {title}."
 MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
 MORNING_LIST_BUTTONS = 6
 LATER_TEXT = "No rush on that one ({title}). It'll come back around in a few hours."
@@ -659,10 +662,11 @@ class TaskBoard:
         away, and the wall was slow, so was it done?), and the list shows the rest."""
         assert event.button is not None
         task_id = int(event.button.payload["task"])
-        await self.complete(task_id, event.member, interactive=True, tapped=event.button.message_id)
+        ticked = await self.complete(
+            task_id, event.member, interactive=True, tapped=event.button.message_id
+        )
         if event.button.message_id is None:
             return
-        ticked = MORNING_LIST_TICKED.format(title=self.get(task_id).title)
         left = []
         for task_id in event.button.payload.get("list", []):
             try:
@@ -792,6 +796,9 @@ class TaskBoard:
             self.withdraw_prompt(task)
             await self._changed(self.get(task_id), "done", interactive)
             said = DONE_TEXT.format(title=task.title)
+        thanks = DONE_TEXT.format(title=task.title)
+        if interactive and by.done_praise and said.startswith(thanks):
+            said = thanks.removesuffix("Thank you.") + _praise(task) + said.removeprefix(thanks)
         for hook in self.done_hooks:  # each time it's done, a repeating one's every round
             try:
                 await hook(task, by, interactive)
@@ -1472,6 +1479,11 @@ def _task_id(row: dict[str, Any]) -> int | None:
     return int(parts[1]) if len(parts) > 2 and parts[0] == "task" and parts[1].isdigit() else None
 
 
+def _praise(task: Task) -> str:
+    """One of PRAISE, varied by task and moment, so it doesn't read as a stamp."""
+    return PRAISE[zlib.crc32(f"{task.id}-{clock.now():%Y%m%d%H%M}".encode()) % len(PRAISE)]
+
+
 def _short(title: str, limit: int = 28) -> str:
     return title if len(title) <= limit else title[: limit - 1].rstrip() + "…"
 
@@ -1841,7 +1853,8 @@ def clock_words(moment: datetime | time) -> str:
 
 @tool(
     "complete_task",
-    "Mark a task done when someone says it's been taken care of.",
+    "Mark a task done when someone says it's been taken care of. The result is what to tell "
+    "them, its warm word included; say it as it is.",
     {"task_id": {"type": "integer"}},
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
