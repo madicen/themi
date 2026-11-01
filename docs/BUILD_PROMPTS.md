@@ -154,7 +154,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 | F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
-| V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [ ] |
+| V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 
 ## Fixed technical choices
 
@@ -7209,7 +7209,7 @@ where they asked in their own words.
 
 
 ### V1 · Robot vacuum (Roborock): chores when it needs a hand, back to its dock
-Status: [ ]
+Status: [x] 2026-11-01
 Depends on: 31, H1, 11
 Read first: "Integrations" (devices); "Module behaviour" → C (Laundry), whose task-from-a-device
 pattern this follows. The plan has no robot vacuum yet; this prompt is where it's decided.
@@ -7300,3 +7300,46 @@ Tests:
 - A consumable under 5% makes one task, not one a poll.
 
 Commit when done.
+
+Notes (2026-11-01):
+- `python-roborock==7.15.1`, pinned, as the optional extra `themi[roborock]` (not in the
+  Docker image, like `thinq`). The S8 MaxV Ultra is `roborock.vacuum.a97` in its constants, a
+  V1-protocol vacuum. The library picks the LAN or the cloud by itself and reconnects; its
+  discovery data is cached in memory only, so a restart asks Roborock's cloud again.
+- `themi.connectors.roborock`: `RoborockLogin` / `RoborockSession` are the seams;
+  `library.py` is the real one (the only piece the default tests don't reach, checked offline
+  against the installed library's names), `tests/fakes/roborock.py` the fake.
+  `RoborockAccount` keeps the email and the library's login data encrypted in
+  `roborock_account`; the code is traded by the same client that asked for it (v4 login).
+- Migration 0093 rebuilds `devices` for the `roborock` provider. With foreign keys on, a
+  rebuild cascade-deletes `device_states` and `appliance_cycles` and blanks
+  `laundry_loads.washer_id`, so those are kept aside and put back (a test pins it).
+- `RoborockWatcher`, job `devices.vacuum` every minute: a robot moving or stopped somewhere is
+  read every run, on its dock (with a dock alert or not) or offline every 5 minutes, parts
+  every 6 hours. Problems and worn parts are kept in `vacuum_states`; the first read of each
+  is the starting point. Deviation: `VacuumEvent` has a `gone` flag rather than a `cleared`
+  kind. The code table is `events.py`'s `ROBOT` and `DOCK`; an unknown code is a `fault`,
+  logged once. `not_docked` also covers the robot sitting idle off its dock.
+- `themi.core.vacuum`: one task per live problem (`vacuum_problems`), assigned with
+  `Matcher.roomiest`, off the wall, outbox kind `vacuum` ("/pause vacuum"). A problem a person
+  marked done isn't raised again until the robot stops showing it (`gone_at`).
+- Dock alerts latch on the robot until "Resolved" in the app (the library says so), so the
+  side effect is one category, `vacuum_home` ("Clear the vacuum's alert and send it back to
+  its dock, once someone's sorted it"): offered when a stuck/jammed/bin/fault problem goes
+  away and the robot sits off its dock, or when someone taps Done while it still shows the
+  alert. The executor reads the robot live, resolves its alert, and sends it home only when
+  it's off the dock and not cleaning or returning.
+- A sign-in that stops working is kept as the account's problem (reads stop, the Family page
+  says so) and the admins hear once; linking again clears it.
+- `appliance_status` covers `vacuum`: its state, battery, and what it needs; the devices tool
+  group now matches "robot", "roborock", "the vacuum" and "vacuum's" (not "vacuum upstairs",
+  a chore).
+- Not tested against Roborock itself: the fixtures follow the library's simulator and
+  models, not captures. Once linked, a status that differs should become a fixture. The
+  build plan has no vacuum section and wasn't read for this prompt.
+- Follow-ups: the vacuum as an energy input; the map picture in the nudge (the outbox can't
+  send images yet); resetting a part's counter from Themi; the dust bag's status bits (the
+  library's mapping for them looks wrong, so only the dock's alerts count for now).
+- Setup: `pip install -e '.[roborock]'`, restart (applies 0093), then Family page, **Robot
+  vacuum**: email, Send code, the emailed code, Link Roborock. To skip the cards, turn on
+  "Clear the vacuum's alert and send it back to its dock" under "What Themi does alone".

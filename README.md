@@ -199,6 +199,30 @@ yet sent. A load left longer than the fresh hours on the Family page (8 by defau
 rewash suggestion instead, timed to finish when that person has room.
 "/pause laundry" holds these nudges for a while.
 
+### The robot vacuum, through Roborock (optional)
+
+A Roborock vacuum (built for the S8 MaxV Ultra) can tell Themi when it needs a person.
+Roborock has no official API, so Themi uses the unofficial `python-roborock` library, the
+one Home Assistant's Roborock integration uses. It signs in with the Roborock app account
+and talks to the robot over the home network when it can, through Roborock's cloud
+otherwise. The library may break when Roborock changes things; Themi then logs it and the
+vacuum goes quiet until it's fixed.
+
+1. Install the library: `pip install -e '.[roborock]'`, and restart. (The Docker image
+   doesn't include it.)
+2. As an admin, open the Family page, enter the Roborock app's email under **Robot
+   vacuum**, press **Send code**, then enter the code Roborock emails and press **Link
+   Roborock**. The login it returns is kept encrypted.
+
+When it gets stuck, jammed, runs the dock's clean water out, fills the dirty-water tank,
+loses its dustbin or doesn't make it back to its dock, whoever has more room gets a chore and
+a nudge 5 minutes later (half an hour for "not back on its dock"), naming the room when its
+map says. If the robot sorts itself out first, nothing is sent. Once it's sorted, Themi asks
+to clear its alert in the app and send it back to its dock; turn on "Clear the vacuum's alert
+and send it back to its dock" under "What Themi does alone" to skip asking. A part nearly worn
+out (filter, brushes, the dock's filter) becomes a chore too. "/pause vacuum" holds these
+nudges for a while. If the sign-in stops working, the admin hears once; link it again.
+
 ### Groceries said to Google Home, through Google Keep (optional, a trial)
 
 "Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API
