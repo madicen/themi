@@ -203,9 +203,27 @@ async def test_a_deadline_overrides_receptivity_and_the_limit_but_not_quiet_hour
 
     clock.freeze(at(21, 21))
     late = await outbox.send(erin, "late relay", priority=Priority.NORMAL, deadline=at(21, 22))
+    assert late.status == "sent"  # its deadline is in quiet hours: it goes before them (F20c)
+
     clock.freeze(at(21, 22))
-    assert await outbox.flush() == 0  # deadline passed, but it's quiet hours now
-    assert outbox.queued(erin.id)[0]["id"] == late.outbox_id
+    later = await outbox.send(erin, "too late", priority=Priority.NORMAL, deadline=at(21, 23))
+    assert await outbox.flush() == 0  # in quiet hours already: morning, as before
+    assert outbox.queued(erin.id)[0]["id"] == later.outbox_id
+
+
+async def test_a_deadline_in_quiet_hours_goes_before_they_start(
+    family: SeededFamily, sender: FakeSender
+) -> None:
+    """F20c: "Michael still needs to put the sheets back on the bed tonight" was due at 11 pm,
+    in his quiet hours, with his daily limit used up, so it waited for 8 am and read "Was due
+    yesterday". It goes half an hour before quiet hours start instead."""
+    outbox = Outbox(family.store, sender, PdaShield(None), LaterBy(timedelta(hours=0)))
+    erin = family.store.update_settings(SYSTEM, family.erin.id, daily_limit=0)
+    clock.freeze(at(21, 18, 45))
+    result = await outbox.send(erin, "sheets", priority=Priority.NORMAL, deadline=at(21, 23))
+    assert result.send_after == at(21, 21)
+    clock.freeze(at(21, 21, 1))
+    assert await outbox.flush() == 1
 
 
 async def test_dedupe_keys_suppress_repeats(family: SeededFamily, outbox: Outbox, sender) -> None:

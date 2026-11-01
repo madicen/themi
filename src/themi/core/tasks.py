@@ -803,6 +803,16 @@ class TaskBoard:
             self.db.execute(
                 f"UPDATE tasks SET {assignments} WHERE id = :id", {**changes, "id": task_id}
             )
+            if changes.get("title", task.title) != task.title:
+                # F20c: a nudge already waiting goes out under the new name.
+                for queued in self.db.query(
+                    "SELECT id, text FROM outbox WHERE status = 'queued' AND dedupe_key LIKE ?",
+                    (f"task-{task.id}-%",),
+                ):
+                    self.db.execute(
+                        "UPDATE outbox SET text = ? WHERE id = ?",
+                        (queued["text"].replace(task.title, changes["title"]), queued["id"]),
+                    )
             await self._changed(self.get(task_id), "edited", interactive)
         return self.get(task_id)
 

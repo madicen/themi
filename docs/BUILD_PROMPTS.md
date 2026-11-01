@@ -150,6 +150,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
 | F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [ ] |
+| F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [~] |
 
 ## Fixed technical choices
 
@@ -6992,3 +6993,39 @@ Build:
 Tests: the tool with the fakes (running with time left, finished, idle, offline, not linked);
 the router picks `devices` for "how much longer on the wash?" and "and the dryer?" after it;
 a scenario: Michael asks, the answer is the fake washer's time left.
+
+### F20c · Feedback (2026-10-31): rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight
+Status: [~]
+Depends on: 08, F19b, F20a
+Read first: "Module behaviour" → A (PDA shielding). From Erin's bugs #111 and #112
+(2026-10-31, 6:45 pm), one exchange: "I vacuumed upstairs. And washed the sheets. Though
+Michael still needs to put the sheets back on the bed tonight". The tools did it all (tasks
+1 and 2 done, task 66 for Michael). The reply was `Marked done: "Vacuum upstairs bedroom".` /
+`Marked done: "Change sheets (upstairs bed and couch)".` / `Put "Put sheets back on bed" on
+Michael's list for tonight.` What Erin got: "Up next: put sheets back on bed for Michael
+tonight." with two choice buttons.
+- The shield (Erin at 2) read "Put … on Michael's list" as a command: it's a report.
+- The AI rewrite got the whole message and dropped both confirmations (#112).
+- It made a choice of a done thing; its buttons answer as if typed, so "Put on Michael's
+  list" ran a second turn, whose reply was rewritten into "Michael's list needs updating."
+  with "Add to it now" (#111).
+- `complete_task`'s warm word was dropped by the model before that (#112: no praise).
+- Found looking: Michael's nudge for task 66 (due 11 pm, in his quiet hours; his daily limit
+  used) was queued for 8 am as "Was due yesterday", under the name it had before a rename.
+
+Decisions (Michael, 2026-10-31): do all of it; make sure he sees tonight's nudge.
+
+Build:
+- The shield rewrites only the flagged sentences; the rest go word for word.
+- A rewrite offers choice buttons only for a message that asks something.
+- A command verb followed by a quoted task title (`Put "X" on …`) is a report, not a command.
+- `complete_task` sends its own confirmation, warm word included (several in one turn as one
+  message), and the model is told not to restate it.
+- The outbox: a deadline inside quiet hours or a busy time goes `BEFORE_QUIET` (30 minutes)
+  before that stretch starts (`localtime.free_until`), or at once if that's passed.
+- A rename changes the task's queued nudge too.
+
+Tests: each a failing test first. The exchange as a scenario at strength 2: both
+confirmations with their warm words, no choice buttons, no second card. A rewrite that drops
+an unflagged line can't. Choice buttons only on a question. The report sentence passes the
+checker. The deadline in quiet hours; free_until; a renamed queued nudge.

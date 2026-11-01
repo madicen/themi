@@ -5,6 +5,7 @@ from tests.fixtures.family import SeededFamily
 from themi.accounts import SYSTEM, BusyTime
 from themi.localtime import (
     free_from,
+    free_until,
     in_busy_time,
     in_quiet_hours,
     next_waking_start,
@@ -78,6 +79,18 @@ def test_free_from_chains_quiet_hours_and_busy_times(family: SeededFamily) -> No
     late = BusyTime((2,), time(20), time(21, 30))  # Wednesdays, right up to quiet hours
     erin = family.store.update_settings(SYSTEM, family.erin.id, busy_times=[late])
     assert free_from(erin, at(21, 20, 15), TZ) == at(22, 8)
+
+
+def test_free_until_steps_back_to_where_free_time_ends(family: SeededFamily) -> None:
+    """F20c: a deadline inside quiet hours, a busy time, or both run together."""
+    erin = family.store.get_member(family.erin.id)
+    assert free_until(erin, at(21, 18), TZ) == at(21, 18)  # free: itself
+    assert free_until(erin, at(21, 23), TZ) == at(21, 21, 30)
+    assert free_until(erin, at(22, 2), TZ) == at(21, 21, 30)  # after midnight, same night
+    late = BusyTime((2,), time(20), time(21, 30))  # Wednesdays, right up to quiet hours
+    erin = family.store.update_settings(SYSTEM, family.erin.id, busy_times=[late])
+    assert free_until(erin, at(21, 23), TZ) == at(21, 20)
+    assert free_until(erin, at(21, 23), TZ, [(at(21, 19), at(21, 20))]) == at(21, 19)
 
 
 def test_busy_time_labels() -> None:

@@ -712,3 +712,16 @@ async def test_a_task_due_today_for_the_other_partner_goes_at_once(scenario: Sce
         t.startswith("Due today: Call the plumber (Erin added this for you).")
         for t in scenario.inbox("Husband")
     )
+
+
+async def test_a_renamed_task_is_nudged_by_its_new_name(scenario: Scenario) -> None:
+    """F20c: "Put sheets back on bed" was renamed "Put sheets back on the bed" after its
+    nudge was queued, and the nudge still had the old name."""
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    task = await board.create(erin, "Book dentist", "errand", 1, date(2026, 10, 22))
+    await board.update(task.id, erin, title="Book the dentist", interactive=True)
+    await scenario.advance(hours=25)
+    nudges = [t for t in scenario.inbox("Erin") if "dentist" in t]
+    assert nudges == ["Due today: Book the dentist. Done already, or later?"]
