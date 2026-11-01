@@ -147,6 +147,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
+| T2 | Tasks: a chore that waits for another to be done | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -6774,3 +6775,81 @@ Notes (2026-10-30):
 - Setup: restart (applies 0083). The first sync puts the whole grocery list into each
   linked Keep list.
 
+### T2 · Tasks: a chore that waits for another to be done
+Status: [ ]
+Depends on: F7, C2d, F17b, F19c
+Read first: F7's notes (`due_before_task`), C2d's (`TaskBoard.holds`, the chart queue), F17b's
+(follow-ups). Plan: Task matching.
+
+From Michael (2026-10-31): "Any time you are going to assign Erin to Clean the Kitchen, first
+send a task to Michael to declutter the kitchen. Once that task is marked done, then Erin can
+be assigned a Clean the kitchen task." Real data: task 29 "Clean kitchen" is Erin's, every
+Wednesday, `missed = roll`; Erin's chart limit is 1.
+
+What happens today (none of it is what was asked):
+- As a rule (`propose_rule`, policy): the text goes into the model's prompt, but chore nudges
+  are sent by code, so nothing changes, and "Locked in. I'll follow that from now on." is
+  untrue.
+- As `due_before_task`: Michael's declutter is due Tuesday (good), but Erin's chore still comes
+  up Wednesday. Left undone, the declutter records a miss on Thursday when her round rolls and
+  moves to next Tuesday, so doing it Friday counts for next week and Erin gets nothing.
+- As a follow-up (`add_follow_up`): Erin gets a second, one-off kitchen task (off the wall,
+  no steps, outside her chart limit) as soon as Michael is done, even on Tuesday, and her own
+  chore still comes up Wednesday.
+
+Wanted (Michael's decisions):
+- "Any time" repeats with the chore: every round of the kitchen gets its declutter first.
+  "Next time" is once: only the next round, then the link goes.
+- Tuesday: Michael's declutter is due (the day before Erin's round), as `due_before_task` does.
+- Erin's round waits until the declutter is done for it. Undone through Friday: Erin is never
+  nudged, it isn't on her chart, and it isn't a miss or overdue for her.
+- Done early (Monday or Tuesday): Erin's chore still comes up on its own day, Wednesday.
+- Done late (Friday): Erin's chore comes up at once (her chart queue may pick it, her nudge
+  goes in her good window). Its overdue and escalation clocks start then. It rolls on as usual
+  at the next Wednesday.
+- Still undone when the next round comes: Michael keeps one owed declutter, not two, and it
+  now counts for the new round. Erin's waiting round moves to the new date with no miss
+  recorded for her (record it as skipped while waiting, not missed).
+- Always, whoever has the kitchen (reassigned, shared, either of you): the hold is on the
+  chore, not on Erin.
+- Michael is told: his declutter nudge says what it clears the way for ("This one clears the
+  way for Erin's kitchen."), in words that pass the PDA checker at his level. Erin is never
+  told she's waiting; her nudge simply comes when it's ready, worded as usual.
+
+Build:
+- A flag on the due-before link: `tasks.holds_target` (the prerequisite holds its target back)
+  and `tasks.hold_once` (for "next time": cleared after one round). Migration.
+- `TaskBoard.waiting_on(task)`: the prerequisite chore(s) holding this one whose current round
+  isn't done for this round. Registered in `TaskBoard.holds`, so `prompt`, the end-of-day
+  list, the morning list, overdue reminders and the day summary leave it out.
+- The chart queue (`ChartQueue._next`, `counts`) skips a waiting chore, so it doesn't take
+  Erin's one slot; the wall sync keeps it off the chart for people without a limit too.
+- `_settle_missed_round`, for a held target: no missed run while it waits; move to the next
+  date with a "skipped" run instead. For the prerequisite: when it holds its target, it's
+  catch-up (stays owed, follows the target's new round, no second one).
+- A done hook on the prerequisite: if its target was waiting and its day has come, nudge it
+  (and refresh the chart queue) now; if its day hasn't come, nothing (it comes up on its day).
+- `set_task_schedule`: `holds_target` and `once` next to `due_before_task`; the tool
+  description covers "any time … first … then" (repeats) versus "next time" (once). The
+  read-back says it: "Saved: Declutter the kitchen (Michael), the day before Clean kitchen.
+  Clean kitchen waits until it's done, every time."
+- Rules: a `policy` rule about when chores happen or wait can't make it happen.
+  `propose_rule`'s description sends those to the scheduling tools, and the reply never says
+  "I'll follow that" for one. An eval case for the message above.
+- Plan: update the Task matching section (prerequisites that hold a chore back).
+
+Tests (frozen clock, from a Sunday):
+- Scenario, Michael's timeline: Tuesday nudge to Michael with the clears-the-way line; nothing
+  to Erin Wednesday or Thursday, and the kitchen isn't on her chart; Michael done Friday:
+  Erin's chore comes up and she's nudged Friday; no missed runs for either.
+- Done Tuesday: Erin is nudged Wednesday, not Tuesday.
+- Undone until the next Tuesday: one declutter for Michael, Erin's round moved with a skipped
+  run, nothing sent to Erin.
+- "Next time": the hold applies to one round, then the link is gone and the next Wednesday
+  comes up as usual.
+- Reassigned to Michael: still held. Erin's chart limit: a waiting chore never takes the slot.
+- The clears-the-way wording passes the PDA checker at level 3.
+- The read-back text for a holding link, repeating and once.
+
+Done when: the message above, said in chat, sets up the repeating link, read back exactly, and
+the scenario timeline passes. Commit.
