@@ -33,7 +33,11 @@ ADD_CATEGORY, ADD_EXECUTOR = "list_add", "lists.add"
 THINGS_TO_BUY = "things_to_buy"  # the household's list for what isn't food (L2a)
 DELETE_CATEGORY, DELETE_EXECUTOR = "list_delete", "lists.delete"
 MAX_NAME = 60
-MAX_ITEM = 100
+MAX_ITEM = 500  # F21a, bug #117: a list of thoughts, not only things
+MAX_WALL_ITEM = 100  # what a list kept on the Cozyla wall takes
+SAID_BACK = 60  # characters: items up to this are named in the reply to an add
+# "Gift list. A scarf", "gift ideas: board games", "packing list - hats" (idea #115)
+OPENS_WITH_LIST = re.compile(r"\s*([^.:\n\u2013\u2014]{3,60}?)\s*(?:[.:\n\u2013\u2014]| - )\s*\S")
 
 
 def _clean(raw: str, limit: int, what: str) -> str:
@@ -43,6 +47,15 @@ def _clean(raw: str, limit: int, what: str) -> str:
     if len(text) > limit:
         raise InvalidValue(f"a {what} name is at most {limit} characters")
     return text
+
+
+def item_limit(nl: NamedList) -> int:
+    return MAX_WALL_ITEM if nl.wall_id else MAX_ITEM
+
+
+def too_long(nl: NamedList) -> str:
+    wall = ", the most a list on the wall takes," if nl.wall_id else ","
+    return f"That one's over {item_limit(nl)} characters{wall} so it isn't on {nl.name} yet."
 
 
 def name_key(text: str) -> str:
@@ -234,7 +247,7 @@ class Lists:
         there = {name_key(i.name) for i in nl.open_items}
         added = []
         for raw in names:
-            name = _clean(raw, MAX_ITEM, "list item")
+            name = _clean(raw, item_limit(nl), "list item")
             if name_key(name) in there:
                 continue
             ticked = next((i for i in nl.ticked if name_key(i.name) == name_key(name)), None)
@@ -397,9 +410,11 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     names, skipped = [], []
     for raw in args["items"]:
         try:
-            name = _clean(raw, MAX_ITEM, "list item")
+            name = _clean(raw, item_limit(nl), "list item")
         except InvalidValue as exc:
-            raise ToolFailed(f"{str(exc).capitalize()}.") from exc
+            long = " ".join(str(raw).split()).strip(" ,.;:")
+            reply = too_long(nl) if long else None
+            raise ToolFailed(f"{str(exc).capitalize()}.", reply) from exc
         if name_key(name) in there or name in names:
             skipped.append(name)
         else:
@@ -411,9 +426,31 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     refuse_spending(names, ctx.request_text, prices=nl.purpose == THINGS_TO_BUY)
     text = and_list(names)
     summary = f"{text[:1].upper()}{text[1:]} for {nl.name}"
-    proposal = Proposal(ADD_CATEGORY, summary, ADD_EXECUTOR, {"list_id": nl.id, "items": names})
-    asked = _said(names, ctx.request_text) and asks_to_add(ctx.request_text, ctx.previous_text)
+    said = and_list([f'"{n}"' for n in names]) if len(text) <= SAID_BACK else ""
+    proposal = Proposal(
+        ADD_CATEGORY,
+        summary,
+        ADD_EXECUTOR,
+        {"list_id": nl.id, "items": names},
+        said=f"Added {said} to {nl.name}." if said else f"Added to {nl.name}.",
+    )
+    asked = _said(names, ctx.request_text) and (
+        asks_to_add(ctx.request_text, ctx.previous_text)
+        or _opens_with(lists, ctx.member, nl, ctx.request_text)
+    )
     return replace(proposal, requested=asked)
+
+
+def _opens_with(lists: Lists, member: Member, nl: NamedList, request_text: str) -> bool:
+    """The message starts with this list's name, then the items: "Gift list. A scarf"
+    asks to add them as plainly as "add a scarf to the gift list" (idea #115)."""
+    found = OPENS_WITH_LIST.match(request_text)
+    if found is None or len(list_key(found.group(1))) < 3:
+        return False
+    try:
+        return lists.find(member, found.group(1)).id == nl.id
+    except ToolFailed:
+        return False
 
 
 @tool(

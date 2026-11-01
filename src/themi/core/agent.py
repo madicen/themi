@@ -470,6 +470,8 @@ class Agent:
                     call_system = f"{call_system}\n\n{LAST_WORD}"
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
+                    if ctx.replies and len(ctx.replies) == len(ctx.outcomes):
+                        return "\n".join(ctx.replies)  # the tools said it all (bug #118)
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)

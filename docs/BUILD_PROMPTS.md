@@ -152,6 +152,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
+| F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
+| F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -7127,3 +7129,80 @@ Notes (2026-10-31):
   task 35 onto it. Report #113 marked reviewed.
 - New since: idea #114 (Erin, 11:28 pm). Not looked at yet.
 - Setup: restart `themi run` (it was stopped for the repair). No migration.
+
+### F21a · Feedback (2026-11-01): "<list name>. X" adds it, longer items, a plain list-add reply
+Status: [x] 2026-11-01
+Depends on: L1a, F5, F20a
+Read first: "Trust tiers" (an action asked for in their own words counts as their yes;
+Themi checks the request against what they wrote). From Erin's reports of 2026-11-01, all
+on her new personal list (list 3; its name and items are private, so left out here):
+- Idea #115 / bug #116: "<list name> list. <item>" got an approval card every time.
+  `add_to_list` skips the card only when `asks_to_add` finds an add word ("add", "put"...),
+  and "<name> list. X" has none. Her personal rule 22 ("when I start with '<name> list',
+  add the rest") can't change that, so she also locked rule 23 (see F21b).
+- Bug #117: three entries over 100 characters (`MAX_ITEM`) failed, and the reply was only
+  "That didn't go through, so nothing has changed yet." (agent `FAILED_TEXT`).
+- Bug #118 (and 👎 on reply 163): an item quoting a painful remark about a sunny day →
+  "Added to <list>. Enjoy the sun." The model answered the item as if said to it.
+
+Build:
+- A message that opens with a list's name ("Gift list. X", "gift list: X", "packing
+  list - X", matched with `list_key`) and then the items counts as asking to add them to
+  that list, when the items are what they wrote. Wall lists and Things to Buy too.
+- A list that isn't on the Cozyla wall takes items up to 500 characters; a wall list keeps
+  100. When an item is still too long, the reply says so in plain words ("That one's over
+  500 characters, so it isn't on the list yet."), not just "didn't go through".
+- A turn whose only tool calls were list adds that went through gets Themi's own reply,
+  built from the tool results ("Added to Gift ideas."), not the model's: it
+  never comments on what the item says.
+
+Tests: each a failing test first, with made-up items. As a scenario: "Gift list. A scarf"
+goes straight on; a 300-character item goes on a personal list; a 120-character item on a
+wall list gets the plain "too long" reply; an item the model would answer ("It's such a
+nice day!") gets only Themi's confirmation. Items the model inferred still wait for a yes.
+
+Notes (2026-11-01):
+- `add_to_list` counts "<list>. X" (also ":", " - ", a dash or a new line after the name)
+  as asking, when the opening words find this list (`Lists.find`, three letters at least)
+  and the items are in what they wrote (`_opens_with`). Model-inferred items still wait.
+- Items take up to 500 characters (`MAX_ITEM`), a wall list 100 (`MAX_WALL_ITEM`), in the
+  tool and in `Lists.add`. A too-long item's reply says so (`too_long`).
+- New `ToolContext.replies`: a staged tool's `Proposal.said` when it's done straight away,
+  and a `ToolFailed(..., reply)`. When every call this turn left one, they are the reply and
+  the model's text isn't sent. A list add names items up to 60 characters ('Added "A wool
+  scarf" to Gift ideas.'), else "Added to Gift ideas."
+- Follow-up: if the model shortens a too-long item and tries again, the reply would be both
+  lines ("That one's over..." then "Added..."). Not seen yet.
+- Reports not marked reviewed: #115, #117 and #118 are fixed here; #114 was a question
+  (answered in chat: the list is hers only, not on the wall, Keep or Google Tasks; it does
+  go to her Gemini free-tier model, into bug reports and the backups); #116 waits for F21b.
+- Setup: restart `themi run`. No migration. Rule 23 (household-wide automatic list adds) is
+  still locked; see F21b.
+
+### F21b · Feedback (2026-11-01): a rule card says what it really makes automatic, a rule Themi can't keep
+Status: [ ]
+Depends on: 13, F16a, F21a
+Read first: "Trust tiers" (a shared category becomes automatic for everyone; only an admin
+locks that), "Rules". From Erin's bug #116 (2026-11-01, 5:23 am): her personal policy rule
+22 was "Locked in" though a policy can't skip a yes. She then locked rule 23, an
+`autonomy_grant` on `list_add`, whose card said "Automatically add items starting with
+'<name> list' to the <name> list". It really made every list add automatic
+for the whole household, Things to Buy on the wall included. Also from #115: at 5:19 am the
+reply repeated the approval card's text under the card.
+
+Build:
+- A grant's card is built from its category, not the model's summary: who it covers
+  ("for everyone" for a shared category) and the category's label ("Add items to one of
+  Themi's lists, any list"). The model's words may follow as the reason.
+- `propose_rule` refuses a policy rule that asks to skip a yes ("without asking",
+  "automatically", "directly add"), telling the model the choices: a grant for the whole
+  category, or say plainly what Themi can't do.
+- A reply that repeats an approval card sent this turn is dropped.
+
+Tests: each a failing test first. Rule 23's proposal: the card names everyone and every
+list. A policy "add it without asking" is refused with the choices. The 5:19 reply that
+repeats the card isn't sent.
+
+Data (Michael decides): once F21a is live, unlock rule 23 so list adds ask again except
+where they asked in their own words.
+
