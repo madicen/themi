@@ -23,7 +23,7 @@ import asyncio
 import logging
 import random
 import re
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
@@ -143,6 +143,22 @@ def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
 
     # "Added: 'task 63' due today." keeps one pair of quotes, not two (bug #108's thread).
     return REQUOTED.sub(r"\1", TASK_NUMBER.sub(named, reply))
+
+
+# Bugs #111, #112: what complete_task said opens the reply; the model's own "Marked done" lines
+# go, since they're the same news without the warm word.
+SAID_DONE = re.compile(r"^\W*marked\s+(?:as\s+)?done\b", re.IGNORECASE)
+
+
+def _without_done(reply: str) -> str:
+    return "\n".join(line for line in reply.split("\n") if not SAID_DONE.match(line)).strip()
+
+
+def _done_first(done: Sequence[str], reply: str) -> str:
+    if not done:
+        return reply
+    rest = "" if reply in ("", "Done.") else reply
+    return "\n".join(done) + (f"\n\n{rest}" if rest else "")
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
@@ -457,9 +473,10 @@ class Agent:
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
-                    reply = _by_name(reply, self._task_title)
+                    reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
-                    return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    reply = _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break
                 used_tools = True
@@ -478,7 +495,7 @@ class Agent:
             return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
         finally:
             timer.added(ctx.groups - offered)
-        return TANGLED_TEXT
+        return _done_first(ctx.done, TANGLED_TEXT)
 
     def _history(self, member: Member, event: InboundEvent) -> list:
         recent = self.services.store.recent_messages(member.id, self.history + 3)

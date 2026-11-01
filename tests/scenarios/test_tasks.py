@@ -491,14 +491,8 @@ async def test_done_in_chat_says_a_warm_word_and_the_wall_doesnt(scenario: Scena
     vet = await board.create(erin, "Call the vet", "call", 1, date(2026, 10, 21), nudge=False)
     scenario.primary.queue_tool_call("complete_task", {"task_id": vet.id})
     scenario.primary.queue_text("Done.")
-    await scenario.say("Erin", "I called the vet")
-    result = [
-        b.content
-        for m in scenario.primary.last_request.messages
-        for b in m.content
-        if isinstance(b, ToolResult)
-    ][-1]
-    assert _praised(str(result), "Call the vet")
+    (reply,) = await scenario.say("Erin", "I called the vet")
+    assert _praised(reply, "Call the vet")  # Themi says it itself (bug #112)
     bins = await board.create(erin, "Bring bins in", "errand", 1, date(2026, 10, 21))
     await scenario.advance(hours=1)
     assert await board.complete(bins.id, erin) == "Marked done: Bring bins in. Thank you."

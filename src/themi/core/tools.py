@@ -52,6 +52,10 @@ class ToolContext:
     tasks: list[int] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
     groups: set[str] = field(default_factory=set)
+    # What complete_task said for each task marked done, warm word included: the reply
+    # opens with them, word for word (bugs #111, #112: the model dropped the warm word, and
+    # the phrasing rewrite dropped the rest).
+    done: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

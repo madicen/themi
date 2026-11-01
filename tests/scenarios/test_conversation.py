@@ -349,4 +349,5 @@ async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: S
     scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
     scenario.primary.queue_text('"Renew the car registration is done now."')
     replies = await scenario.say("Erin", "I renewed the car registration")
-    assert replies == ['"Renew the car registration" is done now.']
+    (reply,) = replies
+    assert reply.endswith('\n\n"Renew the car registration" is done now.')

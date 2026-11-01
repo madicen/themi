@@ -123,6 +123,7 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
 _LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
 _BULLET = re.compile(r"^\s*[-•*]\s")
 _FIRST = re.compile(r"^\s*([A-Za-z']+(?:-[A-Za-z']+)*)")
+_VERB_THEN_TITLE = re.compile(r"^\s*(?:please\s+)?[A-Za-z']+\s+[\"“]", re.IGNORECASE)
 
 
 def _opening_command(sentence: str) -> str | None:
@@ -146,6 +147,8 @@ def _opening_command(sentence: str) -> str | None:
         return None
     if len(words) > 1 and words[1] in _NOT_A_COMMAND_NEXT:
         return None
+    if _VERB_THEN_TITLE.match(sentence):
+        return None  # 'Put "X" on his list.' says what was done with a task (#111)
     return words[0]
 
 
@@ -245,24 +248,60 @@ class PdaShield:
         flags = find_demands(own, strength)
         if not flags:
             return Shielded(text, tuple(buttons))
+        # Bug #112: only the flagged lines are rewritten; the rest go word for word, so a
+        # rewrite can't drop a confirmation. A demand across lines takes the whole message.
+        lines = own.split("\n")
+        runs = _flagged_runs(lines, strength) or [(0, len(lines))]
+        method, options = "rewritten", ()
+        for start, end in reversed(runs):
+            part, how, offered = await self._shield_part(
+                "\n".join(lines[start:end]), member, strength, kind
+            )
+            lines[start:end] = [part]
+            method = "softened" if how == "softened" else method
+            options = offered or options
+        shielded = "\n".join(lines)
+        restored = join_quotes(shielded, quotes)
+        if restored is None:  # a whole-message rewrite lost a quote: soften instead
+            softened = soften(own, plain=member.phrasing != "gentle")
+            restored, method, options = join_quotes(softened, quotes) or softened, "softened", ()
+        # Bug #111: a choice only for a message that asks something; buttons for a report
+        # answered as if typed and ran the request again.
+        extra = _option_buttons(options) if not buttons and "?" in own else ()
+        return Shielded(restored, tuple(buttons) or extra, True, method, tuple(flags))
+
+    async def _shield_part(
+        self, part: str, member: Member, strength: int, kind: CallKind
+    ) -> tuple[str, str, tuple[str, ...]]:
+        """One run of flagged lines: (its new text, "rewritten" or "softened", options)."""
         if self.rewriter is not None:
             try:
-                rewrite = await self.rewriter.rewrite(own, member, flags, kind)
+                rewrite = await self.rewriter.rewrite(
+                    part, member, find_demands(part, strength), kind
+                )
             except Exception as exc:  # the AI being down must never block a message
                 log.info("PDA rewrite unavailable (%s); softening instead", type(exc).__name__)
             else:
-                rewritten = join_quotes(rewrite.text, quotes)
-                if rewrite.text.strip() and not find_demands(rewrite.text, strength) and rewritten:
-                    extra = () if buttons else _option_buttons(rewrite.options)
-                    return Shielded(
-                        rewritten, tuple(buttons) or extra, True, "rewritten", tuple(flags)
-                    )
+                if rewrite.text.strip() and not find_demands(rewrite.text, strength):
+                    return rewrite.text, "rewritten", rewrite.options
                 log.info("PDA rewrite still read as a demand; softening instead")
-        softened = soften(own, plain=member.phrasing != "gentle")
+        softened = soften(part, plain=member.phrasing != "gentle")
         if find_demands(softened, strength):  # pragma: no cover - soften() guarantees this
             log.warning("softener left a demand in place: %s", find_demands(softened, strength))
-        restored = join_quotes(softened, quotes) or softened
-        return Shielded(restored, tuple(buttons), True, "softened", tuple(flags))
+        return softened, "softened", ()
+
+
+def _flagged_runs(lines: Sequence[str], strength: int) -> list[tuple[int, int]]:
+    """Each stretch of consecutive lines with a demand in them, as (start, end)."""
+    runs: list[tuple[int, int]] = []
+    for n, line in enumerate(lines):
+        if not find_demands(line, strength):
+            continue
+        if runs and runs[-1][1] == n:
+            runs[-1] = (runs[-1][0], n + 1)
+        else:
+            runs.append((n, n + 1))
+    return runs
 
 
 # ----- quotes -----------------------------------------------------------------

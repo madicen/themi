@@ -2112,8 +2112,8 @@ def clock_words(moment: datetime | time) -> str:
 
 @tool(
     "complete_task",
-    "Mark a task done when someone says it's been taken care of. The result is what to tell "
-    "them, its warm word included; say it as it is.",
+    "Mark a task done when someone says it's been taken care of. Themi tells them it's done "
+    "itself, its warm word included.",
     {"task_id": {"type": "integer"}},
 )
 async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -2144,7 +2144,12 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
             "last message. Mark only what they say is done; ask if it isn't clear."
         )
-    return await _board(ctx).complete(task.id, ctx.member, interactive=True)
+    said = await _board(ctx).complete(task.id, ctx.member, interactive=True)
+    ctx.done.append(said)
+    return (
+        f'Done, and Themi tells them itself, word for word: "{said}" Don\'t say it again; '
+        "reply only about anything else they said, or nothing."
+    )
 
 
 def _named(ctx: ToolContext, task: Task) -> bool:
