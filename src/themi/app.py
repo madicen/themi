@@ -34,6 +34,7 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
+from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
 from themi.core.breaks import Breaks
 from themi.core.buying import ThingsToBuy
@@ -299,6 +300,7 @@ def build_app(
         laundry = Laundry(services, tasks, services.thinq)
         laundry.install()
         periodic.append(PeriodicTask("laundry.fresh", timedelta(minutes=15), laundry.check_fresh))
+    Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(
             PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)

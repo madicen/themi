@@ -105,14 +105,40 @@ def state_word(word: str) -> str | None:
 
 
 def _run_state(report: Any) -> str | None:
-    if isinstance(report, list):  # one per drum: the main one counts
-        main = [r for r in report if isinstance(r, dict)]
-        main.sort(key=lambda r: (r.get("location") or {}).get("locationName") != "MAIN")
-        report = main[0] if main else None
-    if not isinstance(report, dict):
+    report = _main(report)  # one per drum: the main one counts
+    if report is None:
         return None
     word = (report.get("runState") or {}).get("currentState")
     return state_word(str(word)) if word else None
+
+
+def _main(report: Any) -> dict[str, Any] | None:
+    """The report for the main drum (a list has one per drum), or the report itself."""
+    if isinstance(report, list):
+        main = [r for r in report if isinstance(r, dict)]
+        main.sort(key=lambda r: (r.get("location") or {}).get("locationName") != "MAIN")
+        report = main[0] if main else None
+    return report if isinstance(report, dict) else None
+
+
+def minutes_left(device_id: str, kind: str, report: Any) -> dict[str, int]:
+    """F20b: the time left on each appliance in a state report, as {external id: minutes},
+    from LG's `timer` (remainHour, remainMinute); an appliance without one is left out."""
+    parts_of = (
+        {f"{device_id}:{part}": (report or {}).get(part) for part in TOWER_PARTS}
+        if kind == TOWER and isinstance(report, dict)
+        else {device_id: report}
+    )
+    found = {}
+    for external_id, part in parts_of.items():
+        timer = (_main(part) or {}).get("timer")
+        if not isinstance(timer, dict) or "remainMinute" not in timer:
+            continue
+        try:
+            found[external_id] = int(timer.get("remainHour") or 0) * 60 + int(timer["remainMinute"])
+        except (TypeError, ValueError):
+            continue
+    return found
 
 
 def read_report(device_id: str, kind: str, report: Any) -> dict[str, str]:

@@ -105,6 +105,14 @@ class Dishwasher:
                 started += 1
         return started
 
+    async def read(self, device: Device) -> tuple[str, int | None]:
+        """F20b, asked how it's doing: its state read now (and kept, as a poll would), and
+        the minutes left while it runs. HomeConnectError when it can't be read."""
+        state = await self.account.operation_state(device.external_id)
+        await self._saw(device, state)
+        seconds = await self.account.seconds_left(device.external_id) if state == RUN else None
+        return state, None if seconds is None else round(seconds / 60)
+
     async def _saw(self, device: Device, state: str) -> bool:
         """Note the state; True if a cycle started. Offline says nothing either way."""
         now = to_utc_iso(clock.now())

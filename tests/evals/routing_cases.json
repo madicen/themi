@@ -774,6 +774,31 @@
     "add_to_wall_routine",
     "start_break"
    ]
+  },
+  {
+   "id": "devices-wash-left",
+   "kind": "plain",
+   "message": "How much longer on the current wash cycle?",
+   "tools": [
+    "appliance_status"
+   ]
+  },
+  {
+   "id": "devices-dryer-follow",
+   "kind": "follow-up",
+   "message": "And the dryer?",
+   "before": "How much longer on the current wash cycle?",
+   "tools": [
+    "appliance_status"
+   ]
+  },
+  {
+   "id": "devices-dishwasher-para",
+   "kind": "paraphrase",
+   "message": "Is the dishwasher through yet?",
+   "tools": [
+    "appliance_status"
+   ]
   }
  ]
 }

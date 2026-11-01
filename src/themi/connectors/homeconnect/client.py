@@ -44,6 +44,7 @@ MEDIA_TYPE = "application/vnd.bsh.sdk.v1+json"
 OPERATION_STATE = "BSH.Common.Status.OperationState"
 STATE_PREFIX = "BSH.Common.EnumType.OperationState."
 RUN = "Run"
+REMAINING_TIME = "BSH.Common.Option.RemainingProgramTime"  # seconds, on the active program
 STATE_TTL = timedelta(minutes=10)
 EARLY = timedelta(minutes=5)  # refresh an access token this long before it runs out
 TIMEOUT = 20.0
@@ -155,6 +156,20 @@ class HomeConnectClient:
         body = await self._get(f"/api/homeappliances/{ha_id}/status/{OPERATION_STATE}", access)
         value = str(body.get("data", {}).get("value") or "")
         return value.removeprefix(STATE_PREFIX)
+
+    async def seconds_left(self, access: Secret, ha_id: str) -> int | None:
+        """F20b: the active program's remaining time, or None with no program running (or
+        none said)."""
+        try:
+            body = await self._get(f"/api/homeappliances/{ha_id}/programs/active", access)
+        except HomeConnectError as exc:
+            if isinstance(exc, (LinkRevoked, RateLimited, ApplianceOffline)):
+                raise
+            return None  # 404: no program running
+        for option in body.get("data", {}).get("options", []):
+            if option.get("key") == REMAINING_TIME and isinstance(option.get("value"), int):
+                return int(option["value"])
+        return None
 
     # ----- the wire ---------------------------------------------------------------------
 
@@ -278,6 +293,9 @@ class HomeConnectAccount:
 
     async def operation_state(self, ha_id: str) -> str:
         return await self._with_token(lambda access: self.client.operation_state(access, ha_id))
+
+    async def seconds_left(self, ha_id: str) -> int | None:
+        return await self._with_token(lambda access: self.client.seconds_left(access, ha_id))
 
     async def _with_token(self, call: Any) -> Any:
         now = clock.now()

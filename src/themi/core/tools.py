@@ -166,6 +166,11 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"went off|safeway|\bcart\b|weekly shop",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
+    "devices": (
+        "the washer, dryer and dishwasher: running, done, time left",
+        r"wash(?:er|ing)?\b|dryer|drying|dishwasher|laundry|cycle|load\b|appliance|"
+        r"how (?:much )?longer|time left|still running|is it done",
+    ),
     "spending": (
         "money spent: takeout, eating out, business expenses",
         r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
@@ -281,6 +286,19 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "I have to phone the clinic, can you help?",
         "Make me notes for calling customer service",
     ),
+    "devices": (
+        "How much longer on the wash?",
+        "Is the dryer done yet?",
+        "Is the dishwasher still running?",
+        "How long is left on the laundry?",
+        "Has the washer finished?",
+        "Is anything running right now?",
+        "When will the dryer be done?",
+        "Is the dishwasher finished?",
+        "What's the dryer at?",
+        "Is the load of towels still going?",
+        "How far along is the dishwasher?",
+    ),
     "spending": (
         "We spent $30 on burgers",
         "Got takeout tonight, $45",
@@ -388,6 +406,7 @@ TOOL_GROUPS: dict[str, str] = {
         ("update_pantry", "show_pantry", "suggest_meals", "fill_safeway_cart"), "pantry"
     ),
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
+    "appliance_status": "devices",
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }
 

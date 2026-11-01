@@ -29,6 +29,7 @@ from themi.connectors.thinq.client import (
 from themi.connectors.thinq.events import (
     TOWER,
     ApplianceEvent,
+    minutes_left,
     parts,
     read_push,
     read_report,
@@ -131,6 +132,17 @@ class ThinqWatcher:
             for external_id, state in read_report(lg_id, kind, report).items():
                 events += await self._saw(external_id, state)
         return events
+
+    async def read(self, device: Device) -> tuple[str | None, int | None]:
+        """F20b, asked how it's doing: the appliance's state read now (and kept, as a poll
+        would) and its minutes left, if LG says. ThinqError when it can't be read."""
+        lg_id, _, part = device.external_id.partition(":")
+        kind = TOWER if part else ""
+        report = await self.account.state(lg_id)
+        state = read_report(lg_id, kind, report).get(device.external_id)
+        if state is not None:
+            await self._saw(device.external_id, state)
+        return state, minutes_left(lg_id, kind, report).get(device.external_id)
 
     async def _saw(self, external_id: str, state: str) -> int:
         device = next((d for d in self.devices() if d.external_id == external_id), None)

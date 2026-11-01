@@ -7,7 +7,7 @@ import pytest
 from tests.fakes.thinq import payload
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqDevice
 from themi.connectors.thinq.client import region_url
-from themi.connectors.thinq.events import parts, read_push, read_report, state_word
+from themi.connectors.thinq.events import minutes_left, parts, read_push, read_report, state_word
 
 WASHER, DRYER, TOWER = "DEVICE_WASHER", "DEVICE_DRYER", "DEVICE_WASHTOWER"
 
@@ -71,3 +71,16 @@ def test_the_country_picks_the_server() -> None:
     assert region_url("US") == "https://api-aic.lgthinq.com"
     assert region_url("GB") == "https://api-eic.lgthinq.com"
     assert region_url("KR") == "https://api-kic.lgthinq.com"
+
+
+def test_minutes_left_from_the_timer() -> None:
+    # F20b (bug #109): asked how long is left, Themi reads LG's timer.
+    assert minutes_left("w", "DEVICE_WASHER", payload("washer_running")) == {"w": 24}
+    assert minutes_left("d", "DEVICE_DRYER", payload("dryer_running")) == {"d": 48}
+    assert minutes_left("t", "DEVICE_WASHTOWER", payload("washtower")) == {
+        "t:washer": 0,
+        "t:dryer": 40,
+    }
+    assert minutes_left("w", "DEVICE_WASHER", payload("washer_power_off")) == {}
+    long = {"runState": {"currentState": "DRYING"}, "timer": {"remainHour": 1, "remainMinute": 5}}
+    assert minutes_left("d", "DEVICE_DRYER", long) == {"d": 65}
