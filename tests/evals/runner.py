@@ -78,7 +78,8 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
 
 async def _task(scenario: Scenario, member: Member, step: dict[str, Any]) -> None:
     """A task of theirs: {"task": title}, and optionally "due" ("today", "tomorrow" or a
-    date), "at" ("HH:MM") and "both" (either of them, F19c and O1)."""
+    date), "at" ("HH:MM"), "both" (either of them, F19c and O1) and "for" (someone else's,
+    by name: T2)."""
     board = scenario.app.services.taskboard
     assert board is not None
     if set(step) == {"task"}:  # as the cases before O1 had it: matched, and nudged
@@ -90,8 +91,9 @@ async def _task(scenario: Scenario, member: Member, step: dict[str, Any]) -> Non
     if due and day is None:
         day = date.fromisoformat(due)
     at = time.fromisoformat(step["at"]) if "at" in step else None
+    whose = scenario.member(step["for"]) if "for" in step else member
     task = await board.create(
-        member, step["task"], "errand", 1, day, assignee=member, due_time=at, nudge=False
+        member, step["task"], "errand", 1, day, assignee=whose, due_time=at, nudge=False
     )
     if step.get("both"):
         await board.make_either(task.id)
