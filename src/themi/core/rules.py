@@ -431,6 +431,13 @@ URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail fr
     r"\b(?:e-?mails?|mail) from\b.*\burgent\b|\b\w+ e-?mails (?:are|count as) (?:always )?urgent\b"
 )
 REMINDER = re.compile(r"\bremind (?:me|us|him|her|them|\w+) (?:about|to|of|that)\b")
+# T2: "any time you assign Erin the kitchen, first send Michael a task to declutter it"
+CHORE = re.compile(r"\b(?:assign\w*|chores?|tasks?)\b")
+CHORE_ORDER = re.compile(
+    r"\bfirst\b.*\bthen\b|\b(?:once|until|after)\b.*\b(?:done|finished|completed?)\b"
+    r"|\bbefore (?:you |she |he |they )?(?:assign|give)",
+    re.DOTALL,
+)
 
 
 @tool(
@@ -491,6 +498,13 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
             "A reminder is a task, not a rule: create_task, then set_task_schedule for when it "
             "repeats ('every Tuesday evening'); more_tools brings the schedules group if that "
             "tool isn't there."
+        )
+    if CHORE.search(said) and CHORE_ORDER.search(said) and args["kind"] == "policy":
+        raise ToolFailed(  # T2: chores waiting for each other happen in code, not the prompt
+            "Chores waiting for each other aren't a rule (a rule can't hold a chore back): "
+            "set_task_schedule on the chore done first, with due_before_task the other chore's "
+            "id and holds_back true (once true for 'next time'). create_task first if it "
+            "doesn't exist yet; more_tools brings the schedules group if that tool isn't there."
         )
     if URGENT_MAIL.search(said):
         raise ToolFailed(

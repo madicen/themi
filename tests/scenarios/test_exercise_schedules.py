@@ -37,6 +37,8 @@ async def runs(scenario: Scenario) -> tuple[Task, list[str]]:
             "missed": "next_day",
             "due_before_task": 0,
             "either": False,
+            "holds_back": False,
+            "once": False,
         },
     )
     scenario.primary.queue_text("All set.")

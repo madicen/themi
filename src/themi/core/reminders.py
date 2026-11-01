@@ -234,9 +234,9 @@ class Reminders:
     @staticmethod
     def _moves_by_itself(task: Task) -> bool:
         """Missed rounds that roll on or move to the next day, and deadline chores, aren't
-        overdue: they move."""
+        overdue: they move. A deadline chore that holds another back stays owed (T2)."""
         if task.due_before_task is not None:
-            return True
+            return not task.holds_target
         return task.repeat is not None and task.missed in ("roll", "next_day")
 
     def _nudged_today(self, row: dict[str, Any], today: date) -> bool:

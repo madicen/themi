@@ -172,7 +172,8 @@ class ChartQueue:
         return min(waiting, key=lambda t: (t.due_on or today, -RANK[t.importance], t.id))
 
     def waiting(self, member: Member, today: date) -> list[Task]:
-        """This person's chores that could come up: open, not up, not passed over today."""
+        """This person's chores that could come up: open, not up, not passed over today, and
+        not waiting for another chore to be done first (T2)."""
         up = {p.task_id for p in self.picks(member)}
         skipped = {
             r["task_id"]
@@ -184,7 +185,10 @@ class ChartQueue:
         return [
             t
             for t in self.board.open_for(member) + self._either_for(member)
-            if t.status == "open" and self.counts(t, member) and t.id not in up | skipped
+            if t.status == "open"
+            and self.counts(t, member)
+            and t.id not in up | skipped
+            and not self.board.waiting_on(t)
         ]
 
     def _either_for(self, member: Member) -> list[Task]:
