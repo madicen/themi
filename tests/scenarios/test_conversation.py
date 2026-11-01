@@ -119,9 +119,20 @@ async def test_plan_scenario_3_overloaded_primary_falls_back_once(scenario: Scen
 
 
 async def test_the_step_limit_stops_runaway_tool_loops(scenario: Scenario) -> None:
-    for _ in range(8):
+    for _ in range(9):  # the last word asks for tools too
         scenario.primary.queue_tool_call("list_open_items", {})
     assert await scenario.say("Erin", "loop please") == [TANGLED_TEXT]
+
+
+async def test_at_the_step_limit_the_model_says_what_was_done(scenario: Scenario) -> None:
+    """Bug #110: eight steps of work, all of it done, ended in "I got a bit tangled up". One
+    more call, told the steps are used up, writes the reply."""
+    for _ in range(8):
+        scenario.primary.queue_tool_call("list_open_items", {})
+    scenario.primary.queue_text("Here's everything that's open for you.")
+    assert await scenario.say("Erin", "what's open?") == ["Here's everything that's open for you."]
+    last = scenario.primary.last_request
+    assert "every step" in last.system and "Don't call any more tools" in last.system
 
 
 async def test_choice_buttons_answer_as_if_typed(scenario: Scenario) -> None:
@@ -338,4 +349,5 @@ async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: S
     scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})
     scenario.primary.queue_text('"Renew the car registration is done now."')
     replies = await scenario.say("Erin", "I renewed the car registration")
-    assert replies == ['"Renew the car registration" is done now.']
+    (reply,) = replies
+    assert reply.endswith('\n\n"Renew the car registration" is done now.')

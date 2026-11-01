@@ -1,0 +1,6 @@
+{
+  "runState": {"currentState": "DRYING"},
+  "operation": {"dryerOperationMode": "START"},
+  "remoteControlEnable": {"remoteControlEnabled": false},
+  "timer": {"remainHour": 0, "remainMinute": 48, "totalHour": 0, "totalMinute": 55}
+}

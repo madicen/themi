@@ -1,0 +1,4 @@
+[
+  {"location": {"locationName": "MINI"}, "runState": {"currentState": "RUNNING"}},
+  {"location": {"locationName": "MAIN"}, "runState": {"currentState": "END"}}
+]

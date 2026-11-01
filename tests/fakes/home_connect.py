@@ -2,6 +2,7 @@
 
     fake_home_connect.add_appliance("BOSCH-SMV-1", "Dishwasher")
     fake_home_connect.set_state("BOSCH-SMV-1", "Run")
+    fake_home_connect.set_state("BOSCH-SMV-1", "Run", seconds_left=2700)  # its program's time
     fake_home_connect.approve(authorize_url)   # the person says yes: (state, code)
     fake_home_connect.offline("BOSCH-SMV-1")  # the next status read answers 409
     fake_home_connect.limit(times=1)           # the next call answers 429
@@ -22,7 +23,7 @@ import pytest
 
 from themi import clock
 from themi.connectors.homeconnect import HomeConnectClient, HomeConnectConfig
-from themi.connectors.homeconnect.client import OPERATION_STATE, STATE_PREFIX
+from themi.connectors.homeconnect.client import OPERATION_STATE, REMAINING_TIME, STATE_PREFIX
 from themi.storage.secrets import Secret
 
 BASE_URL = "https://home-connect.test"
@@ -35,6 +36,7 @@ class FakeHomeConnect:
     def __init__(self) -> None:
         self.appliances: dict[str, dict] = {}
         self.states: dict[str, str] = {}
+        self.seconds_left: dict[str, int] = {}  # the active program's, while it runs
         self.codes: dict[str, str] = {}  # code -> redirect_uri
         self.access: dict[str, datetime] = {}  # token -> expires
         self.refresh_tokens: set[str] = set()
@@ -60,8 +62,11 @@ class FakeHomeConnect:
         }
         self.states[ha_id] = "Ready"
 
-    def set_state(self, ha_id: str, state: str) -> None:
+    def set_state(self, ha_id: str, state: str, *, seconds_left: int | None = None) -> None:
         self.states[ha_id] = state
+        self.seconds_left.pop(ha_id, None)
+        if seconds_left is not None:
+            self.seconds_left[ha_id] = seconds_left
         self._offline.discard(ha_id)
 
     def offline(self, ha_id: str) -> None:
@@ -102,6 +107,19 @@ class FakeHomeConnect:
                 200, json={"data": {"homeappliances": list(self.appliances.values())}}
             )
         parts = path.split("/")
+        if len(parts) == 6 and parts[4:] == ["programs", "active"]:
+            if parts[3] in self._offline:
+                return httpx.Response(409)
+            if self.states.get(parts[3]) != "Run":
+                return httpx.Response(404)  # no program running
+            options = (
+                [{"key": REMAINING_TIME, "value": self.seconds_left[parts[3]], "unit": "seconds"}]
+                if parts[3] in self.seconds_left
+                else []
+            )
+            return httpx.Response(
+                200, json={"data": {"key": "Dish.Program.Eco50", "options": options}}
+            )
         if len(parts) == 6 and parts[4] == "status" and parts[5] == OPERATION_STATE:
             ha_id = parts[3]
             if ha_id not in self.appliances:

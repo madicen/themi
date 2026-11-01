@@ -1,0 +1,8 @@
+{
+  "pushType": "DEVICE_PUSH",
+  "deviceId": "lg-washer-1",
+  "deviceType": "DEVICE_WASHER",
+  "userNumber": "KR2306081234567",
+  "timestamp": "2026-10-21T22:40:02.000000",
+  "pushCode": "WASHING_IS_COMPLETE"
+}

@@ -56,7 +56,8 @@ other. For grocery and shopping receipts, list each item bought, named the way a
 family would say it on a shopping list: generic, lowercase, singular brand-free
 names ("olive oil", "eggs", "cat food", "body wash"), using the family's pantry
 or things-to-buy names when one fits. Give the quantity as written (or "") and
-the line price in cents (0 if not shown). Leave out bags, fees, tips, tax and
+the line price in cents (0 if not shown), and the product's name as written on the
+receipt (as_written, "" if it's the same). Leave out bags, fees, tips, tax and
 discounts. total_cents is the order's total as charged, tips, fees and tax included (0 if
 not shown).
 
@@ -78,8 +79,9 @@ RECEIPT_SCHEMA: dict[str, Any] = {
                     "name": {"type": "string"},
                     "quantity": {"type": "string"},
                     "price_cents": {"type": "integer"},
+                    "as_written": {"type": "string"},
                 },
-                "required": ["name", "quantity", "price_cents"],
+                "required": ["name", "quantity", "price_cents", "as_written"],
                 "additionalProperties": False,
             },
         },
@@ -350,6 +352,8 @@ class Pantry:
         if data.get("kind") == "grocery":
             for line in lines:
                 self._purchase(line, email_id, vendor, purchased_at)
+            if self.services.safeway is not None:  # 35c: Safeway's words for the item
+                self._teach_safeway(lines, vendor)
         spending = self.services.spending
         if data.get("kind") == "takeout" and spending is not None:  # X1: the month's takeout
             total = data.get("total_cents")
@@ -369,6 +373,18 @@ class Pantry:
             (to_utc_iso(clock.now()), email_id),
         )
         return True
+
+    def _teach_safeway(self, lines: list[dict[str, Any]], vendor: str) -> None:
+        """A Safeway receipt line matched to a grocery item: its words are what to search
+        for next time the cart is filled."""
+        safeway = self.services.safeway
+        assert safeway is not None
+        for line in lines:
+            try:
+                name = item_name(str(line.get("name", "")))
+            except InvalidValue:
+                continue
+            safeway.learn_from_receipt(name, str(line.get("as_written") or ""), vendor)
 
     def _purchase(
         self, line: dict[str, Any], email_id: int, vendor: str, purchased_at: datetime

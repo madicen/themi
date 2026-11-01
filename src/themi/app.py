@@ -31,8 +31,10 @@ from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
+from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
 from themi.core.breaks import Breaks
 from themi.core.buying import ThingsToBuy
@@ -57,6 +59,7 @@ from themi.core.groceries import GroceryList
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
+from themi.core.laundry import Laundry
 from themi.core.lists import Lists
 from themi.core.meals import Meals
 from themi.core.memory import Memory
@@ -68,6 +71,7 @@ from themi.core.routines import Routines
 from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
+from themi.core.safeway import SafewayCart
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
@@ -126,6 +130,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     home_connect: HomeConnectClient | None = None,
+    thinq: ThinqConfig | None = None,
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
@@ -168,6 +173,8 @@ def build_app(
         NoiseDigest(services, approvals, services.gmail).install()
     groceries = GroceryList(services)
     groceries.install()
+    safeway = SafewayCart(services, groceries)
+    safeway.install()
     lists = Lists(services)
     lists.install()
     ThingsToBuy(services, lists).install()
@@ -236,6 +243,7 @@ def build_app(
         PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
         PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
+        PeriodicTask("safeway.expire", timedelta(minutes=5), safeway.expire_stale),
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
     ]
@@ -282,6 +290,17 @@ def build_app(
         periodic.append(
             PeriodicTask("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
         )
+    if thinq is not None:
+        account = ThinqAccount(db, cipher, thinq)
+        services.thinq = ThinqWatcher(store, account, ThinqPush(account, thinq.mqtt))
+        periodic.append(PeriodicTask("devices.thinq", timedelta(minutes=5), services.thinq.poll))
+        periodic.append(
+            PeriodicTask("devices.thinq_push", timedelta(minutes=1), services.thinq.listen)
+        )
+        laundry = Laundry(services, tasks, services.thinq)
+        laundry.install()
+        periodic.append(PeriodicTask("laundry.fresh", timedelta(minutes=15), laundry.check_fresh))
+    Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(
             PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)

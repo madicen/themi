@@ -178,6 +178,27 @@ dishwasher routine when the dishwasher starts" on the website's "What Themi does
 makes that automatic. Each evening, a week with fewer runs than usual feeds the energy model
 as device activity, as words, never a score.
 
+### The washer and dryer, through LG ThinQ (optional)
+
+An LG washer and dryer on the ThinQ app can tell Themi when they run and finish, through
+LG's official ThinQ Connect API. Themi only reads them, and a token with just the two "view"
+permissions below couldn't control them anyway.
+
+1. At [connect-pat.lgthinq.com](https://connect-pat.lgthinq.com), signed in with the LG
+   account the appliances are on, add a personal access token with "View all devices" and
+   "View all device statuses".
+2. As an admin, open the Family page, paste it under **Washer and dryer** with the country
+   it was made for, and press **Link LG ThinQ**. Themi lists what it found; set each one to
+   Washer, Dryer or Not used.
+3. For updates as they happen, install the MQTT library (`pip install -e '.[thinq]'`) and
+   restart. Without it Themi reads the appliances every 5 minutes, which works too.
+
+When the washer finishes, whoever has more room gets a nudge half an hour later to move the
+load (Later asks again in an hour); the dryer starting settles it, and takes back a nudge not
+yet sent. A load left longer than the fresh hours on the Family page (8 by default) gets a
+rewash suggestion instead, timed to finish when that person has room.
+"/pause laundry" holds these nudges for a while.
+
 ### Groceries said to Google Home, through Google Keep (optional, a trial)
 
 "Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API

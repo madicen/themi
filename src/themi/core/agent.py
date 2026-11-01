@@ -9,9 +9,10 @@ For each inbound event:
   item waiting on this person, if Themi hasn't asked them another question
   since that item's message. With several waiting, Themi asks which one
   (listing them) instead of guessing. Otherwise the model
-  runs a tool loop (at most `max_steps` model calls) and the final text goes
-  out through the outbox as a reply. That's timed (P2a, `themi.core.timing`), and if
-  it takes more than ten seconds a short "still coming" message goes first.
+  runs a tool loop (at most `max_steps` model calls, then one to say what was done)
+  and the final text goes out through the outbox as a reply. That's timed (P2a,
+  `themi.core.timing`), and if it takes more than ten seconds a short "still coming"
+  message goes first.
 
 Failures are said plainly and briefly, never as error dumps.
 """
@@ -22,7 +23,7 @@ import asyncio
 import logging
 import random
 import re
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager, suppress
 from typing import TYPE_CHECKING
 
@@ -73,10 +74,12 @@ NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already w
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
     r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
-    r"rescheduled|changed)\b"
-    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled)\b"
+    r"rescheduled|changed|filled)\b"
+    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled|filled)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
-    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed)\b",
+    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed|filled)\b"
+    # "Safeway cart filled with the 11 items" (2026-10-31): a cart is filled, no verb before it
+    r"|\bcart\s+filled\b",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -124,6 +127,7 @@ def _unquoted(reply: str) -> str:
 
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
 TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
+REQUOTED = re.compile('[\'\u2018\u201c]("[^"\n]+")[\'\u2019\u201d]')
 
 
 def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
@@ -137,7 +141,24 @@ def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
         said = match.group(3)  # quoted: a title like "Refill the water" isn't an order
         return f'"{title}"' if said is None or said.strip() == title else f'"{title}" ({said})'
 
-    return TASK_NUMBER.sub(named, reply)
+    # "Added: 'task 63' due today." keeps one pair of quotes, not two (bug #108's thread).
+    return REQUOTED.sub(r"\1", TASK_NUMBER.sub(named, reply))
+
+
+# Bugs #111, #112: what complete_task said opens the reply; the model's own "Marked done" lines
+# go, since they're the same news without the warm word.
+SAID_DONE = re.compile(r"^\W*marked\s+(?:as\s+)?done\b", re.IGNORECASE)
+
+
+def _without_done(reply: str) -> str:
+    return "\n".join(line for line in reply.split("\n") if not SAID_DONE.match(line)).strip()
+
+
+def _done_first(done: Sequence[str], reply: str) -> str:
+    if not done:
+        return reply
+    rest = "" if reply in ("", "Done.") else reply
+    return "\n".join(done) + (f"\n\n{rest}" if rest else "")
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})
@@ -156,6 +177,11 @@ BUSY_TEXT = (
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
+# Bug #110: after the last step, one more call to say what was done.
+LAST_WORD = (
+    "You've used every step for this message. Don't call any more tools: in a line or two, "
+    "tell them what's done (from the tool results above) and what isn't, if anything."
+)
 SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
 
@@ -433,24 +459,34 @@ class Agent:
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
-            for step in range(1, self.max_steps + 1):
+            for step in range(1, self.max_steps + 2):
                 tools = services.tools.specs_for(ctx.groups, routing)
                 twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
                 call_system = f"{system}\n\n{twins}" if twins else system
+                if step > self.max_steps:
+                    # Bug #110: the work was done in eight steps, and the reply was "tangled".
+                    # The tools still go, since a tool result needs them on some APIs.
+                    log.warning("Agent hit its step limit for member %s", member.id)
+                    call_system = f"{call_system}\n\n{LAST_WORD}"
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
-                    reply = _by_name(reply, self._task_title)
+                    reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
-                    return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    reply = _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    return _done_first(ctx.done, reply)
+                if step > self.max_steps:
+                    break
                 used_tools = True
                 messages.append(response.message)
                 results = []
                 for call in response.tool_calls:
-                    with timer.tool(call.name, after_model=step):
-                        results.append(await services.tools.run(call, ctx))
+                    with timer.tool(call.name, after_model=step) as note:
+                        result = await services.tools.run(call, ctx)
+                        note.said(call.arguments, result.content)
+                        results.append(result)
                 messages.append(Message.tool_results(*results))
         except RefusalError:
             return DECLINED_TEXT
@@ -459,8 +495,7 @@ class Agent:
             return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
         finally:
             timer.added(ctx.groups - offered)
-        log.warning("Agent hit its step limit for member %s", member.id)
-        return TANGLED_TEXT
+        return _done_first(ctx.done, TANGLED_TEXT)
 
     def _history(self, member: Member, event: InboundEvent) -> list:
         recent = self.services.store.recent_messages(member.id, self.history + 3)

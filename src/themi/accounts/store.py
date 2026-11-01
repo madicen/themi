@@ -225,6 +225,8 @@ class AccountStore:
             created_at=_parse_dt(row["created_at"]),
             task_owners={k: int(v) for k, v in json.loads(row["task_owners"]).items()},
             handover_cost=float(row["handover_cost"]),
+            laundry_fresh_hours=float(row["laundry_fresh_hours"]),
+            laundry_rinse_minutes=int(row["laundry_rinse_minutes"]),
         )
 
     def create_family(
@@ -262,6 +264,8 @@ class AccountStore:
         staples: tuple[str, ...] | None = None,
         task_owners: dict[str, int | None] | None = None,
         handover_cost: float | None = None,
+        laundry_fresh_hours: float | None = None,
+        laundry_rinse_minutes: int | None = None,
     ) -> Family:
         self._require_admin(actor)
         if self.get_family() is None:
@@ -293,6 +297,14 @@ class AccountStore:
             if not 0 <= handover_cost <= 50:
                 raise InvalidValue("the hand-over cost must be between 0 and 50")
             changes["handover_cost"] = float(handover_cost)
+        if laundry_fresh_hours is not None:
+            if not 1 <= laundry_fresh_hours <= 48:
+                raise InvalidValue("a wet load stays fresh for 1 to 48 hours")
+            changes["laundry_fresh_hours"] = float(laundry_fresh_hours)
+        if laundry_rinse_minutes is not None:
+            if not 5 <= laundry_rinse_minutes <= 180:
+                raise InvalidValue("a rewash takes 5 to 180 minutes")
+            changes["laundry_rinse_minutes"] = int(laundry_rinse_minutes)
         if changes:
             changes["updated_at"] = _iso(clock.now())
             assignments = ", ".join(f"{column} = :{column}" for column in changes)

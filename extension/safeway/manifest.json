@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Themi Safeway helper",
+  "version": "0.2.0",
+  "description": "Fills your Safeway cart from a list, or from Themi. You still check out yourself.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["https://www.safeway.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "Fill the Safeway cart",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.safeway.com/*"],
+      "js": ["page.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.safeway.com/*"],
+      "js": ["lib/list.js", "lib/safeway.js", "lib/fill.js", "lib/themi.js", "lib/worker.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -37,6 +37,8 @@ async def schedule(
             "missed": missed,
             "due_before_task": before,
             "either": False,
+            "holds_back": False,
+            "once": False,
         },
     )
     scenario.primary.queue_text("All set.")

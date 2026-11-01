@@ -124,11 +124,41 @@ async def test_flagged_text_is_rewritten(family: SeededFamily) -> None:
 
 async def test_rewrite_options_become_reply_buttons(family: SeededFamily) -> None:
     rewriter = FakeRewriter(Rewrite("The washer's done.", ("Dryer now", "Later tonight")))
-    result = await PdaShield(rewriter).apply("Move the laundry.", family.erin)
+    result = await PdaShield(rewriter).apply("Move the laundry. Now, or later?", family.erin)
     assert [(b.label, b.kind, b.payload) for b in result.buttons] == [
         ("Dryer now", "reply", {"text": "Dryer now"}),
         ("Later tonight", "reply", {"text": "Later tonight"}),
     ]
+
+
+async def test_a_message_that_asks_nothing_gets_no_choices(family: SeededFamily) -> None:
+    """Bug #111: a report of what was done became a choice; its buttons ran the request
+    again."""
+    rewriter = FakeRewriter(Rewrite("The sheets are next, for Michael.", ("Add", "Skip")))
+    result = await PdaShield(rewriter).apply("Move the laundry.", family.erin)
+    assert result.method == "rewritten" and result.buttons == ()
+
+
+async def test_only_the_flagged_lines_are_rewritten(family: SeededFamily) -> None:
+    """Bug #112: the rewrite got the whole reply and dropped both "Marked done" lines."""
+    rewriter = FakeRewriter(Rewrite("Up next for Michael: the sheets, tonight."))
+    text = (
+        'Marked done: "Vacuum upstairs bedroom". Nice work.\n'
+        'Marked done: "Change sheets". Lovely.\n\nMove the sheets back tonight.'
+    )
+    result = await PdaShield(rewriter).apply(text, family.erin)
+    assert result.text == (
+        'Marked done: "Vacuum upstairs bedroom". Nice work.\n'
+        'Marked done: "Change sheets". Lovely.\n\nUp next for Michael: the sheets, tonight.'
+    )
+    assert [call[0] for call in rewriter.calls] == ["Move the sheets back tonight."]
+
+
+async def test_each_flagged_run_is_softened_alone(family: SeededFamily) -> None:
+    result = await PdaShield(None).apply(
+        "Call the vet.\nIt's on Friday.\nBook a time.", family.erin
+    )
+    assert result.text == "Up next: call the vet.\nIt's on Friday.\nUp next: book a time."
 
 
 async def test_callers_buttons_win_over_suggested_options(family: SeededFamily) -> None:
@@ -214,6 +244,14 @@ def test_a_bulleted_list_is_a_list_not_orders() -> None:
     text = "Tue 27 Oct:\n- 10-11 am: Dentist\n- Call the vet\n- Clean the bird cage"
     assert find_demands(text, 3) == []
     assert find_demands("Call the vet now.", 3)  # a plain sentence still is
+
+
+def test_putting_a_task_somewhere_is_a_report() -> None:
+    # Bug #111: 'Put "Put sheets back on bed" on Michael's list for tonight.' said what was
+    # done, and the shield took it for an order.
+    assert find_demands('Put "Put sheets back on bed" on Michael\'s list for tonight.', 2) == []
+    assert find_demands("Moved \u201cClean kitchen\u201d to Friday.", 2) == []
+    assert find_demands("Put the sheets back on the bed.", 2)  # no title: still one
 
 
 def test_a_quoted_task_name_isnt_an_order() -> None:

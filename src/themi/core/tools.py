@@ -52,6 +52,10 @@ class ToolContext:
     tasks: list[int] = field(default_factory=list)
     # The tool groups this turn sends (P1); `more_tools` adds to it.
     groups: set[str] = field(default_factory=set)
+    # What complete_task said for each task marked done, warm word included: the reply
+    # opens with them, word for word (bugs #111, #112: the model dropped the warm word, and
+    # the phrasing rewrite dropped the rest).
+    done: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -159,9 +163,14 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
         r"running low|ran out|leftover|used (?:up|the last)|last of|finished the|picked up|"
         r"bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go(?:es)? off|"
-        r"went off",
+        r"went off|safeway|\bcart\b|weekly shop",
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
+    "devices": (
+        "the washer, dryer and dishwasher: running, done, time left",
+        r"wash(?:er|ing)?\b|dryer|drying|dishwasher|laundry|cycle|load\b|appliance|"
+        r"how (?:much )?longer|time left|still running|is it done",
+    ),
     "spending": (
         "money spent: takeout, eating out, business expenses",
         r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
@@ -261,6 +270,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Finished the cereal this morning",
         "The milk went off",
         "Got more coffee beans",
+        "Load up the online grocery cart from the list",
     ),
     "calls": (
         "Write me a script for calling the landlord",
@@ -275,6 +285,19 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "The plumber said next week",
         "I have to phone the clinic, can you help?",
         "Make me notes for calling customer service",
+    ),
+    "devices": (
+        "How much longer on the wash?",
+        "Is the dryer done yet?",
+        "Is the dishwasher still running?",
+        "How long is left on the laundry?",
+        "Has the washer finished?",
+        "Is anything running right now?",
+        "When will the dryer be done?",
+        "Is the dishwasher finished?",
+        "What's the dryer at?",
+        "Is the load of towels still going?",
+        "How far along is the dishwasher?",
     ),
     "spending": (
         "We spent $30 on burgers",
@@ -379,8 +402,11 @@ TOOL_GROUPS: dict[str, str] = {
         ),
         "email",
     ),
-    **dict.fromkeys(("update_pantry", "show_pantry", "suggest_meals"), "pantry"),
+    **dict.fromkeys(
+        ("update_pantry", "show_pantry", "suggest_meals", "fill_safeway_cart"), "pantry"
+    ),
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
+    "appliance_status": "devices",
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }
 

@@ -306,10 +306,13 @@ class CozylaChores:
                     await self.board.complete(task.id, doer, wall=True)
                     self._caught_up(task.id)
                     continue
-            off_wall = self._waiting(task) and not self._wall_members(task)
+            off_wall = (self._waiting(task) and not self._wall_members(task)) or bool(
+                self.board.waiting_on(task)
+            )
             if task.status == "cancelled" or not on_chart(task) or is_routine(task) or off_wall:
                 # A check-in on fixed days is a routine on the wall (C3), not a chore; a chore
-                # waiting its turn for someone's chart is off the wall (C2d).
+                # waiting its turn for someone's chart is off the wall (C2d), and so is one
+                # waiting for another chore to be done first (T2).
                 if chore is not None:
                     await self.client.delete_chore(chore.uid)
                     changed += 1

@@ -91,6 +91,20 @@ class Matcher:
             return 0.0
         return min(TASK_LOAD_CAP, TASK_LOAD_POINTS * (row["open"] + (row["overdue"] or 0)))
 
+    def roomiest(self, kind: str, effort: int, at: datetime | None = None) -> Assignment:
+        """For a job nobody owns (the washer's done, 31): whoever has the most spare room
+        right now, with no hand-over cost. Without an energy read on anyone, an admin."""
+        now = at or clock.now()
+        members = self.store.list_members()
+        tracked = [m for m in members if _tracked(m)]
+        if not tracked:
+            admin = next((m for m in members if m.is_admin), members[0])
+            return Assignment(admin, admin, "No energy read to weigh it with.")
+        best = max(tracked, key=lambda m: self.spare(m, kind, effort, now))  # ties: the first
+        if len(members) == 1:
+            return Assignment(best, best, f"{best.name}'s, the only one here.")
+        return Assignment(best, best, f"{best.name} seems to have the most room right now.")
+
     def assign(
         self, kind: str, effort: int, requester: Member, at: datetime | None = None
     ) -> Assignment:

@@ -71,6 +71,54 @@
 </div>
 {% endif %}
 
+{% if thinq %}
+<h2>Washer and dryer</h2>
+<div class="card">
+  <p class="muted">Themi reads whether the LG washer and dryer are running from LG ThinQ, and
+  nothing else: it can't start or stop them. When the washer finishes, whoever has more
+  room gets a nudge to move the load.</p>
+  {% if thinq.linked %}
+  {% for device, state in thinq.devices %}
+  <form method="post" action="/family/thinq/devices/{{ device.id }}" class="buttons">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span>{{ device.name }}{% if state %} · {{ state }}{% endif %}</span>
+    <select name="appliance" aria-label="What {{ device.name }} is">
+      <option value="washer" {% if device.appliance == "washer" %}selected{% endif %}>Washer</option>
+      <option value="dryer" {% if device.appliance == "dryer" %}selected{% endif %}>Dryer</option>
+      <option value="" {% if not device.appliance %}selected{% endif %}>Not used</option>
+    </select>
+    <button>Save</button>
+  </form>
+  {% else %}
+  <p>Linked, but no appliances were found.</p>
+  {% endfor %}
+  <p class="muted">{{ "Updates arrive as they happen." if thinq.pushes else "Checked every few minutes." }}</p>
+  <form method="post" action="/family/laundry">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">A wet load left longer than this gets a rewash suggestion instead, timed
+    to finish when there's room to move it.</p>
+    <label>Fresh for (hours) <input name="fresh_hours" type="number" min="1" max="48" step="0.5" value="{{ family.laundry_fresh_hours | round(1) }}"></label>
+    <label>A rewash takes (minutes) <input name="rinse_minutes" type="number" min="5" max="180" value="{{ family.laundry_rinse_minutes }}"></label>
+    <button>Save</button>
+  </form>
+  <form method="post" action="/family/thinq/unlink">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Unlink LG ThinQ</button>
+  </form>
+  {% else %}
+  <form method="post" action="/family/thinq/link">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">Make a personal access token at connect-pat.lgthinq.com, signed in with
+    the LG account the appliances are on, with "view all devices" and "view all device
+    statuses" ticked.</p>
+    <label>Personal access token <input name="token" type="password" autocomplete="off" required></label>
+    <label>Country <input name="country" value="{{ thinq.country }}" maxlength="2" size="3"></label>
+    <button class="primary">Link LG ThinQ</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <h2>People</h2>
 {% for person in members %}
 <article class="card">

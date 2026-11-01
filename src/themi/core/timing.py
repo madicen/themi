@@ -12,6 +12,7 @@ low-energy day); others are plain. Never the same one twice in a row.
 
 from __future__ import annotations
 
+import json
 import logging
 import random
 import sqlite3
@@ -26,11 +27,13 @@ from typing import Any
 from themi import clock
 from themi.ai.router import current_reply
 from themi.localtime import to_utc_iso
+from themi.logs import redact
 from themi.storage.db import Database
 
 log = logging.getLogger(__name__)
 
 REPLIES_KEPT = timedelta(days=7)
+KEPT_CHARS = 600  # of a tool call's arguments, and of its result
 SLOW_AFTER = 25.0  # seconds (10 s came too soon, idea #65)
 SLOW_NOTICES = (
     "I'm having a bit of a low-energy day myself. I'll answer as soon as I can.",
@@ -49,6 +52,23 @@ def _seconds(start: datetime) -> float:
 
 
 @dataclass
+class ToolNote:
+    """What one tool call was given and said back, as kept (redacted, at most KEPT_CHARS)."""
+
+    arguments: str | None = None
+    result: str | None = None
+
+    def said(self, arguments: dict[str, Any], result: str) -> None:
+        self.arguments = _kept(json.dumps(arguments, ensure_ascii=False))
+        self.result = _kept(result)
+
+
+def _kept(text: str) -> str:
+    text = redact(text)
+    return text if len(text) <= KEPT_CHARS else text[: KEPT_CHARS - 1] + "…"
+
+
+@dataclass
 class ReplyTimer:
     """One reply's timings. `start()` makes its row, so the model calls can point at it."""
 
@@ -62,7 +82,9 @@ class ReplyTimer:
     groups: tuple[str, ...] | None = None
     tools_sent: int | None = None
     groups_added: tuple[str, ...] = ()
-    _tools: list[tuple[str, int, datetime, float]] = field(default_factory=list)
+    _tools: list[tuple[str, int, datetime, float, str | None, str | None]] = field(
+        default_factory=list
+    )
 
     def start(self) -> None:
         try:
@@ -81,12 +103,16 @@ class ReplyTimer:
         self.groups_added = tuple(sorted(groups))
 
     @contextmanager
-    def tool(self, name: str, after_model: int) -> Iterator[None]:
-        began = clock.now()
+    def tool(self, name: str, after_model: int) -> Iterator[ToolNote]:
+        """Times one tool call; `note.said(arguments, result)` keeps what it was given and
+        what it said back (bug #110), redacted and cut short."""
+        began, note = clock.now(), ToolNote()
         try:
-            yield
+            yield note
         finally:
-            self._tools.append((name, after_model, began, _seconds(began)))
+            self._tools.append(
+                (name, after_model, began, _seconds(began), note.arguments, note.result)
+            )
 
     @asynccontextmanager
     async def outbox(self) -> AsyncIterator[None]:
@@ -114,11 +140,19 @@ class ReplyTimer:
                     self.reply_id,
                 ),
             )
-            for name, after_model, began, seconds in self._tools:
+            for name, after_model, began, seconds, arguments, result in self._tools:
                 self.db.execute(
-                    "INSERT INTO reply_tools (reply_id, name, after_model, started_at, seconds) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (self.reply_id, name, after_model, to_utc_iso(began), seconds),
+                    "INSERT INTO reply_tools (reply_id, name, after_model, started_at, seconds, "
+                    "arguments, result) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        self.reply_id,
+                        name,
+                        after_model,
+                        to_utc_iso(began),
+                        seconds,
+                        arguments,
+                        result,
+                    ),
                 )
             self.db.execute(  # a reply marked wrong waits for its label (P4)
                 "DELETE FROM replies WHERE started_at < ? "

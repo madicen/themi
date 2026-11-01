@@ -123,6 +123,13 @@ async def test_bug_reports_name_their_reply(scenario: Scenario) -> None:
     assert context["reply"] == {
         "id": reply_id,
         "tools": ["add_to_grocery_list"],
+        "calls": [
+            {
+                "name": "add_to_grocery_list",
+                "arguments": '{"items": ["olive oil"]}',
+                "result": "Done automatically (action 1): Added olive oil to the grocery list.",
+            }
+        ],
         "groups": [g for g in groups.split(",") if g],
         "groups_added": [],
     }
@@ -170,3 +177,24 @@ async def test_reply_times_shows_the_weeks_marks(
     await sign_in(scenario, site, "Erin")
     page = (await site.get("/ai/timing")).text
     assert "2 replies marked this week: model choice (1), 1 not labelled yet." in page
+
+
+async def test_a_bug_report_shows_each_tool_call_and_what_it_said(scenario: Scenario) -> None:
+    """Bug #110: "figure out why this failed" couldn't be answered, since only the tools'
+    names were kept. Each call's arguments and result are kept too, redacted and cut short."""
+    scenario.primary.queue_tool_call("complete_task", {"task_id": 99})
+    scenario.primary.queue_text("Hmm.")
+    await scenario.say("Erin", "the dentist is done")
+    reply_id = scenario.app.db.scalar("SELECT MAX(id) FROM replies")
+    (row,) = scenario.app.db.query(
+        "SELECT arguments, result FROM reply_tools WHERE reply_id = ?", (reply_id,)
+    )
+    assert json.loads(row["arguments"]) == {"task_id": 99}
+    assert "no task with that number" in row["result"]
+
+    await scenario.say("Erin", "/bug it didn't mark it")
+    feedback = scenario.app.services.feedback
+    assert feedback is not None
+    text = feedback.book.report(feedback.book.items())
+    assert '1. complete_task {"task_id": 99} → ' in text
+    assert "There's no task with that number." in text

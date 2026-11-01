@@ -36,6 +36,7 @@ from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
+from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fixtures.family import SeededFamily
 from themi import clock
@@ -89,6 +90,7 @@ class Scenario:
         travel: FakeTravel | None = None,
         *,
         home_connect: FakeHomeConnect | None = None,
+        thinq: FakeThinq | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         real_models: bool = False,
@@ -123,6 +125,7 @@ class Scenario:
             cozyla=_cozyla_client(cozyla, family) if cozyla else None,
             travel=travel.client() if travel else None,
             home_connect=home_connect.client() if home_connect else None,
+            thinq=thinq.config() if thinq else None,
             keep=keep.connect if keep else None,
             tool_routing=tool_routing,
         )
@@ -305,7 +308,8 @@ async def scenario(
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
-    `fake_home_connect`, and Google Keep (GK1) when it uses `fake_keep`.
+    `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, and Google Keep (GK1) when
+    it uses `fake_keep`.
     """
 
     def optional(name: str) -> Any:
@@ -321,6 +325,7 @@ async def scenario(
         optional("fake_cozyla"),
         optional("fake_travel"),
         home_connect=optional("fake_home_connect"),
+        thinq=optional("fake_thinq"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
     )

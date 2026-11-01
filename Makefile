@@ -27,6 +27,11 @@ test:
 
 test-all:
 	$(PYTEST) tests/unit tests/integration tests/scenarios
+	@if command -v node >/dev/null 2>&1; then \
+		node --test extension/safeway/tests/*.test.js; \
+	else \
+		echo "Node isn't installed: skipping the Safeway extension tests."; \
+	fi
 
 test-live:
 	$(PYTEST) tests/live --run-live

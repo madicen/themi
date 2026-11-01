@@ -1,0 +1,53 @@
+{
+  "cartId": 100000001,
+  "customerId": "REDACTED-CUSTOMER",
+  "memberId": "REDACTED-MEMBER",
+  "uuid": "REDACTED-UUID",
+  "_id": "REDACTED-ID",
+  "orderId": 0,
+  "storeId": 1196,
+  "banner": "safeway",
+  "status": "Active",
+  "serviceType": "Delivery",
+  "deliveryType": "Attended",
+  "cartCategory": "1P",
+  "zipCode": "00000",
+  "addresses": [],
+  "errors": [],
+  "isAvailable": true,
+  "summary": {
+    "itemCount": 1,
+    "totalItemQuantity": 1,
+    "totalEstimatedPrice": 8.99,
+    "transactionTotal": 8.99,
+    "finalTransactionTotal": 12.94
+  },
+  "cartItemsList": [
+    {
+      "itemId": 970597593,
+      "upc": "0019101100127",
+      "name": "Just Egg Plant-Based Egg - 16 Oz",
+      "price": 8.99,
+      "basePrice": 8.99,
+      "unitPrice": 8.99,
+      "qty": 1,
+      "totalPrice": 8.99,
+      "unitOfMeasure": "FZ",
+      "unitQuantity": "OUNCE",
+      "isAvailable": true,
+      "isFound": true,
+      "isOOS": false,
+      "maxPurchaseQty": 20,
+      "itemSizeQty": "16",
+      "itemPackageQty": "1",
+      "displayUnitQuantityText": "ea",
+      "aisleName": "Eggs",
+      "departmentName": "Dairy, Eggs & Cheese",
+      "shelfName": "Egg Substitute",
+      "imageUrl": "https://images.albertsons-media.com/is/image/ABS/970597593",
+      "sellByWeight": "I",
+      "quantityType": "EA",
+      "quantityValue": 1
+    }
+  ]
+}

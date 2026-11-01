@@ -84,6 +84,39 @@ def free_from(
     return when
 
 
+def quiet_hours_start(member: Member, moment: datetime, timezone: str) -> datetime:
+    """When the current quiet stretch began; `moment` itself if it's not quiet now."""
+    if not in_quiet_hours(member, moment, timezone):
+        return moment
+    local = to_local(moment, timezone)
+    start_today = _at(local, member.quiet_start)
+    return start_today if start_today <= local else start_today - timedelta(days=1)
+
+
+def free_until(
+    member: Member,
+    moment: datetime,
+    timezone: str,
+    blocks: Sequence[tuple[datetime, datetime]] = (),
+) -> datetime:
+    """Where the free time before `moment` ends: `moment` if it's free, else the start of
+    the quiet hours, busy time or calendar block covering it, stepping back through any
+    that run into each other (F20c: a deadline that falls inside one)."""
+    when = moment
+    for _ in range(2 * (len(member.busy_times) + len(blocks)) + 2):
+        if free_from(member, when, timezone, blocks) == when:
+            return when if when == moment else when + _MINUTE
+        local = to_local(quiet_hours_start(member, when, timezone), timezone)
+        covering = [b for b in member.busy_times if b.covers(local)]
+        start = _at(local, min(b.start for b in covering)) if covering else local
+        in_event = [s for s, end in blocks if s <= start < end]
+        when = (min(in_event) if in_event else start) - _MINUTE
+    return when
+
+
+_MINUTE = timedelta(minutes=1)
+
+
 def next_waking_start(member: Member, moment: datetime, timezone: str) -> datetime:
     """The end of the member's next quiet stretch: tomorrow's start of day for them."""
     local = to_local(moment, timezone)

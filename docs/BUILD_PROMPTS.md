@@ -132,20 +132,25 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C3 | Cozyla: routines, and morning and evening routine checks | Cozyla | [x] |
 | F10 | Feedback: due times, one nudge at a time, plain phrasing, check-in reviews | Feedback | [x] |
 | C2d | Cozyla: one chore on the chart at a time | Cozyla | [x] |
-| 30 | LG ThinQ connector | 5 Devices | [ ] |
-| 31 | Laundry module and rescue protocol | 5 Devices | [ ] |
+| 30 | LG ThinQ connector | 5 Devices | [x] |
+| 31 | Laundry module and rescue protocol | 5 Devices | [x] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
-| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [~] |
-| 35c | Safeway cart: Themi sends the list to the extension | 6 Liaison and food | [ ] |
+| 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
+| 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
+| 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [x] |
 | 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
+| T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
+| F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
+| F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
+| F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 
 ## Fixed technical choices
 
@@ -6093,7 +6098,7 @@ Notes (2026-10-26):
 ## Milestone 5: Devices (Phase 2)
 
 ### 30 · LG ThinQ connector
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 29
 Read first: "Integrations" → LG ThinQ row; "Setup checklists" → Phase 2.
 
@@ -6113,8 +6118,39 @@ Tests:
 
 Commit when done.
 
+Notes (2026-10-31):
+- Asked for directly on 2026-10-31, ahead of 29 (still `[~]`), as H1 was.
+- `themi.connectors.thinq`, without LG's SDK: it's built on aiohttp and Themi's
+  connectors use httpx, so `ThinqClient` is a small client of its own, with the wire details
+  (headers, LG's public API key, regional servers by country, error codes) taken from the
+  SDK's source (`thinqconnect`, read 2026-10-31). LG publishes no call limit; error 1306
+  is waited out for an hour, an educated guess.
+- `ThinqAccount`: the family's one token, encrypted in `thinq_account` (migration 0089) with
+  its country and a client id made once and kept (LG blocks callers that keep making new
+  ones). Linking checks the token by listing the appliances before keeping it.
+- Discovery: washers and dryers map themselves; anything else (a WashCombo, the fridge) is
+  "Not used" until set on the Family page. A WashTower becomes two devices,
+  `<id>:washer` and `<id>:dryer`.
+- `ApplianceEvent(device_id, appliance, state, at)`; the device id is there as well
+  because a house can have more than one of a kind. States: LG's words in
+  `events.py` (a paused cycle counts as running, wrinkle care as finished, a delayed start
+  as idle); an unknown word is logged and ignored.
+- `ThinqWatcher`: `devices.thinq_push` (every minute) keeps the push connection up and
+  drains what it brought; `devices.thinq` (every 5 minutes) reads each appliance while
+  pushes aren't connected, and hourly when they are. Only a change becomes an event; the
+  first state seen is just the starting point, so linking doesn't announce an old load.
+- Pushes: register the client, a fresh key and signing request traded for a certificate,
+  `/route` for the broker, then MQTT over mutual TLS (`connectors/thinq/mqtt.py`, paho-mqtt,
+  the optional `themi[thinq]` extra). The connection's thread only queues messages, so
+  everything else stays on the loop. A connection that fails is tried again after 15
+  minutes; polling carries on meanwhile.
+- Not tested against LG itself: the payloads in `tests/fixtures/thinq/` follow LG's docs
+  and SDK rather than captures, and the paho connection is only reached for real. When the
+  family's appliances are linked, a captured payload that differs should become a fixture.
+- Setup: README, "The washer and dryer, through LG ThinQ".
+
 ### 31 · Laundry module and rescue protocol
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 30, 20
 Read first: "Module behaviour" → C (Laundry); "Testing" → Phase 2 row.
 
@@ -6135,6 +6171,44 @@ Tests:
 - Superseding cycles.
 
 Commit when done.
+
+Notes (2026-10-31):
+- `themi.core.laundry`, fed by 30's `ApplianceEvent`s. The washer finishing makes a wet load
+  (`laundry_loads`, migration 0090) and a one-off "Move the wet load to the dryer" task
+  (physical, effort 1). Washer and dryer runs are kept in `appliance_cycles`.
+- "The person with more spare capacity" is `Matcher.roomiest`: the most spare room right
+  now, with no hand-over cost (the laundry has no usual owner, so `assign`'s default owner
+  doesn't fit); ties go to the first member. `TaskBoard.create` takes the `assignment`.
+- The nudge is the task's own (`own_nudges`, like the email audit): "The washer finished at
+  10 am. Into the dryer now, or later?" with Moved it / Later, as the outbox kind `laundry`,
+  so "/pause laundry" holds it. The task stays off the wall's lists (`off_wall`): it comes
+  and goes with the washer.
+- The dryer starting completes the task, which edits the sent nudge ("Marked done").
+  The washer starting again supersedes the load: the task is taken off the list and the
+  nudge says "That load's being washed again". Tapping Moved it, or saying it's done,
+  closes the load too. None of this changes anything outside Themi, so nothing is staged
+  through the trust tiers.
+- `laundry.fresh`, every 15 minutes: a load past the family's fresh hours (Family page,
+  default 8; the rinse length too, default 30 minutes) becomes "Rinse the washer load".
+  The rinse is timed with `next_window` to finish as that person's next good window
+  begins. The message names both times ("started around 6 pm, it'd be done about 6:30
+  pm") and goes out in the half hour before the start, never after (its deadline). A load
+  put off with Later gets the rinse when it comes back.
+- Deviation: when that start falls in quiet hours or a busy time, where nothing can reach
+  them, the rinse starts as soon as a message can (often as quiet hours end, when the
+  window opens) and finishes that much into the window, so the times it names are always
+  ones they can act on.
+- Follow-ups: laundry as an energy input ("device activity", as the plan lists it) isn't
+  done; the cycles are kept for it. A WashCombo is "Not used" until mapped, since its
+  "finished" can mean washed or dried.
+- Changed after first use (Michael, 2026-10-31; the plan says a rinse, Michael's word wins):
+  the first nudge waits half an hour after the wash ends (`MOVE_AFTER`), so a load moved in
+  the meantime never gets one; the dryer starting takes back a nudge not yet sent. Its
+  deadline is its send time, so the daily message limit doesn't hold it to morning (quiet
+  hours, busy times and pauses still do). Later on it asks again in an hour (the button's
+  `minutes`, honoured by `TaskBoard.on_button`), not the usual few hours. The rescue is a
+  rewash, not a rinse ("Rewash the washer load"; the setting's column keeps its name). A
+  washer seen running, then off (a 5-minute read missed the finish) counts as finished.
 
 ### 32 · SmartLife / Tuya feeders
 Status: [ ]
@@ -6234,9 +6308,10 @@ Tests:
 Commit when done.
 
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: none in Themi (it is a separate program)
-Read first: "Integrations" → Safeway/DoorDash row; "Fixed technical choices" (the extension).
+Read first: "Integrations" → Safeway/DoorDash row. (The plan has no section on the extension;
+this prompt and `extension/safeway/NOTES.md` are its spec.)
 
 Decided with the user on 2026-10-30, replacing prompt 35's "item search links" only. Safeway
 has no public cart API. A headless browser on the cloud host would face bot checks from a
@@ -6280,42 +6355,173 @@ safeway.com. Write install steps in `extension/safeway/README.md`.
 
 Commit when done.
 
-### 35c · Safeway cart: Themi sends the list to the extension
-Status: [ ]
+Notes (2026-10-31):
+- Spike passed in the family's signed-in Chrome (driven through Claude in Chrome): the
+  extension calls safeway.com's own search and cart APIs with `fetch`; no button clicking.
+  `extension/safeway/NOTES.md` has the requests; `fixtures/` the redacted responses.
+- What the spike found that the prompt didn't expect:
+    - The sign-in token and API keys are page globals (`AB.userInfo.SWY_SHOP_TOKEN`,
+      `SWY.CONFIGSERVICE`), so `page.js` runs in the page's MAIN world (Chrome 111+) and
+      hands them to the content script. Nothing is hardcoded or stored.
+    - Search refuses a `request-id` not in the site's format (3 digits, ms time, 3 digits).
+    - `featured=true` puts sponsored products first; the extension asks for `false`.
+    - A query with no match still returns ~30 unrelated products with `isExactMatch:
+      false`; that counts as not found.
+    - The cart "add" **sets** the quantity. The extension reads the cart first and posts
+      current + wanted, so it never lowers anything. 35d's jobs must do the same.
+    - Signed out is 401, a bad token 403, a bot check HTML or a dropped connection: all
+      stop the fill with "Sign in to Safeway, then try again."
+- "change" adds the newly chosen product and remembers it; the old one stays in the cart
+  (the extension never removes) and the popup tells them to remove it on safeway.com.
+- An out-of-stock top result is reported, not swapped for the next one.
+- Tests: 33 `node --test` cases in `extension/safeway/tests/` (Node 18 is enough), run by
+  `make test-all` after pytest, skipped with a notice without Node.
+- Manual check: the extension's real `lib/` code run in a signed-in safeway.com tab filled
+  "eggs / 2 bananas / oat milk" in 15 s (Lucerne 18-count eggs, 2 bananas, Oatly 64 oz),
+  and the cart page on safeway.com showed them. Loading it unpacked and using the popup
+  is not yet checked: the user should follow `extension/safeway/README.md` once.
+- The family's cart now has those three plus one Just Egg (16 oz) from the spike; remove
+  any you don't want.
+- Follow-up: products sold each but priced by weight (bananas) show a size of "1 lb".
+
+### 35c · Safeway cart: Themi's side (pairing, jobs, product memory)
+Status: [x] 2026-10-31
 Depends on: 35b, 25, G1, 16
-Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D.
+Read first: "Integrations" → Safeway/DoorDash row; "Module behaviour" → D;
+`extension/safeway/NOTES.md`.
+Split on 2026-10-31: 35c is everything in Themi; 35d is the extension's side. The fake
+extension in the tests stands in for 35d.
 
 Build:
 - Pairing: on the website, anyone in the family can "Connect the Safeway helper". This
   creates a token shown once and stored hashed, which can only read and answer Safeway cart
-  jobs. Revoke it from the same page. The extension's options page takes Themi's public
-  address and the token; host access to that address is requested there and then.
+  jobs (and read and set remembered products). Revoke it from the same page.
 - Staging: "fill the Safeway cart" (or the weekly shop) becomes a `safeway_cart` proposal
   (Tier 1, capped): the grocery list items, with a quantity where the list has one. Its yes
-  queues a cart job.
-- Jobs API under `/api/safeway/`: the extension asks for the next job when a safeway.com tab
-  opens and every minute while one is open; it claims it, fills the cart as in 35b, and posts
-  the results. Everything it sends is validated (shape, lengths, counts) and treated as data;
-  product names are escaped on the website and quoted in blocks for the model.
+  queues a cart job. One open job at a time.
+- Jobs API under `/api/safeway/` (bearer token): claim the next job (claimed once), post its
+  results. Everything the extension sends is validated (shape, lengths, counts, item names
+  that are the job's) and treated as data. Product names are escaped on the website and never
+  sent to the model: the message names the family's items, not Safeway's products.
 - Results go out through the outbox: "9 things in the Safeway cart; oat milk was out of
   stock. Ready when you are." No energy words.
 - Product memory moves to Themi (`safeway_products`: item name to product ID, name and
-  size), so both partners' browsers agree. A receipt line matched to a grocery item
-  (`themi.core.pantry`) becomes that item's search words. The website lists the remembered
-  products, with a way to change or forget one.
-- Fallback: no paired extension, or a job not claimed within 2 hours, sends the list once
-  with a Safeway search link per item, and the job expires.
+  size, plus search words), so both partners' browsers agree. A Safeway receipt line matched
+  to a grocery item (`themi.core.pantry`) becomes that item's search words. The website
+  lists the remembered products, with a way to change the search words or forget one.
+- Fallback: no paired helper, or a job not claimed within 2 hours (or claimed and not
+  answered within 30 minutes), sends the list once with a Safeway search link per item, and
+  the job expires.
 
 Tests:
 - Pairing, revoking, and a wrong or revoked token refused.
 - The job lifecycle: queued, claimed once, results, expiry and the links fallback.
-- Bad results from the extension (wrong shape, too long, unknown job) rejected.
-- Product memory: used on the next job, changed and forgotten on the website, learned from a
-  receipt.
+- Bad results from the extension (wrong shape, too long, unknown job, unknown item)
+  rejected.
+- Product memory: sent with the next job, changed and forgotten on the website, learned from
+  a receipt.
 - A scenario: "fill the Safeway cart", a yes, a fake extension claims and answers, and the
   result message arrives.
 
 Commit when done.
+
+Notes (2026-10-31):
+- `themi.core.safeway.SafewayCart`; migration 0088: `safeway_helpers` (token hash, who, last
+  seen, revoked), `safeway_jobs` (queued, claimed, done or expired; items and results as
+  JSON; the action it came from) and `safeway_products` (item to Safeway pid, name, size and
+  search words). The `safeway_cart` category was already in migration 0008 (Tier 1, capped).
+- The tool is `fill_safeway_cart` (no arguments: the whole grocery list), in the pantry tool
+  group, whose words now include "safeway", "cart" and "weekly shop". The card reads "Eggs,
+  2 oat milk and bananas for the Safeway cart" (an imperative "Fill the..." got an "Up
+  next:" label). A quantity comes from the list's name: "2 oat milk", "oat milk x2" or
+  "oat milk (2)". The yes edits the card: "I'll have the Safeway helper fill the cart...",
+  or, with no helper connected, the list with a search link per item.
+- API (bearer token, no cookies, so no CSRF): `POST /api/safeway/claim` (200 with the job,
+  204 when there's none; claiming is one conditional UPDATE, so a job is claimed once),
+  `POST /api/safeway/jobs/{id}/results`, `GET` and `PUT /api/safeway/products`. A bad
+  token is 401; a bad body (over 64 kB, not JSON, the wrong shape, an item not in the job,
+  an item twice, a quantity outside 1-20, a product id that isn't digits, a name over 200
+  characters, someone else's job, answered twice) is 422 and changes nothing.
+- Each job item goes out with `search` (the remembered search words, else its name) and
+  `product` (the remembered one, or null). An added item's product is remembered.
+- The result message uses only the family's item names and code-written words, so nothing
+  the helper sends reaches the model; the website escapes product names (Jinja). `stopped`
+  is true or false, never the helper's own text.
+- Expiry (`safeway.expire`, every 5 minutes): unclaimed for 2 hours, or claimed and
+  unanswered for 30 minutes, sends the links once (deduped per job).
+- Receipts: the receipt schema has `as_written`, the product's name as on the receipt. A
+  grocery receipt from a vendor named Safeway sets that item's search words (a picked
+  product stays). The website's "Save" on search words clears the product so the next fill
+  picks again; "Forget" removes it.
+- Website: "Safeway" in the menu: connect (the token is shown once on the page the POST
+  returns), the connected helpers with Disconnect, and the remembered products.
+- Setup: restart `themi run` for migration 0088. Pairing does nothing useful until 35d.
+
+### 35d · Safeway cart: the extension takes jobs from Themi
+Status: [x] 2026-10-31
+Depends on: 35c
+Read first: 35b's and 35c's Notes; `extension/safeway/NOTES.md`.
+
+Build (`extension/safeway/`):
+- An options page that takes Themi's public address and the helper token. Host access to
+  that address is requested there and then (`optional_host_permissions`); nothing else is
+  added to the manifest's fixed permissions but `alarms`.
+- A service worker asks Themi for the next job when a safeway.com tab opens and every minute
+  while one is open. It claims it, has the tab fill the cart as in 35b, and posts the
+  results. Calls to Themi go from the worker (the page's CORS rules don't apply there).
+- When paired, remembered products are Themi's (`/api/safeway/products`), for the popup's
+  own fills and "change" too, so both browsers agree. Unpaired, it works as in 35b.
+- The popup shows "Connected to Themi" or a link to the options page, and a job's results
+  like its own.
+
+Tests (`node --test`):
+- Options: address validation (https, or http only for localhost), the token kept in
+  `chrome.storage.local`.
+- The worker: polls only while a Safeway tab is open, claims, posts results, and stops on a
+  401 from Themi ("The helper's connection was revoked").
+- Job items with a remembered product skip the search; ones with search words search those.
+
+Manual check (Notes): pair it with the website, say "fill the Safeway cart", answer yes, and
+see the cart and the message.
+
+Commit when done.
+
+Notes (2026-10-31):
+- Manifest 0.2.0: `permissions` storage and alarms; `optional_host_permissions` https://*/*,
+  http://localhost/* and http://127.0.0.1/*, of which the options page asks for Themi's
+  origin alone, on the Connect click. A `background.js` service worker and `options.html`.
+- `lib/themi.js`: the address check (https, or http on this computer; no user, query or
+  fragment), the API client (bearer token, `credentials: "omit"`, a 401 is `Revoked`),
+  remembered products kept in Themi (read once per fill, set on each new pick) and a fill's
+  result in Themi's shape (only items it got to; `stopped` true or false).
+- `lib/worker.js` (driven by `background.js`): a content script tells the worker when a
+  Safeway tab loads, and a 1-minute alarm runs while one is open. It claims a job, sends it to
+  the tab and is busy until the tab reports back with a fresh message (`job-done`), so a long
+  fill doesn't depend on the worker staying alive; "busy" is in storage and lapses after 30
+  minutes, when Themi gives up on the job too. A tab that can't take the job (opened before
+  the extension was installed) frees it, and Themi sends links when the job runs out. A 401
+  marks the helper revoked and stops polling.
+- Job items are checked in the tab as data (`jobItems`): names up to 80 characters, quantity
+  1-20, a product only with a digits id. A remembered product skips the search; search words
+  are what's searched.
+- Paired, the popup's own fills and "change" use Themi's remembered products too. The popup
+  says whether it's connected, links to the options page, and marks a cart filled for Themi.
+- Tests: 43 `node --test` cases (10 new).
+- Fixed the same day, after the first real try (the job sat queued): the worker only began
+  checking when a Safeway page loaded, so a tab open before the extension was reloaded never
+  started it. It now checks every minute while paired (and on Chrome's start, the
+  extension's install or reload, and right after Connect), pings each Safeway tab, and
+  skips one without its code, telling the popup to say "Reload your Safeway tab". The popup
+  has an **Open Safeway** button. On Themi's side, "Safeway cart filled with the 11 items"
+  went out before the yes: `CLAIMS_DONE` now knows "filled".
+- Also fixed: any safeway.com tab counted as ready, including Safeway's "Not found" page at
+  the end of a sign-in, which would have taken the job and stopped at once. A tab now
+  answers the ping as ready only when page.js reports a store, a sign-in token and both API
+  keys (`readyToShop`); otherwise the popup says "Open Safeway and sign in" (`themiTab`
+  replaced `themiReloadTab`). 47 `node --test` cases.
+- Not checked by hand yet: loading the extension, pairing it with the running Themi, and a
+  real "fill the Safeway cart". The user should do that once (README, "Connect it to
+  Themi"). Themi's address must be reachable from the browser over https (or localhost).
 
 ---
 
@@ -6572,3 +6778,302 @@ Notes (2026-10-30):
 - Setup: restart (applies 0083). The first sync puts the whole grocery list into each
   linked Keep list.
 
+### T2 · Tasks: a chore that waits for another to be done
+Status: [x] 2026-10-31
+Depends on: F7, C2d, F17b, F19c
+Read first: F7's notes (`due_before_task`), C2d's (`TaskBoard.holds`, the chart queue), F17b's
+(follow-ups). Plan: Task matching.
+
+From Michael (2026-10-31): "Any time you are going to assign Erin to Clean the Kitchen, first
+send a task to Michael to declutter the kitchen. Once that task is marked done, then Erin can
+be assigned a Clean the kitchen task." Real data: task 29 "Clean kitchen" is Erin's, every
+Wednesday, `missed = roll`; Erin's chart limit is 1.
+
+What happens today (none of it is what was asked):
+- As a rule (`propose_rule`, policy): the text goes into the model's prompt, but chore nudges
+  are sent by code, so nothing changes, and "Locked in. I'll follow that from now on." is
+  untrue.
+- As `due_before_task`: Michael's declutter is due Tuesday (good), but Erin's chore still comes
+  up Wednesday. Left undone, the declutter records a miss on Thursday when her round rolls and
+  moves to next Tuesday, so doing it Friday counts for next week and Erin gets nothing.
+- As a follow-up (`add_follow_up`): Erin gets a second, one-off kitchen task (off the wall,
+  no steps, outside her chart limit) as soon as Michael is done, even on Tuesday, and her own
+  chore still comes up Wednesday.
+
+Wanted (Michael's decisions):
+- "Any time" repeats with the chore: every round of the kitchen gets its declutter first.
+  "Next time" is once: only the next round, then the link goes.
+- Tuesday: Michael's declutter is due (the day before Erin's round), as `due_before_task` does.
+- Erin's round waits until the declutter is done for it. Undone through Friday: Erin is never
+  nudged, it isn't on her chart, and it isn't a miss or overdue for her.
+- Done early (Monday or Tuesday): Erin's chore still comes up on its own day, Wednesday.
+- Done late (Friday): Erin's chore comes up at once (her chart queue may pick it, her nudge
+  goes in her good window). Its overdue and escalation clocks start then. It rolls on as usual
+  at the next Wednesday.
+- Still undone when the next round comes: Michael keeps one owed declutter, not two, and it
+  now counts for the new round. Erin's waiting round moves to the new date with no miss
+  recorded for her (record it as skipped while waiting, not missed).
+- Always, whoever has the kitchen (reassigned, shared, either of you): the hold is on the
+  chore, not on Erin.
+- Michael is told: his declutter nudge says what it clears the way for ("This one clears the
+  way for Erin's kitchen."), in words that pass the PDA checker at his level. Erin is never
+  told she's waiting; her nudge simply comes when it's ready, worded as usual.
+
+Build:
+- A flag on the due-before link: `tasks.holds_target` (the prerequisite holds its target back)
+  and `tasks.hold_once` (for "next time": cleared after one round). Migration.
+- `TaskBoard.waiting_on(task)`: the prerequisite chore(s) holding this one whose current round
+  isn't done for this round. Registered in `TaskBoard.holds`, so `prompt`, the end-of-day
+  list, the morning list, overdue reminders and the day summary leave it out.
+- The chart queue (`ChartQueue._next`, `counts`) skips a waiting chore, so it doesn't take
+  Erin's one slot; the wall sync keeps it off the chart for people without a limit too.
+- `_settle_missed_round`, for a held target: no missed run while it waits; move to the next
+  date with a "skipped" run instead. For the prerequisite: when it holds its target, it's
+  catch-up (stays owed, follows the target's new round, no second one).
+- A done hook on the prerequisite: if its target was waiting and its day has come, nudge it
+  (and refresh the chart queue) now; if its day hasn't come, nothing (it comes up on its day).
+- `set_task_schedule`: `holds_target` and `once` next to `due_before_task`; the tool
+  description covers "any time … first … then" (repeats) versus "next time" (once). The
+  read-back says it: "Saved: Declutter the kitchen (Michael), the day before Clean kitchen.
+  Clean kitchen waits until it's done, every time."
+- Rules: a `policy` rule about when chores happen or wait can't make it happen.
+  `propose_rule`'s description sends those to the scheduling tools, and the reply never says
+  "I'll follow that" for one. An eval case for the message above.
+- Plan: update the Task matching section (prerequisites that hold a chore back).
+
+Tests (frozen clock, from a Sunday):
+- Scenario, Michael's timeline: Tuesday nudge to Michael with the clears-the-way line; nothing
+  to Erin Wednesday or Thursday, and the kitchen isn't on her chart; Michael done Friday:
+  Erin's chore comes up and she's nudged Friday; no missed runs for either.
+- Done Tuesday: Erin is nudged Wednesday, not Tuesday.
+- Undone until the next Tuesday: one declutter for Michael, Erin's round moved with a skipped
+  run, nothing sent to Erin.
+- "Next time": the hold applies to one round, then the link is gone and the next Wednesday
+  comes up as usual.
+- Reassigned to Michael: still held. Erin's chart limit: a waiting chore never takes the slot.
+- The clears-the-way wording passes the PDA checker at level 3.
+- The read-back text for a holding link, repeating and once.
+
+Done when: the message above, said in chat, sets up the repeating link, read back exactly, and
+the scenario timeline passes. Commit.
+
+Notes (2026-10-31):
+- Migration 0091: `tasks.holds_target`, `tasks.hold_once`, and `tasks.round_until` (a round
+  that came up late). `set_task_schedule` takes `holds_back` and `once` (both required, as
+  every tool argument is); `TaskBoard.set_schedule` takes `holds_target` and `once`.
+- "Done for this round": the holder was done since the held chore's last run ended (done or
+  missed). Rounds skipped while waiting record nothing, so one declutter covers the round
+  that's open, however late. `TaskBoard.waiting_on(task)` answers it; the board registers it
+  in its own `holds`, so nudges, the end-of-day and morning lists, overdue reminders and the
+  day summary leave a waiting chore out.
+- Settling: a waiting chore isn't missed and stays on its date until the next round's day
+  comes, then moves there quietly. The holder doesn't record a miss when the other moves on;
+  it stays owed, for the new round, and gets C2c's overdue reminders (other deadline chores
+  still move by themselves). Overdue and escalation clocks skip a waiting chore, and count
+  from the later of its last done and the holder's.
+- Released late (Friday for a Wednesday round): the round becomes due that day and runs until
+  the day before the next round (`round_until`); missed after that, it rolls on to that day's
+  round, which waits for the next declutter. Released early, the chore's nudge is queued for
+  its own day.
+- "Next time" (`once`): the holder is done once and finished, so the hold ends with it.
+  Cancelling the holder, or taking its hold or schedule away, lets the chore come up too.
+- Michael's nudge: `It clears the way for Erin's "Clean kitchen".` (or "your", or no name for
+  a chore for either of you), as a `TaskBoard.details` line. It passes the PDA checker at 3.
+  Erin is told nothing; the model's open items say "Waits until … is done first".
+- Chart and wall: the chart queue never picks a waiting chore, and the wall sync takes it off
+  the chore chart (as C2d does with waiting chores, so its ticks on the wall go) and puts it
+  back once it's released.
+- Deviation: the read-back reads "Saved: Due the day before Clean kitchen (Every Wednesday);
+  Clean kitchen waits until it's done, every time. Next: Tue 27 Oct." It's built from
+  `summary`, which doesn't name the person; the prompt's version did.
+- Deviation: a skipped round isn't recorded at all. `task_runs` has done and missed runs only,
+  and a run that isn't missed counts as done (last done, wall ticks), so a "skipped" kind
+  would have meant changing every reader. Nothing is lost: it's neither a miss nor a done.
+- Rules: `propose_rule` refuses a policy that mentions assigning, chores or tasks together with
+  an order ("first … then", "once … done", "until … done", "before you assign"), pointing to
+  `set_task_schedule`. Other phrasings rely on the tool descriptions.
+- Evals: case `task-waits-for-declutter` (from Husband; the kitchen is Erin's, set up with the
+  runner's new `"for"` key). Not run: the model evals make real calls.
+- Plan: the Task matching bullet now covers chores that hold another back.
+- Setup: restart `themi run` (applies 0091). Then Michael can send the message in chat. Real
+  data: Erin's "Clean kitchen" (task 29, every Wednesday) is there; the declutter task isn't
+  yet, and the model makes it. Her next round is Wed 4 Nov, so the declutter would be due
+  Tue 3 Nov.
+
+### F20a · Feedback (2026-10-31): no instant card for your own new task, a turn that ran out of steps
+Status: [x] 2026-10-31
+Depends on: T2, F1, P2a
+From Michael's bugs #108 and #110 (2026-10-31). The plan has nothing on either; these are fixes.
+- #108 ("task creation shouldn't trigger the card that asks if it is done"): "cycle the
+  bottles before the dream feet", said to the Google speaker, became task 63, due today, and
+  "Due today: … Done already, or later?" went out the moment it was made. An undated task
+  someone makes for themselves already waits `FIRST_NUDGE_AFTER` (4 hours); a dated one is
+  nudged from its day's start (or its 9 am deadline), which for "today" is now. Same thread:
+  the read-back said `Added: '"Cycle the bottles before the dream feet"' due today.`
+- #110 ("figure out why this failed"): Michael's T2 message ("Any time you are going to assign
+  Erin to Clean the Kitchen, first send a task to Michael to declutter…"). The model used all
+  8 steps (propose_rule, more_tools, create_task ×3, set_task_schedule ×2, update_task), so
+  the reply was "I got a bit tangled up…" though the work was done: task 65 is due Tue 3 Nov
+  before Clean kitchen, holding it back, and was read back. But the model passed `once`, so
+  it's "this once" where Michael said "any time". Why the first set_task_schedule failed
+  can't be told: `reply_tools` keeps only tool names.
+
+Decisions (Michael, 2026-10-31): only the asker's own tasks skip the instant card (a task
+made for the other partner still goes to them at once, since that's how they hear of it).
+Repair task 65 to every time, with the app stopped and a backup.
+
+Build:
+- `TaskBoard.create`: a task someone makes for themselves in chat whose round has already
+  started (due today, no time or a time gone by) is first asked about `FIRST_NUDGE_AFTER`
+  later; its due date's deadline doesn't pull that earlier. A later time or day is unchanged.
+- The Google Tasks inbox read-back doesn't double the quotes.
+- `reply_tools` keeps each call's arguments and result (redacted, cut short); the feedback
+  report lists them under "About reply N". Migration.
+- At the step limit, one more model call with no tools writes the reply from what was done;
+  "tangled" only when that fails too.
+- `set_task_schedule`: `once` with "any time", "every time", "whenever", "always" or "each
+  time" in the message (and no "next time", "this time" or "just once") is stored as every
+  time.
+
+Tests: each a failing test first. A task for yourself due today: no card at once, one 4 hours
+on; for the other partner: at once; due tomorrow: tomorrow's start. The inbox read-back's
+quotes. Tool arguments and results kept, redacted, and in the report. A turn at its step
+limit ends with the model's tool-less reply. "Any time" with once stored as every time;
+"next time" stays once.
+
+Notes (2026-10-31):
+- #108: `TaskBoard.create` waits `FIRST_NUDGE_AFTER` (4 hours) for the first card of a task
+  someone made for themselves in chat when its round has already started; `prompt` takes
+  `after_deadline`, so the due date's 9 am deadline doesn't pull it back. A later day or time
+  is nudged then, as before; a task for someone else still goes at once.
+- #108's read-back: the model wrote `'task 63'` and `_by_name` put the title in quotes inside
+  its quotes. `_by_name` now keeps one pair (`REQUOTED`).
+- #110: migration 0092 adds `reply_tools.arguments` and `result`, redacted and cut to 600
+  characters (`timing.ToolNote`, `KEPT_CHARS`). `themi feedback` lists each call under
+  "About reply N": `1. create_task {...} → Task 65 created…`. Reports from before the
+  restart have names only.
+- #110: after `max_steps` (8), one more call with `LAST_WORD` in the system prompt asks for a
+  line or two on what's done. The tools are still sent (some APIs refuse tool results
+  without them); if it asks for a tool anyway, the reply is "tangled", as before.
+- #110: `set_task_schedule` drops `once` when the message says "any time", "every time",
+  "whenever", "always" or "each time" and not "next time", "this time", "just once" or
+  "only once" (`EVERY_ROUND`).
+- Why #110's first set_task_schedule failed can't be known (arguments weren't kept then).
+  Likely candidates from `set_schedule`'s checks: `once` without `holds_back`, or the link
+  set on Clean kitchen instead of the declutter.
+- Data repaired (backup `data/themi-before-f20-repair-2026-10-31.db`), with the app stopped:
+  task 65 `hold_once` = 0, so Clean kitchen waits for it every week. Its queued Tuesday nudge
+  is unchanged. Reports #108 and #110 marked reviewed; #109 waits for F20b.
+- New report #111 (Erin, 18:46): after she tapped "Put on Michael's list", a second card
+  ("Michael's list needs updating", Add to it now) was unnecessary. Not looked at yet.
+- Not run: the model evals (the step limit's last word is a prompt change; run when there's
+  quota).
+- Setup: restart `themi run` (applies 0092).
+
+### F20b · Feedback (2026-10-31): asked how the laundry's doing, Themi looks
+Status: [x] 2026-10-31
+Depends on: 30, 31, H1, F20a
+From Michael's bug #109 (2026-10-31): "How much longer on the current wash cycle?" → "25
+minutes left"; "And the dryer?" → "The dryer isn't running." Both made up: no tool reads
+the appliances (the router offered core and schedules, then calendar), and Themi keeps one
+word per appliance (running, finished, idle), not time left. Michael: both were running.
+
+Decision (Michael, 2026-10-31): a status tool with time left.
+
+Build:
+- `appliance_status` (read-only, so not staged): each mapped appliance (washer, dryer,
+  dishwasher) as Themi sees it: running, finished or idle, since when, and time left when the
+  device reports it (LG's `timer` remainHour/remainMinute; Home Connect's remaining program
+  time). Read live when asked, falling back to the last state seen, said as such ("as of
+  4:05 pm"). An appliance not linked, or not reachable, says so; never a guess.
+- A `devices` tool group, with words (washer, dryer, dishwasher, laundry, cycle, load) and
+  embedding examples.
+- The system prompt: an appliance's state or time left comes only from appliance_status.
+
+Tests: the tool with the fakes (running with time left, finished, idle, offline, not linked);
+the router picks `devices` for "how much longer on the wash?" and "and the dryer?" after it;
+a scenario: Michael asks, the answer is the fake washer's time left.
+
+Notes (2026-10-31):
+- `themi.core.appliances`: `Appliances` (installed always) and the `appliance_status` tool
+  (`appliance`: washer, dryer, dishwasher or all), group `devices`. Each mapped appliance is
+  read live: `ThinqWatcher.read` (LG; `events.minutes_left` reads the `timer`, a WashTower's
+  two parts each) and `Dishwasher.read` (Home Connect; `seconds_left` reads the active
+  program's `BSH.Common.Option.RemainingProgramTime`). Both keep the state as a poll would,
+  so a cycle seen this way counts for the laundry and the dishwasher too.
+- What it says: "running since 4 pm, 24 minutes left" (since: only when Themi saw the cycle
+  start), "finished at 4:41 pm, not running now", "not running", or, when a read fails, "As
+  of 4:05 pm it was running." A result always ends by telling the model it's all Themi can
+  see. Nothing linked, or no such appliance, says so.
+- The system prompt: an appliance's state or time left comes only from appliance_status.
+- Routing: the `devices` words (washer, dryer, dishwasher, laundry, cycle, load, "how much
+  longer", "time left"...) and 11 embedding examples; routing cases `devices-wash-left`,
+  `devices-dryer-follow` ("And the dryer?" after the wash question) and
+  `devices-dishwasher-para`.
+- Not checked against the real services: whether Home Connect's Dishwasher-Monitor scope
+  allows reading the active program (if it doesn't, the dishwasher says no time left), and
+  whether LG's state reads carry `timer` for this washer and dryer (the fixtures do).
+- Report #109 marked reviewed.
+- Not run: the model evals (a new tool and a prompt line; run when there's quota).
+- Setup: restart `themi run`. No migration.
+
+### F20c · Feedback (2026-10-31): rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight
+Status: [x] 2026-10-31
+Depends on: 08, F19b, F20a
+Read first: "Module behaviour" → A (PDA shielding). From Erin's bugs #111 and #112
+(2026-10-31, 6:45 pm), one exchange: "I vacuumed upstairs. And washed the sheets. Though
+Michael still needs to put the sheets back on the bed tonight". The tools did it all (tasks
+1 and 2 done, task 66 for Michael). The reply was `Marked done: "Vacuum upstairs bedroom".` /
+`Marked done: "Change sheets (upstairs bed and couch)".` / `Put "Put sheets back on bed" on
+Michael's list for tonight.` What Erin got: "Up next: put sheets back on bed for Michael
+tonight." with two choice buttons.
+- The shield (Erin at 2) read "Put … on Michael's list" as a command: it's a report.
+- The AI rewrite got the whole message and dropped both confirmations (#112).
+- It made a choice of a done thing; its buttons answer as if typed, so "Put on Michael's
+  list" ran a second turn, whose reply was rewritten into "Michael's list needs updating."
+  with "Add to it now" (#111).
+- `complete_task`'s warm word was dropped by the model before that (#112: no praise).
+- Found looking: Michael's nudge for task 66 (due 11 pm, in his quiet hours; his daily limit
+  used) was queued for 8 am as "Was due yesterday", under the name it had before a rename.
+
+Decisions (Michael, 2026-10-31): do all of it; make sure he sees tonight's nudge.
+
+Build:
+- The shield rewrites only the flagged sentences; the rest go word for word.
+- A rewrite offers choice buttons only for a message that asks something.
+- A command verb followed by a quoted task title (`Put "X" on …`) is a report, not a command.
+- `complete_task` sends its own confirmation, warm word included (several in one turn as one
+  message), and the model is told not to restate it.
+- The outbox: a deadline inside quiet hours or a busy time goes `BEFORE_QUIET` (30 minutes)
+  before that stretch starts (`localtime.free_until`), or at once if that's passed.
+- A rename changes the task's queued nudge too.
+
+Tests: each a failing test first. The exchange as a scenario at strength 2: both
+confirmations with their warm words, no choice buttons, no second card. A rewrite that drops
+an unflagged line can't. Choice buttons only on a question. The report sentence passes the
+checker. The deadline in quiet hours; free_until; a renamed queued nudge.
+
+Notes (2026-10-31):
+- Shield: `PdaShield.apply` rewrites each run of consecutive flagged lines on its own
+  (`_flagged_runs`, `_shield_part`), one rewrite call per run; the other lines go word for
+  word. A demand that only shows across lines still takes the whole message. If a whole
+  rewrite loses a quote, the message is softened, as before.
+- Choice buttons from a rewrite only when the message has a "?" and the caller sent none.
+- `_opening_command`: a verb followed straight away by a quoted title (`Put "X" on …`) is a
+  report (`_VERB_THEN_TITLE`).
+- Completions: `complete_task` keeps what `TaskBoard.complete` said on `ctx.done` and tells the
+  model Themi says it; the agent opens the reply with those lines (one message for several),
+  and drops the model's own "Marked done" lines (`SAID_DONE`). A model that says it again
+  in other words ("… is done now") still gets its line after them.
+- Outbox: a deadline inside quiet hours, a busy time or a calendar block goes 30 minutes
+  (`BEFORE_QUIET`) before that stretch starts, or at once if that's already passed; a pause
+  still outranks it. `localtime.free_until` finds where the free time before a moment ends.
+  Once quiet hours have started, it waits for the morning, as before.
+- A rename puts the new title into the task's queued nudges.
+- Data repaired (backup `data/themi-before-f20c-repair-2026-10-31.db`), with the app stopped:
+  outbox 818 (Michael's sheets nudge) reads "Due today: Put sheets back on the bed (Erin
+  added this for you)." and, after the restart, is queued for 9 pm tonight. Reports #111
+  and #112 marked reviewed.
+- Not run: the model evals (`complete_task`'s description and result changed; run when
+  there's quota). Eval cases that expect the model to say "Marked done" may need updating.
+- Setup: restart `themi run` again for the shield and completion changes. No migration.

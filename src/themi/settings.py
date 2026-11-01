@@ -20,6 +20,7 @@ from themi.connectors.google.oauth import GoogleConfig
 from themi.connectors.homeconnect.client import BASE_URL as HOME_CONNECT_URL
 from themi.connectors.homeconnect.client import HomeConnectConfig
 from themi.connectors.ourgroceries.client import OurGroceriesConfig
+from themi.connectors.thinq.client import ThinqConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -76,6 +77,9 @@ class Settings(BaseModel):
     home_connect_client_id: str = ""
     home_connect_client_secret: Secret | None = None
     home_connect_url: str = HOME_CONNECT_URL
+    # 30: LG ThinQ needs no settings (the token is added on the Family page); this only
+    # points it at a fake instead of LG's regional servers.
+    thinq_url: str = ""
     backup: BackupConfig | None = None
 
     def cipher(self) -> Cipher:
@@ -116,6 +120,9 @@ class Settings(BaseModel):
         return HomeConnectConfig(
             self.home_connect_client_id, self.home_connect_client_secret, self.home_connect_url
         )
+
+    def thinq(self) -> ThinqConfig:
+        return ThinqConfig(self.thinq_url)
 
     @classmethod
     def load(
@@ -178,6 +185,9 @@ class Settings(BaseModel):
         home_connect_url = get("HOME_CONNECT_URL")
         if home_connect_url and not home_connect_url.startswith(("https://", "http://127.0.0.1")):
             problems.append(f"HOME_CONNECT_URL must be an https:// address, not {home_connect_url}")
+        thinq_url = get("THINQ_URL")
+        if thinq_url and not thinq_url.startswith(("https://", "http://127.0.0.1")):
+            problems.append(f"THINQ_URL must be an https:// address, not {thinq_url}")
         if bool(get("COZYLA_EMAIL")) != bool(get("COZYLA_PASSWORD")):
             problems.append("COZYLA_EMAIL and COZYLA_PASSWORD go together; set both or neither")
 
@@ -243,6 +253,7 @@ class Settings(BaseModel):
                 Secret(home_connect_secret) if home_connect_secret else None
             ),
             home_connect_url=home_connect_url.rstrip("/") or HOME_CONNECT_URL,
+            thinq_url=thinq_url.rstrip("/"),
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),

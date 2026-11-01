@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.connectors.homeconnect import HomeConnectAccount
+    from themi.connectors.thinq import ThinqWatcher
+    from themi.core.appliances import Appliances
     from themi.core.breaks import Breaks
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
@@ -45,6 +47,7 @@ if TYPE_CHECKING:
     from themi.core.groceries import GroceryList
     from themi.core.habits import HabitReserve
     from themi.core.journal import Journal
+    from themi.core.laundry import Laundry
     from themi.core.lists import Lists
     from themi.core.meals import Meals
     from themi.core.memory import Memory
@@ -54,6 +57,7 @@ if TYPE_CHECKING:
     from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
+    from themi.core.safeway import SafewayCart
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
     from themi.core.task_blocks import TaskBlocks
@@ -161,12 +165,16 @@ class Services:
     lists: Lists | None = None  # named lists Themi keeps (L1a)
     buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
+    safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
     home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
+    thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
+    laundry: Laundry | None = None  # wet loads moved, or rescued with a rewash (31)
+    appliances: Appliances | None = None  # how they're doing, asked in chat (F20b)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)

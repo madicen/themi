@@ -491,14 +491,8 @@ async def test_done_in_chat_says_a_warm_word_and_the_wall_doesnt(scenario: Scena
     vet = await board.create(erin, "Call the vet", "call", 1, date(2026, 10, 21), nudge=False)
     scenario.primary.queue_tool_call("complete_task", {"task_id": vet.id})
     scenario.primary.queue_text("Done.")
-    await scenario.say("Erin", "I called the vet")
-    result = [
-        b.content
-        for m in scenario.primary.last_request.messages
-        for b in m.content
-        if isinstance(b, ToolResult)
-    ][-1]
-    assert _praised(str(result), "Call the vet")
+    (reply,) = await scenario.say("Erin", "I called the vet")
+    assert _praised(reply, "Call the vet")  # Themi says it itself (bug #112)
     bins = await board.create(erin, "Bring bins in", "errand", 1, date(2026, 10, 21))
     await scenario.advance(hours=1)
     assert await board.complete(bins.id, erin) == "Marked done: Bring bins in. Thank you."
@@ -673,3 +667,55 @@ def _last_result(scenario: Scenario) -> str:
         if isinstance(block, ToolResult)
     ]
     return results[-1].content
+
+
+def _due_today(title: str, assign_to: str) -> dict:
+    return {
+        "title": title,
+        "kind": "errand",
+        "effort": 1,
+        "due_date": "2026-10-21",
+        "due_time": "",
+        "from_time": "",
+        "assign_to": assign_to,
+        "steps": [],
+        "check_in": False,
+        "importance": "normal",
+    }
+
+
+async def test_your_own_task_due_today_isnt_asked_about_at_once(scenario: Scenario) -> None:
+    """Bug #108: a task due today, said by the person who'll do it, got "Done already, or
+    later?" the moment it was made. It waits four hours, as an undated one does."""
+    scenario.primary.queue_tool_call("create_task", _due_today("Book the dentist", "me"))
+    scenario.primary.queue_text("Added: book the dentist, today.")
+    await scenario.say("Erin", "I need to book the dentist today")
+    await scenario.advance(hours=3, minutes=59)
+    assert not any("Done already" in t for t in scenario.inbox("Erin"))
+    await scenario.advance(minutes=2)
+    assert "Due today: Book the dentist. Done already, or later?" in scenario.inbox("Erin")
+
+
+async def test_a_task_due_today_for_the_other_partner_goes_at_once(scenario: Scenario) -> None:
+    """Bug #108's decision: the other partner hears about it from the card, so it still goes."""
+    scenario.primary.queue_tool_call("create_task", _due_today("Call the plumber", "Husband"))
+    scenario.primary.queue_text("Husband has it.")
+    await scenario.say("Erin", "Have Husband call the plumber today")
+    await scenario.advance(minutes=5)
+    assert any(
+        t.startswith("Due today: Call the plumber (Erin added this for you).")
+        for t in scenario.inbox("Husband")
+    )
+
+
+async def test_a_renamed_task_is_nudged_by_its_new_name(scenario: Scenario) -> None:
+    """F20c: "Put sheets back on bed" was renamed "Put sheets back on the bed" after its
+    nudge was queued, and the nudge still had the old name."""
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    task = await board.create(erin, "Book dentist", "errand", 1, date(2026, 10, 22))
+    await board.update(task.id, erin, title="Book the dentist", interactive=True)
+    await scenario.advance(hours=25)
+    nudges = [t for t in scenario.inbox("Erin") if "dentist" in t]
+    assert nudges == ["Due today: Book the dentist. Done already, or later?"]

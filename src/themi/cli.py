@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
@@ -108,6 +109,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     from themi.connectors.gkeep import GKeepAccount
     from themi.connectors.homeconnect import HomeConnectClient
     from themi.connectors.ourgroceries import OurGroceriesClient
+    from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
     from themi.runtime import Runtime
     from themi.settings import SettingsError
@@ -135,6 +137,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
         travel=TravelClient(settings.tomtom_api_key),
         home_connect=HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
+        thinq=dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
         keep=GKeepAccount,
         tool_routing=settings.tool_routing,
     )

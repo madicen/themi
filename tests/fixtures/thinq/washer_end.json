@@ -1,0 +1,10 @@
+[
+  {
+    "location": {"locationName": "MAIN"},
+    "runState": {"currentState": "END"},
+    "operation": {"washerOperationMode": "STOP"},
+    "remoteControlEnable": {"remoteControlEnabled": false},
+    "timer": {"remainHour": 0, "remainMinute": 0, "totalHour": 1, "totalMinute": 5},
+    "cycle": {"cycleCount": 18}
+  }
+]

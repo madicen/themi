@@ -1,0 +1,7 @@
+{
+  "pushType": "DEVICE_STATUS",
+  "deviceId": "lg-washer-1",
+  "deviceType": "DEVICE_WASHER",
+  "timestamp": "2026-10-21T22:10:00.000000",
+  "report": [{"location": {"locationName": "MAIN"}, "timer": {"remainHour": 0, "remainMinute": 30}}]
+}

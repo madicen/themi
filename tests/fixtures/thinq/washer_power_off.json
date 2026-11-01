@@ -1,0 +1,7 @@
+[
+  {
+    "location": {"locationName": "MAIN"},
+    "runState": {"currentState": "POWER_OFF"},
+    "remoteControlEnable": {"remoteControlEnabled": false}
+  }
+]

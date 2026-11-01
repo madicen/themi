@@ -20,6 +20,7 @@ pytest_plugins = [
     "tests.fakes.gtasks_api",
     "tests.fakes.cozyla",
     "tests.fakes.home_connect",
+    "tests.fakes.thinq",
     "tests.fakes.travel",
     "tests.fakes.ourgroceries",
     "tests.fakes.keep",

@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-10-31T07:31:59.418Z",
+  "errorCode": "OSMS-CART-0009",
+  "errorMessage": "Invalid request parameters",
+  "developerMessage": "Invalid request - Service Type should be DUG, Delivery or inStore",
+  "uri": "uri=/osms-cartservice/api/v2/cart/items"
+}

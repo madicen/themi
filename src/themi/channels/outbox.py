@@ -41,6 +41,7 @@ from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
 from themi.localtime import (
     free_from,
+    free_until,
     next_waking_start,
     start_of_local_day,
     to_utc_iso,
@@ -78,6 +79,8 @@ class Priority(StrEnum):
 
 PROACTIVE = (Priority.URGENT, Priority.NORMAL, Priority.LOW)
 IMMEDIATE = (Priority.REPLY, Priority.URGENT)
+# A message whose deadline is in quiet hours or a busy time goes this long before it starts.
+BEFORE_QUIET = timedelta(minutes=30)
 PRAISE_KIND = "praise"  # a warm word for something done (F19b): goes when it's news
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
@@ -482,7 +485,15 @@ class Outbox:
             if until is not None:
                 when = max(when, until)
         # Whatever was chosen, it can't land inside quiet hours or a busy time.
-        return free_from(member, when, tz, blocks)
+        when = free_from(member, when, tz, blocks)
+        if deadline is not None and not overdue and held is None and when > deadline:
+            # F20c: a deadline inside quiet hours ("tonight", due at 11 pm) goes before they
+            # start, not the next morning, when it's past due.
+            ends = free_until(member, deadline, tz, blocks)
+            before = max(now, ends - BEFORE_QUIET)
+            if before < ends and free_from(member, before, tz, blocks) == before:
+                return before
+        return when
 
     def _gated(self, member: Member, kind: str, now: datetime, priority: Priority) -> bool:
         if priority in IMMEDIATE:

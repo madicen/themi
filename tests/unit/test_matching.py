@@ -96,3 +96,28 @@ def test_no_energy_read_means_no_swap(
     assignment = matcher.assign("text", 2, erin)
     assert assignment.assignee.id == erin.id
     assert "no energy read" in assignment.reason
+
+
+def test_roomiest_takes_whoever_has_more_room_with_no_hand_over_cost(
+    family: SeededFamily, model: EnergyModel, matcher: Matcher
+) -> None:
+    # 31: the laundry has no usual owner, so a small difference is enough.
+    family.store.update_family(SYSTEM, handover_cost=50)
+    model.record(family.erin, "text_note", -1, "a bit flat")
+    room = matcher.roomiest("physical", 1)
+    assert room.assignee.name == "Husband" and not room.swapped
+    assert room.reason == "Husband seems to have the most room right now."
+    model.record(family.husband, "text_note", -3, "a long call")
+    assert matcher.roomiest("physical", 1).assignee.name == "Erin"
+
+
+def test_roomiest_without_any_energy_read_is_an_admins(
+    family: SeededFamily, matcher: Matcher
+) -> None:
+    for member in (family.erin, family.husband):
+        family.store.update_settings(
+            member, member.id, tracking={toggle: False for toggle in member.tracking}
+        )
+    room = matcher.roomiest("physical", 1)
+    assert room.assignee.name == "Erin"
+    assert room.reason == "No energy read to weigh it with."
