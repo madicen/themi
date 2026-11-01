@@ -149,7 +149,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
 | T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
 | F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
-| F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [ ] |
+| F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 
 ## Fixed technical choices
@@ -6971,7 +6971,7 @@ Notes (2026-10-31):
 - Setup: restart `themi run` (applies 0092).
 
 ### F20b · Feedback (2026-10-31): asked how the laundry's doing, Themi looks
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: 30, 31, H1, F20a
 From Michael's bug #109 (2026-10-31): "How much longer on the current wash cycle?" → "25
 minutes left"; "And the dryer?" → "The dryer isn't running." Both made up: no tool reads
@@ -6993,6 +6993,29 @@ Build:
 Tests: the tool with the fakes (running with time left, finished, idle, offline, not linked);
 the router picks `devices` for "how much longer on the wash?" and "and the dryer?" after it;
 a scenario: Michael asks, the answer is the fake washer's time left.
+
+Notes (2026-10-31):
+- `themi.core.appliances`: `Appliances` (installed always) and the `appliance_status` tool
+  (`appliance`: washer, dryer, dishwasher or all), group `devices`. Each mapped appliance is
+  read live: `ThinqWatcher.read` (LG; `events.minutes_left` reads the `timer`, a WashTower's
+  two parts each) and `Dishwasher.read` (Home Connect; `seconds_left` reads the active
+  program's `BSH.Common.Option.RemainingProgramTime`). Both keep the state as a poll would,
+  so a cycle seen this way counts for the laundry and the dishwasher too.
+- What it says: "running since 4 pm, 24 minutes left" (since: only when Themi saw the cycle
+  start), "finished at 4:41 pm, not running now", "not running", or, when a read fails, "As
+  of 4:05 pm it was running." A result always ends by telling the model it's all Themi can
+  see. Nothing linked, or no such appliance, says so.
+- The system prompt: an appliance's state or time left comes only from appliance_status.
+- Routing: the `devices` words (washer, dryer, dishwasher, laundry, cycle, load, "how much
+  longer", "time left"...) and 11 embedding examples; routing cases `devices-wash-left`,
+  `devices-dryer-follow` ("And the dryer?" after the wash question) and
+  `devices-dishwasher-para`.
+- Not checked against the real services: whether Home Connect's Dishwasher-Monitor scope
+  allows reading the active program (if it doesn't, the dishwasher says no time left), and
+  whether LG's state reads carry `timer` for this washer and dryer (the fixtures do).
+- Report #109 marked reviewed.
+- Not run: the model evals (a new tool and a prompt line; run when there's quota).
+- Setup: restart `themi run`. No migration.
 
 ### F20c · Feedback (2026-10-31): rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight
 Status: [x] 2026-10-31
