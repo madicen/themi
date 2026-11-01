@@ -201,3 +201,92 @@ async def test_the_lists_page(scenario: Scenario, site: httpx.AsyncClient) -> No
 
     await site.post(f"/lists/{nl.id}/delete", data={"csrf": erin_csrf})
     assert lists(scenario).visible(scenario.member("Erin")) == []
+
+
+# F21a, Erin's reports #115-#118 (2026-11-01), with made-up items.
+
+
+async def gift_list(scenario: Scenario) -> None:
+    await call(
+        scenario,
+        "Erin",
+        "Start my gift ideas list",
+        "create_list",
+        {"name": "Gift ideas", "personal": True},
+    )
+
+
+async def test_a_message_that_opens_with_the_list_name_adds_to_it(scenario: Scenario) -> None:
+    await gift_list(scenario)
+    replies = await call(
+        scenario,
+        "Erin",
+        "Gift list. A wool scarf",
+        "add_to_list",
+        {"list": "gift ideas", "items": ["A wool scarf"]},
+    )
+    assert items(scenario, "Erin", "gift ideas") == [("A wool scarf", False)]  # no card
+    assert replies == ['Added "A wool scarf" to Gift ideas.']
+    await call(
+        scenario,
+        "Erin",
+        "Gift ideas: board games",
+        "add_to_list",
+        {"list": "gift ideas", "items": ["board games"]},
+    )
+    assert ("board games", False) in items(scenario, "Erin", "gift ideas")
+
+
+async def test_opening_with_the_list_name_still_checks_the_items(scenario: Scenario) -> None:
+    await gift_list(scenario)
+    replies = await call(
+        scenario,
+        "Erin",
+        "Gift list. Something for the garden",
+        "add_to_list",
+        {"list": "gift ideas", "items": ["seed packets"]},  # the model's idea, not her words
+    )
+    assert replies[0] == "Seed packets for Gift ideas\nGo ahead, or not now?"
+    assert items(scenario, "Erin", "gift ideas") == []
+
+
+async def test_a_long_item_on_a_list_off_the_wall(scenario: Scenario) -> None:
+    await gift_list(scenario)
+    long = "A photo book of the trip, " + "with a page for every day we were away " * 7
+    long = long.strip()
+    assert 250 < len(long) <= 500
+    replies = await call(
+        scenario, "Erin", f"Gift list. {long}", "add_to_list", {"list": "gift", "items": [long]}
+    )
+    assert items(scenario, "Erin", "gift ideas") == [(long, False)]
+    assert replies == ["Added to Gift ideas."]  # too long to read back
+
+
+async def test_a_long_item_on_a_wall_list_says_why(scenario: Scenario) -> None:
+    await packing_list(scenario)
+    nl = named(scenario, "Erin", "packing")
+    lists(scenario).db.execute("UPDATE lists SET cozyla_list_id = 'wall-1' WHERE id = ?", (nl.id,))
+    long = "the big blue cooler with the broken handle, " * 3
+    assert len(long.strip()) > 100
+    replies = await call(
+        scenario,
+        "Erin",
+        f"Add {long} to the packing list",
+        "add_to_list",
+        {"list": "packing", "items": [long]},
+    )
+    assert replies == [
+        "That one's over 100 characters, the most a list on the wall takes, so it isn't on "
+        "Packing for the trip yet."
+    ]
+    assert len(named(scenario, "Erin", "packing").items) == 3
+
+
+async def test_the_reply_to_a_list_add_is_themis_own(scenario: Scenario) -> None:
+    await gift_list(scenario)
+    scenario.primary.queue_tool_call(
+        "add_to_list", {"list": "gift ideas", "items": ["It's such a nice day!"]}
+    )
+    scenario.primary.queue_text("Added to Gift ideas. Enjoy the sun.")
+    replies = await scenario.say("Erin", "Gift list. It's such a nice day!")
+    assert replies == ['Added "It\'s such a nice day!" to Gift ideas.']

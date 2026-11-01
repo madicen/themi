@@ -56,6 +56,10 @@ class ToolContext:
     # opens with them, word for word (bugs #111, #112: the model dropped the warm word, and
     # the phrasing rewrite dropped the rest).
     done: list[str] = field(default_factory=list)
+    # What a tool said to them itself (a list add's confirmation, why it couldn't): when
+    # every call this turn left one, they're the reply, and the model's words aren't sent
+    # (bug #118: "Added to the list. Enjoy the sun." after an item about a sunny day).
+    replies: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -70,6 +74,7 @@ class Proposal:
     # what they wrote, never the model's say-so). The trust tiers decide what that allows.
     requested: bool = False
     expires: datetime | None = None  # no use after then: an unanswered card lapses (#64)
+    said: str | None = None  # the reply when it's done straight away (ToolContext.replies)
 
 
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
@@ -77,7 +82,12 @@ Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
 
 class ToolFailed(Exception):
     """A tool couldn't do what was asked (no such task, not theirs...). The message goes
-    back to the model as an error result, and the turn knows nothing was done."""
+    back to the model as an error result, and the turn knows nothing was done. `reply`:
+    what to tell them, when it's plain enough to say as it is (ToolContext.replies)."""
+
+    def __init__(self, message: str, reply: str | None = None) -> None:
+        super().__init__(message)
+        self.reply = reply
 
 
 class ToolDeclined(Exception):
@@ -558,6 +568,8 @@ class ToolRegistry:
         except ToolDeclined as exc:
             return ToolResult(call.id, str(exc)), "declined"
         except ToolFailed as exc:
+            if exc.reply:
+                ctx.replies.append(exc.reply)
             return ToolResult(call.id, f"{exc} Nothing was changed.", is_error=True), "failed"
         except Exception as exc:
             log.exception("Tool %s failed for member %s", call.name, ctx.member.id)
@@ -587,6 +599,8 @@ class ToolRegistry:
                 "until they say yes; don't describe it as done."
             )
         if action.status == "done":
+            if proposal.said:
+                ctx.replies.append(proposal.said)
             return f"Done automatically (action {action.id}): {outcome.message}"
         return f"Tried but it failed (action {action.id}); it can be retried: {outcome.message}"
 
