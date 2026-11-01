@@ -1,6 +1,9 @@
 """The SigV4 signer against AWS's published example (IAM ListUsers, 2015-08-30)."""
 
-from themi.backup.s3 import sign, signing_key
+import hashlib
+import hmac
+
+from themi.backup.s3 import EMPTY_SHA256, sign, signing_key
 
 SECRET = "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY"
 
@@ -32,3 +35,39 @@ def test_the_signature_matches_aws() -> None:
         "SignedHeaders=content-type;host;x-amz-date, "
         "Signature=5d672d79c15b13162d9279b0855cfba6789a8edb4c82c400e06b5924a6f2b5d7"
     )
+
+
+def test_an_encoded_query_is_signed_as_sent() -> None:
+    """The nightly backup's list (2026-11-01): `prefix=themi%2F` was signed as `themi%252F`,
+    and the storage answered 403 SignatureDoesNotMatch."""
+    amz_date = "20261101T152250Z"
+    url = "https://s3.us-west-004.backblazeb2.com/bucket?list-type=2&prefix=themi%2F"
+    headers = {"host": "s3.us-west-004.backblazeb2.com", "x-amz-date": amz_date}
+    canonical = "\n".join(
+        [
+            "GET",
+            "/bucket",
+            "list-type=2&prefix=themi%2F",
+            f"host:{headers['host']}\nx-amz-date:{amz_date}\n",
+            "host;x-amz-date",
+            EMPTY_SHA256,
+        ]
+    )
+    scope = "20261101/us-west-004/s3/aws4_request"
+    to_sign = "\n".join(
+        ["AWS4-HMAC-SHA256", amz_date, scope, hashlib.sha256(canonical.encode()).hexdigest()]
+    )
+    key = signing_key(SECRET, "20261101", "us-west-004", "s3")
+    expected = hmac.new(key, to_sign.encode(), hashlib.sha256).hexdigest()
+    header = sign(
+        "GET",
+        url,
+        headers,
+        EMPTY_SHA256,
+        access_key="AKIDEXAMPLE",
+        secret=SECRET,
+        region="us-west-004",
+        service="s3",
+        amz_date=amz_date,
+    )
+    assert header.endswith(f"Signature={expected}")

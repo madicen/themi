@@ -12,7 +12,7 @@ import hashlib
 import hmac
 from dataclasses import dataclass, field
 from datetime import datetime
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 from xml.etree import ElementTree
 
 import httpx
@@ -69,10 +69,12 @@ def sign(
 ) -> str:
     """The Authorization header for a request. `headers` must include host and x-amz-date."""
     parts = urlsplit(url)
-    path = quote(parts.path or "/", safe="/-_.~")
+    # The URL comes encoded already: decode, then encode once, or "themi%2F" is signed as
+    # "themi%252F" and the storage refuses the signature.
+    path = quote(unquote(parts.path) or "/", safe="/-_.~")
     query = "&".join(
         sorted(
-            f"{quote(k, safe='-_.~')}={quote(v, safe='-_.~')}"
+            f"{quote(unquote(k), safe='-_.~')}={quote(unquote(v), safe='-_.~')}"
             for k, _, v in (p.partition("=") for p in parts.query.split("&") if p)
         )
     )
