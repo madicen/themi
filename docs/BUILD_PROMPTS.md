@@ -147,7 +147,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
-| T2 | Tasks: a chore that waits for another to be done | Feedback | [ ] |
+| T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
 
 ## Fixed technical choices
 
@@ -6776,7 +6776,7 @@ Notes (2026-10-30):
   linked Keep list.
 
 ### T2 · Tasks: a chore that waits for another to be done
-Status: [ ]
+Status: [x] 2026-10-31
 Depends on: F7, C2d, F17b, F19c
 Read first: F7's notes (`due_before_task`), C2d's (`TaskBoard.holds`, the chart queue), F17b's
 (follow-ups). Plan: Task matching.
@@ -6853,3 +6853,46 @@ Tests (frozen clock, from a Sunday):
 
 Done when: the message above, said in chat, sets up the repeating link, read back exactly, and
 the scenario timeline passes. Commit.
+
+Notes (2026-10-31):
+- Migration 0091: `tasks.holds_target`, `tasks.hold_once`, and `tasks.round_until` (a round
+  that came up late). `set_task_schedule` takes `holds_back` and `once` (both required, as
+  every tool argument is); `TaskBoard.set_schedule` takes `holds_target` and `once`.
+- "Done for this round": the holder was done since the held chore's last run ended (done or
+  missed). Rounds skipped while waiting record nothing, so one declutter covers the round
+  that's open, however late. `TaskBoard.waiting_on(task)` answers it; the board registers it
+  in its own `holds`, so nudges, the end-of-day and morning lists, overdue reminders and the
+  day summary leave a waiting chore out.
+- Settling: a waiting chore isn't missed and stays on its date until the next round's day
+  comes, then moves there quietly. The holder doesn't record a miss when the other moves on;
+  it stays owed, for the new round, and gets C2c's overdue reminders (other deadline chores
+  still move by themselves). Overdue and escalation clocks skip a waiting chore, and count
+  from the later of its last done and the holder's.
+- Released late (Friday for a Wednesday round): the round becomes due that day and runs until
+  the day before the next round (`round_until`); missed after that, it rolls on to that day's
+  round, which waits for the next declutter. Released early, the chore's nudge is queued for
+  its own day.
+- "Next time" (`once`): the holder is done once and finished, so the hold ends with it.
+  Cancelling the holder, or taking its hold or schedule away, lets the chore come up too.
+- Michael's nudge: `It clears the way for Erin's "Clean kitchen".` (or "your", or no name for
+  a chore for either of you), as a `TaskBoard.details` line. It passes the PDA checker at 3.
+  Erin is told nothing; the model's open items say "Waits until … is done first".
+- Chart and wall: the chart queue never picks a waiting chore, and the wall sync takes it off
+  the chore chart (as C2d does with waiting chores, so its ticks on the wall go) and puts it
+  back once it's released.
+- Deviation: the read-back reads "Saved: Due the day before Clean kitchen (Every Wednesday);
+  Clean kitchen waits until it's done, every time. Next: Tue 27 Oct." It's built from
+  `summary`, which doesn't name the person; the prompt's version did.
+- Deviation: a skipped round isn't recorded at all. `task_runs` has done and missed runs only,
+  and a run that isn't missed counts as done (last done, wall ticks), so a "skipped" kind
+  would have meant changing every reader. Nothing is lost: it's neither a miss nor a done.
+- Rules: `propose_rule` refuses a policy that mentions assigning, chores or tasks together with
+  an order ("first … then", "once … done", "until … done", "before you assign"), pointing to
+  `set_task_schedule`. Other phrasings rely on the tool descriptions.
+- Evals: case `task-waits-for-declutter` (from Husband; the kitchen is Erin's, set up with the
+  runner's new `"for"` key). Not run: the model evals make real calls.
+- Plan: the Task matching bullet now covers chores that hold another back.
+- Setup: restart `themi run` (applies 0091). Then Michael can send the message in chat. Real
+  data: Erin's "Clean kitchen" (task 29, every Wednesday) is there; the declutter task isn't
+  yet, and the model makes it. Her next round is Wed 4 Nov, so the declutter would be due
+  Tue 3 Nov.
