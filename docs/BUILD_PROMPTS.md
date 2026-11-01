@@ -152,7 +152,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
-| F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [~] |
+| F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
 
 ## Fixed technical choices
@@ -7131,7 +7131,7 @@ Notes (2026-10-31):
 - Setup: restart `themi run` (it was stopped for the repair). No migration.
 
 ### F21a · Feedback (2026-11-01): "<list name>. X" adds it, longer items, a plain list-add reply
-Status: [~]
+Status: [x] 2026-11-01
 Depends on: L1a, F5, F20a
 Read first: "Trust tiers" (an action asked for in their own words counts as their yes;
 Themi checks the request against what they wrote). From Erin's reports of 2026-11-01, all
@@ -7160,6 +7160,24 @@ Tests: each a failing test first, with made-up items. As a scenario: "Gift list.
 goes straight on; a 300-character item goes on a personal list; a 120-character item on a
 wall list gets the plain "too long" reply; an item the model would answer ("It's such a
 nice day!") gets only Themi's confirmation. Items the model inferred still wait for a yes.
+
+Notes (2026-11-01):
+- `add_to_list` counts "<list>. X" (also ":", " - ", a dash or a new line after the name)
+  as asking, when the opening words find this list (`Lists.find`, three letters at least)
+  and the items are in what they wrote (`_opens_with`). Model-inferred items still wait.
+- Items take up to 500 characters (`MAX_ITEM`), a wall list 100 (`MAX_WALL_ITEM`), in the
+  tool and in `Lists.add`. A too-long item's reply says so (`too_long`).
+- New `ToolContext.replies`: a staged tool's `Proposal.said` when it's done straight away,
+  and a `ToolFailed(..., reply)`. When every call this turn left one, they are the reply and
+  the model's text isn't sent. A list add names items up to 60 characters ('Added "A wool
+  scarf" to Gift ideas.'), else "Added to Gift ideas."
+- Follow-up: if the model shortens a too-long item and tries again, the reply would be both
+  lines ("That one's over..." then "Added..."). Not seen yet.
+- Reports not marked reviewed: #115, #117 and #118 are fixed here; #114 was a question
+  (answered in chat: the list is hers only, not on the wall, Keep or Google Tasks; it does
+  go to her Gemini free-tier model, into bug reports and the backups); #116 waits for F21b.
+- Setup: restart `themi run`. No migration. Rule 23 (household-wide automatic list adds) is
+  still locked; see F21b.
 
 ### F21b · Feedback (2026-11-01): a rule card says what it really makes automatic, a rule Themi can't keep
 Status: [ ]
