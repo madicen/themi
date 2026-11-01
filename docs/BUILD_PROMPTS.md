@@ -148,7 +148,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
 | T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
-| F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [~] |
+| F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [ ] |
 
 ## Fixed technical choices
@@ -6900,7 +6900,7 @@ Notes (2026-10-31):
   Tue 3 Nov.
 
 ### F20a · Feedback (2026-10-31): no instant card for your own new task, a turn that ran out of steps
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: T2, F1, P2a
 From Michael's bugs #108 and #110 (2026-10-31). The plan has nothing on either; these are fixes.
 - #108 ("task creation shouldn't trigger the card that asks if it is done"): "cycle the
@@ -6939,6 +6939,35 @@ on; for the other partner: at once; due tomorrow: tomorrow's start. The inbox re
 quotes. Tool arguments and results kept, redacted, and in the report. A turn at its step
 limit ends with the model's tool-less reply. "Any time" with once stored as every time;
 "next time" stays once.
+
+Notes (2026-10-31):
+- #108: `TaskBoard.create` waits `FIRST_NUDGE_AFTER` (4 hours) for the first card of a task
+  someone made for themselves in chat when its round has already started; `prompt` takes
+  `after_deadline`, so the due date's 9 am deadline doesn't pull it back. A later day or time
+  is nudged then, as before; a task for someone else still goes at once.
+- #108's read-back: the model wrote `'task 63'` and `_by_name` put the title in quotes inside
+  its quotes. `_by_name` now keeps one pair (`REQUOTED`).
+- #110: migration 0092 adds `reply_tools.arguments` and `result`, redacted and cut to 600
+  characters (`timing.ToolNote`, `KEPT_CHARS`). `themi feedback` lists each call under
+  "About reply N": `1. create_task {...} → Task 65 created…`. Reports from before the
+  restart have names only.
+- #110: after `max_steps` (8), one more call with `LAST_WORD` in the system prompt asks for a
+  line or two on what's done. The tools are still sent (some APIs refuse tool results
+  without them); if it asks for a tool anyway, the reply is "tangled", as before.
+- #110: `set_task_schedule` drops `once` when the message says "any time", "every time",
+  "whenever", "always" or "each time" and not "next time", "this time", "just once" or
+  "only once" (`EVERY_ROUND`).
+- Why #110's first set_task_schedule failed can't be known (arguments weren't kept then).
+  Likely candidates from `set_schedule`'s checks: `once` without `holds_back`, or the link
+  set on Clean kitchen instead of the declutter.
+- Data repaired (backup `data/themi-before-f20-repair-2026-10-31.db`), with the app stopped:
+  task 65 `hold_once` = 0, so Clean kitchen waits for it every week. Its queued Tuesday nudge
+  is unchanged. Reports #108 and #110 marked reviewed; #109 waits for F20b.
+- New report #111 (Erin, 18:46): after she tapped "Put on Michael's list", a second card
+  ("Michael's list needs updating", Add to it now) was unnecessary. Not looked at yet.
+- Not run: the model evals (the step limit's last word is a prompt change; run when there's
+  quota).
+- Setup: restart `themi run` (applies 0092).
 
 ### F20b · Feedback (2026-10-31): asked how the laundry's doing, Themi looks
 Status: [ ]
