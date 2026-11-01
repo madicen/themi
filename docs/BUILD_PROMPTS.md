@@ -151,6 +151,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
+| F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [~] |
 
 ## Fixed technical choices
 
@@ -7077,3 +7078,31 @@ Notes (2026-10-31):
 - Not run: the model evals (`complete_task`'s description and result changed; run when
   there's quota). Eval cases that expect the model to say "Marked done" may need updating.
 - Setup: restart `themi run` again for the shield and completion changes. No migration.
+
+### F20d · Feedback (2026-10-31): a follow-up after someone else's job that isn't a task yet
+Status: [~]
+Depends on: F17b, T2, F20a
+Read first: "Shadow Calendar" → Task matching. From Erin's bug #113 (2026-10-31, 11:16 pm):
+"After Michael brings the laundry upstairs, remind me to put it away" → `add_follow_up
+{"after_task_id": 35, "title": "Put the laundry away"}`, and "Added to follow up: put the
+laundry away as soon as the grocery order is assembled." Task 35 is "Assemble grocery
+order". Michael had no laundry task, and add_follow_up only follows an open task, so the
+model took one from the open items. Erin: "should have created a task for Michael and a
+follow up task for me". T2's hold is the chore form of this; a follow-up is the one-off.
+
+Decisions (Michael, 2026-10-31): a guard plus "create it first" (not a tool that does both);
+repair the live data.
+
+Build:
+- `add_follow_up` refuses a task whose title shares no word with what they said (the
+  follow-up's own words left out; "brings" matches "bring"; the task's number counts). The
+  refusal tells the model to create_task the first job for whoever does it, then follow it.
+  No check when there's no message (a button).
+- The tool description and the system prompt: when the job it follows isn't a task yet
+  ("after Michael brings the laundry up, remind me to put it away"), create_task it for
+  them first (assign_to their name), then add_follow_up on the new task.
+
+Tests: each a failing test first. Erin's message as a scenario: add_follow_up on task 35 is
+refused; create_task for Michael, then add_follow_up on it: Michael is nudged, and when he's
+done Erin gets "Put the laundry away". The bird cage follow-up still works; "brings"/"bring"
+matches; a button turn isn't checked. An eval case for the message.
