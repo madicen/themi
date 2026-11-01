@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
+from themi.core.memory import terms
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -30,6 +32,12 @@ log = logging.getLogger(__name__)
 # Never "straight away" or "right away": the PDA shield reads those as pressure.
 SAVED_TEXT = '"{title}" comes up as soon as "{after}" is done{each}.'
 EACH_ROUND = ", every time"
+# Bug #113: "after Michael brings the laundry upstairs…" went on "Assemble grocery order",
+# because Michael had no laundry task. The first job gets made, then followed.
+NOT_NAMED = (
+    "\"{after}\" isn't the task they said it follows. If that job isn't a task yet, "
+    "create_task it first (assign_to whoever does it), then add_follow_up on the new task."
+)
 REMOVED_TEXT = 'No follow-up after "{after}" any more.'
 
 
@@ -124,6 +132,21 @@ class FollowUps:
         return items
 
 
+def _named(after: Task, said: str, title: str) -> bool:
+    """Whether what they said names the task it follows: a word of its title ("brings" is
+    "bring"), not counting the follow-up's own words, or its number."""
+    if str(after.id) in re.findall(r"\d+", said):
+        return True
+    own = set(terms(title))
+    words = [w for w in terms(said) if w not in own]
+    return any(
+        a.startswith(b) or b.startswith(a)
+        for a in words
+        for b in terms(after.title)
+        if min(len(a), len(b)) >= 3 or a == b
+    )
+
+
 def _follow_ups(ctx: ToolContext) -> FollowUps:
     follow_ups = ctx.services.follow_ups
     if follow_ups is None:
@@ -135,8 +158,10 @@ def _follow_ups(ctx: ToolContext) -> FollowUps:
     "add_follow_up",
     "A reminder that comes once another task is done, not at a time: 'right after I clean "
     "the bird cage, remind me to refill the water'. after_task_id: the task it follows (from "
-    "the open items). It has no date; it's nudged as soon as that task is done, every time "
-    "for a repeating one. Never a separate dated task for this.",
+    "the open items). When that job isn't a task yet ('after Michael brings the laundry up, "
+    "remind me to put it away'), create_task it for them first, then follow the new task. It "
+    "has no date; it's nudged as soon as that task is done, every time for a repeating one. "
+    "Never a separate dated task for this.",
     {
         "after_task_id": {"type": "integer"},
         "title": {"type": "string", "description": "What to do then, in their words."},
@@ -154,6 +179,8 @@ async def add_follow_up(ctx: ToolContext, args: dict[str, Any]) -> str:
     title = " ".join(str(args["title"]).split()).rstrip(".")[:200]
     if not title:
         raise ToolFailed("What should the follow-up say?")
+    if ctx.request_text and not _named(after, ctx.request_text, title):
+        raise ToolFailed(NOT_NAMED.format(after=after.title))
     steps = [" ".join(str(s).split()) for s in args["steps"] if str(s).strip()]
     follow_ups.add(after, ctx.member, title, steps, ctx.member)
     each = EACH_ROUND if after.repeats else ""

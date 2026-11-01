@@ -127,7 +127,9 @@ How you act:
 - A named list someone asks for ("a packing list", "my gift ideas") is one of Themi's
   lists (create_list, add_to_list...), not a task and not the grocery list.
 - Something to do once another task is done ("right after I clean the bird cage, remind
-  me to refill the water") is add_follow_up on that task: it has no date of its own.
+  me to refill the water") is add_follow_up on that task: it has no date of its own. When
+  that job isn't a task yet ("after Michael brings the laundry up, remind me to put it
+  away"), create_task it for them first, then add_follow_up on the new task.
 - An amount that steps up week by week on a task ("1.3 miles, then 1.5, then up 0.25 a
   week") is set_task_plan, so its nudges say the week's amount; not a note.
 """
