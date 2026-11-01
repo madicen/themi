@@ -1,0 +1,10 @@
+{
+ "main_brush_work_time": 74382,
+ "side_brush_work_time": 74383,
+ "filter_work_time": 74384,
+ "filter_element_work_time": 0,
+ "sensor_dirty_time": 74385,
+ "strainer_work_times": 65,
+ "dust_collection_work_times": 25,
+ "cleaning_brush_work_times": 66
+}

@@ -34,6 +34,7 @@ from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
+from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
@@ -91,6 +92,7 @@ class Scenario:
         *,
         home_connect: FakeHomeConnect | None = None,
         thinq: FakeThinq | None = None,
+        roborock: FakeRoborock | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         real_models: bool = False,
@@ -126,6 +128,7 @@ class Scenario:
             travel=travel.client() if travel else None,
             home_connect=home_connect.client() if home_connect else None,
             thinq=thinq.config() if thinq else None,
+            roborock=roborock,
             keep=keep.connect if keep else None,
             tool_routing=tool_routing,
         )
@@ -308,8 +311,8 @@ async def scenario(
     Gmail too when it uses `fake_gmail`, and the OurGroceries mirror when it uses
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
-    `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, and Google Keep (GK1) when
-    it uses `fake_keep`.
+    `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, Roborock (V1) when it uses
+    `fake_roborock`, and Google Keep (GK1) when it uses `fake_keep`.
     """
 
     def optional(name: str) -> Any:
@@ -326,6 +329,7 @@ async def scenario(
         optional("fake_travel"),
         home_connect=optional("fake_home_connect"),
         thinq=optional("fake_thinq"),
+        roborock=optional("fake_roborock"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
     )
