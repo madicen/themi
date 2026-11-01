@@ -126,6 +126,7 @@ def _unquoted(reply: str) -> str:
 
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
 TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
+REQUOTED = re.compile(r"['‘“](\"[^\"\n]+\")['’”]")
 
 
 def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
@@ -139,7 +140,8 @@ def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
         said = match.group(3)  # quoted: a title like "Refill the water" isn't an order
         return f'"{title}"' if said is None or said.strip() == title else f'"{title}" ({said})'
 
-    return TASK_NUMBER.sub(named, reply)
+    # "Added: 'task 63' due today." keeps one pair of quotes, not two (bug #108's thread).
+    return REQUOTED.sub(r"\1", TASK_NUMBER.sub(named, reply))
 
 
 NO_WORDS = frozenset({"no", "n", "nope", "nah", "skip", "skip it", "no thanks", "leave it"})

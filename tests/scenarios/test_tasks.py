@@ -673,3 +673,42 @@ def _last_result(scenario: Scenario) -> str:
         if isinstance(block, ToolResult)
     ]
     return results[-1].content
+
+
+def _due_today(title: str, assign_to: str) -> dict:
+    return {
+        "title": title,
+        "kind": "errand",
+        "effort": 1,
+        "due_date": "2026-10-21",
+        "due_time": "",
+        "from_time": "",
+        "assign_to": assign_to,
+        "steps": [],
+        "check_in": False,
+        "importance": "normal",
+    }
+
+
+async def test_your_own_task_due_today_isnt_asked_about_at_once(scenario: Scenario) -> None:
+    """Bug #108: a task due today, said by the person who'll do it, got "Done already, or
+    later?" the moment it was made. It waits four hours, as an undated one does."""
+    scenario.primary.queue_tool_call("create_task", _due_today("Book the dentist", "me"))
+    scenario.primary.queue_text("Added: book the dentist, today.")
+    await scenario.say("Erin", "I need to book the dentist today")
+    await scenario.advance(hours=3, minutes=59)
+    assert not any("Done already" in t for t in scenario.inbox("Erin"))
+    await scenario.advance(minutes=2)
+    assert "Due today: Book the dentist. Done already, or later?" in scenario.inbox("Erin")
+
+
+async def test_a_task_due_today_for_the_other_partner_goes_at_once(scenario: Scenario) -> None:
+    """Bug #108's decision: the other partner hears about it from the card, so it still goes."""
+    scenario.primary.queue_tool_call("create_task", _due_today("Call the plumber", "Husband"))
+    scenario.primary.queue_text("Husband has it.")
+    await scenario.say("Erin", "Have Husband call the plumber today")
+    await scenario.advance(minutes=5)
+    assert any(
+        t.startswith("Due today: Call the plumber (Erin added this for you).")
+        for t in scenario.inbox("Husband")
+    )

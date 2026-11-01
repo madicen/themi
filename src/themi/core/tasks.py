@@ -514,15 +514,16 @@ class TaskBoard:
         )
         if nudge:
             task = self.get(task_id)
-            if task.due_on is not None:
+            # They just said it themselves: an instant "done already, or later?" is noise,
+            # for a task due today too (bug #108).
+            own = interactive and assignment.assignee.id == requester.id
+            starts = self._round_starts(task)
+            first = clock.now() + FIRST_NUDGE_AFTER if own else None
+            if starts is not None and (first is None or starts > clock.now()):
                 # Nothing is asked about before it's due (bug #14): its day, or its time.
-                not_before = self._round_starts(task)
-            elif interactive and assignment.assignee.id == requester.id:
-                # They just said it themselves: an instant "done already, or later?" is noise.
-                not_before = clock.now() + FIRST_NUDGE_AFTER
+                await self.prompt(task, not_before=starts)
             else:
-                not_before = None
-            await self.prompt(task, not_before=not_before)
+                await self.prompt(task, not_before=first, after_deadline=first is not None)
         task = self.get(task_id)
         await self._changed(task, "created", interactive)
         return task
@@ -543,10 +544,12 @@ class TaskBoard:
         overdue: str | None = None,
         priority: Priority = Priority.NORMAL,
         lead: str | None = None,
+        after_deadline: bool = False,
     ) -> None:
         """Nudge whoever does the task (or `member`). `overdue`: "own" or "shared" wording.
         `priority` LOW lets a batch of nudges trickle out in good moments. `lead` replaces
-        the opening line (an overdue reminder's, C2c)."""
+        the opening line (an overdue reminder's, C2c). `after_deadline`: `not_before` stands
+        even past the due date's deadline (a task they just made, already due, #108)."""
         if task.assignee is None and member is None:
             return
         if not_before is None and overdue is None and lead is None:
@@ -554,6 +557,8 @@ class TaskBoard:
             if starts is not None and starts > clock.now():
                 not_before = starts
         deadline = self._deadline(task)
+        if after_deadline and not_before is not None and deadline is not None:
+            deadline = max(deadline, not_before)
         if not_before is not None and deadline is not None:
             not_before = min(not_before, deadline)  # a due date still wins
         if member is None:

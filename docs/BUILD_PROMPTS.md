@@ -148,6 +148,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GK1 | Groceries said to Google Home, from Google Keep | Google Home | [x] 2026-10-30 |
 | GK2 | Themi's grocery list shown in Keep, both ways | Google Home | [x] 2026-10-30 |
 | T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
+| F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [~] |
+| F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -6896,3 +6898,68 @@ Notes (2026-10-31):
   data: Erin's "Clean kitchen" (task 29, every Wednesday) is there; the declutter task isn't
   yet, and the model makes it. Her next round is Wed 4 Nov, so the declutter would be due
   Tue 3 Nov.
+
+### F20a · Feedback (2026-10-31): no instant card for your own new task, a turn that ran out of steps
+Status: [~]
+Depends on: T2, F1, P2a
+From Michael's bugs #108 and #110 (2026-10-31). The plan has nothing on either; these are fixes.
+- #108 ("task creation shouldn't trigger the card that asks if it is done"): "cycle the
+  bottles before the dream feet", said to the Google speaker, became task 63, due today, and
+  "Due today: … Done already, or later?" went out the moment it was made. An undated task
+  someone makes for themselves already waits `FIRST_NUDGE_AFTER` (4 hours); a dated one is
+  nudged from its day's start (or its 9 am deadline), which for "today" is now. Same thread:
+  the read-back said `Added: '"Cycle the bottles before the dream feet"' due today.`
+- #110 ("figure out why this failed"): Michael's T2 message ("Any time you are going to assign
+  Erin to Clean the Kitchen, first send a task to Michael to declutter…"). The model used all
+  8 steps (propose_rule, more_tools, create_task ×3, set_task_schedule ×2, update_task), so
+  the reply was "I got a bit tangled up…" though the work was done: task 65 is due Tue 3 Nov
+  before Clean kitchen, holding it back, and was read back. But the model passed `once`, so
+  it's "this once" where Michael said "any time". Why the first set_task_schedule failed
+  can't be told: `reply_tools` keeps only tool names.
+
+Decisions (Michael, 2026-10-31): only the asker's own tasks skip the instant card (a task
+made for the other partner still goes to them at once, since that's how they hear of it).
+Repair task 65 to every time, with the app stopped and a backup.
+
+Build:
+- `TaskBoard.create`: a task someone makes for themselves in chat whose round has already
+  started (due today, no time or a time gone by) is first asked about `FIRST_NUDGE_AFTER`
+  later; its due date's deadline doesn't pull that earlier. A later time or day is unchanged.
+- The Google Tasks inbox read-back doesn't double the quotes.
+- `reply_tools` keeps each call's arguments and result (redacted, cut short); the feedback
+  report lists them under "About reply N". Migration.
+- At the step limit, one more model call with no tools writes the reply from what was done;
+  "tangled" only when that fails too.
+- `set_task_schedule`: `once` with "any time", "every time", "whenever", "always" or "each
+  time" in the message (and no "next time", "this time" or "just once") is stored as every
+  time.
+
+Tests: each a failing test first. A task for yourself due today: no card at once, one 4 hours
+on; for the other partner: at once; due tomorrow: tomorrow's start. The inbox read-back's
+quotes. Tool arguments and results kept, redacted, and in the report. A turn at its step
+limit ends with the model's tool-less reply. "Any time" with once stored as every time;
+"next time" stays once.
+
+### F20b · Feedback (2026-10-31): asked how the laundry's doing, Themi looks
+Status: [ ]
+Depends on: 30, 31, H1, F20a
+From Michael's bug #109 (2026-10-31): "How much longer on the current wash cycle?" → "25
+minutes left"; "And the dryer?" → "The dryer isn't running." Both made up: no tool reads
+the appliances (the router offered core and schedules, then calendar), and Themi keeps one
+word per appliance (running, finished, idle), not time left. Michael: both were running.
+
+Decision (Michael, 2026-10-31): a status tool with time left.
+
+Build:
+- `appliance_status` (read-only, so not staged): each mapped appliance (washer, dryer,
+  dishwasher) as Themi sees it: running, finished or idle, since when, and time left when the
+  device reports it (LG's `timer` remainHour/remainMinute; Home Connect's remaining program
+  time). Read live when asked, falling back to the last state seen, said as such ("as of
+  4:05 pm"). An appliance not linked, or not reachable, says so; never a guess.
+- A `devices` tool group, with words (washer, dryer, dishwasher, laundry, cycle, load) and
+  embedding examples.
+- The system prompt: an appliance's state or time left comes only from appliance_status.
+
+Tests: the tool with the fakes (running with time left, finished, idle, offline, not linked);
+the router picks `devices` for "how much longer on the wash?" and "and the dryer?" after it;
+a scenario: Michael asks, the answer is the fake washer's time left.

@@ -247,6 +247,9 @@ def test_replies_call_tasks_by_name() -> None:
     )
     assert by_name("Task 99 isn't one.", titles) == "Task 99 isn't one."
     assert by_name("I tasked 3 people.", titles) == "I tasked 3 people."
+    # Bug #108's thread: "Added: 'task 63' due today." kept its own quotes around the title's.
+    assert by_name("Added: 'task 7' due today.", titles) == 'Added: "Clean the bird cage" due today.'
+    assert by_name("“task 7” is due.", titles) == '"Clean the bird cage" is due.'
     assert "in quotes" in STABLE_SYSTEM and "never by their\n  numbers" in STABLE_SYSTEM
 
 
