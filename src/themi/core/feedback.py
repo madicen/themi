@@ -150,6 +150,9 @@ def _item_lines(item: FeedbackItem) -> list[str]:
             f"**About reply {reply['id']}:** tools run: {', '.join(reply['tools']) or 'none'}; "
             f"groups offered: {groups}{added}.",
         ]
+        for n, call in enumerate(reply.get("calls", []), 1):
+            said = call["result"].replace("\n", " ")
+            lines.append(f"{n}. {call['name']} {call['arguments']} → {said}")
     if ctx.get("conversation"):
         lines += ["", "**Recent conversation:**", "", "```"]
         for m in ctx["conversation"]:
@@ -280,9 +283,14 @@ class FeedbackChat:
         reply = ReplyReview(db).get(reply_id) if reply_id else None
         if reply is None:
             return None
+        calls = db.query(  # bug #110: what each was given and said back
+            "SELECT name, arguments, result FROM reply_tools WHERE reply_id = ? ORDER BY id",
+            (reply.id,),
+        )
         return {
             "id": reply.id,
             "tools": list(reply.tools),
+            "calls": [c for c in calls if c["arguments"] is not None],
             "groups": None if reply.groups is None else list(reply.groups),
             "groups_added": list(reply.groups_added),
         }

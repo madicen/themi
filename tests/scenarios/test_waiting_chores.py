@@ -51,8 +51,14 @@ def last_tool_result(scenario: Scenario) -> ToolResult:
     ][-1]
 
 
+NEXT_TIME = (
+    "Next time Erin has Clean the Kitchen, first send Michael a task to declutter the "
+    "kitchen; once that's done she can clean it."
+)
+
+
 async def kitchen_and_declutter(
-    scenario: Scenario, *, once: bool = False, wall: bool = False
+    scenario: Scenario, *, once: bool = False, wall: bool = False, message: str = MESSAGE
 ) -> tuple[Task, Task, list[str]]:
     erin, michael = scenario.member("Erin"), scenario.member("Husband")
     kitchen = await board(scenario).create(erin, "Clean kitchen", "physical", 2, assignee=erin)
@@ -81,7 +87,7 @@ async def kitchen_and_declutter(
         },
     )
     scenario.primary.queue_text("All set.")
-    replies = await scenario.say("Husband", MESSAGE)
+    replies = await scenario.say("Husband", message)
     return board(scenario).get(kitchen.id), board(scenario).get(declutter.id), replies
 
 
@@ -159,7 +165,9 @@ async def test_undone_into_the_next_week_one_declutter_is_owed(scenario: Scenari
 
 
 async def test_next_time_holds_one_round(scenario: Scenario) -> None:
-    kitchen, declutter, replies = await kitchen_and_declutter(scenario, once=True)
+    kitchen, declutter, replies = await kitchen_and_declutter(
+        scenario, once=True, message=NEXT_TIME
+    )
     assert "Clean kitchen waits until it's done, this once." in replies[0]
     await until(scenario, date(2026, 10, 27))
     await board(scenario).complete(declutter.id, scenario.member("Husband"))
@@ -168,6 +176,13 @@ async def test_next_time_holds_one_round(scenario: Scenario) -> None:
     await board(scenario).complete(kitchen.id, scenario.member("Erin"))
     after = board(scenario).get(kitchen.id)
     assert after.due_on == date(2026, 11, 4) and not board(scenario).waiting_on(after)
+
+
+async def test_any_time_is_every_time_whatever_once_says(scenario: Scenario) -> None:
+    """Bug #110: Michael's "Any time…" was saved "this once", since the model passed once."""
+    _, declutter, replies = await kitchen_and_declutter(scenario, once=True)
+    assert "Clean kitchen waits until it's done, every time." in replies[0]
+    assert declutter.holds_target and not declutter.hold_once
 
 
 async def test_the_hold_is_on_the_chore_whoever_has_it(scenario: Scenario) -> None:

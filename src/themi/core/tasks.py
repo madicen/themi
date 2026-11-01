@@ -1999,6 +1999,15 @@ def _assignee(ctx: ToolContext, said: str) -> tuple[Member | None, bool]:
     return chosen, False
 
 
+# Bug #110: "Any time you are going to assign Erin…" was saved "this once" (the model's
+# once). Said like that, it's every round, unless they said it's only the once too.
+EVERY_ROUND = re.compile(
+    r"^(?!.*\b(?:next time|this time|just once|only once)\b)"
+    r".*\b(?:any ?time|every ?time|whenever|always|each time)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 @tool(
     "set_task_schedule",
     "Make a chore repeat, change its schedule, or stop it. repeat is a short phrase in plain "
@@ -2052,7 +2061,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
             due_before_task=args["due_before_task"] or None,
             either=bool(args["either"]),
             holds_target=bool(args["holds_back"]),
-            once=bool(args["once"]),
+            once=bool(args["once"]) and not EVERY_ROUND.search(ctx.request_text),
         )
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc

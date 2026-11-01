@@ -9,9 +9,10 @@ For each inbound event:
   item waiting on this person, if Themi hasn't asked them another question
   since that item's message. With several waiting, Themi asks which one
   (listing them) instead of guessing. Otherwise the model
-  runs a tool loop (at most `max_steps` model calls) and the final text goes
-  out through the outbox as a reply. That's timed (P2a, `themi.core.timing`), and if
-  it takes more than ten seconds a short "still coming" message goes first.
+  runs a tool loop (at most `max_steps` model calls, then one to say what was done)
+  and the final text goes out through the outbox as a reply. That's timed (P2a,
+  `themi.core.timing`), and if it takes more than ten seconds a short "still coming"
+  message goes first.
 
 Failures are said plainly and briefly, never as error dumps.
 """
@@ -126,7 +127,7 @@ def _unquoted(reply: str) -> str:
 
 # Bug #71: "Task 50 is taken off the list." People know tasks by name, not by number.
 TASK_NUMBER = re.compile(r"\btask\s+#?(\d+)(\s*\(([^)]*)\))?", re.IGNORECASE)
-REQUOTED = re.compile(r"['‘“](\"[^\"\n]+\")['’”]")
+REQUOTED = re.compile('[\'\u2018\u201c]("[^"\n]+")[\'\u2019\u201d]')
 
 
 def _by_name(reply: str, title_of: Callable[[int], str | None]) -> str:
@@ -160,6 +161,11 @@ BUSY_TEXT = (
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
+# Bug #110: after the last step, one more call to say what was done.
+LAST_WORD = (
+    "You've used every step for this message. Don't call any more tools: in a line or two, "
+    "tell them what's done (from the tool results above) and what isn't, if anything."
+)
 SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
 
@@ -437,10 +443,15 @@ class Agent:
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
-            for step in range(1, self.max_steps + 1):
+            for step in range(1, self.max_steps + 2):
                 tools = services.tools.specs_for(ctx.groups, routing)
                 twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
                 call_system = f"{system}\n\n{twins}" if twins else system
+                if step > self.max_steps:
+                    # Bug #110: the work was done in eight steps, and the reply was "tangled".
+                    # The tools still go, since a tool result needs them on some APIs.
+                    log.warning("Agent hit its step limit for member %s", member.id)
+                    call_system = f"{call_system}\n\n{LAST_WORD}"
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
@@ -449,12 +460,16 @@ class Agent:
                     reply = _by_name(reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
                     return _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                if step > self.max_steps:
+                    break
                 used_tools = True
                 messages.append(response.message)
                 results = []
                 for call in response.tool_calls:
-                    with timer.tool(call.name, after_model=step):
-                        results.append(await services.tools.run(call, ctx))
+                    with timer.tool(call.name, after_model=step) as note:
+                        result = await services.tools.run(call, ctx)
+                        note.said(call.arguments, result.content)
+                        results.append(result)
                 messages.append(Message.tool_results(*results))
         except RefusalError:
             return DECLINED_TEXT
@@ -463,7 +478,6 @@ class Agent:
             return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
         finally:
             timer.added(ctx.groups - offered)
-        log.warning("Agent hit its step limit for member %s", member.id)
         return TANGLED_TEXT
 
     def _history(self, member: Member, event: InboundEvent) -> list:
