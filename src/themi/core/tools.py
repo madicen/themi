@@ -177,9 +177,10 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
     "devices": (
-        "the washer, dryer and dishwasher: running, done, time left",
+        "the washer, dryer, dishwasher and robot vacuum: running, done, time left, stuck",
         r"wash(?:er|ing)?\b|dryer|drying|dishwasher|laundry|cycle|load\b|appliance|"
-        r"how (?:much )?longer|time left|still running|is it done",
+        r"how (?:much )?longer|time left|still running|is it done|"
+        r"robot|roborock|the vacuum\b|vacuum'?s\b",
     ),
     "spending": (
         "money spent: takeout, eating out, business expenses",
@@ -308,6 +309,8 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "What's the dryer at?",
         "Is the load of towels still going?",
         "How far along is the dishwasher?",
+        "Is the robot vacuum still cleaning?",
+        "Where's the vacuum stuck?",
     ),
     "spending": (
         "We spent $30 on burgers",

@@ -49,8 +49,8 @@ Actor = Member | SystemActor
 INVITE_TTL = timedelta(hours=24)
 INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 PROVIDERS = ("gmail",)
-DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie", "home_connect")
-APPLIANCES = ("washer", "dryer", "dishwasher", "feeder", "litter_box")
+DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie", "home_connect", "roborock")
+APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder", "litter_box")
 TASK_KINDS = ("text", "call", "physical", "errand")
 EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 

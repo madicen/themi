@@ -27,6 +27,9 @@ ourgroceries = ["ourgroceries>=1.6"]
 keep = ["gkeepapi>=0.17"]
 # LG ThinQ's pushes (30), over MQTT; without it the washer and dryer are read every 5 minutes.
 thinq = ["paho-mqtt>=2.1"]
+# The robot vacuum (V1), through the unofficial python-roborock library; without it the
+# vacuum isn't offered.
+roborock = ["python-roborock==7.15.1"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

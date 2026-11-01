@@ -33,6 +33,7 @@ TIMEOUTS = {
     "rule": timedelta(hours=12),
     "meal": timedelta(hours=2),
     "laundry": timedelta(hours=3),
+    "vacuum": timedelta(hours=3),
     "task": timedelta(hours=8),
     "maintenance": timedelta(hours=24),
     "habit": timedelta(hours=12),
