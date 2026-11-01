@@ -150,7 +150,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | T2 | Tasks: a chore that waits for another to be done | Feedback | [x] 2026-10-31 |
 | F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [ ] |
-| F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [~] |
+| F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 
 ## Fixed technical choices
 
@@ -6995,7 +6995,7 @@ the router picks `devices` for "how much longer on the wash?" and "and the dryer
 a scenario: Michael asks, the answer is the fake washer's time left.
 
 ### F20c · Feedback (2026-10-31): rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: 08, F19b, F20a
 Read first: "Module behaviour" → A (PDA shielding). From Erin's bugs #111 and #112
 (2026-10-31, 6:45 pm), one exchange: "I vacuumed upstairs. And washed the sheets. Though
@@ -7029,3 +7029,28 @@ Tests: each a failing test first. The exchange as a scenario at strength 2: both
 confirmations with their warm words, no choice buttons, no second card. A rewrite that drops
 an unflagged line can't. Choice buttons only on a question. The report sentence passes the
 checker. The deadline in quiet hours; free_until; a renamed queued nudge.
+
+Notes (2026-10-31):
+- Shield: `PdaShield.apply` rewrites each run of consecutive flagged lines on its own
+  (`_flagged_runs`, `_shield_part`), one rewrite call per run; the other lines go word for
+  word. A demand that only shows across lines still takes the whole message. If a whole
+  rewrite loses a quote, the message is softened, as before.
+- Choice buttons from a rewrite only when the message has a "?" and the caller sent none.
+- `_opening_command`: a verb followed straight away by a quoted title (`Put "X" on …`) is a
+  report (`_VERB_THEN_TITLE`).
+- Completions: `complete_task` keeps what `TaskBoard.complete` said on `ctx.done` and tells the
+  model Themi says it; the agent opens the reply with those lines (one message for several),
+  and drops the model's own "Marked done" lines (`SAID_DONE`). A model that says it again
+  in other words ("… is done now") still gets its line after them.
+- Outbox: a deadline inside quiet hours, a busy time or a calendar block goes 30 minutes
+  (`BEFORE_QUIET`) before that stretch starts, or at once if that's already passed; a pause
+  still outranks it. `localtime.free_until` finds where the free time before a moment ends.
+  Once quiet hours have started, it waits for the morning, as before.
+- A rename puts the new title into the task's queued nudges.
+- Data repaired (backup `data/themi-before-f20c-repair-2026-10-31.db`), with the app stopped:
+  outbox 818 (Michael's sheets nudge) reads "Due today: Put sheets back on the bed (Erin
+  added this for you)." and, after the restart, is queued for 9 pm tonight. Reports #111
+  and #112 marked reviewed.
+- Not run: the model evals (`complete_task`'s description and result changed; run when
+  there's quota). Eval cases that expect the model to say "Marked done" may need updating.
+- Setup: restart `themi run` again for the shield and completion changes. No migration.
