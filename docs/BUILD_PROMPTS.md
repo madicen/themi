@@ -154,6 +154,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 | F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
+| V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [ ] |
 
 ## Fixed technical choices
 
@@ -7206,3 +7207,96 @@ repeats the card isn't sent.
 Data (Michael decides): once F21a is live, unlock rule 23 so list adds ask again except
 where they asked in their own words.
 
+
+### V1 · Robot vacuum (Roborock): chores when it needs a hand, back to its dock
+Status: [ ]
+Depends on: 31, H1, 11
+Read first: "Integrations" (devices); "Module behaviour" → C (Laundry), whose task-from-a-device
+pattern this follows. The plan has no robot vacuum yet; this prompt is where it's decided.
+
+Asked 2026-11-01 (Michael): the vacuum is a Roborock S8 MaxV Ultra (self-emptying, self-washing
+dock with clean and dirty water tanks). The family wants chores to appear on their own when it
+needs a person: water to refill or empty, a jammed brush to clear, the robot stuck somewhere to
+find and carry back to the dock. Today these are written by hand ("Unclog the robot vacuum",
+"Replace vacuum water").
+
+Roborock has no official API. `python-roborock` (Apache-2.0, the library behind Home
+Assistant's built-in Roborock integration) logs in with the Roborock app account by an emailed
+code, then reaches the robot through Roborock's cloud MQTT or over the LAN. Valetudo doesn't
+support the S8 MaxV Ultra, so it isn't an option. Checked 2026-11-01; confirm the model works
+with the library's current release before building, and pin the version.
+
+Build:
+- `themi.connectors.roborock`, wrapping `python-roborock` (an optional extra, `themi[roborock]`,
+  like `thinq`; without it the vacuum is just not seen). The library brings its own HTTP and
+  MQTT, so keep it behind a small `RoborockAccount` / `RoborockClient` seam that tests replace
+  with a fake in `tests/fakes`.
+- Linking from the Family page, admins only: the account email, "Send code", then the code.
+  The login data the library returns (its user data and per-device keys) is kept encrypted
+  (new table, the next migration), never logged. The robot becomes a device (`roborock`) as
+  the `vacuum` appliance; extend `devices` to allow it. Prefer the local connection when the
+  robot answers on the LAN, falling back to the cloud.
+- `RoborockWatcher`, job `devices.vacuum` every minute while it's cleaning or in an error, every
+  5 minutes otherwise: reads status (state, error code, dock error code, battery, in a clean or
+  not), dock status (the clean-water, dirty-water and dust-bag flags where the model reports
+  them) and consumables. Only changes become events, and the first read is the starting point,
+  as in 30.
+- Normalise into `VacuumEvent(device_id, kind, detail, at)`. Kinds and the library's codes
+  (python-roborock's error page, checked 2026-11-01; keep the mapping in one table):
+  - `stuck`: robot_trapped 8, wheels_suspended 3, wheels_jammed 7, robot_tilted 16,
+    bumper_stuck 2, vertical_bumper_pressed 21, cannot_cross_carpet 31.
+  - `jammed`: main_brush_jammed 5, side_brush_jammed 6, side_brush_error 17, vibrarise_jammed
+    27, filter_blocked 29, duct_blockage 34 (dock).
+  - `water_empty`: dock water_empty 38. `water_full`: dock waste_water_tank_full 39,
+    cleaning_tank_full_or_blocked 53.
+  - `not_docked`: return_to_dock_fail 23, dock_locator_error 22, or low_battery 12 away
+    from the dock; also a clean that ended with the robot idle off the dock.
+  - `bin`: no_dustbin 9 or 46, dirty_tank_latch_open 44. Anything else: `fault`, with the
+    library's name for the code, logged.
+  - An error clearing (code back to 0, or the robot moving again) is `cleared`.
+- Where it stopped: from the map the library returns, the room the robot's position falls in,
+  using the room names from the Roborock app ("in the kitchen"). No room found: "away from the
+  dock" without a place. Read once per `stuck` / `not_docked` event, not every poll.
+- `themi.core.vacuum`, like `themi.core.laundry`: each event kind makes one open, one-off task
+  (physical, effort 1, `off_wall` so it comes and goes with the robot), matched with
+  `Matcher.roomiest`, with its own nudge (outbox kind `vacuum`, so "/pause vacuum" holds it):
+  - stuck: "The vacuum's stuck in the kitchen (wheels caught). Free it and pop it back on the
+    dock?"
+  - jammed: "The vacuum's main brush is jammed. Clear it when you can?"
+  - water_empty: "The vacuum's dock is out of clean water. Refill the tank?"
+  - water_full: "The vacuum's dirty-water tank is full. Empty it?"
+  - not_docked: "The vacuum didn't make it back to its dock; it's in the hallway. Carry it
+    back?"
+  - bin / fault: the plain words for it.
+  Buttons Done / Later, as laundry's. The same kind already open isn't made again.
+- The robot fixing itself closes the task: `cleared` closes stuck / jammed / bin; the dock
+  flag clearing closes water ones; the robot charging on the dock closes `not_docked` and a
+  stuck one. A sent nudge is edited ("Sorted, thanks"); one not yet sent is taken back. Like
+  laundry, a short wait before the first nudge (5 minutes) so something the robot or a person
+  sorts at once never sends one.
+- Sending it home: after a stuck, jammed or bin task is closed and the robot is idle off the
+  dock, Themi offers to send it back (`app_charge`). That is a side effect, so it's staged in
+  its own category ("Send the vacuum back to its dock"), supervised until a rule makes it
+  automatic. Other commands (start a clean, rooms) are not in this prompt.
+- Consumables: a part under 5% left (filter, main brush, side brush, mop, sensors, the dock's
+  strainer where reported) becomes a one-off "Replace the vacuum's filter" task, once per
+  part until its counter is reset in the app. Not urgent: a normal-importance nudge.
+- `appliance_status` covers `vacuum`: cleaning (and the room if known), docked, charging,
+  returning, or the error in plain words, plus anything the dock needs.
+- Energy: none in this prompt (a follow-up, like 31's).
+
+Tests:
+- Connector against the fake: linking with a code, the stored data encrypted and redacted,
+  local then cloud fallback, a robot offline, a login that expired asking an admin to relink.
+- Code mapping from recorded status payloads in `tests/fixtures/roborock/` (follow the
+  library's models; replace with captures once linked).
+- Room lookup: a position inside a room, outside every room, no map.
+- Scenarios: the robot gets trapped in the kitchen while Erin is low, so the other parent gets
+  the stuck nudge naming the kitchen; it frees itself within 5 minutes and nothing is sent.
+  The dock runs out of clean water; the task closes when the flag clears. A brush jams, is
+  cleared, and Themi asks (supervised) to send it home; approved, `app_charge` is called on
+  the fake; with the rule on, it's sent without asking.
+- The same error twice doesn't make two tasks; "/pause vacuum" holds the nudge.
+- A consumable under 5% makes one task, not one a poll.
+
+Commit when done.
