@@ -151,7 +151,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20a | Feedback: no instant card for your own new task, a turn that ran out of steps | Feedback | [x] 2026-10-31 |
 | F20b | Feedback: asked how the laundry's doing, Themi looks | Feedback | [x] 2026-10-31 |
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
-| F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [~] |
+| F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 
 ## Fixed technical choices
 
@@ -7080,7 +7080,7 @@ Notes (2026-10-31):
 - Setup: restart `themi run` again for the shield and completion changes. No migration.
 
 ### F20d · Feedback (2026-10-31): a follow-up after someone else's job that isn't a task yet
-Status: [~]
+Status: [x] 2026-10-31
 Depends on: F17b, T2, F20a
 Read first: "Shadow Calendar" → Task matching. From Erin's bug #113 (2026-10-31, 11:16 pm):
 "After Michael brings the laundry upstairs, remind me to put it away" → `add_follow_up
@@ -7106,3 +7106,24 @@ Tests: each a failing test first. Erin's message as a scenario: add_follow_up on
 refused; create_task for Michael, then add_follow_up on it: Michael is nudged, and when he's
 done Erin gets "Put the laundry away". The bird cage follow-up still works; "brings"/"bring"
 matches; a button turn isn't checked. An eval case for the message.
+
+Notes (2026-10-31):
+- `add_follow_up` refuses (`NOT_NAMED`) a task when no word of its title is in what they
+  said, leaving out the follow-up's own words (`_named`). Words match by prefix from three
+  letters ("brings"/"bring", "run"/"running"); the task's number anywhere in the message
+  counts. A turn with no text (a button) isn't checked. The refusal tells the model to
+  create_task the first job for whoever does it and follow the new task.
+- The tool description and the system prompt's follow-up line say the same, with the
+  laundry as the example. Built in: when Michael ticks the laundry, Erin's follow-up comes
+  (F17b), because the follow-up waits on the task, whoever does it.
+- Not tested: the button turn with no text (the prompt listed it); the code skips the
+  check when `request_text` is empty.
+- Eval case `task-follow-up-partner-job` ("After my husband brings the laundry upstairs…",
+  with the grocery order open): create_task for him and add_follow_up mentioning laundry.
+  Not run (it calls the real model; run when there's quota).
+- Data repaired (backup `data/themi-before-f20d-repair-2026-10-31.db`), with the app stopped,
+  through `TaskBoard.create`: task 67 "Bring the laundry upstairs" for Michael (Erin added
+  it), its nudge queued for 8 am Sun 1 Nov (outbox 843), and Erin's follow-up moved from
+  task 35 onto it. Report #113 marked reviewed.
+- New since: idea #114 (Erin, 11:28 pm). Not looked at yet.
+- Setup: restart `themi run` (it was stopped for the repair). No migration.
