@@ -7302,8 +7302,8 @@ Tests:
 Commit when done.
 
 Notes (2026-11-01):
-- `python-roborock==7.15.1`, pinned, as the optional extra `themi[roborock]` (not in the
-  Docker image, like `thinq`). The S8 MaxV Ultra is `roborock.vacuum.a97` in its constants, a
+- `python-roborock==7.15.1`, pinned, as the optional extra `themi[roborock]` (the Docker
+  image installs it, with `ourgroceries` and `thinq`; not `keep`). The S8 MaxV Ultra is `roborock.vacuum.a97` in its constants, a
   V1-protocol vacuum. The library picks the LAN or the cloud by itself and reconnects; its
   discovery data is cached in memory only, so a restart asks Roborock's cloud again.
 - `themi.connectors.roborock`: `RoborockLogin` / `RoborockSession` are the seams;

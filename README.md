@@ -191,7 +191,8 @@ permissions below couldn't control them anyway.
    it was made for, and press **Link LG ThinQ**. Themi lists what it found; set each one to
    Washer, Dryer or Not used.
 3. For updates as they happen, install the MQTT library (`pip install -e '.[thinq]'`) and
-   restart. Without it Themi reads the appliances every 5 minutes, which works too.
+   restart (the Docker image includes it). Without it Themi reads the appliances every 5
+   minutes, which works too.
 
 When the washer finishes, whoever has more room gets a nudge half an hour later to move the
 load (Later asks again in an hour); the dryer starting settles it, and takes back a nudge not
@@ -209,7 +210,7 @@ otherwise. The library may break when Roborock changes things; Themi then logs i
 vacuum goes quiet until it's fixed.
 
 1. Install the library: `pip install -e '.[roborock]'`, and restart. (The Docker image
-   doesn't include it.)
+   includes it.)
 2. As an admin, open the Family page, enter the Roborock app's email under **Robot
    vacuum**, press **Send code**, then enter the code Roborock emails and press **Link
    Roborock**. The login it returns is kept encrypted.
@@ -231,7 +232,8 @@ and a master token per person. That token can do nearly anything to its Google a
 doesn't expire: Themi keeps it encrypted and uses it only for Keep. The library may break if
 Google changes Keep; Themi then logs it and retries, and the grocery list carries on.
 
-1. Install the library: `pip install -e '.[keep]'`.
+1. Install the library: `pip install -e '.[keep]'`. (The Docker image doesn't include it;
+   add `keep` to the `pip install` line in the Dockerfile.)
 2. For each person, run `themi keep link <name>` (add `--list "<name>"` if their list isn't
    called "Shopping list") and follow its steps: sign in at Google's EmbeddedSetup page and
    paste the `oauth_token` cookie. Themi needn't be restarted.

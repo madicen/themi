@@ -13,7 +13,9 @@ ENV THEMI_BUILD_VERSION=$THEMI_BUILD_VERSION
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install '.[ourgroceries]'
+# The optional connectors: OurGroceries, ThinQ's pushes, the Roborock vacuum. (Not Google
+# Keep, the most fragile; add `keep` here to use it.)
+RUN pip install '.[ourgroceries,thinq,roborock]'
 
 # Run as an unprivileged user; the database lives on the /data volume.
 RUN useradd --create-home --uid 10001 themi \
