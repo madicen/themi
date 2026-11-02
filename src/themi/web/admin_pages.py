@@ -16,6 +16,7 @@ from themi.accounts import AccountsError, InvalidValue, Role
 from themi.accounts.setup import pairing_instructions, parse_money_to_cents
 from themi.autonomy import AutonomyError
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
+from themi.connectors.roborock import RoborockError
 from themi.connectors.thinq import ThinqError
 from themi.connectors.travel import TravelError
 from themi.core.rules import RuleError
@@ -40,6 +41,7 @@ def routes(kit: Kit) -> APIRouter:
             "travel": app.services.travel is not None,
             "home_connect": home_connect_values(),
             "thinq": thinq_values(),
+            "roborock": roborock_values(),
             **extra,
         }
 
@@ -78,6 +80,64 @@ def routes(kit: Kit) -> APIRouter:
             "pushes": watcher.push.connected(),
             "devices": [(d, states.get(d.id)) for d in watcher.devices()],
         }
+
+    def roborock_values() -> dict[str, Any] | None:
+        watcher = app.services.roborock
+        if watcher is None:
+            return None
+        states = watcher.states()
+        return {
+            "linked": watcher.account.linked(),
+            "email": watcher.account.email() or "",
+            "problem": watcher.account.problem(),
+            "devices": [(d, states.get(d.id)) for d in watcher.devices()],
+        }
+
+    # ----- Roborock (V1) ------------------------------------------------------------------
+
+    @router.post("/family/roborock/code")
+    async def roborock_code(request: Request) -> Response:
+        """The first step: Roborock emails a code to the app account."""
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.roborock
+        if watcher is None:
+            return kit.redirect("/family", "The vacuum isn't set up on this server.")
+        try:
+            email = await watcher.send_code(str(form.get("email", "")))
+        except RoborockError as exc:
+            return kit.redirect("/family", f"No code was sent: {exc}")
+        return kit.page(
+            request,
+            "family.html",
+            member=session.member,
+            csrf=session.csrf_token,
+            flash=f"Roborock emailed a code to {email}.",
+            **family_values(roborock_code_sent=email),
+        )
+
+    @router.post("/family/roborock/link")
+    async def link_roborock(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.roborock
+        if watcher is None:
+            return kit.redirect("/family", "The vacuum isn't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member, str(form.get("email", "")), str(form.get("code", ""))
+            )
+        except (RoborockError, AccountsError) as exc:
+            return kit.redirect("/family", f"Roborock wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(
+            "/family", f"Linked Roborock. Found {names}." if names else "Linked Roborock."
+        )
+
+    @router.post("/family/roborock/unlink")
+    async def unlink_roborock(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.roborock is not None:
+            await app.services.roborock.unlink()
+        return kit.redirect("/family", "Unlinked Roborock.")
 
     # ----- LG ThinQ (30) ----------------------------------------------------------------
 

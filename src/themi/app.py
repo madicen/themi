@@ -31,6 +31,7 @@ from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
@@ -81,6 +82,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
+from themi.core.vacuum import Vacuum
 from themi.core.which_list import WhichList
 from themi.core.wrong_replies import WrongReplies
 from themi.energy import EnergyModel
@@ -131,6 +133,7 @@ def build_app(
     travel: TravelClient | None = None,
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
+    roborock: RoborockLogin | None = None,
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
@@ -300,6 +303,12 @@ def build_app(
         laundry = Laundry(services, tasks, services.thinq)
         laundry.install()
         periodic.append(PeriodicTask("laundry.fresh", timedelta(minutes=15), laundry.check_fresh))
+    if roborock is not None:
+        services.roborock = RoborockWatcher(store, RoborockAccount(db, cipher, roborock))
+        periodic.append(
+            PeriodicTask("devices.vacuum", timedelta(minutes=1), services.roborock.poll)
+        )
+        Vacuum(services, tasks, services.roborock).install()
     Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(

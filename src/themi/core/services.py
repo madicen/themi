@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from themi.connectors.gmail import GmailSync
     from themi.connectors.google import GoogleAccounts
     from themi.connectors.homeconnect import HomeConnectAccount
+    from themi.connectors.roborock import RoborockWatcher
     from themi.connectors.thinq import ThinqWatcher
     from themi.core.appliances import Appliances
     from themi.core.breaks import Breaks
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
+    from themi.core.vacuum import Vacuum
     from themi.core.which_list import WhichList
     from themi.energy.outcomes import OutcomeTracker
 
@@ -175,6 +177,8 @@ class Services:
     thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
     laundry: Laundry | None = None  # wet loads moved, or rescued with a rewash (31)
     appliances: Appliances | None = None  # how they're doing, asked in chat (F20b)
+    roborock: RoborockWatcher | None = None  # the robot vacuum, from Roborock (V1)
+    vacuum: Vacuum | None = None  # its chores when it needs a hand (V1)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)

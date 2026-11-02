@@ -188,3 +188,35 @@ def test_members_embed_on_the_gemini_backends_of_their_conversation_chain() -> N
     rows = db.query("SELECT member_id, backend_id, model FROM ai_routes WHERE task = 'embedding'")
     assert rows == [{"member_id": 1, "backend_id": 2, "model": "gemini-embedding-2"}]
     assert db.scalar("SELECT COUNT(*) FROM ai_routes WHERE task = 'conversation'") == 3
+
+
+def test_allowing_roborock_keeps_what_points_at_the_devices() -> None:
+    # V1 rebuilds `devices`; with foreign keys on, that would cascade-delete the appliances'
+    # states and cycles and orphan the laundry's loads. They're kept aside and put back.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 93])
+    now = "2026-10-31T17:00:00+00:00"
+    db.execute(
+        "INSERT INTO devices (id, provider, external_id, name, appliance, created_at) "
+        "VALUES (4, 'lg_thinq', 'lg-washer-1', 'Washer', 'washer', ?)",
+        (now,),
+    )
+    db.execute("INSERT INTO device_states VALUES (4, 'RUNNING', ?)", (now,))
+    db.execute("INSERT INTO appliance_cycles VALUES (7, 4, ?, NULL)", (now,))
+    db.execute(
+        "INSERT INTO laundry_loads (id, washer_id, finished_at, status) VALUES (2, 4, ?, 'wet')",
+        (now,),
+    )
+    apply(db, known)
+    assert db.query("SELECT device_id, state FROM device_states") == [
+        {"device_id": 4, "state": "RUNNING"}
+    ]
+    assert db.scalar("SELECT device_id FROM appliance_cycles WHERE id = 7") == 4
+    assert db.scalar("SELECT washer_id FROM laundry_loads WHERE id = 2") == 4
+    db.execute(
+        "INSERT INTO devices (provider, external_id, name, appliance, created_at) "
+        "VALUES ('roborock', 'rr-1', 'Robbie', 'vacuum', ?)",
+        (now,),
+    )
+    assert db.scalar("PRAGMA foreign_key_check") is None

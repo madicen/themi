@@ -3,10 +3,10 @@
 "How much longer on the current wash cycle?" was answered "25 minutes left", and "And the
 dryer?" "The dryer isn't running", both made up: no tool read the appliances. Now
 `appliance_status` reads each one live (LG ThinQ for the washer and dryer, Home Connect for
-the dishwasher), keeps what it saw as a poll would, and says the time left when the
-appliance reports it. One that can't be read now is told as it was last seen, with the time,
-and one that was never seen says so. Reading changes nothing in the house, so it isn't staged
-through the trust tiers.
+the dishwasher, Roborock for the vacuum, V1), keeps what it saw as a poll would, and says the
+time left when the appliance reports it. One that can't be read now is told as it was last
+seen, with the time, and one that was never seen says so. Reading changes nothing in the
+house, so it isn't staged through the trust tiers.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from zoneinfo import ZoneInfo
 
 from themi.accounts import Device
 from themi.connectors.homeconnect import HomeConnectError
+from themi.connectors.roborock import RoborockError
+from themi.connectors.roborock.events import problems, state_word
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqError
 from themi.core.services import Services
 from themi.core.tasks import clock_words
@@ -25,7 +27,7 @@ from themi.core.tools import ToolContext, tool
 
 log = logging.getLogger(__name__)
 
-APPLIANCES = ("washer", "dryer", "dishwasher")
+APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum")
 # Home Connect's words, as LG's three (and its own few that are neither).
 HOME_CONNECT = {
     "Run": RUNNING,
@@ -36,7 +38,7 @@ HOME_CONNECT = {
     "Aborting": IDLE,
 }
 NONE_LINKED = (
-    "No washer, dryer or dishwasher is linked to Themi, so Themi can't see them. An admin "
+    "No washer, dryer, dishwasher or vacuum is linked to Themi, so Themi can't see them. An admin "
     "can link them on the website's Family page. Say so; don't guess how they're doing."
 )
 SAY_ONLY = (
@@ -69,6 +71,8 @@ class Appliances:
 
     async def _line(self, device: Device) -> str:
         name = f"{device.name} ({device.appliance})"
+        if device.provider == "roborock":
+            return await self._vacuum(device, name)
         try:
             state, minutes = await self._read(device)
         except (ThinqError, HomeConnectError) as exc:
@@ -85,6 +89,24 @@ class Appliances:
             word, minutes = await self.services.dishwasher.read(device)
             return HOME_CONNECT.get(word, "offline" if word == "Offline" else IDLE), minutes
         return None, None
+
+    async def _vacuum(self, device: Device, name: str) -> str:
+        """The robot vacuum: what it's doing, and anything it needs a person for."""
+        watcher = self.services.roborock
+        if watcher is None:
+            return f"{name}: couldn't be read just now. {self._last_seen(device)}"
+        try:
+            status = await watcher.read(device)
+        except RoborockError as exc:
+            log.info("Couldn't read %s for a status question: %s", device.name, exc)
+            return f"{name}: couldn't be read just now. {self._last_seen(device)}"
+        said = state_word(status)
+        if status.battery is not None:
+            said += f", battery {status.battery}%"
+        needs = [words for words in problems(status).values()]
+        if needs:
+            said += "; it needs a hand: " + "; ".join(needs)
+        return f"{name}, read just now: {said}."
 
     def _words(self, device: Device, state: str, minutes: int | None) -> str:
         if state == RUNNING:
@@ -108,6 +130,8 @@ class Appliances:
             return "Themi hasn't seen it yet, so its state isn't known."
         state = HOME_CONNECT.get(str(row["state"]), str(row["state"]))
         seen = self._local_words(datetime.fromisoformat(row["seen_at"]))
+        if device.appliance == "vacuum":  # kept in words already
+            return f"As of {seen} it was {state}."
         was = {RUNNING: "running", FINISHED: "finished"}.get(state, "not running")
         return f"As of {seen} it was {was}."
 
@@ -136,9 +160,10 @@ def _minutes(minutes: int) -> str:
 
 @tool(
     "appliance_status",
-    "How the washer, dryer or dishwasher is doing right now: running or not, and the time "
-    "left when the appliance says. Use it for any question about them ('how long on the "
-    "wash?', 'is the dryer done?'); never answer those from memory or the conversation.",
+    "How the washer, dryer, dishwasher or robot vacuum is doing right now: running or not, "
+    "the time left when the appliance says, and what the vacuum needs. Use it for any "
+    "question about them ('how long on the wash?', 'is the dryer done?', 'where's the "
+    "vacuum?'); never answer those from memory or the conversation.",
     {
         "appliance": {
             "type": "string",

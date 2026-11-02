@@ -109,6 +109,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     from themi.connectors.gkeep import GKeepAccount
     from themi.connectors.homeconnect import HomeConnectClient
     from themi.connectors.ourgroceries import OurGroceriesClient
+    from themi.connectors.roborock import library as roborock_library
     from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
     from themi.runtime import Runtime
@@ -138,6 +139,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         travel=TravelClient(settings.tomtom_api_key),
         home_connect=HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
         thinq=dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
+        roborock=roborock_library.available(),
         keep=GKeepAccount,
         tool_routing=settings.tool_routing,
     )

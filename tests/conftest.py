@@ -21,6 +21,7 @@ pytest_plugins = [
     "tests.fakes.cozyla",
     "tests.fakes.home_connect",
     "tests.fakes.thinq",
+    "tests.fakes.roborock",
     "tests.fakes.travel",
     "tests.fakes.ourgroceries",
     "tests.fakes.keep",

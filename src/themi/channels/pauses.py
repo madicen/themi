@@ -23,6 +23,7 @@ EVERYTHING = "everything"
 TOPICS: dict[str, frozenset[str]] = {
     "meals": frozenset({"meal"}),
     "laundry": frozenset({"laundry"}),
+    "vacuum": frozenset({"vacuum"}),
     "maintenance": frozenset({"maintenance"}),
     "tasks": frozenset({"task", "task_summary"}),
     "habits": frozenset({"habit", "routine", "review"}),
@@ -34,6 +35,7 @@ TOPICS: dict[str, frozenset[str]] = {
 TOPIC_WORDS = {
     "meals": "meal reminders",
     "laundry": "laundry nudges",
+    "vacuum": "vacuum nudges",
     "maintenance": "maintenance reminders",
     "tasks": "task nudges",
     "habits": "check-ins",
@@ -50,6 +52,8 @@ ALIASES = {
     "dinner": "meals",
     "washer": "laundry",
     "dryer": "laundry",
+    "roborock": "vacuum",
+    "robot": "vacuum",
     "chores": "tasks",
     "task": "tasks",
     "habit": "habits",
