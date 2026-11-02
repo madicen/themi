@@ -189,3 +189,44 @@ def test_a_released_image_says_its_version() -> None:
         text=True,
     )
     assert out.stdout.strip() == "themi 1.4.0", out.stderr
+
+
+def _next_version(repo: Path, bump: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(REPO / "tools" / "next_version.sh"), bump], cwd=repo, capture_output=True, text=True
+    )
+
+
+@pytest.fixture
+def tagged(tmp_path: Path) -> Path:
+    """A repository with release tags out of order, and tags that aren't releases."""
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(tmp_path)]
+    subprocess.run([*git, "init", "-q"], check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "first"], check=True)
+    for tag in ["v0.2.0", "v0.10.1", "v0.9.0", "v1.0.0-rc1", "nightly"]:
+        subprocess.run([*git, "tag", tag], check=True)
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("bump", "expected"), [("patch", "0.10.2"), ("minor", "0.11.0"), ("major", "1.0.0")]
+)
+def test_the_next_version_counts_up_from_the_latest_release(
+    tagged: Path, bump: str, expected: str
+) -> None:
+    done = _next_version(tagged, bump)
+    assert done.stdout.strip() == expected, done.stderr
+
+
+def test_the_first_release_counts_up_from_nothing(tagged: Path) -> None:
+    subprocess.run(
+        ["git", "-C", str(tagged), "tag", "-d", "v0.2.0", "v0.10.1", "v0.9.0"],
+        check=True,
+        capture_output=True,
+    )
+    assert _next_version(tagged, "minor").stdout.strip() == "0.1.0"
+
+
+def test_the_next_version_wants_a_kind_of_bump(tagged: Path) -> None:
+    done = _next_version(tagged, "huge")
+    assert done.returncode == 2 and "usage" in done.stderr

@@ -161,13 +161,19 @@ the restore drill DEPLOY.md asks for.
 
 ## Part 4: everyday releases
 
+Once what you want is merged and main's CI is green: on GitHub, **Actions > Release > Run
+workflow**, pick `minor`, `patch` or `major`, and run it. It works out the next version from
+the latest tag (`tools/next_version.sh`), checks main's CI passed, tags main, builds both
+images (about 10 minutes) and creates a GitHub release with notes from the merged pull
+requests. The run's summary says which version it made. Then, with the deploy job on, the
+Pi updates itself; without it:
+
 ```sh
-jj git push                    # CI runs on the branch
-tools/release.sh 1.4.0         # once it's green: tag and push
-# release builds both images (about 10 minutes), then, with the deploy job on, the Pi
-# updates itself; without it:
 ssh themi ~/themi/update.sh 1.4.0
 ```
+
+From a terminal instead: `gh workflow run release.yml -f bump=minor`, or pick the version
+yourself with `tools/release.sh 1.4.0`, which tags and pushes; the same workflow builds it.
 
 - **Migrations**: run on start, as now; `update.sh` has already taken a snapshot.
 - **Rolling back by hand**: `~/themi/update.sh 1.3.2 --restore` puts the old version and the
