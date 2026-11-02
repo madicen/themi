@@ -115,7 +115,7 @@ The repository is private, so it can't be downloaded without logging in:
 
 ```sh
 ssh <server> 'mkdir -p ~/themi'
-scp deploy/compose.yml <server>:~/themi/
+scp deploy/compose.yml deploy/update.sh deploy/control.sh deploy/themi-control* <server>:~/themi/
 ```
 
 On the server:
@@ -258,8 +258,37 @@ Sources:
 
 ## 9. Upgrades
 
-Copy `deploy/update.sh` next to `compose.yml` once (`docs/RASPBERRY_PI.md` has the
-details). Then an upgrade is one line:
+The everyday way is the website: **Development** (admins only), **Update to the newest
+release**. Themi can't update itself, so it writes a request to `~/themi/control`, and
+`control.sh` on the server (started by a systemd path unit) runs `update.sh` and writes back
+how it went. You get a Telegram message when it's done. **Restart** pulls the running
+version again and starts it.
+
+Setting it up, once (`bootstrap-pi.sh` does this on a Pi):
+
+1. Copy `deploy/compose.yml`, `deploy/update.sh`, `deploy/control.sh` and the four
+   `deploy/themi-control*` units into `~/themi` (section 5's `scp`). The new `compose.yml`
+   mounts `./control` and sets `THEMI_CONTROL_DIR`.
+2. The repository is private, so looking up its newest release needs a token. Make a
+   fine-grained GitHub token for `madicen/themi` with **Contents: read-only**, and add it to
+   `.env`:
+   ```sh
+   THEMI_GITHUB_TOKEN=github_pat_...
+   ```
+   (`THEMI_REPO=owner/repo` too, if it isn't the one in `THEMI_IMAGE`.)
+3. Install the runner, then restart Themi with the new compose file:
+   ```sh
+   cd ~/themi && ./control.sh --install    # asks for sudo: the folder's owner, lingering
+   docker compose up -d
+   ```
+   `--install` makes `control/` (owned by the container's user, uid 10001, and your group),
+   installs the units into `~/.config/systemd/user`, turns on lingering so they run without
+   a login, and looks up the newest release. The Development page should now show it.
+
+If the button does nothing: `systemctl --user status themi-control.path themi-control`
+and `journalctl --user -u themi-control` show what the runner did.
+
+By hand, an upgrade is one line:
 
 ```sh
 ~/themi/update.sh 1.4.0      # pull, copy the database, switch, wait for healthy

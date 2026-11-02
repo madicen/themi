@@ -38,7 +38,7 @@ Everything else is a script in the repo, so a rebuilt Pi comes out the same.
      container's own health check to say healthy;
    - if it doesn't, puts the old version back, restores the snapshot it just took (an older
      image refuses a database a newer one migrated), starts it again, and exits with an
-     error, so you see it (and the deploy job fails).
+     error, so you see it.
 
    It's safe to run twice, and `update.sh` with no version re-pulls the current one.
 3. **`deploy/bootstrap-pi.sh`**: everything in Part 2's steps 3 to 6, written so it can be run
@@ -113,7 +113,7 @@ then `sudo systemctl restart docker`.
 ### 5. Tailscale
 ```sh
 curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up --ssh              # log in; --ssh lets you (and the deploy job) in by name
+sudo tailscale up --ssh              # log in; --ssh lets you in by name
 sudo tailscale funnel --bg 8080      # https://themi.<tailnet>.ts.net reaches the website
 ```
 Then nothing on the Pi needs to be open to the internet, and you can reach it from anywhere
@@ -122,7 +122,7 @@ as `themi`. (The website is published by Funnel; the Pi's own ports stay closed.
 ### 6. Themi's folder
 ```sh
 mkdir -p ~/themi && cd ~/themi
-# from the laptop: scp deploy/compose.yml deploy/update.sh themi@themi:~/themi/
+# from the laptop: scp deploy/compose.yml deploy/*.sh deploy/themi-control* themi@themi:~/themi/
 echo "<github token with read:packages>" | docker login ghcr.io -u madicen --password-stdin
 ```
 
@@ -165,8 +165,9 @@ Once what you want is merged and main's CI is green: on GitHub, **Actions > Rele
 workflow**, pick `minor`, `patch` or `major`, and run it. It works out the next version from
 the latest tag (`tools/next_version.sh`), checks main's CI passed, tags main, builds both
 images (about 10 minutes) and creates a GitHub release with notes from the merged pull
-requests. The run's summary says which version it made. Then, with the deploy job on, the
-Pi updates itself; without it:
+requests. The run's summary says which version it made. Then, on Themi's website,
+**Development**, **Update to the newest release** (D3a, D3b; set up in DEPLOY.md section 9).
+You get a Telegram message when it's done. Without the website, over ssh:
 
 ```sh
 ssh themi ~/themi/update.sh 1.4.0
@@ -200,7 +201,8 @@ yourself with `tools/release.sh 1.4.0`, which tags and pushes; the same workflow
 ## Decisions for you
 
 1. **Pi 5 or Pi 4**, and SSD over USB or NVMe (Pi 5 only).
-2. **Deploy on tag, or by hand** to start (I'd start by hand).
+2. **Deploy on tag, or by hand** to start. Decided (2026-11-02): by hand, from the website's
+   Development page (D3b). A deploy job in the release workflow was never built.
 3. **When to move**: now, or after this machine has had backups running for a few nights.
 
 ## What's next

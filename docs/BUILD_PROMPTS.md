@@ -157,7 +157,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
-| D3b | Development page: the host's runner that does the update | Dev tooling | [ ] |
+| D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
 
 ## Fixed technical choices
 
@@ -7468,7 +7468,7 @@ Notes (2026-11-02):
 - Setup: restart (applies 0094). Nothing else until D3b.
 
 ### D3b · Development page: the host's runner that does the update
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: D3a
 Read first: as D3a. `docs/RASPBERRY_PI.md` (Part 4) and `docs/DEPLOY.md` (section 9).
 
@@ -7498,3 +7498,37 @@ Tests: `control.sh` against the stand-in `docker` from `tests/integration/test_d
 and a stand-in for GitHub's API (no network): an update to the newest release, a restart, a
 request already on the newest version, a bad request refused, a failed update reported as
 failed, a request run once.
+
+Notes (2026-11-02):
+- `deploy/control.sh` (bash, with `python3` for the JSON, as on any Pi OS or Debian) has
+  three modes: no argument runs the waiting request, `--check` only notes the newest
+  release, and `--install` sets everything up. `--install` is an addition to the prompt: one
+  command that both `bootstrap-pi.sh` and DEPLOY.md use, so the cloud server and an
+  already-running Pi don't need the whole bootstrap again.
+- A request has to be exactly `update` + `newest` or `restart` + `current` and nothing else.
+  Anything else, or unreadable JSON, gets `refused`, and Docker never runs. A failed pull and
+  update.sh's rollback are both reported as `failed`, with the version it tried. If no
+  release can be found, the result is `failed` with no `to`.
+- The repository is private, so the GitHub API needs `THEMI_GITHUB_TOKEN` in `.env` (a
+  fine-grained token with Contents read-only). It is passed to curl on stdin, never as an
+  argument. The repo comes from `THEMI_REPO`, or else from `THEMI_IMAGE`. Only `x.y.z` tags
+  count as releases.
+- Units: `themi-control.path` (`PathExists` on `~/themi/control/request.json`) starts
+  `themi-control.service` (oneshot, 20-minute limit). `themi-control-check.timer` (daily,
+  `Persistent`) runs `control.sh --check`. They are user units, so `--install` turns on
+  lingering. The control folder is mode 2770, owned by uid 10001 and the host user's group:
+  Themi writes there, and the runner reads and moves files.
+- `bootstrap-pi.sh` now moves newer copies of the deploy files over older ones in
+  `~/themi`. Before, it left an existing `compose.yml` alone. It runs `--install` once
+  `.env` is there.
+- Docs: DEPLOY.md section 9 makes the website the everyday way and lists the one-time setup.
+  RASPBERRY_PI.md drops the deploy job, which was never built, and records the decision
+  "by hand, from the website".
+- Tests: `test_deploy_scripts.py` runs `control.sh` against the stand-in `docker`, with a
+  `file://` folder standing in for GitHub's API. One test checks the runner's files against
+  `themi.updates`' own parsers, so the two sides can't drift apart.
+- Not tried on a real Pi or VM yet: systemd and the folder's permissions are untested here.
+- Setup (Michael): copy the new deploy files across, add `THEMI_GITHUB_TOKEN` to `.env`, run
+  `./control.sh --install` and then `docker compose up -d` (DEPLOY.md section 9). Do this on
+  the Pi and on the cloud server. That release also needs D3a's migration 0094, which runs
+  on start.
