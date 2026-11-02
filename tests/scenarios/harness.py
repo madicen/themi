@@ -36,6 +36,7 @@ from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
+from tests.fakes.server_runner import FakeRunner
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
@@ -95,6 +96,7 @@ class Scenario:
         roborock: FakeRoborock | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
+        runner: FakeRunner | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -131,6 +133,7 @@ class Scenario:
             roborock=roborock,
             keep=keep.connect if keep else None,
             tool_routing=tool_routing,
+            control_dir=runner.folder if runner else None,
         )
         if not real_models:
             for member in (family.erin, family.husband):
@@ -312,7 +315,8 @@ async def scenario(
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
     `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, Roborock (V1) when it uses
-    `fake_roborock`, and Google Keep (GK1) when it uses `fake_keep`.
+    `fake_roborock`, Google Keep (GK1) when it uses `fake_keep`, and the control folder for
+    updates from the website (D3a) when it uses `fake_runner`.
     """
 
     def optional(name: str) -> Any:
@@ -332,6 +336,7 @@ async def scenario(
         roborock=optional("fake_roborock"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
+        runner=optional("fake_runner"),
     )
     await s.start()
     yield s

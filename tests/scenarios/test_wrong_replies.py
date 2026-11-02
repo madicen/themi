@@ -175,7 +175,7 @@ async def test_reply_times_shows_the_weeks_marks(
     await scenario.react("Erin", "👎")
     ReplyReview(scenario.app.db).label(first, "create_task")
     await sign_in(scenario, site, "Erin")
-    page = (await site.get("/ai/timing")).text
+    page = (await site.get("/dev")).text
     assert "2 replies marked this week: model choice (1), 1 not labelled yet." in page
 
 

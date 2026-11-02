@@ -354,7 +354,7 @@ async def test_reply_times_show_where_the_time_went(
     scenario.primary.take(18).queue_text("Nothing open.")
     await scenario.say("Erin", "What's open?")
     await sign_in(scenario, site, "Erin")
-    page = (await site.get("/ai/timing")).text
+    page = (await site.get("/dev")).text
     assert "1 reply." in page and "still coming" in page
     assert "34.0 s · Erin" in page
     assert "Model: 16.0 s (Primary)" in page and "Tool list_open_items: 0.0 s" in page
@@ -370,7 +370,7 @@ async def test_reply_times_show_how_the_tool_groups_did(
     scenario.primary.take(4).queue_text("Done.")
     await scenario.say("Erin", "Hmm, what should we do about that")
     await sign_in(scenario, site, "Erin")
-    page = (await site.get("/ai/timing")).text
+    page = (await site.get("/dev")).text
     assert "1 of 2 replies needed more tools." in page
     assert "Replies that needed more: 7.0 s (median)." in page
     assert "Replies that didn't: 2.0 s (median)." in page
@@ -382,5 +382,16 @@ async def test_reply_times_show_how_the_tool_groups_did(
 
 async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncClient) -> None:
     await sign_in(scenario, site, "Husband")
+    assert (await site.get("/dev")).status_code == 403
     assert (await site.get("/ai/timing")).status_code == 403
-    assert "/ai/timing" not in (await site.get("/")).text
+    assert "/dev" not in (await site.get("/")).text
+
+
+async def test_reply_times_moved_to_the_development_page(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    # D3a: the old address still works, for bookmarks.
+    await sign_in(scenario, site, "Erin")
+    response = await site.get("/ai/timing")
+    assert response.status_code == 303 and response.headers["location"] == "/dev"
+    assert '<a href="/dev">Development</a>' in (await site.get("/")).text
