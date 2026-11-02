@@ -154,6 +154,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 | F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
+| F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 
 ## Fixed technical choices
@@ -7206,6 +7207,48 @@ repeats the card isn't sent.
 
 Data (Michael decides): once F21a is live, unlock rule 23 so list adds ask again except
 where they asked in their own words.
+
+### F21c · Feedback (2026-11-01): "I ran this morning" marks the run done, and a refused "done" isn't said to be done
+Status: [x] 2026-11-02
+Depends on: F5, F18g, F21a
+Read first: "Task matching" (check-ins: "did you go for a run?"). From Erin's bug #119
+(2026-11-01, 9:02 pm, "run not marked complete on cozyla"): at 7:20 pm she wrote "I ran
+this morning". The model called `complete_task` on task 8 ("Go for a run") three times, and
+each was refused: "nothing they said names Go for a run". Themi still replied "Marked done:
+Go for a run.", and at 9:15 pm the end-of-day list had the run as still open. It was never
+done in Themi, so the wall's chore wasn't ticked either.
+- `words_in_common` heard nothing: "go" is too short to count, and `_same_word` only matches
+  forms that share five letters, so "ran"/"run" (and "walked"/"walk", "mopped"/"mop") miss.
+- `_honest` replaces a claim when every tool failed, but `CLAIMS_DONE` doesn't know
+  "Marked done", "ticked off" or "completed".
+
+Build:
+- `_same_word` also matches a word with a regular ending on the other ("walks", "walked",
+  "running", "mopped", "baking") and common irregular past forms ("ran", "swam", "took",
+  "fed", "bought"...).
+- `CLAIMS_DONE` catches "marked (as) done", "ticked off" and "completed".
+- `complete_task`'s "nothing names it" refusal carries Themi's own reply ('"Go for a run"
+  is still open: I couldn't tell that's the one you meant. Is it done?'), so a "yes" after it
+  names the task. The same reply from several calls in one turn is sent once.
+
+Tests: each a failing test first. "I ran this morning" marks "Go for a run" done. A turn
+whose `complete_task` calls are all refused never says "Marked done", and says the task is
+still open, once.
+
+Notes (2026-11-02):
+- `events._stem` (used by `_same_word`, so by `words_in_common`, `title_matches` and
+  `named_as_anchor` too) strips "ing", "ed", "es" and "s" when three letters are left, undoes
+  a doubled last letter ("running", "mopped"; not l, s or z), drops a final "e" ("bake" and
+  "baking" both "bak"), and maps an `IRREGULAR` past to its base ("ran" → "run"). No bare
+  "d" ending ("feed" would be "fee"), and "ss" keeps its s ("kiss").
+- `CLAIMS_DONE` knows "marked", "ticked (off)" and "completed".
+- The refusal's reply names the task, so Themi's last message names it and a "yes" next
+  turn passes `_named`. `ctx.replies` are sent once each (`dict.fromkeys`), so three
+  identical refusals, or two identical list-add lines, make one line.
+- Data (Michael decides): task 8 ("Go for a run") is still open and due Sat 31 Oct, though
+  Erin ran on Sun 1 Nov. Tick it in chat or on the wall once this is live. #119 isn't
+  marked reviewed (`themi feedback --done 119`).
+- Setup: restart `themi run`. No migration.
 
 
 ### V1 · Robot vacuum (Roborock): chores when it needs a hand, back to its dock
