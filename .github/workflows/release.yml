@@ -1,21 +1,85 @@
 name: Release
 
-# Pushing a version tag (v1.2.3) builds the image and publishes it to GitHub's
-# container registry as ghcr.io/madicen/themi:1.2.3, :1.2 and :latest, for PCs (amd64)
-# and a Raspberry Pi (arm64; docs/RASPBERRY_PI.md). `tools/release.sh 1.2.3` tags.
+# Actions > Release > Run workflow, then pick patch, minor or major: tags main with the next
+# version (tools/next_version.sh) once main's CI has passed, then builds and publishes. Or
+# push a version tag (v1.2.3) by hand, as tools/release.sh does. Either way the image goes to
+# GitHub's container registry as ghcr.io/madicen/themi:1.2.3, :1.2 and :latest, for PCs
+# (amd64) and a Raspberry Pi (arm64; docs/RASPBERRY_PI.md), and a GitHub release follows.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Which part of the version goes up"
+        type: choice
+        options: [minor, patch, major]
+        default: minor
 
 permissions:
-  contents: read
+  contents: write   # the tag and the GitHub release
   packages: write
+  actions: read     # main's CI result
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  tag:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are cut from main, not ${{ github.ref_name }}."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tags, to find the latest version
+      - name: Check main's CI passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ci="$(gh run list --workflow CI --commit "$GITHUB_SHA" --limit 1 \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')"
+          if [ "$ci" != "completed success" ]; then
+            echo "::error::CI on main ($GITHUB_SHA) isn't green yet: ${ci:-no run found}"
+            exit 1
+          fi
+      - id: next
+        name: Work out the version
+        run: |
+          version="$(tools/next_version.sh ${{ inputs.bump }})"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version (${{ inputs.bump }})" >> "$GITHUB_STEP_SUMMARY"
+      # A tag pushed with the workflow's own token doesn't start this workflow again, so
+      # the image job below builds it.
+      - name: Tag and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tag="v${{ steps.next.outputs.version }}"
+          git tag -a "$tag" -m "Themi ${{ steps.next.outputs.version }}" "$GITHUB_SHA"
+          git push origin "$tag"
+
   image:
+    needs: tag
+    # After the tag job, or straight away on a pushed tag (when the tag job is skipped).
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      - id: version
+        name: Which version
+        run: |
+          tag="${{ needs.tag.outputs.version && format('v{0}', needs.tag.outputs.version) || github.ref_name }}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
       - name: Build and smoke-test it first
         run: tools/smoke_container.sh themi:release
       - uses: docker/setup-qemu-action@v3   # builds the arm64 image on an amd64 runner
@@ -29,9 +93,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
+          # value= because a "Run workflow" release runs on main, not on the tag
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.tag }}
             type=raw,value=latest
       - uses: docker/build-push-action@v6
         with:
@@ -41,3 +106,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: GitHub release, with notes from the merged pull requests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          gh release create "$tag" --verify-tag --generate-notes --title "Themi ${tag#v}" \
+            --notes "Image: \`ghcr.io/${{ github.repository }}:${tag#v}\`" \
+            || gh release view "$tag" >/dev/null   # already there: a re-run
