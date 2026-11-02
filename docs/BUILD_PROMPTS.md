@@ -156,7 +156,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
 | F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
-| D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [~] |
+| D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
 | D3b | Development page: the host's runner that does the update | Dev tooling | [ ] |
 
 ## Fixed technical choices
@@ -7391,7 +7391,7 @@ Notes (2026-11-01):
 
 
 ### D3a · Development page: update or restart the server from the website (Themi's side)
-Status: [~]
+Status: [x] 2026-11-02
 Depends on: 29, P3, P4
 Read first: "Deployment and hosting" (Updates: pull the new image and restart) and "Security
 and privacy" (least privilege). From Michael (2026-11-02): updating the Pi or the cloud
@@ -7414,7 +7414,7 @@ Build:
     - `request(action, member)`: `action` is `update` (to the newest release) or `restart`
       (the running version again). Recorded in a new `server_requests` table (who, what,
       when, state, result), then written to `request.json` atomically (a temp file, then
-      rename): `{"id", "action", "version": "newest" | <running version>, "asked_by",
+      rename): `{"id", "action", "version": "newest" | "current", "asked_by",
       "asked_at"}`. Refused while a request is waiting or running.
     - `state()`: the running version (`themi.__version__`), whether the runner is installed
       (`runner.json`, which the runner writes), the request in progress, the newest release
@@ -7439,6 +7439,33 @@ Tests: unit tests for `ServerControl` on a temp folder (request written atomical
 request refused, a result reported once, junk in `result.json` ignored, no folder set); web
 tests for `/dev` (admins only, CSRF, the redirect, the not-set-up card); a scenario: an admin
 presses Update, the runner's result appears, and they get the "now on" message once.
+
+Notes (2026-11-02):
+- `themi.updates.ServerControl`, on `App.server` (always built; the `server.results` job
+  only when `THEMI_CONTROL_DIR` is set). Migration 0094: `server_requests` and the category
+  `server_control` (family, may become automatic, though the button's `requested=True`
+  makes that moot). The executor `server.request` writes the row and `request.json`; a
+  retry of the same action reuses its row.
+- The file shapes D3b must keep are in `themi.updates`' docstring. `result.json`: `id`
+  (int), `state` (`running`, `done`, `failed`, `refused`), `from`/`to` (version-shaped or
+  ignored), `detail` (the end of the output, kept to 2,000 characters and shown only on
+  the page, escaped), `finished_at`. `runner.json`: `newest`, `checked_at`.
+- Deviation: a request also needs `runner.json`, so nothing is asked for before D3b's runner
+  is installed. A request not picked up in 15 minutes, or running for 30, lapses (the asker
+  is told), so a lost one never blocks the button.
+- Messages: "Themi is now on 1.5.0 (was 1.4.0).", "already on 1.5.0, the newest release",
+  "restarted on 1.4.0", "The update to 1.5.0 didn't work, so Themi is still on 1.4.0."
+  (true both for a failed pull and for update.sh's rollback). Outbox kind `system`, to the
+  admin who asked only.
+- `/dev` replaces `/ai/timing` (now a redirect) and the "Reply times" menu link. The
+  confirm step is a `<details>` with a "Yes, update now" button, no JavaScript.
+- `deploy/compose.yml` mounts `./control` at `/control` and sets `THEMI_CONTROL_DIR`.
+  If the folder doesn't exist, Docker makes it owned by root and the container (uid 10001)
+  can't write to it; D3b's bootstrap makes it properly. Until then the card says the
+  runner isn't installed.
+- Follow-up: `/tiers` lists "Update or restart Themi's server" with an automatic switch,
+  which does nothing useful; hide it if it confuses anyone.
+- Setup: restart (applies 0094). Nothing else until D3b.
 
 ### D3b · Development page: the host's runner that does the update
 Status: [ ]
