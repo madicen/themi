@@ -1,0 +1,10 @@
+# Started by themi-control.path; runs one request (update.sh waits up to 3 minutes for
+# healthy, plus the pull).
+[Unit]
+Description=Update or restart Themi, as asked on its website
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/themi
+ExecStart=%h/themi/control.sh
+TimeoutStartSec=20min

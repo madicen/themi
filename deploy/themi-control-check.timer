@@ -1,0 +1,11 @@
+# Once a day, so the website's Development page knows the newest release.
+[Unit]
+Description=Look up Themi's newest release daily
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
