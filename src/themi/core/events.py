@@ -116,10 +116,63 @@ def _time(text: str) -> time:
 FILLER = STOPWORDS | {"appointment", "appt", "event", "next", "this", "her", "his", "their"}
 
 
+# Bug #119: "I ran this morning" didn't name "Go for a run". Past forms that share no start.
+IRREGULAR = {
+    "ran": "run",
+    "swam": "swim",
+    "ate": "eat",
+    "took": "take",
+    "taken": "take",
+    "fed": "feed",
+    "made": "make",
+    "did": "do",
+    "done": "do",
+    "bought": "buy",
+    "drove": "drive",
+    "driven": "drive",
+    "rode": "ride",
+    "wrote": "write",
+    "gave": "give",
+    "got": "get",
+    "sent": "send",
+    "brought": "bring",
+    "paid": "pay",
+    "threw": "throw",
+    "thrown": "throw",
+    "hung": "hang",
+    "swept": "sweep",
+    "sold": "sell",
+    "told": "tell",
+    "spoke": "speak",
+    "met": "meet",
+    "found": "find",
+    "caught": "catch",
+    "built": "build",
+    "won": "win",
+}
+ENDINGS = ("ing", "ed", "es", "s")
+
+
+def _stem(word: str) -> str:
+    """ "running" → "run", "walked" → "walk", "baking" → "bak" (with "bake" → "bak" too)."""
+    if word in IRREGULAR:
+        return _stem(IRREGULAR[word])
+    for ending in ENDINGS:
+        if ending == "s" and word.endswith("ss"):
+            break  # "kiss", "glass"
+        if word.endswith(ending) and len(word) - len(ending) >= 3:
+            word = word[: -len(ending)]
+            if len(word) > 3 and word[-1] == word[-2] and word[-1] not in "lsz":
+                word = word[:-1]  # "running", "mopped"
+            return word
+    return word[:-1] if len(word) > 3 and word.endswith("e") else word
+
+
 def _same_word(a: str, b: str) -> bool:
     """The same word, or one a form of the other ("tutoring" and "tutor", "pediatrics" and
-    "pediatrician"): a shared start of five letters or more, most of the shorter word."""
-    if a == b:
+    "pediatrician"): a shared start of five letters or more, most of the shorter word; or
+    the same word under a regular ending or an irregular past ("walked", "ran") (bug #119)."""
+    if a == b or _stem(a) == _stem(b):
         return True
     shared = next(
         (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))

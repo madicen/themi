@@ -74,10 +74,12 @@ NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already w
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
     r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
-    r"rescheduled|changed|filled)\b"
-    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled|filled)\b"
+    r"rescheduled|changed|filled|marked|ticked|completed)\b"
+    r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled|filled|"
+    r"marked|ticked|completed)\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
-    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed|filled)\b"
+    r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed|filled|marked|"
+    r"ticked off|completed?)\b"
     # "Safeway cart filled with the 11 items" (2026-10-31): a cart is filled, no verb before it
     r"|\bcart\s+filled\b",
     re.IGNORECASE | re.MULTILINE,
@@ -471,7 +473,8 @@ class Agent:
                 response = await client.chat(call_system, messages, tools)
                 if not response.tool_calls:
                     if ctx.replies and len(ctx.replies) == len(ctx.outcomes):
-                        return "\n".join(ctx.replies)  # the tools said it all (bug #118)
+                        # The tools said it all (bug #118); a retry's repeat once (#119).
+                        return "\n".join(dict.fromkeys(ctx.replies))
                     reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
