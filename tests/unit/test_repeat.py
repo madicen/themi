@@ -181,6 +181,20 @@ def test_words_in_common_with_a_title() -> None:
     assert words_in_common("that's done", "Take out the bins") == 0  # no scraps or fillers
 
 
+def test_words_in_common_hears_other_forms_of_a_short_word() -> None:
+    """Bug #119: "I ran this morning" didn't name "Go for a run"."""
+    from themi.core.events import words_in_common
+
+    assert words_in_common("I ran this morning", "Go for a run") == 1
+    assert words_in_common("went running earlier", "Go for a run") == 1
+    assert words_in_common("walked the dog", "Walk dog") == 2
+    assert words_in_common("I mopped already", "Mop floor") == 1
+    assert words_in_common("fed the cat", "Feed cat") == 2
+    assert words_in_common("baking done", "Bake bread") == 1
+    assert words_in_common("I ran the dishwasher", "Mop floor") == 0
+    assert words_in_common("rung the bell", "Go for a run") == 0
+
+
 def test_times_relative_to_sunset() -> None:
     """F9b, Erin's runs: "an afternoon check-in at least an hour before sunset"."""
     rep = parse("every Tue, Thu and Sat or Sun at 2pm, at least an hour before sunset", WED)

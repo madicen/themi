@@ -147,6 +147,42 @@ async def test_done_for_the_wrong_task_number_is_caught(scenario: Scenario) -> N
     assert board(scenario).get(bins.id).due_on == date(2026, 10, 28)
 
 
+async def something_else_said(scenario: Scenario) -> None:
+    """Themi's last message is about something else, as at 7:20 pm on 2026-11-01."""
+    await scenario.app.services.outbox.send(
+        scenario.member("Erin"), "Reminder set for tomorrow at 9 am.", priority=Priority.REPLY
+    )
+
+
+async def test_i_ran_marks_the_run_done(scenario: Scenario) -> None:
+    """Bug #119: "I ran this morning" was refused three times for "Go for a run"."""
+    run = await chore(scenario, "Go for a run")
+    await something_else_said(scenario)
+    scenario.primary.queue_tool_call("complete_task", {"task_id": run.id})
+    scenario.primary.queue_text("Marked done: Go for a run.")
+    await scenario.say("Erin", "I ran this morning")
+    assert board(scenario).get(run.id).status == "done"
+
+
+async def test_a_refused_done_isnt_said_to_be_done(scenario: Scenario) -> None:
+    """Bug #119: every complete_task was refused, and the reply was "Marked done: Go for a
+    run." Themi says it's still open instead, once, and a "yes" to that names it."""
+    bins = await chore(scenario, "Bring bins in")
+    await something_else_said(scenario)
+    for _ in range(3):
+        scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Marked done: Bring bins in.")
+    replies = await scenario.say("Erin", "Finished that one")
+    assert replies[-1] == (
+        "\"Bring bins in\" is still open: I couldn't tell that's the one you meant. Is it done?"
+    )
+    assert board(scenario).get(bins.id).status == "open"
+    scenario.primary.queue_tool_call("complete_task", {"task_id": bins.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "yes")
+    assert board(scenario).get(bins.id).status == "done"
+
+
 async def test_yes_to_a_question_about_one_task_cant_change_another(scenario: Scenario) -> None:
     """Bug #92: Michael's "Yes please" to "Should I reschedule 'Contact Erin's parents' to
     today at 6 pm?" moved the bird cage to 6 pm instead, so Erin was nudged about it."""
