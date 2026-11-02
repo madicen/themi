@@ -11,8 +11,12 @@ services:
       THEMI_DB_PATH: /data/themi.db
       THEMI_HTTP_HOST: 0.0.0.0
       THEMI_HTTP_PORT: "8080"
+      # Updates and restarts asked for on the website go here for the host's runner
+      # (deploy/control.sh, docs/DEPLOY.md section 9). Without the runner, nothing happens.
+      THEMI_CONTROL_DIR: /control
     volumes:
       - themi-data:/data
+      - ./control:/control
     ports:
       # Only this machine can reach it; Tailscale Funnel publishes it over HTTPS.
       - "127.0.0.1:8080:8080"

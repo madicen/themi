@@ -80,6 +80,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     from themi.web import (
         admin_pages,
         ai_pages,
+        dev_pages,
         email_pages,
         google_pages,
         knowledge_pages,
@@ -145,6 +146,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(safeway_pages.routes(kit))
     web.include_router(email_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
+    web.include_router(dev_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
 
 
