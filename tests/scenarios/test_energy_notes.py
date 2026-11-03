@@ -65,3 +65,17 @@ def test_the_prompt_asks_for_energy_remarks() -> None:
     from themi.core.prompts import STABLE_SYSTEM
 
     assert "log_energy_note" in STABLE_SYSTEM and "log_energy_level" in STABLE_SYSTEM
+
+
+async def test_energy_said_about_the_partner_isnt_theirs(scenario: Scenario) -> None:
+    """Bug #126: Michael's "Erin is at zero energy" is about her, and her energy isn't his to
+    record, by the model or the backstop."""
+    scenario.primary.queue_tool_call("log_energy_level", {"level": "low", "note": "zero energy"})
+    scenario.primary.queue_text("I'm sorry to hear it.")
+    await scenario.say("Husband", "Erin is at zero energy")
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Husband", "She\u2019s having a low energy day")
+    assert signals(scenario, "Husband") == [] and signals(scenario, "Erin") == []
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Husband", "Erin's fine, but I'm having a low energy day")
+    assert signals(scenario, "Husband") == [("day_level", -1.0)]

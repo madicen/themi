@@ -11,7 +11,7 @@ import pytest
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
-from themi.core.focus import SIGNAL, overwhelmed
+from themi.core.focus import SIGNAL, overwhelmed, partner_signal
 from themi.core.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)
@@ -128,6 +128,39 @@ async def test_too_much_today_on_the_morning_list(scenario: Scenario) -> None:
     await scenario.tap("Erin", "Too much today")
     assert scenario.inbox("Erin")[-1].startswith("For now, just these:\n")
     assert scenario.inbox("Erin")[-1].endswith("The other one is kept; nothing's dropped.")
+
+
+async def test_overwhelmed_said_about_the_partner(scenario: Scenario) -> None:
+    """Bug #126: Michael's "Erin is absolutely overwhelmed" pared down his own day, and
+    Themi said "I've pared things down for her." It's about her: his day stays as it is."""
+    await a_full_day(scenario, "Husband")
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
+    scenario.primary.queue_text("I'm sorry. Want to see what's on her plate?")
+    replies = await scenario.say(
+        "Husband", "Erin is absolutely overwhelmed right now. She is at zero energy."
+    )
+    assert SIGNAL not in turn(scenario)
+    assert partner_signal("Erin") in turn(scenario)
+    assert "about Erin" in tool_result(scenario)
+    assert replies == ["I'm sorry. Want to see what's on her plate?"]
+
+
+@pytest.mark.parametrize(
+    ("said", "theirs"),
+    [
+        ("Erin is overwhelmed", False),
+        ("I think she\u2019s overwhelmed today", False),
+        ("I'm worried my wife is overwhelmed", False),
+        ("I'm overwhelmed", True),
+        ("I'm overwhelmed with Erin's stuff", True),
+        ("Erin's out tonight. I'm overwhelmed", True),
+    ],
+)
+async def test_whose_overwhelm(scenario: Scenario, said: str, theirs: bool) -> None:
+    scenario.primary.queue_text("Okay.")
+    await scenario.say("Husband", said)
+    assert (SIGNAL in turn(scenario)) is theirs
+    assert (partner_signal("Erin") in turn(scenario)) is not theirs
 
 
 async def test_no_signal_without_the_words(scenario: Scenario) -> None:
