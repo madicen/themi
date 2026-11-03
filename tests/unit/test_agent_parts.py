@@ -276,6 +276,21 @@ def test_the_prompt_reads_a_task_for_the_partner_and_a_tired_evening() -> None:
     assert "I'm too tired tonight" in STABLE_SYSTEM
 
 
+async def test_a_task_id_of_0_is_no_task_the_turn_touched(family: SeededFamily) -> None:
+    """Eval wall-new-item-like-an-open-task (F23e): add_to_wall_routine's task_id 0 is "a
+    new item", and the reply looked task 0 up, failed, and was never sent."""
+
+    @tool("place", "Places", {"task_id": {"type": "integer"}})
+    async def place(ctx, args):
+        return "ok"
+
+    registry = ToolRegistry([place])
+    ctx = ToolContext(family.erin, services=None)  # type: ignore[arg-type]
+    await registry.run(ToolCall("1", "place", {"task_id": 0}), ctx)
+    await registry.run(ToolCall("2", "place", {"task_id": 4}), ctx)
+    assert ctx.tasks == [4]
+
+
 async def test_numbers_and_switches_sent_as_text_are_read_as_such(family: SeededFamily) -> None:
     """Eval energy-plumber: Gemini sent log_energy_note's effect as "-3" (its function
     schemas take only text choices), the check refused it, and the note was never saved."""
