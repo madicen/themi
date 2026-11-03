@@ -161,7 +161,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
 | D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
 | F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [x] 2026-11-02 |
-| F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [ ] |
+| F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [x] 2026-11-02 |
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [ ] |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [ ] |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [ ] |
@@ -7685,7 +7685,7 @@ Notes (2026-11-02):
 - Setup: restart `themi run`. No migration.
 
 ### F22b · Feedback (2026-11-02): "Too much today" gives fewer than the list it answers
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: O1a, O1b
 Read first: "PDA shielding", O1a's notes. From Erin's bug #121 (2026-11-02, 8:01 am, "I told
 it the tasks were too much and it offered the exact same tasks again"): the 8:00 morning
@@ -7704,6 +7704,21 @@ Build:
 
 Tests: each a failing test first. Two overdue things and a run at noon: the button gives
 one. A second "too much" gives one, a third gives none and asks nothing.
+
+Notes (2026-11-02):
+- `Focus.pick(member, among, times)`: the first time, their number but at most one less than
+  there are (never under one); the second, one, the lightest (effort first); a third or
+  later, none: "Nothing for now. It's all kept." with no buttons. Medicines stay every
+  time, so with a medicine due the second round is the medicine alone.
+- `times` is how many `focus` messages they've had since local midnight, plus this one
+  (`Focus.times`), so the button and "still too much" in words count alike. The Spread /
+  Leave buttons carry `list` and `times`, so they act on that message's own few.
+- The morning list's button carries the list's task ids; the answer picks only among them.
+  An older button without them answers the whole day, as before.
+- The agent no longer adds "Done." when the model says nothing after a tool whose message
+  was the answer (`ctx.answered`).
+- Data: mark #121 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
 
 ### F22c · Feedback (2026-11-02): "I ran yesterday" after F21c, checked
 Status: [ ]
