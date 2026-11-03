@@ -170,9 +170,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
 | F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
 | F23e | Feedback: a task moved into a routine becomes the routine item | Feedback | [x] 2026-11-03 |
-| F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [ ] |
-| F24b | Idea: time blocked for a task moves its due date | Feedback | [ ] |
-| F24c | Feedback: an email is read as its reader sees it | Feedback | [ ] |
+| F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [x] 2026-11-03 |
+| F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
+| F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [ ] |
 
 ## Fixed technical choices
@@ -8079,7 +8079,7 @@ Notes (2026-11-03):
 - Setup: restart `themi run`. No migration.
 
 ### F24a · Feedback (2026-11-03): asked for again, the open task is raised, not made twice
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: T1, F18f, F23e
 Read first: "Shadow Calendar" → Task matching; T1 (urgent is a due date that's soon). From
 Erin's bug #132 (2026-11-03, 10:09 am, "I believe Michael has a cat feeder refill task
@@ -8093,25 +8093,47 @@ her own tasks, so the model couldn't have seen task 23.
 
 Build:
 - `create_task`: besides the exact twin, a near twin among the assignee's open tasks (or
-  everyone's, with no assignee): two or more of the new title's words in common with it
-  (`words_in_common`), and all of the shorter title's words but one. Refused, naming each
-  near twin, whose it is, its schedule and when it's due, so the model changes that one, or
-  calls again with `not_these` (the ids it's sure are different jobs).
+  everyone's, with no assignee): two or more of the new title's words in common with it,
+  and all of the longer title's words but one (`events.near_twin`). Refused, naming each
+  near twin, whose it is, its schedule and when it's due, so the model changes that one.
+  Called again in the same turn, it's a different job, and it's made (no new argument, so
+  create_task's schema stays as it is).
 - The refusal says how to raise it when they said it's urgent: `reschedule_task` to today
   (this round only, for a repeating chore) and `set_task_importance` high. A task of the
   partner's raised this way is changed by whoever asked, as for update_task's assign_to
   (F4), and its owner gets the same "Due today: ... (Erin asked for this)" card a new task
   would give.
-- `not_these` lists ids only. An id that isn't one of the near twins named is ignored.
 
 Tests: each a failing test first. Bug #132's message with tasks 22 and 23: refused once
 with both named, then task 23 is due today and high, Michael gets one card, and nothing new
-is open. "Refill the bird feeder" beside "Refill auto feeders", with `not_these`, is made.
+is open. "Refill the bird feeder" beside "Refill auto feeders" is made on the second call.
 "Clean the kitchen" beside "Clean the upstairs bathroom" isn't a near twin (one word).
 Evals: bug #132's message, and a new task beside a near twin that really is different.
 
+Notes (2026-11-03):
+- `events.near_twin` (two or more words in common, and all of the longer title's but one)
+  runs in `create_task` after the exact-twin check, over the same people's open tasks. The
+  refusal names each twin as "task 23 (Refill auto feeders, Michael's, every Thursday, due
+  Thu 05 Nov)". `ToolContext.named_twins` remembers who was named, so the same call again
+  that turn is made.
+- Not built: "(Erin asked for this)" on a raised task's card. Its owner gets the plain "Due
+  today: Refill auto feeders" card from `reschedule`, so Michael isn't told who raised it.
+  That needs a "raised by" column; say if it's wanted.
+- Importance stays high on a repeating chore's later rounds once it's raised. The refusal
+  says so only for the due date. Watch for it.
+- A false twin costs one round trip ("Take out the trash" beside "Take out the recycling"
+  isn't one; "Refill the bird feeder" beside "Refill auto feeders" is).
+- Evals (2026-11-03, gemini-3.5-flash-lite, 3 runs each): `urgent-for-partner-raises-
+  their-open-task` 3/3. Each run was refused once, then raised task 1 with
+  `reschedule_task` to today and `set_task_importance` high. `new-task-beside-a-near-twin-
+  that-differs` 3/3, but the model titled it "Refill the bird feeder in the garden", which
+  isn't a near twin, so the second-call path was only seen in the scenario test.
+- Data (the Pi): task 72 (Refill cat feeders) was already cancelled. Task 23 is as it was.
+  Mark #132 reviewed.
+- Setup: restart `themi run`. No migration.
+
 ### F24b · Idea (2026-11-03): time blocked for a task moves its due date
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: K5, F23c
 Read first: "Shadow Calendar" → Task matching; K5. From Michael's idea #135 (2026-11-03,
 1:56 pm, "time blocking tasks should update their due date"): at 11:56 am he blocked
@@ -8128,8 +8150,19 @@ Tests: each a failing test first. Idea #135's case: both tasks due Sat 7 Nov, no
 Tuesday's summary as overdue, and no overdue reminder before Saturday. The block moved to
 Sunday moves both. A repeating chore's next round is unchanged.
 
+Notes (2026-11-03):
+- `TaskBoard.due_for_block(task, day)`: the day, with no time, and overdue counts reset.
+  Sent to the wall and Google Tasks as a reschedule, but nobody is asked again (the block
+  holds the nudge). Called by the block's executor and by `blocks.tick` when the event has
+  moved. A block removed leaves the due date as it is.
+- The block's result ends "It's due Fri 23 Oct now." / "They're due ...".
+- Data (the Pi): tasks 59 and 10 are blocked for Sat 7 Nov but still due 29 Oct. The tick
+  only moves a due date when the block moves, so they stay that way after the restart.
+  Ask again, or reschedule both to 2026-11-07. Mark #135 reviewed.
+- Setup: restart `themi run`. No migration.
+
 ### F24c · Feedback (2026-11-03): an email is read as its reader sees it
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: 22, 23, F16d
 Read first: "Gmail triage"; "Security and privacy" (email text is data). From Erin's bug
 #134 (2026-11-03, 12:18 pm, "Themi flagged a standard autopay confirmation as an urgent
@@ -8152,6 +8185,23 @@ Tests: each a failing test first. A fixture shaped like email 810 (made up, no r
 addresses): the body says it's scheduled, and triage with a scripted model sees the
 snippet. A plain-only email is unchanged. A `display:none` preheader is left out.
 Eval: email 810's shape isn't urgent.
+
+Notes (2026-11-03):
+- Deviation (narrower): the plain part is still preferred. It gives way to the HTML only
+  when it shares under half of the snippet's first eight words (of four letters or more)
+  and the HTML shares more (`parse._agrees`). Switching every email to HTML would have
+  changed receipts (pantry) and every stored body. Hidden preheaders aren't stripped: the
+  snippet is often the preheader, so stripping it would break the comparison.
+- Triage's block gets "Preview: ..." (the snippet, unescaped, padding characters removed).
+  SYSTEM says subject and preview win over a body that says otherwise, with unsure set.
+- Not checked against real mail. Fetching email 810's parts on the Pi (Erin's Gmail) was
+  refused by the permission check, so the plain-vs-HTML cause is inferred from the subject
+  and snippet against the stored body. Worth a look with permission.
+- No eval: the evals cover chat tool calls, not triage. Covered instead by
+  `test_the_email_is_read_as_its_reader_sees_it` (fake Gmail, scripted model).
+- Only new mail is parsed this way. Email 810 stays as stored, and its alert has been sent.
+  Mark #134 reviewed.
+- Setup: restart `themi run`. No migration.
 
 ### D4 · Dev tooling: `make dev` with a copy of the Pi's data
 Status: [ ]
