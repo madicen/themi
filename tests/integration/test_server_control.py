@@ -4,7 +4,8 @@ its results taken in (themi.updates), against a temp control folder."""
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -100,6 +101,8 @@ async def test_no_runner_or_no_folder_refuses(scenario: Scenario, fake_runner: F
     [
         ("update", "done", "1.4.0", "1.5.0", "Themi is now on 1.5.0 (was 1.4.0)."),
         ("update", "done", "1.5.0", "1.5.0", "already on 1.5.0, the newest release"),
+        # F23a, bug #130: the runner started from the image tag, not a version
+        ("update", "done", "latest", "0.3.2", "Themi is now on 0.3.2."),
         ("restart", "done", "1.4.0", "1.4.0", "Themi restarted on 1.4.0."),
         (
             "update",
@@ -133,6 +136,24 @@ async def test_a_result_is_told_once_to_whoever_asked(
     assert not any(words in t for t in scenario.inbox("Erin"))
     row = rows(scenario)[0]
     assert (row["state"], row["to_version"]) == (state, to) and len(row["detail"]) == 2000
+
+
+async def test_a_result_goes_at_once_in_quiet_hours_and_isnt_counted(
+    scenario: Scenario, runner: FakeRunner
+) -> None:
+    """F23a, bug #130: three updates asked for near midnight were all told at 8 am."""
+    husband = scenario.member("Husband")
+    tz = ZoneInfo("America/Los_Angeles")
+    clock.freeze(datetime(2026, 11, 2, 23, 40, tzinfo=tz))  # his quiet hours
+    server = scenario.app.server
+    assert server is not None
+    await server.request("update", husband)
+    picked = runner.pick_up()
+    runner.finish(picked["id"], "done", "0.3.1", "0.3.2")
+    await server.check()
+    await scenario.app.outbox.flush()
+    assert "Themi is now on 0.3.2 (was 0.3.1)." in scenario.inbox("Husband")
+    assert scenario.app.outbox.sent_today(husband.id) == 0
 
 
 @pytest.mark.parametrize(

@@ -31,7 +31,7 @@ from typing import Any
 from themi import __version__, clock
 from themi.accounts import Member, NotFound
 from themi.autonomy import ExecutionContext
-from themi.channels.outbox import Priority
+from themi.channels.outbox import SERVER_KIND, Priority
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
 
@@ -309,7 +309,7 @@ class ServerControl:
             member,
             self.words(_request_from_row(row)),
             priority=Priority.NORMAL,
-            kind="system",
+            kind=SERVER_KIND,  # it answers what they asked for: quiet hours or not (#130)
             dedupe_key=f"server-request:{request_id}",
         )
 
@@ -322,8 +322,11 @@ class ServerControl:
                 return TEXT["restarted"].format(to=to)
             if frm == to:
                 return TEXT["newest"].format(to=to)
+            numbered = frm is not None and frm[0].isdigit()  # not the image tag (bug #130)
             return (
-                TEXT["updated"].format(to=to, frm=frm) if frm else TEXT["updated_to"].format(to=to)
+                TEXT["updated"].format(to=to, frm=frm)
+                if numbered
+                else TEXT["updated_to"].format(to=to)
             )
         if request.state == "failed" and frm and to and frm != to:
             return TEXT["still_on"].format(to=to, frm=frm)
