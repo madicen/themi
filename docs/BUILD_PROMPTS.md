@@ -168,6 +168,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [x] 2026-11-03 |
 | F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [x] 2026-11-03 |
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
+| F23d | Vacuum chores: whose it is when asked, either of you overnight | Feedback | [~] |
 
 ## Fixed technical choices
 
@@ -7978,3 +7979,25 @@ Notes (2026-11-03):
   is live, ask again to tie both tasks to Saturday afternoon (or delete that event and ask
   again). Mark #131 reviewed, and #128 with #119, #120 and #127.
 - Setup: restart `themi run`. No migration.
+
+### F23d · Vacuum chores: whose it is when asked, either of you overnight
+Status: [~]
+Depends on: V1, F20b
+Read first: "Devices" (V1). Asked 2026-11-03 (Michael): "Why hasn't a task been created for
+the roborock vacuum even though it doesn't have clean water?" One had been: at 4:47 am the
+dock ran out of clean water, and task 71 went to Erin, "the most room right now". Its nudge
+waited for her quiet hours and went at 8 am. It's off the wall (V1), so Michael saw it
+nowhere. At 5:12 am he asked "What's the state of the vacuum?" and heard "The clean-water
+tank is empty", with nothing about the chore.
+
+Build:
+- `appliance_status` for the vacuum says each open chore: its title, whose it is ("Erin's",
+  "either of you"), and whether they've been asked yet.
+- A problem that starts while the person picked is in quiet hours goes to either of you:
+  on both lists, a nudge to each as their quiet hours end, and whoever does it closes it.
+  In the day, the person with the most room still gets it.
+
+Tests: each a failing test first. At 4:45 am clean water runs out: the chore is for either
+of you, Michael is asked at 7, Erin at 8, and once he taps Done she isn't asked. In the day
+it goes to one person as before. Asked about the vacuum, the reply has the chore and whose
+it is.

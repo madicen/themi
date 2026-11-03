@@ -256,3 +256,45 @@ async def test_asked_how_the_vacuum_is_doing_it_looks(
     assert "appliance_status" in tool_names(scenario)  # the words chose the devices group
     assert "Robbie (vacuum), read just now: stopped with a problem, battery 55%" in said
     assert "it needs a hand: the main brush is jammed" in said
+
+
+WATER = "The vacuum's dock is out of clean water. Refill the tank?"
+
+
+async def test_out_of_water_overnight_its_for_either_of_you(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    """F23d: at 4:47 am it went to Erin, asked at 8; Michael saw nothing of it."""
+    clock.advance(timedelta(hours=19, minutes=40))  # Thu 4:40 am: both asleep
+    await seen(scenario, robot, "clean_water_empty")
+    (row,) = scenario.app.db.query("SELECT * FROM tasks")
+    assert row["either"] and row["shared"]
+    assert await scenario.advance(hours=2, minutes=10) == []  # 6:55: still his quiet hours
+    assert await scenario.advance(minutes=10) == [WATER]  # 7:05: they ended at 7
+    assert scenario.inbox("Husband") == [WATER] and scenario.inbox("Erin") == []
+    await scenario.tap("Husband", "Done")
+    assert tasks(scenario)[0][1] == "done"
+    await scenario.advance(hours=1, minutes=30)  # past 8 am
+    assert WATER not in scenario.inbox("Erin")
+
+
+async def test_out_of_water_overnight_both_are_asked(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    clock.advance(timedelta(hours=19, minutes=40))
+    await seen(scenario, robot, "clean_water_empty")
+    await scenario.advance(hours=3, minutes=30)  # 8:15 am, nobody has answered
+    assert scenario.inbox("Husband") == [WATER]
+    assert scenario.inbox("Erin") == [WATER]
+
+
+async def test_asked_how_the_vacuum_is_the_chore_and_whose_it_is(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    tired(scenario)  # Michael has more room: it's his
+    await seen(scenario, robot, "clean_water_empty")
+    said = await ask(scenario, "What's the state of the vacuum?", "vacuum")
+    assert "Open chore: Refill the vacuum's clean water, Husband's, not asked yet" in said
+    await scenario.advance(minutes=5)
+    said = await ask(scenario, "And now?", "vacuum")
+    assert "Open chore: Refill the vacuum's clean water, Husband's, asked at 9:10 am" in said

@@ -5,9 +5,12 @@ From the robot's events (Roborock, `themi.connectors.roborock`):
 - A problem starting (stuck, a jam, the dock's water empty or full, a dustbin out, not back
   on its dock, any other fault) makes one effort-1 hands-on task, for whoever has the most
   room right now, off the wall's lists like the laundry's (it comes and goes with the
-  robot). Its nudge waits 5 minutes (half an hour for "not back on its dock": it may still
-  be sent home), so a problem sorted at once never sends one; then it asks, naming the
-  room when the map says. Done / Later; Later asks again in an hour.
+  robot). Starting while that person's in quiet hours, it's for either of you instead
+  (F23d: at 4:47 am the pick is a guess): on both lists, each asked as their quiet hours
+  end, and whoever does it closes it. Its nudge waits 5 minutes (half an hour for "not
+  back on its dock": it may still be sent home), so a problem sorted at once never sends
+  one; then it asks, naming the room when the map says. Done / Later; Later asks again in
+  an hour.
 - The robot showing the problem's gone closes the task: done if the nudge had gone out
   (someone most likely saw to it), quietly taken off the list if not.
 - Once a stuck, jammed or binned robot is sorted and it's sitting off its dock, or someone
@@ -16,6 +19,9 @@ From the robot's events (Roborock, `themi.connectors.roborock`):
   it's staged in `vacuum_home`, a card until a rule makes it automatic.
 - A part nearly worn out makes a "Replace the vacuum's filter" task, once until the part's
   counter is reset in the Roborock app. Not time-bound: the usual daily limit applies.
+
+Asked how the vacuum is (`appliance_status`), each open chore is said with whose it is
+and whether they've been asked (F23d).
 
 People see words, never codes. A problem marked done isn't raised again until the robot
 stops showing it.
@@ -46,8 +52,8 @@ from themi.connectors.roborock import (
     VacuumEvent,
 )
 from themi.core.services import Services
-from themi.core.tasks import Task, TaskBoard, TaskChange
-from themi.localtime import to_utc_iso
+from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
+from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -132,7 +138,10 @@ class Vacuum:
             assignment=assignment,
         )
         self.db.execute("UPDATE vacuum_problems SET task_id = ? WHERE id = ?", (task.id, row_id))
-        await self.board.prompt(task)  # now it's known as the robot's: its own nudge
+        if in_quiet_hours(assignment.assignee, event.at, self._timezone()):
+            await self.board.make_either(task.id)  # each asked as they wake; first one wins
+        else:
+            await self.board.prompt(task)  # now it's known as the robot's: its own nudge
 
     async def _gone(self, event: VacuumEvent, problem: str) -> None:
         now = to_utc_iso(event.at)
@@ -225,7 +234,7 @@ class Vacuum:
             wait = AWAY_WAIT if kind == NOT_DOCKED else WAIT
             not_before = max(now, opened + wait, not_before or now)
             deadline = not_before
-        self.board.withdraw_prompt(task)  # one nudge per problem waiting for them
+        self._withdraw(task, member)  # one nudge per problem waiting for them
         result = await self.services.outbox.send(
             member,
             text,
@@ -274,7 +283,54 @@ class Vacuum:
                     dedupe_key=f"roborock-expired-{clock.now().date().isoformat()}",
                 )
 
+    # ----- asked about ------------------------------------------------------------------
+
+    def chores(self, device_id: int) -> list[str]:
+        """Each open chore for the robot: whose it is, and whether they've been asked."""
+        lines = []
+        for row in self.db.query(
+            "SELECT * FROM vacuum_problems WHERE device_id = ? AND status = 'open' "
+            "AND task_id IS NOT NULL ORDER BY id",
+            (device_id,),
+        ):
+            task = self._task(row)
+            if task is None:
+                continue
+            if task.either:
+                whose = "either of you"
+            elif task.assignee is not None:
+                whose = f"{self.store.get_member(task.assignee).name}'s"
+            else:
+                whose = "nobody's yet"
+            asked = self.db.scalar(
+                "SELECT MIN(sent_at) FROM outbox WHERE status = 'sent' AND dedupe_key LIKE ?",
+                (f"task-{task.id}-%",),
+            )
+            when = (
+                f"asked at {clock_words(to_local(datetime.fromisoformat(asked), self._timezone()))}"
+                if asked
+                else "not asked yet"
+            )
+            lines.append(f"Open chore: {task.title}, {whose}, {when}.")
+        return lines
+
     # ----- small things -------------------------------------------------------------------
+
+    def _withdraw(self, task: Task, member: Member) -> None:
+        """Before a new nudge: this person's waiting ones go. A chore for either of you keeps
+        the other's."""
+        if not task.shared:
+            self.board.withdraw_prompt(task)
+            return
+        for queued in self.db.query(
+            "SELECT id FROM outbox WHERE status = 'queued' AND member_id = ? AND dedupe_key LIKE ?",
+            (member.id, f"task-{task.id}-%"),
+        ):
+            self.services.outbox.cancel(queued["id"])
+
+    def _timezone(self) -> str:
+        family = self.store.get_family()
+        return family.timezone if family else "UTC"
 
     def _live(self, device_id: int, problem: str) -> list[dict[str, Any]]:
         return self.db.query(
