@@ -9,8 +9,9 @@ From the robot's events (Roborock, `themi.connectors.roborock`):
   (F23d: at 4:47 am the pick is a guess): on both lists, each asked as their quiet hours
   end, and whoever does it closes it. Its nudge waits 5 minutes (half an hour for "not
   back on its dock": it may still be sent home), so a problem sorted at once never sends
-  one; then it asks, naming the room when the map says. Done / Later; Later asks again in
-  an hour.
+  one; then it asks, naming the room when the map says, and the chore goes on the wall's
+  to-do list (F23d, the `vacuum.wall` job), so one sorted at once never shows there.
+  Done / Later; Later asks again in an hour.
 - The robot showing the problem's gone closes the task: done if the nudge had gone out
   (someone most likely saw to it), quietly taken off the list if not.
 - Once a stuck, jammed or binned robot is sorted and it's sitting off its dock, or someone
@@ -282,6 +283,21 @@ class Vacuum:
                     kind=KIND,
                     dedupe_key=f"roborock-expired-{clock.now().date().isoformat()}",
                 )
+
+    async def onto_wall(self) -> int:
+        """Scheduler job: a problem still open once its nudge may go puts its chore on the
+        wall's to-do list. Returns how many went on."""
+        now = clock.now()
+        put = 0
+        for row in self.db.query(
+            "SELECT p.*, t.off_wall FROM vacuum_problems p JOIN tasks t ON t.id = p.task_id "
+            "WHERE p.status = 'open' AND t.off_wall = 1 AND t.status IN ('open', 'snoozed')"
+        ):
+            wait = AWAY_WAIT if row["problem"] == NOT_DOCKED else WAIT
+            if datetime.fromisoformat(row["opened_at"]) + wait <= now:
+                await self.board.put_on_wall(int(row["task_id"]))
+                put += 1
+        return put
 
     # ----- asked about ------------------------------------------------------------------
 

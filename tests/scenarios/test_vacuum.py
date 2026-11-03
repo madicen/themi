@@ -11,6 +11,7 @@ from datetime import timedelta
 import httpx
 import pytest
 
+from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.roborock import CODE, EMAIL, FakeRoborock
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
@@ -298,3 +299,45 @@ async def test_asked_how_the_vacuum_is_the_chore_and_whose_it_is(
     await scenario.advance(minutes=5)
     said = await ask(scenario, "And now?", "vacuum")
     assert "Open chore: Refill the vacuum's clean water, Husband's, asked at 9:10 am" in said
+
+
+async def on_wall(scenario: Scenario, fake_cozyla: FakeCozyla) -> list[str]:
+    await scenario.run_periodic("vacuum.wall")
+    await scenario.run_periodic("cozyla.sync")
+    return [t["todoTitle"] for t in fake_cozyla.in_list(scenario.cozyla_list)]
+
+
+async def test_a_chore_goes_on_the_wall_once_its_nudge_does(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    """F23d (Michael, 2026-11-03): "I would also like to see vacuum chores on the wall"."""
+    await seen(scenario, robot, "clean_water_empty")
+    assert await on_wall(scenario, fake_cozyla) == []  # it may sort itself out
+    await scenario.advance(minutes=5)
+    assert await on_wall(scenario, fake_cozyla) == ["Refill the vacuum's clean water"]
+    await seen(scenario, robot, "docked")  # refilled and cleared: the robot shows it gone
+    await on_wall(scenario, fake_cozyla)
+    assert fake_cozyla.titles(scenario.cozyla_list, done=True) == [
+        "Refill the vacuum's clean water"
+    ]
+
+
+async def test_sorted_before_its_nudge_it_never_reaches_the_wall(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    await seen(scenario, robot, "trapped")
+    robot.set_status(ROBOT, "cleaning")
+    clock.advance(timedelta(minutes=2))
+    await scenario.run_periodic("devices.vacuum")
+    clock.advance(timedelta(minutes=10))
+    assert await on_wall(scenario, fake_cozyla) == []
+
+
+async def test_a_worn_part_goes_on_the_wall_too(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    robot.set_parts(ROBOT, filter_work_time=530_000)
+    for _ in range(3):  # parts are read every few hours
+        clock.advance(timedelta(hours=6))
+        await scenario.run_periodic("devices.vacuum")
+    assert await on_wall(scenario, fake_cozyla) == ["Replace the vacuum's filter"]
