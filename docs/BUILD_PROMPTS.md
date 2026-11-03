@@ -164,7 +164,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [x] 2026-11-02 |
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
-| F22e | Replies sized to the message, and asking before problem-solving | Feedback | [ ] |
+| F22e | Replies sized to the message, and asking before problem-solving | Feedback | [x] 2026-11-02 |
 
 ## Fixed technical choices
 
@@ -7820,7 +7820,7 @@ Notes (2026-11-02):
 - Setup: restart `themi run`. Migration 0096 runs on start.
 
 ### F22e · Replies sized to the message, and asking before problem-solving
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: 08, F22d
 Read first: "PDA shielding" (the shield's rewrite), personal phrasing settings. From Erin's
 ideas #124 and #125 (2026-11-02):
@@ -7832,3 +7832,27 @@ ideas #124 and #125 (2026-11-02):
 Before building, ask (Erin): is a question like "want ideas, or just to vent?" the right
 way to ask; does it apply to Michael too, or per person (a setting, on by default like PDA
 shielding).
+
+Notes (2026-11-02):
+- Erin's answers weren't in yet, so these are defaults Michael chose for now: the question is
+  "Want ideas, or just to vent?" (the model may word it its own way), and listening first
+  is a per-person setting, `members.listen_first`, on by default (migration 0097), on My
+  settings: "When I share how I feel, listen first, and ask before suggesting fixes".
+- `themi.core.listening`. Size: a message of up to 8 words in one sentence gets "reply with
+  one short, matter-of-fact line"; three sentences or more get "about that length". After
+  a short message, a closing "Anything else...?", "Let me know if..." or "Happy to help..."
+  is cut from the reply (`trimmed`), unless that was the whole reply.
+- Listening: a feeling ("I'm so stressed", "I feel...", "I just needed to vent") with no
+  request in it (`ASKS`: "what should I do", "any ideas", "can you", "please", "add",
+  "remind"...) gets `LISTEN_SIGNAL`: validate, no advice or tools, ask once before ideas.
+  When that feeling message is more than one sentence, the overwhelm signal is left out and
+  `focus_now` refuses, so the model has to ask first. "I'm completely overwhelmed today" on
+  its own still gets a few things for now (O1a). The "Too much today" button is unchanged.
+- In burnout mode the size line still goes with burnout's own signal; the listening line
+  doesn't, since burnout's covers it.
+- What the model does with these lines can't be pinned by a test; the evals can check it
+  (`listen-before-fixing`, not run).
+- `test_whose_overwhelm` now runs with Michael's `listen_first` off: "Erin's out tonight.
+  I'm overwhelmed" is two sentences, so it would be listened to first.
+- Data: mark #124 and #125 reviewed once this is live.
+- Setup: restart `themi run`. Migration 0097 runs on start.
