@@ -32,7 +32,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import priority
+from themi.core import partner, priority
 from themi.core.repeat import next_occurrences
 from themi.core.tasks import Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -72,9 +72,43 @@ BUDGET_RANGE = (2, 8)
 MORNING = time(9)  # a shared task put off to a day comes back to them then
 
 
+PARTNER_SIGNAL = (
+    "they say {name} is overwhelmed: it's about {name}, not them, so don't pare their own day "
+    "down (focus_now won't). Ask if they'd like to see what's on {name}'s plate (day_summary "
+    "whose: partner), or to take some of it on (update_task assign_to: me, for a one-off)"
+)
+
+
 def overwhelmed(text: str) -> bool:
     """Words that say it's too much, from anyone."""
     return bool(OVERWHELM.search(text))
+
+
+def partner_signal(name: str) -> str:
+    return PARTNER_SIGNAL.format(name=name)
+
+
+def signals(text: str, member: Member, members: list[Member]) -> list[str]:
+    """The line for the turn's context when the message says it's too much: for them, or
+    (bug #126) for their partner."""
+    found = OVERWHELM.search(text)
+    if found is None:
+        return []
+    if partner.about_partner_at(text, found.start(), member, members):
+        other = partner.named(text, member, members)
+        return [partner_signal(other.name)] if other is not None else []
+    return [SIGNAL]
+
+
+def for_partner(text: str, member: Member, members: list[Member]) -> Member | None:
+    """The partner, when what the message says is about them rather than the speaker."""
+    found = OVERWHELM.search(text)
+    about = (
+        partner.about_partner_at(text, found.start(), member, members)
+        if found is not None
+        else partner.about_partner(text, member, members)
+    )
+    return partner.named(text, member, members) if about else None
 
 
 class Focus:
@@ -238,6 +272,13 @@ async def focus_now(ctx: ToolContext, args: dict[str, Any]) -> str:
     focus = ctx.services.focus
     if focus is None:
         raise ToolFailed("This isn't set up.")
+    members = ctx.services.store.list_members()
+    if (other := for_partner(ctx.request_text, ctx.member, members)) is not None:
+        raise ToolFailed(  # bug #126: it pared the speaker's own day down
+            f"Nothing changed: this is about {other.name}, not them, and their own day "
+            f"stays as it is. Don't say anything was pared down. Offer to show what's on "
+            f"{other.name}'s plate (day_summary whose: partner), or to take some of it on."
+        )
     text = await focus.send(ctx.member, spread=bool(args["spread"]))
     ctx.answered.append("focus_now")
     return (

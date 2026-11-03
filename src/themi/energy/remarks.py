@@ -32,14 +32,15 @@ class Remark:
     source: str  # "day_level" or "text_note"
     value: float
     words: str  # what was said, for the note
+    at: int = 0  # where in the message
 
 
 def energy_remark(text: str) -> Remark | None:
     """The clearest energy remark in `text`, if there is one."""
     if m := _DAY_LEVEL.search(text):
-        return Remark("day_level", _LEVELS[m.group(1).lower()], m.group(0))
+        return Remark("day_level", _LEVELS[m.group(1).lower()], m.group(0), m.start())
     if m := _DRAIN.search(text):
-        return Remark("text_note", -2.0, m.group(0))
+        return Remark("text_note", -2.0, m.group(0), m.start())
     if m := _BOOST.search(text):
-        return Remark("text_note", 2.0, m.group(0))
+        return Remark("text_note", 2.0, m.group(0), m.start())
     return None
