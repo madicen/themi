@@ -160,7 +160,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
 | D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
-| F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [ ] |
+| F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [x] 2026-11-02 |
 | F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [ ] |
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [ ] |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [ ] |
@@ -7607,7 +7607,7 @@ Notes (2026-11-02):
 
 
 ### F22a · Feedback (2026-11-02): asking for your partner ("what's on her plate?", "she's overwhelmed")
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: K1, K2, O1a
 Read first: "Calendars" (a person's event details reach only their own conversations unless
 they share them with their partner), "Transparency" (neither partner sees the other's raw
@@ -7642,6 +7642,31 @@ Tests: each a failing test first. The 8:55-8:56 conversation: "what's on her pla
 Erin's tasks, headed with her name, without her events while she keeps them to herself;
 "she's overwhelmed" doesn't run `focus_now` on Michael's list; "Erin is at zero energy"
 logs no energy for Michael.
+
+Notes (2026-11-02):
+- `themi.core.partner` decides who a message is about. `named` finds the other person by
+  name, or by "she", "my wife", "him"... when there's only one other person. `about_partner_at`
+  looks at the nearest subject before a phrase in its sentence, so "I'm worried she's
+  overwhelmed" is about her and "I'm overwhelmed with Erin's stuff" is about the speaker.
+  `about_partner` is the whole message: it names them and never says I or me. Curly
+  apostrophes count.
+- `day_summary` takes `whose` (me / both / partner) in place of `partner`. The partner's day
+  is headed "Erin, Mon 02 Nov:". Her events show only with `calendar_details` "partner";
+  otherwise the tool result tells the model only what's due is shown. `DaySummary.items` /
+  `text` take a `viewer`. The gate drops "wife/husband/partner" from `ABOUT_BOTH`, since
+  `named` now covers them.
+- `focus.signals` replaces the plain `SIGNAL` in the turn: overwhelm about the partner gets
+  `partner_signal(name)`. `focus_now` refuses on such a message, or on one wholly about the
+  partner, and says nothing was pared.
+- `log_energy_level` / `log_energy_note` return "Not recorded" on a message wholly about the
+  partner. The backstop (`_catch_energy`) skips a remark whose subject is the partner
+  (`Remark.at`).
+- Evals: `focus-about-the-partner`, `summary-her-plate`. Not run against Gemini here.
+- Not built: putting the partner's things on hold for them. That waits for F22d (who can
+  turn burnout mode on).
+- Data (Michael decides): Michael's day was pared down at 8:55 (`focus_now` sent the list
+  only; nothing was moved). Nothing to undo. Mark #126 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
 
 ### F22b · Feedback (2026-11-02): "Too much today" gives fewer than the list it answers
 Status: [ ]
