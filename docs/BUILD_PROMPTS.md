@@ -165,9 +165,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [x] 2026-11-02 |
-| F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [ ] |
-| F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [ ] |
-| F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [ ] |
+| F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [x] 2026-11-03 |
+| F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [x] 2026-11-03 |
+| F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -7865,7 +7865,7 @@ Notes (2026-11-02):
 - Setup: restart `themi run`. Migration 0097 runs on start.
 
 ### F23a · Feedback (2026-11-03): update notices come at once, quiet hours or not
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: D3a, D3b
 Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From Michael's bug
 #130 (2026-11-03, 8:01 am, "update notifications should skip quiet hour and busy settings"):
@@ -7884,8 +7884,21 @@ Build:
 Tests: each a failing test first. A finished update in quiet hours is sent at once and isn't
 counted against the daily limit; "from latest" gives no "(was latest)".
 
+Notes (2026-11-03):
+- From the Pi: requests 1 and 2 failed at 11:39 pm and 11:43 pm ("couldn't find the newest
+  release on GitHub", the D3b fix), and 3 worked at 12:06 am. Each notice was queued at once,
+  with `send_after` 8 am.
+- `outbox.SERVER_KIND` ("server") joins `PRAISE_KIND` in `ANSWER_KINDS`: no quiet hours,
+  busy times or daily limit, and not counted in `sent_today`. `ServerControl._report` sends
+  it. Other "system" messages (backups, a lost Gmail link) still wait out quiet hours.
+- `ServerControl.words` says "(was X)" only when X starts with a digit.
+- Not changed: the runner still reports `latest` as the version it started from (it reads
+  `THEMI_VERSION` from `.env`). Only the wording is fixed.
+- Data: mark #130 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
+
 ### F23b · Feedback (2026-11-03): a routine check follows ticks made on the wall or in chat
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: R1a, R1b
 Read first: "Routines" (R1a, R1b notes). From Michael's bug #129 (2026-11-02, 11:14 pm, "the
 cycle dishwasher task is done, but the earlier message never updated"): the evening check
@@ -7905,8 +7918,20 @@ Build:
 Tests: each a failing test first. A check is sent; a tick on the wall takes that item off
 it; the last tick says all done; a skipped check isn't changed; a tick in chat does the same.
 
+Notes (2026-11-03):
+- `Routines.show_tick(item, day)` edits that day's sent check (found by its dedupe key,
+  `routine-r<id>-<day>`). `routines_wall` calls it after a tick from the wall, and so does
+  `tick_routine_item`. The card's own buttons keep editing it as before, warm word included.
+- A held check: `outbox.refreshers["routine"]` writes Themi's checks again as they go, or
+  drops them if nothing is left. C3's wall checks (`routine-<part>-<day>`) go as they are.
+- "Skip today" sets `routine_day_checks.skipped_at` (migration 0098), and `show_tick` leaves
+  a skipped check alone.
+- Data: nothing to repair (the stale card is from last night). Mark #129 reviewed once this
+  is live.
+- Setup: restart `themi run`. Migration 0098 runs on start.
+
 ### F23c · Feedback (2026-11-03): "make time Saturday for X and Y" holds both tasks for that time
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: K3, K5
 Read first: "Calendars" (K5, time blocked for a task). From Michael's bug #131 (2026-11-03,
 8:05 am, "I said to make time for two of the tasks on Saturday, but both tasks still show for
@@ -7935,3 +7960,21 @@ live, ask again to tie both tasks to Saturday afternoon. Mark #131 reviewed.
 Also from this batch: Erin's bug #128 (2026-11-02, 9:47 pm, "it seems it thinks I ran today,
 not yesterday") came from 0.3.1, before F22c (0.3.2), which fixed that case. Mark #128
 reviewed with #119, #120 and #127.
+
+Notes (2026-11-03):
+- From the Pi: reply 218 offered the calendar and email groups, so `block_time_for_task` was
+  there. The model used `add_calendar_event` because the block tool took a single `task_id`.
+- `block_time_for_task` now takes `task_ids` (its schema changed). The event is titled with
+  the tasks' names ("X and Y"), with no title of the model's: one fewer thing to get wrong.
+  `task_blocks` gets a row per task for the one event. A staged block from before this,
+  with only `task_id`, still runs. `find_time_for_task` still takes one task.
+- `events.MAKE_TIME` ("block", "time for", "set aside", "make/find (some) time") gates
+  `add_calendar_event` on their own calendar: when an open task of theirs shares two or more
+  words with the message, it refuses, naming the tasks and the ids to use. The same words
+  now count as "asked for" for a block, so "make some time Saturday for..." is made at once.
+- Follow-up, if it's noticed: a block for two tasks nudges each as it begins, and asks
+  "done, or move the block?" for each as it ends.
+- Data (Michael decides): the event from 8:03 am stays, not tied to either task. Once this
+  is live, ask again to tie both tasks to Saturday afternoon (or delete that event and ask
+  again). Mark #131 reviewed, and #128 with #119, #120 and #127.
+- Setup: restart `themi run`. No migration.
