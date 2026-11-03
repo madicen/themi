@@ -66,7 +66,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | L1a | Lists on demand: Themi's own lists | Lists | [x] |
 | L1b | Lists on demand: the wall's lists | Lists | [x] |
 | L2a | A "things to buy" list sorted by store | Lists | [x] |
-| L2b | Things to buy in the carts | Lists | [ ] |
+| L2b | Things to buy in the carts | Lists | [x] 2026-11-02 |
 | H1 | Dishwasher: notice when the household is falling behind | Devices, early | [x] |
 | F11 | Feedback: put off until a time, summaries, finding events, routine items | Feedback | [x] |
 | F12 | Feedback: heads-ups explained, "one of us", emoji on the wall | Feedback | [x] |
@@ -3203,10 +3203,23 @@ Notes (2026-10-26):
   Things to Buy and rename it; the next sync renames it on the wall.
 
 ### L2b · Things to buy in the carts
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: L2a, 35c
 - When prompt 35c stages a cart, it offers the matching "things to buy" items (by usual
   store) as part of the same approval.
+
+Notes (2026-11-02):
+- Safeway is the only cart there is, so "matching" means Things to Buy items whose usual
+  store has the word "safeway" in it ("Safeway", "safeway.com"). `ThingsToBuy.from_store`
+  finds them without making the list; `SafewayCart.things_to_buy` turns them into cart
+  items (a quantity read as on the grocery list), skipping any already on the grocery list.
+- The card names them apart: "Eggs and 2 oat milk for the Safeway cart, plus batteries
+  from Things to Buy". One yes queues them all in one job, and the links fallback and
+  result message cover them like groceries. With an empty grocery list, Safeway things to
+  buy alone still make a cart.
+- Not separately choosable: the card is one yes or no. Items stay on Things to Buy after
+  the cart fills (a person still checks out); the Safeway receipt ticks them off (L2a).
+- No migration; nothing to set up beyond a usual store of Safeway on the items.
 
 ### H1 · Dishwasher: notice when the household is falling behind
 Status: [x] 2026-10-30
