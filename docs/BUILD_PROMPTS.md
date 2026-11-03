@@ -163,7 +163,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [x] 2026-11-02 |
 | F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [x] 2026-11-02 |
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
-| F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [ ] |
+| F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [ ] |
 
 ## Fixed technical choices
@@ -7755,7 +7755,7 @@ Notes (2026-11-02):
 - Setup: restart `themi run`. No migration.
 
 ### F22d · Burnout mode: everything held, no demands, urgent things to the partner
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: O1a, O1b, F22a, F22b
 Read first: "PDA shielding", "Task matching" (handing a task to the other partner), the
 trust tiers. From Erin's ideas #122 and #123 (2026-11-02), and #33 (burnout recovery mode).
@@ -7779,6 +7779,45 @@ message says (that she's in burnout mode, or just the task); whether Michael can
 for her (F22a's case) or only suggest it; and how it ends (her word, or Themi asking after
 some days). Probably split into a/b (the mode and the held tasks; the self-care check-ins
 and the conversation).
+
+Notes (2026-11-02):
+- Built in one go, not split. Erin's answers weren't in yet, so Michael chose "sensible
+  defaults" for now. Each one is a single place in the code to change:
+  - Urgent enough for Michael: her own task (not already on both lists), due today or
+    overdue, with a time or marked important (`Burnout._time_sensitive`). An hourly job
+    (`burnout.hand_over`) hands on the ones whose day comes later.
+  - Michael's message: only the task's usual nudge, nothing about burnout mode.
+  - Who turns it on: only her. Michael asking ("put Erin in burnout mode") is refused, and
+    the model is told to say so kindly and offer to take things on.
+  - How it ends: her word only ("I'm out of burnout mode", `/burnout off`). No end date and
+    no check after some days. Still-open handed-on tasks come back to her then.
+- `themi.core.burnout`: a `burnout` pause (new topic in `pauses.TOPICS`) with a ten-year
+  `until`, plus migration 0096 (`burnout`, `burnout_handoffs`). It holds task nudges, lists
+  and summaries, check-ins, routines, reviews, focus, approval and rule cards, the email
+  audit, laundry, vacuum, maintenance, takeout and Safeway. Still sent: replies, urgent
+  alerts, her own reminders, meal nudges, travel heads-ups, email alerts and praise.
+- The first reply is one of four short lines with no imperative in them (`STARTED_TEXTS`,
+  chosen at random): the PDA shield rewrote "Go rest." into "Up next: go rest.", so no
+  command. It's the whole reply (`ctx.replies`): the model's words aren't sent.
+- `burnout_task` gives the single lightest open dated task (least effort, then soonest),
+  never a medicine: "If you'd like one thing: X. Nothing at all is fine too."
+- While it's on, the turn's signal (`burnout.SIGNAL`) replaces the overwhelm one. It sets
+  the pacing: validate first and say it's handled; resting is the most useful thing only
+  in a later message; a grounding idea only if asked, one, from what they've said worked.
+  This is guidance to the model, not code: no test can hold the model to it.
+- Check-ins: `habits.burnout` is `held` (the default), `keep` or `only`, and
+  `habits.burnout_prompt` is her burnout wording. Kept and burnout-only check-ins go as kind
+  `selfcare`, which the pause doesn't hold, and ignoring them in burnout mode never retires
+  them. `set_burnout_check_in` (settings group) sets that. A new burnout-only check-in goes
+  through `habit_trial` for a yes, like any new check-in. A new everyday one isn't made
+  here.
+- Known gaps: her own medicine check-ins are held too (they share the `task` kind, which
+  the one-nudge-at-a-time gate and reactions depend on). Ask Erin whether they should keep
+  coming. `/pause` "resume everything" also ends the burnout pause, though the mode still
+  reads as on. There's no website page for it yet.
+- Eval `burnout-on` (start_burnout, not focus_now or start_break). Not run.
+- Data: mark #33, #122 and #123 reviewed once this is live and Erin has tried it.
+- Setup: restart `themi run`. Migration 0096 runs on start.
 
 ### F22e · Replies sized to the message, and asking before problem-solving
 Status: [ ]
