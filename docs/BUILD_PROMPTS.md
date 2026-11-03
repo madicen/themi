@@ -169,6 +169,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [x] 2026-11-03 |
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
 | F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
+| F23e | Feedback: a task moved into a routine becomes the routine item | Feedback | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -8022,4 +8023,48 @@ Notes (2026-11-03):
   in Google Tasks (GT1b), like any one-off task.
 - Data: task 71 (Refill the vacuum's clean water, Erin's) goes on the wall within a minute
   of the restart, since it's still open.
+- Setup: restart `themi run`. No migration.
+
+### F23e · Feedback (2026-11-03): a task moved into a routine becomes the routine item
+Status: [x] 2026-11-03
+Depends on: C3, F4
+Read first: "Shadow Calendar" → Task matching; the wall's routines (C3). From Michael's bug
+#133 (2026-11-03, 11:45 am, "a new routine item was created instead of moving the existing
+task from Erin"): he said "I'll handle the vacuum water task that Erin has. Can you move it
+to my evening routine for today?", and `add_to_wall_routine` made "Vacuum water" for today.
+Task 71 (Refill the vacuum's clean water) stayed open on Erin's list. The model couldn't
+have done better: a person's open items list only their own tasks, so task 71's id was
+nowhere in Michael's context.
+
+Build (the user's choice, 2026-11-03): a task moved into a routine is reassigned to the
+asker and becomes a one-off routine item. It lives only as that item and is ticked only as
+that item. It's no longer a task.
+- `add_to_wall_routine` takes `task_id`: the one-off task it takes the place of, or 0.
+  Run, the item goes on the asker's routine and the task is cancelled (off its list, the
+  wall's to-do list, Google Tasks, its nudge withdrawn).
+- With `task_id` 0, a message that says it's moving a task ("move", "take it over",
+  "instead of", "task") and an open one-off task of anyone's with the item's words in its
+  title: refused, naming the task and whose list it's on, so the model calls again with its
+  id or asks which.
+- A repeating chore isn't moved (its schedule is its own); a done or closed task is refused.
+
+Tests: each a failing test first. Bug #133's message: refused once with Erin's task named,
+then the item is on Husband's evening routine, the task is cancelled, Erin has nothing open,
+and the item is gone the next day. "Add vacuum water to my evening routine tonight" with the
+task open adds an item and leaves the task. A repeating chore is refused.
+
+Notes (2026-11-03):
+- `MOVED` and `_moved_task` in `cozyla_routines`; the executor's `_moved` cancels after the
+  wall has the item, so a Cozyla error leaves the task as it was. The card reads "..., in
+  place of task N (title)". It counts as asked when the message says "routine" and moves a
+  task by id, though "it" stands in for the title.
+- A vacuum chore moved this way: cancelling marks its problem done (V1), so it isn't raised
+  again while the tank stays empty, and a refilled robot doesn't tick the routine item.
+- Erin isn't told her task went; her waiting nudge is just withdrawn. Say if she should be.
+- Still open: the model sees only the asker's own tasks. Handing over a partner's task by
+  `update_task` (no routine) still needs its id, which `day_summary` whose=partner doesn't
+  give for a task with no due date.
+- Data (the Pi, not done yet): task 71 is still open and Erin's, beside Michael's
+  just-for-today "Vacuum water" (gone tomorrow). Cancel task 71 if he did it; mark #133
+  reviewed once this is live.
 - Setup: restart `themi run`. No migration.
