@@ -489,7 +489,10 @@ class Agent:
                     if ctx.replies and len(ctx.replies) == len(ctx.outcomes):
                         # The tools said it all (bug #118); a retry's repeat once (#119).
                         return "\n".join(dict.fromkeys(ctx.replies))
-                    reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = _unquoted(response.text)
+                    if ctx.answered and not reply:
+                        return _done_first(ctx.done, "")  # F22b: the tool's message said it
+                    reply = reply or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
                     reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)

@@ -10,6 +10,11 @@ overdue, not put off or waiting for the chart; what the day summary has): medici
 always, then ones with a time today, then urgent and important (T1), then the lightest.
 One message: those few, and a line that the rest are kept. Never energy, never "should".
 
+F22b (bug #121): "for now" is always fewer than what they were looking at, at most one less
+than the day (or the morning list the button is on), never under one. Asked again the same
+day, it's the lightest one; a third time, nothing ("It's all kept"). Medicines stay each
+time.
+
 The rest (O1b) can be spread over the next two weeks, the most pressing first, each to the
 first day with room under a budget: the person's setting, or what they usually get done in
 a day (the median of the last four weeks, 2 to 8; 4 with nothing to go by). It's offered
@@ -24,6 +29,7 @@ from __future__ import annotations
 import re
 import statistics
 from collections import Counter
+from collections.abc import Collection
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -36,6 +42,7 @@ from themi.core import partner, priority
 from themi.core.repeat import next_occurrences
 from themi.core.tasks import Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
     from themi.core.day_summary import DaySummary
@@ -58,6 +65,7 @@ FOCUS_TEXT = "For now, just {these}:\n{items}"
 KEPT_TEXT = "The other {n} are kept; nothing's dropped."
 KEPT_ONE_TEXT = "The other one is kept; nothing's dropped."
 ALL_TEXT = "That's all there is for today."
+NOTHING_TEXT = "Nothing for now. It's all kept."
 CLEAR_TEXT = "Nothing's due today. All clear."
 SPREAD_TEXT = "The rest are spread out, no more than {budget} on a day:"
 STAY_TEXT = "Staying with today, as they can't move: {titles}."
@@ -122,15 +130,20 @@ class Focus:
         self.services.tools.register(focus_now)
         self.services.button_handlers["focus"] = self.on_button
 
-    def pick(self, member: Member) -> tuple[list[Task], list[Task]]:
-        """Today's few for now (their own number of them), and the rest: medicines, a time
-        today, urgent and important, then the lightest."""
+    def pick(
+        self, member: Member, among: Collection[int] | None = None, times: int = 1
+    ) -> tuple[list[Task], list[Task]]:
+        """Today's few for now, and the rest: medicines, a time today, urgent and important,
+        then the lightest. `among`: only what was on the list they were looking at. Their own
+        number of them, and fewer than there are; asked again (`times` 2), the lightest one;
+        a third time, none. Medicines always."""
         today = self.summary.today()
         now = clock.now()
 
         def order(task: Task) -> tuple[Any, ...]:
             return (
                 not task.medicine,
+                times > 1 and task.effort,
                 self.board.time_of(task, today) is None,
                 priority.rank(task, today, now, now),
                 task.effort,
@@ -138,14 +151,28 @@ class Focus:
             )
 
         due = sorted(self.summary.due(member, today), key=order)
+        if among is not None:
+            due = [t for t in due if t.id in among]
         medicines = [t for t in due if t.medicine]
-        cut = max(member.focus_count, len(medicines))
+        few = max(min(member.focus_count, len(due) - 1), 1) if times == 1 else max(3 - times, 0)
+        cut = max(few, len(medicines))
         return due[:cut], due[cut:]
+
+    def times(self, member: Member) -> int:
+        """How many times it's been too much today, this one included."""
+        today = self.summary.today()
+        start = datetime(today.year, today.month, today.day, tzinfo=self._tz())
+        sent = self.services.store.db.scalar(
+            "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND kind = 'focus' "
+            "AND created_at >= ?",
+            (member.id, to_utc_iso(start)),
+        )
+        return int(sent or 0) + 1
 
     def text(self, member: Member, few: list[Task], rest: list[Task], after: str = "") -> str:
         """The few, then `after` (what became of the rest), or that the rest are kept."""
         if not few:
-            return CLEAR_TEXT
+            return NOTHING_TEXT if rest else CLEAR_TEXT
         today = self.summary.today()
         lines = []
         for task in few:
@@ -160,18 +187,22 @@ class Focus:
         kept = KEPT_ONE_TEXT if len(rest) == 1 else KEPT_TEXT.format(n=len(rest))
         return f"{text}\n{kept}"
 
-    async def send(self, member: Member, *, spread: bool = False) -> str:
+    async def send(
+        self, member: Member, *, spread: bool = False, among: list[int] | None = None
+    ) -> str:
         """The few for now; the rest spread out at once (`spread`), or offered to be."""
         buttons: list[Button] = []
+        times = self.times(member)
         if spread:
-            text = await self.spread_now(member)
+            text = await self.spread_now(member, among, times)
         else:
-            few, rest = self.pick(member)
+            few, rest = self.pick(member, among, times)
             text = self.text(member, few, rest)
             if few and rest:
+                which = {"list": among, "times": times}
                 buttons = [
-                    Button(SPREAD_BUTTON, "focus", {"action": "spread"}),
-                    Button(LEAVE_BUTTON, "focus", {"action": "leave"}),
+                    Button(SPREAD_BUTTON, "focus", {"action": "spread", **which}),
+                    Button(LEAVE_BUTTON, "focus", {"action": "leave", **which}),
                 ]
         await self.services.outbox.send(
             member, text, priority=Priority.REPLY, kind="focus", buttons=buttons
@@ -182,14 +213,16 @@ class Focus:
         """ "Too much today" on the morning list; then Spread them out, or Leave them."""
         assert event.button is not None
         member = self.services.store.get_member(event.member.id)
-        action = event.button.payload.get("action")
+        payload = event.button.payload
+        action, among = payload.get("action"), payload.get("list")
         if action == "focus":
-            await self.send(member)
+            await self.send(member, among=among)  # the list it's on, not the whole day
             return
+        times = int(payload.get("times", 1))
         if action == "spread":
-            text = await self.spread_now(member)
+            text = await self.spread_now(member, among, times)
         else:
-            few, rest = self.pick(member)
+            few, rest = self.pick(member, among, times)
             left = LEFT_ONE_TEXT if len(rest) == 1 else LEFT_TEXT.format(n=len(rest))
             text = self.text(member, few, rest, left if rest else "")
         if event.button.message_id is not None:
@@ -210,9 +243,11 @@ class Focus:
         low, high = BUDGET_RANGE
         return min(max(int(statistics.median(per_day.values())), low), high)
 
-    async def spread_now(self, member: Member) -> str:
+    async def spread_now(
+        self, member: Member, among: Collection[int] | None = None, times: int = 1
+    ) -> str:
         """The few for now, and the rest moved to the coming days, said by day."""
-        few, rest = self.pick(member)
+        few, rest = self.pick(member, among, times)
         if not rest:
             return self.text(member, few, rest)
         budget = self.budget(member)

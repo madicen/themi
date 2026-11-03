@@ -683,7 +683,8 @@ class TaskBoard:
             )
             for t in tasks[:MORNING_LIST_BUTTONS]
         ]
-        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus"}))  # O1a, Erin's idea #94
+        # O1a, Erin's idea #94; F22b: it answers this list (bug #121), not the whole day
+        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus", "list": ids}))
         return MORNING_LIST_TEXT.format(items=lines), buttons
 
     async def _list_done(self, event: InboundEvent) -> None:

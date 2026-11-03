@@ -308,3 +308,66 @@ async def test_how_few_is_their_own_number(scenario: Scenario) -> None:
     few, rest = focus.pick(scenario.member("Erin"))
     assert [t.title for t in few] == ["Mimi pill", "Call the vet"]
     assert len(rest) == 4
+
+
+# ----- F22b: fewer than the list it answers ------------------------------------------------
+
+
+async def too_much(scenario: Scenario, said: str) -> list[str]:
+    scenario.primary.queue_tool_call("focus_now", {"spread": False})
+    scenario.primary.queue_text("")
+    return await scenario.say("Erin", said)
+
+
+async def test_too_much_gives_fewer_than_the_morning_list(scenario: Scenario) -> None:
+    """Bug #121 (2026-11-02, 8 am): two overdue things on the list, "Too much today", and
+    back came three: the same two and the noon run."""
+    erin = scenario.member("Erin")
+    await scenario.advance(hours=13)  # 22:00, quiet hours
+    for title, due in (("Move the box upstairs", WED - timedelta(days=1)), ("Assemble order", WED)):
+        await board(scenario).create(erin, title, "errand", 2, due, assignee=erin)
+    await task(scenario, "Erin", "Go for a run", WED + timedelta(days=1), due_time=time(12))
+    await scenario.advance(hours=10, minutes=1)  # Thursday, 8:01
+    assert "Go for a run" not in scenario.inbox("Erin")[-1]  # the morning list
+    await scenario.tap("Erin", "Too much today")
+    sent = scenario.inbox("Erin")[-1]
+    assert sent.startswith("For now, just this:\n- ")
+    assert sent.endswith("The other one is kept; nothing's dropped.")
+    assert "Go for a run" not in sent
+
+
+async def test_asked_again_one_then_none(scenario: Scenario) -> None:
+    for title, effort in (("Deep clean the oven", 3), ("Sort the mail", 1), ("Call", 2)):
+        await task(scenario, "Erin", title, effort=effort, importance="high")
+    await task(scenario, "Erin", "Water the plants", importance="low")
+    first = await too_much(scenario, "I'm overwhelmed")
+    assert first[0].count("\n- ") == 3
+    second = await too_much(scenario, "still too much")
+    assert second == [
+        "For now, just this:\n- Sort the mail\nThe other 3 are kept; nothing's dropped."
+    ]  # the lightest
+    await scenario.tap("Erin", "Leave them for now")  # the second's own few, not the first's
+    assert scenario.edits("Erin")[-1]["text"].startswith("For now, just this:\n- Sort the mail\n")
+
+
+async def test_medicines_stay_when_asked_again(scenario: Scenario) -> None:
+    await a_full_day(scenario)
+    await too_much(scenario, "I'm overwhelmed")
+    assert (await too_much(scenario, "still too much"))[0].startswith(
+        "For now, just this:\n- Mimi pill\n"
+    )
+    assert (await too_much(scenario, "still too much"))[0].startswith(
+        "For now, just this:\n- Mimi pill\n"
+    )
+
+
+async def test_the_third_time_nothing_and_no_question(scenario: Scenario) -> None:
+    for title in ("Sort the mail", "Call the vet", "Water the plants"):
+        await task(scenario, "Erin", title)
+    first = await too_much(scenario, "It's too much")
+    assert first[0].count("\n- ") == 2  # fewer than the three there are
+    second = await too_much(scenario, "still too much")
+    assert second[0].count("\n- ") == 1
+    third = await too_much(scenario, "it's all too much")
+    assert third == ["Nothing for now. It's all kept."]
+    assert not scenario.telegram.calls("sendMessage")[-1].get("reply_markup")  # no question
