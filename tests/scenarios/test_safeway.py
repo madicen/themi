@@ -303,3 +303,66 @@ async def test_a_safeway_receipt_teaches_search_words(scenario: Scenario, inbox:
     eggs = safeway(scenario).product("eggs")
     assert eggs is not None
     assert eggs.search_words == "Lucerne Farms Eggs Cage Free Large - 18 Count"
+
+
+# ----- things to buy (L2b) ---------------------------------------------------------------
+
+
+def to_buy(scenario: Scenario, **stores: str) -> None:
+    """Things to Buy, each item with the store it usually comes from ("" for none)."""
+    buying = scenario.app.services.buying
+    assert buying is not None
+    erin = scenario.member("Erin")
+    buying.lists.add(buying.lists.things_to_buy(erin), list(stores), erin)
+    for name, store in stores.items():
+        buying.remember(name, kind="other", store=store or None)
+
+
+async def test_things_to_buy_from_safeway_go_in_the_same_cart(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    helper = FakeSafewayHelper(site, await connect(scenario, site))
+    on_the_list(scenario, "eggs", "2 oat milk")
+    to_buy(scenario, batteries="Safeway", **{"body wash": "Amazon", "2 sponges": "safeway.com"})
+    to_buy(scenario, **{"light bulbs": ""})
+    await ask_for_cart(scenario)
+    assert (
+        "Eggs and 2 oat milk for the Safeway cart, plus batteries and 2 sponges from Things to "
+        "Buy\nGo ahead, or not now?"
+    ) in scenario.inbox("Erin")
+
+    await scenario.tap("Erin", "Go ahead")
+    assert "fill the cart with 4 things" in card(scenario)
+    await helper.fill({"sponges": "not_found"})
+    assert [(i["name"], i["qty"]) for i in helper.jobs[0]["items"]] == [
+        ("eggs", 1),
+        ("oat milk", 2),
+        ("batteries", 1),
+        ("sponges", 2),
+    ]
+    assert scenario.inbox("Erin")[-1] == (
+        "3 things in the Safeway cart; I couldn't find sponges. Ready when you are."
+    )
+
+
+async def test_safeway_things_to_buy_alone_make_a_cart_and_nothing_twice(
+    scenario: Scenario,
+) -> None:
+    to_buy(scenario, batteries="Safeway", eggs="Safeway")
+    await ask_for_cart(scenario)
+    assert "Batteries and eggs from Things to Buy for the Safeway cart\nGo ahead, or not now?" in (
+        scenario.inbox("Erin")
+    )
+    await scenario.tap("Erin", "Not now")
+    on_the_list(scenario, "eggs")
+    await ask_for_cart(scenario)
+    assert "Eggs for the Safeway cart, plus batteries from Things to Buy\nGo ahead" in "\n".join(
+        scenario.inbox("Erin")
+    )
+
+
+async def test_staging_a_cart_never_makes_the_things_to_buy_list(scenario: Scenario) -> None:
+    on_the_list(scenario, "eggs")
+    await ask_for_cart(scenario)
+    assert "Eggs for the Safeway cart\nGo ahead, or not now?" in scenario.inbox("Erin")
+    assert scenario.app.db.query("SELECT id FROM lists WHERE purpose = 'things_to_buy'") == []

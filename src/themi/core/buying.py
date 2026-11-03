@@ -8,7 +8,8 @@
   from putting an item on the other list by itself; what someone asks for in their own
   words wins, and is remembered instead.
 - Receipts (`themi.core.pantry`) tick off what they bought and teach the store.
-- L2b will offer the items for a store when a cart for it is staged.
+- A cart staged for a store (L2b: the Safeway cart) offers the open items that usually
+  come from there, in the same approval.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
 from themi.core.groceries import and_list, asks_to_add, refuse_spending
-from themi.core.lists import ADD_CATEGORY, Lists, name_key
+from themi.core.lists import ADD_CATEGORY, THINGS_TO_BUY, Lists, NamedList, name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 
@@ -88,6 +89,23 @@ class ThingsToBuy:
 
     def forget_store(self, name: str) -> None:
         self.db.execute("UPDATE item_homes SET store = NULL WHERE name_key = ?", (name_key(name),))
+
+    def from_store(self, member: Member, store: str) -> tuple[NamedList, list[str]] | None:
+        """Things to Buy and its open items that usually come from `store` ("Safeway's" and
+        "Safeway" both match "safeway"); None when there's no such list yet, which this
+        never makes."""
+        row = self.db.one("SELECT id FROM lists WHERE purpose = ?", (THINGS_TO_BUY,))
+        nl = self.lists.get(row["id"], member) if row else None
+        if nl is None:
+            return None
+        wanted = re.escape(name_key(store))
+        stores = self.lists.stores(nl)
+        names = [
+            i.name
+            for i in nl.open_items
+            if re.search(rf"\b{wanted}\b", name_key(stores.get(i.id, "")))
+        ]
+        return nl, names
 
     # ----- bought -------------------------------------------------------------------------
 
