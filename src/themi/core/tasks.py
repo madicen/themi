@@ -1571,6 +1571,21 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title) + both
         return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
+    async def due_for_block(self, task: Task, day: date) -> Task:
+        """Time blocked for it on that day: it's due then, with no time of its own (idea
+        #135: blocked for Saturday, it still said "Was due Thursday"). Not asked again, as
+        reschedule asks: the block holds its nudge. A repeating chore: this round only."""
+        if task.status in ("done", "cancelled") or (task.due_on == day and not task.due_time):
+            return task
+        self.db.execute(
+            "UPDATE tasks SET due_on = ?, due_time = NULL, from_time = NULL, round_until = NULL, "
+            "overdue_reminders = 0, overdue_reminded_on = NULL WHERE id = ?",
+            (day.isoformat(), task.id),
+        )
+        task = self.get(task.id)
+        await self._changed(task, "rescheduled", False)
+        return task
+
     def when_words(self, task: Task) -> str:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
         assert task.due_on is not None
