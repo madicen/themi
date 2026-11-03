@@ -162,7 +162,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
 | F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [x] 2026-11-02 |
 | F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [x] 2026-11-02 |
-| F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [ ] |
+| F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [ ] |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [ ] |
 
@@ -7721,7 +7721,7 @@ Notes (2026-11-02):
 - Setup: restart `themi run`. No migration.
 
 ### F22c · Feedback (2026-11-02): "I ran yesterday" after F21c, checked
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: F21c
 From Erin's bugs #120 (8:01 am, "it still hasn't figured out that I ran yesterday") and
 #127 (12:40 pm, "the running tracking seems to be broken"). At 12:38 pm she wrote "I ran
@@ -7736,6 +7736,23 @@ reply says so. Fix only what still fails. Also check the reply when every tool f
 
 Data (Michael decides): tick Sunday's run once this is live; mark #119, #120 and #127
 reviewed.
+
+Notes (2026-11-02):
+- Checked: with F21c, "I ran yesterday" after the routine's message (as at 12:38 pm) passes
+  the naming check ("ran" → "run") and the run is marked done. The "That didn't go through"
+  was #119's refusal again.
+- What still failed: it counted as done today, so the next round was worked out from Monday
+  ("never two days in a row" pushed it to Wed, not Tue). Now "yesterday" or "last night" in
+  their words passes `on` (yesterday) to `TaskBoard.complete`: the run's `done_at` is a day
+  earlier, on time is judged by that day, the next round counts from it, and the reply adds
+  "Counted for yesterday, Sun 01 Nov." before the next round. A one-off isn't changed.
+- Not changed: the reply when every tool failed. F21c's naming refusal already names the
+  task. Naming the task in the other refusals ("they said no", a question) was tried and
+  dropped: the next message then counted as naming it, so a "no" could become a done.
+- Scenario `test_i_ran_yesterday_counts_for_yesterday`.
+- Data: tick the run for Sun 01 Nov ("I ran yesterday" works only on the day after, so
+  from the website or the wall now); mark #119, #120 and #127 reviewed.
+- Setup: restart `themi run`. No migration.
 
 ### F22d · Burnout mode: everything held, no demands, urgent things to the partner
 Status: [ ]
