@@ -36,6 +36,7 @@ from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import focus, partner
+from themi.core.approvals import ASK_TEXT
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
@@ -97,6 +98,18 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     if waiting:
         return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
     return reply
+
+
+# F21b (#115, 5:19 am): the reply was the approval card's own text again, under the card.
+CARD_WORDS = re.compile(r"[^\w]+")
+ASK_QUESTION = ASK_TEXT.partition("\n")[2]
+
+
+def _repeats_card(reply: str, waiting: list[str]) -> bool:
+    """Is the reply only the text of a card sent this turn (its summary, with or without
+    the card's question)?"""
+    said = CARD_WORDS.sub(" ", reply.lower().replace(ASK_QUESTION.lower(), "")).strip()
+    return bool(said) and any(said == CARD_WORDS.sub(" ", s.lower()).strip() for s in waiting)
 
 
 # Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
@@ -481,7 +494,10 @@ class Agent:
                         return ""  # the tool's message was the answer (bug #89)
                     reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
-                    reply = _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    waiting = self._waiting_since(member, mark)
+                    if _repeats_card(reply, waiting):
+                        return _done_first(ctx.done, "")
+                    reply = _honest(reply, waiting, ctx.outcomes)
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break
