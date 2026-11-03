@@ -82,6 +82,10 @@ IMMEDIATE = (Priority.REPLY, Priority.URGENT)
 # A message whose deadline is in quiet hours or a busy time goes this long before it starts.
 BEFORE_QUIET = timedelta(minutes=30)
 PRAISE_KIND = "praise"  # a warm word for something done (F19b): goes when it's news
+SERVER_KIND = "server"  # how an update or restart they asked for went (F23a, bug #130)
+# Answers to what they did or asked for, not Themi starting a conversation: no quiet hours,
+# busy times or daily limit, and not counted. A pause they asked for still holds them.
+ANSWER_KINDS = (PRAISE_KIND, SERVER_KIND)
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
 
@@ -458,9 +462,9 @@ class Outbox:
     ) -> datetime:
         if priority in IMMEDIATE:
             return now
-        if kind == PRAISE_KIND:
-            # A warm word answers what they just did: no quiet hours, busy times or daily
-            # limit (Michael, 2026-10-30). A pause they asked for still holds it.
+        if kind in ANSWER_KINDS:
+            # A warm word answers what they just did (Michael, 2026-10-30), and an update's
+            # result what they asked for (bug #130).
             return max(now, self.pauses.held_until(member, kind) or now)
         tz = self._tz
         overdue = deadline is not None and deadline <= now
@@ -512,12 +516,14 @@ class Outbox:
 
     def sent_today(self, member_id: int, now: datetime | None = None) -> int:
         """Proactive messages already sent to the member since local midnight. A warm word
-        for a tick on the wall (F19b) is an answer to what they did: it doesn't count."""
+        for a tick on the wall (F19b) or an update's result (F23a) is an answer to what they
+        did: it doesn't count."""
         midnight = start_of_local_day(now or clock.now(), self._tz)
         return self.store.db.scalar(
             "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND status = 'sent' "
-            "AND priority IN ('urgent', 'normal', 'low') AND kind != ? AND sent_at >= ?",
-            (member_id, PRAISE_KIND, to_utc_iso(midnight)),
+            "AND priority IN ('urgent', 'normal', 'low') AND kind NOT IN (?, ?) "
+            "AND sent_at >= ?",
+            (member_id, *ANSWER_KINDS, to_utc_iso(midnight)),
         )
 
     def _is_duplicate(self, member_id: int, key: str, now: datetime) -> bool:

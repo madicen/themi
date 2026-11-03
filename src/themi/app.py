@@ -320,7 +320,9 @@ def build_app(
         periodic.append(
             PeriodicTask("devices.vacuum", timedelta(minutes=1), services.roborock.poll)
         )
-        Vacuum(services, tasks, services.roborock).install()
+        vacuum = Vacuum(services, tasks, services.roborock)
+        vacuum.install()
+        periodic.append(PeriodicTask("vacuum.wall", timedelta(minutes=1), vacuum.onto_wall))
     Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(

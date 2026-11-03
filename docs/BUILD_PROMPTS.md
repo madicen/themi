@@ -165,6 +165,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [x] 2026-11-02 |
+| F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [x] 2026-11-03 |
+| F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [x] 2026-11-03 |
+| F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
+| F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -7860,3 +7864,162 @@ Notes (2026-11-02):
   I'm overwhelmed" is two sentences, so it would be listened to first.
 - Data: mark #124 and #125 reviewed once this is live.
 - Setup: restart `themi run`. Migration 0097 runs on start.
+
+### F23a · Feedback (2026-11-03): update notices come at once, quiet hours or not
+Status: [x] 2026-11-03
+Depends on: D3a, D3b
+Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From Michael's bug
+#130 (2026-11-03, 8:01 am, "update notifications should skip quiet hour and busy settings"):
+Michael asked for three updates from the website between 11:39 pm and 12:06 am. Two failed
+(the `.env` lookup D3b fixed) and the third worked. Each notice went to the outbox as
+`normal`, so quiet hours held all three until 8 am, when they came together: "The update
+didn't work" twice, then "Themi is now on 0.3.2 (was latest)". It wasn't a duplicate send.
+
+Build:
+- A server request's result answers what the person asked for, like a warm word for a tick
+  (F19b): no quiet hours, busy times or daily limit, and it isn't counted. A pause they asked
+  for still holds it, as it holds praise.
+- "(was latest)": the runner reports the image tag it started from. Only a version number
+  is said; `latest` or `dev` gives "Themi is now on 0.3.2."
+
+Tests: each a failing test first. A finished update in quiet hours is sent at once and isn't
+counted against the daily limit; "from latest" gives no "(was latest)".
+
+Notes (2026-11-03):
+- From the Pi: requests 1 and 2 failed at 11:39 pm and 11:43 pm ("couldn't find the newest
+  release on GitHub", the D3b fix), and 3 worked at 12:06 am. Each notice was queued at once,
+  with `send_after` 8 am.
+- `outbox.SERVER_KIND` ("server") joins `PRAISE_KIND` in `ANSWER_KINDS`: no quiet hours,
+  busy times or daily limit, and not counted in `sent_today`. `ServerControl._report` sends
+  it. Other "system" messages (backups, a lost Gmail link) still wait out quiet hours.
+- `ServerControl.words` says "(was X)" only when X starts with a digit.
+- Not changed: the runner still reports `latest` as the version it started from (it reads
+  `THEMI_VERSION` from `.env`). Only the wording is fixed.
+- Data: mark #130 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
+
+### F23b · Feedback (2026-11-03): a routine check follows ticks made on the wall or in chat
+Status: [x] 2026-11-03
+Depends on: R1a, R1b
+Read first: "Routines" (R1a, R1b notes). From Michael's bug #129 (2026-11-02, 11:14 pm, "the
+cycle dishwasher task is done, but the earlier message never updated"): the evening check
+listed Take Meds, Cover the birdcage and Cycle Dishwasher. The two he tapped on the card
+were taken off it. Cycle Dishwasher, ticked on the wall at 11:06 pm, got a "Ticked off on
+the wall" message, but the card still said "Evening routine, still open: Cycle Dishwasher.
+Done already?". Only the card's own buttons change it. A tick from the wall (R1b's sync) or
+in chat (`tick_routine_item`) leaves it as it was.
+
+Build:
+- Any tick of a routine item edits that day's check, if one was sent: the rest still open,
+  with their buttons, or "Evening routine: all done." once nothing is left.
+- A check still waiting to go out is written again as it goes, or dropped if nothing is
+  left.
+- A check they tapped "Skip today" on stays skipped.
+
+Tests: each a failing test first. A check is sent; a tick on the wall takes that item off
+it; the last tick says all done; a skipped check isn't changed; a tick in chat does the same.
+
+Notes (2026-11-03):
+- `Routines.show_tick(item, day)` edits that day's sent check (found by its dedupe key,
+  `routine-r<id>-<day>`). `routines_wall` calls it after a tick from the wall, and so does
+  `tick_routine_item`. The card's own buttons keep editing it as before, warm word included.
+- A held check: `outbox.refreshers["routine"]` writes Themi's checks again as they go, or
+  drops them if nothing is left. C3's wall checks (`routine-<part>-<day>`) go as they are.
+- "Skip today" sets `routine_day_checks.skipped_at` (migration 0098), and `show_tick` leaves
+  a skipped check alone.
+- Data: nothing to repair (the stale card is from last night). Mark #129 reviewed once this
+  is live.
+- Setup: restart `themi run`. Migration 0098 runs on start.
+
+### F23c · Feedback (2026-11-03): "make time Saturday for X and Y" holds both tasks for that time
+Status: [x] 2026-11-03
+Depends on: K3, K5
+Read first: "Calendars" (K5, time blocked for a task). From Michael's bug #131 (2026-11-03,
+8:05 am, "I said to make time for two of the tasks on Saturday, but both tasks still show for
+today"): at 8:02 am he said "Make some time Saturday afternoon for moving Mimi's box and
+splitting Merlin's box". Both tasks were overdue from Thu 29 Oct. The model used
+`add_calendar_event` ("Move Mimi's box and split Merlin's box", Sat 07 Nov, 2-3:30 pm), not
+`block_time_for_task`, which takes a single task. So the event wasn't tied to either task,
+and both still showed in "What's on my list for today?".
+
+Build:
+- `block_time_for_task` takes `task_ids`: one event for them all (titled with their names,
+  or a title the model gives), and each task is held until it, as a single task's block is.
+  Moving or deleting the event moves or ends the hold for each.
+- `add_calendar_event` refuses when what they said asks for time for open tasks of theirs
+  ("make time for", "time for", "block", "set aside") and names them (two or more words of a
+  title, as the naming check does). The refusal names the tasks and says to use
+  `block_time_for_task` with their ids.
+
+Tests: each a failing test first. The 8:02 message makes one block for both tasks, and
+neither shows in today's summary; the plain-event path refuses with both ids; a meeting
+named like no task ("time for coffee with Sam") is still an event.
+
+Data (Michael decides): the event from 8:03 am stays, not tied to either task. Once this is
+live, ask again to tie both tasks to Saturday afternoon. Mark #131 reviewed.
+
+Also from this batch: Erin's bug #128 (2026-11-02, 9:47 pm, "it seems it thinks I ran today,
+not yesterday") came from 0.3.1, before F22c (0.3.2), which fixed that case. Mark #128
+reviewed with #119, #120 and #127.
+
+Notes (2026-11-03):
+- From the Pi: reply 218 offered the calendar and email groups, so `block_time_for_task` was
+  there. The model used `add_calendar_event` because the block tool took a single `task_id`.
+- `block_time_for_task` now takes `task_ids` (its schema changed). The event is titled with
+  the tasks' names ("X and Y"), with no title of the model's: one fewer thing to get wrong.
+  `task_blocks` gets a row per task for the one event. A staged block from before this,
+  with only `task_id`, still runs. `find_time_for_task` still takes one task.
+- `events.MAKE_TIME` ("block", "time for", "set aside", "make/find (some) time") gates
+  `add_calendar_event` on their own calendar: when an open task of theirs shares two or more
+  words with the message, it refuses, naming the tasks and the ids to use. The same words
+  now count as "asked for" for a block, so "make some time Saturday for..." is made at once.
+- Follow-up, if it's noticed: a block for two tasks nudges each as it begins, and asks
+  "done, or move the block?" for each as it ends.
+- Data (Michael decides): the event from 8:03 am stays, not tied to either task. Once this
+  is live, ask again to tie both tasks to Saturday afternoon (or delete that event and ask
+  again). Mark #131 reviewed, and #128 with #119, #120 and #127.
+- Setup: restart `themi run`. No migration.
+
+### F23d · Vacuum chores: whose it is when asked, either of you overnight, on the wall
+Status: [x] 2026-11-03
+Depends on: V1, F20b
+Read first: "Devices" (V1). Asked 2026-11-03 (Michael): "Why hasn't a task been created for
+the roborock vacuum even though it doesn't have clean water?" One had been: at 4:47 am the
+dock ran out of clean water, and task 71 went to Erin, "the most room right now". Its nudge
+waited for her quiet hours and went at 8 am. It's off the wall (V1), so Michael saw it
+nowhere. At 5:12 am he asked "What's the state of the vacuum?" and heard "The clean-water
+tank is empty", with nothing about the chore.
+
+Build:
+- `appliance_status` for the vacuum says each open chore: its title, whose it is ("Erin's",
+  "either of you"), and whether they've been asked yet.
+- A problem that starts while the person picked is in quiet hours goes to either of you:
+  on both lists, a nudge to each as their quiet hours end, and whoever does it closes it.
+  In the day, the person with the most room still gets it.
+- Added while building (Michael): "I would also like to see vacuum chores on the wall".
+
+Tests: each a failing test first. At 4:45 am clean water runs out: the chore is for either
+of you, Michael is asked at 7, Erin at 8, and once he taps Done she isn't asked. In the day
+it goes to one person as before. Asked about the vacuum, the reply has the chore and whose
+it is.
+
+Notes (2026-11-03):
+- `Vacuum.chores(device_id)` gives a line per open chore ("Open chore: Refill the vacuum's
+  clean water, Erin's, asked at 8 am."), and `appliance_status` adds them after the
+  robot's own state.
+- Either of you: when `in_quiet_hours` holds for the person matching picked, at the moment
+  the problem started, the task goes through `TaskBoard.make_either`, which nudges both.
+  The vacuum's own nudge now takes back only that person's waiting nudge when the task is
+  shared (before, the second nudge cancelled the first). `_offer_home` still goes to
+  the task's assignee, not whoever tapped Done.
+- On the wall: vacuum chores are still made `off_wall` (V1), and a new job, `vacuum.wall`
+  (every minute), puts a chore on the wall once it has lasted as long as its nudge waits
+  (5 minutes, or 30 for "not back on its dock"), with `TaskBoard.put_on_wall`. A worn part
+  goes on after 5 minutes too. One the robot sorts out before then never shows. Ticked on
+  the wall, it's done as a tap on Done is, and the robot clearing it ticks it there.
+  For either of you, it's the family member's on the wall.
+- Side effect: with `off_wall` cleared, the chore also goes on that person's "Themi" list
+  in Google Tasks (GT1b), like any one-off task.
+- Data: task 71 (Refill the vacuum's clean water, Erin's) goes on the wall within a minute
+  of the restart, since it's still open.
+- Setup: restart `themi run`. No migration.

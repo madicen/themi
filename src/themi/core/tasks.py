@@ -1582,6 +1582,14 @@ class TaskBoard:
             return f"{day}, {clock_words(task.from_time)}-{clock_words(task.due_time)}"
         return f"{day}, {clock_words(at)}" if at else day
 
+    async def put_on_wall(self, task_id: int) -> Task:
+        """A task made off the wall's lists goes on them now (F23d: a vacuum chore, once its
+        nudge goes)."""
+        self.db.execute("UPDATE tasks SET off_wall = 0 WHERE id = ?", (task_id,))
+        task = self.get(task_id)
+        await self._changed(task, "moved", False)
+        return task
+
     async def make_either(self, task_id: int) -> Task:
         """Either of them can do it (bug #26, "one of us"): on both lists, asked of both,
         and whoever does it closes it."""

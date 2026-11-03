@@ -4,7 +4,7 @@ go both ways, and only Themi checks. The clock starts on Wednesday 21 October 20
 
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
@@ -135,6 +135,35 @@ async def test_ticks_go_both_ways(scenario: Scenario, fake_cozyla: FakeCozyla) -
     scenario.primary.queue_text("Nice.")
     await scenario.say("Erin", "took my meds")
     assert (pills, WED.isoformat()) in fake_cozyla.routine_ticks  # at once, not next sync
+
+
+async def test_a_tick_on_the_wall_updates_the_check(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F23b, bug #129: Cycle Dishwasher, ticked on the wall, stayed on the evening check."""
+    meds = fake_cozyla.add_routine("m-erin", "Take meds", "Evening")
+    dishwasher = fake_cozyla.add_routine("m-erin", "Cycle dishwasher", "Evening")
+    await sync(scenario)
+    clock.advance(time_until(20, 30))  # the evening ends an hour before her quiet hours
+    await scenario.run_periodic("routines.check")
+    await scenario.advance(minutes=20)
+    assert scenario.inbox("Erin")[-1] == (
+        "Evening routine, still open:\n- Take meds\n- Cycle dishwasher\nDone already?"
+    )
+    fake_cozyla.tick_routine(dishwasher, WED)
+    await sync(scenario)
+    edit = scenario.edits("Erin")[-1]
+    assert edit["text"] == "Evening routine, still open:\n- Take meds\nDone already?"
+    keyboard = edit["reply_markup"]["inline_keyboard"]
+    assert [b["text"] for row in keyboard for b in row] == ["✓ Take meds", "Skip today"]
+    fake_cozyla.tick_routine(meds, WED)
+    await sync(scenario)
+    assert scenario.edits("Erin")[-1]["text"] == "Evening routine: all done."
+
+
+def time_until(hour: int, minute: int = 0) -> timedelta:
+    now = clock.now()
+    return now.replace(hour=hour, minute=minute) - now
 
 
 async def test_a_tick_on_the_wall_at_night_gets_a_warm_word(

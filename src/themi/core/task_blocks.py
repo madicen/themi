@@ -1,10 +1,11 @@
 """Time blocked on someone's calendar for a task (K5).
 
 - "Block Saturday morning for the bathroom": an event on their calendar for the task
-  (`block_time_for_task`; made at once when asked for in their words). "Find me time for
-  the bathroom": Themi picks the first good window long enough (their calendar's busy
-  times, busy times, quiet hours and the energy model's windows) and offers it as a card
-  (`find_time_for_task`).
+  (`block_time_for_task`; made at once when asked for in their words). One block can be
+  for several tasks ("make time Saturday for X and Y", bug #131): each is held for it.
+  "Find me time for the bathroom": Themi picks the first good window long enough (their
+  calendar's busy times, busy times, quiet hours and the energy model's windows) and offers
+  it as a card (`find_time_for_task`).
 - While a block is coming, the task is held (`TaskBoard.holds`): no nudge, no end-of-day
   or overdue reminder. Its nudge comes as the block begins (`blocks.tick`, every 5 minutes).
 - The block follows its event: moved on the calendar, the block and its nudge move; deleted,
@@ -30,7 +31,8 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
-from themi.core.events import OWN, When, parse_when, when_words
+from themi.core.events import MAKE_TIME, OWN, When, parse_when, when_words
+from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool
@@ -45,7 +47,7 @@ log = logging.getLogger(__name__)
 
 EXECUTOR = "blocks.add"
 ENDED_TEXT = "The time for {title} is over. Done, or move the block?"
-INTENT = re.compile(r"\b(?:block|calendar|schedule|time for)\b")
+INTENT = re.compile(rf"\b(?:calendar|schedule)\b|{MAKE_TIME.pattern}")
 # "Prompt me to run at 2" asks for a nudge then, not time on the calendar (bug #39).
 NUDGE = re.compile(r"\b(?:prompt|remind|nudge|ping|check in with)\b")
 MAX_DAYS = 14
@@ -97,26 +99,33 @@ class TaskBlocks:
         events = self.services.events
         if events is None:
             return "Calendars aren't set up."
-        task = self.board.get(int(payload["task_id"]))
+        ids = payload.get("task_ids") or [payload["task_id"]]  # one task, before bug #131
+        tasks = [self.board.get(int(i)) for i in ids]
         themi_id, text = await events.make(ctx.member, payload, ctx.idempotency_key)
-        if not self.db.one("SELECT 1 FROM task_blocks WHERE themi_event_id = ?", (themi_id,)):
-            self.db.execute(
-                "INSERT INTO task_blocks (task_id, member_id, themi_event_id, starts_at, ends_at, "
-                "created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    task.id, ctx.member.id, themi_id,
-                    to_utc_iso(datetime.fromisoformat(payload["starts"])),
-                    to_utc_iso(datetime.fromisoformat(payload["ends"])),
-                    to_utc_iso(clock.now()),
-                ),
-            )  # fmt: skip
-        self.board.withdraw_prompt(task)  # its nudge comes with the block now
-        return f"{text} Its nudge waits until then."
+        for task in tasks:
+            if not self.db.one(
+                "SELECT 1 FROM task_blocks WHERE themi_event_id = ? AND task_id = ?",
+                (themi_id, task.id),
+            ):
+                self.db.execute(
+                    "INSERT INTO task_blocks (task_id, member_id, themi_event_id, starts_at, "
+                    "ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        task.id, ctx.member.id, themi_id,
+                        to_utc_iso(datetime.fromisoformat(payload["starts"])),
+                        to_utc_iso(datetime.fromisoformat(payload["ends"])),
+                        to_utc_iso(clock.now()),
+                    ),
+                )  # fmt: skip
+            self.board.withdraw_prompt(task)  # its nudge comes with the block now
+        return f"{text} {'Their nudges wait' if len(tasks) > 1 else 'Its nudge waits'} until then."
 
-    def payload(self, task: Task, when: When) -> dict[str, Any]:
+    def payload(self, tasks: list[Task], when: When) -> dict[str, Any]:
+        task = tasks[0]
         return {
             "task_id": task.id,
-            "title": task.title,
+            "task_ids": [t.id for t in tasks],
+            "title": titles(tasks),
             "location": "",
             "starts": when.starts.isoformat(),
             "ends": when.ends.isoformat(),
@@ -237,6 +246,10 @@ def _blocks(ctx: ToolContext) -> TaskBlocks:
     return blocks
 
 
+def titles(tasks: list[Task]) -> str:
+    return and_list([t.title for t in tasks])
+
+
 def _task(blocks: TaskBlocks, ctx: ToolContext, task_id: int) -> Task:
     try:
         task = blocks.board.get(task_id)
@@ -249,12 +262,13 @@ def _task(blocks: TaskBlocks, ctx: ToolContext, task_id: int) -> Task:
 
 @staged_tool(
     "block_time_for_task",
-    "Block time on their own calendar for a task ('block Saturday morning for the "
-    "bathroom'). date: YYYY-MM-DD; start and end: HH:MM, 24-hour. The task's nudges wait for "
-    "the block. Asked for in their words, it's made at once. A nudge at a time ('prompt me "
-    "to run at 2') isn't a block: that's snooze_task.",
+    "Block time on their own calendar for tasks ('block Saturday morning for the "
+    "bathroom', 'make time Saturday for X and Y'): one event for all the tasks named. "
+    "date: YYYY-MM-DD; start and end: HH:MM, 24-hour. The tasks' nudges wait for the block, "
+    "and they're off today's list. Asked for in their words, it's made at once. A nudge at a "
+    "time ('prompt me to run at 2') isn't a block: that's snooze_task.",
     {
-        "task_id": {"type": "integer"},
+        "task_ids": {"type": "array", "items": {"type": "integer"}},
         "date": {"type": "string"},
         "start": {"type": "string"},
         "end": {"type": "string"},
@@ -262,7 +276,10 @@ def _task(blocks: TaskBlocks, ctx: ToolContext, task_id: int) -> Task:
 )
 async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     blocks = _blocks(ctx)
-    task = _task(blocks, ctx, int(args["task_id"]))
+    ids = list(dict.fromkeys(int(i) for i in args["task_ids"]))
+    if not ids:
+        raise ToolFailed("Which task is the time for?")
+    tasks = [_task(blocks, ctx, i) for i in ids]
     events = ctx.services.events
     assert events is not None
     events.own_account(ctx.member)
@@ -277,9 +294,9 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     when = parse_when(args["date"], args["start"], args["end"], events._today(), events._tz())
     proposal = Proposal(
         OWN,
-        f"Time for {task.title}: {when_words(when, events._tz())}, on your calendar",
+        f"Time for {titles(tasks)}: {when_words(when, events._tz())}, on your calendar",
         EXECUTOR,
-        blocks.payload(task, when),
+        blocks.payload(tasks, when),
     )
     return replace(proposal, requested=bool(INTENT.search(said)), expires=when.ends)
 
@@ -311,6 +328,6 @@ async def find_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         OWN,
         f"Time for {task.title}: {when_words(when, events._tz())}, on your calendar",
         EXECUTOR,
-        blocks.payload(task, when),
+        blocks.payload([task], when),
         expires=when.ends,  # a time that's past is no use (bug #64's stale card)
     )

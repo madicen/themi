@@ -106,7 +106,9 @@ class Appliances:
         needs = [words for words in problems(status).values()]
         if needs:
             said += "; it needs a hand: " + "; ".join(needs)
-        return f"{name}, read just now: {said}."
+        vacuum = self.services.vacuum
+        chores = vacuum.chores(device.id) if vacuum is not None else []  # F23d: and whose
+        return " ".join([f"{name}, read just now: {said}.", *chores])
 
     def _words(self, device: Device, state: str, minutes: int | None) -> str:
         if state == RUNNING:

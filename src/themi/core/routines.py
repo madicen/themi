@@ -8,7 +8,9 @@ one day, and are ticked once a day.
 
 The check (the `routines.check` job): once a routine's window ends, if any of
 today's items are open, one message lists them, with a button per item and
-"Skip today", as C3's checks. All done: nothing is sent. Each check feeds the
+"Skip today", as C3's checks. All done: nothing is sent. A tick made anywhere (the
+check's buttons, chat, the wall) changes the check: what's still open, or all done; a
+check still waiting to go is written again as it goes (F23b). Each check feeds the
 energy model as device activity (a small lift or dip, in words), which each
 person can switch off.
 
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -60,6 +63,7 @@ CHECK_LATE = timedelta(hours=5)
 DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 ADD_CATEGORY, ADD_EXECUTOR = "routine_item_add", "routines.add_item"
 KIND = "routine"  # the outbox kind, as C3's checks
+CHECK_KEY = re.compile(r"routine-r(\d+)-(\d{4}-\d{2}-\d{2})")  # Themi's own, not C3's
 TICKED_TEXT = "Marked done: {title}. {praise}"  # a tick on the check, said with a warm word
 
 
@@ -130,6 +134,7 @@ class Routines:
     def install(self) -> None:
         self.services.routines = self
         self.services.button_handlers["routine_item"] = self.on_button
+        self.services.outbox.refreshers[KIND] = self._as_it_stands
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         for each in (show_routines, set_routine, remove_routine, add_routine_item,
                      remove_routine_item, tick_routine_item):  # fmt: skip
@@ -322,11 +327,56 @@ class Routines:
                     kind=KIND,
                     buttons=_buttons(routine, still, today),
                     deadline=end + timedelta(minutes=15),
-                    dedupe_key=f"routine-r{routine.id}-{today}",
+                    dedupe_key=_check_key(routine, today),
                     expires=end + CHECK_LATE,
                 )
                 sent += 1
         return sent
+
+    async def show_tick(self, item: Item, day: date) -> None:
+        """A tick made away from the check (the wall, chat): the check sent for that day
+        shows what's still open, unless they skipped it (bug #129)."""
+        routine = self.get(item.routine_id)
+        row = self.db.one(
+            "SELECT o.telegram_message_id, c.skipped_at FROM outbox o JOIN routine_day_checks c "
+            "ON c.routine_id = ? AND c.day = ? WHERE o.member_id = ? AND o.dedupe_key = ? "
+            "AND o.status = 'sent' ORDER BY o.id DESC LIMIT 1",
+            (routine.id, day.isoformat(), routine.member_id, _check_key(routine, day)),
+        )
+        if row is None or row["telegram_message_id"] is None or row["skipped_at"]:
+            return
+        member = self.store.get_member(routine.member_id)
+        still = self._still(routine, day)
+        if still:
+            text = CHECK_TEXT.format(part=routine.name, items=_bullets(still))
+            buttons = _buttons(routine, still, day)
+        else:
+            text, buttons = ALL_DONE_TEXT.format(part=routine.name), []
+        await self.services.outbox.edit(member, row["telegram_message_id"], text, buttons)
+
+    def _as_it_stands(
+        self, member: Member, row: dict[str, Any]
+    ) -> str | tuple[str, list[Button]] | None:
+        """A held check, written again as it goes: ticks made since are left off, and with
+        nothing left it isn't sent. C3's checks of the wall go as they are."""
+        key = str(row["dedupe_key"] or "")
+        found = CHECK_KEY.fullmatch(key)
+        if found is None:
+            return str(row["text"])
+        stored = self.db.one("SELECT * FROM routines WHERE id = ?", (int(found.group(1)),))
+        if stored is None:
+            return None  # removed since
+        routine = _routine(stored)
+        day = date.fromisoformat(found.group(2))
+        still = self._still(routine, day)
+        if not still:
+            return None
+        return CHECK_TEXT.format(part=routine.name, items=_bullets(still)), _buttons(
+            routine, still, day
+        )
+
+    def _still(self, routine: Routine, day: date) -> list[Item]:
+        return [i for i in self.today_items(routine, day) if not self.ticked(i, day)]
 
     async def on_button(self, event: InboundEvent) -> None:
         assert event.button is not None
@@ -341,6 +391,10 @@ class Routines:
         found = _routine(routine)
         day = date.fromisoformat(str(payload["day"]))
         if payload.get("skip"):
+            self.db.execute(
+                "UPDATE routine_day_checks SET skipped_at = ? WHERE routine_id = ? AND day = ?",
+                (to_utc_iso(clock.now()), found.id, day.isoformat()),
+            )
             if message is not None:
                 await self.services.outbox.edit(
                     event.member, message, SKIPPED_TEXT.format(part=found.name)
@@ -352,7 +406,7 @@ class Routines:
             await self.tick_now(item, day)
             if event.member.done_praise:  # a warm word, as for a task (F19b)
                 said = TICKED_TEXT.format(title=item.title, praise=praise.word(f"r{item.id}"))
-        still = [i for i in self.today_items(found, day) if not self.ticked(i, day)]
+        still = self._still(found, day)
         if message is None:
             return
         if still:
@@ -401,6 +455,10 @@ class Routines:
     def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
         return ZoneInfo(family.timezone if family else "UTC")
+
+
+def _check_key(routine: Routine, day: date) -> str:
+    return f"routine-r{routine.id}-{day.isoformat()}"
 
 
 def _bullets(items: list[Item]) -> str:
@@ -591,5 +649,7 @@ async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     item = routines.find_item(ctx.member, str(args["title"]))
     if item is None:
         raise ToolFailed(f"No item like {args['title']} on their routines.")
-    await routines.tick_now(item, routines.today())
+    today = routines.today()
+    await routines.tick_now(item, today)
+    await routines.show_tick(item, today)
     return f"Ticked {item.title} for today."
