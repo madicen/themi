@@ -63,6 +63,10 @@ STOPWORDS = {"the", "a", "an", "my", "our", "to", "with", "for", "at", "on", "an
 # A meal with no time is at its usual one, not all day (bug #35); the card reads it back.
 MEALS = {"breakfast": "08:00", "brunch": "10:30", "lunch": "12:00", "dinner": "18:00",
          "supper": "18:00"}  # fmt: skip
+# Time asked for to do something: with open tasks named, it's a block for them (K5, #131).
+MAKE_TIME = re.compile(
+    r"\b(?:block|time for|set aside|(?:make|find)(?: me| us)?(?: some| a little)? time)\b"
+)
 MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
 REPLACED_TEXT = "Replaced by the newer card."
 MOVED_SINCE_TEXT = "Not needed now: that event has been changed since."
@@ -682,6 +686,22 @@ def _events(ctx: ToolContext) -> Events:
     return events
 
 
+def _not_for_tasks(ctx: ToolContext) -> None:
+    """Time made for open tasks of theirs is a block, so the tasks wait for it; a plain
+    event left them on today's list (bug #131)."""
+    board = ctx.services.taskboard
+    said = name_key(ctx.request_text)
+    if board is None or not MAKE_TIME.search(said):
+        return
+    named = [t for t in board.open_for(ctx.member) if words_in_common(said, t.title) >= 2]
+    if named:
+        listed = "; ".join(f"{t.id}: {t.title}" for t in named)
+        raise ToolFailed(
+            f"They asked for time for their tasks ({listed}). Use block_time_for_task with "
+            f"task_ids {[t.id for t in named]}, so the tasks wait for that time."
+        )
+
+
 @staged_tool(
     "add_calendar_event",
     "Put an event on someone's calendar: their own ('mine') or the family calendar on the "
@@ -706,6 +726,7 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         raise ToolFailed("An event needs a title.")
     if args["calendar"] == "mine":
         events.own_account(ctx.member)  # fails early, with what to do, if there's none
+        _not_for_tasks(ctx)
     start, end = str(args["start"]), str(args["end"])
     meal = MEAL.search(name_key(title))
     if meal and not start.strip():

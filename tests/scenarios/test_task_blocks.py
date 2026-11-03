@@ -79,7 +79,7 @@ async def block_2_to_3(scenario: Scenario, task: Task) -> None:
         scenario,
         "Block 2 to 3 today for the bathroom",
         "block_time_for_task",
-        {"task_id": task.id, "date": "2026-10-21", "start": "14:00", "end": "15:00"},
+        {"task_ids": [task.id], "date": "2026-10-21", "start": "14:00", "end": "15:00"},
     )
 
 
@@ -175,7 +175,7 @@ async def test_mentioned_but_not_asked_its_a_card(scenario: Scenario, linked: Fa
         scenario,
         "I might do the bathroom after lunch",
         "block_time_for_task",
-        {"task_id": task.id, "date": "2026-10-21", "start": "13:00", "end": "14:00"},
+        {"task_ids": [task.id], "date": "2026-10-21", "start": "13:00", "end": "14:00"},
     )
     assert replies[0] == (
         "Time for Clean the bathroom: Wed 21 Oct, 1-2 pm, on your calendar\nGo ahead, or not now?"
@@ -189,7 +189,7 @@ async def test_a_nudge_at_a_time_isnt_a_block(scenario: Scenario, linked: FakeGc
         scenario,
         "Can you prompt me to do the bathroom at 2pm?",
         "block_time_for_task",
-        {"task_id": task.id, "date": "2026-10-21", "start": "14:00", "end": ""},
+        {"task_ids": [task.id], "date": "2026-10-21", "start": "14:00", "end": ""},
     )
     result = scenario.primary.last_request.messages[-1].content[0]
     assert "snooze_task" in result.content  # type: ignore[union-attr]
@@ -206,9 +206,86 @@ async def test_a_card_for_a_time_thats_past_lapses(scenario: Scenario, linked: F
         scenario,
         "I might do the bathroom after lunch",
         "block_time_for_task",
-        {"task_id": task.id, "date": "2026-10-21", "start": "13:00", "end": "14:00"},
+        {"task_ids": [task.id], "date": "2026-10-21", "start": "13:00", "end": "14:00"},
     )
     await scenario.advance(hours=5)  # 14:00 has been and gone
     await scenario.run_periodic("approvals.expire")
     (status,) = [r["status"] for r in scenario.app.db.query("SELECT status FROM pending_actions")]
     assert status == "expired"
+
+
+async def two_boxes(scenario: Scenario) -> tuple[Task, Task]:
+    erin = scenario.member("Erin")
+    late = date(2026, 10, 15)  # both overdue, as on Tue 03 Nov
+    mimi = await board(scenario).create(
+        erin, "Move Mimi's box upstairs for Rosie", "physical", 2, late, assignee=erin, nudge=False
+    )
+    merlin = await board(scenario).create(
+        erin, "Split Merlin's cat box into two halves", "physical", 2, late, assignee=erin,
+        nudge=False,
+    )  # fmt: skip
+    return mimi, merlin
+
+
+# As sent from his phone, with curly apostrophes
+MAKE_TIME = (
+    "Make some time Saturday afternoon for moving Mimi\u2019s box and splitting Merlin\u2019s box"
+)
+
+
+async def test_time_made_for_two_tasks_holds_both(scenario: Scenario, linked: FakeGcal) -> None:
+    """F23c, bug #131: the time was on his calendar, but both tasks still showed for today."""
+    mimi, merlin = await two_boxes(scenario)
+    await say(
+        scenario,
+        MAKE_TIME,
+        "block_time_for_task",
+        {"task_ids": [mimi.id, merlin.id], "date": "2026-10-24", "start": "14:00", "end": "15:30"},
+    )
+    (event,) = linked.events(ERIN, ERIN)  # asked for in their words: made at once
+    assert event["summary"] == (
+        "Move Mimi's box upstairs for Rosie and Split Merlin's cat box into two halves"
+    )
+    erin = scenario.member("Erin")
+    assert board(scenario).held(mimi, erin) and board(scenario).held(merlin, erin)
+    summary = scenario.app.services.day_summary
+    assert summary is not None
+    assert summary.due(erin, WED) == []
+
+
+async def test_a_plain_event_for_named_tasks_is_sent_to_the_block(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    mimi, merlin = await two_boxes(scenario)
+    await say(
+        scenario,
+        MAKE_TIME,
+        "add_calendar_event",
+        {
+            "title": "Move Mimi's box and split Merlin's box", "date": "2026-10-24",
+            "start": "14:00", "end": "15:30", "location": "", "calendar": "mine",
+        },
+    )  # fmt: skip
+    result = scenario.primary.last_request.messages[-1].content[0]
+    assert result.is_error  # type: ignore[union-attr]
+    said = result.content  # type: ignore[union-attr]
+    assert "block_time_for_task" in said and f"[{mimi.id}, {merlin.id}]" in said
+    assert linked.events(ERIN, ERIN) == []
+
+
+async def test_time_for_something_thats_no_task_is_an_event(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await two_boxes(scenario)
+    await say(
+        scenario,
+        "Make some time Saturday for coffee with Sam",
+        "add_calendar_event",
+        {
+            "title": "Coffee with Sam", "date": "2026-10-24", "start": "14:00", "end": "15:00",
+            "location": "", "calendar": "mine",
+        },
+    )  # fmt: skip
+    result = scenario.primary.last_request.messages[-1].content[0]
+    assert not result.is_error  # type: ignore[union-attr]
+    assert "Coffee with Sam" in result.content  # type: ignore[union-attr]
