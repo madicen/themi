@@ -155,11 +155,16 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 | F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
-| F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
+| F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [x] 2026-11-02 |
 | F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
 | D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
+| F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [x] 2026-11-02 |
+| F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [x] 2026-11-02 |
+| F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
+| F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
+| F22e | Replies sized to the message, and asking before problem-solving | Feedback | [x] 2026-11-02 |
 
 ## Fixed technical choices
 
@@ -7251,7 +7256,7 @@ Notes (2026-11-01):
   still locked; see F21b.
 
 ### F21b · Feedback (2026-11-01): a rule card says what it really makes automatic, a rule Themi can't keep
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: 13, F16a, F21a
 Read first: "Trust tiers" (a shared category becomes automatic for everyone; only an admin
 locks that), "Rules". From Erin's bug #116 (2026-11-01, 5:23 am): her personal policy rule
@@ -7276,6 +7281,22 @@ repeats the card isn't sent.
 
 Data (Michael decides): once F21a is live, unlock rule 23 so list adds ask again except
 where they asked in their own words.
+
+Notes (2026-11-02):
+- A grant's summary and text come from its category (`Rulebook._grant_words`): "Automatic
+  for everyone: <label>" for a shared category, "Automatic: <label>" for a personal one (the
+  card already says "just for you"). The model's summary follows as "(the idea: ...)" unless
+  it's already in the label. The rule's text, which goes into every prompt, is "Themi may
+  <label>, without asking first, for everyone." `grant_automatic` (the website) is unchanged.
+- Migration 0095 relabels `list_add` "Add items to any of Themi's lists, the wall's
+  included". Rule 23's own summary isn't rewritten; unlocking it is still Michael's call.
+- `propose_rule` refuses a policy whose summary or text skips a yes (`SKIPS_YES`: "without
+  asking", "automatically", "directly add", "don't ask"...) with the two choices.
+  `test_rules.py`'s sample policy dropped its "without asking" for this.
+- The agent drops a reply that is only a card's summary sent this turn, with or without
+  "Go ahead, or not now?" (`_repeats_card`, compared on words alone). The card is the reply.
+- Data: unlock rule 23 once this is live; mark #116 reviewed.
+- Setup: restart `themi run`. Migration 0095 runs on start.
 
 ### F21c · Feedback (2026-11-01): "I ran this morning" marks the run done, and a refused "done" isn't said to be done
 Status: [x] 2026-11-02
@@ -7599,3 +7620,243 @@ Notes (2026-11-02):
   `./control.sh --install` and then `docker compose up -d` (DEPLOY.md section 9). Do this on
   the Pi and on the cloud server. That release also needs D3a's migration 0094, which runs
   on start.
+
+
+### F22a · Feedback (2026-11-02): asking for your partner ("what's on her plate?", "she's overwhelmed")
+Status: [x] 2026-11-02
+Depends on: K1, K2, O1a
+Read first: "Calendars" (a person's event details reach only their own conversations unless
+they share them with their partner), "Transparency" (neither partner sees the other's raw
+energy signals). From Michael's bug #126 (2026-11-02, 8:56 am, "you seem to think I'm
+asking about me when I'm trying to intercede on behalf of my wife"):
+- 8:55 "Erin is absolutely overwhelmed right now. She is at zero energy." The overwhelm
+  signal fired on Michael's message, so `focus_now` pared down Michael's own day (member 2),
+  and Themi said "I've pared things down for her."
+- 8:55 "What's on her plate that need to be done today?" `day_summary` was called with
+  `partner: true`, but the gate (`_about_both`) doesn't know "her", so Michael got his own
+  day. Even when it passes, `partner` only adds the partner's calendar events: the tasks are
+  always the asker's.
+- 8:56 "Not for me, for Erin" passed the gate (her name) and still sent Michael's day, word
+  for word, a third time.
+
+Build:
+- `day_summary`'s `partner` boolean becomes `whose`: `me`, `both` (as `partner: true` was)
+  or `partner`: the partner's day, headed with their name ("Erin, Mon 02 Nov:"), their tasks
+  due, and their events only if they share details with their partner (Erin doesn't). The
+  gate allows `both` / `partner` when the message names the partner or says
+  wife/husband/partner, she/her/he/him/his; otherwise `me`, as before.
+- Overwhelm said about the partner ("Erin is overwhelmed", "she can't cope", no I/me in it)
+  gets a different signal: it's about the partner, not them; don't pare their own day down;
+  offer to show the partner's day or take some of it on (`update_task` assign_to me for a
+  one-off). `focus_now` refuses on such a message with the same guidance, so nothing is
+  pared and nothing is claimed.
+- `log_energy_level` and `log_energy_note` refuse on a message about the partner with no
+  first person in it ("Erin is at zero energy"): it isn't the speaker's energy, and the
+  partner's can't be logged by someone else.
+
+Tests: each a failing test first. The 8:55-8:56 conversation: "what's on her plate" sends
+Erin's tasks, headed with her name, without her events while she keeps them to herself;
+"she's overwhelmed" doesn't run `focus_now` on Michael's list; "Erin is at zero energy"
+logs no energy for Michael.
+
+Notes (2026-11-02):
+- `themi.core.partner` decides who a message is about. `named` finds the other person by
+  name, or by "she", "my wife", "him"... when there's only one other person. `about_partner_at`
+  looks at the nearest subject before a phrase in its sentence, so "I'm worried she's
+  overwhelmed" is about her and "I'm overwhelmed with Erin's stuff" is about the speaker.
+  `about_partner` is the whole message: it names them and never says I or me. Curly
+  apostrophes count.
+- `day_summary` takes `whose` (me / both / partner) in place of `partner`. The partner's day
+  is headed "Erin, Mon 02 Nov:". Her events show only with `calendar_details` "partner";
+  otherwise the tool result tells the model only what's due is shown. `DaySummary.items` /
+  `text` take a `viewer`. The gate drops "wife/husband/partner" from `ABOUT_BOTH`, since
+  `named` now covers them.
+- `focus.signals` replaces the plain `SIGNAL` in the turn: overwhelm about the partner gets
+  `partner_signal(name)`. `focus_now` refuses on such a message, or on one wholly about the
+  partner, and says nothing was pared.
+- `log_energy_level` / `log_energy_note` return "Not recorded" on a message wholly about the
+  partner. The backstop (`_catch_energy`) skips a remark whose subject is the partner
+  (`Remark.at`).
+- Evals: `focus-about-the-partner`, `summary-her-plate`. Not run against Gemini here.
+- Not built: putting the partner's things on hold for them. That waits for F22d (who can
+  turn burnout mode on).
+- Data (Michael decides): Michael's day was pared down at 8:55 (`focus_now` sent the list
+  only; nothing was moved). Nothing to undo. Mark #126 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
+
+### F22b · Feedback (2026-11-02): "Too much today" gives fewer than the list it answers
+Status: [x] 2026-11-02
+Depends on: O1a, O1b
+Read first: "PDA shielding", O1a's notes. From Erin's bug #121 (2026-11-02, 8:01 am, "I told
+it the tasks were too much and it offered the exact same tasks again"): the 8:00 morning
+list had two overdue things. She tapped "Too much today" and got three: the same two and
+the 12 pm run, "The other one is kept". `pick` cuts at `focus_count` (3), so a day of three
+or fewer is never pared.
+
+Build:
+- "For now" is always fewer than what they were looking at: at most `focus_count`, and at
+  most one less than the day's (or the list's) count, never under one. Medicines still
+  stay.
+- Asked again the same day ("still too much", the button a second time): one thing, the
+  lightest; then, a third time, nothing: "Nothing for now. It's all kept." (no question).
+- The "Too much today" button answers the list it's on: things not on that list (the run,
+  not yet due) don't join it.
+
+Tests: each a failing test first. Two overdue things and a run at noon: the button gives
+one. A second "too much" gives one, a third gives none and asks nothing.
+
+Notes (2026-11-02):
+- `Focus.pick(member, among, times)`: the first time, their number but at most one less than
+  there are (never under one); the second, one, the lightest (effort first); a third or
+  later, none: "Nothing for now. It's all kept." with no buttons. Medicines stay every
+  time, so with a medicine due the second round is the medicine alone.
+- `times` is how many `focus` messages they've had since local midnight, plus this one
+  (`Focus.times`), so the button and "still too much" in words count alike. The Spread /
+  Leave buttons carry `list` and `times`, so they act on that message's own few.
+- The morning list's button carries the list's task ids; the answer picks only among them.
+  An older button without them answers the whole day, as before.
+- The agent no longer adds "Done." when the model says nothing after a tool whose message
+  was the answer (`ctx.answered`).
+- Data: mark #121 reviewed once this is live.
+- Setup: restart `themi run`. No migration.
+
+### F22c · Feedback (2026-11-02): "I ran yesterday" after F21c, checked
+Status: [x] 2026-11-02
+Depends on: F21c
+From Erin's bugs #120 (8:01 am, "it still hasn't figured out that I ran yesterday") and
+#127 (12:40 pm, "the running tracking seems to be broken"). At 12:38 pm she wrote "I ran
+yesterday" to the noon run check-in and Themi said "That didn't go through, so nothing has
+changed yet." Both reports came from 0.3.0, before F21c (0.3.1) was deployed, so this is
+likely #119 again.
+
+Build: a scenario with the check-in for task 8 ("Go for a run", due Mon 02 Nov, missed Sun
+01 Nov) answered "I ran yesterday": the run is marked done for Sunday's round, and the
+reply says so. Fix only what still fails. Also check the reply when every tool failed:
+"That didn't go through" should say what didn't (F21c's refusal names the task).
+
+Data (Michael decides): tick Sunday's run once this is live; mark #119, #120 and #127
+reviewed.
+
+Notes (2026-11-02):
+- Checked: with F21c, "I ran yesterday" after the routine's message (as at 12:38 pm) passes
+  the naming check ("ran" → "run") and the run is marked done. The "That didn't go through"
+  was #119's refusal again.
+- What still failed: it counted as done today, so the next round was worked out from Monday
+  ("never two days in a row" pushed it to Wed, not Tue). Now "yesterday" or "last night" in
+  their words passes `on` (yesterday) to `TaskBoard.complete`: the run's `done_at` is a day
+  earlier, on time is judged by that day, the next round counts from it, and the reply adds
+  "Counted for yesterday, Sun 01 Nov." before the next round. A one-off isn't changed.
+- Not changed: the reply when every tool failed. F21c's naming refusal already names the
+  task. Naming the task in the other refusals ("they said no", a question) was tried and
+  dropped: the next message then counted as naming it, so a "no" could become a done.
+- Scenario `test_i_ran_yesterday_counts_for_yesterday`.
+- Data: tick the run for Sun 01 Nov ("I ran yesterday" works only on the day after, so
+  from the website or the wall now); mark #119, #120 and #127 reviewed.
+- Setup: restart `themi run`. No migration.
+
+### F22d · Burnout mode: everything held, no demands, urgent things to the partner
+Status: [x] 2026-11-02
+Depends on: O1a, O1b, F22a, F22b
+Read first: "PDA shielding", "Task matching" (handing a task to the other partner), the
+trust tiers. From Erin's ideas #122 and #123 (2026-11-02), and #33 (burnout recovery mode).
+Today "Can you put me in burnout mode?" got made-up words with nothing behind them.
+
+Erin's spec, in short:
+- On: every task held indefinitely. Urgent or time-sensitive ones go to Michael. A subset
+  of self-care check-ins she chooses still come (eat, drink), each with a burnout version
+  she can word; some self-care check-ins exist only in burnout mode (extra water, grounding,
+  rest).
+- The first reply has zero demands: a brief "Burnout mode is on. Everything's handled. Go
+  rest." Varied phrasing, attuned to her, paced: never several steps in one message.
+- Asked for something to do: the single lowest-demand task there is.
+- Worried about what's held: validate the feeling, then reassure that it's tracked and being
+  handled, then (a later message) that resting is the most useful thing now, then, only if
+  she wants it, a grounding idea from what she's said worked before.
+- No end date: it stays on until she turns it off.
+
+Before building, ask (Erin): what counts as urgent enough to go to Michael; what Michael's
+message says (that she's in burnout mode, or just the task); whether Michael can turn it on
+for her (F22a's case) or only suggest it; and how it ends (her word, or Themi asking after
+some days). Probably split into a/b (the mode and the held tasks; the self-care check-ins
+and the conversation).
+
+Notes (2026-11-02):
+- Built in one go, not split. Erin's answers weren't in yet, so Michael chose "sensible
+  defaults" for now. Each one is a single place in the code to change:
+  - Urgent enough for Michael: her own task (not already on both lists), due today or
+    overdue, with a time or marked important (`Burnout._time_sensitive`). An hourly job
+    (`burnout.hand_over`) hands on the ones whose day comes later.
+  - Michael's message: the task's usual nudge, with one line saying why it's his
+    ("Erin's running on empty, so this one's come to you for now.", `HANDED_TEXT`), on every
+    nudge while it's handed on, never the words "burnout mode" or a score. Michael asked
+    for this the same day: knowing helps him get it done. "(Erin added this for you)" is
+    left off those nudges (`TaskBoard.handed_on`).
+  - Who turns it on: only her. Michael asking ("put Erin in burnout mode") is refused, and
+    the model is told to say so kindly and offer to take things on.
+  - How it ends: her word only ("I'm out of burnout mode", `/burnout off`). No end date and
+    no check after some days. Still-open handed-on tasks come back to her then.
+- `themi.core.burnout`: a `burnout` pause (new topic in `pauses.TOPICS`) with a ten-year
+  `until`, plus migration 0096 (`burnout`, `burnout_handoffs`). It holds task nudges, lists
+  and summaries, check-ins, routines, reviews, focus, approval and rule cards, the email
+  audit, laundry, vacuum, maintenance, takeout and Safeway. Still sent: replies, urgent
+  alerts, her own reminders, meal nudges, travel heads-ups, email alerts and praise.
+- The first reply is one of four short lines with no imperative in them (`STARTED_TEXTS`,
+  chosen at random): the PDA shield rewrote "Go rest." into "Up next: go rest.", so no
+  command. It's the whole reply (`ctx.replies`): the model's words aren't sent.
+- `burnout_task` gives the single lightest open dated task (least effort, then soonest),
+  never a medicine: "If you'd like one thing: X. Nothing at all is fine too."
+- While it's on, the turn's signal (`burnout.SIGNAL`) replaces the overwhelm one. It sets
+  the pacing: validate first and say it's handled; resting is the most useful thing only
+  in a later message; a grounding idea only if asked, one, from what they've said worked.
+  This is guidance to the model, not code: no test can hold the model to it.
+- Check-ins: `habits.burnout` is `held` (the default), `keep` or `only`, and
+  `habits.burnout_prompt` is her burnout wording. Kept and burnout-only check-ins go as kind
+  `selfcare`, which the pause doesn't hold, and ignoring them in burnout mode never retires
+  them. `set_burnout_check_in` (settings group) sets that. A new burnout-only check-in goes
+  through `habit_trial` for a yes, like any new check-in. A new everyday one isn't made
+  here.
+- Known gaps: her own medicine check-ins are held too (they share the `task` kind, which
+  the one-nudge-at-a-time gate and reactions depend on). Ask Erin whether they should keep
+  coming. `/pause` "resume everything" also ends the burnout pause, though the mode still
+  reads as on. There's no website page for it yet.
+- Eval `burnout-on` (start_burnout, not focus_now or start_break). Not run.
+- Data: mark #33, #122 and #123 reviewed once this is live and Erin has tried it.
+- Setup: restart `themi run`. Migration 0096 runs on start.
+
+### F22e · Replies sized to the message, and asking before problem-solving
+Status: [x] 2026-11-02
+Depends on: 08, F22d
+Read first: "PDA shielding" (the shield's rewrite), personal phrasing settings. From Erin's
+ideas #124 and #125 (2026-11-02):
+- Mirror the message: a short, blunt message gets a short, matter-of-fact confirmation; a few
+  sentences about how they feel get a few sentences of validation.
+- Two modes, listening and problem-solving: Themi asks before moving from listening to
+  problem-solving.
+
+Before building, ask (Erin): is a question like "want ideas, or just to vent?" the right
+way to ask; does it apply to Michael too, or per person (a setting, on by default like PDA
+shielding).
+
+Notes (2026-11-02):
+- Erin's answers weren't in yet, so these are defaults Michael chose for now: the question is
+  "Want ideas, or just to vent?" (the model may word it its own way), and listening first
+  is a per-person setting, `members.listen_first`, on by default (migration 0097), on My
+  settings: "When I share how I feel, listen first, and ask before suggesting fixes".
+- `themi.core.listening`. Size: a message of up to 8 words in one sentence gets "reply with
+  one short, matter-of-fact line"; three sentences or more get "about that length". After
+  a short message, a closing "Anything else...?", "Let me know if..." or "Happy to help..."
+  is cut from the reply (`trimmed`), unless that was the whole reply.
+- Listening: a feeling ("I'm so stressed", "I feel...", "I just needed to vent") with no
+  request in it (`ASKS`: "what should I do", "any ideas", "can you", "please", "add",
+  "remind"...) gets `LISTEN_SIGNAL`: validate, no advice or tools, ask once before ideas.
+  When that feeling message is more than one sentence, the overwhelm signal is left out and
+  `focus_now` refuses, so the model has to ask first. "I'm completely overwhelmed today" on
+  its own still gets a few things for now (O1a). The "Too much today" button is unchanged.
+- In burnout mode the size line still goes with burnout's own signal; the listening line
+  doesn't, since burnout's covers it.
+- What the model does with these lines can't be pinned by a test; the evals can check it
+  (`listen-before-fixing`, not run).
+- `test_whose_overwhelm` now runs with Michael's `listen_first` off: "Erin's out tonight.
+  I'm overwhelmed" is two sentences, so it would be listened to first.
+- Data: mark #124 and #125 reviewed once this is live.
+- Setup: restart `themi run`. Migration 0097 runs on start.

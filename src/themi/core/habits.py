@@ -10,6 +10,11 @@ Each member has a few ideas held in reserve. One is offered (through the
 An accepted habit sends one low-priority message a day, at a strong window.
 If it's ignored several days in a row it's retired without comment; a
 declined or lapsed offer is never made again.
+
+In burnout mode (F22d) a check-in is held with everything else, unless they keep it
+(`burnout` 'keep', in its burnout words if they gave some) or it's one of theirs that comes
+only then ('only': extra water, grounding, rest). Those still come, and ignoring them then
+never retires them.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ RETIRE_AFTER_IGNORED = 3
 CATEGORY = "habit_trial"
 # The daily message itself (not the offer) is labelled, as Erin asked in rules 7 and 8.
 CHECK_IN_TEXT = "Check-in: {prompt}"
+SELF_CARE_KIND = "selfcare"  # a check-in burnout mode keeps (F22d): not held by its pause
 EXECUTOR = "habits.activate"
 # Michael read the old "A small daily check-in to try: ..." as Erin's check-in sent to him:
 # each member has their own reserve, so the offer says it's theirs.
@@ -159,19 +165,24 @@ class HabitReserve:
         """Scheduler job: today's check-in for each active habit. Returns how many were queued."""
         today = self._today().isoformat()
         sent = 0
+        burnout = self.services.burnout
         for habit in self.db.query("SELECT * FROM habits WHERE status = 'active'"):
             if habit["last_sent_on"] == today:
                 continue
-            if habit["last_outbox_id"] is not None and not self._settle_last(habit):
+            member = self.store.get_member(habit["member_id"])
+            resting = burnout is not None and burnout.current(member) is not None
+            if habit["burnout"] == ("held" if resting else "only"):
+                continue  # held in burnout mode, or one that comes only then
+            if habit["last_outbox_id"] is not None and not self._settle_last(habit, resting):
                 continue
             if habit["status"] == "retired":
                 continue
-            member = self.store.get_member(habit["member_id"])
+            words = (resting and habit["burnout_prompt"]) or _check_in_words(habit, member)
             result = await self.services.outbox.send(
                 member,
-                CHECK_IN_TEXT.format(prompt=_check_in_words(habit, member)),
+                CHECK_IN_TEXT.format(prompt=words),
                 priority=Priority.LOW,
-                kind="habit",
+                kind=SELF_CARE_KIND if resting else "habit",
             )
             self.db.execute(
                 "UPDATE habits SET last_sent_on = ?, last_outbox_id = ?, check_ins = check_ins + 1 "
@@ -181,11 +192,14 @@ class HabitReserve:
             sent += 1
         return sent
 
-    def _settle_last(self, habit: dict[str, Any]) -> bool:
-        """Count how yesterday's check-in went. False if there's nothing new to send."""
+    def _settle_last(self, habit: dict[str, Any], resting: bool = False) -> bool:
+        """Count how yesterday's check-in went. False if there's nothing new to send. In
+        burnout mode (`resting`) an ignored one isn't held against it."""
         outcome = self.outcomes.outcome_of(habit["last_outbox_id"])
         if outcome is None:
             return False  # still waiting to go out, or still open: one at a time
+        if resting:
+            return True
         streak = habit["ignored_streak"] + 1 if outcome == "ignored" else 0
         if streak >= RETIRE_AFTER_IGNORED:
             self.db.execute(

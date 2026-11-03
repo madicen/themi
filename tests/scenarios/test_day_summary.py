@@ -81,13 +81,13 @@ async def erins_day(scenario: Scenario, fake: FakeGcal) -> None:
 
 async def test_what_is_on_today_on_request(scenario: Scenario, linked: FakeGcal) -> None:
     await erins_day(scenario, linked)
-    scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "me"})
     scenario.primary.queue_text("Here's your day.")
     replies = await scenario.say("Erin", "What's my day look like?")
     assert replies[0] == TODAY  # sent as it is (idea #19), in the order of the day
     assert '<data source="day summary">' in tool_result(scenario)
     assert "Don't repeat it" in tool_result(scenario)
-    scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-22", "partner": False})
+    scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-22", "whose": "me"})
     scenario.primary.queue_text("Tomorrow.")
     replies = await scenario.say("Erin", "And tomorrow?")
     assert replies[0] == "Thu 22 Oct:\n- 10-11 am: Tomorrow's thing"
@@ -108,7 +108,7 @@ async def test_what_happened_yesterday(scenario: Scenario, linked: FakeGcal) -> 
     await board(scenario).complete(vet.id, erin)
     clock.advance(datetime(2026, 10, 22, 15, 38, tzinfo=PACIFIC) - clock.now())
     await scenario.run_periodic("calendar.busy")  # read again: from now on, it had no Wednesday
-    scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-21", "partner": False})
+    scenario.primary.queue_tool_call("day_summary", {"date": "2026-10-21", "whose": "me"})
     scenario.primary.queue_text("That was yesterday.")
     replies = await scenario.say("Erin", "What happened yesterday?")
     assert replies[0] == (
@@ -126,14 +126,14 @@ async def test_the_summary_isnt_said_twice(scenario: Scenario, linked: FakeGcal)
     """Bug #89 ("why does this question result in two different day summary messages?"):
     the model wrote its own version of the day after the summary had gone."""
     await erins_day(scenario, linked)
-    scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "me"})
     scenario.primary.queue_text(
         "Today you have the dentist at 3 pm and a few tasks.\n\nYour tasks due today are "
         "calling the vet and returning the library books."
     )
     replies = await scenario.say("Erin", "What's my schedule for today?")
     assert replies == [TODAY]
-    scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": False})
+    scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "me"})
     scenario.primary.queue_text("A full day, but the afternoon is open.")
     replies = await scenario.say("Erin", "What's on today?")
     assert replies == [TODAY, "A full day, but the afternoon is open."]  # a short line stays
@@ -163,7 +163,7 @@ async def test_the_partners_events_only_when_they_share(
     await scenario.run_periodic("calendar.busy")
 
     async def ask() -> str:
-        scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": True})
+        scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "both"})
         scenario.primary.queue_text("Okay.")
         await scenario.say("Erin", "What are we doing today?")
         return tool_result(scenario)
@@ -255,7 +255,7 @@ async def test_whose_events_are_whose(
         )  # fmt: skip
 
     async def ask(said: str) -> str:
-        scenario.primary.queue_tool_call("day_summary", {"date": "", "partner": True})
+        scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "both"})
         scenario.primary.queue_text("Okay.")
         return (await scenario.say("Erin", said))[0]
 
@@ -267,3 +267,29 @@ async def test_whose_events_are_whose(
         "- all day: Take out Waste Bins (Madicen Family)\n"
         "- 4:30-5 pm: Tea Time! (Husband)"
     )
+
+
+async def test_whats_on_her_plate(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #126: Michael, for Erin: "What's on her plate that need to be done today?" got
+    Michael's own day, three times. It's her tasks, and her events only if she shares them."""
+    await erins_day(scenario, linked)
+
+    async def ask(said: str) -> str:
+        scenario.primary.queue_tool_call("day_summary", {"date": "", "whose": "partner"})
+        scenario.primary.queue_text("That's hers.")
+        return (await scenario.say("Husband", said))[0]
+
+    assert await ask("What\u2019s on her plate that need to be done today?") == (
+        "Erin, Wed 21 Oct:\n"
+        "- 2 pm: Go for a run (check-in, 1.3 miles this week)\n"
+        "- Return the library books (since Mon 19 Oct)\n"
+        "- Call the vet"
+    )
+    assert "keeps calendar details private" in tool_result(scenario)
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(erin, erin.id, calendar_details="partner")
+    assert (await ask("Not for me, for Erin")).startswith(
+        "Erin, Wed 21 Oct:\n- 10-11 am: Dentist (at Smile Dental)\n"
+    )
+    # Their own day when the message isn't about her, whatever the model sent.
+    assert await ask("What's on my plate?") == "Wed 21 Oct: nothing on the calendar, nothing due."

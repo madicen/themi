@@ -127,6 +127,8 @@ STEP_UP_AFTER = 6  # on-time runs in a row before offering to go more often
 DONE_TEXT = "Marked done: {title}. Thank you."
 SETTLE_WITHIN = timedelta(hours=36)  # sent nudges that stop asking once it's done elsewhere
 LAST_ROUND_TEXT = " That was the last one."
+YESTERDAY_TEXT = " Counted for yesterday, {day}."  # F22c: "I ran yesterday"
+DONE_YESTERDAY = re.compile(r"\byesterday\b|\blast night\b", re.IGNORECASE)
 MORNING_LIST_TEXT = "This morning:\n{items}\nTap any that are done; the rest can wait."
 MORNING_LIST_DONE = "This morning's list: all done."
 MORNING_LIST_WITHIN = timedelta(minutes=45)  # after quiet hours end: the morning list
@@ -280,6 +282,9 @@ class TaskBoard:
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = [self._clears_the_way]  # after _steps_for's steps
         self.own_nudges: list[OwnNudge] = []
+        # Tasks handed on for a while (F22d's burnout mode): their nudge says why, so
+        # "Erin added this for you" would be wrong.
+        self.handed_on: list[Callable[[Task], bool]] = []
         # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.wall_notes: list[Callable[[Task], str | None]] = []
@@ -575,7 +580,9 @@ class TaskBoard:
         details = "\n\n".join(d for d in parts if d)
         added_by = (
             self.store.get_member(task.created_by)
-            if task.created_by is not None and task.created_by != member.id
+            if task.created_by is not None
+            and task.created_by != member.id
+            and not any(handed(task) for handed in self.handed_on)
             else None
         )
         goes_out = self.outbox.send_time(
@@ -683,7 +690,8 @@ class TaskBoard:
             )
             for t in tasks[:MORNING_LIST_BUTTONS]
         ]
-        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus"}))  # O1a, Erin's idea #94
+        # O1a, Erin's idea #94; F22b: it answers this list (bug #121), not the whole day
+        buttons.append(Button(TOO_MUCH, "focus", {"action": "focus", "list": ids}))
         return MORNING_LIST_TEXT.format(items=lines), buttons
 
     async def _list_done(self, event: InboundEvent) -> None:
@@ -824,17 +832,19 @@ class TaskBoard:
         interactive: bool = False,
         tapped: int | None = None,
         wall: bool = False,
+        on: date | None = None,
     ) -> str:
         """Mark it done (a repeating one: this round). `tapped`: the message whose Done
         button did it, which the caller edits itself. `wall`: ticked on the wall by `by`
-        (the wall said who), who hears a warm word for it (F19b)."""
+        (the wall said who), who hears a warm word for it (F19b). `on`: an earlier day it
+        was done ("I ran yesterday"), which a repeating one's next round counts from."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
         self._end_own_snoozes(task.id)
         await self._settle_sent(task, tapped)
         if task.repeats and not task.hold_once:  # "next time" (T2) is done once
-            said = await self._complete_round(task, by, interactive)
+            said = await self._complete_round(task, by, interactive, on)
         else:
             self.db.execute(
                 "UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?",
@@ -1265,24 +1275,28 @@ class TaskBoard:
         assert task.times_per_week is not None
         return today + timedelta(days=max(1, int(7 / task.times_per_week + 0.5)))
 
-    async def _complete_round(self, task: Task, by: Member, interactive: bool) -> str:
+    async def _complete_round(
+        self, task: Task, by: Member, interactive: bool, on: date | None = None
+    ) -> str:
         missed = self._just_missed(task)
         if missed is not None:
             return self._fill_missed(task, by, missed)
         self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
         today = self._today()
+        day = min(on or today, today)
         end = self.round_end(task)
-        on_time = end is None or today <= end
-        now = to_utc_iso(clock.now())
+        on_time = end is None or day <= end
+        now = to_utc_iso(clock.now() - timedelta(days=(today - day).days))
+        earlier = YESTERDAY_TEXT.format(day=f"{day:%a %d %b}") if day < today else ""
         self.db.execute(
             "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
             "VALUES (?, ?, ?, ?, ?)",
             (task.id, by.id, now, task.due_on.isoformat() if task.due_on else None, int(on_time)),
         )
-        next_due = self._next_due_after_done(task, today)
+        next_due = self._next_due_after_done(task, day)
         if next_due is None:
             await self._finish_course(task, interactive)
-            return DONE_TEXT.format(title=task.title) + LAST_ROUND_TEXT
+            return DONE_TEXT.format(title=task.title) + earlier + LAST_ROUND_TEXT
         self.db.execute(  # the next round: back to its owner, nothing overdue or unanswered
             "UPDATE tasks SET status = 'open', due_on = ?, round_until = NULL, shared = either, "
             "snoozed_until = NULL, "
@@ -1294,8 +1308,10 @@ class TaskBoard:
         await self.prompt(fresh, not_before=self._round_starts(fresh))
         await self._changed(fresh, "rescheduled", interactive)
         await self._maybe_offer_step_up(fresh)
-        return DONE_TEXT.format(title=task.title) + NEXT_ROUND_TEXT.format(
-            when=next_due.strftime("%a %d %b")
+        return (
+            DONE_TEXT.format(title=task.title)
+            + earlier
+            + NEXT_ROUND_TEXT.format(when=next_due.strftime("%a %d %b"))
         )
 
     def _just_missed(self, task: Task) -> dict[str, Any] | None:
@@ -2146,7 +2162,9 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             reply=f"\"{task.title}\" is still open: I couldn't tell that's the one you meant. "
             "Is it done?",
         )
-    said = await _board(ctx).complete(task.id, ctx.member, interactive=True)
+    board = _board(ctx)
+    on = board._today() - timedelta(days=1) if DONE_YESTERDAY.search(text) else None
+    said = await board.complete(task.id, ctx.member, interactive=True, on=on)
     ctx.done.append(said)
     return (
         f'Done, and Themi tells them itself, word for word: "{said}" Don\'t say it again; '

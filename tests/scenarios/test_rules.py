@@ -12,7 +12,7 @@ from themi.core.rules import (
 )
 
 PROPOSAL = PROPOSAL_TEXT.format(summary="Archive store promos")
-RULE_TEXT = "Archive promotional emails from stores without asking."
+RULE_TEXT = "Archive promotional emails from stores."
 
 
 def queue_proposal(scenario: Scenario, kind: str = "policy", category: str = "") -> None:

@@ -55,6 +55,11 @@ DISCARDED_TEXT = "Set aside: {summary}."
 LAPSED_TEXT = "This idea lapsed: {summary}. Happy to pick it up again any time."
 STILL_DRAFT_REPLY = "It's still a draft. We can come back to it whenever."
 NOT_YOURS_REPLY = "That one is for the person it affects to lock in."
+# F21b: a grant's card says what it really covers, from its category; the model's words
+# follow as the idea it came from (bug #116: "add items starting with 'X list'" made every
+# list add automatic for everyone).
+GRANT_SUMMARY = "Automatic{whose}: {label}"
+GRANT_IDEA = "{summary} (the idea: {idea})"
 NEEDS_ADMIN = (
     "Making that automatic changes what Themi does for the household, so it takes an admin "
     "to lock in."
@@ -164,6 +169,10 @@ class Rulebook:
         if kind == "autonomy_grant":
             self._check_grant_possible(member, category)
             scope = self._grant_scope(category)
+            idea = summary
+            summary, text = self._grant_words(category, scope)
+            if idea.lower() not in summary.lower():
+                summary = GRANT_IDEA.format(summary=summary, idea=idea)
         else:
             category = None
         now = to_utc_iso(clock.now())
@@ -215,6 +224,17 @@ class Rulebook:
             )
         if cat.scope == "family" and not self.store.get_member(member.id).is_admin:
             raise RuleError(NEEDS_ADMIN)
+
+    def _grant_words(self, category: str | None, scope: RuleScope) -> tuple[str, str]:
+        """(summary, text) of a grant, from what its category covers and for whom."""
+        assert category is not None
+        cat = self.autonomy.category(category)
+        whose = "" if scope == "personal" else " for everyone"
+        label = cat.label[:1].lower() + cat.label[1:]
+        return (
+            GRANT_SUMMARY.format(whose=whose, label=cat.label),
+            f"Themi may {label}, without asking first{whose and ','}{whose}.",
+        )
 
     def _grant_scope(self, category: str | None) -> RuleScope:
         """A grant for someone's own actions is their personal rule (F16a)."""
@@ -432,6 +452,13 @@ URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail fr
 )
 REMINDER = re.compile(r"\bremind (?:me|us|him|her|them|\w+) (?:about|to|of|that)\b")
 # T2: "any time you assign Erin the kitchen, first send Michael a task to declutter it"
+# F21b (bug #116): a policy can't skip a yes; only a grant on a whole category can.
+SKIPS_YES = re.compile(
+    r"\bwithout (?:asking|a yes|approval|checking|confirm\w*)\b|\bautomatically\b"
+    r"|\bdirectly (?:add|archive|send|delete|book|order)\b|\b(?:no need|don't need) to ask\b"
+    r"|\bdon't ask\b|\bskip (?:the|a) (?:yes|card|approval)\b",
+    re.IGNORECASE,
+)
 CHORE = re.compile(r"\b(?:assign\w*|chores?|tasks?)\b")
 CHORE_ORDER = re.compile(
     r"\bfirst\b.*\bthen\b|\b(?:once|until|after)\b.*\b(?:done|finished|completed?)\b"
@@ -505,6 +532,13 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
             "set_task_schedule on the chore done first, with due_before_task the other chore's "
             "id and holds_back true (once true for 'next time'). create_task first if it "
             "doesn't exist yet; more_tools brings the schedules group if that tool isn't there."
+        )
+    if args["kind"] == "policy" and SKIPS_YES.search(f"{args['summary']} {args['text']}"):
+        raise ToolFailed(
+            "A policy rule can't skip a yes: what needs one is set by action category. The "
+            "choices: propose an autonomy_grant for the whole category (it then covers every "
+            "case of it, for everyone if it's a shared one, so say that), or tell them plainly "
+            "that Themi can't make only this case automatic."
         )
     if URGENT_MAIL.search(said):
         raise ToolFailed(

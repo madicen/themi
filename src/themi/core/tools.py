@@ -190,7 +190,7 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     "settings": (
         "pausing messages, breaks, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
-        r"plain|pushy|too many|limit|break\b|\brest\b|i'?m back",
+        r"plain|pushy|too many|limit|break\b|\brest\b|i'?m back|burnout|check-?ins?\b",
     ),
 }
 # P7a: plain examples of what calls for each group, for an embedding router (P7b) to
@@ -342,7 +342,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
-    **dict.fromkeys(("start_break", "end_break"), "settings"),
+    **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
         "spending",

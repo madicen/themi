@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from themi.core import partner
 from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, more_tools, tool
 
 # What the person must have said themselves before the model answers a card for them.
@@ -99,6 +100,16 @@ async def report_forgotten_context(ctx: ToolContext, args: dict[str, Any]) -> st
     return f"Diagnosis: {repair.diagnosis}. Tell them, in your own words: {repair.message}"
 
 
+def _someone_elses(ctx: ToolContext) -> str | None:
+    """Bug #126: "Erin is at zero energy", from Michael, is hers, and only she records it."""
+    members = ctx.services.store.list_members()
+    if not partner.about_partner(ctx.request_text, ctx.member, members):
+        return None
+    other = partner.named(ctx.request_text, ctx.member, members)
+    name = other.name if other is not None else "someone else"
+    return f"Not recorded: that's about {name}, not them. Never mention energy."
+
+
 @tool(
     "log_energy_note",
     "Record how a remark suggests this person's energy is doing, when they mention it "
@@ -115,6 +126,8 @@ async def report_forgotten_context(ctx: ToolContext, args: dict[str, Any]) -> st
     },
 )
 async def log_energy_note(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if (said_of := _someone_elses(ctx)) is not None:
+        return said_of
     if not ctx.services.energy.record(ctx.member, "text_note", float(args["effect"]), args["note"]):
         return "This person has turned off energy notes; nothing was recorded."
     return "Noted."
@@ -131,6 +144,8 @@ async def log_energy_note(ctx: ToolContext, args: dict[str, Any]) -> str:
     },
 )
 async def log_energy_level(ctx: ToolContext, args: dict[str, Any]) -> str:
+    if (said_of := _someone_elses(ctx)) is not None:
+        return said_of
     value = {"low": -1.0, "medium": 0.0, "high": 1.0}[args["level"]]
     if not ctx.services.energy.record(ctx.member, "day_level", value, args["note"]):
         return "This person has turned off energy notes; nothing was recorded."

@@ -35,7 +35,8 @@ from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import focus
+from themi.core import focus, listening, partner
+from themi.core.approvals import ASK_TEXT
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
@@ -97,6 +98,18 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     if waiting:
         return "\n".join(WAITING_TEXT.format(summary=summary) for summary in waiting)
     return reply
+
+
+# F21b (#115, 5:19 am): the reply was the approval card's own text again, under the card.
+CARD_WORDS = re.compile(r"[^\w]+")
+ASK_QUESTION = ASK_TEXT.partition("\n")[2]
+
+
+def _repeats_card(reply: str, waiting: list[str]) -> bool:
+    """Is the reply only the text of a card sent this turn (its summary, with or without
+    the card's question)?"""
+    said = CARD_WORDS.sub(" ", reply.lower().replace(ASK_QUESTION.lower(), "")).strip()
+    return bool(said) and any(said == CARD_WORDS.sub(" ", s.lower()).strip() for s in waiting)
 
 
 # Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
@@ -379,7 +392,8 @@ class Agent:
         if recorded:
             return
         remark = energy_remark(text)
-        if remark is not None:
+        members = self.services.store.list_members()
+        if remark is not None and not partner.about_partner_at(text, remark.at, member, members):
             self.services.energy.record(
                 member, remark.source, remark.value, f"said: {remark.words}"
             )
@@ -430,7 +444,7 @@ class Agent:
             timezone=timezone,
             calendars=services.calendar_context(member),
             lands=services.what_lands(member),
-            signals=[focus.SIGNAL] if focus.overwhelmed(text) else [],
+            signals=self._signals(member, text),
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
@@ -475,12 +489,19 @@ class Agent:
                     if ctx.replies and len(ctx.replies) == len(ctx.outcomes):
                         # The tools said it all (bug #118); a retry's repeat once (#119).
                         return "\n".join(dict.fromkeys(ctx.replies))
-                    reply = _unquoted(response.text) or ("Done." if used_tools else TANGLED_TEXT)
+                    reply = _unquoted(response.text)
+                    if ctx.answered and not reply:
+                        return _done_first(ctx.done, "")  # F22b: the tool's message said it
+                    reply = reply or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
                         return ""  # the tool's message was the answer (bug #89)
                     reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
-                    reply = _honest(reply, self._waiting_since(member, mark), ctx.outcomes)
+                    reply = listening.trimmed(reply, text)  # F22e: no "Anything else?"
+                    waiting = self._waiting_since(member, mark)
+                    if _repeats_card(reply, waiting):
+                        return _done_first(ctx.done, "")
+                    reply = _honest(reply, waiting, ctx.outcomes)
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break
@@ -501,6 +522,18 @@ class Agent:
         finally:
             timer.added(ctx.groups - offered)
         return _done_first(ctx.done, TANGLED_TEXT)
+
+    def _signals(self, member: Member, text: str) -> list[str]:
+        """What the message, or the mode they're in, asks of this turn: its size, and
+        listening first (F22e), or a few things for now when it's too much (O1a). In
+        burnout mode (F22d) its own line replaces both: focus_now would be a demand."""
+        found = listening.signals(text, member)
+        held = self.services.burnout.signals(member) if self.services.burnout else []
+        if held:
+            return held + [s for s in found if s != listening.LISTEN_SIGNAL]
+        if listening.holds_off_solving(text, member):
+            return found
+        return focus.signals(text, member, self.services.store.list_members()) + found
 
     def _history(self, member: Member, event: InboundEvent) -> list:
         recent = self.services.store.recent_messages(member.id, self.history + 3)

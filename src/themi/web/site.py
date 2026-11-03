@@ -301,6 +301,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 phrasing_notes=str(form.get("phrasing_notes", "")),
                 checkin_reviews=form.get("checkin_reviews") == "on",
                 done_praise=form.get("done_praise") == "on",
+                listen_first=form.get("listen_first") == "on",
                 day_budget=as_int(form.get("day_budget")),
                 focus_count=as_int(form.get("focus_count")),
                 chart_limit=as_int(form.get("chart_limit")),

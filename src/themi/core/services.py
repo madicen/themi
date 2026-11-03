@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from themi.connectors.thinq import ThinqWatcher
     from themi.core.appliances import Appliances
     from themi.core.breaks import Breaks
+    from themi.core.burnout import Burnout
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
@@ -169,6 +170,7 @@ class Services:
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
+    burnout: Burnout | None = None  # everything held, no demands (F22d)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)

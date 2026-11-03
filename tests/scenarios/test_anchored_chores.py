@@ -434,3 +434,31 @@ async def test_a_course_whose_last_round_passes_is_over(scenario: Scenario) -> N
     await scenario.advance(hours=24 * 3)  # the 23rd goes by undone
     await scenario.run_periodic("tasks.schedules")
     assert board(scenario).get(pill.id).status == "done"
+
+
+async def test_i_ran_yesterday_counts_for_yesterday(scenario: Scenario) -> None:
+    """Bugs #120 and #127 (2026-11-02, 12:38 pm): Sunday's run was missed in Themi, and at
+    the Monday noon check-in Erin wrote "I ran yesterday", after the morning routine's
+    message. The run is done for Sunday, so the next round is Tuesday, not two days in a
+    row from Monday."""
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await schedule(
+        scenario, run, "every Tuesday, Thursday and Saturday or Sunday at 12pm, never two "
+        "days in a row",
+    )  # fmt: skip
+    await scenario.advance(hours=27)  # Thu 22 Oct, 12:00
+    await board(scenario).complete(run.id, erin)
+    await scenario.advance(hours=24 * 4)  # Mon 26 Oct, 12:00; Sat and Sun went by
+    await scenario.app.services.outbox.send(
+        erin, "Morning routine, still open:\n- Walk dog\nDone already?", priority=Priority.REPLY
+    )
+    scenario.primary.queue_tool_call("complete_task", {"task_id": run.id})
+    scenario.primary.queue_text("Marked done: Go for a run.")
+    (reply,) = await scenario.say("Erin", "I ran yesterday")
+    assert reply.startswith("Marked done: Go for a run. ")
+    assert reply.endswith(" Counted for yesterday, Sun 25 Oct. Next round: Tue 27 Oct.")
+    (done,) = board(scenario).runs(run.id)[-1:]
+    assert done.done_at.astimezone(board(scenario)._tz()).date() == date(2026, 10, 25)
