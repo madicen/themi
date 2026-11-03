@@ -282,6 +282,9 @@ class TaskBoard:
         self.change_listeners: list[TaskListener] = []
         self.details: list[TaskDetails] = [self._clears_the_way]  # after _steps_for's steps
         self.own_nudges: list[OwnNudge] = []
+        # Tasks handed on for a while (F22d's burnout mode): their nudge says why, so
+        # "Erin added this for you" would be wrong.
+        self.handed_on: list[Callable[[Task], bool]] = []
         # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.wall_notes: list[Callable[[Task], str | None]] = []
@@ -577,7 +580,9 @@ class TaskBoard:
         details = "\n\n".join(d for d in parts if d)
         added_by = (
             self.store.get_member(task.created_by)
-            if task.created_by is not None and task.created_by != member.id
+            if task.created_by is not None
+            and task.created_by != member.id
+            and not any(handed(task) for handed in self.handed_on)
             else None
         )
         goes_out = self.outbox.send_time(

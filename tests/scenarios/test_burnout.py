@@ -11,7 +11,7 @@ import pytest
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import WED, board, task, tool_result, turn
 from themi.channels.outbox import Priority
-from themi.core.burnout import ENDED_TEXT, LIGHTEST_TEXT, SIGNAL, STARTED_TEXTS
+from themi.core.burnout import ENDED_TEXT, HANDED_TEXT, LIGHTEST_TEXT, SIGNAL, STARTED_TEXTS
 from themi.core.focus import SIGNAL as FOCUS_SIGNAL
 from themi.core.habits import HabitReserve
 
@@ -55,8 +55,9 @@ async def test_time_sensitive_things_go_to_her_partner_and_come_back(
     assert board(scenario).get(bill.id).assignee == husband.id
     assert board(scenario).get(mail.id).assignee == scenario.member("Erin").id
     await scenario.advance(hours=5, minutes=1)  # 14:01
-    assert any("Call the vet" in t for t in scenario.inbox("Husband"))
-    assert not any("burnout" in t.lower() for t in scenario.inbox("Husband"))  # just the task
+    (nudge,) = [t for t in scenario.inbox("Husband") if "Call the vet" in t]
+    assert HANDED_TEXT.format(name="Erin") in nudge  # why it's his (Michael, 2026-11-02)
+    assert "burnout" not in nudge.lower() and "added this for you" not in nudge
 
     await board(scenario).complete(bill.id, husband)
     scenario.primary.queue_tool_call("end_burnout", {})

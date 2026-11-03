@@ -6,8 +6,9 @@ ask for still comes, and so do replies, urgent alerts, their own reminders, meal
 and travel heads-ups. The first reply is a few words with nothing in it to do.
 
 Time-sensitive things don't wait: a task of theirs due today or overdue that has a time,
-or is marked important, goes to their partner for now (the partner hears only the task's
-own nudge). An hourly check hands on the ones that become due later. When it ends, what
+or is marked important, goes to their partner for now. Its nudges say why (Michael,
+2026-11-02: knowing she has nothing in the tank helps him get it done), in words, never
+energy scores. An hourly check hands on the ones that become due later. When it ends, what
 was handed on and is still open comes back to them.
 
 Check-ins (F22d's second half): each one is held in burnout mode unless they keep it, in
@@ -63,6 +64,7 @@ ENDED_TEXT = "Burnout mode is off. Things will come back gently, a few at a time
 NOT_ON_TEXT = "Burnout mode isn't on."
 LIGHTEST_TEXT = "If you'd like one thing: {title}. Nothing at all is fine too."
 NOTHING_TEXT = "There's nothing that needs you. Resting is the thing."
+HANDED_TEXT = "{name}'s running on empty, so this one's come to you for now."
 KEEP_TEXT = {
     "keep": "In burnout mode, {idea} still comes{words}.",
     "only": "{idea} now comes only in burnout mode{words}.",
@@ -90,6 +92,8 @@ class Burnout:
     def install(self) -> None:
         s = self.services
         s.burnout = self
+        self.board.details.append(self._why_yours)
+        self.board.handed_on.append(lambda task: self._why_yours(task) is not None)
         s.add_command("/burnout", self.on_command, "Burnout mode: /burnout, /burnout off")
         for t in (start_burnout, end_burnout, burnout_task, set_burnout_check_in):
             s.tools.register(t)
@@ -158,6 +162,17 @@ class Burnout:
                 await self.board.reassign(task.id, other)
                 handed += 1
         return handed
+
+    def _why_yours(self, task: Task) -> str | None:
+        """On a handed-on task's nudge: whose it was, and why it's with them now."""
+        row = self.db.one(
+            "SELECT h.from_member FROM burnout_handoffs h JOIN burnout b ON b.id = h.burnout_id "
+            "WHERE h.task_id = ? AND h.to_member = ? AND b.ended_at IS NULL",
+            (task.id, task.assignee),
+        )
+        if row is None:
+            return None
+        return HANDED_TEXT.format(name=self.services.store.get_member(row["from_member"]).name)
 
     def _time_sensitive(self, task: Task) -> bool:
         """Due today or overdue, with a time or marked important. Never shared (the

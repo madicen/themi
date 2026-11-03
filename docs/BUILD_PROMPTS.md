@@ -7786,7 +7786,11 @@ Notes (2026-11-02):
   - Urgent enough for Michael: her own task (not already on both lists), due today or
     overdue, with a time or marked important (`Burnout._time_sensitive`). An hourly job
     (`burnout.hand_over`) hands on the ones whose day comes later.
-  - Michael's message: only the task's usual nudge, nothing about burnout mode.
+  - Michael's message: the task's usual nudge, with one line saying why it's his
+    ("Erin's running on empty, so this one's come to you for now.", `HANDED_TEXT`), on every
+    nudge while it's handed on, never the words "burnout mode" or a score. Michael asked
+    for this the same day: knowing helps him get it done. "(Erin added this for you)" is
+    left off those nudges (`TaskBoard.handed_on`).
   - Who turns it on: only her. Michael asking ("put Erin in burnout mode") is refused, and
     the model is told to say so kindly and offer to take things on.
   - How it ends: her word only ("I'm out of burnout mode", `/burnout off`). No end date and
