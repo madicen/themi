@@ -151,8 +151,10 @@ async def test_themis_check_ins_are_routines_on_the_wall(
 # ----- bug #22: items added to a routine ----------------------------------------------------
 
 
-async def add(scenario: Scenario, said: str, args: dict[str, str]) -> list[str]:
-    scenario.primary.queue_tool_call("add_to_wall_routine", {"position": "end", **args})
+async def add(scenario: Scenario, said: str, args: dict[str, str | int]) -> list[str]:
+    scenario.primary.queue_tool_call(
+        "add_to_wall_routine", {"position": "end", "task_id": 0, **args}
+    )
     scenario.primary.queue_text("Done.")
     return await scenario.say("Erin", said)
 
@@ -178,6 +180,72 @@ async def test_an_item_for_tonight_goes_on_the_evening_routine_and_off_tomorrow(
     assert not any(
         r["routineTitle"] == "Replace vacuum water" for r in fake_cozyla.routines.values()
     )
+
+
+MOVE_IT = (
+    "I'll handle the vacuum water task that Erin has. Can you move it to my evening "
+    "routine for today?"
+)
+VACUUM_ITEM = {"position": "end", "title": "Vacuum water", "part": "Evening", "repeat": "today"}
+
+
+async def test_a_task_moved_to_a_routine_is_the_routine_item_and_no_longer_a_task(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #133: Michael took on Erin's vacuum chore for his evening routine, and a new
+    routine item was made beside it: Erin's task stayed, and neither knew of the other.
+    Moved, it's a just-for-today item on his routine, and the task is closed."""
+    erin = scenario.member("Erin")
+    task = await board(scenario).create(
+        erin, "Refill the vacuum's clean water", "physical", 1, assignee=erin
+    )
+    await at(scenario, WED, 9, 30)
+    scenario.primary.queue_tool_call("add_to_wall_routine", {**VACUUM_ITEM, "task_id": 0})
+    scenario.primary.queue_tool_call("add_to_wall_routine", {**VACUUM_ITEM, "task_id": task.id})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", MOVE_IT)
+
+    refused = str(scenario.primary.requests[-2].messages[-1])
+    assert f"task {task.id}" in refused and "Erin's" in refused
+    routine = fake_cozyla.routine_named("Vacuum water")
+    assert (routine["memberUid"], routine["routineType"]) == ("m-husband", "Evening")
+    assert board(scenario).get(task.id).status == "cancelled"
+    assert board(scenario).open_for(erin) == []
+    await at(scenario, WED + timedelta(days=1), 9)
+    assert not any(r["routineTitle"] == "Vacuum water" for r in fake_cozyla.routines.values())
+
+
+async def test_a_new_routine_item_like_an_open_task_leaves_the_task_alone(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    erin = scenario.member("Erin")
+    task = await board(scenario).create(
+        erin, "Refill the vacuum's clean water", "physical", 1, assignee=erin
+    )
+    await at(scenario, WED, 9, 30)
+    await add(
+        scenario,
+        "Add vacuum water to my evening routine tonight",
+        {"title": "Vacuum water", "part": "Evening", "repeat": "today", "task_id": 0},
+    )
+    assert fake_cozyla.routine_named("Vacuum water")
+    assert board(scenario).get(task.id).status == "open"
+
+
+async def test_a_repeating_chore_isnt_moved_to_a_routine(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    erin = scenario.member("Erin")
+    task = await board(scenario).create(erin, "Water the plants", "physical", 1, assignee=erin)
+    await board(scenario).set_schedule(task.id, erin, repeat=parse("every Tuesday", WED))
+    await at(scenario, WED, 9, 30)
+    await add(
+        scenario,
+        "Move the water the plants task to my morning routine",
+        {"title": "Water the plants", "part": "Morning", "repeat": "", "task_id": task.id},
+    )
+    assert "repeating chore" in last_result(scenario)
+    assert board(scenario).get(task.id).status == "open"
 
 
 async def test_a_repeating_item_stays(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
@@ -235,7 +303,13 @@ async def test_items_go_where_they_were_asked_and_stay(
         [
             (
                 "add_to_wall_routine",
-                {"title": "Take wegovy", "part": "Morning", "repeat": "", "position": "start"},
+                {
+                    "title": "Take wegovy",
+                    "part": "Morning",
+                    "repeat": "",
+                    "position": "start",
+                    "task_id": 0,
+                },
                 None,
             ),
             (
@@ -245,6 +319,7 @@ async def test_items_go_where_they_were_asked_and_stay(
                     "part": "Morning",
                     "repeat": "",
                     "position": "after: take wegovy",
+                    "task_id": 0,
                 },
                 None,
             ),

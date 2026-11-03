@@ -34,7 +34,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import Member
+from themi.accounts import Member, NotFound
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
@@ -48,7 +48,7 @@ from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.repeat import RepeatError, parse, read_back
 from themi.core.services import Services
-from themi.core.tasks import TaskBoard
+from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 
@@ -63,6 +63,10 @@ JUST_TODAY = re.compile(r"\b(?:today|tonight|just for|this (?:morning|afternoon|
 EVERY_DAY = re.compile(  # bug #47: these keep an item, whatever the model sent
     r"\b(?:until further notice|from now on|every (?:day|morning|afternoon|evening|night)|"
     r"always|for good|permanently)\b"
+)
+# Bug #133: "move it to my evening routine" for a task someone has made a new item beside it.
+MOVED = re.compile(
+    r"\b(?:move|moving|take (?:it |that )?over|taking (?:it )?over|instead of|task)\b"
 )
 CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
 ALL_DONE_TEXT = "{part} routine: all done."
@@ -152,6 +156,7 @@ class CozylaRoutines:
         made = await self.client.create_routine(member, title, part, schedule, order)
         if order is not None:
             where = await self._placed(made, title, part, schedule, today, order, where)
+        moved = await self._moved(payload, ctx)
         if once:
             self.db.execute(
                 "INSERT OR REPLACE INTO wall_routine_once (routine_id, member_id, day) "
@@ -159,11 +164,26 @@ class CozylaRoutines:
                 (made, ctx.member.id, today.isoformat()),
             )
             return (
-                f"Added {title} to the {part.lower()} routine on the wall{where}, just for today."
+                f"Added {title} to the {part.lower()} routine on the wall{where}, just for "
+                f"today.{moved}"
             )
         return (
-            f"Added {title} to the {part.lower()} routine on the wall{where}: {read_back(repeat)}."
+            f"Added {title} to the {part.lower()} routine on the wall{where}: "
+            f"{read_back(repeat)}.{moved}"
         )
+
+    async def _moved(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        """The task the item takes the place of is closed: it's only the routine item now,
+        ticked on the wall like any other (bug #133)."""
+        task_id = int(payload.get("task_id") or 0)
+        if not task_id:
+            return ""
+        task = self.board.get(task_id)
+        if task.status not in ("open", "snoozed"):
+            return ""
+        whose = self.board.whose_list(task)
+        await self.board.cancel(task_id, ctx.member)
+        return f" Task {task_id} ({task.title}) is closed and off {whose}: it's this item now."
 
     async def _order(self, member: str, part: str, position: str) -> tuple[float | None, str]:
         """The displayOrder that puts it there (bug #38), and the words for where; None for
@@ -525,12 +545,15 @@ class CozylaRoutines:
     "today or tonight, a schedule phrase ('every Tue and Thu'), or '' for every day. "
     "position: 'end', 'start', or 'after: <item>'; several at the start, in order: the "
     "first 'start', each next 'after: <the one before>'. Not a calendar event, a chore or "
-    "a list.",
+    "a list. task_id: a one-off task moved into the routine ('I'll take Erin's vacuum task, "
+    "put it in my evening routine'): it becomes this item on the asker's routine, and the "
+    "task is closed. 0 for a new item.",
     {
         "title": {"type": "string"},
         "part": {"type": "string", "enum": list(PARTS)},
         "repeat": {"type": "string"},
         "position": {"type": "string"},
+        "task_id": {"type": "integer"},
     },
 )
 async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
@@ -557,11 +580,15 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     position = " ".join(str(args.get("position") or "end").split()).lower() or "end"
     if position not in ("start", "end") and not position.startswith("after:"):
         raise ToolFailed("position: 'start', 'end' or 'after: <item>'.")
+    moved = _moved_task(ctx, int(args.get("task_id") or 0), title, said)
     words = [w for w in name_key(title).split() if len(w) > 2]
-    asked = "routine" in said and all(w in said for w in words)
+    asked = "routine" in said and (
+        all(w in said for w in words) or (moved is not None and bool(MOVED.search(said)))
+    )
+    instead = f", in place of task {moved.id} ({moved.title})" if moved else ""
     proposal = Proposal(
         ADD_CATEGORY,
-        f"{title} for the {str(args['part']).lower()} routine{when}",
+        f"{title} for the {str(args['part']).lower()} routine{when}{instead}",
         ADD_EXECUTOR,
         {
             "title": title,
@@ -569,9 +596,48 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             "repeat": phrase,
             "once": once,
             "position": position,
+            "task_id": moved.id if moved else 0,
         },
     )
     return replace(proposal, requested=asked)
+
+
+def _moved_task(ctx: ToolContext, task_id: int, title: str, said: str) -> Task | None:
+    """The task a routine item takes the place of: the one asked for by id. Said as moving a
+    task with no id, an open task like it is named back, so the model can pass it rather
+    than make a second item beside it (bug #133)."""
+    board = ctx.services.taskboard
+    if board is None:
+        return None
+    if task_id:
+        try:
+            task = board.get(task_id)
+        except NotFound as exc:
+            raise ToolFailed("There's no task with that number.") from exc
+        if task.status not in ("open", "snoozed"):
+            raise ToolFailed(f"Task {task_id} is already done or closed.")
+        if task.repeats:
+            raise ToolFailed(
+                f"Task {task_id} is a repeating chore: its schedule is its own "
+                "(set_task_schedule), so it isn't moved into a routine."
+            )
+        return task
+    if not MOVED.search(said):
+        return None
+    like = {
+        t.id: t
+        for member in ctx.services.store.list_members()
+        for t in board.open_for(member)
+        if not t.repeats and title_matches(title, t.title)
+    }
+    if not like:
+        return None
+    named = "; ".join(f"task {t.id} on {board.whose_list(t)}: {t.title}" for t in like.values())
+    raise ToolFailed(
+        f"Nothing added yet. An open task is like it ({named}). If that's the task they're "
+        "moving, call again with its task_id: it becomes this routine item and the task "
+        "closes. If not, ask them which they mean."
+    )
 
 
 @tool(
