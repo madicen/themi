@@ -168,7 +168,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [x] 2026-11-03 |
 | F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [x] 2026-11-03 |
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
-| F23d | Vacuum chores: whose it is when asked, either of you overnight | Feedback | [~] |
+| F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -7980,8 +7980,8 @@ Notes (2026-11-03):
   again). Mark #131 reviewed, and #128 with #119, #120 and #127.
 - Setup: restart `themi run`. No migration.
 
-### F23d · Vacuum chores: whose it is when asked, either of you overnight
-Status: [~]
+### F23d · Vacuum chores: whose it is when asked, either of you overnight, on the wall
+Status: [x] 2026-11-03
 Depends on: V1, F20b
 Read first: "Devices" (V1). Asked 2026-11-03 (Michael): "Why hasn't a task been created for
 the roborock vacuum even though it doesn't have clean water?" One had been: at 4:47 am the
@@ -7996,8 +7996,30 @@ Build:
 - A problem that starts while the person picked is in quiet hours goes to either of you:
   on both lists, a nudge to each as their quiet hours end, and whoever does it closes it.
   In the day, the person with the most room still gets it.
+- Added while building (Michael): "I would also like to see vacuum chores on the wall".
 
 Tests: each a failing test first. At 4:45 am clean water runs out: the chore is for either
 of you, Michael is asked at 7, Erin at 8, and once he taps Done she isn't asked. In the day
 it goes to one person as before. Asked about the vacuum, the reply has the chore and whose
 it is.
+
+Notes (2026-11-03):
+- `Vacuum.chores(device_id)` gives a line per open chore ("Open chore: Refill the vacuum's
+  clean water, Erin's, asked at 8 am."), and `appliance_status` adds them after the
+  robot's own state.
+- Either of you: when `in_quiet_hours` holds for the person matching picked, at the moment
+  the problem started, the task goes through `TaskBoard.make_either`, which nudges both.
+  The vacuum's own nudge now takes back only that person's waiting nudge when the task is
+  shared (before, the second nudge cancelled the first). `_offer_home` still goes to
+  the task's assignee, not whoever tapped Done.
+- On the wall: vacuum chores are still made `off_wall` (V1), and a new job, `vacuum.wall`
+  (every minute), puts a chore on the wall once it has lasted as long as its nudge waits
+  (5 minutes, or 30 for "not back on its dock"), with `TaskBoard.put_on_wall`. A worn part
+  goes on after 5 minutes too. One the robot sorts out before then never shows. Ticked on
+  the wall, it's done as a tap on Done is, and the robot clearing it ticks it there.
+  For either of you, it's the family member's on the wall.
+- Side effect: with `off_wall` cleared, the chore also goes on that person's "Themi" list
+  in Google Tasks (GT1b), like any one-off task.
+- Data: task 71 (Refill the vacuum's clean water, Erin's) goes on the wall within a minute
+  of the restart, since it's still open.
+- Setup: restart `themi run`. No migration.
