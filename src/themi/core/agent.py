@@ -444,7 +444,7 @@ class Agent:
             timezone=timezone,
             calendars=services.calendar_context(member),
             lands=services.what_lands(member),
-            signals=focus.signals(text, member, services.store.list_members()),
+            signals=self._signals(member, text),
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
@@ -521,6 +521,12 @@ class Agent:
         finally:
             timer.added(ctx.groups - offered)
         return _done_first(ctx.done, TANGLED_TEXT)
+
+    def _signals(self, member: Member, text: str) -> list[str]:
+        """What the message, or the mode they're in, asks of this turn. In burnout mode
+        (F22d) that's the only line: focus_now's offer would be a demand."""
+        held = self.services.burnout.signals(member) if self.services.burnout else []
+        return held or focus.signals(text, member, self.services.store.list_members())
 
     def _history(self, member: Member, event: InboundEvent) -> list:
         recent = self.services.store.recent_messages(member.id, self.history + 3)

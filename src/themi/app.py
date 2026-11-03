@@ -39,6 +39,7 @@ from themi.core.agent import Agent
 from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
 from themi.core.breaks import Breaks
+from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
@@ -200,6 +201,8 @@ def build_app(
     day_summary = DaySummary(services, tasks)
     day_summary.install()
     Focus(services, tasks, day_summary).install()
+    burnout = Burnout(services, tasks)
+    burnout.install()
     reviews = CheckinReviews(services)
     reviews.install()
     Meals(services, pantry).install()
@@ -240,6 +243,7 @@ def build_app(
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
+        PeriodicTask("burnout.hand_over", timedelta(hours=1), burnout.hand_over),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),

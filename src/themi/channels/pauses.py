@@ -30,6 +30,27 @@ TOPICS: dict[str, frozenset[str]] = {
     "approvals": frozenset({"approval", "rule"}),
     "notes": frozenset({"relay"}),  # notes passed on from your partner
     "break": frozenset({"task", "task_summary", "habit", "routine", "review"}),  # B1
+    # F22d: whatever asks something of them; replies, alerts, their own reminders, meals
+    # and travel heads-ups still come.
+    "burnout": frozenset(
+        {
+            "task",
+            "task_summary",
+            "habit",
+            "routine",
+            "review",
+            "focus",
+            "summary",
+            "approval",
+            "rule",
+            "email_audit",
+            "laundry",
+            "vacuum",
+            "maintenance",
+            "takeout",
+            "safeway",
+        }
+    ),
     EVERYTHING: frozenset(),  # every proactive message
 }
 TOPIC_WORDS = {
@@ -42,6 +63,7 @@ TOPIC_WORDS = {
     "approvals": "approval requests",
     "notes": "notes from your partner",
     "break": "task nudges and check-ins, for a break",
+    "burnout": "everything that asks something of you, for burnout mode",
     EVERYTHING: "everything that can wait",
 }
 ALIASES = {
