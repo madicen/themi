@@ -192,6 +192,16 @@ def title_matches(words: str, title: str) -> bool:
     return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
 
 
+def near_twin(words: str, title: str) -> bool:
+    """Most likely the same job under other words ("Refill cat feeders" and "Refill auto
+    feeders", bug #132): two or more words in common, and every word of the longer title
+    but one."""
+    wanted = [w for w in name_key(words).split() if len(w) > 2 and w not in FILLER]
+    have = [w for w in name_key(title).split() if len(w) > 2 and w not in FILLER]
+    shared = sum(any(_same_word(w, h) for h in have) for w in wanted)
+    return shared >= 2 and shared >= max(len(wanted), len(have)) - 1
+
+
 def words_in_common(said: str, title: str) -> int:
     """How many of the title's words (bar fillers and scraps like "s") they used, give or
     take endings ("contacted" and "contact")."""
