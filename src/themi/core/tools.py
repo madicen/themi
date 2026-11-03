@@ -552,7 +552,7 @@ class ToolRegistry:
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
         task_id = call.arguments.get("task_id")
-        if outcome == "ok" and isinstance(task_id, int):
+        if outcome == "ok" and isinstance(task_id, int) and task_id > 0:  # 0 is none (F23e)
             ctx.tasks.append(task_id)
         return result
 
