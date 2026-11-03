@@ -170,6 +170,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
 | F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
 | F23e | Feedback: a task moved into a routine becomes the routine item | Feedback | [x] 2026-11-03 |
+| F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [ ] |
+| F24b | Idea: time blocked for a task moves its due date | Feedback | [ ] |
+| F24c | Feedback: an email is read as its reader sees it | Feedback | [ ] |
+| D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [ ] |
 
 ## Fixed technical choices
 
@@ -8073,3 +8077,101 @@ Notes (2026-11-03):
   just-for-today "Vacuum water" (gone tomorrow). Cancel task 71 if he did it; mark #133
   reviewed once this is live.
 - Setup: restart `themi run`. No migration.
+
+### F24a · Feedback (2026-11-03): asked for again, the open task is raised, not made twice
+Status: [ ]
+Depends on: T1, F18f, F23e
+Read first: "Shadow Calendar" → Task matching; T1 (urgent is a due date that's soon). From
+Erin's bug #132 (2026-11-03, 10:09 am, "I believe Michael has a cat feeder refill task
+already. The existing task should have been escalated to urgent"): she said "Urgent for
+Michael: cat feeders need to be refilled", and `create_task` made task 72 "Refill cat
+feeders" for Michael, due today, importance high. Michael already had task 23 "Refill auto
+feeders" (weekly on Thursdays, due Thu 5 Nov) and task 22 "Refill pet feeders" (monthly on
+the 19th). `create_task`'s twin check (`title_matches`, bug #56) wants every word of the new
+title in the old one, and "cat" isn't in either. As F23e noted, Erin's context lists only
+her own tasks, so the model couldn't have seen task 23.
+
+Build:
+- `create_task`: besides the exact twin, a near twin among the assignee's open tasks (or
+  everyone's, with no assignee): two or more of the new title's words in common with it
+  (`words_in_common`), and all of the shorter title's words but one. Refused, naming each
+  near twin, whose it is, its schedule and when it's due, so the model changes that one, or
+  calls again with `not_these` (the ids it's sure are different jobs).
+- The refusal says how to raise it when they said it's urgent: `reschedule_task` to today
+  (this round only, for a repeating chore) and `set_task_importance` high. A task of the
+  partner's raised this way is changed by whoever asked, as for update_task's assign_to
+  (F4), and its owner gets the same "Due today: ... (Erin asked for this)" card a new task
+  would give.
+- `not_these` lists ids only. An id that isn't one of the near twins named is ignored.
+
+Tests: each a failing test first. Bug #132's message with tasks 22 and 23: refused once
+with both named, then task 23 is due today and high, Michael gets one card, and nothing new
+is open. "Refill the bird feeder" beside "Refill auto feeders", with `not_these`, is made.
+"Clean the kitchen" beside "Clean the upstairs bathroom" isn't a near twin (one word).
+Evals: bug #132's message, and a new task beside a near twin that really is different.
+
+### F24b · Idea (2026-11-03): time blocked for a task moves its due date
+Status: [ ]
+Depends on: K5, F23c
+Read first: "Shadow Calendar" → Task matching; K5. From Michael's idea #135 (2026-11-03,
+1:56 pm, "time blocking tasks should update their due date"): at 11:56 am he blocked
+Saturday 7 Nov, 1 to 5 pm, for tasks 59 (Move Mimi's box upstairs for Rosie) and 10 (Split
+Merlin's cat box into two halves). Both are still due Thu 29 Oct, so they stay overdue:
+the morning summary lists them as "Was due Thursday" and their overdue reminders still
+count, though the block holds their nudges.
+- Making a block sets each task's due date to the block's day (local), with no due time.
+  The block moved on the calendar moves the due date with it. Removed, the due date stays.
+- For a repeating chore it's this round's due date only, as reschedule_task does.
+- The block's reply says so: "...and it's due Saturday now".
+
+Tests: each a failing test first. Idea #135's case: both tasks due Sat 7 Nov, not in
+Tuesday's summary as overdue, and no overdue reminder before Saturday. The block moved to
+Sunday moves both. A repeating chore's next round is unchanged.
+
+### F24c · Feedback (2026-11-03): an email is read as its reader sees it
+Status: [ ]
+Depends on: 22, 23, F16d
+Read first: "Gmail triage"; "Security and privacy" (email text is data). From Erin's bug
+#134 (2026-11-03, 12:18 pm, "Themi flagged a standard autopay confirmation as an urgent
+'your autopay is being cancelled'"): email 810 from SoFi, subject "Your SoFi Credit Card
+autopay is scheduled for 11/13/2026", Gmail snippet "We'll process your payment
+automatically". The body Themi kept says "You've cancelled autopay for your SoFi Credit
+Card." `parse.py` takes the first text/plain part, and SoFi's plain part comes from another
+template. The HTML Erin saw (the snippet is made from it) said it was scheduled.
+Triage read only the wrong text and marked it urgent (financial).
+- Body: the text/html part when there is one, as text (hidden parts left out: `display:none`
+  preheaders, `<style>`, `<head>`), else text/plain. Check this against a few real emails on
+  the Pi first (only the parts' first lines, no addresses or links).
+- When a plain part is kept, its first sentences against the snippet: if they share
+  almost nothing, the HTML wins.
+- Triage's prompt gets the subject and snippet beside the body, in the same delimited
+  block. When they disagree it goes by the subject and snippet, and says it's unsure
+  (never urgent on the body alone).
+
+Tests: each a failing test first. A fixture shaped like email 810 (made up, no real
+addresses): the body says it's scheduled, and triage with a scripted model sees the
+snippet. A plain-only email is unchanged. A `display:none` preheader is left out.
+Eval: email 810's shape isn't urgent.
+
+### D4 · Dev tooling: `make dev` with a copy of the Pi's data
+Status: [ ]
+Depends on: D1, D2, 29
+From Michael's idea #136 (2026-11-03, 2:15 pm, "when using make dev, include an option to
+pull down a copy of the prod db, or a recent backup of prod"). Read first: "Security and
+privacy" (secrets encrypted at rest; least privilege).
+- `make dev-prod` (`python -m tools.dev prod [--from-backup NAME|latest]`): copies the Pi's
+  database into `data/dev-prod/` and runs dev on it, with `data/dev/` left alone. The copy
+  comes over ssh with SQLite's backup API (`THEMI_PI`, default `themi@themi`), or with
+  `--from-backup` from the encrypted backups (the laptop's `.env` backup settings and key).
+- Dev never reaches the family. The copy is cleaned before the run: every linked account's
+  tokens, connector settings (Cozyla, ThinQ, Roborock, Keep, OurGroceries, Safeway pairing)
+  and AI keys are deleted. Telegram ids map to the simulator's people (member 1 → Erin,
+  member 2 → the husband). The Gemini key from dev's `.env` goes on everyone's backends, as
+  D1 does. The process also never gets the prod secret key, so anything missed stays
+  unreadable.
+- It holds the family's real messages and emails: `data/` is ignored by jj; the banner
+  says it's a private copy, and `make dev-reset` deletes it too.
+
+Tests: the cleaning on a seeded database (no tokens, no connector rows, new Telegram ids,
+the outbox's queued messages kept for the simulator). The ssh copy against a fake command.
+No real network.
