@@ -160,6 +160,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
 | D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
+| F22a | Feedback: asking for your partner ("what's on her plate?", "she's overwhelmed") | Feedback | [ ] |
+| F22b | Feedback: "Too much today" gives fewer than the list it answers | Feedback | [ ] |
+| F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [ ] |
+| F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [ ] |
+| F22e | Replies sized to the message, and asking before problem-solving | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -7599,3 +7604,119 @@ Notes (2026-11-02):
   `./control.sh --install` and then `docker compose up -d` (DEPLOY.md section 9). Do this on
   the Pi and on the cloud server. That release also needs D3a's migration 0094, which runs
   on start.
+
+
+### F22a · Feedback (2026-11-02): asking for your partner ("what's on her plate?", "she's overwhelmed")
+Status: [ ]
+Depends on: K1, K2, O1a
+Read first: "Calendars" (a person's event details reach only their own conversations unless
+they share them with their partner), "Transparency" (neither partner sees the other's raw
+energy signals). From Michael's bug #126 (2026-11-02, 8:56 am, "you seem to think I'm
+asking about me when I'm trying to intercede on behalf of my wife"):
+- 8:55 "Erin is absolutely overwhelmed right now. She is at zero energy." The overwhelm
+  signal fired on Michael's message, so `focus_now` pared down Michael's own day (member 2),
+  and Themi said "I've pared things down for her."
+- 8:55 "What's on her plate that need to be done today?" `day_summary` was called with
+  `partner: true`, but the gate (`_about_both`) doesn't know "her", so Michael got his own
+  day. Even when it passes, `partner` only adds the partner's calendar events: the tasks are
+  always the asker's.
+- 8:56 "Not for me, for Erin" passed the gate (her name) and still sent Michael's day, word
+  for word, a third time.
+
+Build:
+- `day_summary`'s `partner` boolean becomes `whose`: `me`, `both` (as `partner: true` was)
+  or `partner`: the partner's day, headed with their name ("Erin, Mon 02 Nov:"), their tasks
+  due, and their events only if they share details with their partner (Erin doesn't). The
+  gate allows `both` / `partner` when the message names the partner or says
+  wife/husband/partner, she/her/he/him/his; otherwise `me`, as before.
+- Overwhelm said about the partner ("Erin is overwhelmed", "she can't cope", no I/me in it)
+  gets a different signal: it's about the partner, not them; don't pare their own day down;
+  offer to show the partner's day or take some of it on (`update_task` assign_to me for a
+  one-off). `focus_now` refuses on such a message with the same guidance, so nothing is
+  pared and nothing is claimed.
+- `log_energy_level` and `log_energy_note` refuse on a message about the partner with no
+  first person in it ("Erin is at zero energy"): it isn't the speaker's energy, and the
+  partner's can't be logged by someone else.
+
+Tests: each a failing test first. The 8:55-8:56 conversation: "what's on her plate" sends
+Erin's tasks, headed with her name, without her events while she keeps them to herself;
+"she's overwhelmed" doesn't run `focus_now` on Michael's list; "Erin is at zero energy"
+logs no energy for Michael.
+
+### F22b · Feedback (2026-11-02): "Too much today" gives fewer than the list it answers
+Status: [ ]
+Depends on: O1a, O1b
+Read first: "PDA shielding", O1a's notes. From Erin's bug #121 (2026-11-02, 8:01 am, "I told
+it the tasks were too much and it offered the exact same tasks again"): the 8:00 morning
+list had two overdue things. She tapped "Too much today" and got three: the same two and
+the 12 pm run, "The other one is kept". `pick` cuts at `focus_count` (3), so a day of three
+or fewer is never pared.
+
+Build:
+- "For now" is always fewer than what they were looking at: at most `focus_count`, and at
+  most one less than the day's (or the list's) count, never under one. Medicines still
+  stay.
+- Asked again the same day ("still too much", the button a second time): one thing, the
+  lightest; then, a third time, nothing: "Nothing for now. It's all kept." (no question).
+- The "Too much today" button answers the list it's on: things not on that list (the run,
+  not yet due) don't join it.
+
+Tests: each a failing test first. Two overdue things and a run at noon: the button gives
+one. A second "too much" gives one, a third gives none and asks nothing.
+
+### F22c · Feedback (2026-11-02): "I ran yesterday" after F21c, checked
+Status: [ ]
+Depends on: F21c
+From Erin's bugs #120 (8:01 am, "it still hasn't figured out that I ran yesterday") and
+#127 (12:40 pm, "the running tracking seems to be broken"). At 12:38 pm she wrote "I ran
+yesterday" to the noon run check-in and Themi said "That didn't go through, so nothing has
+changed yet." Both reports came from 0.3.0, before F21c (0.3.1) was deployed, so this is
+likely #119 again.
+
+Build: a scenario with the check-in for task 8 ("Go for a run", due Mon 02 Nov, missed Sun
+01 Nov) answered "I ran yesterday": the run is marked done for Sunday's round, and the
+reply says so. Fix only what still fails. Also check the reply when every tool failed:
+"That didn't go through" should say what didn't (F21c's refusal names the task).
+
+Data (Michael decides): tick Sunday's run once this is live; mark #119, #120 and #127
+reviewed.
+
+### F22d · Burnout mode: everything held, no demands, urgent things to the partner
+Status: [ ]
+Depends on: O1a, O1b, F22a, F22b
+Read first: "PDA shielding", "Task matching" (handing a task to the other partner), the
+trust tiers. From Erin's ideas #122 and #123 (2026-11-02), and #33 (burnout recovery mode).
+Today "Can you put me in burnout mode?" got made-up words with nothing behind them.
+
+Erin's spec, in short:
+- On: every task held indefinitely. Urgent or time-sensitive ones go to Michael. A subset
+  of self-care check-ins she chooses still come (eat, drink), each with a burnout version
+  she can word; some self-care check-ins exist only in burnout mode (extra water, grounding,
+  rest).
+- The first reply has zero demands: a brief "Burnout mode is on. Everything's handled. Go
+  rest." Varied phrasing, attuned to her, paced: never several steps in one message.
+- Asked for something to do: the single lowest-demand task there is.
+- Worried about what's held: validate the feeling, then reassure that it's tracked and being
+  handled, then (a later message) that resting is the most useful thing now, then, only if
+  she wants it, a grounding idea from what she's said worked before.
+- No end date: it stays on until she turns it off.
+
+Before building, ask (Erin): what counts as urgent enough to go to Michael; what Michael's
+message says (that she's in burnout mode, or just the task); whether Michael can turn it on
+for her (F22a's case) or only suggest it; and how it ends (her word, or Themi asking after
+some days). Probably split into a/b (the mode and the held tasks; the self-care check-ins
+and the conversation).
+
+### F22e · Replies sized to the message, and asking before problem-solving
+Status: [ ]
+Depends on: 08, F22d
+Read first: "PDA shielding" (the shield's rewrite), personal phrasing settings. From Erin's
+ideas #124 and #125 (2026-11-02):
+- Mirror the message: a short, blunt message gets a short, matter-of-fact confirmation; a few
+  sentences about how they feel get a few sentences of validation.
+- Two modes, listening and problem-solving: Themi asks before moving from listening to
+  problem-solving.
+
+Before building, ask (Erin): is a question like "want ideas, or just to vent?" the right
+way to ask; does it apply to Michael too, or per person (a setting, on by default like PDA
+shielding).
