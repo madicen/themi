@@ -165,6 +165,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F22c | Feedback: "I ran yesterday" after F21c, checked | Feedback | [x] 2026-11-02 |
 | F22d | Burnout mode: everything held, no demands, urgent things to the partner | Feedback | [x] 2026-11-02 |
 | F22e | Replies sized to the message, and asking before problem-solving | Feedback | [x] 2026-11-02 |
+| F23a | Feedback: update notices come at once, quiet hours or not | Feedback | [ ] |
+| F23b | Feedback: a routine check follows ticks made on the wall or in chat | Feedback | [ ] |
+| F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -7860,3 +7863,75 @@ Notes (2026-11-02):
   I'm overwhelmed" is two sentences, so it would be listened to first.
 - Data: mark #124 and #125 reviewed once this is live.
 - Setup: restart `themi run`. Migration 0097 runs on start.
+
+### F23a · Feedback (2026-11-03): update notices come at once, quiet hours or not
+Status: [ ]
+Depends on: D3a, D3b
+Read first: "PDA-sensitive phrasing" → timing; quiet hours in the outbox. From Michael's bug
+#130 (2026-11-03, 8:01 am, "update notifications should skip quiet hour and busy settings"):
+Michael asked for three updates from the website between 11:39 pm and 12:06 am. Two failed
+(the `.env` lookup D3b fixed) and the third worked. Each notice went to the outbox as
+`normal`, so quiet hours held all three until 8 am, when they came together: "The update
+didn't work" twice, then "Themi is now on 0.3.2 (was latest)". It wasn't a duplicate send.
+
+Build:
+- A server request's result answers what the person asked for, like a warm word for a tick
+  (F19b): no quiet hours, busy times or daily limit, and it isn't counted. A pause they asked
+  for still holds it, as it holds praise.
+- "(was latest)": the runner reports the image tag it started from. Only a version number
+  is said; `latest` or `dev` gives "Themi is now on 0.3.2."
+
+Tests: each a failing test first. A finished update in quiet hours is sent at once and isn't
+counted against the daily limit; "from latest" gives no "(was latest)".
+
+### F23b · Feedback (2026-11-03): a routine check follows ticks made on the wall or in chat
+Status: [ ]
+Depends on: R1a, R1b
+Read first: "Routines" (R1a, R1b notes). From Michael's bug #129 (2026-11-02, 11:14 pm, "the
+cycle dishwasher task is done, but the earlier message never updated"): the evening check
+listed Take Meds, Cover the birdcage and Cycle Dishwasher. The two he tapped on the card
+were taken off it. Cycle Dishwasher, ticked on the wall at 11:06 pm, got a "Ticked off on
+the wall" message, but the card still said "Evening routine, still open: Cycle Dishwasher.
+Done already?". Only the card's own buttons change it. A tick from the wall (R1b's sync) or
+in chat (`tick_routine_item`) leaves it as it was.
+
+Build:
+- Any tick of a routine item edits that day's check, if one was sent: the rest still open,
+  with their buttons, or "Evening routine: all done." once nothing is left.
+- A check still waiting to go out is written again as it goes, or dropped if nothing is
+  left.
+- A check they tapped "Skip today" on stays skipped.
+
+Tests: each a failing test first. A check is sent; a tick on the wall takes that item off
+it; the last tick says all done; a skipped check isn't changed; a tick in chat does the same.
+
+### F23c · Feedback (2026-11-03): "make time Saturday for X and Y" holds both tasks for that time
+Status: [ ]
+Depends on: K3, K5
+Read first: "Calendars" (K5, time blocked for a task). From Michael's bug #131 (2026-11-03,
+8:05 am, "I said to make time for two of the tasks on Saturday, but both tasks still show for
+today"): at 8:02 am he said "Make some time Saturday afternoon for moving Mimi's box and
+splitting Merlin's box". Both tasks were overdue from Thu 29 Oct. The model used
+`add_calendar_event` ("Move Mimi's box and split Merlin's box", Sat 07 Nov, 2-3:30 pm), not
+`block_time_for_task`, which takes a single task. So the event wasn't tied to either task,
+and both still showed in "What's on my list for today?".
+
+Build:
+- `block_time_for_task` takes `task_ids`: one event for them all (titled with their names,
+  or a title the model gives), and each task is held until it, as a single task's block is.
+  Moving or deleting the event moves or ends the hold for each.
+- `add_calendar_event` refuses when what they said asks for time for open tasks of theirs
+  ("make time for", "time for", "block", "set aside") and names them (two or more words of a
+  title, as the naming check does). The refusal names the tasks and says to use
+  `block_time_for_task` with their ids.
+
+Tests: each a failing test first. The 8:02 message makes one block for both tasks, and
+neither shows in today's summary; the plain-event path refuses with both ids; a meeting
+named like no task ("time for coffee with Sam") is still an event.
+
+Data (Michael decides): the event from 8:03 am stays, not tied to either task. Once this is
+live, ask again to tie both tasks to Saturday afternoon. Mark #131 reviewed.
+
+Also from this batch: Erin's bug #128 (2026-11-02, 9:47 pm, "it seems it thinks I ran today,
+not yesterday") came from 0.3.1, before F22c (0.3.2), which fixed that case. Mark #128
+reviewed with #119, #120 and #127.
