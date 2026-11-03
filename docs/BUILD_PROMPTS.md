@@ -94,6 +94,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
+| P8a | "Which task?" refusals: how often the naming check says no, and how often it's wrong | Feedback | [ ] |
+| P8b | An embedding fallback for "which task?", if P8a says | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4775,6 +4777,58 @@ Notes (2026-10-30):
 - Setup for the family: `THEMI_TOOL_ROUTING=embeddings` in `.env`, and a Gemini backend in
   each person's conversation chain (or an embedding route on the website). Then a week of
   P3's numbers against the word lists' week decides whether the word lists go.
+
+### P8a · "Which task?" refusals: how often the naming check says no, and how often it's wrong
+Status: [ ]
+Depends on: F21c, P3
+Asked 2026-11-02 (Michael), after bug #119 ("I ran this morning" didn't name "Go for a
+run"): would embeddings or a small "System 1" model do the naming check better than words?
+Not yet: the routers (P1, P7b) only choose which tools are offered, and that worked in #119.
+The miss was `_named` in `complete_task`, the check that what they said (or Themi's last
+message) names the task. It exists because the model picks the wrong task (#92; "We
+contacted Erin's parents" marked the bins done). So first measure it, the way P3 measured
+routing before P7b.
+- Every refusal from a naming check is countable: `reply_tools` rows whose result starts
+  "Not marked done: nothing they said names" (`_named`) or "...names task N" (`_check_meant`,
+  `_meant_instead`), and `follow_ups._named`. Give these refusals a stable marker in the
+  result (or a column) so they're counted without matching words.
+- `themi feedback` (or P3's metrics report) shows, per week: naming refusals, and of those,
+  how many were followed within ten minutes by the same task done (the refusal was wrong, as
+  in #119), or by a different task done (it was right).
+- An eval set from the family's messages (P7a's way: labelled, private text left out) of
+  "done" messages and the task each one means, including paraphrases the words can't catch
+  ("did my 5k", "took the trash out", "jogged"), and near misses that must stay refused
+  (the bins/parents pair, #92's "yes please"). Run against the word check, it prints the
+  wrongly refused and the wrongly accepted.
+
+Tests: a refusal is counted with its kind; a refusal then a done of the same task counts as
+wrong, of another task as right; the eval runner scores the word check on fake cases.
+
+Decides P8b: build it only if, after F21c, the word check still wrongly refuses often
+enough to notice (more than about one a week), or the eval's paraphrases show a real gap.
+
+### P8b · An embedding fallback for "which task?", if P8a says
+Status: [ ]
+Depends on: P8a, P7b
+Read first: "Trust tiers" (an action asked for in their own words). Only if P8a's numbers ask.
+The word check stays the fast path; embeddings decide only when it finds nothing.
+- `_named` misses → embed this message (and Themi's last message, for a short answer, as
+  `_meant_instead` does) and every open task's title with P7b's `RouterEmbedder` and
+  `VectorCache` (titles cached; they change rarely). Accept only when this task is the
+  closest open task AND above a threshold AND clear of the next one by a margin. Strict on
+  purpose: the check is there to doubt the model.
+- `_meant_instead` uses the same scores, so "names another task" and "names this one" can't
+  disagree: a message closest to another task still gets "names task N, not this one".
+- An embedding that fails or takes over a second leaves the word check's answer (refuse and
+  ask, F21c's reply). A done never waits on it, and no network call means no new risk.
+- Threshold and margin are chosen with P8a's eval: no wrongly accepted case at all, then
+  as few wrongly refused as that allows; say why in the Notes.
+- A small model as judge ("does this message say task X is done?") is the next step only
+  if embeddings can't get the near misses right at any threshold: it costs a model round.
+
+Tests: a paraphrase the words miss ("did my 5k" for "Go for a run") is accepted; the
+bins/parents pair and "yes please" stay refused; a message equally close to two tasks is
+refused; a failing or slow embedder leaves the refusal; the fake embedder, no network.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
