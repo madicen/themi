@@ -2140,9 +2140,11 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         )
     _check_meant(ctx, task, "Not marked done")
     if not _named(ctx, task):
-        raise ToolFailed(
+        raise ToolFailed(  # bug #119: the reply said "Marked done" anyway, so Themi says it
             f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
-            "last message. Mark only what they say is done; ask if it isn't clear."
+            "last message. Mark only what they say is done; ask if it isn't clear.",
+            reply=f"\"{task.title}\" is still open: I couldn't tell that's the one you meant. "
+            "Is it done?",
         )
     said = await _board(ctx).complete(task.id, ctx.member, interactive=True)
     ctx.done.append(said)

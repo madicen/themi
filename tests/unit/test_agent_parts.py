@@ -370,3 +370,19 @@ def test_the_focus_words_pass_the_strictest_pda_check() -> None:
         focus.LEFT_ONE_TEXT,
     ):
         assert find_demands(text, 3) == [], text
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Marked done: Go for a run.",
+        "I've marked it as done.",
+        "Ticked off: the bins.",
+        "Go for a run is completed.",
+        "I completed it for you.",
+    ],
+)
+def test_a_done_task_claim_is_caught(claim: str) -> None:
+    """Bug #119: "Marked done: Go for a run." went out when every complete_task failed."""
+    assert agent_module.CLAIMS_DONE.search(claim)
+    assert agent_module._honest(claim, [], ["failed"]) == agent_module.FAILED_TEXT
