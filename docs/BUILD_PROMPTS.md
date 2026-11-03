@@ -8064,6 +8064,11 @@ Notes (2026-11-03):
 - Still open: the model sees only the asker's own tasks. Handing over a partner's task by
   `update_task` (no routine) still needs its id, which `day_summary` whose=partner doesn't
   give for a task with no due date.
+- Evals (2026-11-03, gemini-3.5-flash-lite, 3 runs each): `wall-move-partners-task-to-routine`
+  (bug #133's message) 3/3: each run was refused once with task 0, then called again with
+  Erin's task id, and said her task is closed. `wall-new-item-like-an-open-task` 3/3, after
+  a fix it found: the tool registry counted `task_id` 0 as a task the turn touched, so the
+  reply looked task 0 up and was never sent. Only ids above 0 count now.
 - Data (the Pi, not done yet): task 71 is still open and Erin's, beside Michael's
   just-for-today "Vacuum water" (gone tomorrow). Cancel task 71 if he did it; mark #133
   reviewed once this is live.
