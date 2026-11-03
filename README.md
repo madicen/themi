@@ -8,6 +8,8 @@ energy for it, and phrases prompts so they never feel like demands.
 - Design: [Themi Build Plan (V1)](https://claude.ai/artifact/PWX3iYKmbKy1UmCQrVF2Z1)
 - Build order and progress: [docs/BUILD_PROMPTS.md](docs/BUILD_PROMPTS.md)
 
+![What Themi connects to: Telegram; Google; home devices; AI models; groceries and shopping; maps and travel; backups](docs/integrations.svg)
+
 ## Development setup
 
 Needs Python 3.12+ and [jj](https://jj-vcs.github.io/jj/) (the repo is a colocated jj/git repo).

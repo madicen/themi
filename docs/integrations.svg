@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="636" viewBox="0 0 960 636" role="img" aria-labelledby="title desc">
+  <title id="title">Themi's integrations</title>
+  <desc id="desc">The services Themi connects to, grouped: Telegram for chat; Google (Gmail, Calendar, Tasks, Keep); home devices (Home Connect, LG ThinQ, Roborock, Cozyla); AI models (Claude, Gemini, OpenAI and OpenRouter, local models); groceries and shopping (OurGroceries, Safeway); maps and travel (TomTom, OpenStreetMap); backups (Cloudflare R2, Backblaze B2).</desc>
+  <style>
+    svg { --bg: #ffffff; --card: #f6f7f9; --line: #e2e5ea; --ink: #1d2330; --muted: #5f6878;
+          --pill: #fff3d6; --pill-ink: #8a5a00;
+          --google: #2f6fdb; --devices: #1f9461; --ai: #7a4fd6; --grocery: #d9711c;
+          --maps: #138a95; --backup: #6b7486; --chat: #2a9fd6; }
+    @media (prefers-color-scheme: dark) {
+      svg { --bg: #0d1117; --card: #161b22; --line: #2b323c; --ink: #e6e9ee; --muted: #9aa4b2;
+            --pill: #3a2e10; --pill-ink: #f0c060;
+            --google: #6f9ef0; --devices: #4cc08b; --ai: #a989ef; --grocery: #f0974d;
+            --maps: #4cbfca; --backup: #9aa3b4; --chat: #5bbbe8; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bg { fill: var(--bg); }
+    .card { fill: var(--card); stroke: var(--line); stroke-width: 1; }
+    .h1 { font-size: 26px; font-weight: 700; }
+    .sub { font-size: 14px; fill: var(--muted); }
+    .cat { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+    .name { font-size: 15px; font-weight: 600; }
+    .what { font-size: 12.5px; fill: var(--muted); }
+    .pill { fill: var(--pill); }
+    .pill-t { font-size: 10.5px; font-weight: 700; fill: var(--pill-ink); letter-spacing: 0.04em; }
+    .google { fill: var(--google); } .devices { fill: var(--devices); } .ai { fill: var(--ai); }
+    .grocery { fill: var(--grocery); } .maps { fill: var(--maps); } .backup { fill: var(--backup); }
+    .chat { fill: var(--chat); }
+  </style>
+
+  <defs>
+    <clipPath id="tall"><rect width="292" height="244" rx="12"/></clipPath>
+    <clipPath id="short"><rect width="292" height="148" rx="12"/></clipPath>
+    <clipPath id="strip"><rect x="24" y="88" width="912" height="60" rx="12"/></clipPath>
+  </defs>
+
+  <rect class="bg" width="960" height="636" rx="16"/>
+
+  <text class="h1" x="24" y="46">What Themi connects to</text>
+  <text class="sub" x="24" y="70">Grouped by kind. How to set up each one is further down this README.</text>
+
+  <!-- Chat: the one channel everyone uses -->
+  <rect class="card" x="24" y="88" width="912" height="60" rx="12"/>
+  <rect class="chat" x="24" y="88" width="6" height="60" clip-path="url(#strip)"/>
+  <text class="cat chat" x="48" y="114">CHAT</text>
+  <text class="name" x="48" y="135">Telegram</text>
+  <text class="what" x="190" y="135">Where each person in the family talks with Themi, and where its messages arrive</text>
+
+  <!-- Row 1 -->
+  <g transform="translate(24 166)">
+    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="google" width="292" height="6" clip-path="url(#tall)"/>
+    <text class="cat google" x="20" y="36">GOOGLE</text>
+    <text class="name" x="20" y="68">Gmail</text>
+    <text class="what" x="20" y="86">Triage, receipts and follow-ups</text>
+    <text class="name" x="20" y="116">Calendar</text>
+    <text class="what" x="20" y="134">Busy times and events</text>
+    <text class="name" x="20" y="164">Tasks</text>
+    <text class="what" x="20" y="182">Task lists kept in sync</text>
+    <text class="name" x="20" y="212">Keep</text>
+    <rect class="pill" x="62" y="200" width="40" height="16" rx="8"/>
+    <text class="pill-t" x="82" y="211.5" text-anchor="middle">TRIAL</text>
+    <text class="what" x="20" y="230">Groceries said to Google Home</text>
+  </g>
+
+  <g transform="translate(334 166)">
+    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="devices" width="292" height="6" clip-path="url(#tall)"/>
+    <text class="cat devices" x="20" y="36">HOME DEVICES</text>
+    <text class="name" x="20" y="68">Home Connect</text>
+    <text class="what" x="20" y="86">The dishwasher</text>
+    <text class="name" x="20" y="116">LG ThinQ</text>
+    <text class="what" x="20" y="134">The washer and dryer</text>
+    <text class="name" x="20" y="164">Roborock</text>
+    <text class="what" x="20" y="182">The robot vacuum</text>
+    <text class="name" x="20" y="212">Cozyla</text>
+    <rect class="pill" x="76" y="200" width="40" height="16" rx="8"/>
+    <text class="pill-t" x="96" y="211.5" text-anchor="middle">TRIAL</text>
+    <text class="what" x="20" y="230">The family display's chores and lists</text>
+  </g>
+
+  <g transform="translate(644 166)">
+    <rect class="card" width="292" height="244" rx="12"/>
+    <rect class="ai" width="292" height="6" clip-path="url(#tall)"/>
+    <text class="cat ai" x="20" y="36">AI MODELS</text>
+    <text class="name" x="20" y="68">Claude</text>
+    <text class="what" x="20" y="86">Anthropic</text>
+    <text class="name" x="20" y="116">Gemini</text>
+    <text class="what" x="20" y="134">Google</text>
+    <text class="name" x="20" y="164">OpenAI and OpenRouter</text>
+    <text class="what" x="20" y="182">Or any OpenAI-compatible service</text>
+    <text class="name" x="20" y="212">Local models</text>
+    <text class="what" x="20" y="230">Ollama, LM Studio, vLLM, llama.cpp</text>
+  </g>
+
+  <!-- Row 2 -->
+  <g transform="translate(24 428)">
+    <rect class="card" width="292" height="148" rx="12"/>
+    <rect class="grocery" width="292" height="6" clip-path="url(#short)"/>
+    <text class="cat grocery" x="20" y="36">GROCERIES AND SHOPPING</text>
+    <text class="name" x="20" y="68">OurGroceries</text>
+    <text class="what" x="20" y="86">The shared grocery list</text>
+    <text class="name" x="20" y="116">Safeway</text>
+    <text class="what" x="20" y="134">Fills the cart through a Chrome helper</text>
+  </g>
+
+  <g transform="translate(334 428)">
+    <rect class="card" width="292" height="148" rx="12"/>
+    <rect class="maps" width="292" height="6" clip-path="url(#short)"/>
+    <text class="cat maps" x="20" y="36">MAPS AND TRAVEL</text>
+    <text class="name" x="20" y="68">TomTom</text>
+    <text class="what" x="20" y="86">Drive times with live traffic</text>
+    <text class="name" x="20" y="116">OpenStreetMap</text>
+    <text class="what" x="20" y="134">The free fallback, without a TomTom key</text>
+  </g>
+
+  <g transform="translate(644 428)">
+    <rect class="card" width="292" height="148" rx="12"/>
+    <rect class="backup" width="292" height="6" clip-path="url(#short)"/>
+    <text class="cat backup" x="20" y="36">BACKUPS</text>
+    <text class="name" x="20" y="68">Cloudflare R2</text>
+    <text class="what" x="20" y="86">Off-site snapshots</text>
+    <text class="name" x="20" y="116">Backblaze B2</text>
+    <text class="what" x="20" y="134">Off-site snapshots</text>
+  </g>
+
+  <rect class="pill" x="24" y="598" width="40" height="16" rx="8"/>
+  <text class="pill-t" x="44" y="609.5" text-anchor="middle">TRIAL</text>
+  <text class="what" x="74" y="610">Early support that may change.</text>
+</svg>
