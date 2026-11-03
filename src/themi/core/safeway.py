@@ -4,7 +4,8 @@
 - Pairing: anyone can connect a helper on the website. Its token is shown once and kept
   hashed, and it can only claim and answer cart jobs and read and set remembered products.
 - "Fill the Safeway cart" is a `safeway_cart` proposal (Tier 1, capped: always a yes). The
-  yes queues a job with the grocery list's items; a helper claims it once and posts what it
+  yes queues a job with the grocery list's items, plus the things to buy that usually come
+  from Safeway (L2b, named apart on the same card); a helper claims it once and posts what it
   added. The message names the family's items ("oat milk was out of stock"), never
   Safeway's product names, which only the website shows (escaped). Nothing the helper sends
   reaches the model.
@@ -273,6 +274,26 @@ class SafewayCart:
                 items[key] = {"name": name, "qty": qty}
         return list(items.values())
 
+    def things_to_buy(
+        self, member: Member, taken: list[dict[str, Any]]
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """L2b: the open things to buy that usually come from Safeway, as cart items, and the
+        list's name. Ones already among `taken` (the grocery items) aren't offered twice."""
+        buying = self.services.buying
+        found = buying.from_store(member, "Safeway") if buying is not None else None
+        if found is None:
+            return "", []
+        nl, names = found
+        keys = {name_key(i["name"]) for i in taken}
+        items = []
+        for raw in names:
+            name, qty = list_entry(raw)
+            key = name_key(name)
+            if key and key not in keys and len(taken) + len(items) < MAX_ITEMS:
+                keys.add(key)
+                items.append({"name": name, "qty": qty})
+        return nl.name, items
+
     def queue(self, member: Member, items: list[dict[str, Any]], action_id: int | None) -> Job:
         job_id = self.db.execute(
             "INSERT INTO safeway_jobs (member_id, action_id, items, status, created_at) "
@@ -505,7 +526,8 @@ def result_text(results: dict[str, Any]) -> str:
     "fill_safeway_cart",
     "Fill the family's Safeway cart from the grocery list ('fill the Safeway cart', 'do the "
     "weekly shop on Safeway'). The Safeway helper in their Chrome adds the items; a person "
-    "always checks out. Takes the whole grocery list; waits for their yes.",
+    "always checks out. Takes the whole grocery list, plus the things to buy that usually "
+    "come from Safeway; waits for their yes.",
     {},
 )
 async def fill_safeway_cart(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
@@ -514,9 +536,24 @@ async def fill_safeway_cart(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
         raise ToolFailed("The Safeway cart isn't set up.")
     if safeway.open_job() is not None:
         raise ToolDeclined("A Safeway cart is already waiting for the helper. Nothing was staged.")
-    items = safeway.list_items()
-    if not items:
-        raise ToolDeclined("The grocery list is empty, so there's nothing for the cart.")
-    names = and_list([f"{i['qty']} {i['name']}" if i["qty"] > 1 else i["name"] for i in items])
-    summary = f"{names[:1].upper()}{names[1:]} for the Safeway cart"
-    return Proposal(CATEGORY, summary, EXECUTOR, {"items": items})
+    groceries = safeway.list_items()
+    list_name, extras = safeway.things_to_buy(ctx.member, groceries)
+    if not groceries and not extras:
+        raise ToolDeclined(
+            "The grocery list is empty and nothing to buy usually comes from Safeway, so "
+            "there's nothing for the cart."
+        )
+    summary = f"{_named(groceries)} for the Safeway cart" if groceries else ""
+    if extras:
+        summary += (
+            f", plus {_named(extras)} from {list_name}"
+            if groceries
+            else f"{_named(extras)} from {list_name} for the Safeway cart"
+        )
+    return Proposal(
+        CATEGORY, summary[:1].upper() + summary[1:], EXECUTOR, {"items": groceries + extras}
+    )
+
+
+def _named(items: list[dict[str, Any]]) -> str:
+    return and_list([f"{i['qty']} {i['name']}" if i["qty"] > 1 else i["name"] for i in items])
