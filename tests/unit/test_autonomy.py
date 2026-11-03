@@ -42,6 +42,7 @@ CAN_BE_AUTOMATIC = {
     "dishwasher_done",
     "vacuum_home",
     "routine_item_add",
+    "server_control",  # D3a: asked for on the website, so it runs at once
 }
 
 

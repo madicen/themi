@@ -1,0 +1,11 @@
+# Runs control.sh when Themi's website asks for an update or a restart (docs/DEPLOY.md, 9).
+# A user unit: ~/.config/systemd/user, installed by `./control.sh --install`.
+[Unit]
+Description=Watch for update requests from Themi's website
+
+[Path]
+PathExists=%h/themi/control/request.json
+Unit=themi-control.service
+
+[Install]
+WantedBy=default.target

@@ -156,6 +156,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
 | F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
+| D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
+| D3b | Development page: the host's runner that does the update | Dev tooling | [x] 2026-11-02 |
 
 ## Fixed technical choices
 
@@ -7386,3 +7388,147 @@ Notes (2026-11-01):
 - Setup: `pip install -e '.[roborock]'`, restart (applies 0093), then Family page, **Robot
   vacuum**: email, Send code, the emailed code, Link Roborock. To skip the cards, turn on
   "Clear the vacuum's alert and send it back to its dock" under "What Themi does alone".
+
+
+### D3a · Development page: update or restart the server from the website (Themi's side)
+Status: [x] 2026-11-02
+Depends on: 29, P3, P4
+Read first: "Deployment and hosting" (Updates: pull the new image and restart) and "Security
+and privacy" (least privilege). From Michael (2026-11-02): updating the Pi or the cloud
+server means ssh and `~/themi/update.sh 1.4.0`. He wants a development section on the
+website that holds what `/ai/timing` shows now (reply times, how often `more_tools` was
+needed, replies marked wrong) and a command that stops Themi, updates it to the newest
+release and starts it again.
+
+Themi runs in a container, so it can't update itself. Giving it the Docker socket would give
+it root on the host, and Themi reads emails and web pages. So Themi only *asks*: it writes a
+request file to a folder shared with the host, and a runner on the host (D3b) does the work
+with `update.sh` and writes the result back. The worst a forged request can do is install a
+real, tagged release.
+
+Build:
+- `THEMI_CONTROL_DIR` setting: the shared folder. Unset, the page says updates from the
+  website aren't set up and links to the docs. `deploy/compose.yml` mounts `./control` at
+  `/control` and sets it.
+- `themi.updates`: `ServerControl` over the folder.
+    - `request(action, member)`: `action` is `update` (to the newest release) or `restart`
+      (the running version again). Recorded in a new `server_requests` table (who, what,
+      when, state, result), then written to `request.json` atomically (a temp file, then
+      rename): `{"id", "action", "version": "newest" | "current", "asked_by",
+      "asked_at"}`. Refused while a request is waiting or running.
+    - `state()`: the running version (`themi.__version__`), whether the runner is installed
+      (`runner.json`, which the runner writes), the request in progress, the newest release
+      the runner last saw (from `runner.json`), and the last few results.
+    - `check()`, a periodic job every minute: reads `result.json`; a finished result for a
+      request not yet reported updates its row and tells the person who asked, through the
+      outbox ("Themi is now on 1.5.0 (was 1.4.0)." / "1.5.0 didn't start well, so Themi went
+      back to 1.4.0 with the database from before."). The file's contents are data: only
+      known fields are read, and the text shown is Themi's own, never the file's.
+- Trust tiers: a new family category `server_control` ("Update or restart Themi's server",
+  max tier 2) and an executor `server.request` that writes the request. The website stages
+  it with `requested=True` (an admin pressing the button is their yes), so it runs at once
+  and the audit trail has it.
+- The website: `/dev`, admins only, called "Development" in the menu in place of "Reply
+  times". A **Server** card on top: the running version, the newest one the runner has seen,
+  the runner's state, **Update to the newest release** and **Restart** buttons (each POST
+  with CSRF; a small confirm step on the page, no JavaScript dialog), the request in progress,
+  and the last results. Below it, what `/ai/timing` shows now. `/ai/timing` redirects to
+  `/dev`.
+
+Tests: unit tests for `ServerControl` on a temp folder (request written atomically, a second
+request refused, a result reported once, junk in `result.json` ignored, no folder set); web
+tests for `/dev` (admins only, CSRF, the redirect, the not-set-up card); a scenario: an admin
+presses Update, the runner's result appears, and they get the "now on" message once.
+
+Notes (2026-11-02):
+- `themi.updates.ServerControl`, on `App.server` (always built; the `server.results` job
+  only when `THEMI_CONTROL_DIR` is set). Migration 0094: `server_requests` and the category
+  `server_control` (family, may become automatic, though the button's `requested=True`
+  makes that moot). The executor `server.request` writes the row and `request.json`; a
+  retry of the same action reuses its row.
+- The file shapes D3b must keep are in `themi.updates`' docstring. `result.json`: `id`
+  (int), `state` (`running`, `done`, `failed`, `refused`), `from`/`to` (version-shaped or
+  ignored), `detail` (the end of the output, kept to 2,000 characters and shown only on
+  the page, escaped), `finished_at`. `runner.json`: `newest`, `checked_at`.
+- Deviation: a request also needs `runner.json`, so nothing is asked for before D3b's runner
+  is installed. A request not picked up in 15 minutes, or running for 30, lapses (the asker
+  is told), so a lost one never blocks the button.
+- Messages: "Themi is now on 1.5.0 (was 1.4.0).", "already on 1.5.0, the newest release",
+  "restarted on 1.4.0", "The update to 1.5.0 didn't work, so Themi is still on 1.4.0."
+  (true both for a failed pull and for update.sh's rollback). Outbox kind `system`, to the
+  admin who asked only.
+- `/dev` replaces `/ai/timing` (now a redirect) and the "Reply times" menu link. The
+  confirm step is a `<details>` with a "Yes, update now" button, no JavaScript.
+- `deploy/compose.yml` mounts `./control` at `/control` and sets `THEMI_CONTROL_DIR`.
+  If the folder doesn't exist, Docker makes it owned by root and the container (uid 10001)
+  can't write to it; D3b's bootstrap makes it properly. Until then the card says the
+  runner isn't installed.
+- Follow-up: `/tiers` lists "Update or restart Themi's server" with an automatic switch,
+  which does nothing useful; hide it if it confuses anyone.
+- Setup: restart (applies 0094). Nothing else until D3b.
+
+### D3b · Development page: the host's runner that does the update
+Status: [x] 2026-11-02
+Depends on: D3a
+Read first: as D3a. `docs/RASPBERRY_PI.md` (Part 4) and `docs/DEPLOY.md` (section 9).
+
+Build:
+- `deploy/control.sh`: run by systemd when `control/request.json` appears.
+    - Moves the request aside first, so it runs once. Checks it: a known action, a version
+      that is `newest` or a version number, nothing else. Anything else is refused with a
+      result saying so.
+    - `newest`: the latest release from GitHub's API (`releases/latest` for the repo in
+      `THEMI_REPO`, or worked out from `THEMI_IMAGE` `ghcr.io/<owner>/<repo>`). Already on it:
+      the result says so and nothing restarts.
+    - Writes `result.json` as `running`, runs `update.sh <version>` (a restart is `update.sh`
+      with no version), then writes `done` or `failed` with the old and new versions and the
+      last lines of the output, atomically.
+    - Writes `runner.json` (installed, the newest release it saw, when) after each run.
+- `deploy/themi-control.path` and `deploy/themi-control.service` (a user-level path unit
+  watching `~/themi/control/request.json`; the service runs `control.sh`), and a daily timer
+  that only refreshes `runner.json`'s newest release.
+- `bootstrap-pi.sh` makes `~/themi/control` (writable by the container's user, uid 10001),
+  copies `control.sh`, installs and starts the units, and turns on lingering so they run
+  without a login. `docs/DEPLOY.md` gets the same steps for the cloud server, and
+  `docs/RASPBERRY_PI.md` Part 4 says the website's button is the everyday way.
+- The release workflow's missing "deploy job" stays out of scope; the docs stop mentioning
+  it as if it existed.
+
+Tests: `control.sh` against the stand-in `docker` from `tests/integration/test_deploy_scripts.py`
+and a stand-in for GitHub's API (no network): an update to the newest release, a restart, a
+request already on the newest version, a bad request refused, a failed update reported as
+failed, a request run once.
+
+Notes (2026-11-02):
+- `deploy/control.sh` (bash, with `python3` for the JSON, as on any Pi OS or Debian) has
+  three modes: no argument runs the waiting request, `--check` only notes the newest
+  release, and `--install` sets everything up. `--install` is an addition to the prompt: one
+  command that both `bootstrap-pi.sh` and DEPLOY.md use, so the cloud server and an
+  already-running Pi don't need the whole bootstrap again.
+- A request has to be exactly `update` + `newest` or `restart` + `current` and nothing else.
+  Anything else, or unreadable JSON, gets `refused`, and Docker never runs. A failed pull and
+  update.sh's rollback are both reported as `failed`, with the version it tried. If no
+  release can be found, the result is `failed` with no `to`.
+- The repository is private, so the GitHub API needs `THEMI_GITHUB_TOKEN` in `.env` (a
+  fine-grained token with Contents read-only). It is passed to curl on stdin, never as an
+  argument. The repo comes from `THEMI_REPO`, or else from `THEMI_IMAGE`. Only `x.y.z` tags
+  count as releases.
+- Units: `themi-control.path` (`PathExists` on `~/themi/control/request.json`) starts
+  `themi-control.service` (oneshot, 20-minute limit). `themi-control-check.timer` (daily,
+  `Persistent`) runs `control.sh --check`. They are user units, so `--install` turns on
+  lingering. The control folder is mode 2770, owned by uid 10001 and the host user's group:
+  Themi writes there, and the runner reads and moves files.
+- `bootstrap-pi.sh` now moves newer copies of the deploy files over older ones in
+  `~/themi`. Before, it left an existing `compose.yml` alone. It runs `--install` once
+  `.env` is there.
+- Docs: DEPLOY.md section 9 makes the website the everyday way and lists the one-time setup.
+  RASPBERRY_PI.md drops the deploy job, which was never built, and records the decision
+  "by hand, from the website".
+- Tests: `test_deploy_scripts.py` runs `control.sh` against the stand-in `docker`, with a
+  `file://` folder standing in for GitHub's API. One test checks the runner's files against
+  `themi.updates`' own parsers, so the two sides can't drift apart.
+- Not tried on a real Pi or VM yet: systemd and the folder's permissions are untested here.
+- Setup (Michael): copy the new deploy files across, add `THEMI_GITHUB_TOKEN` to `.env`, run
+  `./control.sh --install` and then `docker compose up -d` (DEPLOY.md section 9). Do this on
+  the Pi and on the cloud server. That release also needs D3a's migration 0094, which runs
+  on start.

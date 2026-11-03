@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from themi.updates import FINISHED_STATES, _moment, _version
+
 REPO = Path(__file__).resolve().parents[2]
 
 FAKE_DOCKER = r"""#!PYTHON
@@ -59,9 +61,12 @@ class Server:
         self.bin = root / "bin"
         for path in (self.dir, self.data, self.bin):
             path.mkdir()
-        for name in ("update.sh",):
+        for name in ("update.sh", "control.sh"):
             (self.dir / name).write_text((REPO / "deploy" / name).read_text())
-        (self.dir / "update.sh").chmod(0o755)
+            (self.dir / name).chmod(0o755)
+        self.control = self.dir / "control"
+        self.control.mkdir()
+        self.github = root / "github"
         (self.dir / "compose.yml").write_text((REPO / "deploy" / "compose.yml").read_text())
         (self.dir / ".env").write_text("THEMI_IMAGE=ghcr.io/x/themi\nTHEMI_VERSION=1.0.0\n")
         docker = self.bin / "docker"
@@ -79,6 +84,11 @@ class Server:
     def update(
         self, *args: str, settings: dict[str, str] | None = None, **fake: str
     ) -> subprocess.CompletedProcess[str]:
+        return self.run("update.sh", *args, settings=settings, **fake)
+
+    def run(
+        self, script: str, *args: str, settings: dict[str, str] | None = None, **fake: str
+    ) -> subprocess.CompletedProcess[str]:
         env = {
             **os.environ,
             **(settings or {}),
@@ -89,9 +99,29 @@ class Server:
             **{f"FAKE_{k.upper()}": v for k, v in fake.items()},
         }
         env.pop("THEMI_VERSION", None)
+        env["GITHUB_API"] = self.github.as_uri()  # D3b: no network
         return subprocess.run(
-            [str(self.dir / "update.sh"), *args], env=env, capture_output=True, text=True
+            [str(self.dir / script), *args], env=env, capture_output=True, text=True
         )
+
+    # ----- D3b: the runner for the website's Update and Restart -----------------------------
+
+    def release(self, tag: str) -> None:
+        """GitHub's stand-in: `tag` is the latest release of ghcr.io/x/themi's repo."""
+        latest = self.github / "repos" / "x" / "themi" / "releases" / "latest"
+        latest.parent.mkdir(parents=True, exist_ok=True)
+        latest.write_text(json.dumps({"tag_name": tag, "name": "ignored"}))
+
+    def ask(self, request: object) -> None:
+        (self.control / "request.json").write_text(
+            request if isinstance(request, str) else json.dumps(request)
+        )
+
+    def result(self) -> dict:
+        return json.loads((self.control / "result.json").read_text())
+
+    def runner(self) -> dict:
+        return json.loads((self.control / "runner.json").read_text())
 
     def version(self) -> str:
         line = next(
@@ -177,6 +207,119 @@ def test_nonsense_is_refused(server: Server) -> None:
         [str(REPO / "tools" / "release.sh"), "1.4"], capture_output=True, text=True
     )
     assert usage.returncode == 2 and "usage: tools/release.sh 1.4.0" in usage.stderr
+
+
+# ----- D3b: control.sh, the runner for the website's buttons --------------------------------
+
+
+def test_an_update_goes_to_the_newest_release(server: Server) -> None:
+    server.release("v1.1.0")
+    server.ask({"id": 7, "action": "update", "version": "newest", "asked_by": "Erin"})
+    done = server.run("control.sh", migrates="1.1.0")
+    assert done.returncode == 0, done.stderr
+    assert server.version() == "1.1.0" and "migrated_1_1_0" in server.tables()
+    result = server.result()
+    assert {k: result[k] for k in ("id", "state", "from", "to")} == {
+        "id": 7,
+        "state": "done",
+        "from": "1.0.0",
+        "to": "1.1.0",
+    }
+    assert "now on 1.1.0 (was 1.0.0)" in result["detail"] and result["finished_at"]
+    assert server.runner()["newest"] == "1.1.0"
+    assert not (server.control / "request.json").exists()
+    assert sorted(p.name for p in server.control.iterdir()) == ["result.json", "runner.json"]
+    # What themi.updates reads (D3a): the same shapes, so the two sides agree.
+    assert result["state"] in FINISHED_STATES and _version(result["to"]) == "1.1.0"
+    assert _moment(result["finished_at"]) and _moment(server.runner()["checked_at"])
+
+
+def test_a_restart_pulls_the_running_version_again(server: Server) -> None:
+    server.release("v1.1.0")
+    server.ask({"id": 8, "action": "restart", "version": "current"})
+    done = server.run("control.sh")
+    assert done.returncode == 0, done.stderr
+    assert server.version() == "1.0.0"
+    assert (server.result()["state"], server.result()["to"]) == ("done", "1.0.0")
+    assert "compose pull themi" in server.calls() and "compose up -d themi" in server.calls()
+
+
+def test_already_on_the_newest_restarts_nothing(server: Server) -> None:
+    server.release("v1.0.0")
+    server.ask({"id": 9, "action": "update", "version": "newest"})
+    assert server.run("control.sh").returncode == 0
+    assert server.result()["state"] == "done" and server.result()["to"] == "1.0.0"
+    assert not server.log.exists()  # docker never ran
+
+
+@pytest.mark.parametrize(
+    "request_text",
+    [
+        json.dumps({"id": 1, "action": "update", "version": "1.1.0; rm -rf /"}),
+        json.dumps({"id": 1, "action": "shell", "version": "newest"}),
+        json.dumps({"id": 1, "action": "restart", "version": "newest"}),
+        json.dumps({"id": "1", "action": "update", "version": "newest"}),
+        "not json",
+    ],
+)
+def test_a_request_it_does_not_know_is_refused(server: Server, request_text: str) -> None:
+    server.release("v1.1.0")
+    server.ask(request_text)
+    done = server.run("control.sh")
+    assert done.returncode == 1 and "refused" in done.stderr
+    assert server.result()["state"] == "refused"
+    assert server.version() == "1.0.0" and not server.log.exists()
+
+
+def test_a_failed_update_is_reported_as_failed(server: Server) -> None:
+    server.release("v1.1.0")
+    server.ask({"id": 3, "action": "update", "version": "newest"})
+    done = server.run("control.sh", unhealthy="1.1.0")
+    assert done.returncode == 1
+    result = server.result()
+    assert (result["state"], result["from"], result["to"]) == ("failed", "1.0.0", "1.1.0")
+    assert "back on 1.0.0" in result["detail"]
+    assert server.version() == "1.0.0"
+
+
+def test_no_release_found_is_reported_as_failed(server: Server) -> None:
+    server.ask({"id": 4, "action": "update", "version": "newest"})  # GitHub has nothing
+    assert server.run("control.sh").returncode == 1
+    assert (server.result()["state"], server.result()["to"]) == ("failed", None)
+    assert not server.log.exists()
+
+
+def test_a_request_runs_once(server: Server) -> None:
+    server.release("v1.1.0")
+    server.ask({"id": 5, "action": "update", "version": "newest"})
+    assert server.run("control.sh").returncode == 0
+    pulls = server.calls().count("compose pull themi")
+    assert server.run("control.sh").returncode == 0  # nothing waiting: only a check
+    assert server.calls().count("compose pull themi") == pulls
+    assert server.result()["id"] == 5
+
+
+def test_the_daily_check_only_notes_the_newest_release(server: Server) -> None:
+    server.release("v1.2.0")
+    assert server.run("control.sh", "--check").returncode == 0
+    runner = server.runner()
+    assert runner["newest"] == "1.2.0" and runner["installed_at"] and runner["checked_at"]
+    installed = runner["installed_at"]
+    with (server.dir / ".env").open("a") as env:
+        env.write("THEMI_GITHUB_TOKEN=github_pat_secret\n")  # a private repository
+    server.release("1.3.0")
+    server.run("control.sh", "--check")
+    assert server.runner() == {**server.runner(), "newest": "1.3.0", "installed_at": installed}
+    assert not server.log.exists()
+
+
+def test_the_repo_comes_from_the_image_or_its_own_setting(server: Server) -> None:
+    (server.dir / ".env").write_text(
+        "THEMI_IMAGE=ghcr.io/x/themi\nTHEMI_VERSION=1.0.0\nTHEMI_REPO=someone/else\n"
+    )
+    server.release("v1.2.0")  # x/themi's, which THEMI_REPO overrides
+    server.run("control.sh", "--check")
+    assert server.runner()["newest"] is None
 
 
 def test_a_released_image_says_its_version() -> None:

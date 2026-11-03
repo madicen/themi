@@ -81,6 +81,8 @@ class Settings(BaseModel):
     # points it at a fake instead of LG's regional servers.
     thinq_url: str = ""
     backup: BackupConfig | None = None
+    # D3a: the folder shared with the host's runner, for updates asked for on the website.
+    control_dir: Path | None = None
 
     def cipher(self) -> Cipher:
         return Cipher(self.secret_key)
@@ -254,6 +256,7 @@ class Settings(BaseModel):
             ),
             home_connect_url=home_connect_url.rstrip("/") or HOME_CONNECT_URL,
             thinq_url=thinq_url.rstrip("/"),
+            control_dir=Path(control) if (control := get("THEMI_CONTROL_DIR")) else None,
             backup=BackupConfig(
                 S3Config(
                     endpoint.rstrip("/"),

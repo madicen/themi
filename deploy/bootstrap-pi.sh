@@ -2,10 +2,12 @@
 # Prepare a Raspberry Pi (or any Debian machine) for Themi: docs/RASPBERRY_PI.md, Part 2,
 # steps 3 to 6. Safe to run again: each step checks before it changes anything.
 #
-#   scp deploy/bootstrap-pi.sh deploy/compose.yml deploy/update.sh themi@themi.local:
+#   scp deploy/bootstrap-pi.sh deploy/compose.yml deploy/*.sh deploy/themi-control* \
+#       themi@themi.local:
 #   ssh themi@themi.local ./bootstrap-pi.sh
 #
 # Afterwards: put .env in ~/themi (chmod 600), log in to ghcr.io, and restore or init.
+# Then `~/themi/control.sh --install`, if .env wasn't there yet, for the website's Update.
 set -euo pipefail
 
 step() { echo; echo "== $*"; }
@@ -48,16 +50,27 @@ sudo tailscale funnel --bg 8080 || echo "(turn on Funnel for this tailnet, then 
 
 step "Themi's folder"
 mkdir -p "$home_dir"
-for file in compose.yml update.sh; do
-    if [ -f "$HOME/$file" ] && [ ! -f "$home_dir/$file" ]; then
+# Newer copies replace older ones, so running this again with new files updates them.
+for file in compose.yml update.sh control.sh themi-control.path themi-control.service \
+    themi-control-check.service themi-control-check.timer; do
+    if [ -f "$HOME/$file" ]; then
         mv "$HOME/$file" "$home_dir/$file"
     fi
 done
-[ -f "$home_dir/update.sh" ] && chmod +x "$home_dir/update.sh"
+for script in update.sh control.sh; do
+    [ -f "$home_dir/$script" ] && chmod +x "$home_dir/$script"
+done
 if [ -f "$home_dir/.env" ]; then
     chmod 600 "$home_dir/.env"
 else
     echo "Next: put .env in $home_dir (chmod 600; keep a copy in a password manager)"
+fi
+
+step "Updates from the website (the Development page)"
+if [ -f "$home_dir/.env" ] && [ -f "$home_dir/control.sh" ]; then
+    "$home_dir/control.sh" --install
+else
+    echo "Once .env is in place: $home_dir/control.sh --install"
 fi
 
 step "Done"

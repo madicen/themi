@@ -1,0 +1,8 @@
+# Started by themi-control-check.timer: looks up the newest release for the website.
+[Unit]
+Description=Look up Themi's newest release
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/themi
+ExecStart=%h/themi/control.sh --check

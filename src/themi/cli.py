@@ -142,6 +142,7 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
         roborock=roborock_library.available(),
         keep=GKeepAccount,
         tool_routing=settings.tool_routing,
+        control_dir=settings.control_dir,
     )
     return Runtime(
         app,

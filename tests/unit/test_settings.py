@@ -229,3 +229,10 @@ def test_tool_routing_defaults_to_groups_and_takes_all() -> None:
     assert meaning.tool_routing == "embeddings"  # P7b
     with pytest.raises(SettingsError, match="THEMI_TOOL_ROUTING must be groups, all or embed"):
         Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_TOOL_ROUTING": "some"})
+
+
+def test_the_control_folder_is_optional() -> None:
+    # D3a: updates from the website need the folder shared with the host's runner.
+    assert Settings.from_mapping({"THEMI_SECRET_KEY": KEY}).control_dir is None
+    settings = Settings.from_mapping({"THEMI_SECRET_KEY": KEY, "THEMI_CONTROL_DIR": "/control"})
+    assert settings.control_dir == Path("/control")

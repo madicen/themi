@@ -10,6 +10,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
+from pathlib import Path
 
 from themi.accounts import AccountStore
 from themi.ai.embeddings import RouterEmbedder, VectorCache
@@ -92,6 +93,7 @@ from themi.energy.windows import EnergyReceptivity
 from themi.scheduler import Scheduler
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
+from themi.updates import ServerControl
 
 ChannelFactory = Callable[[AccountStore], TelegramChannel]
 
@@ -118,6 +120,7 @@ class App:
     periodic: list[PeriodicTask] = field(default_factory=list)
     # Queued background work (the Runtime adds the periodic tasks to it too).
     scheduler: Scheduler | None = None
+    server: ServerControl | None = None  # updates and restarts from the website (D3a)
 
 
 def build_app(
@@ -137,6 +140,7 @@ def build_app(
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
+    control_dir: Path | None = None,
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
@@ -250,6 +254,10 @@ def build_app(
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
     ]
+    server = ServerControl(services, control_dir)
+    server.install()
+    if control_dir is not None:
+        periodic.append(PeriodicTask("server.results", timedelta(minutes=1), server.check))
     if backup is not None:
         backups = BackupJob(store, Backups(backup, cipher), outbox)
         periodic.append(PeriodicTask("backup.nightly", timedelta(hours=1), backups.run))
@@ -359,6 +367,7 @@ def build_app(
         rulebook,
         periodic,
         scheduler,
+        server,
     )
 
 
