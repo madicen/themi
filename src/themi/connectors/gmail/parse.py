@@ -2,7 +2,9 @@
 
 - Headers: From (address and name), To and Cc, Subject, Message-ID, References.
 - Body: the first text/plain part; failing that, the text/html part with tags,
-  scripts and styles stripped. Capped at `MAX_BODY` characters.
+  scripts and styles stripped. Capped at `MAX_BODY` characters. A plain part that
+  shares almost nothing with Gmail's snippet, when the HTML does, gives way to the HTML:
+  that's what the reader saw (bug #134: the plain part was another template's).
 - Attachments: listed (name, type, size) but never downloaded.
 
 Everything here is external text. It's stored and later shown to models only
@@ -18,6 +20,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.utils import getaddresses, parseaddr
+from html import unescape
 from html.parser import HTMLParser
 from typing import Any
 
@@ -132,6 +135,15 @@ def tidy(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
+def _agrees(snippet: str, text: str) -> bool:
+    """Most of the snippet's first words are in the text (or it's too short to say)."""
+    words = re.findall(r"[a-z0-9$]{4,}", unescape(snippet).lower())[:8]
+    if len(words) < 3:
+        return True
+    have = set(re.findall(r"[a-z0-9$]{4,}", text.lower()))
+    return sum(w in have for w in words) * 2 >= len(words)
+
+
 def parse_message(message: dict[str, Any]) -> GmailMessage:
     payload = message.get("payload", {})
     headers = _headers(payload)
@@ -150,6 +162,10 @@ def parse_message(message: dict[str, Any]) -> GmailMessage:
         elif mime == "text/html" and not html:
             html = _decode(body.get("data"), _charset(part))
     text = tidy(plain) if plain.strip() else html_to_text(html)
+    snippet = message.get("snippet", "")
+    if plain.strip() and html and not _agrees(snippet, text):
+        from_html = html_to_text(html)
+        text = from_html if _agrees(snippet, from_html) else text
     internal = int(message.get("internalDate", "0") or 0)
     return GmailMessage(
         id=message["id"],

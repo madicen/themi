@@ -37,9 +37,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from html import unescape
 from typing import Any
 
 from themi import clock
@@ -100,6 +102,10 @@ appointment, a reservation, a flight, a visit with a set time), fill event: a
 short title ("Vet: Biscuit's checkup"), the date (YYYY-MM-DD), start and end
 (HH:MM, 24-hour; both empty for an all-day event) and the place, as written.
 Otherwise leave every event field empty.
+
+Each email's subject and preview are what the family sees in the inbox. If the body
+says something else (a payment "scheduled" in the subject, "cancelled" in the body),
+go by the subject and preview, and set unsure; never call it urgent on the body alone.
 
 Set unsure to true when you can't tell whether an email needs attention (whether
 it's urgent, or matters at all); the family is asked about those. Otherwise false.
@@ -204,6 +210,12 @@ def _sender(row: dict[str, Any]) -> str:
     )
 
 
+def _preview(row: dict[str, Any]) -> str:
+    """Gmail's snippet, without its padding: what the inbox shows (bug #134)."""
+    text = unescape(row.get("snippet") or "")
+    return " ".join(re.sub(r"[\u034f\u200b-\u200f\u2060\ufeff]", " ", text).split())
+
+
 def email_prompt(rows: list[dict[str, Any]], accounts: dict[int, LinkedAccount]) -> str:
     parts = []
     for row in rows:
@@ -212,6 +224,7 @@ def email_prompt(rows: list[dict[str, Any]], accounts: dict[int, LinkedAccount])
         header = (
             f"email_id: {row['id']}\nTo inbox: {account.address}\nFrom: {_sender(row)}\n"
             f"Subject: {row['subject']}\n"
+            + (f"Preview: {preview}\n" if (preview := _preview(row)) else "")
             + (f"Attachments: {attachments}\n" if attachments else "")
             + "\n"
         )
