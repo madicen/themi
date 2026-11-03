@@ -11,6 +11,9 @@ import os
 import sqlite3
 import subprocess
 import sys
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -67,6 +70,7 @@ class Server:
         self.control = self.dir / "control"
         self.control.mkdir()
         self.github = root / "github"
+        self.api = self.github.as_uri()
         (self.dir / "compose.yml").write_text((REPO / "deploy" / "compose.yml").read_text())
         (self.dir / ".env").write_text("THEMI_IMAGE=ghcr.io/x/themi\nTHEMI_VERSION=1.0.0\n")
         docker = self.bin / "docker"
@@ -99,7 +103,7 @@ class Server:
             **{f"FAKE_{k.upper()}": v for k, v in fake.items()},
         }
         env.pop("THEMI_VERSION", None)
-        env["GITHUB_API"] = self.github.as_uri()  # D3b: no network
+        env["GITHUB_API"] = self.api  # D3b: no network
         return subprocess.run(
             [str(self.dir / script), *args], env=env, capture_output=True, text=True
         )
@@ -320,6 +324,59 @@ def test_the_repo_comes_from_the_image_or_its_own_setting(server: Server) -> Non
     server.release("v1.2.0")  # x/themi's, which THEMI_REPO overrides
     server.run("control.sh", "--check")
     assert server.runner()["newest"] is None
+
+
+def test_settings_read_like_compose_reads_them(server: Server) -> None:
+    """A comment after a value, or quotes round it, aren't part of it (as in Compose)."""
+    (server.dir / ".env").write_text(
+        'THEMI_IMAGE="ghcr.io/y/other"\nTHEMI_VERSION=1.0.0   # pinned\n'
+        "THEMI_REPO=x/themi       # only if it isn't the one in THEMI_IMAGE\n"
+    )
+    server.release("v1.2.0")
+    server.ask({"id": 8, "action": "update", "version": "newest"})
+    done = server.run("control.sh")
+    assert done.returncode == 0, done.stderr
+    assert (server.result()["from"], server.result()["to"]) == ("1.0.0", "1.2.0")
+
+
+def test_no_repository_says_so(server: Server) -> None:
+    (server.dir / ".env").write_text("THEMI_IMAGE=themi:local\nTHEMI_VERSION=1.0.0\n")
+    server.ask({"id": 9, "action": "update", "version": "newest"})
+    assert server.run("control.sh").returncode == 1
+    assert "doesn't name a GitHub repository" in server.result()["detail"]
+
+
+@pytest.fixture
+def refusing_github() -> Iterator[str]:
+    """A GitHub on localhost that turns every token down, as it does an expired one."""
+
+    class Refuse(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(401 if self.headers.get("Authorization") else 404)
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Refuse)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{httpd.server_port}"
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def test_a_token_github_turns_down_says_so(server: Server, refusing_github: str) -> None:
+    server.api = refusing_github
+    with (server.dir / ".env").open("a") as env:
+        env.write("THEMI_GITHUB_TOKEN=github_pat_expired\n")
+    server.ask({"id": 10, "action": "update", "version": "newest"})
+    assert server.run("control.sh").returncode == 1
+    detail = server.result()["detail"]
+    assert "THEMI_GITHUB_TOKEN" in detail and "github_pat_expired" not in detail
+    (server.dir / ".env").write_text("THEMI_IMAGE=ghcr.io/x/themi\nTHEMI_VERSION=1.0.0\n")
+    server.ask({"id": 11, "action": "update", "version": "newest"})
+    server.run("control.sh")
+    assert "no release in x/themi" in server.result()["detail"]
 
 
 def test_a_released_image_says_its_version() -> None:

@@ -21,7 +21,20 @@ TAIL_LINES=40
 die() { echo "control: $*" >&2; exit 1; }
 say() { echo "control: $*"; }
 
-setting() { sed -n "s/^$1=//p" .env 2>/dev/null | tail -n 1; }
+# A value as Compose reads it: the last one wins, quotes come off, and so does a comment
+# after it ("THEMI_REPO=owner/repo   # why").
+setting() {
+    python3 - "$1" <<'PY' 2>/dev/null
+import re, sys
+value = ""
+for line in open(".env"):
+    key, sep, raw = line.rstrip("\n").partition("=")
+    if sep and key == sys.argv[1]:
+        value = raw.strip()
+quoted = re.fullmatch(r"""(["'])(.*?)\1\s*(#.*)?""", value)
+print(quoted.group(2) if quoted else re.sub(r"\s+#.*", "", value))
+PY
+}
 
 # Written whole or not at all, from KEY=VALUE arguments (VALUE "-" is null; an int stays one).
 write_json() {
@@ -55,20 +68,47 @@ repo() {
     echo "$repo"
 }
 
-# The newest release's version (v1.5.0 -> 1.5.0), or nothing if it can't be found.
-newest() {
+# The newest release's version (v1.5.0 -> 1.5.0), or "-" and why it couldn't be found.
+lookup() {
     local repo token
-    repo="$(repo)" || return 0
+    repo="$(repo)" \
+        || { echo "- THEMI_REPO or THEMI_IMAGE in .env doesn't name a GitHub repository"; return 0; }
     token="$(setting THEMI_GITHUB_TOKEN)"   # only for a private repository
-    # The token goes in on stdin, so it never shows in the process list.
+    # The token goes in on stdin, so it never shows in the process list. The answer comes
+    # back with its HTTP status on a last line of its own.
     { [ -n "$token" ] && printf 'Authorization: Bearer %s\n' "$token"; true; } \
-        | curl -fsS --max-time 20 -H "Accept: application/vnd.github+json" -H @- \
-        "$GITHUB_API/repos/$repo/releases/latest" 2>/dev/null \
+        | { curl -sS --max-time 20 -w '\n%{http_code}' -H "Accept: application/vnd.github+json" \
+            -H @- "$GITHUB_API/repos/$repo/releases/latest" 2>/dev/null || true; } \
         | python3 -c '
 import json, re, sys
-tag = str(json.load(sys.stdin).get("tag_name", "")).removeprefix("v")
-print(tag if re.fullmatch(r"\d+\.\d+\.\d+", tag) else "")
-' 2>/dev/null || true
+body, _, code = sys.stdin.read().rpartition("\n")
+repo, token = sys.argv[1:]
+try:
+    found = json.loads(body)
+except ValueError:
+    found = None
+tag = str(found.get("tag_name", "")).removeprefix("v") if isinstance(found, dict) else ""
+if re.fullmatch(r"\d+\.\d+\.\d+", tag):
+    print(tag)
+elif tag:
+    print(f"- the newest release in {repo} is {tag}, not a version like v1.2.3")
+elif code == "401":
+    print("- GitHub turned down THEMI_GITHUB_TOKEN; it may have expired "
+          "(a public repository needs none)")
+elif code == "403":
+    print(f"- GitHub refused: too many lookups for now, or the token can not see {repo}")
+elif code == "404":
+    print(f"- no release in {repo}" + ("" if token else
+          ", or it is private and needs THEMI_GITHUB_TOKEN"))
+else:
+    print("- could not reach GitHub")
+' "$repo" "${token:+token}" 2>/dev/null || echo "- could not read what GitHub said"
+}
+
+newest() {  # the version alone, or nothing
+    local found
+    found="$(lookup)"
+    [ "${found%% *}" = "-" ] || echo "$found"
 }
 
 current_version() {
@@ -119,7 +159,7 @@ install() {
 }
 
 run_request() {
-    local taken id action version current target output status to
+    local taken id action version current target found output status to
     [ -f control/request.json ] || { note_runner "$(newest)"; return 0; }
     taken="control/request.taken"
     mv control/request.json "$taken"   # first, so it runs once
@@ -147,13 +187,16 @@ print(rid if isinstance(rid, int) and not isinstance(rid, bool) else "-",
 
     target="$current"
     if [ "$action" = "update" ]; then
-        target="$(newest)"
-        note_runner "$target"
-        if [ -z "$target" ]; then
+        found="$(lookup)"
+        target="${found%% *}"
+        if [ "$target" = "-" ]; then
+            note_runner ""
             write_json control/result.json "id=$id" state=failed "from=$current" "to=-" \
-                "detail=couldn't find the newest release on GitHub" "finished_at=$(now)"
-            die "couldn't find the newest release"
+                "detail=couldn't find the newest release on GitHub: ${found#- }" \
+                "finished_at=$(now)"
+            die "couldn't find the newest release: ${found#- }"
         fi
+        note_runner "$target"
         if [ "$target" = "$current" ]; then
             write_json control/result.json "id=$id" state=done "from=$current" "to=$current" \
                 "detail=already on $current" "finished_at=$(now)"
