@@ -155,7 +155,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F20c | Feedback: rewrites that drop facts and invent choices, a confirmation with its praise, tonight's nudge tonight | Feedback | [x] 2026-10-31 |
 | F20d | Feedback: a follow-up after someone else's job that isn't a task yet | Feedback | [x] 2026-10-31 |
 | F21a | Feedback: "<list name>. X" adds it, longer items, a plain list-add reply | Feedback | [x] 2026-11-01 |
-| F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [ ] |
+| F21b | Feedback: a rule card says what it really makes automatic, a rule Themi can't keep | Feedback | [x] 2026-11-02 |
 | F21c | Feedback: "I ran this morning" marks the run done, a refused "done" isn't said to be done | Feedback | [x] 2026-11-02 |
 | V1 | Robot vacuum (Roborock): chores when it needs a hand, back to its dock | 5 Devices | [x] 2026-11-01 |
 | D3a | Development page: update or restart the server from the website (Themi's side) | Dev tooling | [x] 2026-11-02 |
@@ -7256,7 +7256,7 @@ Notes (2026-11-01):
   still locked; see F21b.
 
 ### F21b · Feedback (2026-11-01): a rule card says what it really makes automatic, a rule Themi can't keep
-Status: [ ]
+Status: [x] 2026-11-02
 Depends on: 13, F16a, F21a
 Read first: "Trust tiers" (a shared category becomes automatic for everyone; only an admin
 locks that), "Rules". From Erin's bug #116 (2026-11-01, 5:23 am): her personal policy rule
@@ -7281,6 +7281,22 @@ repeats the card isn't sent.
 
 Data (Michael decides): once F21a is live, unlock rule 23 so list adds ask again except
 where they asked in their own words.
+
+Notes (2026-11-02):
+- A grant's summary and text come from its category (`Rulebook._grant_words`): "Automatic
+  for everyone: <label>" for a shared category, "Automatic: <label>" for a personal one (the
+  card already says "just for you"). The model's summary follows as "(the idea: ...)" unless
+  it's already in the label. The rule's text, which goes into every prompt, is "Themi may
+  <label>, without asking first, for everyone." `grant_automatic` (the website) is unchanged.
+- Migration 0095 relabels `list_add` "Add items to any of Themi's lists, the wall's
+  included". Rule 23's own summary isn't rewritten; unlocking it is still Michael's call.
+- `propose_rule` refuses a policy whose summary or text skips a yes (`SKIPS_YES`: "without
+  asking", "automatically", "directly add", "don't ask"...) with the two choices.
+  `test_rules.py`'s sample policy dropped its "without asking" for this.
+- The agent drops a reply that is only a card's summary sent this turn, with or without
+  "Go ahead, or not now?" (`_repeats_card`, compared on words alone). The card is the reply.
+- Data: unlock rule 23 once this is live; mark #116 reviewed.
+- Setup: restart `themi run`. Migration 0095 runs on start.
 
 ### F21c · Feedback (2026-11-01): "I ran this morning" marks the run done, and a refused "done" isn't said to be done
 Status: [x] 2026-11-02
