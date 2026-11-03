@@ -8,6 +8,7 @@ from datetime import date, time, timedelta
 
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.channels.pauses import EVERYTHING
 from themi.core.praise import PRAISE
 from themi.core.routines import Routines
 
@@ -190,6 +191,59 @@ async def test_ticking_and_removing_from_chat(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     morning = routines(scenario).find(erin, "Morning")
     assert morning is not None and routines(scenario).items(morning) == []
+
+
+async def test_a_tick_in_chat_updates_the_check(scenario: Scenario) -> None:
+    """F23b, bug #129: the check follows a tick made anywhere, not only its own buttons."""
+    add(scenario, "Erin", "Morning", "Vitamins")
+    add(scenario, "Erin", "Morning", "Make the bed")
+    await at(scenario, WED, 12)
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "vitamins"})
+    scenario.primary.queue_text("Nice.")
+    await scenario.say("Erin", "took my vitamins")
+    assert scenario.edits("Erin")[-1]["text"] == (
+        "Morning routine, still open:\n- Make the bed\nDone already?"
+    )
+
+
+async def test_a_skipped_check_stays_skipped(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Morning", "Vitamins")
+    add(scenario, "Erin", "Morning", "Make the bed")
+    await at(scenario, WED, 12)
+    await scenario.tap("Erin", "Skip today")
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "vitamins"})
+    scenario.primary.queue_text("Nice.")
+    await scenario.say("Erin", "took my vitamins")
+    assert scenario.edits("Erin")[-1]["text"] == "Morning routine: left for today."
+
+
+async def test_a_held_check_is_written_again_as_it_goes(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    add(scenario, "Erin", "Morning", "Vitamins")
+    add(scenario, "Erin", "Morning", "Make the bed")
+    scenario.app.outbox.pauses.pause(erin, EVERYTHING, clock.now().replace(hour=13))
+    await at(scenario, WED, 12)
+    r = routines(scenario)
+    vitamins = r.find_item(erin, "vitamins")
+    assert vitamins is not None
+    await r.tick_now(vitamins, WED)
+    await at(scenario, WED, 13)
+    assert (
+        scenario.inbox("Erin")[-1] == "Morning routine, still open:\n- Make the bed\nDone already?"
+    )
+    assert scenario.last_buttons("Erin") == ["✓ Make the bed", "Skip today"]
+
+
+async def test_a_held_check_with_nothing_left_is_dropped(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    add(scenario, "Erin", "Morning", "Vitamins")
+    scenario.app.outbox.pauses.pause(erin, EVERYTHING, clock.now().replace(hour=13))
+    await at(scenario, WED, 12)
+    vitamins = routines(scenario).find_item(erin, "vitamins")
+    assert vitamins is not None
+    await routines(scenario).tick_now(vitamins, WED)
+    await at(scenario, WED, 13)
+    assert not any("routine" in t for t in scenario.inbox("Erin"))
 
 
 async def test_an_item_for_someone_elses_routine_asks_first(scenario: Scenario) -> None:

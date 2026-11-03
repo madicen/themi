@@ -231,6 +231,7 @@ class RoutinesWall:
             ticked = self.routines.ticked(item, today)
             if link["wall_id"] in done_on_wall and not ticked:
                 self.routines.tick(item, today)
+                await self.routines.show_tick(item, today)  # bug #129: the check follows
                 member = self.store.get_member(self.routines.get(item.routine_id).member_id)
                 await praise.from_wall(self.services.outbox, member, item.title, f"r{item.id}")
             elif ticked and link["wall_id"] not in done_on_wall:
