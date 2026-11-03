@@ -145,6 +145,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         phrasing_notes=row["phrasing_notes"],
         checkin_reviews=bool(row["checkin_reviews"]),
         done_praise=bool(row["done_praise"]),
+        listen_first=bool(row["listen_first"]),
         day_budget=row["day_budget"],
         focus_count=row["focus_count"],
         chart_limit=row["chart_limit"],
@@ -393,6 +394,7 @@ class AccountStore:
         phrasing_notes: str | None = None,
         checkin_reviews: bool | None = None,
         done_praise: bool | None = None,
+        listen_first: bool | None = None,
         day_budget: int | None = None,
         focus_count: int | None = None,
         chart_limit: int | None = None,
@@ -477,6 +479,8 @@ class AccountStore:
             changes["leave_heads_up"] = int(leave_heads_up)
         if done_praise is not None:
             changes["done_praise"] = int(done_praise)
+        if listen_first is not None:
+            changes["listen_first"] = int(listen_first)
         if day_budget is not None:
             if not 0 <= day_budget <= MAX_DAY_BUDGET:
                 raise InvalidValue(f"a day's budget is between 0 and {MAX_DAY_BUDGET}")

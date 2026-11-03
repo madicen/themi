@@ -35,7 +35,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import focus, partner
+from themi.core import focus, listening, partner
 from themi.core.approvals import ASK_TEXT
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
@@ -497,6 +497,7 @@ class Agent:
                         return ""  # the tool's message was the answer (bug #89)
                     reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
+                    reply = listening.trimmed(reply, text)  # F22e: no "Anything else?"
                     waiting = self._waiting_since(member, mark)
                     if _repeats_card(reply, waiting):
                         return _done_first(ctx.done, "")
@@ -523,10 +524,16 @@ class Agent:
         return _done_first(ctx.done, TANGLED_TEXT)
 
     def _signals(self, member: Member, text: str) -> list[str]:
-        """What the message, or the mode they're in, asks of this turn. In burnout mode
-        (F22d) that's the only line: focus_now's offer would be a demand."""
+        """What the message, or the mode they're in, asks of this turn: its size, and
+        listening first (F22e), or a few things for now when it's too much (O1a). In
+        burnout mode (F22d) its own line replaces both: focus_now would be a demand."""
+        found = listening.signals(text, member)
         held = self.services.burnout.signals(member) if self.services.burnout else []
-        return held or focus.signals(text, member, self.services.store.list_members())
+        if held:
+            return held + [s for s in found if s != listening.LISTEN_SIGNAL]
+        if listening.holds_off_solving(text, member):
+            return found
+        return focus.signals(text, member, self.services.store.list_members()) + found
 
     def _history(self, member: Member, event: InboundEvent) -> list:
         recent = self.services.store.recent_messages(member.id, self.history + 3)

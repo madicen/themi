@@ -76,6 +76,7 @@ class Member:
     phrasing_notes: str = ""  # their own words on how they like things said
     checkin_reviews: bool = True  # now and then, ask whether a check-in is helping (idea #13)
     done_praise: bool = True  # a short warm word when they mark a task done (idea #102)
+    listen_first: bool = True  # feelings get listening; ask before problem-solving (F22e)
     focus_count: int = 3  # things "for now" when it's too much (O1a)
     day_budget: int = 0  # at most this many on a day when the rest is spread (O1b); 0: usual
     chart_limit: int = 0  # chores on the wall's chart at a time; 0 is no limit (C2d)

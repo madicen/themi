@@ -38,7 +38,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import partner, priority
+from themi.core import listening, partner, priority
 from themi.core.repeat import next_occurrences
 from themi.core.tasks import Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -313,6 +313,12 @@ async def focus_now(ctx: ToolContext, args: dict[str, Any]) -> str:
             f"Nothing changed: this is about {other.name}, not them, and their own day "
             f"stays as it is. Don't say anything was pared down. Offer to show what's on "
             f"{other.name}'s plate (day_summary whose: partner), or to take some of it on."
+        )
+    if listening.holds_off_solving(ctx.request_text, ctx.member):
+        raise ToolFailed(  # F22e (idea #125): ask before problem-solving
+            "Not sent: they're sharing how they feel, not asking for anything. Listen and "
+            "validate first; offer to pare today down only as a question ('Want me to pick "
+            "a few things for now, or just to listen?'), and run this once they say yes."
         )
     text = await focus.send(ctx.member, spread=bool(args["spread"]))
     ctx.answered.append("focus_now")
