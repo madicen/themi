@@ -157,6 +157,8 @@ async def test_overwhelmed_said_about_the_partner(scenario: Scenario) -> None:
     ],
 )
 async def test_whose_overwhelm(scenario: Scenario, said: str, theirs: bool) -> None:
+    husband = scenario.member("Husband")  # F22e would listen first to a second sentence
+    scenario.app.store.update_settings(husband, husband.id, listen_first=False)
     scenario.primary.queue_text("Okay.")
     await scenario.say("Husband", said)
     assert (SIGNAL in turn(scenario)) is theirs
