@@ -138,7 +138,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 31 | Laundry module and rescue protocol | 5 Devices | [x] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [x] 2026-11-04 |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
-| CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [ ] |
+| CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [x] 2026-11-04 |
 | CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
@@ -199,6 +199,10 @@ and record the change here.
   other OpenAI-compatible server via `base_url`).
 - Own REST clients over `httpx` for Google (OAuth, Gmail, Calendar) and Tuya, so they are easy
   to point at local HTTP fakes.
+- CatGenie's client runs over `curl_cffi` instead, agreed with the user on 2026-11-04 (CG1a):
+  PetNovations' cloud quietly drops requests whose TLS doesn't look like a phone's, which
+  httpx's does. It has wheels for the Pi (aarch64) and `python:3.13-slim`. Tests and
+  `make dev` still go through an httpx transport, behind the client's small wire seam.
 - SQLite (stdlib `sqlite3`, WAL, FTS5) with a small numbered-migration runner. No ORM.
 - `cryptography` Fernet for secrets at rest; key from `THEMI_SECRET_KEY` or a key file.
 - Tests: pytest, pytest-asyncio, Hypothesis, coverage.py. Lint/format: ruff. Types: pyright.
@@ -6619,7 +6623,7 @@ Notes (2026-11-04):
   energy input.
 
 ### CG1a · CatGenie litter box: unofficial client, sign-in by text code, captures
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: 32
 Read first: "Integrations" → CatGenie row (no official API, risk high); "Module behaviour" →
 feeders and litter box; 32's notes (the connector this one copies).
@@ -6681,6 +6685,47 @@ Tests:
 - Discovery maps to `litter_box`; status reads; capture strips every identifying field.
 
 Commit when done.
+
+Notes (2026-11-04):
+- curl_cffi agreed by Michael (asked to implement after it was raised); recorded under Fixed
+  technical choices. 0.17.0 has an abi3 aarch64 wheel. `pyproject.toml` needs
+  `make install` (or the Docker image rebuilt) on the Pi.
+- `themi.connectors.catgenie.client`: our own client. The wire is a small seam (`Wire`):
+  `CurlWire` (curl_cffi, `chrome131_android`) for real, `HttpxWire` over a transport for the
+  fake. AES comes from `cryptography`; random parts from `secrets`; time from `themi.clock`.
+  The app's HMAC headers aren't sent (the package says the server doesn't check them), and
+  the `config/v1/url` preflight is skipped (the package makes it but ignores the answer). No
+  `CATGENIE_URL` setting: like Tuya, tests use the transport, so it wasn't needed.
+- Errors: an empty 2xx or non-JSON is a failure ("its edge may be filtering"), never an empty
+  account; a 401 renews once and tries again; a refused refresh token (400/401/403) is
+  `SignInLost`: kept as the account's problem, the admins told once (CG1b's job) and no more
+  calls until linked again. A renewal that hands back a new refresh token replaces the kept
+  one. The access token's `expiration` (ms) is used when given, else 30 minutes.
+- Phone numbers: "+<digits>", or 10 digits taken as US. Only passed through a hidden form
+  field between the two steps, as Roborock's email is; never stored or logged (a test checks
+  every table).
+- `CatGenieWatcher`, job `devices.litter_box` every 10 minutes: one device-list call and one
+  notifications call. Migration 0104: `catgenie_account`, `catgenie_devices` (raw report),
+  `catgenie_notifications` (each once; the first read is marked `first` and never raised),
+  and `litter_states` (problems as kind -> words, sani-solution, cycles, a live alert). The
+  watcher already emits `LitterBoxEvent`s (error, alert, solution) for CG1b, and hands every
+  reading to `reading_listeners` (for the granules' count).
+- Alerts (my reading, until captures say better): a notification whose `errorType` is set
+  is a problem from its time until the box is seen to clean after it (`lastClean` later,
+  not cleaning now). `ALERT_TYPES` (by numeric `type`) is empty until captures show which
+  types are errors.
+- `CODES` is empty: each error reads "it shows an error (heater fault)", from the code. The
+  `activeErrors` entries' shape is unknown, so a dict's `errorType`/`error`/`code`/`type`/
+  `name` is taken, else its JSON. Times without a zone are taken as UTC, as the package does.
+- `appliance_status` covers `litter_box` (state, sani-solution, errors, last clean). The
+  devices group's words and two examples cover litter, CatGenie, sani-solution, cartridge
+  and granules. Log redaction now masks JWTs too.
+- Accounts page: a "Litter box" row: phone, Send code, the code, Link; the box's state and
+  what it reports (its id and MAC left out); Unlink. Admins only.
+- Not tested against PetNovations itself.
+- Setup: `make install` (curl_cffi), restart (migration 0104), link on the Accounts page.
+  Then please run `themi catgenie capture` a few times as the box shows different things
+  (cleaning, cartridge low, dome off, any error) and share the files.
 
 ### CG1b · CatGenie litter box: errors and supplies become chores
 Status: [ ]
