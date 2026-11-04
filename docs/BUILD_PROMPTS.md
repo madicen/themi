@@ -94,7 +94,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P6 | Near-twin tools: sent together, told apart, tested both ways | Feedback | [x] 2026-10-30 |
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
-| P8a | "Which task?" refusals: how often the naming check says no, and how often it's wrong | Feedback | [ ] |
+| P8a | "Which task?" refusals: how often the naming check says no, and how often it's wrong | Feedback | [x] 2026-11-03 |
 | P8b | An embedding fallback for "which task?", if P8a says | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
@@ -4806,7 +4806,7 @@ Notes (2026-10-30):
   P3's numbers against the word lists' week decides whether the word lists go.
 
 ### P8a · "Which task?" refusals: how often the naming check says no, and how often it's wrong
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: F21c, P3
 Asked 2026-11-02 (Michael), after bug #119 ("I ran this morning" didn't name "Go for a
 run"): would embeddings or a small "System 1" model do the naming check better than words?
@@ -4833,6 +4833,42 @@ wrong, of another task as right; the eval runner scores the word check on fake c
 
 Decides P8b: build it only if, after F21c, the word check still wrongly refuses often
 enough to notice (more than about one a week), or the eval's paraphrases show a real gap.
+
+Notes (2026-11-03):
+- Picked over P2b, whose week of P2a timings (from 2026-10-28) isn't in yet.
+- `ToolFailed(refused=...)` marks a naming check's no: `not_named` (`complete_task`,
+  `add_follow_up`) or `names_other` (`_check_meant`, so cancel and reschedule too). The tool
+  runner keeps it in `naming_refusals` (migration 0099: member, tool, kind, task; no text;
+  kept 12 weeks, longer than `reply_tools`' week, so weeks can be compared).
+- Deviation: what follows is the same *tool* going through for the same person within ten
+  minutes (`naming.CHECKED`, settled in `ToolRegistry.run`): on the same task, wrong; on
+  another, right. That covers cancel, reschedule and follow-ups as well as done, but a done
+  from a button or the wall doesn't settle one (a refusal's reply asks in chat).
+- `themi feedback` ends with the weeks that had a refusal: refused (by kind), wrong, right,
+  nothing after. `themi.core.naming`.
+- The word checks are now plain functions (`names_task`, `meant_instead` in `tasks.py`), so
+  the eval scores the same code. `tests/evals/naming.py` takes any check (case and task
+  title in, accepted out), so P8b's is scored the same way; `make naming-eval` prints it.
+- `tests/evals/naming_cases.json`: 45 cases over a board of 17 open tasks, written from the
+  kinds of thing in the family's chat (read locally), paraphrased, no names of theirs.
+  **Not reviewed by a person yet** (P7a's rule): check the `means` labels before P8b leans
+  on them.
+- Baseline (word check, `BASELINE` in `tests/unit/test_naming_eval.py`): 19/45 right;
+  9 cases wrongly refused, all paraphrases ("jogged this morning", "Counters are clear",
+  "Headphones are on the charger"); 18 wrongly accepted. Live: one refusal in the local
+  copy (#119, 2026-11-02, before F21c).
+- The bigger gap is accepting, which P8b as written (embeddings only when the words find
+  nothing) can't touch. One shared word lets a task through: "clean" (bird cage, kitchen,
+  both bathrooms), "put", "about" ("Want a reminder about the dentist?" then "Yes please"
+  names "Contact ... about babysitting"), "ran" for "Ran the dishwasher", and `ALL_OF_THEM`
+  matching "all" in "Broke down all the boxes" lets every task through. The model has to
+  pick the wrong task first, so it's a second line; worth its own prompt if the live
+  numbers show wrong dones.
+- Also found: "did my 5k" never reaches the naming check; `QUESTION` reads a message
+  starting "did" as a question.
+- P8b's call: wait for a few weeks of `themi feedback` numbers. On the eval alone, the
+  paraphrase gap is real (9/15 refused).
+- Setup: restart (applies 0099).
 
 ### P8b · An embedding fallback for "which task?", if P8a says
 Status: [ ]
