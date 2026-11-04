@@ -67,6 +67,7 @@ from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry
 from themi.core.lists import Lists
+from themi.core.litter_box import LitterBox
 from themi.core.maintenance import Maintenance
 from themi.core.meals import Meals
 from themi.core.memory import Memory
@@ -344,6 +345,7 @@ def build_app(
         periodic.append(
             PeriodicTask("devices.litter_box", timedelta(minutes=10), services.catgenie.poll)
         )
+        LitterBox(services, tasks, services.catgenie).install()
     Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(

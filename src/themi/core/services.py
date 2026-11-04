@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from themi.core.journal import Journal
     from themi.core.laundry import Laundry
     from themi.core.lists import Lists
+    from themi.core.litter_box import LitterBox
     from themi.core.maintenance import Maintenance
     from themi.core.meals import Meals
     from themi.core.memory import Memory
@@ -191,6 +192,7 @@ class Services:
     tuya: TuyaWatcher | None = None  # the pet feeders, from Tuya's cloud (32)
     feeders: Feeders | None = None  # their chores when one needs a hand (32)
     catgenie: CatGenieWatcher | None = None  # the litter box, from CatGenie's cloud (CG1a)
+    litter_box: LitterBox | None = None  # its chores when it needs a hand (CG1b)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)

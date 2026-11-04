@@ -186,7 +186,9 @@ class Appliances:
         if reading.last_clean is not None:
             said += f"; last cleaned {self._local_words(reading.last_clean)}"
             said += self._day_words(reading.last_clean)
-        return f"{name}, read just now: {said}."
+        litter_box = self.services.litter_box
+        chores = litter_box.chores(device.id) if litter_box is not None else []  # and whose
+        return " ".join([f"{name}, read just now: {said}.", *chores])
 
     def _words(self, device: Device, state: str, minutes: int | None) -> str:
         if state == RUNNING:

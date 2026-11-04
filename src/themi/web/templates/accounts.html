@@ -306,13 +306,24 @@ and it only sends after you say yes.</p>
   {% call(part) row("Litter box", meta="CatGenie", chips=chips, id="catgenie", open=opened == "catgenie" or catgenie_code_sent) %}
   {% if part == "body" %}
     <p class="muted">Themi reads the CatGenie through the CatGenie app's cloud: whether it's
-    cleaning, its sani-solution and any error. CatGenie has no official way in, so this uses
-    the app's own, and may stop working if they change it. It never starts, stops or changes
-    the litter box.</p>
+    cleaning, its sani-solution and any error. When it needs a hand (an error, the cartridge
+    low or out, the granules due), whoever has more room gets a nudge. CatGenie has no
+    official way in, so this uses the app's own, and may stop working if they change it. It
+    never starts, stops or changes the litter box.</p>
     {% if catgenie.linked %}
     {% if catgenie.problem %}<p class="error">{{ catgenie.problem }}</p>{% endif %}
-    {% for device, state, raw in catgenie.devices %}
+    {% for device, state, raw, granules in catgenie.devices %}
     <p>{{ device.name }}{% if state %} · {{ state }}{% endif %}</p>
+    {% if granules is not none %}
+    <form method="post" action="/family/catgenie/granules/{{ device.id }}" class="buttons">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Top up the granules every
+        <input name="every" type="number" min="1" inputmode="numeric" value="{{ granules[0] if granules[0] else '' }}" aria-label="Cleans between granule top-ups" style="width: 6em">
+        cleans</label>
+      <button class="small">Save</button>
+    </form>
+    <p class="muted">{% if granules[0] and granules[1] is not none %}{{ granules[1] }} since the last top-up. {% endif %}The box can't tell how many granules are left, so Themi counts its cleans. Leave it blank for no reminders.</p>
+    {% endif %}
     {% if raw %}
     <details>
       <summary class="muted">What it reports</summary>

@@ -129,10 +129,14 @@ def _catgenie(app: Any) -> dict[str, Any] | None:
     if watcher is None:
         return None
     states = watcher.states()
+    chores = app.services.litter_box
     return {
         "linked": watcher.account.linked(),
         "problem": watcher.account.problem(),
-        "devices": [(d, states.get(d.id), watcher.raw(d)) for d in watcher.devices()],
+        "devices": [
+            (d, states.get(d.id), watcher.raw(d), chores.granules(d.id) if chores else None)
+            for d in watcher.devices()
+        ],
     }
 
 
@@ -292,6 +296,28 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(to, "Linked CatGenie, but the account has no litter box on it yet.")
         names = ", ".join(d.name for d in added)
         return kit.redirect(to, f"Linked CatGenie. Found {names}." if names else "Linked CatGenie.")
+
+    @router.post("/family/catgenie/granules/{device_id}")
+    async def catgenie_granules(request: Request, device_id: int) -> Response:
+        """CG1b: every how many cleans the granules want topping up (blank: never asked)."""
+        _session, form = await kit.checked(request, admin=True)
+        watcher, chores = app.services.catgenie, app.services.litter_box
+        to = back("catgenie")
+        if watcher is None or chores is None:
+            return kit.redirect(to, "The litter box isn't set up on this server.")
+        device = next((d for d in watcher.devices() if d.id == device_id), None)
+        if device is None:
+            return kit.redirect(to, "That isn't one of the litter boxes.")
+        every = str(form.get("every", "")).strip()
+        if not every:
+            chores.set_granules(device.id, None)
+            return kit.redirect(to, f"{device.name}: no granule reminders.")
+        if not every.isdigit() or int(every) <= 0:
+            return kit.redirect(to, "Not saved: the number of cleans must be a whole number.")
+        chores.set_granules(device.id, int(every))
+        return kit.redirect(
+            to, f"{device.name}: a granule top-up every {int(every)} cleans, counted from now."
+        )
 
     @router.post("/family/catgenie/unlink")
     async def unlink_catgenie(request: Request) -> Response:
