@@ -2,9 +2,9 @@
 
 - Headers: From (address and name), To and Cc, Subject, Message-ID, References.
 - Body: the first text/plain part; failing that, the text/html part with tags,
-  scripts and styles stripped. Capped at `MAX_BODY` characters. A plain part that
-  shares almost nothing with Gmail's snippet, when the HTML does, gives way to the HTML:
-  that's what the reader saw (bug #134: the plain part was another template's).
+  scripts and styles stripped. Capped at `MAX_BODY` characters. When the HTML has more
+  of Gmail's snippet in it than the plain part, the HTML is the text: it's what the
+  reader saw (bug #134: SoFi's plain part was another template's, "You've cancelled").
 - Attachments: listed (name, type, size) but never downloaded.
 
 Everything here is external text. It's stored and later shown to models only
@@ -135,13 +135,12 @@ def tidy(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 
 
-def _agrees(snippet: str, text: str) -> bool:
-    """Most of the snippet's first words are in the text (or it's too short to say)."""
+def _snippet_words(snippet: str, text: str) -> int:
+    """How many of the snippet's first eight words (of four letters or more) are in the
+    text. On the real email of bug #134: the plain part 2 of 4, the HTML 4."""
     words = re.findall(r"[a-z0-9$]{4,}", unescape(snippet).lower())[:8]
-    if len(words) < 3:
-        return True
     have = set(re.findall(r"[a-z0-9$]{4,}", text.lower()))
-    return sum(w in have for w in words) * 2 >= len(words)
+    return sum(w in have for w in words)
 
 
 def parse_message(message: dict[str, Any]) -> GmailMessage:
@@ -162,10 +161,10 @@ def parse_message(message: dict[str, Any]) -> GmailMessage:
         elif mime == "text/html" and not html:
             html = _decode(body.get("data"), _charset(part))
     text = tidy(plain) if plain.strip() else html_to_text(html)
-    snippet = message.get("snippet", "")
-    if plain.strip() and html and not _agrees(snippet, text):
-        from_html = html_to_text(html)
-        text = from_html if _agrees(snippet, from_html) else text
+    if plain.strip() and html:
+        snippet, from_html = message.get("snippet", ""), html_to_text(html)
+        if _snippet_words(snippet, from_html) > _snippet_words(snippet, text):
+            text = from_html
     internal = int(message.get("internalDate", "0") or 0)
     return GmailMessage(
         id=message["id"],

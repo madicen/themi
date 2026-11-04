@@ -336,7 +336,8 @@ async def test_the_email_is_read_as_its_reader_sees_it(
         {
             "sender": "Card Co <no-reply@card.example>",
             "subject": "Your card autopay is scheduled for 11/13/2026",
-            "text": "Hi Erin, You've cancelled autopay for your Card Co card.",
+            "text": "Future payments won't be made automatically. Hi Erin, You've cancelled "
+            "autopay for your Card Co card.",
             "html": "<p>We'll process your payment automatically.</p>"
             "<p>Your autopay of $120.00 is scheduled for 11/13/2026.</p>",
             "snippet": "We&#39;ll process your payment automatically. ͏ ‌ ﻿",

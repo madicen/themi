@@ -113,7 +113,8 @@ def test_html_to_text_keeps_line_structure() -> None:
 
 def test_a_plain_part_unlike_the_snippet_gives_way_to_the_html() -> None:
     """F24c, bug #134: the plain part said autopay was cancelled; the HTML the reader saw,
-    and Gmail's snippet, said it was scheduled."""
+    and Gmail's snippet, said it was scheduled. As in the real one, the plain part has two
+    of the snippet's four words ("your", "automatically")."""
     parsed = parse_message(
         message(
             {
@@ -121,7 +122,12 @@ def test_a_plain_part_unlike_the_snippet_gives_way_to_the_html() -> None:
                 "parts": [
                     {
                         "mimeType": "text/plain",
-                        "body": {"data": b64("Hi Erin, You've cancelled autopay for your card.")},
+                        "body": {
+                            "data": b64(
+                                "Future payments won't be made automatically. Hi Erin, "
+                                "You've cancelled autopay for your card."
+                            )
+                        },
                     },
                     {
                         "mimeType": "text/html",
