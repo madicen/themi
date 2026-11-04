@@ -17,7 +17,7 @@ from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
-from themi.core.vacuum import CATEGORY, EXPIRED_TEXT
+from themi.core.vacuum import CATEGORY, DONE_CATEGORY, EXPIRED_TEXT
 
 ROBOT = "rr-duid-1"
 STUCK_IN_KITCHEN = (
@@ -342,3 +342,41 @@ async def test_a_worn_part_goes_on_the_wall_too(
         clock.advance(timedelta(hours=6))
         await scenario.run_periodic("devices.vacuum")
     assert await on_wall(scenario, fake_cozyla) == ["Replace the vacuum's filter"]
+
+
+async def test_a_routine_item_about_it_is_checked_off_when_its_sorted(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    """F25a (Michael, 2026-11-03): the chore moved to him, then into his routine (F23e), so no
+    task is left; the robot showing it sorted checks the item off, as the dishwasher does."""
+    refill = fake_cozyla.add_routine("m-husband", "Refill vacuum water", "Evening")
+    chore = fake_cozyla.add_routine("m-husband", "Vacuum upstairs bedroom", "Evening")
+    tired(scenario)
+    await seen(scenario, robot, "clean_water_empty")
+    await scenario.advance(minutes=5)
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task_id = scenario.app.db.scalar("SELECT id FROM tasks")
+    await board.cancel(task_id, scenario.member("Husband"))  # it's the routine item now
+    await seen(scenario, robot, "docked")  # refilled, and cleared in the app
+    assert scenario.inbox("Husband")[-1] == (
+        "The vacuum's dock has clean water again: check off Refill vacuum water on the wall\n"
+        "Go ahead, or not now?"
+    )
+    await scenario.tap("Husband", "Go ahead")
+    day = clock.now().date().isoformat()
+    assert fake_cozyla.routine_ticks == {(refill, day)}
+    assert (chore, day) not in fake_cozyla.routine_ticks
+
+
+async def test_with_the_rule_on_a_routine_item_is_ticked_without_asking(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    routine = fake_cozyla.add_routine("m-husband", "Empty the robot's dirty water", "Morning")
+    scenario.app.services.autonomy.grant_tier2(
+        DONE_CATEGORY, via_rule_id=1, by=scenario.member("Erin")
+    )
+    await seen(scenario, robot, "dirty_water_full")
+    await seen(scenario, robot, "docked")  # sorted before anyone was asked
+    assert fake_cozyla.routine_ticks == {(routine, clock.now().date().isoformat())}
+    assert scenario.inbox("Husband") == []

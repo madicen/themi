@@ -41,6 +41,7 @@ CAN_BE_AUTOMATIC = {
     "email_keep",
     "dishwasher_done",
     "vacuum_home",
+    "vacuum_done",
     "routine_item_add",
     "server_control",  # D3a: asked for on the website, so it runs at once
 }
