@@ -8430,6 +8430,11 @@ Notes (2026-11-03):
   `button.danger` and `.danger-zone`.
 - The CSP allows no inline styles, so icons are inline SVG styled from the stylesheet.
 - Checked by eye at 390px and 1280px with headless Chrome on pages the test harness rendered.
+- Fix (2026-11-04, Michael's phone screenshots): after the update, Safari kept the
+  pre-W1 `themi.css`. Static files had no Cache-Control, so the browser guessed the old
+  copy was still fresh, and the new pages rendered with the old styles. `kit.asset(name)`
+  now puts a fingerprint of the file in the URL (`/static/themi.css?v=<sha256[:12]>`), and
+  `/static/` responses send `Cache-Control: no-cache`.
 
 ### W2 · Website redesign: Tasks as compact rows with Done, and Home
 Status: [x] 2026-11-03

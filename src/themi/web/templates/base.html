@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <title>{% block title %}Themi{% endblock %}</title>
-  <link rel="stylesheet" href="/static/themi.css">
-  <script src="/static/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="{{ asset('themi.css') }}">
+  <script src="{{ asset('htmx.min.js') }}" defer></script>
 </head>
 {% set path = request.url.path %}
 {% set tab = "home" if path == "/" else "tasks" if path.startswith("/tasks") else "lists" if path.startswith("/lists") else "more" %}
