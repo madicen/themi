@@ -17,6 +17,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from themi import clock
@@ -279,6 +280,20 @@ class TuyaWatcher:
             "seen_at = excluded.seen_at",
             (device.id, word, to_utc_iso(clock.now())),
         )
+
+
+async def write_captures(watcher: TuyaWatcher, folder: Path) -> list[Path]:
+    """`themi tuya capture`: each linked device's data points, one file each, named by its
+    model (Tuya's product id)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    written = []
+    for n, device in enumerate(watcher.devices(), 1):
+        captured = await watcher.capture(device)
+        stem = captured["product_id"] or captured["category"] or "device"
+        path = folder / f"{stem}-{n}.json"
+        path.write_text(json.dumps(captured, indent=1, sort_keys=True) + "\n")
+        written.append(path)
+    return written
 
 
 def _portions(value: Any) -> int:

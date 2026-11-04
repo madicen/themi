@@ -400,10 +400,10 @@ def _keep(command: str, name: str, list_name: str) -> int:
 
 def _tuya_capture(out: str) -> int:
     import asyncio
-    import json
     from pathlib import Path
 
     from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
+    from themi.connectors.tuya.watch import write_captures
 
     store = _store()
     watcher = TuyaWatcher(store, TuyaAccount(store.db, store.cipher, TuyaConfig()))
@@ -411,20 +411,12 @@ def _tuya_capture(out: str) -> int:
         print("Link Tuya on the website's Accounts page first.", file=sys.stderr)
         return 1
     folder = Path(out)
-    folder.mkdir(parents=True, exist_ok=True)
 
     async def run() -> list[Path]:
-        written = []
         try:
-            for n, device in enumerate(watcher.devices(), 1):
-                captured = await watcher.capture(device)
-                stem = captured["product_id"] or captured["category"] or "device"
-                path = folder / f"{stem}-{n}.json"
-                path.write_text(json.dumps(captured, indent=1, sort_keys=True) + "\n")
-                written.append(path)
+            return await write_captures(watcher, folder)
         finally:
             await watcher.account.close()
-        return written
 
     try:
         written = asyncio.run(run())

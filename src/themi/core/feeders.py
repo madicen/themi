@@ -76,6 +76,7 @@ class Feeders:
         self.watcher.broken_listeners.append(self._broken)
         self.board.own_nudges.append(self._nudge)
         self.board.change_listeners.append(self._task_changed)
+        self.board.done_hooks.append(self._done)
 
     # ----- the feeder -------------------------------------------------------------------
 
@@ -185,29 +186,25 @@ class Feeders:
         return True
 
     async def _task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
-        """Done or taken off the list by a person (a tap, a word in chat): handled as far as
-        Themi's concerned. Done, it's a small chore's effort for whoever did it."""
+        """Done or taken off the list by a person (a tap, a word in chat, a tick on the wall):
+        handled as far as Themi's concerned."""
         if change not in ("done", "cancelled"):
             return
-        row = self.db.one(
-            "SELECT * FROM feeder_problems WHERE task_id = ? AND status = 'open'", (task.id,)
-        )
-        if row is None:
-            return
         self.db.execute(
-            "UPDATE feeder_problems SET status = 'done', closed_at = ? WHERE id = ?",
-            (to_utc_iso(clock.now()), row["id"]),
+            "UPDATE feeder_problems SET status = 'done', closed_at = ? "
+            "WHERE task_id = ? AND status = 'open'",
+            (to_utc_iso(clock.now()), task.id),
         )
-        if change != "done":
-            return
-        by = self.db.scalar(
-            "SELECT done_by FROM task_runs WHERE task_id = ? ORDER BY id DESC LIMIT 1", (task.id,)
+
+    async def _done(self, task: Task, by: Member, interactive: bool) -> None:
+        """Someone did it: a small chore's effort for them. Not when the feeder showed it
+        sorted (that's 'cleared'), which says nothing about who did it."""
+        row = self.db.one(
+            "SELECT * FROM feeder_problems WHERE task_id = ? AND status = 'done'", (task.id,)
         )
-        if by is not None:
-            member = self.store.get_member(int(by))
-            self.services.energy.record(
-                member, "device_activity", EFFORT, f"saw to the feeder ({row['problem']})"
-            )
+        if row is not None:
+            note = f"saw to the feeder ({row['problem']})"
+            self.services.energy.record(by, "device_activity", EFFORT, note)
 
     async def _broken(self, why: str) -> None:
         for member in self.store.list_members():

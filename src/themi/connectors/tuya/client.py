@@ -30,7 +30,6 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
 
 import httpx
 
@@ -69,7 +68,7 @@ OFFLINE_CODES = frozenset({2001, 40000801})
 def string_to_sign(
     method: str, path: str, body: bytes = b"", headers: dict[str, str] | None = None
 ) -> str:
-    """Tuya's stringToSign. `path` carries its query, already sorted (`url_for`)."""
+    """Tuya's stringToSign. `path` carries its query, sorted and not encoded (`url_for`)."""
     digest = hashlib.sha256(body).hexdigest() if body else EMPTY_SHA256
     signed = "".join(f"{k}:{v}\n" for k, v in (headers or {}).items())
     return f"{method.upper()}\n{digest}\n{signed}\n{path}"
@@ -88,10 +87,11 @@ def sign(
 
 
 def url_for(path: str, params: dict[str, Any] | None = None) -> str:
-    """The path with its query sorted by key, as Tuya signs it (and as it's sent)."""
+    """The path with its query sorted by key and not encoded, as Tuya signs it (it's sent
+    encoded, and Tuya decodes it before checking)."""
     if not params:
         return path
-    return f"{path}?{urlencode(sorted((k, str(v)) for k, v in params.items()))}"
+    return f"{path}?{'&'.join(f'{k}={v}' for k, v in sorted(params.items()))}"
 
 
 @dataclass(frozen=True)
@@ -205,11 +205,11 @@ class TuyaClient:
     async def _call(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
         await self._ensure_token()
         try:
-            return await self._send(method, url_for(path, params), self._token)
+            return await self._send(method, path, params, self._token)
         except _TokenGone:
             self._token = ""
             await self._ensure_token()
-            return await self._send(method, url_for(path, params), self._token)
+            return await self._send(method, path, params, self._token)
 
     async def _ensure_token(self) -> None:
         now = clock.now()
@@ -218,11 +218,11 @@ class TuyaClient:
         result: Any = None
         if self._refresh:
             try:
-                result = await self._send("GET", f"/v1.0/token/{self._refresh}", "")
+                result = await self._send("GET", f"/v1.0/token/{self._refresh}", None, "")
             except TuyaError:
                 result = None  # a refresh that's no good: start again
         if not isinstance(result, dict):
-            result = await self._send("GET", url_for("/v1.0/token", {"grant_type": 1}), "")
+            result = await self._send("GET", "/v1.0/token", {"grant_type": 1}, "")
         if not isinstance(result, dict) or not result.get("access_token"):
             raise TuyaError("Tuya didn't hand back a token")
         self._token = str(result["access_token"])
@@ -230,7 +230,7 @@ class TuyaClient:
         lasts = timedelta(seconds=int(result.get("expire_time") or 0))
         self._token_until = now + max(lasts - TOKEN_EARLY, timedelta(0))
 
-    async def _send(self, method: str, url: str, token: str) -> Any:
+    async def _send(self, method: str, path: str, params: dict[str, Any] | None, token: str) -> Any:
         t = str(_ms(clock.now()))
         nonce = secrets.token_hex(16)
         headers = {
@@ -243,14 +243,19 @@ class TuyaClient:
                 self._secret.reveal(),
                 t,
                 nonce,
-                string_to_sign(method, url),
+                string_to_sign(method, url_for(path, params)),
                 token,
             ),
         }
         if token:
             headers["access_token"] = token
         try:
-            response = await self._http.request(method, url, headers=headers)
+            response = await self._http.request(
+                method,
+                path,
+                params=sorted((k, str(v)) for k, v in (params or {}).items()),
+                headers=headers,
+            )
         except httpx.HTTPError as exc:
             raise TuyaError(f"Tuya couldn't be reached ({type(exc).__name__})") from exc
         try:
@@ -279,7 +284,6 @@ class TuyaClient:
             )
         if code in OFFLINE_CODES:
             raise DeviceOffline("The device isn't connected right now.", code)
-        path = url.split("?", 1)[0]
         log.info("Tuya answered %s (%s) for %s", response.status_code, code, path)
         raise TuyaError(f"Tuya answered {response.status_code} ({code or 'no code'})", code)
 
