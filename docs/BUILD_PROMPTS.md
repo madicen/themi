@@ -95,7 +95,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
 | P8a | "Which task?" refusals: how often the naming check says no, and how often it's wrong | Feedback | [x] 2026-11-03 |
-| P8b | Embeddings decide "which task?" | Feedback | [ ] |
+| P8b | Embeddings decide "which task?" | Feedback | [x] 2026-11-03 |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4870,7 +4870,7 @@ Notes (2026-11-03):
 - Setup: restart (applies 0099).
 
 ### P8b · Embeddings decide "which task?"
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: P8a, P7b
 Read first: "Trust tiers" (an action asked for in their own words).
 Rewritten 2026-11-03 (Michael: "use the best system"). P8a's first plan was a fallback
@@ -4931,6 +4931,45 @@ pick the right one ("Kitchen's decluttered"); a message about equally close to t
 refused; "All done!" after a list and "Both bathrooms are clean" accept each meant task;
 "Broke down all the boxes" accepts nothing; a failing or slow embedder falls back to the
 word check; the fake embedder, no network.
+
+Notes (2026-11-03):
+- `themi.core.which_task`: `which()` (pure: scores in, the tasks clearly named out) and
+  `TaskNamer` (`Services.task_namer`, built in `app.py` on `RouterEmbedder`, so keys,
+  retries, fallback and `ai_calls` apply; titles kept in `VectorCache`). Over `TIMEOUT`
+  (1 s), on any failure, or if the titles would come from another model, it says it can't
+  tell and the word check decides, unchanged.
+- `tasks._check_meant` is now async and asks it first, for `complete_task` (which must
+  name its task), `cancel_task`, `reschedule_task` and `set_task_schedule` (which must not
+  name another). `add_follow_up` stays on words: its message holds the follow-up's own
+  words, which would pull the embeddings off.
+- Deviation, short answers: the message is scored first, then Themi's last message, then
+  their own before it. Treating every message of three words or fewer as a bare answer
+  refused "jogged this morning" and "Finished my miles". So a short message right after a
+  task's "Done already?" can still name that task through the prompt ("Ran the dishwasher"
+  just after the run's prompt counts as the run).
+- "All", "both", "everything": in a longer message, every task within `GROUP_MARGIN` of the
+  best; after a short answer, only the tasks whose whole title Themi's message listed (a
+  shared "clean" pulled the kitchen into "Still open: Clean left bathroom, ...").
+- Settings: threshold 0.6, margin 0.05, group margin 0.05 (`make evals PROVIDER=gemini
+  EVAL_ARGS='-k naming_thresholds -s'`). On the 45 reviewed cases: 42 right, 2 wrongly
+  refused ("Counters are clear", "Headphones are on the charger"), 1 wrongly accepted
+  ("Drank a glass of water" as "Drink green tea"), against the words' 19 / 9 / 18. No
+  setting refuses the water and tea pair (both drinks), so the eval allows that one and
+  nothing else. 0.5 gets 43 right but lets a vaguer message closer to a task; the threshold
+  barely moves the numbers, the margin does.
+- 18 new cases (near twins, short answers, paraphrases, near misses) are in the file with
+  `"reviewed": false`: printed, not counted. The check gets 15 right; it misses "Right
+  bathroom's done", "Cleared off the kitchen table", and accepts "Charged the car" as the
+  tires. Review them and drop the flag.
+- The "did my 5k" fix: a leading did/have/has/was reads as a question only with someone
+  after it ("Did I clean the bird cage" still asks).
+- Fake-embedder tests in `tests/scenarios/test_which_task.py` (`TopicEmbedder`), and the
+  eval's `meaning_check` on fake scores in `make test-all`.
+- Setup: none to deploy beyond a restart. It needs an embedding route for the person (P7b
+  gave everyone one on their Gemini backends); without one, the words decide as before.
+  Each check embeds the message (and for a short answer, what it answers) plus any new
+  task titles: a few texts against the free tier's 100 a minute.
+- P8a's weekly refusal counts in `themi feedback` show how it does live.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
