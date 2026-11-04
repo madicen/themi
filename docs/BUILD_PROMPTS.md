@@ -139,7 +139,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 32 | SmartLife / Tuya feeders | 5 Devices | [x] 2026-11-04 |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
 | CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [x] 2026-11-04 |
-| CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [ ] |
+| CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [x] 2026-11-04 |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
@@ -6728,7 +6728,7 @@ Notes (2026-11-04):
   (cleaning, cartridge low, dome off, any error) and share the files.
 
 ### CG1b · CatGenie litter box: errors and supplies become chores
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: CG1a, and the family's captures from it
 Read first: as CG1a, and CG1a's notes.
 
@@ -6763,6 +6763,40 @@ Tests:
   chore.
 
 Commit when done.
+
+Notes (2026-11-04):
+- Asked for together with CG1a, before any captures (its dependency): built as 32 was, on
+  fixtures in the documented shapes. `CODES` and `ALERT_TYPES` stay empty until the family's
+  captures come in, so every error reads "it shows an error (<the code in words>)".
+- The mapping (`events.py`, written in CG1a): problems are `error` (the box's
+  `operationStatus.error` and `activeErrors`, joined), `alert` (a notification naming an
+  error, live until a clean after it), `solution` (low at 20% or under, out at 0; a jump up
+  clears it) and `granules`.
+- `themi.core.litter_box.LitterBox`, like `themi.core.feeders`: one effort-1 physical task
+  per live problem, `Matcher.roomiest`, on the wall's lists, for either of you when it
+  starts in quiet hours. Its own nudge waits 10 minutes (outbox kind `litter_box`,
+  "/pause litter" or "/pause catgenie", held in burnout mode). An error or an alert, and no
+  sani-solution, are due at once (my reading: we can't yet tell which errors stop it
+  cleaning, so all do); running low and the granules wait for the usual limits. Running
+  low, then out, asks again. The box showing it's sorted closes the task: done if asked,
+  cancelled if not. A person marking it done is the device-activity energy signal (-0.5).
+  The admins hear once when the sign-in is refused.
+- Titles: "Check the CatGenie", "Change the CatGenie's sani-solution cartridge", "Top up the
+  CatGenie's granules". The app's name for the box is kept as it is ("the CatGenie"), not
+  lowered as the feeders' are.
+- Granules (migration 0105, `litter_granules`): per box, every N cleans (off when blank),
+  counted from the lifetime cycle count when it was set or last done. Set on the Accounts
+  page under the box. Done or taken off the list, the count starts again (a granule problem
+  is gone once done, as no sensor will say so). A count that goes backwards (a reset box)
+  starts again from there. `appliance_status` says the count when it's on.
+- Migration 0105 also has `litter_problems`, as `feeder_problems`.
+- The dev control panel has a "Litter box (CatGenie)" section (sani-solution, an error, an
+  alert in the app, cleans) and its faults (offline, an empty answer, the sign-in refused,
+  working again, which relinks); `make dev` links the fake CatGenie on the first run.
+- Follow-ups: the family's captures, then `CODES`/`ALERT_TYPES` with tests (and whether
+  `dome`, `fanShutter` and `lowHeater` mean anything a person should hear about). No routing
+  cases were added (a person should label them, as with P7a's).
+- Setup: restart (migration 0105). Optionally set the granules' number on the Accounts page.
 
 ---
 

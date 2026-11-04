@@ -291,8 +291,19 @@ Themi only reads it; it never starts, stops or changes a clean.
 2. Enter the code that's texted to it and press **Link CatGenie**. Themi keeps the sign-in
    (encrypted), not the number.
 
-The litter box is read every 10 minutes. Asked "is the litter box ok?" or "how much
-sani-solution is left?", Themi reads it.
+The litter box is read every 10 minutes. An error (on the box, or an alert the app was sent),
+or the sani-solution running low (20% or under) or out, becomes a chore for whoever has more
+room, with a nudge 10 minutes later; one sorted in the meantime sends nothing, and the box
+showing it's sorted (the error gone, a clean after the alert, a new cartridge) closes the
+chore. An error or no sani-solution stops it cleaning, so those nudges aren't held by the
+daily limit. "/pause litter" holds them for a while. If the sign-in stops working, the admin
+hears once; link it again. Asked "is the litter box ok?" or "how much sani-solution is
+left?", Themi reads it.
+
+The CatGenie can't tell how many granules are left, so Themi counts its cleans instead: set
+**Top up the granules every _ cleans** under the litter box on the Accounts page, and a
+chore comes round each time that many have gone by. Marking it done starts the count again.
+Leave it blank for none.
 
 Nobody has published what the CatGenie's error codes mean, so for now each one is shown in
 plain words from the code itself. To send real ones for a proper mapping, run
