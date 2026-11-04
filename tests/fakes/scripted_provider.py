@@ -140,6 +140,11 @@ class ScriptedProvider:
         self._takes.append(seconds)
         return self
 
+    def drop(self, op: Operation = "chat") -> ScriptedProvider:
+        """Forget what's still queued: a closing line a turn ended without (P2b)."""
+        self._queues[op].clear()
+        return self
+
     def pending(self, op: Operation = "chat") -> int:
         return len(self._queues[op])
 

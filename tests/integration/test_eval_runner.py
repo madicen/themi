@@ -123,8 +123,8 @@ async def test_the_list_setup_makes_a_named_list(
 ) -> None:
     # P6's twins cases: "add sunscreen to the packing list" needs the list to be there.
     fake_ai.queue(gemini_function_call("add_to_list", {"list": "packing", "items": ["sunscreen"]}))
-    fake_ai.queue(gemini_text("Sunscreen is on Packing."))
     scenario = Scenario(family, fake_telegram, real_models=True)
     outcome = await run_case(scenario, CASES["twin-list-packing"], fake_gemini(fake_ai))
     assert outcome.passed, outcome.problems
-    assert "Packing" in str(fake_ai.requests[1].json)
+    (request,) = fake_ai.requests  # P2b: the add's own reply, without a second round
+    assert "Packing" in str(request.json)

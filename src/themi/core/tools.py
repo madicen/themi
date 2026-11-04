@@ -61,6 +61,10 @@ class ToolContext:
     # every call this turn left one, they're the reply, and the model's words aren't sent
     # (bug #118: "Added to the list. Enjoy the sun." after an item about a sunny day).
     replies: list[str] = field(default_factory=list)
+    # The replies above from something done just as they asked (Proposal.requested): when
+    # every call this turn left one, the turn ends there, without another model round,
+    # whose words wouldn't be sent (P2b).
+    asked: list[str] = field(default_factory=list)
     # Open tasks create_task named as maybe the same job (bug #132): asked again this turn,
     # it's a different job, and it's made.
     named_twins: set[int] = field(default_factory=set)
@@ -619,6 +623,8 @@ class ToolRegistry:
         if action.status == "done":
             if proposal.said:
                 ctx.replies.append(proposal.said)
+                if proposal.requested:
+                    ctx.asked.append(proposal.said)
             return f"Done automatically (action {action.id}): {outcome.message}"
         return f"Tried but it failed (action {action.id}); it can be retried: {outcome.message}"
 

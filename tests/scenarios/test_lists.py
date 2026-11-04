@@ -41,7 +41,9 @@ async def call(
 ) -> list[str]:
     scenario.primary.queue_tool_call(tool, args)
     scenario.primary.queue_text("Done.")
-    return await scenario.say(who, said)
+    replies = await scenario.say(who, said)
+    scenario.primary.drop()  # an add done as asked ends the turn without it (P2b)
+    return replies
 
 
 async def packing_list(scenario: Scenario) -> None:
