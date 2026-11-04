@@ -138,6 +138,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 31 | Laundry module and rescue protocol | 5 Devices | [x] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [x] 2026-11-04 |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
+| CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [ ] |
+| CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [ ] |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
@@ -6616,6 +6618,107 @@ Notes (2026-11-04):
   cases with a real model; the descriptions tell them apart for now. Maintenance isn't an
   energy input.
 
+### CG1a · CatGenie litter box: unofficial client, sign-in by text code, captures
+Status: [ ]
+Depends on: 32
+Read first: "Integrations" → CatGenie row (no official API, risk high); "Module behaviour" →
+feeders and litter box; 32's notes (the connector this one copies).
+
+Asked by Michael, 2026-11-04: the litter box's errors as tasks, and warnings such as low
+sani-solution or low litter. Found while starting 36's CatGenie question (2026-11-04):
+- No official API. The community client [kclif9/catgenieapi](https://github.com/kclif9/catgenieapi)
+  (`catgenie` 0.1.6 on PyPI, MIT) is reverse-engineered from the Android app's calls to
+  `https://iot.petnovations.com`. Its source was read, not run.
+- Sign-in is a phone number and a code sent by text: `ums/v1/users/generateLoginCode/v2`, then
+  `ums/v1/users/loginByPhoneNumber/v2`. The phone goes in a `str1` field, AES-CBC with a static
+  key from the app and a zero IV. That gives a refresh token (about 10 years) and access
+  tokens (30 minutes), renewed at `facade/v1/mobile-user/refreshToken/v2`.
+- Requests need a phone's TLS fingerprint (curl_cffi, `impersonate="chrome131_android"`).
+  Ordinary Python TLS gets a 200 with an empty body. The app's HMAC signatures aren't checked
+  by the server, per the package.
+- `GET device/device/v2` per device: `remainingSaniSolution` (%), `lastClean`, `reportedStatus`,
+  `operationStatus` (`state`, `progress`, `error`, `stepNum`), `activeErrors` (shape unknown),
+  `configuration.activation.count` (lifetime cycles), and `dome`, `fanShutter`, `lowHeater` flags.
+- `GET notification/v1/push/user`: the app's alerts, each with a JSON `data` holding a numeric
+  `type` and an `errorType`. Nothing says what the codes mean.
+- No granule (litter) level anywhere in the API.
+
+Decide first, with the user (Fixed technical choices): curl_cffi as a dependency. Our other
+clients are our own over httpx, which can't pass the TLS filter. Record the change there once
+agreed, and check curl_cffi installs on the Pi and in `python:3.13-slim`.
+
+Build:
+- `themi.connectors.catgenie`: our own small client over curl_cffi's `AsyncSession`, with the
+  package as the reference (credited). Not the package itself: it needs Python 3.13+, its
+  models forbid unknown fields, and it brings pycryptodome (AES comes from `cryptography`).
+  The base URL is settable (`CATGENIE_URL`) so tests point it at a local fake. Read-only:
+  devices, a device's status, notifications. No start, stop or settings (the plan's device
+  connections only read).
+- Linking on the Accounts page: phone number, "Send code", then the code. The refresh token
+  is encrypted at rest and redacted from logs; the phone number isn't kept once linked. A
+  refresh token that stops working tells the admins once, to link again, as Tuya's does.
+- Discovery: each device becomes a `devices` row, provider `catgenie`, appliance `litter_box`
+  (both already allowed).
+- `CatGenieWatcher`, job `devices.litter_box` every 10 minutes: each device's status, and new
+  notifications by id. The raw device JSON and notifications are kept for captures (migration
+  0104, like `tuya_devices`). The first read is the starting point, as in 30 and 32.
+- Breakage: an empty 200, non-JSON, a 401 after a refresh, or a 5xx counts as a failure, never
+  as "no devices" or "no problems". The admins hear once when it stops working, and it picks up
+  again by itself.
+- `themi catgenie capture --out DIR`: one JSON per device plus the notification history, without
+  ids, MAC addresses, names, phone numbers, tokens or account ids.
+- `appliance_status` covers `litter_box`: online, cleaning now (with progress), last clean,
+  sani-solution left. No chores yet (CG1b).
+- `tests/fakes/catgenie.py`, an HTTP fake for sign-in, refresh, devices and notifications.
+  Fixtures in `tests/fixtures/catgenie/` follow the package's documented shapes and say they
+  aren't captures.
+
+Tests:
+- Linking against the fake: the code sent, the code exchanged, the tokens stored encrypted, the
+  phone number not kept.
+- Refresh before expiry and after a 401; a refused refresh token tells the admins once.
+- An empty 200 is a failure, not an empty account.
+- Discovery maps to `litter_box`; status reads; capture strips every identifying field.
+
+Commit when done.
+
+### CG1b · CatGenie litter box: errors and supplies become chores
+Status: [ ]
+Depends on: CG1a, and the family's captures from it
+Read first: as CG1a, and CG1a's notes.
+
+Build:
+- `themi.connectors.catgenie.events`: a device read plus new notifications become
+  `LitterBoxEvent(device, problems, sani_left, cycles, at)`. Problems come from
+  `operationStatus.error`, `activeErrors` and the notifications' `type` and `errorType`,
+  mapped from the captures in `tests/fixtures/catgenie/`, never guessed (as 32's mapping was).
+  An unknown code is still a problem, in plain words, and is logged once.
+- Sani-solution: running low at 20% or under (32's line for food), out at 0. A jump up (a new
+  cartridge) closes it.
+- Granules: there's no sensor, so a "top up the granules" chore comes every N cleaning cycles
+  since the last top-up, from the lifetime count. N is a household setting on the Accounts
+  page, off until set. Marking it done starts the count again.
+- `themi.core.litter_box`, like `themi.core.feeders`: one effort-1 physical task per live
+  problem, `Matcher.roomiest`, on the wall's lists, a chore for either of you when it starts in
+  quiet hours. Outbox kind `litter_box`, "/pause litter", held in burnout mode. An error that
+  stops cleaning is due at once; low solution and granules aren't. The box showing it's sorted
+  closes the task: done if asked, cancelled if not. A person marking it done is the
+  device-activity energy signal, as in 32.
+- The devices group's words and examples cover litter, the litter box, CatGenie, the cartridge,
+  sani-solution and granules.
+- Dev control panel: litter box controls (online, an error, solution left, cycles), as D5d did
+  for the feeders, so `make dev` runs with the fake.
+
+Tests:
+- Mapping from the captured fixtures: each captured error in its words; an unknown code a plain
+  problem.
+- Low then out asks again; a new cartridge closes it; the granule count across a done.
+- Task creation, quiet hours, "/pause litter", the burnout hold.
+- Scenario: an error becomes a chore and closes when the box clears it; low solution becomes a
+  chore.
+
+Commit when done.
+
 ---
 
 ## Milestone 6: Liaison and food (Phase 2)
@@ -6900,7 +7003,9 @@ Do:
 - CatGenie: research access options (official or community APIs, the app's traffic, email or
   push notifications). Write findings to `docs/research/catgenie.md` with sources. If there's a
   viable path, propose a connector prompt. Either way, implement the fallback: cleaning-schedule
-  estimates plus a quick check-in task.
+  estimates plus a quick check-in task. (2026-11-04: a community client was found and the
+  connector is drafted as CG1a and CG1b, whose background holds the findings so far. The
+  research doc and the fallback are still 36's.)
 - Automated vendor calls: compare voice providers (cost per minute, conversational quality,
   setup) in `docs/research/voice-calls.md`.
 - SMS as an extra channel: current Twilio pricing and US A2P 10DLC registration steps and costs,
