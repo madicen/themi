@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, time
+from functools import cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
@@ -18,6 +20,14 @@ from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
 HERE = Path(__file__).parent
 FLASH_COOKIE = "themi_flash"
+
+
+@cache
+def asset(name: str) -> str:
+    """A static file's URL with a fingerprint of its contents, so a browser never keeps
+    an old copy after an update (Michael's phone kept the pre-W1 stylesheet)."""
+    digest = hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:12]
+    return f"/static/{name}?v={digest}"
 
 
 def clock(moment: time | None) -> str:
@@ -52,6 +62,7 @@ class Kit:
         self.templates = Jinja2Templates(directory=str(HERE / "templates"))
         self.templates.env.filters["local_time"] = self.local_time
         self.templates.env.filters["clock"] = clock
+        self.templates.env.globals["asset"] = asset
 
     def timezone(self) -> str:
         family = self.app.store.get_family()

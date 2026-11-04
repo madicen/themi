@@ -113,6 +113,8 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     ) -> Response:
         response = await call_next(request)
         security_headers(response, form_targets)
+        if request.url.path.startswith("/static/"):  # checked each time (a cheap 304)
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     @web.exception_handler(NotSignedIn)

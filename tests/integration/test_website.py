@@ -401,3 +401,22 @@ async def test_one_save_bar_saves_every_section(
                   "pda_strength", "track_text_notes"):  # fmt: skip
         assert f'name="{field}"' in form, field
     assert '<div class="savebar">' in form and form.count("<button") == 1
+
+
+async def test_a_changed_stylesheet_is_never_served_from_an_old_cache(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """Michael's phone kept the old themi.css after the redesign: no Cache-Control, so
+    Safari guessed it was fresh. The URLs carry a fingerprint of the file, and static files
+    are checked with the server before a cached copy is used."""
+    import hashlib
+
+    from themi.web.kit import HERE
+
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/")).text
+    for name in ("themi.css", "htmx.min.js"):
+        digest = hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:12]
+        assert f"/static/{name}?v={digest}" in page, name
+        response = await site.get(f"/static/{name}?v={digest}")
+        assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
