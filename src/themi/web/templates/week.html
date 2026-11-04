@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}My week · Themi{% endblock %}
 {% block content %}
 <h1>How Themi sees your week</h1>
@@ -35,9 +36,13 @@ What it notices is up to you: <a href="/settings">My settings</a>.
 </section>
 {% endif %}
 
+<h2>The week ahead</h2>
+<div class="rows">
 {% for day in days %}
-<section class="card">
-  <h2>{{ day.day.strftime('%A %d %b') }}</h2>
+{% set meta = [] %}
+{% for p in day.parts %}{% set _ = meta.append(p.part | capitalize ~ " " ~ p.words) %}{% endfor %}
+{% call(part) row(day.day.strftime('%A %d %b'), meta=meta | join(" · "), id="day-" ~ day.day.isoformat(), open=loop.first) %}
+{% if part == "body" %}
   {% for p in day.parts %}
   <div class="row">
     <span><strong>{{ p.part|capitalize }}:</strong> {{ p.words }}{% if p.first_guess and p.words not in ("quiet hours", "busy (your busy times)", "busy on your calendar") %} <span class="muted">(a first guess)</span>{% endif %}</span>
@@ -46,12 +51,14 @@ What it notices is up to you: <a href="/settings">My settings</a>.
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="weekday" value="{{ day.day.weekday() }}">
       <input type="hidden" name="part" value="{{ p.part }}">
-      <button class="quiet" name="way" value="better" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s usually go better than this">Usually better</button>
-      <button class="quiet" name="way" value="worse" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s are usually harder than this">Usually harder</button>
+      <button class="small quiet" name="way" value="better" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s usually go better than this">Usually better</button>
+      <button class="small quiet" name="way" value="worse" title="{{ day_names[day.day.weekday()] }} {{ p.part }}s are usually harder than this">Usually harder</button>
     </form>
     {% endif %}
   </div>
   {% endfor %}
-</section>
+{% endif %}
+{% endcall %}
 {% endfor %}
+</div>
 {% endblock %}

@@ -208,3 +208,6 @@ ul.items details.more[open] { flex-basis: 100%; order: 2; padding: 0 var(--space
 .more-panel { display: flex; flex-direction: column; gap: var(--space-2); }
 .more-panel form { margin: 0; }
 .days { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0 var(--space-3); }
+.rows.checks > label.check { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); }
+.rows.checks > label.check:last-child { border-bottom: none; }
+.savebar { flex-wrap: wrap; }

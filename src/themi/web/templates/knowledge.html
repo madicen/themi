@@ -1,42 +1,15 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}Rules &amp; memory · Themi{% endblock %}
 {% block content %}
 <h1>Rules &amp; memory</h1>
 
-<h2>Household rules</h2>
-{% for rule in locked %}
-<article class="card">
-  <p class="summary">{{ rule.summary }}</p>
-  <p class="muted">{{ rule.text }}</p>
-  {% if member.is_admin or rule.affects == member.id %}
-  <form method="post" action="/rules/{{ rule.id }}/retire">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Retire</button>
-  </form>
-  {% endif %}
-</article>
-{% else %}
-<p class="muted">No household rules yet.</p>
-{% endfor %}
-
-{% if personal %}
-<h2>Just for you</h2>
-<p class="muted">Personal rules only shape Themi's conversations with you. Nobody else sees them.</p>
-{% for rule in personal %}
-<article class="card">
-  <p class="summary">{{ rule.summary }}</p>
-  <p class="muted">{{ rule.text }}</p>
-  <form method="post" action="/rules/{{ rule.id }}/retire">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Retire</button>
-  </form>
-</article>
-{% endfor %}
-{% endif %}
-
 {% if drafts %}
 <h2>Your drafts</h2>
+<div class="rows">
 {% for rule in drafts %}
-<article class="card">
-  <p class="summary">{{ rule.summary }}{% if rule.scope == "personal" %} <span class="muted">(just for you)</span>{% endif %}</p>
+{% call(part) row(rule.summary, chips=[("Draft", "warn")] + ([("Just for you", "info")] if rule.scope == "personal" else []), id="draft-" ~ rule.id, open=loop.length == 1) %}
+{% if part == "body" %}
   <p class="muted">{{ rule.text }}</p>
   <div class="buttons">
     <form method="post" action="/rules/{{ rule.id }}/lock">
@@ -46,61 +19,111 @@
       <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Set aside</button>
     </form>
   </div>
-</article>
+{% endif %}
+{% endcall %}
 {% endfor %}
+</div>
+{% endif %}
+
+<h2>Household rules</h2>
+<div class="rows">
+{% for rule in locked %}
+{% call(part) row(rule.summary, id="rule-" ~ rule.id) %}
+{% if part == "body" %}
+  <p class="muted">{{ rule.text }}</p>
+  {% if member.is_admin or rule.affects == member.id %}
+  <div class="danger-zone">
+    <form method="post" action="/rules/{{ rule.id }}/retire">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Retire</button>
+    </form>
+  </div>
+  {% endif %}
+{% endif %}
+{% endcall %}
+{% else %}
+<p class="empty muted">No household rules yet.</p>
+{% endfor %}
+</div>
+
+{% if personal %}
+<h2>Just for you</h2>
+<p class="muted">Personal rules only shape Themi's conversations with you. Nobody else sees them.</p>
+<div class="rows">
+{% for rule in personal %}
+{% call(part) row(rule.summary, id="rule-" ~ rule.id) %}
+{% if part == "body" %}
+  <p class="muted">{{ rule.text }}</p>
+  <div class="danger-zone">
+    <form method="post" action="/rules/{{ rule.id }}/retire">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Retire</button>
+    </form>
+  </div>
+{% endif %}
+{% endcall %}
+{% endfor %}
+</div>
 {% endif %}
 
 <h2>What Themi remembers</h2>
 <p class="muted">Pinned facts are always in front of Themi; the rest come up when they're relevant.
 Household facts are shared; personal ones only appear in your own conversations.</p>
+<div class="rows">
 {% for fact in facts %}
-<article class="card">
+{% call(part) row(fact.fact, meta=("Personal" if fact.scope == "member" else "Household") ~ " · " ~ fact.subject, chips=[("Pinned", "info")] if fact.pinned else [], id="fact-" ~ fact.id) %}
+{% if part == "body" %}
   <form method="post" action="/facts/{{ fact.id }}/edit">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label class="muted">{{ "Personal" if fact.scope == "member" else "Household" }} · {{ fact.subject }}{% if fact.pinned %} · pinned{% endif %}
-      <input name="fact" value="{{ fact.fact }}" required>
-    </label>
+    <label>What Themi remembers <input name="fact" value="{{ fact.fact }}" required></label>
     <button>Save</button>
   </form>
-  <div class="buttons">
+  <div class="danger-zone buttons">
     <form method="post" action="/facts/{{ fact.id }}/{{ 'unpin' if fact.pinned else 'pin' }}">
       <input type="hidden" name="csrf" value="{{ csrf }}"><button>{{ "Unpin" if fact.pinned else "Pin" }}</button>
     </form>
     <form method="post" action="/facts/{{ fact.id }}/delete">
-      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Forget</button>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Forget</button>
     </form>
   </div>
-</article>
+{% endif %}
+{% endcall %}
 {% else %}
-<p class="muted">Nothing remembered yet.</p>
+<p class="empty muted">Nothing remembered yet.</p>
 {% endfor %}
+</div>
 
 <h2 id="journal">Your journal</h2>
 <p class="muted">Once a day is over, Themi writes down what you talked about and what was decided.
 Only you see your journal; Themi reads it when you ask about an earlier day.</p>
-<form method="get" action="/knowledge#journal" class="inline-field">
-  <label>Search <input type="search" name="q" value="{{ query }}" placeholder="pacifiers"></label>
+<form method="get" action="/knowledge#journal" class="add-item">
+  <input type="search" name="q" value="{{ query }}" placeholder="Search, like “pacifiers”" aria-label="Search your journal">
   <button>Search</button>
 </form>
+<div class="rows">
 {% for entry in entries %}
-<article class="card">
-  <p class="summary">{{ entry.day.strftime('%A %-d %B') }}</p>
+{% call(part) row(entry.day.strftime('%A %-d %B'), meta=entry.topics | join("; "), id="journal-" ~ entry.id, open=query and loop.first) %}
+{% if part == "body" %}
   {% if entry.topics %}<p>Talked about: {{ entry.topics | join("; ") }}</p>{% endif %}
   {% if entry.decided %}<p>Decided: {{ entry.decided | join("; ") }}</p>{% endif %}
-  <form method="post" action="/journal/{{ entry.id }}/delete">
-    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="quiet">Delete</button>
-  </form>
-</article>
+  <div class="danger-zone">
+    <form method="post" action="/journal/{{ entry.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete</button>
+    </form>
+  </div>
+{% endif %}
+{% endcall %}
 {% else %}
-<p class="muted">{% if query %}Nothing in your journal about that.{% else %}Nothing written yet: the first entry comes the morning after a day you talk with Themi.{% endif %}</p>
+<p class="empty muted">{% if query %}Nothing in your journal about that.{% else %}Nothing written yet: the first entry comes the morning after a day you talk with Themi.{% endif %}</p>
 {% endfor %}
+</div>
 
 {% if repairs %}
-<h2>Times Themi forgot something</h2>
-<ul class="activity">
-  {% for repair in repairs %}
-  <li><span class="when">{{ repair.created_at | local_time }}</span> "{{ repair.complaint }}": {{ repair.fix }}</li>
-  {% endfor %}
-</ul>
+<details class="group">
+  <summary>Times Themi forgot something ({{ repairs|length }})</summary>
+  <ul class="activity">
+    {% for repair in repairs %}
+    <li><span class="when">{{ repair.created_at | local_time }}</span> "{{ repair.complaint }}": {{ repair.fix }}</li>
+    {% endfor %}
+  </ul>
+</details>
 {% endif %}
 {% endblock %}

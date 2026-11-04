@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}Safeway helper · Themi{% endblock %}
 {% block content %}
 <h1>Safeway helper</h1>
@@ -35,28 +36,31 @@ safeway.com. Install steps are in <code>extension/safeway/README.md</code>.</p>
   </form>
 </section>
 
-<section class="card">
-  <h2>Remembered products</h2>
-  <p class="muted">What each item on the list means at Safeway, the same in everyone's
-  browser. Change the search words to have the helper pick again.</p>
+<h2>Remembered products</h2>
+<p class="muted">What each item on the list means at Safeway, the same in everyone's
+browser. Change the search words to have the helper pick again.</p>
+<div class="rows">
   {% for p in products %}
-  <div class="row">
-    <span><strong>{{ p.name }}</strong>:
-      {% if p.product_name %}{{ p.product_name }}{% if p.size and p.size not in p.product_name %}, {{ p.size }}{% endif %}{% else %}<span class="muted">picked at the next fill</span>{% endif %}</span>
-    <form method="post" action="/safeway/products/search" class="inline">
+  {% if p.product_name %}{% set meta = p.product_name ~ (", " ~ p.size if p.size and p.size not in p.product_name else "") %}{% else %}{% set meta = "Picked at the next fill" %}{% endif %}
+  {% call(part) row(p.name, meta=meta, chips=[("Own search words", "info")] if p.search_words else []) %}
+  {% if part == "body" %}
+    <form method="post" action="/safeway/products/search" class="add-item">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <input type="hidden" name="name" value="{{ p.name }}">
       <input type="text" name="words" value="{{ p.search_words or '' }}" placeholder="Search for…" aria-label="What to search for, for {{ p.name }}" maxlength="80">
-      <button class="quiet">Save</button>
+      <button>Save</button>
     </form>
-    <form method="post" action="/safeway/products/forget" class="inline">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="hidden" name="name" value="{{ p.name }}">
-      <button class="quiet" aria-label="Forget {{ p.name }}">Forget</button>
-    </form>
-  </div>
+    <div class="danger-zone">
+      <form method="post" action="/safeway/products/forget">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="name" value="{{ p.name }}">
+        <button class="danger" aria-label="Forget {{ p.name }}">Forget</button>
+      </form>
+    </div>
+  {% endif %}
+  {% endcall %}
   {% else %}
-  <p class="muted">Nothing yet. The helper remembers what it picks.</p>
+  <p class="empty muted">Nothing yet. The helper remembers what it picks.</p>
   {% endfor %}
-</section>
+</div>
 {% endblock %}

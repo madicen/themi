@@ -178,7 +178,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [x] 2026-11-03 |
-| W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [ ] |
+| W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -8554,7 +8554,7 @@ Notes (2026-11-03):
   the item with HTMX could come later if the reload feels slow in the shop.
 
 ### W5 · Website redesign: Tiers, Rules & memory, AI and the remaining pages
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: W1
 - What Themi does alone: one row per category, chip "Automatic", "Asks first", "Always
   asks" or "Paused"; the escalation reason on the collapsed row. Buttons in the panel.
@@ -8570,3 +8570,23 @@ Depends on: W1
 
 Tests: chips for each tier state, a paused category's reason, an AI job's chain summary.
 Every page renders for a member and an admin.
+
+Notes (2026-11-03):
+- Tiers: chips Automatic / Automatic for you / Paused / Asks first / Always asks. The
+  escalation reason or "Automatic for <names>" is on the row; "Yours to switch" appears only
+  where switching is possible. The panel keeps the old wording. Members see "An admin can
+  change this one." on shared categories.
+- Rules & memory: drafts first (opened when there's just one), then household rules,
+  personal rules, facts (chip Pinned; meta Household/Personal · subject) and journal days,
+  all as rows. Retire, Forget and Delete are in the danger zone. Repairs are a collapsed
+  group. A journal search opens the first hit.
+- My AI: jobs show their chain ("Primary → Fallback", or a "Not set" chip); backends show
+  their provider and model, with a "Key saved" chip. Forms are unchanged inside the panels.
+- Beyond the prompt: My week's days are rows (today open) with the three parts on the
+  second line, because seven days of buttons made the page very long on a phone.
+- Safeway's remembered products are rows. Spending's entries are plain rows. Emails to
+  archive is a checklist with its buttons in the save bar. Calendars and Development are
+  unchanged apart from the shell.
+- Checked by eye at 390px and 1280px: headless Chrome on pages the test harness rendered,
+  with seeded tasks, accounts, a list and LG ThinQ. Not yet tried on a real phone against
+  `make dev-prod`; worth a look on both phones before relying on it.

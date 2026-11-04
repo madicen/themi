@@ -432,3 +432,37 @@ async def test_reply_times_moved_to_the_development_page(
     response = await site.get("/ai/timing")
     assert response.status_code == 303 and response.headers["location"] == "/dev"
     assert 'href="/dev"' in (await site.get("/more")).text  # W1: on the More page
+
+
+# ----- rows with chips (W5) ---------------------------------------------------------
+
+
+def row_of(page: str, row_id: str) -> str:
+    start = page.index(f'id="{row_id}"')
+    return page[start : page.index("</summary>", start)]
+
+
+async def test_each_tier_says_its_state_on_the_row(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
+    await site.post("/tiers/email_mark_read/automatic", data={"csrf": csrf})
+    scenario.app.services.autonomy.escalate("email_mark_read", "a bill confirmation is late")
+    page = (await site.get("/tiers")).text
+    assert '<span class="chip good">Automatic</span>' in row_of(page, "tier-grocery_list_add")
+    paused = row_of(page, "tier-email_mark_read")
+    assert '<span class="chip warn">Paused</span>' in paused
+    assert "Asking again because: a bill confirmation is late" in paused
+    capped = row_of(page, "tier-email_reply")
+    assert '<span class="chip">Always asks</span>' in capped and "Yours to switch" not in capped
+    archive = row_of(page, "tier-email_archive_noise")
+    assert '<span class="chip">Asks first</span>' in archive and "Yours to switch" in archive
+
+
+async def test_each_ai_job_shows_its_chain(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/ai")).text
+    labels = [b.label for b in scenario.app.ai_settings.backends(scenario.member("Erin").id)]
+    chain = row_of(page, "job-conversation")
+    assert "Conversation" in chain and " → ".join(labels[:2]) in chain
