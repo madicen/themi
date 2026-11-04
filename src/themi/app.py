@@ -86,6 +86,7 @@ from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
 from themi.core.which_list import WhichList
+from themi.core.which_task import TaskNamer
 from themi.core.wrong_replies import WrongReplies
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
@@ -154,6 +155,7 @@ def build_app(
     services = Services(
         tool_routing=tool_routing,
         group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db)),
+        task_namer=TaskNamer(RouterEmbedder(router), VectorCache(db)),
         store=store,
         ai_settings=ai_settings,
         router=router,

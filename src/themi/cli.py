@@ -271,6 +271,8 @@ def _feedback(
     not_wrong: int | None = None,
 ) -> int:
     from themi.core.feedback import FeedbackBook
+    from themi.core.naming import NamingRefusals
+    from themi.core.naming import report as naming_report
     from themi.core.wrong_replies import LABEL_WORDS, ReplyReview, ReviewError, report, stub_text
 
     store = _store()
@@ -301,6 +303,9 @@ def _feedback(
     marked_report = report(review.unlabelled(), family.timezone if family else "UTC")
     if marked_report:
         print("\n" + marked_report, end="")
+    refusals = naming_report(NamingRefusals(store.db).weeks(), family.timezone if family else "UTC")
+    if refusals:
+        print("\n" + refusals, end="")
     return 0
 
 

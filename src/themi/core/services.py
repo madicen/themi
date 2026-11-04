@@ -68,6 +68,7 @@ if TYPE_CHECKING:
     from themi.core.triage import EmailTriage
     from themi.core.vacuum import Vacuum
     from themi.core.which_list import WhichList
+    from themi.core.which_task import TaskNamer
     from themi.energy.outcomes import OutcomeTracker
 
 Decision = Literal["yes", "no", "later"]
@@ -139,6 +140,7 @@ class Services:
     site_url: str = ""  # the website's base address, for /site links
     tool_routing: str = "groups"  # P5: or "all", every tool on every call; P7b "embeddings"
     group_router: EmbeddingRouter | None = None  # P7b, used when tool_routing is "embeddings"
+    task_namer: TaskNamer | None = None  # P8b: which open task a message names, by meaning
     rulebook: Rulebook | None = None
     memory: Memory | None = None
     outcomes: OutcomeTracker | None = None

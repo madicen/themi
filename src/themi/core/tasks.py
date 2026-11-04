@@ -19,7 +19,7 @@ import secrets
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from themi import clock
@@ -27,7 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
-from themi.core import praise
+from themi.core import naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
@@ -43,6 +43,7 @@ from themi.core.repeat import (
 from themi.core.services import Services
 from themi.core.sun import sunset
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import to_utc_iso
 
@@ -66,8 +67,11 @@ UNSURE = re.compile(
     re.IGNORECASE,
 )
 # "Didn't I just clean the bird cage?" asks; it doesn't say it's done (#92).
+# A leading "did" asks only with someone after it: "Did I clean it" asks, "did my 5k" says
+# it's done (P8a's Notes).
 QUESTION = re.compile(
-    r"\?\s*$|^\s*(?:did|didn[\u2019']?t|have|haven[\u2019']?t|has|hasn[\u2019']?t|when|was|wasn[\u2019']?t)\b",
+    r"\?\s*$|^\s*when\b|^\s*(?:did|didn[\u2019']?t|have|haven[\u2019']?t|has|hasn[\u2019']?t|"
+    r"was|wasn[\u2019']?t)\s+(?:i|you|we|he|she|they|it|someone|anyone|somebody|anybody)\b",
     re.IGNORECASE,
 )
 SAYS_DONE = re.compile(  # ...unless it says so too ("done, what's next?", "can you mark it")
@@ -75,7 +79,6 @@ SAYS_DONE = re.compile(  # ...unless it says so too ("done, what's next?", "can 
     r"\b(?:mark|tick|check (?:it |that )?off|cross (?:it |that )?off|log|note)\b",
     re.IGNORECASE,
 )
-SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it
 # "no" to "Walk dog... Done already?" marked eight other tasks done (#97).
 NOT_DONE = frozenset(
     {"no", "n", "nope", "nah", "not yet", "not done", "not today", "no not yet", "nope not yet"}
@@ -84,7 +87,6 @@ _RELATIVE_DAY = re.compile(
     r"\b(?:today|tonight|yesterday|tomorrow|this (?:morning|afternoon|evening))\b",
     re.IGNORECASE,
 )
-ALL_OF_THEM = re.compile(r"\b(?:all|everything|every one|both)\b", re.IGNORECASE)
 
 
 def is_medicine(title: str) -> bool:
@@ -2128,7 +2130,7 @@ async def set_task_schedule(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
     phrase = args["repeat"].strip()
     try:
-        _check_meant(ctx, board.get(args["task_id"]), "Not changed")
+        await _check_meant(ctx, board.get(args["task_id"]), "Not changed")
         repeat = parse(phrase, board._today()) if phrase else None
         task = await board.set_schedule(
             args["task_id"],
@@ -2208,14 +2210,7 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "Not marked done: they asked a question, not said it's done. Answer it (when it "
             "was last done is in its details); mark it done only when they say it is."
         )
-    _check_meant(ctx, task, "Not marked done")
-    if not _named(ctx, task):
-        raise ToolFailed(  # bug #119: the reply said "Marked done" anyway, so Themi says it
-            f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
-            "last message. Mark only what they say is done; ask if it isn't clear.",
-            reply=f"\"{task.title}\" is still open: I couldn't tell that's the one you meant. "
-            "Is it done?",
-        )
+    await _check_meant(ctx, task, "Not marked done", must_name=True)
     board = _board(ctx)
     on = board._today() - timedelta(days=1) if DONE_YESTERDAY.search(text) else None
     said = await board.complete(task.id, ctx.member, interactive=True, on=on)
@@ -2226,38 +2221,79 @@ async def complete_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     )
 
 
-def _named(ctx: ToolContext, task: Task) -> bool:
+def names_task(title: str, request: str, previous: str = "", said_before: str = "") -> bool:
     """Something said names this task: their message or the one before it, Themi's last one
     (the nudge they're answering), or all of them ("all done", "everything") (#97)."""
-    said = (ctx.request_text, ctx.previous_text, ctx.said_before)
-    return any(words_in_common(text, task.title) for text in said) or bool(
-        ALL_OF_THEM.search(ctx.request_text)
-    )
+    said = (request, previous, said_before)
+    return any(words_in_common(text, title) for text in said) or bool(ALL_OF_THEM.search(request))
 
 
-def _check_meant(ctx: ToolContext, task: Task, not_done: str) -> None:
-    meant = _meant_instead(ctx, task)
-    if meant is not None:
-        raise ToolFailed(
-            f"{not_done}: what they said names task {meant.id} ({meant.title}), not task "
-            f"{task.id} ({task.title}). Use the one they mean, and say which by name."
-        )
-
-
-def _meant_instead(ctx: ToolContext, task: Task) -> Task | None:
-    """Another open task the conversation names, when it names nothing of this one ("We
-    contacted Erin's parents" marked the bins done, 2026-10-29). A short answer ("Yes please")
-    is read with what Themi asked before it (#92). Just "done" names nothing: no check."""
+async def _check_meant(
+    ctx: ToolContext, task: Task, not_done: str, *, must_name: bool = False
+) -> None:
+    """What they said names this task, and not another open one: by meaning (P8b), or by
+    words when that can't be told in time. `must_name`: a done needs its task named; a
+    change only must not name another one."""
     board = _board(ctx)
     rows = board.db.query(
         "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND id != ?", (task.id,)
     )
     others = [board.get(r["id"]) for r in rows]
-    texts = [ctx.request_text]
-    if len(ctx.request_text.split()) <= SHORT_ANSWER:
-        texts.append(ctx.said_before)
+    namer = ctx.services.task_namer
+    titles = {task.id: task.title} | {t.id: t.title for t in others}
+    said = Said(ctx.request_text, ctx.previous_text, ctx.said_before)
+    named = None if namer is None else await namer.named(ctx.member.id, said, titles)
+    if named is None:  # the word check, as before P8b
+        meant = meant_instead(task.title, others, ctx.request_text, ctx.said_before)
+        if meant is not None:
+            raise _names_other(task, meant, not_done)
+        if must_name and not names_task(
+            task.title, ctx.request_text, ctx.previous_text, ctx.said_before
+        ):
+            raise _not_named(task)
+        return
+    if task.id in named:
+        return
+    if named:
+        raise _names_other(task, board.get(min(named)), not_done)
+    if must_name:
+        raise _not_named(task)
+
+
+def _names_other(task: Task, meant: Task, not_done: str) -> ToolFailed:
+    return ToolFailed(
+        f"{not_done}: what they said names task {meant.id} ({meant.title}), not task "
+        f"{task.id} ({task.title}). Use the one they mean, and say which by name.",
+        refused=naming.NAMES_OTHER,
+    )
+
+
+def _not_named(task: Task) -> ToolFailed:
+    return ToolFailed(  # bug #119: the reply said "Marked done" anyway, so Themi says it
+        f"Not marked done: nothing they said names {task.title}, and neither did Themi's "
+        "last message. Mark only what they say is done; ask if it isn't clear.",
+        reply=f"\"{task.title}\" is still open: I couldn't tell that's the one you meant. "
+        "Is it done?",
+        refused=naming.NOT_NAMED,
+    )
+
+
+class _Titled(Protocol):
+    @property
+    def title(self) -> str: ...
+
+
+def meant_instead[TitledT: _Titled](
+    title: str, others: Sequence[TitledT], request: str, said_before: str = ""
+) -> TitledT | None:
+    """Another open task the conversation names, when it names nothing of this one ("We
+    contacted Erin's parents" marked the bins done, 2026-10-29). A short answer ("Yes please")
+    is read with what Themi asked before it (#92). Just "done" names nothing: no check."""
+    texts = [request]
+    if len(request.split()) <= SHORT_ANSWER:
+        texts.append(said_before)
     for said in texts:
-        if words_in_common(said, task.title):
+        if words_in_common(said, title):
             return None
         scored = [(words_in_common(said, t.title), t) for t in others]
         best = max(scored, key=lambda pair: pair[0], default=None)
@@ -2278,7 +2314,7 @@ async def cancel_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = _board(ctx).get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
-    _check_meant(ctx, task, "Not taken off")
+    await _check_meant(ctx, task, "Not taken off")
     return await _board(ctx).cancel(task.id, ctx.member, interactive=True)
 
 
@@ -2304,7 +2340,7 @@ async def reschedule_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         task = board.get(args["task_id"])
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
-    _check_meant(ctx, task, "Not changed")
+    await _check_meant(ctx, task, "Not changed")
     said = str(args["due_date"]).strip().lower()
     try:
         today = board._today()
