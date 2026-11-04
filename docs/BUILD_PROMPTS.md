@@ -178,6 +178,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
 | D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [x] 2026-11-03 |
 | D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [x] 2026-11-04 |
+| D5d | Dev control panel: the pet feeders | Dev tooling | [x] 2026-11-04 |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
@@ -6548,7 +6549,7 @@ Notes (2026-11-04):
   as with P7a's).
 - Follow-ups: the plan's refill-level disagreements go to 34's alignment prompts. A water
   fountain (`cwysj`) could share this with its own words. The dev control panel (D5) has no
-  feeder controls, so `make dev` runs without the Tuya fake.
+  feeder controls, so `make dev` runs without the Tuya fake (done in D5d).
 - Setup: README, "The pet feeders, through SmartLife / Tuya": a Tuya cloud project (Smart
   Home), the SmartLife account linked by QR, the feeders on "DP Instruction" mode if
   offered, then the Access ID and Secret on the Accounts page. Tuya's free IoT Core plan
@@ -8768,6 +8769,34 @@ Notes (2026-11-04):
 - Tried for real: a scene, a fault, and the Safeway and travel state on a running
   `make dev`.
 - Setup: none.
+
+### D5d · Dev control panel: the pet feeders
+Status: [x] 2026-11-04
+Depends on: D5c, 32
+Asked 2026-11-04 (Michael), after 32 left the feeders out of `make dev`.
+
+- `make dev` runs with the Tuya fake, saved in `fakes.json` like the others. On the first
+  run it gets two feeders, then links them through Themi's own link path: "Cat Feeder"
+  (Tuya's standard kind, with a food level) and "Mochi's feeder" (its own fault code).
+- A "Pet feeders (Tuya)" section: set the cat feeder's food left (%), set Mochi's feeder
+  (fine, running low, stuck, out of food with the battery low, an unknown fault), and add
+  a feeding. Each is read at once, feeding logs included.
+- Faults: the cat feeder offline, a 1199 rate limit, the free plan lapsing, and "Tuya
+  works again", which relinks as the Accounts page would.
+
+Tests: each action changes what Themi read; a low feeder from the panel nudges whoever
+has more room 10 minutes on, and filling it closes the chore; the plan lapsing tells the
+admins once, and working again relinks. No real network.
+
+Notes (2026-11-04):
+- `TuyaWatcher.poll(feeds=True)` reads the feeding logs at once (the panel's check). The
+  scheduler's hourly read is unchanged.
+- `FakeTuya`'s offline set is public now (`offline_devices`), for the section's state.
+- `make dev` now lists six devices, Cat Feeder and Mochi's feeder among them.
+- No scene uses the feeders yet.
+- Not tried on a running `make dev`, only through the tests' `make dev` wiring and the
+  simulator.
+- Setup: none. An existing `data/dev/` links the feeders on its next start.
 
 ### W1 · Website redesign: phone-first shell, navigation and row components
 Status: [x] 2026-11-03

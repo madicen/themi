@@ -43,13 +43,14 @@ opens the management site signed in as that person.
   session. *New session* marks where the next copy starts.
 - Every outside service is played by its test fake: Gmail, Calendar and Tasks for
   `erin@gmail.com` and `husband@gmail.com`, Keep, the wall, OurGroceries, an LG washer and
-  dryer, a Bosch dishwasher and a Roborock. They're linked on the first run and kept in
-  `data/dev/fakes.json`. `make dev FAKES=0` runs without them. Replies use real Gemini.
+  dryer, a Bosch dishwasher, a Roborock and two SmartLife pet feeders. They're linked on
+  the first run and kept in `data/dev/fakes.json`. `make dev FAKES=0` runs without them.
+  Replies use real Gemini.
 - The *Control panel* (<http://localhost:8090/control>, beside the chat on a wide screen)
   makes things happen outside the chat: an email arrives, an event is added or moved, a
-  to-do is ticked on the wall, the washer finishes, the robot gets stuck. Themi looks at
-  once, and each action shows in the chat and in *Copy session*. Each section can also
-  make its service fail (busy, offline, signed out), the Safeway helper answers cart jobs
+  to-do is ticked on the wall, the washer finishes, the robot gets stuck, a feeder runs low
+  or jams. Themi looks at once, and each action shows in the chat and in *Copy session*.
+  Each section can also make its service fail (busy, offline, signed out), the Safeway helper answers cart jobs
   as the extension would, and *Scenes* run a whole day of these with the clock skipped
   between them (`tools/dev/scenes.py`).
 - `make dev-prod` runs the same way on a fresh copy of the Pi's data, in `data/dev-prod/`
