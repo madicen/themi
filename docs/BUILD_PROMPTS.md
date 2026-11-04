@@ -95,7 +95,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | P7a | Routing data: the family's kinds of message, labelled | Feedback | [x] 2026-10-30 |
 | P7b | An embedding router, if P5 says routing stays | Feedback | [x] 2026-10-30 |
 | P8a | "Which task?" refusals: how often the naming check says no, and how often it's wrong | Feedback | [x] 2026-11-03 |
-| P8b | An embedding fallback for "which task?", if P8a says | Feedback | [ ] |
+| P8b | Embeddings decide "which task?" | Feedback | [ ] |
 | F16a | Feedback: automatic is per person | Feedback | [x] |
 | F16b | Feedback: noise emails in one message, inside the limit | Feedback | [x] |
 | F16c | Feedback: time-sensitive, explaining email levels, the run, slow notices | Feedback | [x] |
@@ -4866,32 +4866,72 @@ Notes (2026-11-03):
   numbers show wrong dones.
 - Also found: "did my 5k" never reaches the naming check; `QUESTION` reads a message
   starting "did" as a question.
-- P8b's call: wait for a few weeks of `themi feedback` numbers. On the eval alone, the
-  paraphrase gap is real (9/15 refused).
+- P8b's call: the eval decided it (embeddings scored 38/45 against the words' 19/45), and
+  P8b was rewritten so embeddings decide rather than only fill in. See P8b.
 - Setup: restart (applies 0099).
 
-### P8b · An embedding fallback for "which task?", if P8a says
+### P8b · Embeddings decide "which task?"
 Status: [ ]
 Depends on: P8a, P7b
-Read first: "Trust tiers" (an action asked for in their own words). Only if P8a's numbers ask.
-The word check stays the fast path; embeddings decide only when it finds nothing.
-- `_named` misses → embed this message (and Themi's last message, for a short answer, as
-  `_meant_instead` does) and every open task's title with P7b's `RouterEmbedder` and
-  `VectorCache` (titles cached; they change rarely). Accept only when this task is the
-  closest open task AND above a threshold AND clear of the next one by a margin. Strict on
-  purpose: the check is there to doubt the model.
-- `_meant_instead` uses the same scores, so "names another task" and "names this one" can't
-  disagree: a message closest to another task still gets "names task N, not this one".
-- An embedding that fails or takes over a second leaves the word check's answer (refuse and
-  ask, F21c's reply). A done never waits on it, and no network call means no new risk.
-- Threshold and margin are chosen with P8a's eval: no wrongly accepted case at all, then
-  as few wrongly refused as that allows; say why in the Notes.
-- A small model as judge ("does this message say task X is done?") is the next step only
-  if embeddings can't get the near misses right at any threshold: it costs a model round.
+Read first: "Trust tiers" (an action asked for in their own words).
+Rewritten 2026-11-03 (Michael: "use the best system"). P8a's first plan was a fallback
+that asks the embeddings only when the words find nothing. On P8a's 45 cases that barely
+helps: most of the word check's mistakes are a single shared word *accepting* the wrong
+task ("clean", "put", "about", "ran", "all"), and a fallback never sees those. Scored
+offline with Gemini embeddings (2026-11-03, threshold and margin tuned on the same cases):
 
-Tests: a paraphrase the words miss ("did my 5k" for "Go for a run") is accepted; the
-bins/parents pair and "yes please" stay refused; a message equally close to two tasks is
-refused; a failing or slow embedder leaves the refusal; the fake embedder, no network.
+| Check | Right | Wrongly refused | Wrongly accepted |
+| --- | --- | --- | --- |
+| Word check (today) | 19 | 9 | 18 |
+| Words, then embeddings (the old plan) | 22-25 | 1-5 | 19-20 |
+| Embeddings decide, 0.6, margin 0.05 | 38 | 6 | 2 |
+| Embeddings decide, 0.6, margin 0.08 | 36 | 8 | 1 |
+
+So embeddings decide which open task a message names, and the word rules stay only where
+picking the single closest task can't work.
+- **The embedding check.** Embed what they said and every open task's title with P7b's
+  `RouterEmbedder` and `VectorCache` (titles cached; they change rarely). The task the
+  model picked is named when it's the closest open task, at or above a threshold, and
+  ahead of the next one by a margin. The margin is what matters: absolute scores don't
+  separate ("Cleaned the car" is 0.755 from "Clean the kitchen", above several real
+  paraphrases), being clearly the closest does.
+- **One answer for both checks.** `_named` and `_meant_instead` read the same scores: the
+  closest task by the margin is "this one" or "task N, not this one"; nothing clear is
+  "not named". They can't disagree.
+- **Word rules kept** where the closest task can't be right:
+  - "all", "both", "everything" (`ALL_OF_THEM`): several tasks are meant. Keep the word
+    rule, but only when it has something to apply to (Themi's last message lists tasks, or
+    the message names a group, "both bathrooms"); "Broke down all the boxes" must not let
+    every task through.
+  - Short answers ("Yes please", "Done", "and the tea"): the earlier message carries the
+    meaning, and embedding the two together muddies it. Score Themi's last message (or
+    their own before it) on its own, as `_meant_instead` does now, and use that.
+  - A follow-up's own words (`follow_ups._named`) are left out, as now.
+- **When the embeddings can't answer** (a failure, or over a second): the word check
+  decides, as today. A done never waits on it; P8a's refusal and its reply stay as they
+  are.
+- **Threshold and margin**: chosen on the reviewed cases, with no wrongly accepted case if
+  any setting allows it, then as few wrongly refused as possible. Say why in the Notes.
+  Keep the offline scoring as an opt-in eval (like `test_router_thresholds.py`: the test
+  key, vectors cached in `results/`), plus a fake-embedder version in `make test-all`.
+- **Before tuning**: someone reviews `tests/evals/naming_cases.json`'s labels (P8a left them
+  unreviewed), and the cases grow: more near twins (the kitchen pair, the bathrooms),
+  more short answers, and "Counters are clear" / "Headphones are on the charger", the
+  paraphrases embeddings still missed.
+- Also fix while here: "did my 5k" never reaches the naming check, since `QUESTION` reads
+  a message starting "did" as a question (P8a's Notes).
+- P8a's weekly numbers in `themi feedback` show whether it worked: fewer wrong refusals
+  and no rise in wrong dones (👎 marks, `/bug`).
+- A small model as judge ("does this message say task X is done?") only if embeddings
+  can't get the near misses right at any setting: it costs a model round.
+
+Tests: a paraphrase the words miss ("jogged this morning" for "Go for a run") is accepted;
+a single shared word no longer is ("Ran the dishwasher", "Cleaned the car" with several
+"Clean ..." tasks); the bins/parents pair and #92's "Yes please" stay refused; near twins
+pick the right one ("Kitchen's decluttered"); a message about equally close to two tasks is
+refused; "All done!" after a list and "Both bathrooms are clean" accept each meant task;
+"Broke down all the boxes" accepts nothing; a failing or slow embedder falls back to the
+word check; the fake embedder, no network.
 
 ### F16a · Feedback (2026-10-28): automatic is per person
 Status: [x] 2026-10-28
