@@ -177,7 +177,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 | D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
 | D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [x] 2026-11-03 |
-| D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [ ] |
+| D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [x] 2026-11-04 |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
@@ -8559,7 +8559,7 @@ Notes (2026-11-03):
 - Setup: none.
 
 ### D5c · Dev control panel: faults, the Safeway helper, travel and scenes
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: D5b
 - Faults on each section, from the fakes' own switches: fail the next call (with a
   status, and Retry-After for Gmail), go offline, rate-limit, expire or revoke the
@@ -8577,6 +8577,51 @@ Tests: each fault leads to the behaviour its connector's tests already expect (a
 "Needs relinking" chip, a retry, no duplicate send). A Safeway job answered from the
 panel lands in the cart's results. A scene runs end to end on a frozen clock. No real
 network.
+
+Notes (2026-11-04):
+- Faults: each section gets a "Make it fail" action, built from the fakes' own switches
+  (`FAULTS` in `tools/dev/controls.py`):
+  - Email: Gmail busy (429 with Retry-After), failing (500) or forgetting the history;
+    access revoked at Google.
+  - Calendar: reads or new events fail.
+  - Google Home: Google Tasks fails, Keep fails a read, or Keep loses a save.
+  - The wall: reading to-dos fails, or every sign-in expires.
+  - OurGroceries: a read or an add fails.
+  - Laundry: the washer offline, a 1306 rate limit, the token turned down, or "LG works
+    again".
+  - Dishwasher: offline, a 429, access revoked, or "Approve it again".
+  - Vacuum: offline, signed out, or back online.
+
+  The help on each says how to relink on the Accounts page (the fake Google page, LG's
+  token, Roborock's email and code). Home Connect's sign-in page is at an address a
+  browser can't open, so "Approve it again" relinks it (`DevFakes.link_home_connect`).
+  Each section's state shows a fault that's in force.
+- The Safeway helper: `DevFakes` keeps its token like a fake (`HelperSeat` in
+  `fakes.json`) and connects one on the first run, as the Safeway page's Connect does.
+  "Answer the next cart job" claims and answers through `FakeSafewayHelper` and the real
+  `/api/safeway/` (in-process, over the website's ASGI app, which `bind` now takes).
+- Deviation: Themi's results have no "substitute" status. The outcomes are its own:
+  added, out of stock, not found, failed. One choice applies to every item, and "milk:
+  not found" lines set exceptions.
+- Travel: the drive time, a place it can find, and a failing lookup.
+- Scenes: `tools/dev/scenes.py` has `Do` (a panel action), `At` (the next such time, on a
+  weekday if given) and `Wait`. There are three scenes: "A busy Tuesday", "Shopping all
+  over" and "Everything breaks". `ControlPanel.run_scene` runs the steps from the
+  simulator's worker thread. Each skip goes through the simulator's `skip` (a "Skipped
+  ahead" notice, which advances a frozen clock in tests), then the outbox sends what came
+  due. A failing step stops the scene, and the notice and error say which step it was. A
+  test checks every step against the sections' actions and fields.
+- `DevFakes.act` awaits async changes. A vacuum check that can't read (offline, signed
+  out) no longer fails the action, since that's the behaviour being tried.
+- Tests: `tests/integration/test_dev_faults.py` (the faults lead to the "Needs relinking"
+  and "Link it again" states, Gmail's back-off without lost or doubled mail, the wall's
+  retry without doubles, a lost Keep save sent again once, the Safeway job's results,
+  travel, the scene checks) and a scenario: "A busy Tuesday" end to end, with the
+  urgent email triaged, the washer's nudge at 10:30, and the robot trapped at 2.
+  `Panel` moved to `tests/fixtures/dev.py`.
+- Tried for real: a scene, a fault, and the Safeway and travel state on a running
+  `make dev`.
+- Setup: none.
 
 ### W1 · Website redesign: phone-first shell, navigation and row components
 Status: [x] 2026-11-03

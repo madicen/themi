@@ -48,7 +48,10 @@ opens the management site signed in as that person.
 - The *Control panel* (<http://localhost:8090/control>, beside the chat on a wide screen)
   makes things happen outside the chat: an email arrives, an event is added or moved, a
   to-do is ticked on the wall, the washer finishes, the robot gets stuck. Themi looks at
-  once, and each action shows in the chat and in *Copy session*.
+  once, and each action shows in the chat and in *Copy session*. Each section can also
+  make its service fail (busy, offline, signed out), the Safeway helper answers cart jobs
+  as the extension would, and *Scenes* run a whole day of these with the clock skipped
+  between them (`tools/dev/scenes.py`).
 - `make dev-prod` runs the same way on a fresh copy of the Pi's data, in `data/dev-prod/`
   (over ssh to `THEMI_PI`, default `themi@themi`). `make dev-prod BACKUP=latest` copies from
   the encrypted backups instead, and `KEEP=1` reuses the last copy. The copy is cleaned
