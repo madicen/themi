@@ -174,6 +174,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
+| D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [ ] |
+| D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [ ] |
+| D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [ ] |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
@@ -8376,6 +8379,108 @@ Notes (2026-11-03):
 - Setup: none. `.env` needs `GEMINI_API_KEY` for replies, and the `THEMI_BACKUP_*`
   settings and the real `THEMI_SECRET_KEY` for `BACKUP=`. `data/dev-prod/` now holds a
   copy; `make dev-reset` deletes it.
+
+### D5a · Dev control panel: the fakes wired into `make dev`, linked and kept between runs
+Status: [ ]
+Depends on: D1, D2, D4
+From Michael (2026-11-03): `make dev` can't show the whole Themi experience, because
+nothing outside the chat ever happens: no email arrives, the washer never finishes, the
+wall never gets ticked. The test fakes already play every outside service; dev should
+run with them, and a control panel (D5b) should drive them.
+- `tools/dev/fakes.py`: `DevFakes` starts and holds the fakes from `tests/fakes`, the same
+  ones the scenario harness uses: Google sign-in, Gmail, Calendar and Tasks (local HTTP
+  servers on random ports), Cozyla, ThinQ (with its fake MQTT broker), Home Connect and
+  travel (httpx transports), and Keep, OurGroceries and Roborock (at their interfaces).
+- One wiring for both. Move the harness's `_google_config` and `_cozyla_client` into
+  `tests/fakes/wiring.py` with a `connector_options(fakes) -> dict` that gives
+  `build_app`'s connector arguments, and have the harness and dev both use it.
+  `build_runtime` takes `connectors: Mapping[str, Any] | None`, which replaces what it
+  would build from settings (the only change on the production side).
+- Linked on the first run, through the real link paths (`GoogleAccounts.link`, the ThinQ
+  and Roborock watchers' `link`, `KeepLinks.link`, and Home Connect's OAuth flow with
+  `FakeHomeConnect.approve` saying yes), as the scenarios do:
+  Erin and Husband each have a Google account (Gmail, Calendar, Tasks) and Keep; the
+  household has the wall (a "Family" list, both people as members), OurGroceries, an LG
+  washer and dryer, a Bosch dishwasher and a Roborock. The rows in `data/dev/` are real,
+  so the website's Accounts page shows them linked.
+- Kept between runs. Themi remembers sync cursors and remote ids, so fakes that forgot
+  everything on restart would make it think the wall or Keep had deleted things. Each fake
+  gets `snapshot() -> dict` and `restore(dict)` over its plain state (no pickle), and
+  `DevFakes` saves `data/dev/fakes.json` on stop and every minute. Tokens the fakes issued
+  are kept too, so links survive a restart. `make dev-reset` deletes it with the rest.
+- Threads. The fakes are changed from the simulator's server thread (D5b) and read on
+  Themi's event loop. `DevFakes.act(fn)` runs every change on Themi's loop
+  (`run_coroutine_threadsafe`) and waits for it, so there's no locking in the fakes.
+- `DevFakes.check_now(task)` runs one of `app.periodic` (`gmail.poll`, `cozyla.sync`,
+  `devices.thinq_push`, `devices.dishwasher`, `devices.vacuum`, `calendar.sync`, ...) at
+  once, as the harness's `run_periodic` does, so a change shows up in seconds rather than
+  at the next poll.
+- On by default for `make dev`; `make dev FAKES=0` runs without them, as now. `make
+  dev-prod` stays without fakes (its links were cleaned); a later prompt can add them.
+- The banner lists what's linked to the fakes.
+
+Tests: `connector_options` gives the same app the harness built before (the existing
+scenarios pass unchanged). Snapshot and restore round-trip for each fake, including a
+Cozyla to-do Themi made, which isn't deleted after a restart. `act` runs on the loop.
+An integration test boots the dev wiring on a temp folder with a frozen clock: linked
+once, not twice on the second run. No real network.
+
+### D5b · Dev control panel: the page, with email, calendar, wall, lists and devices
+Status: [ ]
+Depends on: D5a
+- A Control panel at `http://localhost:8090/control`, served by the simulator, plus a
+  panel beside the chat on wide screens, so you can see Themi react while you trigger
+  things. Dev only: nothing goes in `themi.web`, and production code never imports it.
+- Sections are declared, not hand-built. `tools/dev/controls.py` has `Section(name,
+  fake, actions)` and `Action(label, fields, run, check)`, where `check` is the periodic
+  task to run afterwards. The page renders from `GET /control/schema` and posts
+  `/control/act`. Each section also shows the fake's current state (`GET /control/state`):
+  the washer's run state, the wall's lists, what's in Keep. A new connector adds one
+  `Section`, and its own prompt should include that.
+- Every action adds a notice to the simulator's transcript (chat 0, "⚙ Washer: finished"),
+  so the D2 Copy session report shows what was triggered and when, in Themi's clock.
+- Sections and actions:
+  - Email: deliver to Erin or Husband (from, subject, text, Primary or Promotions), with
+    presets: a bill due Friday, a package delivered, a school notice, an urgent one from a
+    known sender, newsletter noise, an expected email arriving late. Then `gmail.poll`.
+  - Calendar: an event on someone's calendar (title, start, length, place); a change
+    or cancellation from Google's side; Themi's own events listed. Then `calendar.sync`.
+  - Google Home: "said to a speaker", to Google Tasks' My Tasks (GT1a) or Keep's
+    shopping list (GK1); ticked or deleted in Keep.
+  - The wall (Cozyla): add or tick a to-do, tick a chore for a person and day, tick a
+    routine item, reorder a list. Then `cozyla.sync`.
+  - OurGroceries: add, cross off or delete an item.
+  - Laundry (ThinQ): washer or dryer to Running, End or Power off, sent as a push.
+  - Dishwasher (Home Connect): Run (with minutes left), Finished, Ready, door opened.
+  - Vacuum (Roborock): cleaning, returning, docked, trapped, bin full, water tank empty,
+    and parts wear.
+  - Energy (dev only): record a `day_level` or `device_activity` signal for a person; the
+    existing Energy numbers view shows the effect. Never on the website.
+
+Tests: each action changes its fake and runs its check (a unit test per section through
+`/control/act`). Scenarios through the panel's actions, with a frozen clock: the washer's
+End nudges someone after the half hour; an email preset is triaged; a chore ticked on the
+wall closes the task. The schema covers every fake `DevFakes` holds. No real network.
+
+### D5c · Dev control panel: faults, the Safeway helper, travel and scenes
+Status: [ ]
+Depends on: D5b
+- Faults on each section, from the fakes' own switches: fail the next call (with a
+  status, and Retry-After for Gmail), go offline, rate-limit, expire or revoke the
+  sign-in. Relinking then goes through the website's real link pages against the fakes
+  (the fake Google consent page is already a page you can click through).
+- The Safeway helper: `FakeSafewayHelper` paired as the extension would be; the panel
+  shows waiting cart jobs and answers each item (found, a substitute, not found).
+- Travel: set TomTom's drive time, add a place it can find, or have it fail.
+- Scenes: a named sequence of actions with clock skips, written in
+  `tools/dev/scenes.py` (for example "a busy Tuesday": an urgent email at 8, the washer
+  done at 10, the robot trapped at 2). The panel runs one and the report records each
+  step. Scenes use the same `Action`s, so they stay in step with the sections.
+
+Tests: each fault leads to the behaviour its connector's tests already expect (a
+"Needs relinking" chip, a retry, no duplicate send). A Safeway job answered from the
+panel lands in the cart's results. A scene runs end to end on a frozen clock. No real
+network.
 
 ### W1 · Website redesign: phone-first shell, navigation and row components
 Status: [x] 2026-11-03
