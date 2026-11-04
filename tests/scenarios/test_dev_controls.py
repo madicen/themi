@@ -55,12 +55,14 @@ async def driven(
         home_connect=fakes.home_connect,
         thinq=fakes.thinq,
         roborock=fakes.roborock,
+        tuya=fakes.tuya,
         gtasks=fakes.gtasks,
         keep=fakes.keep,
     )
     await scenario.start()
     await fakes.bind(scenario.app, SITE)
-    for first in ("devices.thinq", "devices.thinq_push"):  # as the scheduler does on start
+    # As the scheduler does on start.
+    for first in ("devices.thinq", "devices.thinq_push", "devices.feeders"):
         await scenario.run_periodic(first)
     yield Driven(scenario, ControlPanel(fakes))
     await scenario.stop()
@@ -74,6 +76,20 @@ async def test_the_washer_finishing_brings_a_nudge_half_an_hour_on(driven: Drive
     at = clock_words(clock.now().astimezone(START.tzinfo))
     assert await driven.scenario.advance(minutes=29) == []
     assert await driven.scenario.advance(minutes=1) == [WASHED_TEXT.format(at=at)]
+
+
+async def test_the_cat_feeder_running_low_brings_a_nudge_ten_minutes_on(driven: Driven) -> None:
+    scenario = driven.scenario
+    scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "worn out")
+    await driven.act("feeders", "food", left="15")
+    assert await scenario.advance(minutes=9) == []
+    assert await scenario.advance(minutes=1) == [
+        "The cat feeder is running low on food (about 15% left). Top it up when you can?"
+    ]
+    assert scenario.inbox("Erin") == []  # her husband has more room
+    await driven.act("feeders", "food", left="80")  # filled: the chore closes
+    (task,) = scenario.app.db.query("SELECT status FROM tasks")
+    assert task["status"] == "done"
 
 
 async def test_an_email_from_the_panel_is_triaged(driven: Driven) -> None:

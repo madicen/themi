@@ -70,6 +70,20 @@ async def test_roborock_signed_out_says_link_it_again_and_relinks(panel: Panel) 
     assert panel.device_state("Robbie") == "cleaning"
 
 
+async def test_tuya_lapsing_tells_the_admins_and_working_again_relinks(panel: Panel) -> None:
+    await panel.ok("feeders", "fault", fault="The cat feeder goes offline")
+    assert panel.device_state("Cat Feeder") == "offline"
+    await panel.ok("feeders", "fault", fault="The free plan lapses")
+    watcher = panel.run.runtime.app.services.tuya
+    assert watcher is not None and watcher.account.problem()  # the "Link it again" chip
+    told = panel.rows("SELECT text FROM outbox WHERE kind = 'feeder'")
+    assert len(told) == 1 and told[0]["text"].startswith("Tuya stopped answering")
+    happened = await panel.ok("feeders", "fault", fault="Tuya works again")
+    assert happened.endswith("relinked as from the Accounts page")
+    assert watcher.account.problem() is None
+    assert panel.device_state("Cat Feeder") == "plenty of food (64% left)"
+
+
 async def test_home_connect_revoked_then_approved_again(panel: Panel) -> None:
     await panel.ok("dishwasher", "fault", fault="Access revoked")
     await panel.ok("dishwasher", "state", state="Running", minutes="60")

@@ -8,6 +8,7 @@ import httpx
 
 from tests.fakes.wiring import wall_list
 from tests.fixtures.dev import Panel
+from tools.dev import controls
 from tools.dev.controls import SECTIONS
 from tools.dev.fakes import DevFakes
 from tools.dev.simulator import Simulator
@@ -182,3 +183,21 @@ async def test_while_themi_starts_the_page_is_told_to_wait() -> None:
             assert (await client.post("/control/act", json={})).status_code == 503
     finally:
         sim.stop()
+
+
+async def test_the_feeders_are_read_at_once(panel: Panel) -> None:
+    assert await panel.ok("feeders", "food", left="15") == (
+        "Pet feeders (Tuya): Cat Feeder: 15% food left"
+    )
+    assert panel.device_state("Cat Feeder") == "running low on food (15% left)"
+    await panel.ok("feeders", "mochi", status="Food stuck (motor fault)")
+    assert panel.device_state("Mochi's feeder") == "the food's stuck (motor fault)"
+    assert await panel.ok("feeders", "fed", feeder="Cat Feeder", portions="2") == (
+        "Pet feeders (Tuya): Cat Feeder fed 2 portions"
+    )  # read at once, not on the hourly log read
+    assert [r["portions"] for r in panel.rows("SELECT portions FROM feeder_feeds")] == [2]
+    state = controls._feeders_state(panel.run.fakes)
+    assert state[0].startswith("Cat Feeder: running low on food (15% left), last fed ")
+    assert state[1] == "Mochi's feeder: the food's stuck (motor fault)"
+    refused = await panel.act("feeders", "food", left="150")
+    assert refused.json()["error"] == "food left is 0 to 100%"
