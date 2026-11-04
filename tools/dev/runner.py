@@ -217,6 +217,7 @@ def run(
             from tools.dev.fakes import FAKES_FILE, DevFakes
 
             dev_fakes = DevFakes(dev_dir / FAKES_FILE)
+            simulator.controls_coming = True
             dev_fakes.start(site_urls(settings))
             connectors = dev_fakes.connectors(family_timezone(settings))
         runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK, connectors=connectors)
@@ -226,7 +227,14 @@ def run(
 
         async def main() -> None:
             runtime.install_signal_handlers()
-            linked = await dev_fakes.bind(runtime, site_urls(settings)[0]) if dev_fakes else None
+            linked = None
+            if dev_fakes is not None:
+                from tools.dev.controls import ControlPanel
+
+                linked = await dev_fakes.bind(
+                    runtime.app, site_urls(settings)[0], runtime.scheduler, runtime.web
+                )
+                simulator.controls = ControlPanel(dev_fakes)
             print(_banner(simulator.url, link, result, dev_dir, source, linked), flush=True)
             await runtime.run()
 
@@ -279,6 +287,8 @@ def _banner(
         ]
     if fakes is not None:
         lines += [
+            f"  Controls: {simulator_url.replace('127.0.0.1', 'localhost')}/control "
+            "(beside the chat on a wide screen)",
             "  Fakes:    " + "; ".join(fakes),
             f"            kept in {dev_dir}/fakes.json (make dev FAKES=0 runs without them)",
         ]

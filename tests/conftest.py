@@ -29,6 +29,7 @@ pytest_plugins = [
     "tests.fakes.server_runner",
     "tests.scenarios.harness",
     "tests.fixtures.web",
+    "tests.fixtures.dev",
 ]
 
 # Folder -> marker, so a test's layer is decided by where it lives.
