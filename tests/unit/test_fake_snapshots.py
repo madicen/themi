@@ -23,6 +23,7 @@ from tests.fakes.roborock import FakeRoborock
 from tests.fakes.snapshot import SnapshotError, Snapshots, dump, load
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
+from tests.fakes.tuya import FakeTuya
 from themi import clock
 
 ERIN = "erin@gmail.com"
@@ -137,6 +138,15 @@ def roborock() -> FakeRoborock:
     return fake
 
 
+def tuya() -> FakeTuya:
+    fake = FakeTuya()
+    fake.add_feeder("ebfeeder1", "Cat Feeder")
+    fake.set_status("ebfeeder1", "standard_low")
+    fake.fed("ebfeeder1", 2, datetime(2026, 11, 4, 7, tzinfo=UTC))
+    fake.offline("ebfeeder1")
+    return fake
+
+
 def keep() -> FakeKeep:
     fake = FakeKeep()
     fake.check(ERIN, fake.put(ERIN, "milk"))
@@ -166,6 +176,7 @@ FAKES: dict[str, Callable[[], Snapshots]] = {
     "home_connect": home_connect,
     "thinq": thinq,
     "roborock": roborock,
+    "tuya": tuya,
     "keep": keep,
     "ourgroceries": ourgroceries,
     "travel": travel,

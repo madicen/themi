@@ -38,6 +38,7 @@ from tests.fakes.server_runner import FakeRunner
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
+from tests.fakes.tuya import FakeTuya
 from tests.fakes.wiring import connector_options, wall_list
 from tests.fixtures.family import SeededFamily
 from themi import clock
@@ -91,6 +92,7 @@ class Scenario:
         home_connect: FakeHomeConnect | None = None,
         thinq: FakeThinq | None = None,
         roborock: FakeRoborock | None = None,
+        tuya: FakeTuya | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         runner: FakeRunner | None = None,
@@ -137,6 +139,7 @@ class Scenario:
                 home_connect=home_connect,
                 thinq=thinq,
                 roborock=roborock,
+                tuya=tuya,
                 keep=keep,
                 timezone=family.family.timezone,
             ),
@@ -310,8 +313,9 @@ async def scenario(
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
     `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, Roborock (V1) when it uses
-    `fake_roborock`, Google Keep (GK1) when it uses `fake_keep`, and the control folder for
-    updates from the website (D3a) when it uses `fake_runner`.
+    `fake_roborock`, Tuya's feeders (32) when it uses `fake_tuya`, Google Keep (GK1) when it
+    uses `fake_keep`, and the control folder for updates from the website (D3a) when it uses
+    `fake_runner`.
     """
 
     def optional(name: str) -> Any:
@@ -329,6 +333,7 @@ async def scenario(
         home_connect=optional("fake_home_connect"),
         thinq=optional("fake_thinq"),
         roborock=optional("fake_roborock"),
+        tuya=optional("fake_tuya"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
         runner=optional("fake_runner"),

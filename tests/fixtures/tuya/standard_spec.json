@@ -1,0 +1,52 @@
+{
+ "category": "cwwsq",
+ "functions": [
+  {
+   "code": "quick_feed",
+   "type": "Boolean",
+   "values": "{}"
+  },
+  {
+   "code": "manual_feed",
+   "type": "Integer",
+   "values": "{\"unit\": \"\", \"min\": 1, \"max\": 12, \"scale\": 0, \"step\": 1}"
+  },
+  {
+   "code": "light",
+   "type": "Boolean",
+   "values": "{}"
+  }
+ ],
+ "status": [
+  {
+   "code": "surplus_grain",
+   "type": "Integer",
+   "values": "{\"unit\": \"%\", \"min\": 0, \"max\": 100, \"scale\": 0, \"step\": 1}"
+  },
+  {
+   "code": "feed_report",
+   "type": "Integer",
+   "values": "{\"unit\": \"\", \"min\": 0, \"max\": 12, \"scale\": 0, \"step\": 1}"
+  },
+  {
+   "code": "feed_state",
+   "type": "Enum",
+   "values": "{\"range\": [\"standby\", \"feeding\", \"done\"]}"
+  },
+  {
+   "code": "battery_percentage",
+   "type": "Integer",
+   "values": "{\"unit\": \"%\", \"min\": 0, \"max\": 100, \"scale\": 0, \"step\": 1}"
+  },
+  {
+   "code": "charge_state",
+   "type": "Boolean",
+   "values": "{}"
+  },
+  {
+   "code": "light",
+   "type": "Boolean",
+   "values": "{}"
+  }
+ ]
+}

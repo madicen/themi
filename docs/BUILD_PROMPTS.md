@@ -43,7 +43,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 26 | Google Calendar for Cozyla | 4 Gmail and pantry | [x] |
 | 27 | Meal suggestions and vendor call scripts | 4 Gmail and pantry | [x] |
 | 28 | Evals, live smoke tests, coverage gates | 4 Gmail and pantry | [x] |
-| 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [~] |
+| 29 | Backups and cloud deployment (Phase 2 gate) | 4 Gmail and pantry | [x] 2026-11-04 |
 | D1 | Local dev run and Telegram simulator | Dev tooling | [x] |
 | D2 | Simulator: copy a test session | Dev tooling | [x] |
 | F1 | Feedback from chat: /bug and /idea | Feedback | [x] |
@@ -136,7 +136,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | C2d | Cozyla: one chore on the chart at a time | Cozyla | [x] |
 | 30 | LG ThinQ connector | 5 Devices | [x] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [x] |
-| 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
+| 32 | SmartLife / Tuya feeders | 5 Devices | [x] 2026-11-04 |
 | 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
@@ -178,6 +178,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
 | D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [x] 2026-11-03 |
 | D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [x] 2026-11-04 |
+| D5d | Dev control panel: the pet feeders | Dev tooling | [x] 2026-11-04 |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
@@ -2137,7 +2138,7 @@ Notes (2026-10-25):
       `pantry-add-cumin` pass 4/4. In two of them the model still claimed the item was on the
       list, and the check replaced the claim with the waiting line.
 ### 29 · Backups and cloud deployment (Phase 2 gate)
-Status: [~] (built 2026-10-25; waiting on the real deployment and the two-week gate)
+Status: [x] 2026-11-04 (built 2026-10-25; deployed on a Raspberry Pi, not the cloud)
 Depends on: 10, 28
 Read first: "Deployment and hosting"; "Setup checklists" (hosting, backups).
 
@@ -2216,6 +2217,11 @@ Notes (2026-10-25):
     2. Follow `docs/DEPLOY.md` for real.
     3. Run the restore drill.
     4. The gate: two weeks of daily use by both before Phase 2 (prompt 30).
+
+Notes (2026-11-04):
+- Closed on Michael's word: Themi runs on a Raspberry Pi at home with automatic backups,
+  in daily use well past two weeks. The cloud VM in `docs/DEPLOY.md` wasn't needed; the
+  guide stays for anyone moving it there.
 
 ### D1 · Local dev run and Telegram simulator
 Status: [x] (2026-10-25)
@@ -6471,7 +6477,7 @@ Notes (2026-10-31):
   washer seen running, then off (a 5-minute read missed the finish) counts as finished.
 
 ### 32 · SmartLife / Tuya feeders
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: 29, 20
 Read first: "Integrations" → SmartLife row; "Module behaviour" → C (feeders).
 
@@ -6490,6 +6496,66 @@ Tests:
 - Credentials encrypted.
 
 Commit when done.
+
+Notes (2026-11-04):
+- Asked for directly; 29 was closed the same day (see its notes).
+- `themi.connectors.tuya`: Tuya's cloud API over httpx, no SDK. `sign` is pinned to both of
+  Tuya's published signature examples. The query is signed unencoded and sent encoded, as
+  Tuya's own connector does. A project token is renewed with its refresh token, and a
+  token Tuya stops taking (1010-1012) is swapped once per call. Error codes from Tuya's
+  global list (checked 2026-11-04): a wrong key (1001/1004/1005) or a lapsed plan or API
+  (28841001-6, 28841101-6) is the account's problem until linked again, and the admins hear
+  once. 1110/1113/1199 wait 10 minutes (a guess; Tuya doesn't say), and 2001 means offline.
+- `TuyaAccount`: one cloud project (`tuya_account`, migration 0103): the Access ID, the
+  Access Secret encrypted, and the data centre. Devices come from
+  `/v1.0/iot-01/associated-users/devices` (the linked SmartLife accounts), paged. The device
+  list's `local_key` is never kept. `devices` already allowed `tuya` and `feeder`, so no
+  rebuild was needed.
+- Discovery: category `cwwsq` (Tuya's pet feeder) maps itself to `feeder`; anything else is
+  "Not used" until set on the Accounts page (W3 moved device rows there, not the Family page).
+- Data points (`events.py`): Tuya's standard feeder status set (checked 2026-11-04) has a
+  food level (`surplus_grain` %), `feed_report` and a battery, but no fault. So the reading
+  goes `MODELS` (per product id, empty until captures exist), then the standard codes, then
+  by name: a code with fault/alarm/error in it is decoded by its type from the device's
+  specification (a bitmap's labels, an enum, a flag), and a food flag or level enum is the
+  food. Labels are sorted into food low or out, stuck (a jam), or another fault in plain
+  words. "Low" is 20% or under, my choice. An unknown label is still a fault, and is logged
+  once.
+- Captures: each device's raw specification and status are kept (`tuya_devices`), listed
+  on the Accounts page under "Its data points", and `themi tuya capture --out DIR` writes
+  one JSON per device without ids, keys, names or places. The fixtures in
+  `tests/fixtures/tuya/` follow Tuya's published standard and a typical fault bitmap. They
+  aren't captures: once linked, the real ones belong there, with a `MODELS` line for any
+  model the rules misread.
+- `TuyaWatcher`, job `devices.feeders` every 10 minutes: the status each run, the
+  specification once, the feeding log (`/logs`, type 7, the feed codes) hourly into
+  `feeder_feeds`. The first read is the starting point, as in 30. Running low then out is
+  a change of words for the same problem (an event), not a new one.
+- `themi.core.feeders`, like the vacuum's: one effort-1 physical task per live problem,
+  `Matcher.roomiest`, on the wall's lists (a feeder problem lasts, unlike the vacuum's), as
+  a chore for either of you when it starts in quiet hours. Its own nudge waits 10 minutes
+  (outbox kind `feeder`, "/pause feeders", held in burnout mode). Out of food and stuck
+  are due at once, so the daily limit doesn't hold them. Running low, then out, asks again.
+  The feeder showing it's sorted closes the task: done if asked, cancelled if not.
+- Energy (deviation): feedings carry no person (scheduled, or from the app), so they're
+  kept for status but don't feed the energy hook. A person marking a feeder chore done is
+  the "device activity" signal instead: -0.5 (a small chore's effort) for them, through
+  the done hook, only when their device-activity input is on. The feeder clearing it
+  itself counts for nobody.
+- `appliance_status` covers `feeder`: the food (and % left), other problems, the last
+  feeding ("today", "yesterday" or the day), and open chores with whose they are. The
+  devices group's words and examples now cover feeders, kibble and "been fed".
+- Not tested against Tuya itself. No routing cases were added (a person should label them,
+  as with P7a's).
+- Follow-ups: the plan's refill-level disagreements go to 34's alignment prompts. A water
+  fountain (`cwysj`) could share this with its own words. The dev control panel (D5) has no
+  feeder controls, so `make dev` runs without the Tuya fake (done in D5d).
+- Setup: README, "The pet feeders, through SmartLife / Tuya": a Tuya cloud project (Smart
+  Home), the SmartLife account linked by QR, the feeders on "DP Instruction" mode if
+  offered, then the Access ID and Secret on the Accounts page. Tuya's free IoT Core plan
+  needs extending every so often. Restart applies migration 0103. Then please run
+  `themi tuya capture` and share the files, so the mapping can be checked against the
+  family's real feeders.
 
 ### 33 · Seasonal and long-term maintenance
 Status: [x] 2026-11-04
@@ -6513,7 +6579,7 @@ Tests:
 Commit when done.
 
 Notes (2026-11-04):
-- Taken ahead of 32, whose dependency 29 is still `[~]`; 33's (26, 19) are done.
+- Taken ahead of 32, whose dependency 29 was still `[~]` then; 33's (26, 19) are done.
 - `themi.core.maintenance`, migration 0102: `maintenance_items` (name, interval in days,
   active months as JSON month numbers, the guide as JSON steps, an optional owner, the
   first due date) and `maintenance_runs` (day, who, notes). `calendar_events.source` now
@@ -8703,6 +8769,34 @@ Notes (2026-11-04):
 - Tried for real: a scene, a fault, and the Safeway and travel state on a running
   `make dev`.
 - Setup: none.
+
+### D5d · Dev control panel: the pet feeders
+Status: [x] 2026-11-04
+Depends on: D5c, 32
+Asked 2026-11-04 (Michael), after 32 left the feeders out of `make dev`.
+
+- `make dev` runs with the Tuya fake, saved in `fakes.json` like the others. On the first
+  run it gets two feeders, then links them through Themi's own link path: "Cat Feeder"
+  (Tuya's standard kind, with a food level) and "Mochi's feeder" (its own fault code).
+- A "Pet feeders (Tuya)" section: set the cat feeder's food left (%), set Mochi's feeder
+  (fine, running low, stuck, out of food with the battery low, an unknown fault), and add
+  a feeding. Each is read at once, feeding logs included.
+- Faults: the cat feeder offline, a 1199 rate limit, the free plan lapsing, and "Tuya
+  works again", which relinks as the Accounts page would.
+
+Tests: each action changes what Themi read; a low feeder from the panel nudges whoever
+has more room 10 minutes on, and filling it closes the chore; the plan lapsing tells the
+admins once, and working again relinks. No real network.
+
+Notes (2026-11-04):
+- `TuyaWatcher.poll(feeds=True)` reads the feeding logs at once (the panel's check). The
+  scheduler's hourly read is unchanged.
+- `FakeTuya`'s offline set is public now (`offline_devices`), for the section's state.
+- `make dev` now lists six devices, Cat Feeder and Mochi's feeder among them.
+- No scene uses the feeders yet.
+- Not tried on a running `make dev`, only through the tests' `make dev` wiring and the
+  simulator.
+- Setup: none. An existing `data/dev/` links the feeders on its next start.
 
 ### W1 · Website redesign: phone-first shell, navigation and row components
 Status: [x] 2026-11-03

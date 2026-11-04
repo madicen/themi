@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from themi.connectors.homeconnect import HomeConnectAccount
     from themi.connectors.roborock import RoborockWatcher
     from themi.connectors.thinq import ThinqWatcher
+    from themi.connectors.tuya import TuyaWatcher
     from themi.core.appliances import Appliances
     from themi.core.breaks import Breaks
     from themi.core.burnout import Burnout
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from themi.core.events import Events
     from themi.core.expected import ExpectedEmails
     from themi.core.feedback import FeedbackChat
+    from themi.core.feeders import Feeders
     from themi.core.focus import Focus
     from themi.core.follow_ups import FollowUps
     from themi.core.google_tasks import GoogleTasksInbox
@@ -185,6 +187,8 @@ class Services:
     appliances: Appliances | None = None  # how they're doing, asked in chat (F20b)
     roborock: RoborockWatcher | None = None  # the robot vacuum, from Roborock (V1)
     vacuum: Vacuum | None = None  # its chores when it needs a hand (V1)
+    tuya: TuyaWatcher | None = None  # the pet feeders, from Tuya's cloud (32)
+    feeders: Feeders | None = None  # their chores when one needs a hand (32)
     reactions: Reactions | None = None  # what lands with each person (S5)
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
