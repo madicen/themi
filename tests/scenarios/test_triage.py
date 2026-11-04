@@ -323,3 +323,30 @@ async def test_someone_elses_automatic_archiving_leaves_her_mail_asked(
     (action,) = scenario.app.db.query(actions())
     assert action["status"] == "pending"
     assert inbox.calls_to("modify") == 0
+
+
+async def test_the_email_is_read_as_its_reader_sees_it(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """F24c, Erin's bug #134: "a standard autopay confirmation" came as urgent, "your
+    autopay is being cancelled". The plain part was another template's."""
+    (email_id,) = await arrive(
+        scenario,
+        inbox,
+        {
+            "sender": "Card Co <no-reply@card.example>",
+            "subject": "Your card autopay is scheduled for 11/13/2026",
+            "text": "Future payments won't be made automatically. Hi Erin, You've cancelled "
+            "autopay for your Card Co card.",
+            "html": "<p>We'll process your payment automatically.</p>"
+            "<p>Your autopay of $120.00 is scheduled for 11/13/2026.</p>",
+            "snippet": "We&#39;ll process your payment automatically. ͏ ‌ ﻿",
+        },
+    )
+    body = scenario.app.db.scalar("SELECT body_text FROM emails WHERE id = ?", (email_id,))
+    assert "scheduled for 11/13/2026" in body and "cancelled" not in body
+    scenario.primary.queue_structured({"results": [verdict(email_id, "confirmation")]})
+    await scenario.run_periodic("email.triage")
+    prompt = scenario.primary.requests[-1].prompt
+    assert "Preview: We'll process your payment automatically.\n" in prompt
+    assert "You've cancelled" not in prompt

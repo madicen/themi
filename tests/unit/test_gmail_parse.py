@@ -109,3 +109,54 @@ def test_bodies_are_capped() -> None:
 
 def test_html_to_text_keeps_line_structure() -> None:
     assert html_to_text("a<br>b<p>c</p>") == "a\nb\nc"
+
+
+def test_a_plain_part_unlike_the_snippet_gives_way_to_the_html() -> None:
+    """F24c, bug #134: the plain part said autopay was cancelled; the HTML the reader saw,
+    and Gmail's snippet, said it was scheduled. As in the real one, the plain part has two
+    of the snippet's four words ("your", "automatically")."""
+    parsed = parse_message(
+        message(
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {
+                        "mimeType": "text/plain",
+                        "body": {
+                            "data": b64(
+                                "Future payments won't be made automatically. Hi Erin, "
+                                "You've cancelled autopay for your card."
+                            )
+                        },
+                    },
+                    {
+                        "mimeType": "text/html",
+                        "body": {
+                            "data": b64(
+                                "<p>We'll process your payment automatically.</p>"
+                                "<p>Your autopay of $120.00 is scheduled for 11/13.</p>"
+                            )
+                        },
+                    },
+                ],
+            },
+            snippet="We&#39;ll process your payment automatically. ͏ ‌",
+        )
+    )
+    assert "scheduled for 11/13" in parsed.text and "cancelled" not in parsed.text
+
+
+def test_a_plain_part_like_the_snippet_is_kept() -> None:
+    parsed = parse_message(
+        message(
+            {
+                "mimeType": "multipart/alternative",
+                "parts": [
+                    {"mimeType": "text/plain", "body": {"data": b64("Your bill of $84 is due.")}},
+                    {"mimeType": "text/html", "body": {"data": b64("<p>HTML version</p>")}},
+                ],
+            },
+            snippet="Your bill of $84 is due Friday",
+        )
+    )
+    assert parsed.text == "Your bill of $84 is due."

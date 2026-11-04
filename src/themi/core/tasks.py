@@ -28,7 +28,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import praise
-from themi.core.events import title_matches, words_in_common
+from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.progression import Progression, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -1571,6 +1571,21 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title) + both
         return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
+    async def due_for_block(self, task: Task, day: date) -> Task:
+        """Time blocked for it on that day: it's due then, with no time of its own (idea
+        #135: blocked for Saturday, it still said "Was due Thursday"). Not asked again, as
+        reschedule asks: the block holds its nudge. A repeating chore: this round only."""
+        if task.status in ("done", "cancelled") or (task.due_on == day and not task.due_time):
+            return task
+        self.db.execute(
+            "UPDATE tasks SET due_on = ?, due_time = NULL, from_time = NULL, round_until = NULL, "
+            "overdue_reminders = 0, overdue_reminded_on = NULL WHERE id = ?",
+            (day.isoformat(), task.id),
+        )
+        task = self.get(task.id)
+        await self._changed(task, "rescheduled", False)
+        return task
+
     def when_words(self, task: Task) -> str:
         """ "Thu 29 Oct, 2 pm", "Fri 30 Oct, 12-1 pm", or "Thu 29 Oct"."""
         assert task.due_on is not None
@@ -1916,6 +1931,22 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
             "does it with update_task's assign_to, its schedule with set_task_schedule. If "
             "this is a different job, give it a title that says how."
         )
+    twins = {
+        t.id: t
+        for m in whose
+        for t in _board(ctx).open_for(m)
+        if t.id not in ctx.named_twins and near_twin(args["title"], t.title)
+    }
+    if twins:  # bug #132: "cat feeders" beside his "Refill auto feeders"
+        ctx.named_twins.update(twins)
+        named = "; ".join(_twin_words(ctx, t) for t in twins.values())
+        return (
+            f"Not created: it may be one that's already open: {named}. If it's that one, "
+            "change it instead, now (don't ask them first). Said to be urgent: "
+            "reschedule_task to today (a repeating chore's later rounds stay as they are) and "
+            "set_task_importance high; whoever has it gets a nudge. If it's a different job, "
+            "call create_task again just as it was."
+        )
     try:
         task = await _board(ctx).create(
             ctx.member,
@@ -1966,6 +1997,21 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         + f" {nudged} a gentle nudge at a good moment.{tell}{rename} Say its title "
         "and when in one line."
     )
+
+
+def _twin_words(ctx: ToolContext, task: Task) -> str:
+    """ "task 23 (Refill auto feeders, Michael's, every Thursday, due Thu 05 Nov)"."""
+    if task.either or task.assignee is None:
+        whose = "either of them"
+    else:
+        whose = f"{ctx.services.store.get_member(task.assignee).name}'s"
+    parts = [task.title, whose]
+    if task.repeat is not None:
+        schedule = read_back(task.repeat)
+        parts.append(schedule[0].lower() + schedule[1:])
+    if task.due_on is not None:
+        parts.append(f"due {_board(ctx).when_words(task)}")
+    return f"task {task.id} ({', '.join(parts)})"
 
 
 @tool(

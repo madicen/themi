@@ -45,6 +45,19 @@ def test_emails_reach_the_model_only_inside_data_blocks(account) -> None:
     assert "Attachments: photo.jpg" in prompt and "To inbox: erin@gmail.com" in prompt
 
 
+def test_the_snippet_comes_with_the_body_and_settles_a_disagreement(account) -> None:
+    """F24c, bug #134: the body said cancelled; the subject and Gmail's preview said
+    scheduled. The model saw only the body."""
+    email = row(
+        8, account.id, "You've cancelled autopay.", subject="Your autopay is scheduled",
+        snippet="We&#39;ll process your payment automatically. \u034f \u200c \u200c",
+    )  # fmt: skip
+    prompt = email_prompt([email], {account.id: account})
+    block = prompt[prompt.index('<data source="email 8">') :]
+    assert "Preview: We'll process your payment automatically.\n" in block
+    assert "subject and preview" in triage.SYSTEM
+
+
 def test_only_well_formed_verdicts_for_this_batch_count() -> None:
     data = {
         "results": [

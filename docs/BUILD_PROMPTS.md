@@ -170,6 +170,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F23c | Feedback: "make time Saturday for X and Y" holds both tasks for that time | Feedback | [x] 2026-11-03 |
 | F23d | Vacuum chores: whose it is when asked, either of you overnight, on the wall | Feedback | [x] 2026-11-03 |
 | F23e | Feedback: a task moved into a routine becomes the routine item | Feedback | [x] 2026-11-03 |
+| F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [x] 2026-11-03 |
+| F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
+| F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
+| D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -8073,3 +8077,177 @@ Notes (2026-11-03):
   just-for-today "Vacuum water" (gone tomorrow). Cancel task 71 if he did it; mark #133
   reviewed once this is live.
 - Setup: restart `themi run`. No migration.
+
+### F24a · Feedback (2026-11-03): asked for again, the open task is raised, not made twice
+Status: [x] 2026-11-03
+Depends on: T1, F18f, F23e
+Read first: "Shadow Calendar" → Task matching; T1 (urgent is a due date that's soon). From
+Erin's bug #132 (2026-11-03, 10:09 am, "I believe Michael has a cat feeder refill task
+already. The existing task should have been escalated to urgent"): she said "Urgent for
+Michael: cat feeders need to be refilled", and `create_task` made task 72 "Refill cat
+feeders" for Michael, due today, importance high. Michael already had task 23 "Refill auto
+feeders" (weekly on Thursdays, due Thu 5 Nov) and task 22 "Refill pet feeders" (monthly on
+the 19th). `create_task`'s twin check (`title_matches`, bug #56) wants every word of the new
+title in the old one, and "cat" isn't in either. As F23e noted, Erin's context lists only
+her own tasks, so the model couldn't have seen task 23.
+
+Build:
+- `create_task`: besides the exact twin, a near twin among the assignee's open tasks (or
+  everyone's, with no assignee): two or more of the new title's words in common with it,
+  and all of the longer title's words but one (`events.near_twin`). Refused, naming each
+  near twin, whose it is, its schedule and when it's due, so the model changes that one.
+  Called again in the same turn, it's a different job, and it's made (no new argument, so
+  create_task's schema stays as it is).
+- The refusal says how to raise it when they said it's urgent: `reschedule_task` to today
+  (this round only, for a repeating chore) and `set_task_importance` high. A task of the
+  partner's raised this way is changed by whoever asked, as for update_task's assign_to
+  (F4), and its owner gets the same "Due today: ... (Erin asked for this)" card a new task
+  would give.
+
+Tests: each a failing test first. Bug #132's message with tasks 22 and 23: refused once
+with both named, then task 23 is due today and high, Michael gets one card, and nothing new
+is open. "Refill the bird feeder" beside "Refill auto feeders" is made on the second call.
+"Clean the kitchen" beside "Clean the upstairs bathroom" isn't a near twin (one word).
+Evals: bug #132's message, and a new task beside a near twin that really is different.
+
+Notes (2026-11-03):
+- `events.near_twin` (two or more words in common, and all of the longer title's but one)
+  runs in `create_task` after the exact-twin check, over the same people's open tasks. The
+  refusal names each twin as "task 23 (Refill auto feeders, Michael's, every Thursday, due
+  Thu 05 Nov)". `ToolContext.named_twins` remembers who was named, so the same call again
+  that turn is made.
+- Not built: "(Erin asked for this)" on a raised task's card. Its owner gets the plain "Due
+  today: Refill auto feeders" card from `reschedule`, so Michael isn't told who raised it.
+  That needs a "raised by" column; say if it's wanted.
+- Importance stays high on a repeating chore's later rounds once it's raised. The refusal
+  says so only for the due date. Watch for it.
+- A false twin costs one round trip ("Take out the trash" beside "Take out the recycling"
+  isn't one; "Refill the bird feeder" beside "Refill auto feeders" is).
+- Evals (2026-11-03, gemini-3.5-flash-lite, 3 runs each): `urgent-for-partner-raises-
+  their-open-task` 3/3. Each run was refused once, then raised task 1 with
+  `reschedule_task` to today and `set_task_importance` high. `new-task-beside-a-near-twin-
+  that-differs` 3/3, but the model titled it "Refill the bird feeder in the garden", which
+  isn't a near twin, so the second-call path was only seen in the scenario test.
+- Data (the Pi): task 72 (Refill cat feeders) was already cancelled. Task 23 is as it was.
+  Mark #132 reviewed.
+- Setup: restart `themi run`. No migration.
+
+### F24b · Idea (2026-11-03): time blocked for a task moves its due date
+Status: [x] 2026-11-03
+Depends on: K5, F23c
+Read first: "Shadow Calendar" → Task matching; K5. From Michael's idea #135 (2026-11-03,
+1:56 pm, "time blocking tasks should update their due date"): at 11:56 am he blocked
+Saturday 7 Nov, 1 to 5 pm, for tasks 59 (Move Mimi's box upstairs for Rosie) and 10 (Split
+Merlin's cat box into two halves). Both are still due Thu 29 Oct, so they stay overdue:
+the morning summary lists them as "Was due Thursday" and their overdue reminders still
+count, though the block holds their nudges.
+- Making a block sets each task's due date to the block's day (local), with no due time.
+  The block moved on the calendar moves the due date with it. Removed, the due date stays.
+- For a repeating chore it's this round's due date only, as reschedule_task does.
+- The block's reply says so: "...and it's due Saturday now".
+
+Tests: each a failing test first. Idea #135's case: both tasks due Sat 7 Nov, not in
+Tuesday's summary as overdue, and no overdue reminder before Saturday. The block moved to
+Sunday moves both. A repeating chore's next round is unchanged.
+
+Notes (2026-11-03):
+- `TaskBoard.due_for_block(task, day)`: the day, with no time, and overdue counts reset.
+  Sent to the wall and Google Tasks as a reschedule, but nobody is asked again (the block
+  holds the nudge). Called by the block's executor and by `blocks.tick` when the event has
+  moved. A block removed leaves the due date as it is.
+- The block's result ends "It's due Fri 23 Oct now." / "They're due ...".
+- Data (the Pi): tasks 59 and 10 are blocked for Sat 7 Nov but still due 29 Oct. The tick
+  only moves a due date when the block moves, so they stay that way after the restart.
+  Ask again, or reschedule both to 2026-11-07. Mark #135 reviewed.
+- Setup: restart `themi run`. No migration.
+
+### F24c · Feedback (2026-11-03): an email is read as its reader sees it
+Status: [x] 2026-11-03
+Depends on: 22, 23, F16d
+Read first: "Gmail triage"; "Security and privacy" (email text is data). From Erin's bug
+#134 (2026-11-03, 12:18 pm, "Themi flagged a standard autopay confirmation as an urgent
+'your autopay is being cancelled'"): email 810 from SoFi, subject "Your SoFi Credit Card
+autopay is scheduled for 11/13/2026", Gmail snippet "We'll process your payment
+automatically". The body Themi kept says "You've cancelled autopay for your SoFi Credit
+Card." `parse.py` takes the first text/plain part, and SoFi's plain part comes from another
+template. The HTML Erin saw (the snippet is made from it) said it was scheduled.
+Triage read only the wrong text and marked it urgent (financial).
+- Body: the text/html part when there is one, as text (hidden parts left out: `display:none`
+  preheaders, `<style>`, `<head>`), else text/plain. Check this against a few real emails on
+  the Pi first (only the parts' first lines, no addresses or links).
+- When a plain part is kept, its first sentences against the snippet: if they share
+  almost nothing, the HTML wins.
+- Triage's prompt gets the subject and snippet beside the body, in the same delimited
+  block. When they disagree it goes by the subject and snippet, and says it's unsure
+  (never urgent on the body alone).
+
+Tests: each a failing test first. A fixture shaped like email 810 (made up, no real
+addresses): the body says it's scheduled, and triage with a scripted model sees the
+snippet. A plain-only email is unchanged. A `display:none` preheader is left out.
+Eval: email 810's shape isn't urgent.
+
+Notes (2026-11-03):
+- Deviation (narrower): the plain part is still preferred. It gives way to the HTML only
+  when the HTML has more of the snippet's first eight words (of four letters or more)
+  than the plain part (`parse._snippet_words`). Switching every email to HTML would have
+  changed receipts (pantry) and every stored body. Hidden preheaders aren't stripped: the
+  snippet is often the preheader, so stripping it would break the comparison.
+- Triage's block gets "Preview: ..." (the snippet, unescaped, padding characters removed).
+  SYSTEM says subject and preview win over a body that says otherwise, with unsure set.
+- Checked on the Pi (Michael's go-ahead, 2026-11-03, read-only, through Themi's Gmail
+  client). Email 810's HTML says "autopay is coming up on 11/13/2026 ... no action is
+  needed"; its plain part is the "You've cancelled" template. The first rule (the plain part
+  kept when it had half the snippet's words) would have kept it: it has 2 of 4. Fixed by
+  comparing the two parts against each other. On 810, 846, 847 and 851: 810 and 846
+  (Nextdoor, whose plain part is a digest) take the HTML, and 847 (AWS) and 851 keep the
+  plain part.
+- No eval: the evals cover chat tool calls, not triage. Covered instead by
+  `test_the_email_is_read_as_its_reader_sees_it` (fake Gmail, scripted model).
+- Only new mail is parsed this way. Email 810 stays as stored, and its alert has been sent.
+  Mark #134 reviewed.
+- Setup: restart `themi run`. No migration.
+
+### D4 · Dev tooling: `make dev` with a copy of the Pi's data
+Status: [x] 2026-11-03
+Depends on: D1, D2, 29
+From Michael's idea #136 (2026-11-03, 2:15 pm, "when using make dev, include an option to
+pull down a copy of the prod db, or a recent backup of prod"). Read first: "Security and
+privacy" (secrets encrypted at rest; least privilege).
+- `make dev-prod` (`python -m tools.dev prod [--from-backup NAME|latest]`): copies the Pi's
+  database into `data/dev-prod/` and runs dev on it, with `data/dev/` left alone. The copy
+  comes over ssh with SQLite's backup API (`THEMI_PI`, default `themi@themi`), or with
+  `--from-backup` from the encrypted backups (the laptop's `.env` backup settings and key).
+- Dev never reaches the family. The copy is cleaned before the run: every linked account's
+  tokens, connector settings (Cozyla, ThinQ, Roborock, Keep, OurGroceries, Safeway pairing)
+  and AI keys are deleted. Telegram ids map to the simulator's people (member 1 → Erin,
+  member 2 → the husband). The Gemini key from dev's `.env` goes on everyone's backends, as
+  D1 does. The process also never gets the prod secret key, so anything missed stays
+  unreadable.
+- It holds the family's real messages and emails: `data/` is ignored by jj; the banner
+  says it's a private copy, and `make dev-reset` deletes it too.
+
+Tests: the cleaning on a seeded database (no tokens, no connector rows, new Telegram ids,
+the outbox's queued messages kept for the simulator). The ssh copy against a fake command.
+No real network.
+
+Notes (2026-11-03):
+- Built with Michael's go-ahead (the copy holds the family's messages and email).
+  `tools/dev/prod_copy.py`: `from_pi`, `from_backup`, `clean`, `put_dev_key`. `make dev-prod`
+  (`BACKUP=latest`, `KEEP=1`); `python -m tools.dev prod [--from-backup NAME] [--keep]`.
+  Each run without `--keep` takes a fresh copy.
+- The ssh copy runs SQLite's backup into memory in the container and writes it to stdout
+  (`serialize`), so nothing is written on the Pi. The WAL is included.
+- `clean` goes by the schema, not a list of tables, so a new connector's secret is caught
+  too. Every BLOB column is emptied, and a row whose BLOB can't be empty is deleted, except
+  `linked_accounts` (Gmail), which is switched off so its mail stays. Every row with a
+  `token_hash`, `code_hash` or `state_hash` is deleted (website sessions, sign-in links,
+  invites, OAuth states, Safeway helpers). Full-text tables are skipped, and so is
+  `embedding_cache` (vectors, not keys).
+- Tried for real on 2026-11-03. From the Pi: 10.8 MB, 851 emails, 72 tasks, no keys left.
+  It started on the copy, migrated it, and queued the waiting messages for the simulator,
+  with no connector calls and no errors. From `--from-backup latest`: 838 emails.
+- The banner says it's a private copy, and that member 2 (Michael) is "Husband" in the
+  simulator.
+- Setup: none. `.env` needs `GEMINI_API_KEY` for replies, and the `THEMI_BACKUP_*`
+  settings and the real `THEMI_SECRET_KEY` for `BACKUP=`. `data/dev-prod/` now holds a
+  copy; `make dev-reset` deletes it.

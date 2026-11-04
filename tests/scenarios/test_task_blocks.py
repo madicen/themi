@@ -289,3 +289,60 @@ async def test_time_for_something_thats_no_task_is_an_event(
     result = scenario.primary.last_request.messages[-1].content[0]
     assert not result.is_error  # type: ignore[union-attr]
     assert "Coffee with Sam" in result.content  # type: ignore[union-attr]
+
+
+def last_result(scenario: Scenario) -> str:
+    from themi.ai.types import ToolResult
+
+    return [
+        block.content
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ][-1]
+
+
+async def test_time_made_for_tasks_moves_their_due_date(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F24b, idea #135: blocked for Saturday, both still said "Was due Thursday"."""
+    mimi, merlin = await two_boxes(scenario)
+    await say(
+        scenario,
+        MAKE_TIME,
+        "block_time_for_task",
+        {"task_ids": [mimi.id, merlin.id], "date": "2026-10-24", "start": "14:00", "end": "15:30"},
+    )
+    for task in (mimi, merlin):
+        moved = board(scenario).get(task.id)
+        reminded = scenario.app.db.scalar(
+            "SELECT overdue_reminders FROM tasks WHERE id = ?", (task.id,)
+        )
+        assert (moved.due_on, moved.due_time, reminded) == (date(2026, 10, 24), None, 0)
+    assert "They're due Sat 24 Oct now." in last_result(scenario)
+
+    (event,) = linked.events(ERIN, ERIN)
+    event.update(start={"dateTime": local(10, day=25)}, end={"dateTime": local(12, day=25)})
+    await at(scenario, 9, 30)
+    assert board(scenario).get(mimi.id).due_on == date(2026, 10, 25)  # follows the block
+    assert board(scenario).get(merlin.id).due_on == date(2026, 10, 25)
+
+
+async def test_a_repeating_chores_block_moves_this_round_only(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    from themi.core.repeat import parse
+
+    task = await bathroom(scenario)
+    erin = scenario.member("Erin")
+    await board(scenario).set_schedule(task.id, erin, repeat=parse("every Wednesday", WED))
+    before = board(scenario).get(task.id).repeat
+    await say(
+        scenario,
+        "Block Friday 10 to 11 for the bathroom",
+        "block_time_for_task",
+        {"task_ids": [task.id], "date": "2026-10-23", "start": "10:00", "end": "11:00"},
+    )
+    moved = board(scenario).get(task.id)
+    assert (moved.due_on, moved.repeat) == (date(2026, 10, 23), before)
+    assert "It's due Fri 23 Oct now." in last_result(scenario)

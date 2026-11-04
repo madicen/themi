@@ -127,8 +127,10 @@ class FakeGmail:
         labels: tuple[str, ...] = ("INBOX", "UNREAD"),
         age: timedelta = timedelta(0),
         thread_id: str | None = None,
+        snippet: str | None = None,
     ) -> str:
-        """Mail arrives in `address`'s mailbox. Returns its Gmail id."""
+        """Mail arrives in `address`'s mailbox. Returns its Gmail id. `snippet`: Gmail's own,
+        when it isn't the start of the text (it's made from what's shown, bug #134)."""
         with self._lock:
             box = self.mailbox(address)
             number = next(self._ids)
@@ -173,7 +175,9 @@ class FakeGmail:
                 list(labels),
                 int(moment.timestamp() * 1000),
                 payload,
-                (text or re.sub(r"<[^>]+>", " ", html or ""))[:100].strip(),
+                snippet
+                if snippet is not None
+                else (text or re.sub(r"<[^>]+>", " ", html or ""))[:100].strip(),
             )
             self._record(box, "messageAdded", gid, list(labels))
             return gid

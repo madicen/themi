@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
@@ -118,7 +118,16 @@ class TaskBlocks:
                     ),
                 )  # fmt: skip
             self.board.withdraw_prompt(task)  # its nudge comes with the block now
-        return f"{text} {'Their nudges wait' if len(tasks) > 1 else 'Its nudge waits'} until then."
+        day = self._day(payload["starts"])
+        for task in tasks:
+            await self.board.due_for_block(task, day)
+        they, nudges = (
+            ("They're", "Their nudges wait") if len(tasks) > 1 else ("It's", "Its nudge waits")
+        )
+        return f"{text} {nudges} until then. {they} due {day:%a %d %b} now."
+
+    def _day(self, starts: str) -> date:
+        return datetime.fromisoformat(starts).astimezone(self._tz()).date()
 
     def payload(self, tasks: list[Task], when: When) -> dict[str, Any]:
         task = tasks[0]
@@ -164,7 +173,10 @@ class TaskBlocks:
             except NotFound:
                 continue
             member = self.services.store.get_member(row["member_id"])
+            moved_from = row["starts_at"]
             row = self._follow(row, member)
+            if row is not None and row["starts_at"] != moved_from:
+                task = await self.board.due_for_block(task, self._day(row["starts_at"]))
             if row is None:
                 if task.status in ("open", "snoozed"):
                     await self.board.prompt(task, member=member)  # back to its usual nudge

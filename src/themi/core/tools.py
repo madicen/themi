@@ -60,6 +60,9 @@ class ToolContext:
     # every call this turn left one, they're the reply, and the model's words aren't sent
     # (bug #118: "Added to the list. Enjoy the sun." after an item about a sunny day).
     replies: list[str] = field(default_factory=list)
+    # Open tasks create_task named as maybe the same job (bug #132): asked again this turn,
+    # it's a different job, and it's made.
+    named_twins: set[int] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
