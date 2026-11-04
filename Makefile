@@ -56,9 +56,10 @@ cov:
 	$(PYTHON) tools/check_coverage.py
 
 # Themi on this computer, chatting through the Telegram simulator at http://localhost:8090.
-# Dev data lives in data/dev/; see tools/dev/runner.py.
+# Dev data lives in data/dev/; see tools/dev/runner.py. Outside services are played by the
+# test fakes (D5a); FAKES=0 runs without them.
 dev:
-	$(PYTHON) -m tools.dev
+	$(PYTHON) -m tools.dev $(if $(filter 0,$(FAKES)),--no-fakes)
 
 dev-reset:
 	$(PYTHON) -m tools.dev reset
