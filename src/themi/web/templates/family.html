@@ -1,9 +1,13 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}Family · Themi{% endblock %}
 {% block content %}
 <h1>Family</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<p class="muted">Appliances, the vacuum and the family calendar are on
+<a href="/accounts#household">Accounts</a>.</p>
 
+<h2>Household</h2>
 <form method="post" action="/family" class="card">
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <label>Family name <input name="name" value="{{ family.name }}" required></label>
@@ -16,195 +20,65 @@
 </form>
 
 {% if travel %}
-<h2>Home</h2>
-<form method="post" action="/family/home" class="card settings">
+<form method="post" action="/family/home" class="card">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Home address <input name="address" value="{{ home[0] if home else '' }}" placeholder="12 Main St, Springfield" required></label>
   <p class="muted">Travel times to events start here. Only the map's coordinates are used,
   and the address stays on this server.</p>
-  <label>Address <input name="address" value="{{ home[0] if home else '' }}" placeholder="12 Main St, Springfield" required></label>
   <button>Save</button>
 </form>
-{% endif %}
-
-{% if calendar %}
-<h2>Family calendar</h2>
-<form method="post" action="/family/calendar" class="card">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <p class="muted">Tasks with dates go on this Google calendar (once someone says yes), so
-  Cozyla shows them. Themi finds the calendar by name, or makes it.</p>
-  {% if calendar.problem %}<p class="alert">{{ calendar.problem }}</p>
-  {% elif calendar.using %}<p>Writing to "{{ calendar.name }}" on {{ calendar.using }}.</p>{% endif %}
-  <label>Account
-    <select name="account">
-      <option value="" {% if calendar.chosen is none %}selected{% endif %}>The first admin's account that allows it</option>
-      {% for account in calendar.accounts %}
-      <option value="{{ account.id }}" {% if calendar.chosen == account.id %}selected{% endif %}>{{ account.address }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Calendar name <input name="name" value="{{ calendar.name }}"></label>
-  <button>Save</button>
-</form>
-{% endif %}
-
-{% if home_connect %}
-<h2>Appliances</h2>
-<div class="card">
-  <p class="muted">Themi reads whether the dishwasher is running from Home Connect, the Bosch
-  app, and nothing else. A cycle starting checks off the dishwasher on the wall's routines.</p>
-  {% if home_connect.linked %}
-  {% for device, state in home_connect.devices %}
-  <p>{{ device.name }}{% if device.appliance %} · {{ device.appliance }}{% endif %}{% if state %} · {{ state | lower }}{% endif %}</p>
-  {% else %}
-  <p>Linked, but no appliances were found.</p>
-  {% endfor %}
-  <form method="post" action="/family/home-connect/unlink">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button>Unlink Home Connect</button>
-  </form>
-  {% else %}
-  <form method="post" action="/family/home-connect/link">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="primary">Link Home Connect</button>
-  </form>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if thinq %}
-<h2>Washer and dryer</h2>
-<div class="card">
-  <p class="muted">Themi reads whether the LG washer and dryer are running from LG ThinQ, and
-  nothing else: it can't start or stop them. When the washer finishes, whoever has more
-  room gets a nudge to move the load.</p>
-  {% if thinq.linked %}
-  {% for device, state in thinq.devices %}
-  <form method="post" action="/family/thinq/devices/{{ device.id }}" class="buttons">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <span>{{ device.name }}{% if state %} · {{ state }}{% endif %}</span>
-    <select name="appliance" aria-label="What {{ device.name }} is">
-      <option value="washer" {% if device.appliance == "washer" %}selected{% endif %}>Washer</option>
-      <option value="dryer" {% if device.appliance == "dryer" %}selected{% endif %}>Dryer</option>
-      <option value="" {% if not device.appliance %}selected{% endif %}>Not used</option>
-    </select>
-    <button>Save</button>
-  </form>
-  {% else %}
-  <p>Linked, but no appliances were found.</p>
-  {% endfor %}
-  <p class="muted">{{ "Updates arrive as they happen." if thinq.pushes else "Checked every few minutes." }}</p>
-  <form method="post" action="/family/laundry">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <p class="muted">A wet load left longer than this gets a rewash suggestion instead, timed
-    to finish when there's room to move it.</p>
-    <label>Fresh for (hours) <input name="fresh_hours" type="number" min="1" max="48" step="0.5" value="{{ family.laundry_fresh_hours | round(1) }}"></label>
-    <label>A rewash takes (minutes) <input name="rinse_minutes" type="number" min="5" max="180" value="{{ family.laundry_rinse_minutes }}"></label>
-    <button>Save</button>
-  </form>
-  <form method="post" action="/family/thinq/unlink">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button>Unlink LG ThinQ</button>
-  </form>
-  {% else %}
-  <form method="post" action="/family/thinq/link">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <p class="muted">Make a personal access token at connect-pat.lgthinq.com, signed in with
-    the LG account the appliances are on, with "view all devices" and "view all device
-    statuses" ticked.</p>
-    <label>Personal access token <input name="token" type="password" autocomplete="off" required></label>
-    <label>Country <input name="country" value="{{ thinq.country }}" maxlength="2" size="3"></label>
-    <button class="primary">Link LG ThinQ</button>
-  </form>
-  {% endif %}
-</div>
-{% endif %}
-
-{% if roborock %}
-<h2>Robot vacuum</h2>
-<div class="card">
-  <p class="muted">Themi reads the Roborock vacuum's state, alerts and parts. When it needs a
-  hand (stuck, a jam, the dock's water, a worn part) whoever has more room gets a nudge, with
-  the room it's in when the map says. With a yes (or a rule), Themi can clear its alert and
-  send it back to its dock; it doesn't start cleans.</p>
-  {% if roborock.linked %}
-  {% if roborock.problem %}<p class="error">{{ roborock.problem }} Link it again below.</p>{% endif %}
-  {% for device, state in roborock.devices %}
-  <p>{{ device.name }}{% if state %} · {{ state }}{% endif %}</p>
-  {% else %}
-  <p>Linked, but no vacuum was found.</p>
-  {% endfor %}
-  <p class="muted">Signed in as {{ roborock.email }}.</p>
-  <form method="post" action="/family/roborock/unlink">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button>Unlink Roborock</button>
-  </form>
-  {% endif %}
-  {% if not roborock.linked or roborock.problem %}
-  {% if roborock_code_sent %}
-  <form method="post" action="/family/roborock/link">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="hidden" name="email" value="{{ roborock_code_sent }}">
-    <label>The code Roborock emailed to {{ roborock_code_sent }}
-      <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
-    <button class="primary">Link Roborock</button>
-  </form>
-  {% else %}
-  <form method="post" action="/family/roborock/code">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <p class="muted">The email the Roborock app signs in with. Roborock emails a code to it.</p>
-    <label>Email <input name="email" type="email" value="{{ roborock.email }}" autocomplete="off" required></label>
-    <button class="primary">Send code</button>
-  </form>
-  {% endif %}
-  {% endif %}
-</div>
 {% endif %}
 
 <h2>People</h2>
-{% for person in members %}
-<article class="card">
-  <p class="summary">{{ person.name }} · {{ "admin" if person.is_admin else "member" }}
-    · {{ "connected to Telegram" if person.telegram_user_id else "not connected yet" }}</p>
-  <div class="buttons">
-    <form method="post" action="/family/members/{{ person.id }}/role">
+<div class="rows">
+  {% for person in members %}
+  {% set chips = [("Admin", "info")] if person.is_admin else [] %}
+  {% set chips = chips + ([("On Telegram", "good")] if person.telegram_user_id else [("Not connected yet", "warn")]) %}
+  {% call(part) row(person.name, meta=person.email or "", chips=chips, id="person-" ~ person.id) %}
+  {% if part == "body" %}
+    <div class="buttons">
+      <form method="post" action="/family/members/{{ person.id }}/role">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="role" value="{{ 'member' if person.is_admin else 'admin' }}">
+        <button>{{ "Make a member" if person.is_admin else "Make an admin" }}</button>
+      </form>
+      {% if not person.telegram_user_id %}
+      <form method="post" action="/family/members/{{ person.id }}/invite">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button>New invite code</button>
+      </form>
+      {% endif %}
+    </div>
+    <form method="post" action="/family/members/{{ person.id }}/email" class="inline-field">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="hidden" name="role" value="{{ 'member' if person.is_admin else 'admin' }}">
-      <button>{{ "Make a member" if person.is_admin else "Make an admin" }}</button>
+      <label>Google sign-in address
+        <input type="email" name="email" value="{{ person.email or '' }}" autocomplete="off"></label>
+      <button>Save address</button>
     </form>
-    {% if not person.telegram_user_id %}
-    <form method="post" action="/family/members/{{ person.id }}/invite">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button>New invite code</button>
-    </form>
+    {% if person.id != member.id %}
+    <details class="danger-zone">
+      <summary>Remove {{ person.name }}</summary>
+      <form method="post" action="/family/members/{{ person.id }}/remove">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <p class="muted">This deletes their settings, messages and linked accounts.</p>
+        <label>Type their name to confirm <input name="confirm_name" autocomplete="off"></label>
+        <button class="danger">Remove</button>
+      </form>
+    </details>
     {% endif %}
-  </div>
-  <form method="post" action="/family/members/{{ person.id }}/email" class="inline-field">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>Google sign-in address
-      <input type="email" name="email" value="{{ person.email or '' }}" autocomplete="off"></label>
-    <button>Save address</button>
-  </form>
-  {% if person.id != member.id %}
-  <details>
-    <summary>Remove {{ person.name }}</summary>
-    <form method="post" action="/family/members/{{ person.id }}/remove">
+  {% endif %}
+  {% endcall %}
+  {% endfor %}
+  <details class="add">
+    <summary>Add someone</summary>
+    <form method="post" action="/family/members">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <p class="muted">This deletes their settings, messages and linked accounts.</p>
-      <label>Type their name to confirm <input name="confirm_name" autocomplete="off"></label>
-      <button class="quiet">Remove</button>
+      <label>Name <input name="name" required></label>
+      <label>Role
+        <select name="role"><option value="member">Member</option><option value="admin">Admin</option></select>
+      </label>
+      <button class="primary">Add and get an invite code</button>
     </form>
   </details>
-  {% endif %}
-</article>
-{% endfor %}
-
-<form method="post" action="/family/members" class="card">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <p class="summary">Add someone</p>
-  <label>Name <input name="name" required></label>
-  <label>Role
-    <select name="role"><option value="member">Member</option><option value="admin">Admin</option></select>
-  </label>
-  <button class="primary">Add and get an invite code</button>
-</form>
+</div>
 {% endblock %}

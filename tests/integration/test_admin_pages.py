@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
@@ -11,6 +12,41 @@ from themi.autonomy import Tier
 from themi.storage.secrets import Secret
 
 GEMINI_KEY = "AIzaVeryDistinctiveTestKey000000000000000"
+
+
+# ----- household connections on Accounts (W3) --------------------------------------
+
+
+@pytest.mark.usefixtures("fake_thinq", "fake_roborock", "fake_home_connect")
+async def test_household_connections_are_on_accounts_for_admins_only(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    member = (await site.get("/accounts")).text
+    assert "My Google accounts" in member
+    assert 'id="household"' not in member and "/family/thinq/link" not in member
+    async with web_client(scenario) as admin_site:
+        await sign_in(scenario, admin_site, "Erin")
+        accounts = (await admin_site.get("/accounts")).text
+        assert 'id="household"' in accounts
+        for row in ("thinq", "roborock", "home-connect"):
+            assert f'id="{row}"' in accounts
+        family = (await admin_site.get("/family")).text
+        for gone in ("LG ThinQ", "Roborock", "Home Connect", "/family/calendar"):
+            assert gone not in family
+        assert 'href="/accounts#household"' in family
+
+
+@pytest.mark.usefixtures("fake_thinq", "fake_roborock")
+async def test_a_connection_row_opens_when_asked(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    closed = (await site.get("/accounts")).text
+    opened = (await site.get("/accounts?open=thinq")).text
+    assert '<div class="row-item" id="thinq">\n  <details open>' in opened
+    assert '<div class="row-item" id="thinq">\n  <details>' in closed
+    assert '<div class="row-item" id="roborock">\n  <details>' in opened
 
 
 # ----- family (admins only) ----------------------------------------------------

@@ -286,7 +286,7 @@ async def test_expected_emails_on_the_website(
     await site.post(f"/accounts/{account.id}/expected", data=form)
     assert "Watching for the PG&amp;E confirmation." in await flash(site, "/accounts")
     page = unescape((await site.get("/accounts")).text)
-    assert "the PG&E confirmation</strong>: from @pge.com" in page
+    assert "the PG&E confirmation</span>" in page and "From @pge.com" in page
 
     await site.post(f"/accounts/{account.id}/expected", data={**form, "cadence_days": "0"})
     assert "How often it comes should be between 1 and 400 days." in await flash(site, "/accounts")

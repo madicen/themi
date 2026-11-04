@@ -1,4 +1,4 @@
-"""H1: the dishwasher, read from Home Connect. Linked from the Family page; a cycle starting
+"""H1: the dishwasher, read from Home Connect. Linked from the Accounts page; a cycle starting
 checks off the dishwasher on the wall's routines and Themi's tasks; fewer runs than usual is
 a "running behind" sign. The clock starts on Wednesday 21 October 2026, 09:00 (Los Angeles)."""
 
@@ -26,15 +26,16 @@ def board(scenario: Scenario) -> TaskBoard:
 
 
 async def link(scenario: Scenario, site: httpx.AsyncClient, fake: FakeHomeConnect) -> str:
-    """Erin (an admin) links Home Connect from the Family page; returns the page's message."""
+    """Erin (an admin) links Home Connect from the Accounts page; returns the page's message."""
     await sign_in(scenario, site, "Erin")
-    family_page = await site.get("/family")
-    started = await site.post("/family/home-connect/link", data={"csrf": csrf_of(family_page.text)})
+    accounts = await site.get("/accounts")
+    started = await site.post("/family/home-connect/link", data={"csrf": csrf_of(accounts.text)})
     assert started.status_code == 303
     state, code = fake.approve(started.headers["location"])
     back = await site.get(f"/auth/home-connect/callback?state={state}&code={code}")
-    assert back.status_code == 303 and back.headers["location"] == "/family"
-    return await flash(site, "/family")
+    assert back.status_code == 303
+    assert back.headers["location"] == "/accounts?open=home-connect#home-connect"
+    return await flash(site, "/accounts")
 
 
 async def at(scenario: Scenario, day: date, hour: int, minute: int = 0) -> None:

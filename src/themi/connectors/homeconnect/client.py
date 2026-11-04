@@ -63,7 +63,7 @@ class HomeConnectError(Exception):
 
 
 class LinkRevoked(HomeConnectError):
-    """The sign-in no longer works: linking again on the Family page fixes it."""
+    """The sign-in no longer works: linking again on the Accounts page fixes it."""
 
 
 class RateLimited(HomeConnectError):

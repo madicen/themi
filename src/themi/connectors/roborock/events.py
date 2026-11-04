@@ -185,7 +185,7 @@ def low_parts(counters: dict[str, int]) -> dict[str, str]:
 
 
 def state_word(status: VacuumStatus) -> str:
-    """Its state in a few words, for the Family page and a status question."""
+    """Its state in a few words, for the Accounts page and a status question."""
     if status.state == OFFLINE:
         return "offline"
     if status.error or status.state == ERROR:  # a dock alert alone: still on its dock

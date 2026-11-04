@@ -83,7 +83,7 @@ class ThinqError(Exception):
 
 
 class TokenRejected(ThinqError):
-    """The token no longer works: a new one on the Family page fixes it."""
+    """The token no longer works: a new one on the Accounts page fixes it."""
 
 
 class RateLimited(ThinqError):

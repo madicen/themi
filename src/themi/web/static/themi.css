@@ -95,6 +95,7 @@ a.button { display: inline-flex; align-items: center; text-decoration: none; }
 button.link { border: none; background: none; color: var(--accent); padding: 0; min-height: auto; }
 .buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .buttons form, form.inline { display: inline; margin: 0; }
+form.buttons > span { flex: 1 1 8rem; }
 
 /* ----- forms ----- */
 fieldset { border: none; padding: 0; margin: 0 0 1.25rem; min-width: 0; }
@@ -102,7 +103,7 @@ legend { font-weight: 600; margin-bottom: var(--space-1); padding: 0; }
 label { display: block; margin: var(--space-2) 0; }
 label.check { display: flex; gap: var(--space-2); align-items: flex-start; min-height: var(--tap); padding-top: .6rem; margin: 0; }
 label.check input { width: 20px; height: 20px; margin: .1rem 0 0; flex: none; }
-textarea, select, input:not([type=checkbox]):not([type=hidden]):not([type=radio]) {
+textarea, select, input:where(:not([type=checkbox], [type=hidden], [type=radio])) {
   font: inherit; font-size: max(16px, 1em); padding: .5rem .6rem; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: var(--bg); color: var(--fg); width: 100%; max-width: 100%;
   min-height: var(--tap); }

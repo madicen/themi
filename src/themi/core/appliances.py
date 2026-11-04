@@ -39,7 +39,7 @@ HOME_CONNECT = {
 }
 NONE_LINKED = (
     "No washer, dryer, dishwasher or vacuum is linked to Themi, so Themi can't see them. An admin "
-    "can link them on the website's Family page. Say so; don't guess how they're doing."
+    "can link them on the website's Accounts page. Say so; don't guess how they're doing."
 )
 SAY_ONLY = (
     "That's all Themi can see of them: say it as it is, and never add a time or a state "

@@ -1,0 +1,277 @@
+"""Household connections (W3): Home Connect, LG ThinQ, Roborock and the family calendar, on
+the Accounts page beside each person's Google accounts. Admins only, both the section and
+its routes; members never see it.
+
+The routes keep their old /family/... addresses (bookmarks, and the Home Connect callback
+registered with Home Connect), and each lands back on /accounts with its row open.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse, Response
+
+from themi.accounts import AccountsError, Member
+from themi.connectors.google import TASKS_SCOPE
+from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
+from themi.connectors.roborock import RoborockError
+from themi.connectors.thinq import ThinqError
+from themi.web.kit import Kit
+
+
+def back(row: str) -> str:
+    """The Accounts page with this connection's row open."""
+    return f"/accounts?open={row}#{row}"
+
+
+def accounts_values(app: Any, member: Member, **extra: Any) -> dict[str, Any]:
+    """Everything accounts.html shows this member: their Google accounts, and the household's
+    connections when they're an admin."""
+    accounts = app.store.linked_accounts(member.id)
+    expected = app.services.expected
+    return {
+        "accounts": accounts,
+        "can_link": app.services.google is not None,
+        "expected": {a.id: expected.for_account(a.id) for a in accounts} if expected else {},
+        "protectable": [c for c in app.services.autonomy.categories() if not c.capped],
+        "tasks_scope": TASKS_SCOPE,
+        "household": household_values(app) if member.is_admin else None,
+        **extra,
+    }
+
+
+def household_values(app: Any) -> dict[str, Any]:
+    return {
+        "family": app.store.get_family(),
+        "calendar": _calendar(app),
+        "home_connect": _home_connect(app),
+        "thinq": _thinq(app),
+        "roborock": _roborock(app),
+    }
+
+
+def _calendar(app: Any) -> dict[str, Any] | None:
+    calendar = app.services.calendar
+    if calendar is None:
+        return None
+    chosen, name = calendar.settings()
+    account = calendar.account()
+    return {
+        "accounts": calendar.eligible_accounts(),
+        "chosen": chosen,
+        "name": name,
+        "using": account.address if account else None,
+        "problem": calendar.problem(),
+    }
+
+
+def _home_connect(app: Any) -> dict[str, Any] | None:
+    account, dishwasher = app.services.home_connect, app.services.dishwasher
+    if account is None or dishwasher is None:
+        return None
+    states = {r["device_id"]: r["state"] for r in app.db.query("SELECT * FROM device_states")}
+    return {
+        "linked": account.linked(),
+        "devices": [(d, states.get(d.id)) for d in dishwasher.devices()],
+    }
+
+
+def _thinq(app: Any) -> dict[str, Any] | None:
+    watcher = app.services.thinq
+    if watcher is None:
+        return None
+    states = watcher.states()
+    return {
+        "linked": watcher.account.linked(),
+        "country": watcher.account.country() or "US",
+        "pushes": watcher.push.connected(),
+        "devices": [(d, states.get(d.id)) for d in watcher.devices()],
+    }
+
+
+def _roborock(app: Any) -> dict[str, Any] | None:
+    watcher = app.services.roborock
+    if watcher is None:
+        return None
+    states = watcher.states()
+    return {
+        "linked": watcher.account.linked(),
+        "email": watcher.account.email() or "",
+        "problem": watcher.account.problem(),
+        "devices": [(d, states.get(d.id)) for d in watcher.devices()],
+    }
+
+
+def routes(kit: Kit) -> APIRouter:
+    router = APIRouter()
+    app = kit.app
+    store = app.store
+
+    # ----- the family calendar (26) ---------------------------------------------------
+
+    @router.post("/family/calendar")
+    async def save_calendar(request: Request) -> Response:
+        _session, form = await kit.checked(request, admin=True)
+        calendar = app.services.calendar
+        to = back("family-calendar")
+        if calendar is None:
+            return kit.redirect(to, "Google isn't set up on this server yet.")
+        account = str(form.get("account", ""))
+        try:
+            calendar.choose(int(account) if account.isdigit() else None, str(form.get("name", "")))
+        except ValueError as exc:
+            return kit.redirect(to, f"Not saved: {exc}.")
+        return kit.redirect(to, "Saved the calendar settings.")
+
+    # ----- Roborock (V1) ------------------------------------------------------------------
+
+    @router.post("/family/roborock/code")
+    async def roborock_code(request: Request) -> Response:
+        """The first step: Roborock emails a code to the app account."""
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.roborock
+        to = back("roborock")
+        if watcher is None:
+            return kit.redirect(to, "The vacuum isn't set up on this server.")
+        try:
+            email = await watcher.send_code(str(form.get("email", "")))
+        except RoborockError as exc:
+            return kit.redirect(to, f"No code was sent: {exc}")
+        return kit.page(  # the address stays out of the URL
+            request,
+            "accounts.html",
+            member=session.member,
+            csrf=session.csrf_token,
+            flash=f"Roborock emailed a code to {email}.",
+            **accounts_values(app, session.member, roborock_code_sent=email, opened="roborock"),
+        )
+
+    @router.post("/family/roborock/link")
+    async def link_roborock(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.roborock
+        to = back("roborock")
+        if watcher is None:
+            return kit.redirect(to, "The vacuum isn't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member, str(form.get("email", "")), str(form.get("code", ""))
+            )
+        except (RoborockError, AccountsError) as exc:
+            return kit.redirect(to, f"Roborock wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(to, f"Linked Roborock. Found {names}." if names else "Linked Roborock.")
+
+    @router.post("/family/roborock/unlink")
+    async def unlink_roborock(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.roborock is not None:
+            await app.services.roborock.unlink()
+        return kit.redirect(back("roborock"), "Unlinked Roborock.")
+
+    # ----- LG ThinQ (30) ----------------------------------------------------------------
+
+    @router.post("/family/thinq/link")
+    async def link_thinq(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.thinq
+        to = back("thinq")
+        if watcher is None:
+            return kit.redirect(to, "LG ThinQ isn't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member, str(form.get("token", "")), str(form.get("country", ""))
+            )
+        except (ThinqError, AccountsError) as exc:
+            return kit.redirect(to, f"LG ThinQ wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(to, f"Linked LG ThinQ. Found {names}." if names else "Linked LG ThinQ.")
+
+    @router.post("/family/thinq/unlink")
+    async def unlink_thinq(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.thinq is not None:
+            await app.services.thinq.unlink()
+        return kit.redirect(
+            back("thinq"), "Unlinked LG ThinQ. Deleting the token on LG's site finishes it."
+        )
+
+    @router.post("/family/thinq/devices/{device_id}")
+    async def map_thinq_device(request: Request, device_id: int) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.thinq
+        to = back("thinq")
+        if watcher is None or device_id not in {d.id for d in watcher.devices()}:
+            return kit.redirect(to, "That appliance isn't one of LG ThinQ's.")
+        appliance = str(form.get("appliance", "")) or None
+        if appliance not in (None, "washer", "dryer"):
+            return kit.redirect(to, "An LG appliance is the washer, the dryer, or neither.")
+        device = store.set_device_appliance(session.member, device_id, appliance)
+        return kit.redirect(to, f"{device.name}: {appliance or 'not used'}.")
+
+    @router.post("/family/laundry")
+    async def save_laundry(request: Request) -> Response:
+        """How long a wet load stays fresh, and how long a rewash takes (31)."""
+        session, form = await kit.checked(request, admin=True)
+        to = back("thinq")
+        try:
+            hours = float(str(form.get("fresh_hours", "")))
+            minutes = int(str(form.get("rinse_minutes", "")))
+        except ValueError:
+            return kit.redirect(to, "The fresh hours and rewash minutes are numbers.")
+        try:
+            store.update_family(
+                session.member, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes
+            )
+        except AccountsError as exc:
+            return kit.redirect(to, f"Not saved: {exc}.")
+        return kit.redirect(to, "Laundry settings saved.")
+
+    # ----- Home Connect (H1) ----------------------------------------------------------------
+
+    @router.post("/family/home-connect/link")
+    async def link_home_connect(request: Request) -> Response:
+        session, _ = await kit.checked(request, admin=True)
+        account = app.services.home_connect
+        if account is None:
+            return kit.redirect(back("home-connect"), "Home Connect isn't set up on this server.")
+        redirect = HomeConnectAccount.redirect_uri(kit.ctx.base_url)
+        return RedirectResponse(
+            account.authorization_url(session.member, redirect), status_code=303
+        )
+
+    @router.get("/auth/home-connect/callback")
+    async def home_connect_callback(
+        request: Request, state: str = "", code: str = "", error: str = ""
+    ) -> Response:
+        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        to = back("home-connect")
+        if account is None or dishwasher is None:
+            return kit.redirect(to, "Home Connect isn't set up on this server.")
+        if error or not state or not code:
+            return kit.redirect(to, "Home Connect wasn't linked, so nothing changed.")
+        try:
+            member_id = await account.complete(
+                state, code, HomeConnectAccount.redirect_uri(kit.ctx.base_url)
+            )
+            added = await dishwasher.add_appliances(store.get_member(member_id))
+        except (HomeConnectError, AccountsError) as exc:
+            return kit.redirect(to, f"Home Connect wasn't linked: {exc}")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(
+            to, f"Linked Home Connect. Found {names}." if names else "Linked Home Connect."
+        )
+
+    @router.post("/family/home-connect/unlink")
+    async def unlink_home_connect(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.home_connect is not None:
+            app.services.home_connect.unlink()
+        return kit.redirect(
+            back("home-connect"),
+            "Unlinked Home Connect. Removing Themi in the Home Connect app's settings finishes it.",
+        )
+
+    return router

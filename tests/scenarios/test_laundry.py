@@ -274,14 +274,14 @@ async def test_the_fresh_hours_are_the_familys(
     scenario: Scenario, site: httpx.AsyncClient, laundry_room: FakeThinq
 ) -> None:
     await sign_in(scenario, site, "Erin")
-    page = await site.get("/family")
-    assert "Fresh for (hours)" in page.text
+    page = await site.get("/accounts")
+    assert 'name="fresh_hours"' in page.text
     response = await site.post(
         "/family/laundry",
         data={"csrf": csrf_of(page.text), "fresh_hours": "4", "rinse_minutes": "20"},
     )
     assert response.status_code == 303
-    assert "Laundry settings saved." in await flash(site, "/family")
+    assert "Laundry settings saved." in await flash(site, "/accounts")
     family = scenario.app.store.get_family()
     assert family is not None
     assert (family.laundry_fresh_hours, family.laundry_rinse_minutes) == (4.0, 20)
@@ -289,7 +289,7 @@ async def test_the_fresh_hours_are_the_familys(
         "/family/laundry",
         data={"csrf": csrf_of(page.text), "fresh_hours": "0", "rinse_minutes": "20"},
     )
-    assert "Not saved: a wet load stays fresh for 1 to 48 hours." in await flash(site, "/family")
+    assert "Not saved: a wet load stays fresh for 1 to 48 hours." in await flash(site, "/accounts")
 
     await wash(scenario, laundry_room)
     clock.advance(timedelta(hours=4))

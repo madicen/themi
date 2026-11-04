@@ -1,7 +1,7 @@
 """Where Themi's events go, and writing them there idempotently.
 
 - The target is a calendar called "Themi" (configurable) on an admin's linked
-  account: the one chosen on the Family page, or else the first admin's first
+  account: the one chosen on the Accounts page, or else the first admin's first
   linked account that granted the calendar scopes. It's found by name in the
   calendar list, or made if missing, and remembered in `calendars`.
 - `upsert()` writes an event under a deterministic id. It updates first; if

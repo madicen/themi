@@ -176,7 +176,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
-| W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [ ] |
+| W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [ ] |
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [ ] |
 
@@ -8480,7 +8480,7 @@ Notes (2026-11-03):
 - Chips sit on the row's second line, before the status text, so a long title keeps its width.
 
 ### W3 · Website redesign: outside connections move to Accounts, Family slimmed
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: W1, 21, 26, V1, 35c
 Read first: "Accounts and data model"; "How the family uses Themi" → management website
 (Family and Devices are separate areas).
@@ -8507,6 +8507,24 @@ Tests: a member sees no Household connections and gets 403 from their routes. An
 links and unlinks ThinQ, maps a device and is sent back to `/accounts`. The Home Connect
 callback lands on `/accounts`. `/family` no longer shows any connection. Existing
 connection tests move with the forms.
+
+Notes (2026-11-03):
+- Deviation: Safeway helpers stay on `/safeway`. Any member can connect one there (35c),
+  and moving them into the admins-only section would have taken that away. The household
+  section has a row pointing to the Safeway page instead.
+- `themi.web.connection_pages`: `accounts_values(app, member)` (everything accounts.html
+  shows; `household` only for admins), `household_values(app)`, and the connection routes
+  moved from `admin_pages` with their `/family/...` URLs unchanged. Each redirects to
+  `back(row)`, `/accounts?open=<row>#<row>`, and `GET /accounts?open=<row>` opens that row
+  (`thinq`, `roborock`, `home-connect`, `family-calendar`, or `account-<id>`). Roborock's
+  code step still renders the page directly, so the email stays out of the URL.
+- `/family` keeps the household form, the home address and People. People are rows with
+  Admin / On Telegram / Not connected yet chips. Removing someone sits in the panel's danger zone.
+- Messages that sent people to "the Family page" for a device now say the Accounts page
+  (the vacuum's expired sign-in, `appliance_status` with nothing linked, and docstrings).
+  The home address and sign-in addresses are still on Family.
+- CSS: the general input rule now uses `:where()`, so number and time inputs keep their
+  narrow widths.
 
 ### W4 · Website redesign: My settings in sections, Lists for the shop
 Status: [ ]
