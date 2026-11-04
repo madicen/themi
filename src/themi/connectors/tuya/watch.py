@@ -107,8 +107,9 @@ class TuyaWatcher:
 
     # ----- the job --------------------------------------------------------------------
 
-    async def poll(self) -> int:
-        """Scheduler job: read each feeder. Returns how many events."""
+    async def poll(self, *, feeds: bool = False) -> int:
+        """Scheduler job: read each feeder. Returns how many events. `feeds`: read the
+        feeding logs now too, not just hourly (`make dev`'s panel, D5d)."""
         if not self.account.linked() or self.account.problem():
             return 0
         events = 0
@@ -116,7 +117,7 @@ class TuyaWatcher:
             try:
                 reading = await self._read(device)
                 events += await self._saw(device, reading)
-                if self._feeds_due(device):
+                if feeds or self._feeds_due(device):
                     await self._feeds(device, reading)
             except RateLimited as exc:
                 log.warning("Tuya asked to wait %s; the feeders wait", exc.wait)

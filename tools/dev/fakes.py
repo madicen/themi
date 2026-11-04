@@ -1,15 +1,15 @@
 """D5a: `make dev` with the test fakes for every outside service, linked and kept.
 
 `DevFakes` holds the fakes from `tests/fakes` (Google sign-in, Gmail, Calendar and Tasks
-as local servers; the wall, ThinQ, Home Connect and travel as transports; Keep,
+as local servers; the wall, ThinQ, Home Connect, Tuya and travel as transports; Keep,
 OurGroceries and Roborock at their interfaces) and hands them to `build_runtime` the way
 the scenario harness hands them to `build_app` (`tests.fakes.wiring`).
 
-On the first run it fills them (a washer and dryer, a dishwasher, a robot, the wall's
-"Family" list) and links them through Themi's own link paths, so `data/dev/` holds real
-linked accounts. What the fakes hold is saved in `data/dev/fakes.json` (each minute, after
-each `act`, and on stop) and comes back on the next run, so Themi's sync cursors and
-remote ids still match.
+On the first run it fills them (a washer and dryer, a dishwasher, a robot, two pet
+feeders, the wall's "Family" list) and links them through Themi's own link paths, so
+`data/dev/` holds real linked accounts. What the fakes hold is saved in
+`data/dev/fakes.json` (each minute, after each `act`, and on stop) and comes back on the
+next run, so Themi's sync cursors and remote ids still match.
 
 The fakes are only changed on Themi's event loop: `act` hands a change over from another
 thread (the simulator's, D5b) and waits for it, so the fakes need no locks.
@@ -42,6 +42,9 @@ from tests.fakes.snapshot import Snapshots
 from tests.fakes.thinq import TOKEN as THINQ_TOKEN
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
+from tests.fakes.tuya import ACCESS_ID as TUYA_ACCESS_ID
+from tests.fakes.tuya import SECRET as TUYA_SECRET
+from tests.fakes.tuya import FakeTuya
 from tests.fakes.wiring import connector_options, wall_list
 from themi.accounts import Member
 from themi.connectors.gkeep import KeepLogin
@@ -61,6 +64,7 @@ ADDRESSES = {"Erin": "erin@gmail.com", "Husband": "husband@gmail.com"}
 WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 DISHWASHER = "BOSCH-SMV-1"
 ROBOT = "rr-duid-1"
+FEEDER, MOCHI = "ebfeeder1", "ebfeeder2"  # the standard kind, and one with a fault code
 
 T = TypeVar("T")
 Check = str | Callable[[], Awaitable[object]]  # a periodic task's name, or a read
@@ -87,6 +91,7 @@ class DevFakes:
         self.thinq = FakeThinq()
         self.home_connect = FakeHomeConnect()
         self.roborock = FakeRoborock()
+        self.tuya = FakeTuya()
         self.keep = FakeKeep()
         self.ourgroceries = FakeOurGroceries()
         self.travel = FakeTravel()
@@ -109,6 +114,7 @@ class DevFakes:
             "thinq": self.thinq,
             "home_connect": self.home_connect,
             "roborock": self.roborock,
+            "tuya": self.tuya,
             "keep": self.keep,
             "ourgroceries": self.ourgroceries,
             "travel": self.travel,
@@ -143,6 +149,7 @@ class DevFakes:
             home_connect=self.home_connect,
             thinq=self.thinq,
             roborock=self.roborock,
+            tuya=self.tuya,
             keep=self.keep,
             timezone=timezone,
         )
@@ -236,6 +243,9 @@ class DevFakes:
             self.home_connect.add_appliance(DISHWASHER, "Dishwasher", "Dishwasher")
         if ROBOT not in self.roborock.robots:
             self.roborock.add_robot(ROBOT, "Robbie")
+        if FEEDER not in self.tuya.devices:
+            self.tuya.add_feeder(FEEDER, "Cat Feeder")
+            self.tuya.add_feeder(MOCHI, "Mochi's feeder", "fault")
         wall_list(self.cozyla)
         for address in ADDRESSES.values():
             self.keep.user(address)
@@ -265,6 +275,8 @@ class DevFakes:
         if services.roborock is not None and not services.roborock.account.linked():
             await services.roborock.send_code(ROBOROCK_EMAIL)
             await services.roborock.link(admin, ROBOROCK_EMAIL, ROBOROCK_CODE)
+        if services.tuya is not None and not services.tuya.account.linked():
+            await services.tuya.link(admin, TUYA_ACCESS_ID, TUYA_SECRET, "us")
         if services.home_connect is not None and not services.home_connect.linked():
             await self.link_home_connect(app, admin, site_url)
         safeway = services.safeway

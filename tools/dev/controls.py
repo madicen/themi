@@ -26,11 +26,25 @@ from tests.fakes.roborock import CODE as ROBOROCK_CODE
 from tests.fakes.roborock import EMAIL as ROBOROCK_EMAIL
 from tests.fakes.safeway_helper import FakeSafewayHelper
 from tests.fakes.thinq import TOKEN as THINQ_TOKEN
+from tests.fakes.tuya import ACCESS_ID as TUYA_ACCESS_ID
+from tests.fakes.tuya import SECRET as TUYA_SECRET
 from tests.fakes.wiring import wall_list
 from themi import clock
 from themi.connectors.roborock import RoborockError
 from themi.connectors.roborock.events import PARTS, problems, read_status, state_word
-from tools.dev.fakes import ADDRESSES, DISHWASHER, DRYER, ROBOT, WASHER, Check, DevFakes
+from themi.connectors.tuya.events import read_status as read_feeder
+from themi.connectors.tuya.events import state_word as feeder_word
+from tools.dev.fakes import (
+    ADDRESSES,
+    DISHWASHER,
+    DRYER,
+    FEEDER,
+    MOCHI,
+    ROBOT,
+    WASHER,
+    Check,
+    DevFakes,
+)
 from tools.dev.scenes import SCENES, At, Do, describe
 
 PEOPLE = tuple(ADDRESSES)  # ("Erin", "Husband")
@@ -896,6 +910,115 @@ VACUUM = Section(
 )
 
 
+# ----- the pet feeders (Tuya) --------------------------------------------------------------
+
+FEEDERS = {"Cat Feeder": FEEDER, "Mochi's feeder": MOCHI}
+MOCHI_STATUSES = {  # label -> a payload in tests/fixtures/tuya (its fault bitmap)
+    "Fine": "fault_none",
+    "Food running low": "fault_shortage",
+    "Food stuck (motor fault)": "fault_motor",
+    "Out of food, battery low": "fault_battery_and_empty",
+    "An unknown fault": "fault_unknown_bit",
+}
+
+
+async def _read_feeders(fakes: DevFakes) -> None:
+    """The feeders read now, feeding logs too (a poll comes every 10 minutes, the logs
+    hourly)."""
+    assert fakes.app is not None
+    if fakes.app.services.tuya is not None:
+        await fakes.app.services.tuya.poll(feeds=True)
+
+
+def _food(fakes: DevFakes, v: Values) -> str:
+    left = int(v.number("left"))
+    if not 0 <= left <= 100:
+        raise ControlError("food left is 0 to 100%")
+    status = fakes.tuya.statuses[FEEDER]
+    for point in status:
+        if point["code"] == "surplus_grain":
+            point["value"] = left
+    return f"Cat Feeder: {left}% food left"
+
+
+def _mochi(fakes: DevFakes, v: Values) -> str:
+    fakes.tuya.set_status(MOCHI, MOCHI_STATUSES[v["status"]])
+    return f"Mochi's feeder: {v['status'].lower()}"
+
+
+def _fed(fakes: DevFakes, v: Values) -> str:
+    portions = int(v.number("portions"))
+    if portions < 1:
+        raise ControlError("a feeding is at least one portion")
+    fakes.tuya.fed(FEEDERS[v["feeder"]], portions, clock.now())
+    return f"{v['feeder']} fed {portions} portion{'s' if portions != 1 else ''}"
+
+
+def _feeders_state(fakes: DevFakes) -> list[str]:
+    tuya = fakes.tuya
+    lines = []
+    for device_id, device in tuya.devices.items():
+        if device["category"] != "cwwsq":
+            continue
+        reading = read_feeder(tuya.statuses[device_id], tuya.specs[device_id], device["product_id"])
+        fed = tuya.logs.get(device_id, [])
+        last = (
+            f", last fed {_short_ms(fed[-1]['event_time'], fakes)} ({fed[-1]['value']})"
+            if fed
+            else ""
+        )
+        offline = " (offline)" if device_id in tuya.offline_devices else ""
+        lines.append(f"{device['name']}: {feeder_word(reading)}{last}{offline}")
+    if tuya.lapsed:
+        lines.append("Tuya's plan has lapsed (Tuya works again relinks)")
+    return lines
+
+
+def _short_ms(ms: int, fakes: DevFakes) -> str:
+    return datetime.fromtimestamp(ms / 1000, _zone(fakes)).strftime("%a %H:%M")
+
+
+FEEDERS_SECTION = Section(
+    "feeders",
+    "Pet feeders (Tuya)",
+    ("tuya",),
+    (
+        Action(
+            "food",
+            "Set the cat feeder's food",
+            (Field("left", "Food left (%)", "number", default="15"),),
+            _food,
+            (_read_feeders,),
+            "20% or under is running low, 0 is out. A nudge comes 10 minutes on: skip ahead.",
+        ),
+        Action(
+            "mochi",
+            "Set Mochi's feeder",
+            (
+                Field(
+                    "status", "Status", "select", tuple(MOCHI_STATUSES), "Food stuck (motor fault)"
+                ),
+            ),
+            _mochi,
+            (_read_feeders,),
+            "This one has no food level, only a fault code.",
+        ),
+        Action(
+            "fed",
+            "A feeding",
+            (
+                Field("feeder", "Feeder", "select", tuple(FEEDERS), "Cat Feeder"),
+                Field("portions", "Portions", "number", default="2"),
+            ),
+            _fed,
+            (_read_feeders,),
+            'Then ask Themi "has the cat been fed?"',
+        ),
+    ),
+    _feeders_state,
+)
+
+
 # ----- energy (dev only) --------------------------------------------------------------------
 
 DAY_LEVELS = {"Low": -1.0, "Medium": 0.0, "High": 1.0}
@@ -1194,6 +1317,21 @@ def _robot_back(fakes: DevFakes, v: Values) -> str:
     return "Robbie is back online"
 
 
+def _tuya_back(fakes: DevFakes, v: Values) -> Awaitable[str]:
+    async def relink() -> str:
+        fakes.tuya.lapsed = False
+        fakes.tuya.offline_devices.clear()
+        assert fakes.app is not None
+        watcher = fakes.app.services.tuya
+        if watcher is None or not watcher.account.problem():
+            return "Tuya works again"
+        admin = next(m for m in fakes.app.store.list_members() if m.is_admin)
+        await watcher.link(admin, TUYA_ACCESS_ID, TUYA_SECRET, "us")
+        return "Tuya works again, relinked as from the Accounts page"
+
+    return relink()
+
+
 def _say(text: str, change: Callable[[DevFakes], object]) -> Fault:
     def run(fakes: DevFakes, v: Values) -> str:
         change(fakes)
@@ -1308,6 +1446,21 @@ FAULTS: dict[str, Action] = {
         (_read_robot,),
         f"Relink on the Accounts page with {ROBOROCK_EMAIL} and the code {ROBOROCK_CODE}.",
     ),
+    "feeders": _fault_action(
+        {
+            "The cat feeder goes offline": _say(
+                "the cat feeder is offline", lambda f: f.tuya.offline(FEEDER)
+            ),
+            "Tuya rate-limits (1199)": _say(
+                "Tuya answers the next call with 1199", lambda f: f.tuya.limit()
+            ),
+            "The free plan lapses": _say("Tuya's plan lapsed", lambda f: f.tuya.lapse()),
+            "Tuya works again": _tuya_back,
+        },
+        (_read_feeders,),
+        f"A lapsed plan tells the admins once. To relink by hand: the Accounts page with "
+        f"{TUYA_ACCESS_ID}, the secret {TUYA_SECRET}, Western America.",
+    ),
 }
 
 
@@ -1327,6 +1480,7 @@ SECTIONS = tuple(
         LAUNDRY,
         DISHWASHER_SECTION,
         VACUUM,
+        FEEDERS_SECTION,
         SAFEWAY,
         TRAVEL,
         ENERGY,

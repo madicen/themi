@@ -42,7 +42,7 @@ def payload(name: str) -> Any:
 
 class FakeTuya(Snapshots):
     # D5a: what `make dev` would keep between runs
-    SNAPSHOT = ("devices", "specs", "statuses", "logs", "keys", "_offline", "lapsed")
+    SNAPSHOT = ("devices", "specs", "statuses", "logs", "keys", "offline_devices", "lapsed")
 
     def __init__(self) -> None:
         self.devices: dict[str, dict[str, Any]] = {}
@@ -54,7 +54,7 @@ class FakeTuya(Snapshots):
         self.calls: list[str] = []
         self.lapsed = False
         self.page_size: int | None = None  # set to page device lists and logs
-        self._offline: set[str] = set()
+        self.offline_devices: set[str] = set()
         self._limited = 0
         self.transport = httpx.MockTransport(self._handle)
 
@@ -88,7 +88,7 @@ class FakeTuya(Snapshots):
 
     def set_status(self, device_id: str, name: str) -> None:
         self.statuses[device_id] = payload(name)
-        self._offline.discard(device_id)
+        self.offline_devices.discard(device_id)
 
     def fed(self, device_id: str, portions: int, at: datetime) -> None:
         self.logs[device_id].append(
@@ -101,7 +101,7 @@ class FakeTuya(Snapshots):
         )
 
     def offline(self, device_id: str) -> None:
-        self._offline.add(device_id)
+        self.offline_devices.add(device_id)
 
     def limit(self, times: int = 1) -> None:
         self._limited += times
@@ -158,7 +158,7 @@ class FakeTuya(Snapshots):
             if what == "specifications":
                 return _ok(self.specs[device_id])
             if what == "status":
-                if device_id in self._offline:
+                if device_id in self.offline_devices:
                     return _error(2001, "device is offline")
                 return _ok(self.statuses[device_id])
             if what == "logs":
