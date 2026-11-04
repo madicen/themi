@@ -4,7 +4,7 @@ PYTEST := $(PYTHON) -m pytest
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals router-eval cov dev dev-reset dev-invite dev-prod
+.PHONY: venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -45,6 +45,10 @@ evals:
 # P3: how well the tool groups are chosen, over the eval cases (no model, no keys)
 router-eval:
 	$(PYTEST) tests/scenarios/test_router_eval.py -k recall -s -q
+
+# P8a: how the "which task?" word check does on the naming cases (no model, no keys)
+naming-eval:
+	$(PYTHON) -c 'from tests.evals.naming import *; print(format_naming(score(load_naming_cases(), word_check)))'
 
 cov:
 	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios

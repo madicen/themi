@@ -1,0 +1,383 @@
+{
+ "board": [
+  "Go for a run",
+  "Bring bins in",
+  "Clean the bird cage",
+  "Contact Sam's parents about babysitting",
+  "Clean the kitchen",
+  "Declutter the kitchen",
+  "Drink green tea",
+  "Refill pet feeders",
+  "Process the cardboard outside",
+  "Move the wet load to the dryer",
+  "Bring the laundry upstairs",
+  "Put sheets back on the bed",
+  "Add air to the car tires",
+  "Answer the client email",
+  "Plug in my earbuds",
+  "Clean left bathroom",
+  "Clean right bathroom"
+ ],
+ "cases": [
+  {
+   "id": "run-went",
+   "kind": "plain",
+   "message": "I went for a run",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "run-ran",
+   "kind": "plain",
+   "message": "I ran this morning",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "bins-in",
+   "kind": "plain",
+   "message": "Bins are in",
+   "means": [
+    "Bring bins in"
+   ]
+  },
+  {
+   "id": "cage-cleaned",
+   "kind": "plain",
+   "message": "Cleaned the bird cage",
+   "means": [
+    "Clean the bird cage"
+   ]
+  },
+  {
+   "id": "tea-drank",
+   "kind": "plain",
+   "message": "Had my green tea",
+   "means": [
+    "Drink green tea"
+   ]
+  },
+  {
+   "id": "feeders-full",
+   "kind": "plain",
+   "message": "Feeders are full",
+   "means": [
+    "Refill pet feeders"
+   ]
+  },
+  {
+   "id": "sheets-on",
+   "kind": "plain",
+   "message": "Sheets are back on the bed",
+   "means": [
+    "Put sheets back on the bed"
+   ]
+  },
+  {
+   "id": "tires-air",
+   "kind": "plain",
+   "message": "Put air in the tires",
+   "means": [
+    "Add air to the car tires"
+   ]
+  },
+  {
+   "id": "client-replied",
+   "kind": "plain",
+   "message": "Replied to the client",
+   "means": [
+    "Answer the client email"
+   ]
+  },
+  {
+   "id": "earbuds-charging",
+   "kind": "plain",
+   "message": "Earbuds are charging",
+   "means": [
+    "Plug in my earbuds"
+   ]
+  },
+  {
+   "id": "cardboard-done",
+   "kind": "plain",
+   "message": "The cardboard is processed",
+   "means": [
+    "Process the cardboard outside"
+   ]
+  },
+  {
+   "id": "left-bath",
+   "kind": "plain",
+   "message": "Left bathroom is clean",
+   "means": [
+    "Clean left bathroom"
+   ]
+  },
+  {
+   "id": "run-5k",
+   "kind": "paraphrase",
+   "message": "did my 5k",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "run-jogged",
+   "kind": "paraphrase",
+   "message": "jogged this morning",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "run-miles",
+   "kind": "paraphrase",
+   "message": "Finished my miles",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "run-pavement",
+   "kind": "paraphrase",
+   "message": "Hit the pavement for a couple of miles",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "bins-cans",
+   "kind": "paraphrase",
+   "message": "The garbage cans are back by the garage",
+   "means": [
+    "Bring bins in"
+   ]
+  },
+  {
+   "id": "cage-birds",
+   "kind": "paraphrase",
+   "message": "Gave the birds fresh paper and a scrub",
+   "means": [
+    "Clean the bird cage"
+   ]
+  },
+  {
+   "id": "cage-spotless",
+   "kind": "paraphrase",
+   "message": "The cage is spotless",
+   "means": [
+    "Clean the bird cage"
+   ]
+  },
+  {
+   "id": "kitchen-counters",
+   "kind": "paraphrase",
+   "message": "Counters are clear",
+   "means": [
+    "Declutter the kitchen"
+   ]
+  },
+  {
+   "id": "feeders-bowls",
+   "kind": "paraphrase",
+   "message": "Topped up the cats' food",
+   "means": [
+    "Refill pet feeders"
+   ]
+  },
+  {
+   "id": "cardboard-boxes",
+   "kind": "paraphrase",
+   "message": "Broke down all the boxes in the yard",
+   "means": [
+    "Process the cardboard outside"
+   ]
+  },
+  {
+   "id": "laundry-folded",
+   "kind": "paraphrase",
+   "message": "Folded clothes are upstairs now",
+   "means": [
+    "Bring the laundry upstairs"
+   ]
+  },
+  {
+   "id": "sheets-bed",
+   "kind": "paraphrase",
+   "message": "Made the bed with fresh linens",
+   "means": [
+    "Put sheets back on the bed"
+   ]
+  },
+  {
+   "id": "tires-pumped",
+   "kind": "paraphrase",
+   "message": "Tires are pumped up",
+   "means": [
+    "Add air to the car tires"
+   ]
+  },
+  {
+   "id": "earbuds-headphones",
+   "kind": "paraphrase",
+   "message": "Headphones are on the charger",
+   "means": [
+    "Plug in my earbuds"
+   ]
+  },
+  {
+   "id": "parents-sitter",
+   "kind": "paraphrase",
+   "message": "Called the sitter's family",
+   "means": [
+    "Contact Sam's parents about babysitting"
+   ]
+  },
+  {
+   "id": "yes-cage",
+   "kind": "short-answer",
+   "message": "Yes",
+   "before": "Did you get to the bird cage today?",
+   "means": [
+    "Clean the bird cage"
+   ]
+  },
+  {
+   "id": "yep-bins",
+   "kind": "short-answer",
+   "message": "Yep, done",
+   "before": "Bring bins in: done already, or later?",
+   "means": [
+    "Bring bins in"
+   ]
+  },
+  {
+   "id": "done-run",
+   "kind": "short-answer",
+   "message": "Done",
+   "before": "Go for a run: done already, or later?",
+   "means": [
+    "Go for a run"
+   ]
+  },
+  {
+   "id": "emailed-back",
+   "kind": "short-answer",
+   "message": "Emailed them back",
+   "before": "Answer the client email is still open.",
+   "means": [
+    "Answer the client email"
+   ]
+  },
+  {
+   "id": "yes-please-parents",
+   "kind": "short-answer",
+   "message": "Yes please",
+   "before": "Should I move \"Contact Sam's parents about babysitting\" to today at 6 pm?",
+   "means": [
+    "Contact Sam's parents about babysitting"
+   ]
+  },
+  {
+   "id": "and-tea",
+   "kind": "short-answer",
+   "message": "and the tea",
+   "earlier": "Fed the pets",
+   "means": [
+    "Drink green tea"
+   ]
+  },
+  {
+   "id": "all-done",
+   "kind": "all",
+   "message": "All done!",
+   "before": "Still on for tonight: Drink green tea, Refill pet feeders.",
+   "means": [
+    "Drink green tea",
+    "Refill pet feeders"
+   ]
+  },
+  {
+   "id": "both-baths",
+   "kind": "all",
+   "message": "Both bathrooms are clean",
+   "means": [
+    "Clean left bathroom",
+    "Clean right bathroom"
+   ]
+  },
+  {
+   "id": "parents-bins",
+   "kind": "near-miss",
+   "message": "We contacted Sam's parents",
+   "means": [
+    "Contact Sam's parents about babysitting"
+   ]
+  },
+  {
+   "id": "kitchen-decluttered",
+   "kind": "near-miss",
+   "message": "Kitchen's decluttered",
+   "means": [
+    "Declutter the kitchen"
+   ]
+  },
+  {
+   "id": "kitchen-wiped",
+   "kind": "near-miss",
+   "message": "Wiped down the kitchen, it's sparkling",
+   "means": [
+    "Clean the kitchen"
+   ]
+  },
+  {
+   "id": "laundry-dryer",
+   "kind": "near-miss",
+   "message": "Moved the laundry to the dryer",
+   "means": [
+    "Move the wet load to the dryer"
+   ]
+  },
+  {
+   "id": "cage-clean-house",
+   "kind": "near-miss",
+   "message": "The birds have a clean house again",
+   "means": [
+    "Clean the bird cage"
+   ]
+  },
+  {
+   "id": "water-not-tea",
+   "kind": "near-miss",
+   "message": "Drank a glass of water",
+   "means": []
+  },
+  {
+   "id": "contacted-school",
+   "kind": "near-miss",
+   "message": "We contacted the school",
+   "means": []
+  },
+  {
+   "id": "ran-dishwasher",
+   "kind": "near-miss",
+   "message": "Ran the dishwasher",
+   "means": []
+  },
+  {
+   "id": "cleaned-car",
+   "kind": "near-miss",
+   "message": "Cleaned the car",
+   "means": []
+  },
+  {
+   "id": "yes-please-reminder",
+   "kind": "near-miss",
+   "message": "Yes please",
+   "before": "Want a reminder about the dentist tomorrow?",
+   "means": []
+  }
+ ]
+}
