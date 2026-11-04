@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -51,17 +51,18 @@ from themi.storage.secrets import Secret
 
 if TYPE_CHECKING:
     from themi.app import App
-    from themi.runtime import Runtime
+    from themi.scheduler import Scheduler
 
 FAKES_FILE = "fakes.json"
 SAVE_EVERY = timedelta(minutes=1)
-ACT_TIMEOUT = 30.0  # seconds a change from another thread may take
+ACT_TIMEOUT = 120.0  # seconds a change and its checks may take (triage asks the AI)
 ADDRESSES = {"Erin": "erin@gmail.com", "Husband": "husband@gmail.com"}
 WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 DISHWASHER = "BOSCH-SMV-1"
 ROBOT = "rr-duid-1"
 
 T = TypeVar("T")
+Check = str | Callable[[], Awaitable[object]]  # a periodic task's name, or a read
 
 
 class DevFakes:
@@ -131,13 +132,14 @@ class DevFakes:
             timezone=timezone,
         )
 
-    async def bind(self, runtime: Runtime, site_url: str) -> list[str]:
+    async def bind(self, app: App, site_url: str, scheduler: Scheduler | None = None) -> list[str]:
         """On Themi's loop, before it runs: link what isn't linked yet, and save each
-        minute. Returns what's linked to the fakes, for the banner."""
-        self.app = runtime.app
+        minute on `scheduler` (the runtime's). Returns what's linked, for the banner."""
+        self.app = app
         self.loop = asyncio.get_running_loop()
-        await self.link(runtime.app, site_url)
-        runtime.scheduler.every("dev.fakes_save", SAVE_EVERY, self._save_job)
+        await self.link(app, site_url)
+        if scheduler is not None:
+            scheduler.every("dev.fakes_save", SAVE_EVERY, self._save_job)
         self.save()
         return self.linked()
 
@@ -163,23 +165,36 @@ class DevFakes:
 
     # ----- changes from other threads ---------------------------------------------------
 
-    def act(self, change: Callable[[], T], check: str | None = None) -> T:
-        """Make `change` to the fakes on Themi's loop and wait for it; then, if given, run
-        the periodic task `check` so Themi sees it now. Safe from any thread."""
-        loop = self.loop
-        if loop is None:
-            raise RuntimeError("the fakes aren't bound to a running Themi yet")
-        if _on(loop):
-            raise RuntimeError("act is for other threads; on Themi's loop, change the fake")
+    def act(self, change: Callable[[], T], check: Check | Sequence[Check] = ()) -> T:
+        """Make `change` to the fakes on Themi's loop and wait for it; then run `check` so
+        Themi sees it now: periodic tasks by name, or reads of its own. Safe from any thread
+        but Themi's own."""
 
         async def on_loop() -> T:
             result = change()
-            if check is not None:
-                await self.check_now(check)
             self.save()
+            for step in (check,) if isinstance(check, str) or callable(check) else check:
+                await (self.check_now(step) if isinstance(step, str) else step())
             return result
 
-        return asyncio.run_coroutine_threadsafe(on_loop(), loop).result(ACT_TIMEOUT)
+        return self._on_loop(on_loop())
+
+    def read(self, look: Callable[[], T]) -> T:
+        """Read the fakes on Themi's loop (they're only changed there), from another thread."""
+
+        async def on_loop() -> T:
+            return look()
+
+        return self._on_loop(on_loop())
+
+    def _on_loop(self, work: Coroutine[Any, Any, T]) -> T:
+        loop = self.loop
+        if loop is None or _on(loop):
+            work.close()
+            raise RuntimeError(
+                "act and read are for other threads while Themi runs; on its loop, use the fake"
+            )
+        return asyncio.run_coroutine_threadsafe(work, loop).result(ACT_TIMEOUT)
 
     async def check_now(self, task_name: str) -> object:
         """Run one of Themi's periodic tasks at once, as the scheduler would."""
