@@ -20,6 +20,10 @@ From the robot's events (Roborock, `themi.connectors.roborock`):
   it's staged in `vacuum_home`, a card until a rule makes it automatic.
 - A part nearly worn out makes a "Replace the vacuum's filter" task, once until the part's
   counter is reset in the Roborock app. Not time-bound: the usual daily limit applies.
+- The robot showing a problem's gone (a worn part's too) checks off today's wall routine
+  items about it, as the dishwasher does (F25a): "Refill vacuum water" when the dock's water
+  alert clears, whether or not the item started out as one of these tasks (F23e). Each goes
+  through `vacuum_done`, to whoever's item it is: a card until a rule makes it automatic.
 
 Asked how the vacuum is (`appliance_status`), each open chore is said with whose it is
 and whether they've been asked (F23d).
@@ -31,14 +35,16 @@ stops showing it.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from themi import clock
 from themi.accounts import Device, Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Button, Priority
+from themi.connectors.cozyla import CozylaError
 from themi.connectors.roborock import (
     BIN,
     FAULT,
@@ -52,6 +58,7 @@ from themi.connectors.roborock import (
     RoborockWatcher,
     VacuumEvent,
 )
+from themi.core.events import words_in_common
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
@@ -60,6 +67,7 @@ log = logging.getLogger(__name__)
 
 KIND = "vacuum"  # the outbox kind: "/pause vacuum" holds these
 CATEGORY, EXECUTOR = "vacuum_home", "devices.vacuum_home"
+DONE_CATEGORY, DONE_EXECUTOR = "vacuum_done", "devices.vacuum_done"
 TITLES = {
     STUCK: "Free the stuck vacuum",
     JAMMED: "Unjam the vacuum",
@@ -96,6 +104,27 @@ AWAY_WAIT = timedelta(minutes=30)  # "not back on its dock" waits longer: it may
 LATER_FOR = 60  # minutes: Later asks again in an hour
 HOME_AFTER = (STUCK, JAMMED, BIN, FAULT)  # sorted, it may be sitting where it stopped
 CARD_FOR = timedelta(hours=2)  # an offer to send it home goes stale
+# F25a: a routine item is about the robot when it names it and the problem ("Refill vacuum
+# water"); "Vacuum upstairs bedroom" is a person's chore. A fault has no words of its own.
+NAMES = "vacuum vac robot roborock"
+ABOUT = {
+    STUCK: "stuck free trapped rescue",
+    JAMMED: "jam jammed unjam clog unclog brush tangle tangled",
+    WATER_EMPTY: "water tank refill fill",
+    WATER_FULL: "water tank empty dirty",
+    BIN: "bin dustbin dust bag empty",
+    NOT_DOCKED: "dock home back",
+}
+POSSESSIVE = re.compile(r"['\u2019]s\b")  # straight or curly
+SEEN_TO = "replace change swap new clean wipe wash"  # with the part's name, for a worn part
+SORTED = {
+    STUCK: "The vacuum's free again",
+    JAMMED: "The vacuum's jam is cleared",
+    WATER_EMPTY: "The vacuum's dock has clean water again",
+    WATER_FULL: "The vacuum's dirty-water tank is empty again",
+    BIN: "The vacuum's dustbin is sorted",
+    NOT_DOCKED: "The vacuum's back on its dock",
+}
 
 
 class Vacuum:
@@ -109,6 +138,7 @@ class Vacuum:
     def install(self) -> None:
         self.services.vacuum = self
         self.services.autonomy.executors.register(EXECUTOR)(self._execute)
+        self.services.autonomy.executors.register(DONE_EXECUTOR)(self._execute_done)
         self.watcher.listeners.append(self.on_event)
         self.watcher.expired_listeners.append(self._expired)
         self.board.own_nudges.append(self._nudge)
@@ -164,6 +194,42 @@ class Vacuum:
                 await self.board.cancel(task.id, member)
             if event.kind in HOME_AFTER:
                 await self._offer_home(event.device_id, member)
+        await self._check_off(event)
+
+    # ----- the wall's routine items about it (F25a) -------------------------------------
+
+    async def _check_off(self, event: VacuumEvent) -> None:
+        """Gone: today's unticked routine items about it are checked off (a card each, to
+        whoever's item it is, until a rule makes it automatic), task or no task."""
+        wall = self.services.wall_routines
+        device = self._device(event.device_id)
+        if wall is None or device is None:
+            return
+        try:
+            items = await wall.open_items()
+        except CozylaError as exc:
+            log.warning("The wall's routines couldn't be read for the vacuum: %s", exc)
+            return
+        local = to_local(event.at, self._timezone())
+        until = local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        for record, member in items:
+            if not about(event.kind, event.detail, record.title, device.name):
+                continue
+            await self.services.autonomy.stage(
+                DONE_CATEGORY,
+                member or self._admin(),
+                f"{_sorted(event.kind, event.detail)}: check off {record.title} on the wall",
+                {"routine": record.routine_id, "day": local.date().isoformat()},
+                DONE_EXECUTOR,
+                expires=until,
+            )
+
+    async def _execute_done(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        wall = self.services.wall_routines
+        if wall is None:
+            return "The wall's routines aren't connected any more, so nothing was ticked."
+        await wall.tick(int(payload["routine"]), date.fromisoformat(str(payload["day"])))
+        return "Ticked it on the wall."
 
     # ----- clearing its alert, sending it home -----------------------------------------------
 
@@ -372,6 +438,29 @@ class Vacuum:
 
     def _device(self, device_id: int) -> Device | None:
         return next((d for d in self.watcher.devices() if d.id == device_id), None)
+
+    def _admin(self) -> Member:
+        return next(m for m in self.store.list_members() if m.is_admin)
+
+
+def about(kind: str, detail: str, title: str, robot: str = "") -> bool:
+    """F25a: a routine item's title names the robot and this problem ("Refill vacuum
+    water"; "Replace the vac filter" for a worn filter)."""
+    title = POSSESSIVE.sub("", title)  # "the vac's dustbin": "vac's" isn't "vac" otherwise
+    if not words_in_common(f"{NAMES} {robot}", title):
+        return False
+    if kind == PART:
+        part = detail.split()[-1]  # "main brush", "dock's water filter": the thing itself
+        return bool(words_in_common(part, title) and words_in_common(SEEN_TO, title))
+    return kind in ABOUT and bool(words_in_common(ABOUT[kind], title))
+
+
+def _sorted(kind: str, detail: str) -> str:
+    if kind == PART:
+        if detail == "sensors":
+            return "The vacuum's sensors were cleaned"
+        return f"The vacuum's {detail} was replaced"
+    return SORTED[kind]
 
 
 def _title(kind: str, detail: str) -> str:
