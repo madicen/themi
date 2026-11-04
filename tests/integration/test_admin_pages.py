@@ -416,6 +416,21 @@ async def test_reply_times_show_how_the_tool_groups_did(
     assert "(core, lists), then pantry." in page  # the slowest, step by step
 
 
+async def test_reply_times_count_the_calls_sent_twice(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    # P2b: a stuck call sent again, and one where the first still answered first.
+    scenario.app.router.hedge_after = 5
+    scenario.primary.take(30).queue_text("Tuesday.")
+    await scenario.say("Erin", "When's the vet?")
+    scenario.primary.take(7).take(9).queue_text("Wednesday.").queue_text("Thursday.")
+    await scenario.say("Erin", "And the dentist?")
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/dev")).text
+    assert "2 slow model calls were sent a second time; the second answered first 1 time." in page
+    assert "sent again, the first answered" in page
+
+
 async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncClient) -> None:
     await sign_in(scenario, site, "Husband")
     assert (await site.get("/dev")).status_code == 403

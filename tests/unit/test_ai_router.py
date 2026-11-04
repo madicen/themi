@@ -1,10 +1,11 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fixtures.family import SeededFamily
+from themi import clock
 from themi.ai import Capabilities, Message, RefusalError, StopReason, ToolSpec
 from themi.ai.adapters import AdapterConfig
 from themi.ai.router import AIRouter, AllProvidersFailed, Deferred
@@ -310,3 +311,117 @@ async def test_each_call_is_recorded_with_its_waits(
         await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
     last = family.db.query("SELECT * FROM ai_calls ORDER BY id DESC LIMIT 1")[0]
     assert (last["ok"], last["last_status"]) == (0, 529)
+
+
+# ----- P2b: a slow interactive call is sent a second time ----------------------------
+
+
+async def test_a_slow_call_is_sent_again_and_the_quicker_answer_used(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(30).queue_text("Hi")  # the first is stuck; the second answers at once
+    response = await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert response.text == "Hi"
+    assert len(claude.requests) == 2 and claude.pending() == 0
+    assert clock.now() - frozen_clock < timedelta(seconds=10)
+    (row,) = family.db.query("SELECT hedge, ok, backend FROM ai_calls")
+    assert (row["hedge"], row["ok"], row["backend"]) == ("second", 1, "Claude")
+
+
+async def test_the_first_answer_wins_when_it_comes_first(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(7).take(20).queue_text("First").queue_text("Second")
+    response = await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert response.text == "First" and len(claude.requests) == 2
+    assert family.db.scalar("SELECT hedge FROM ai_calls") == "first"
+
+
+async def test_a_quick_call_goes_once(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(4).queue_text("Hi")
+    await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert len(claude.requests) == 1
+    assert family.db.scalar("SELECT hedge FROM ai_calls") is None
+
+
+async def test_background_calls_are_never_sent_twice(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    # Nobody is waiting, and the free tier's daily quota is shared with triage.
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(30).queue_text("Filed.")
+    client = router.client_for(family.erin.id, AITask.EMAIL_TRIAGE)
+    await client.chat("s", hello(), kind=CallKind.BACKGROUND)
+    assert len(claude.requests) == 1
+
+
+async def test_one_failing_while_the_other_answers_is_an_answer(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    from themi.ai import PermanentError
+
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    # The second try fails at once (it takes the queued error); the first answers at 8 s.
+    claude.take(8).queue_error(PermanentError("bad request")).queue_text("Hi")
+    response = await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert response.text == "Hi"
+    assert not factory.provider(ERIN_GEMINI).requests  # no fallback needed
+    assert family.db.scalar("SELECT hedge FROM ai_calls") == "first"
+
+
+async def test_both_failing_falls_back(
+    family: SeededFamily,
+    ai: AISettingsStore,
+    factory: Factory,
+    router: AIRouter,
+    frozen_clock: datetime,
+) -> None:
+    from themi.ai import PermanentError
+
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(8).queue_error(PermanentError("one")).queue_error(PermanentError("two"))
+    factory.provider(ERIN_GEMINI).queue_text("From Gemini")
+    response = await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert response.text == "From Gemini" and len(claude.requests) == 2
+
+
+async def test_hedging_can_be_turned_off(
+    family: SeededFamily, ai: AISettingsStore, factory: Factory, frozen_clock: datetime
+) -> None:
+    router = AIRouter(ai, sleep=NoSleep(), factory=factory, hedge_after=None)
+    two_step_chain(family, ai)
+    claude = factory.provider(ERIN_CLAUDE)
+    claude.take(30).queue_text("Hi")
+    await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
+    assert len(claude.requests) == 1

@@ -15,7 +15,7 @@ from pathlib import Path
 from themi.accounts import AccountStore
 from themi.ai.embeddings import RouterEmbedder, VectorCache
 from themi.ai.retry import Sleep
-from themi.ai.router import AIRouter, ProviderFactory
+from themi.ai.router import HEDGE_AFTER, AIRouter, ProviderFactory
 from themi.ai.settings import AISettingsStore
 from themi.autonomy import Autonomy, ExecutorRegistry
 from themi.backup import BackupConfig, Backups
@@ -143,10 +143,11 @@ def build_app(
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
     control_dir: Path | None = None,
+    hedge_after: float | None = HEDGE_AFTER,
 ) -> App:
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
-    router = AIRouter(ai_settings, factory=provider_factory, sleep=sleep)
+    router = AIRouter(ai_settings, factory=provider_factory, sleep=sleep, hedge_after=hedge_after)
     channel = make_channel(store)
     energy = EnergyModel(store)
     outbox = Outbox(store, channel, PdaShield(AIRewriter(router)), EnergyReceptivity(energy))

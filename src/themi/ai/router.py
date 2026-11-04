@@ -12,6 +12,9 @@ For each call the router walks the member's chain for that task:
 3. Try it under the retry policy. A backend that can't do the job (no audio,
    no key, bad config, malformed output, a refusal) is skipped to the next.
 4. A model without tool support gets the request in JSON action mode.
+5. An interactive chat call still out after `hedge_after` seconds is sent once more,
+   and whichever answers first is used (P2b: most calls take a second or two, but one
+   in seven took over eight, and a second try is usually quick).
 
 If every backend fails, interactive calls raise `AllProvidersFailed` (or the
 `RefusalError` itself, if every backend declined), and background calls
@@ -66,6 +69,8 @@ log = logging.getLogger(__name__)
 
 CONNECTION_TEST_PROMPT = "Reply with the single word OK."
 CALLS_KEPT = timedelta(days=7)  # ai_calls history (bug #29)
+# P2b, from the week of 2026-10-28: three in four calls took under 1.9 s, one in ten over 14.
+HEDGE_AFTER = 5.0
 # The reply (P2a's `replies` row) the calls being made now are for, if any.
 current_reply: ContextVar[int | None] = ContextVar("current_reply", default=None)
 
@@ -134,8 +139,10 @@ class AIRouter:
         rng: random.Random | None = None,
         breakers: BreakerBoard | None = None,
         factory: ProviderFactory | None = None,
+        hedge_after: float | None = HEDGE_AFTER,
     ) -> None:
         self.settings = settings
+        self.hedge_after = hedge_after
         self.policy = policy
         self.breakers = breakers or BreakerBoard()
         self._sleep = sleep
@@ -159,9 +166,13 @@ class AIRouter:
         kind: CallKind,
         operation: Operation[T],
         on_retry: OnRetry | None = None,
+        *,
+        hedge: bool = False,
     ) -> T:
         errors: list[tuple[str, Exception]] = []
         call = _CallRecord(clock.now())
+        if hedge and self.hedge_after is not None:
+            operation = self._hedged(operation, self.hedge_after, call)
 
         async def noted(attempt: int, error: RetryableError, wait: float) -> None:
             call.retries += 1
@@ -213,12 +224,12 @@ class AIRouter:
         try:
             db.execute(
                 "INSERT INTO ai_calls (member_id, task, kind, backend, started_at, seconds, "
-                "waited, retries, last_status, ok, reply_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "waited, retries, last_status, ok, reply_id, hedge) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     member_id, task.value, kind.value, call.backend, to_utc_iso(call.started),
                     round((now - call.started).total_seconds(), 2), round(call.waited, 2),
-                    call.retries, call.last_status, int(ok), current_reply.get(),
+                    call.retries, call.last_status, int(ok), current_reply.get(), call.hedge,
                 ),
             )  # fmt: skip
             db.execute(  # not a marked reply's, until it's labelled (P4)
@@ -229,6 +240,41 @@ class AIRouter:
             )
         except sqlite3.Error:  # never lose an answer over a note about it
             log.warning("Couldn't record an AI call", exc_info=True)
+
+    @staticmethod
+    def _hedged(operation: Operation[T], after: float, call: _CallRecord) -> Operation[T]:
+        """The operation, sent a second time if the first hasn't answered `after` seconds
+        in. The first answer wins and the other is cancelled; an error counts only once
+        both have failed. `call.hedge` notes it: "first" or "second", whichever answered."""
+
+        async def hedged(provider: Provider) -> T:
+            first = asyncio.ensure_future(operation(provider))
+            timer = asyncio.ensure_future(clock.sleep(after))
+            racing = {first}
+            try:
+                await asyncio.wait({first, timer}, return_when=asyncio.FIRST_COMPLETED)
+                if first.done():
+                    return first.result()
+                log.info("AI call still out after %.0f s; sending it again", after)
+                second = asyncio.ensure_future(operation(provider))
+                racing.add(second)
+                failed: BaseException | None = None
+                while racing:
+                    done, racing = await asyncio.wait(racing, return_when=asyncio.FIRST_COMPLETED)
+                    for task in done:
+                        error = task.exception()
+                        if error is None:
+                            call.hedge = "second" if task is second else "first"
+                            return task.result()
+                        failed = error
+                assert failed is not None
+                call.hedge = "first"
+                raise failed
+            finally:
+                for task in (timer, *racing):
+                    task.cancel()
+
+        return hedged
 
     async def _attempt(
         self,
@@ -291,6 +337,7 @@ class _CallRecord:
     retries: int = 0
     waited: float = 0.0
     last_status: int | None = None
+    hedge: str | None = None  # P2b: sent twice, and which one answered
 
 
 class TaskClient:
@@ -334,7 +381,14 @@ class TaskClient:
                 )
             return await provider.chat(system, messages, tools, max_tokens=max_tokens, kind=kind)
 
-        return await self._router.run(self.member_id, self.task, kind, operation, on_retry)
+        return await self._router.run(
+            self.member_id,
+            self.task,
+            kind,
+            operation,
+            on_retry,
+            hedge=kind is CallKind.INTERACTIVE,
+        )
 
     async def structured(
         self,
