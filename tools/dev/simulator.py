@@ -105,6 +105,7 @@ class Simulator(FakeTelegram):
         self.app.add_api_route("/control/schema", self._control_schema, methods=["GET"])
         self.app.add_api_route("/control/state", self._control_state, methods=["GET"])
         self.app.add_api_route("/control/act", self._control_act, methods=["POST"])
+        self.app.add_api_route("/control/scene", self._control_scene, methods=["POST"])
 
     def number_messages_after(self, message_id: int) -> None:
         """Continue Telegram message ids past an earlier run's, as Telegram itself would."""
@@ -276,9 +277,15 @@ class Simulator(FakeTelegram):
         minutes = int(body["minutes"])
         if not 0 < minutes <= 7 * 24 * 60:
             return JSONResponse({"ok": False, "error": "skip 1 minute to 7 days"}, status_code=400)
-        now = clock.shift(timedelta(minutes=minutes))
+        return JSONResponse({"ok": True, "now": self.skip(minutes).isoformat()})
+
+    def skip(self, minutes: int) -> datetime:
+        """Move Themi's clock ahead, saying so in every chat. (A frozen clock, in tests,
+        is advanced instead.)"""
+        delta = timedelta(minutes=minutes)
+        now = clock.advance(delta) if clock.is_frozen() else clock.shift(delta)
         self._add(EVERY_CHAT, "notice", f"Skipped ahead {_duration(minutes)}")
-        return JSONResponse({"ok": True, "now": now.isoformat()})
+        return now
 
     # ----- the control panel (D5b) ---------------------------------------------
     # The panel's calls wait on Themi's loop, which may call this server meanwhile (a
@@ -292,7 +299,7 @@ class Simulator(FakeTelegram):
             waiting = self.controls_coming
             error = STARTING if waiting else NO_CONTROLS
             return JSONResponse({"sections": [], "error": error, "retry": waiting})
-        return JSONResponse({"sections": self.controls.schema()})
+        return JSONResponse({"sections": self.controls.schema(), "scenes": self.controls.scenes()})
 
     async def _control_state(self) -> JSONResponse:
         if self.controls is None:
@@ -323,6 +330,29 @@ class Simulator(FakeTelegram):
             )
         self._add(EVERY_CHAT, "notice", f"⚙ {happened}")
         return JSONResponse({"ok": True, "happened": happened})
+
+    async def _control_scene(self, request: Request) -> JSONResponse:
+        from tools.dev.controls import ControlError
+
+        if self.controls is None:
+            return JSONResponse({"ok": False, "error": NO_CONTROLS}, status_code=404)
+        name = str((await request.json()).get("name", ""))
+        try:
+            done = await asyncio.to_thread(
+                self.controls.run_scene,
+                name,
+                lambda text: self._add(EVERY_CHAT, "notice", f"⚙ {text}"),
+                lambda ahead: self.skip(int(ahead.total_seconds() // 60)),
+            )
+        except ControlError as exc:
+            self._add(EVERY_CHAT, "notice", f"⚙ The scene stopped at {exc}")
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        except Exception as exc:
+            log.exception("A control panel scene failed")
+            return JSONResponse(
+                {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500
+            )
+        return JSONResponse({"ok": True, "done": done})
 
     # ----- the session report -------------------------------------------------
 

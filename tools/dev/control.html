@@ -153,6 +153,7 @@ async function load() {
     if (schema.retry) setTimeout(load, 1500);
     return;
   }
+  if (schema.scenes && schema.scenes.length) main.append(scenesBox(schema.scenes));
   for (const section of schema.sections) {
     const box = el("details");
     box.dataset.id = section.id;
@@ -170,6 +171,59 @@ async function load() {
   refreshState();
 }
 
+function scenesBox(scenes) {
+  // D5c: a named run of the panel's actions, with Themi's clock skipped between them.
+  const box = el("details");
+  box.dataset.id = "scenes";
+  box.open = opened.includes("scenes");
+  box.ontoggle = () => {
+    opened = [...document.querySelectorAll("details[open]")].map((d) => d.dataset.id);
+    try { localStorage.setItem("themi-control-open", JSON.stringify(opened)); } catch {}
+  };
+  box.append(el("summary", "", "Scenes"));
+  const form = el("form");
+  const pick = el("select");
+  for (const scene of scenes) pick.append(new Option(scene.name, scene.name));
+  const label = el("label", "wide", "Scene");
+  label.append(pick);
+  const about = el("p", "help");
+  const steps = el("pre", "state");
+  const show = () => {
+    const scene = scenes.find((sc) => sc.name === pick.value);
+    about.textContent = scene.about;
+    steps.textContent = scene.steps.map((st, n) => `${n + 1}. ${st}`).join("\n");
+  };
+  pick.onchange = show;
+  show();
+  const go = el("div", "go");
+  const button = el("button", "", "Run it");
+  const result = el("span", "result");
+  go.append(button, result);
+  form.append(label, about, steps, go);
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    button.disabled = true;
+    result.className = "result";
+    result.textContent = "Running… (each step shows in the chat)";
+    try {
+      const res = await fetch("/control/scene", {
+        method: "POST", headers: {"content-type": "application/json"},
+        body: JSON.stringify({name: pick.value}),
+      });
+      const body = await res.json();
+      result.className = "result " + (body.ok ? "ok" : "bad");
+      result.textContent = body.ok ? `Done: ${body.done.length} actions` : body.error;
+    } catch {
+      result.className = "result bad";
+      result.textContent = "Can't reach the simulator. Is make dev running?";
+    }
+    button.disabled = false;
+    refreshState();
+  };
+  box.append(form);
+  return box;
+}
+
 async function refreshState() {
   const open = document.querySelectorAll("details[open]");
   if (!open.length) return;
@@ -177,6 +231,7 @@ async function refreshState() {
   try { state = await (await fetch("/control/state")).json(); } catch { return; }
   for (const box of open) {
     const lines = state[box.dataset.id];
+    if (box.dataset.id === "scenes") continue;
     if (lines) box.querySelector(".state").textContent = lines.join("\n") || "—";
   }
 }

@@ -97,3 +97,31 @@ async def test_a_chore_ticked_on_the_wall_closes_its_round(driven: Driven) -> No
     assert board(scenario).get(kitchen.id).due_on == date(2026, 10, 28)  # done for this week
     runs = scenario.app.db.query("SELECT done_by FROM task_runs WHERE task_id = ?", (kitchen.id,))
     assert [r["done_by"] for r in runs] == [scenario.member("Erin").id]
+
+
+async def test_a_busy_tuesday_runs_end_to_end(driven: Driven) -> None:
+    scenario = driven.scenario
+    scenario.primary.queue_structured(
+        {"results": [verdict(1, "urgent", "Appointment moved to 8 am", urgent_kind="other")]}
+    )
+    before = len(scenario.telegram.calls("sendMessage"))
+    notices: list[str] = []
+    done = await asyncio.to_thread(
+        driven.panel.run_scene, "A busy Tuesday", notices.append, clock.advance
+    )
+    assert notices == ["Scene: A busy Tuesday", *done]
+    assert done == [
+        'Email: "Your appointment tomorrow has moved to 8:00 am" from Dr. Patel\'s Office to Erin',
+        "Laundry (LG): Washer: running",
+        "Laundry (LG): Washer: finished",
+        "Vacuum (Roborock): Robbie: trapped, in the Kitchen",
+    ]
+    assert clock.now().astimezone(START.tzinfo).strftime("%a %d %b %H:%M") == "Tue 27 Oct 14:00"
+    assert scenario.app.db.scalar("SELECT category FROM emails") == "urgent"
+    sent = [p["text"] for p in scenario.telegram.calls("sendMessage")[before:]]
+    assert WASHED_TEXT.format(at="10 am") in sent  # half an hour after it finished
+    state = scenario.app.db.scalar(
+        "SELECT s.state FROM device_states s JOIN devices d ON d.id = s.device_id "
+        "WHERE d.name = 'Robbie'"
+    )
+    assert state != "docked"

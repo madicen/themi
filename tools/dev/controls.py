@@ -9,18 +9,29 @@ one `Section` here and nothing else.
 
 from __future__ import annotations
 
+import contextlib
+import json
+from collections import Counter
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import httpx
+
 from tests.fakes.gmail_api import _Mailbox
 from tests.fakes.gtasks_api import DEFAULT as MY_TASKS
+from tests.fakes.roborock import CODE as ROBOROCK_CODE
+from tests.fakes.roborock import EMAIL as ROBOROCK_EMAIL
+from tests.fakes.safeway_helper import FakeSafewayHelper
+from tests.fakes.thinq import TOKEN as THINQ_TOKEN
 from tests.fakes.wiring import wall_list
 from themi import clock
+from themi.connectors.roborock import RoborockError
 from themi.connectors.roborock.events import PARTS, problems, read_status, state_word
 from tools.dev.fakes import ADDRESSES, DISHWASHER, DRYER, ROBOT, WASHER, Check, DevFakes
+from tools.dev.scenes import SCENES, At, Do, describe
 
 PEOPLE = tuple(ADDRESSES)  # ("Erin", "Husband")
 
@@ -44,7 +55,7 @@ class Action:
     id: str
     label: str
     fields: tuple[Field, ...]
-    run: Callable[[DevFakes, Values], str]  # changes the fakes; returns what happened
+    run: Callable[[DevFakes, Values], str | Awaitable[str]]  # changes; says what happened
     # Then: periodic tasks by name, or reads of Themi's own (given the fakes).
     check: tuple[str | Callable[[DevFakes], Awaitable[object]], ...] = ()
     help: str = ""
@@ -147,6 +158,42 @@ class ControlPanel:
         ]
         happened = self.fakes.act(lambda: action.run(self.fakes, values), checks)
         return f"{section.title}: {happened}"
+
+    def scenes(self) -> list[dict[str, Any]]:
+        return [
+            {"name": sc.name, "about": sc.about, "steps": [describe(st) for st in sc.steps]}
+            for sc in SCENES
+        ]
+
+    def run_scene(
+        self, name: str, notice: Callable[[str], None], skip: Callable[[timedelta], object]
+    ) -> list[str]:
+        """Each step in turn, from another thread: actions as `act` runs them (each one told
+        to `notice`), and skips through `skip`, after which Themi sends what came due.
+        Stops at a step that fails, saying which. Returns what each action did."""
+        scene = next((sc for sc in SCENES if sc.name == name), None)
+        if scene is None:
+            raise ControlError(f"there's no scene called {name!r}")
+        notice(f"Scene: {scene.name}")
+        done = []
+        for n, step in enumerate(scene.steps, 1):
+            try:
+                if isinstance(step, Do):
+                    done.append(self.act(step.section, step.action, step.values))
+                    notice(done[-1])
+                    continue
+                if isinstance(step, At):
+                    ahead = step.until(
+                        self.fakes.read(lambda: clock.now().astimezone(_zone(self.fakes)))
+                    )
+                else:
+                    ahead = timedelta(minutes=step.minutes)
+                if ahead >= timedelta(minutes=1):
+                    skip(ahead)
+                    self.fakes.act(lambda: None, ("outbox.flush",))
+            except ControlError as exc:
+                raise ControlError(f"step {n} ({describe(step)}): {exc}") from exc
+        return done
 
 
 def _bound(read: Callable[[DevFakes], Awaitable[object]], fakes: DevFakes) -> Check:
@@ -676,7 +723,10 @@ def _laundry_state(fakes: DevFakes) -> list[str]:
         f"{device['deviceInfo']['alias']}: {_run_state(fakes.thinq.states[device_id])}"
         for device_id, device in fakes.thinq.devices.items()
     ]
-    return [*lines, f"Pushes {'connected' if pushes else 'not connected yet'}"]
+    lines.append(f"Pushes {'connected' if pushes else 'not connected yet'}")
+    if THINQ_TOKEN not in fakes.thinq.tokens:
+        lines.append("LG turns the token down")
+    return lines
 
 
 LAUNDRY = Section(
@@ -716,7 +766,8 @@ def _dishwasher(fakes: DevFakes, v: Values) -> str:
 
 def _dishwasher_state(fakes: DevFakes) -> list[str]:
     hc = fakes.home_connect
-    return [
+    revoked = [] if hc.refresh_tokens else ["Home Connect access revoked (Approve it again)"]
+    return revoked + [
         f"{appliance['name']}: {hc.states.get(ha_id, '?')}"
         + (f", {hc.seconds_left[ha_id] // 60} min left" if ha_id in hc.seconds_left else "")
         for ha_id, appliance in hc.appliances.items()
@@ -769,7 +820,9 @@ async def _read_robot(fakes: DevFakes) -> None:
     if watcher is None:
         return
     for device in watcher.devices():
-        await watcher.read(device)
+        # Offline or signed out: what Themi does about it is the point.
+        with contextlib.suppress(RoborockError):
+            await watcher.read(device)
 
 
 def _vacuum(fakes: DevFakes, v: Values) -> str:
@@ -801,6 +854,8 @@ def _vacuum_state(fakes: DevFakes) -> list[str]:
         )
         worn = [WORN_NAMES[c] for c, used in rr.parts.get(duid, {}).items() if _is_worn(c, used)]
         lines.append(f"Worn parts: {', '.join(worn) or 'none'}")
+    if rr.expired:
+        lines.append(f"Signed out: relink with {ROBOROCK_EMAIL} and the code {ROBOROCK_CODE}")
     return lines
 
 
@@ -894,4 +949,386 @@ ENERGY = Section(
     ),
 )
 
-SECTIONS = (EMAIL, CALENDAR, HOME, WALL, GROCERIES, LAUNDRY, DISHWASHER_SECTION, VACUUM, ENERGY)
+
+# ----- the Safeway helper (35d) -------------------------------------------------------------
+
+SAFEWAY_OUTCOMES = {  # label -> the status the extension sends
+    "Added": "added",
+    "Out of stock": "out_of_stock",
+    "Not found": "not_found",
+    "Failed": "failed",
+}
+
+
+def _pair(fakes: DevFakes, v: Values) -> str:
+    assert fakes.app is not None and fakes.app.services.safeway is not None
+    fakes.safeway.token = fakes.app.services.safeway.connect(_member(fakes, v["person"]))
+    return f"a helper connected by {v['person']}"
+
+
+def _outcomes(text: str) -> dict[str, str]:
+    """ "milk: not found" lines -> {"milk": "not_found"}."""
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        name, _, label = line.partition(":")
+        status = {k.lower(): v for k, v in SAFEWAY_OUTCOMES.items()}.get(label.strip().lower())
+        if not name.strip() or status is None:
+            raise ControlError(f"write each exception as 'item: not found', not {line!r}")
+        found[name.strip().lower()] = status
+    return found
+
+
+async def _answer_job(fakes: DevFakes, v: Values) -> str:
+    """As the extension does: claim the next cart job and send what it found."""
+    if fakes.web is None:
+        raise ControlError("there's no website to reach the helper's API")
+    usual = SAFEWAY_OUTCOMES[v["outcome"]]
+    exceptions = _outcomes(v["except"])
+    transport = httpx.ASGITransport(app=fakes.web)
+    base = fakes.site_url or "http://themi.test"
+    async with httpx.AsyncClient(transport=transport, base_url=base) as client:
+        helper = FakeSafewayHelper(client, fakes.safeway.token)
+        claimed = await helper.claim()
+        if claimed.status_code == 401:
+            raise ControlError("the helper isn't connected: pair it again")
+        if claimed.status_code == 204:
+            raise ControlError("no cart job is waiting")
+        job = helper.jobs[-1]
+        lines = []
+        for n, item in enumerate(job["items"]):
+            status = exceptions.get(item["name"].lower(), usual)
+            product = item["product"] or {
+                "id": str(970000000 + n),
+                "name": f"{item['search'].title()} - 1 Each",
+                "size": "1 Each",
+                "price": 3.99,
+            }
+            lines.append(
+                {
+                    "name": item["name"],
+                    "status": status,
+                    "qty": item["qty"],
+                    "product": product if status in ("added", "out_of_stock") else None,
+                }
+            )
+        answered = await helper.answer(job["id"], {"items": lines, "stopped": False})
+        if answered.status_code != 200:
+            raise ControlError(f"Themi turned the answer down: {answered.text}")
+    counts = Counter(line["status"].replace("_", " ") for line in lines)
+    return f"cart job {job['id']} answered: " + ", ".join(f"{n} {s}" for s, n in counts.items())
+
+
+def _safeway_state(fakes: DevFakes) -> list[str]:
+    assert fakes.app is not None
+    safeway = fakes.app.services.safeway
+    if safeway is None:
+        return ["Safeway isn't set up"]
+    paired = safeway.helper_for(fakes.safeway.token) is not None if fakes.safeway.token else False
+    lines = ["Helper: " + ("connected" if paired else "not connected (pair it)")]
+    for row in fakes.app.db.query(
+        "SELECT id, status, items FROM safeway_jobs WHERE status IN ('queued', 'claimed') "
+        "ORDER BY id"
+    ):
+        names = ", ".join(i["name"] for i in json.loads(row["items"]))
+        lines.append(f"Job {row['id']} ({row['status']}): {names}")
+    return lines if len(lines) > 1 else [*lines, "No cart jobs waiting"]
+
+
+SAFEWAY = Section(
+    "safeway",
+    "Safeway helper",
+    ("safeway",),
+    (
+        Action(
+            "answer",
+            "Answer the next cart job",
+            (
+                Field("outcome", "Each item", "select", tuple(SAFEWAY_OUTCOMES), "Added"),
+                Field(
+                    "except",
+                    "Except (one per line, e.g. milk: not found)",
+                    "textarea",
+                    required=False,
+                ),
+            ),
+            _answer_job,
+            help="As the Chrome extension does. Jobs come from asking Themi to fill the cart.",
+        ),
+        Action("pair", "Connect the helper again", (_person(),), _pair),
+    ),
+    _safeway_state,
+)
+
+
+# ----- travel (TomTom and OpenStreetMap) -------------------------------------------------
+
+TRAVEL_KINDS = {
+    "Finding a place (TomTom)": "geocode",
+    "Drive time (TomTom)": "route",
+    "Finding a place (OpenStreetMap)": "nominatim",
+}
+
+
+def _drive_time(fakes: DevFakes, v: Values) -> str:
+    fakes.travel.minutes = int(v.number("minutes"))
+    return f"drives take {fakes.travel.minutes} minutes"
+
+
+def _place(fakes: DevFakes, v: Values) -> str:
+    fakes.travel.place(v["address"], v.number("lat"), v.number("lon"))
+    return f"{v['address']} can be found"
+
+
+def _travel_fault(fakes: DevFakes, v: Values) -> str:
+    fakes.travel.fail(TRAVEL_KINDS[v["kind"]], int(v.number("status")))
+    return f"{v['kind']} fails next time ({int(v.number('status'))})"
+
+
+def _travel_state(fakes: DevFakes) -> list[str]:
+    places = ", ".join(sorted(fakes.travel.places)) or "none"
+    return [f"Drive time: {fakes.travel.minutes} minutes", f"Places it can find: {places}"]
+
+
+TRAVEL = Section(
+    "travel",
+    "Travel",
+    ("travel",),
+    (
+        Action(
+            "minutes",
+            "Set the drive time",
+            (Field("minutes", "Minutes", "number", default="30"),),
+            _drive_time,
+            ("travel.heads_up",),
+        ),
+        Action(
+            "place",
+            "Add a place it can find",
+            (
+                Field("address", "Address", default="Smile Dental"),
+                Field("lat", "Latitude", "number", default="37.7749"),
+                Field("lon", "Longitude", "number", default="-122.4194"),
+            ),
+            _place,
+            ("travel.heads_up",),
+            "An event's place must be found for its heads-up (K4).",
+        ),
+        Action(
+            "fail",
+            "Make the next lookup fail",
+            (
+                Field("kind", "Lookup", "select", tuple(TRAVEL_KINDS), "Drive time (TomTom)"),
+                Field("status", "Status", "number", default="500"),
+            ),
+            _travel_fault,
+        ),
+    ),
+    _travel_state,
+)
+
+
+# ----- faults: each section's way to fail, from the fakes' own switches --------------------
+
+Fault = Callable[[DevFakes, Values], str | Awaitable[str]]
+
+
+def _fault_action(
+    faults: dict[str, Fault],
+    check: tuple[str | Callable[[DevFakes], Awaitable[object]], ...],
+    help: str = "",
+    extra: tuple[Field, ...] = (),
+) -> Action:
+    def run(fakes: DevFakes, v: Values) -> str | Awaitable[str]:
+        return faults[v["fault"]](fakes, v)
+
+    field = Field("fault", "What goes wrong", "select", tuple(faults), next(iter(faults)))
+    return Action("fault", "Make it fail", (field, *extra), run, check, help)
+
+
+def _gmail_busy(fakes: DevFakes, v: Values) -> str:
+    seconds = int(v.number("seconds"))
+    fakes.gmail.fail("history", 429, retry_after=seconds)
+    return f"Gmail answers the next read with 429 (Retry-After {seconds}s)"
+
+
+def _gmail_down(fakes: DevFakes, v: Values) -> str:
+    fakes.gmail.fail("history", 500)
+    return "Gmail answers the next read with 500"
+
+
+def _gmail_forgets(fakes: DevFakes, v: Values) -> str:
+    fakes.gmail.expire_history(ADDRESSES[v["person"]])
+    return f"Gmail forgot {v['person']}'s history (a 404, then a full sync)"
+
+
+def _google_revoked(fakes: DevFakes, v: Values) -> str:
+    address = ADDRESSES[v["person"]]
+    fakes.google.revoke_everything_for(address)
+    tokens = fakes.google.state.access_tokens
+    for token in [t for t, a in tokens.items() if a == address]:
+        del tokens[token]  # as if the hour they're good for had passed
+    return f"{v['person']} removed Themi's access at Google"
+
+
+def _thinq_back(fakes: DevFakes, v: Values) -> str:
+    fakes.thinq.tokens.add(THINQ_TOKEN)
+    for device in MACHINES.values():
+        fakes.thinq.set_run_state(device, _run_state(fakes.thinq.states[device]))
+    return f"LG works again (relink with the token {THINQ_TOKEN} if it was revoked)"
+
+
+def _home_connect_again(fakes: DevFakes, v: Values) -> Awaitable[str]:
+    async def relink() -> str:
+        assert fakes.app is not None
+        admin = next(m for m in fakes.app.store.list_members() if m.is_admin)
+        await fakes.link_home_connect(fakes.app, admin, fakes.site_url)
+        return "Home Connect approved again, as if relinked"
+
+    return relink()
+
+
+def _robot_back(fakes: DevFakes, v: Values) -> str:
+    fakes.roborock.offline_robots.discard(ROBOT)
+    return "Robbie is back online"
+
+
+def _say(text: str, change: Callable[[DevFakes], object]) -> Fault:
+    def run(fakes: DevFakes, v: Values) -> str:
+        change(fakes)
+        return text
+
+    return run
+
+
+FAULTS: dict[str, Action] = {
+    "email": _fault_action(
+        {
+            "Gmail is busy (429)": _gmail_busy,
+            "Gmail fails (500)": _gmail_down,
+            "Gmail forgets the history": _gmail_forgets,
+            "Access revoked at Google": _google_revoked,
+        },
+        (_read_mail,),
+        "Relink on the website's Accounts page: the fake Google page asks which address "
+        "(erin@gmail.com or husband@gmail.com).",
+        (_person(), Field("seconds", "Retry-After (seconds)", "number", default="120")),
+    ),
+    "calendar": _fault_action(
+        {
+            "Reading events fails (500)": _say(
+                "Google Calendar answers the next read with 500",
+                lambda f: f.gcal.fail("list_events", 500),
+            ),
+            "Adding an event fails (500)": _say(
+                "Google Calendar answers the next new event with 500",
+                lambda f: f.gcal.fail("insert", 500),
+            ),
+        },
+        CALENDAR_CHECK,
+    ),
+    "home": _fault_action(
+        {
+            "Google Tasks fails (503)": _say(
+                "Google Tasks answers the next read with 503",
+                lambda f: f.gtasks.fail("list", 503),
+            ),
+            "Keep fails the next read": _say(
+                "Keep fails the next read", lambda f: f.keep.fail("items")
+            ),
+            "Keep loses the next save": _say(
+                "Keep says the next save worked, and loses it", lambda f: f.keep.drop_next_write()
+            ),
+        },
+        ("google_tasks.inbox", "groceries.keep"),
+    ),
+    "wall": _fault_action(
+        {
+            "Reading the to-dos fails": _say(
+                "the wall answers the next to-do read with 500",
+                lambda f: f.cozyla.fail("todosInfo/list", 500),
+            ),
+            "Every sign-in expires": _say(
+                "the wall's sign-ins expired", lambda f: f.cozyla.expire_tokens()
+            ),
+        },
+        ("cozyla.sync",),
+    ),
+    "groceries": _fault_action(
+        {
+            "Reading the list fails": _say(
+                "OurGroceries fails the next read", lambda f: f.ourgroceries.fail("items")
+            ),
+            "Adding fails": _say(
+                "OurGroceries fails the next add", lambda f: f.ourgroceries.fail("add")
+            ),
+        },
+        ("groceries.mirror",),
+    ),
+    "laundry": _fault_action(
+        {
+            "The washer goes offline": _say(
+                "the washer is offline", lambda f: f.thinq.offline(WASHER)
+            ),
+            "LG rate-limits (1306)": _say(
+                "LG answers the next call with 1306", lambda f: f.thinq.limit()
+            ),
+            "LG revokes the token": _say("LG turned the token down", lambda f: f.thinq.revoke()),
+            "LG works again": _thinq_back,
+        },
+        ("devices.thinq",),
+        f"While pushes work, Themi reads LG only every so often. To relink: LG works again, "
+        f"then the Accounts page with the token {THINQ_TOKEN} (US).",
+    ),
+    "dishwasher": _fault_action(
+        {
+            "It goes offline": _say(
+                "the dishwasher is offline", lambda f: f.home_connect.offline(DISHWASHER)
+            ),
+            "Home Connect rate-limits (429)": _say(
+                "Home Connect answers the next call with 429", lambda f: f.home_connect.limit()
+            ),
+            "Access revoked": _say(
+                "Home Connect's access was revoked", lambda f: f.home_connect.revoke()
+            ),
+            "Approve it again": _home_connect_again,
+        },
+        ("devices.dishwasher",),
+        "Home Connect's sign-in page can't be opened here, so relink with Approve it again.",
+    ),
+    "vacuum": _fault_action(
+        {
+            "Robbie goes offline": _say("Robbie is offline", lambda f: f.roborock.offline(ROBOT)),
+            "The sign-in expires": _say(
+                "Roborock's sign-in expired", lambda f: f.roborock.expire()
+            ),
+            "Robbie is back online": _robot_back,
+        },
+        (_read_robot,),
+        f"Relink on the Accounts page with {ROBOROCK_EMAIL} and the code {ROBOROCK_CODE}.",
+    ),
+}
+
+
+def _with_faults(section: Section) -> Section:
+    fault = FAULTS.get(section.id)
+    return replace(section, actions=(*section.actions, fault)) if fault else section
+
+
+SECTIONS = tuple(
+    _with_faults(s)
+    for s in (
+        EMAIL,
+        CALENDAR,
+        HOME,
+        WALL,
+        GROCERIES,
+        LAUNDRY,
+        DISHWASHER_SECTION,
+        VACUUM,
+        SAFEWAY,
+        TRAVEL,
+        ENERGY,
+    )
+)
