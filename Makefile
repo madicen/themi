@@ -4,7 +4,7 @@ PYTEST := $(PYTHON) -m pytest
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals router-eval cov dev dev-reset dev-invite
+.PHONY: venv install fmt lint test test-all test-live evals router-eval cov dev dev-reset dev-invite dev-prod
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -58,6 +58,11 @@ dev:
 
 dev-reset:
 	$(PYTHON) -m tools.dev reset
+
+# D4: dev on a fresh, cleaned copy of the Pi's data (data/dev-prod). BACKUP=latest copies
+# from the encrypted backups instead; KEEP=1 runs on the copy already there.
+dev-prod:
+	$(PYTHON) -m tools.dev prod $(if $(BACKUP),--from-backup $(BACKUP)) $(if $(KEEP),--keep)
 
 # make dev-invite NAME=Sam, then send /start <code> as "Someone new" in the simulator
 dev-invite:

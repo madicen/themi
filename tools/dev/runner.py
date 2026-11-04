@@ -10,7 +10,10 @@ prints a sign-in link for the website.
 
     python -m tools.dev            # run
     python -m tools.dev invite Sam # a new member's invite code, for the "Someone new" chat
-    python -m tools.dev reset      # delete data/dev
+    python -m tools.dev reset      # delete data/dev and data/dev-prod
+    python -m tools.dev prod       # a fresh copy of the Pi's data, then run on it (D4)
+    python -m tools.dev prod --from-backup latest   # ...from the encrypted backups instead
+    python -m tools.dev prod --keep                 # run on the copy already there
 """
 
 from __future__ import annotations
@@ -43,6 +46,8 @@ if TYPE_CHECKING:
     from tools.dev.simulator import Simulator
 
 DEV_DIR = Path("data/dev")
+PROD_DIR = Path("data/dev-prod")  # D4: a cleaned copy of the family's data (prod_copy)
+PI = "themi@themi"  # where `prod` copies from; THEMI_PI changes it
 SIMULATOR_PORT = 8090
 DEV_HTTP_PORT = "8081"  # the dev website; THEMI_DEV_HTTP_PORT changes it
 SCHEDULER_TICK = timedelta(seconds=2)  # skipped-ahead nudges show up quickly
@@ -111,6 +116,14 @@ def continue_numbering(settings: Settings, simulator: Simulator) -> None:
     simulator.number_messages_after(int(highest))
 
 
+def _has_key_at(settings: Settings) -> bool:
+    store = _store(settings)
+    try:
+        return _has_key(store, settings)
+    finally:
+        store.db.close()
+
+
 def _has_key(store: AccountStore, settings: Settings) -> bool:
     ai = AISettingsStore(store.db, settings.cipher())
     return any(b.has_key for m in store.list_members() for b in ai.backends(m.id))
@@ -167,7 +180,8 @@ def invite(settings: Settings, name: str) -> str:
         store.db.close()
 
 
-def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
+def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = False) -> None:
+    """`copy`: dev_dir holds a copy of the family's data (D4), not the seeded test family."""
     from themi.cli import build_runtime
     from themi.logs import configure_logging
     from tools.dev.simulator import Simulator
@@ -177,14 +191,23 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
     simulator.start()
     try:
         settings = dev_settings(dev_dir, simulator.url, env)
-        result = seed(settings, env.get("GEMINI_API_KEY", "").strip())
+        gemini_key = env.get("GEMINI_API_KEY", "").strip()
+        result = seed(settings, gemini_key)
+        source = None
+        if copy:
+            from tools.dev import prod_copy
+
+            source = prod_copy.copied_from(settings)
+            keyed = prod_copy.put_dev_key(settings, gemini_key) > 0
+            result = SeedResult(seeded=False, key_set=keyed or _has_key_at(settings))
         continue_numbering(settings, simulator)
         configure_logging(settings.log_level)
         logging.getLogger().addHandler(simulator.logs)  # for the page's Copy session
         runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK)
         simulator.login = lambda telegram_user_id: login_link(settings, telegram_user_id)
         simulator.energy_debug = lambda telegram_user_id: energy_numbers(runtime, telegram_user_id)
-        print(_banner(simulator.url, login_link(settings) or "", result, dev_dir), flush=True)
+        link = login_link(settings) or ""
+        print(_banner(simulator.url, link, result, dev_dir, source), flush=True)
 
         async def main() -> None:
             runtime.install_signal_handlers()
@@ -195,7 +218,9 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT) -> None:
         simulator.stop()
 
 
-def _banner(simulator_url: str, link: str, result: SeedResult, dev_dir: Path) -> str:
+def _banner(
+    simulator_url: str, link: str, result: SeedResult, dev_dir: Path, copy: str | None = None
+) -> str:
     lines = [
         "",
         "Themi is running against the Telegram simulator.",
@@ -203,6 +228,12 @@ def _banner(simulator_url: str, link: str, result: SeedResult, dev_dir: Path) ->
         f"  Website:  {link}  (Erin; later, use the chat page's Website link)",
         f"  Data:     {dev_dir}/ (make dev-reset starts over)",
     ]
+    if copy:
+        lines += [
+            f"  A private copy of the family's data ({copy}): their messages and email.",
+            "  Member 1 is Erin and member 2 is Husband in the simulator. No links work:",
+            "  Gmail, Keep, the wall and the devices aren't reached, and nothing goes to Telegram.",
+        ]
     if result.seeded:
         lines.append("  Seeded Erin and Husband, both paired.")
     if not result.key_set:
@@ -220,13 +251,43 @@ def main(argv: Sequence[str] | None = None) -> None:
     commands.add_parser("reset", help=f"delete {DEV_DIR}")
     invite_parser = commands.add_parser("invite", help="print an invite code for a new member")
     invite_parser.add_argument("name")
+    prod_parser = commands.add_parser("prod", help=f"run on a copy of the Pi's data, in {PROD_DIR}")
+    prod_parser.add_argument(
+        "--from-backup", metavar="NAME", help="a snapshot ('latest', or from `themi backup --list`)"
+    )
+    prod_parser.add_argument("--keep", action="store_true", help="run on the copy already there")
     args = parser.parse_args(argv)
     if args.command == "reset":
-        shutil.rmtree(DEV_DIR, ignore_errors=True)
-        print(f"Deleted {DEV_DIR}.")
+        for folder in (DEV_DIR, PROD_DIR):
+            shutil.rmtree(folder, ignore_errors=True)
+        print(f"Deleted {DEV_DIR} and {PROD_DIR}.")
+    elif args.command == "prod":
+        prod(args.from_backup, args.keep)
     elif args.command == "invite":
         settings = dev_settings(DEV_DIR, "http://127.0.0.1", os.environ)
         code = invite(settings, args.name)
         print(f'In the simulator, pick "Someone new" and send:  /start {code}')
     else:
         run()
+
+
+def prod(backup: str | None, keep: bool) -> None:
+    """D4: copy (unless `keep`), clean, and run on the copy."""
+    from tools.dev import prod_copy
+
+    dest = PROD_DIR / "themi.db"
+    if keep and not dest.exists():
+        raise SystemExit(f"There's no copy in {PROD_DIR} yet; run without --keep.")
+    if not keep:
+        env = {**read_dotenv(Path(".env")), **os.environ}
+        if backup:
+            print(f"Restoring backup {backup} into {PROD_DIR}...", flush=True)
+            prod_copy.from_backup(backup, dest)
+            source = f"backup {backup}"
+        else:
+            host = env.get("THEMI_PI", PI)
+            print(f"Copying the database from {host}...", flush=True)
+            prod_copy.from_pi(host, dest)
+            source = f"the Pi ({host})"
+        prod_copy.clean(dest, source)
+    run(PROD_DIR, copy=True)

@@ -42,6 +42,12 @@ opens the management site signed in as that person.
 - *Copy session* copies the conversations and Themi's log as text, to paste into a Claude
   session. *New session* marks where the next copy starts.
 - Only Telegram is simulated. Replies use real Gemini, and Google and OurGroceries are off.
+- `make dev-prod` runs the same way on a fresh copy of the Pi's data, in `data/dev-prod/`
+  (over ssh to `THEMI_PI`, default `themi@themi`). `make dev-prod BACKUP=latest` copies from
+  the encrypted backups instead, and `KEEP=1` reuses the last copy. The copy is cleaned
+  first: no tokens, keys or sign-ins, Gmail switched off, and member 1 and 2 are the
+  simulator's Erin and Husband. It holds the family's real messages and email, so
+  `make dev-reset` deletes it too.
 
 ### Rules worth knowing
 
