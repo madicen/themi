@@ -173,7 +173,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [x] 2026-11-03 |
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
-| D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [ ] |
+| D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 
 ## Fixed technical choices
 
@@ -8208,7 +8208,7 @@ Notes (2026-11-03):
 - Setup: restart `themi run`. No migration.
 
 ### D4 · Dev tooling: `make dev` with a copy of the Pi's data
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: D1, D2, 29
 From Michael's idea #136 (2026-11-03, 2:15 pm, "when using make dev, include an option to
 pull down a copy of the prod db, or a recent backup of prod"). Read first: "Security and
@@ -8229,3 +8229,25 @@ privacy" (secrets encrypted at rest; least privilege).
 Tests: the cleaning on a seeded database (no tokens, no connector rows, new Telegram ids,
 the outbox's queued messages kept for the simulator). The ssh copy against a fake command.
 No real network.
+
+Notes (2026-11-03):
+- Built with Michael's go-ahead (the copy holds the family's messages and email).
+  `tools/dev/prod_copy.py`: `from_pi`, `from_backup`, `clean`, `put_dev_key`. `make dev-prod`
+  (`BACKUP=latest`, `KEEP=1`); `python -m tools.dev prod [--from-backup NAME] [--keep]`.
+  Each run without `--keep` takes a fresh copy.
+- The ssh copy runs SQLite's backup into memory in the container and writes it to stdout
+  (`serialize`), so nothing is written on the Pi. The WAL is included.
+- `clean` goes by the schema, not a list of tables, so a new connector's secret is caught
+  too. Every BLOB column is emptied, and a row whose BLOB can't be empty is deleted, except
+  `linked_accounts` (Gmail), which is switched off so its mail stays. Every row with a
+  `token_hash`, `code_hash` or `state_hash` is deleted (website sessions, sign-in links,
+  invites, OAuth states, Safeway helpers). Full-text tables are skipped, and so is
+  `embedding_cache` (vectors, not keys).
+- Tried for real on 2026-11-03. From the Pi: 10.8 MB, 851 emails, 72 tasks, no keys left.
+  It started on the copy, migrated it, and queued the waiting messages for the simulator,
+  with no connector calls and no errors. From `--from-backup latest`: 838 emails.
+- The banner says it's a private copy, and that member 2 (Michael) is "Husband" in the
+  simulator.
+- Setup: none. `.env` needs `GEMINI_API_KEY` for replies, and the `THEMI_BACKUP_*`
+  settings and the real `THEMI_SECRET_KEY` for `BACKUP=`. `data/dev-prod/` now holds a
+  copy; `make dev-reset` deletes it.
