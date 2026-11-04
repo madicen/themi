@@ -176,7 +176,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F25a | Feedback: a vacuum routine item is checked off when the robot shows it sorted | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 | D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
-| D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [ ] |
+| D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [x] 2026-11-03 |
 | D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [ ] |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
@@ -8491,7 +8491,7 @@ Notes (2026-11-03):
   also deletes `fakes.json`.
 
 ### D5b · Dev control panel: the page, with email, calendar, wall, lists and devices
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: D5a
 - A Control panel at `http://localhost:8090/control`, served by the simulator, plus a
   panel beside the chat on wide screens, so you can see Themi react while you trigger
@@ -8526,6 +8526,37 @@ Tests: each action changes its fake and runs its check (a unit test per section 
 `/control/act`). Scenarios through the panel's actions, with a frozen clock: the washer's
 End nudges someone after the half hour; an email preset is triaged; a chore ticked on the
 wall closes the task. The schema covers every fake `DevFakes` holds. No real network.
+
+Notes (2026-11-03):
+- `tools/dev/controls.py`: `Field`, `Action`, `Section`, `Values`, `ControlPanel` and the
+  sections (Email, Calendar, Google Home, The wall, OurGroceries, Laundry, Dishwasher,
+  Vacuum, Energy). `tools/dev/control.html` is drawn from `/control/schema`, shows each
+  open section's `/control/state` every 3 seconds, and posts `/control/act`. The simulator
+  page shows it in a third column at 1100px and wider (the *Panel* button hides it), and
+  links to it in the header.
+- The simulator runs each panel call in a worker thread. A check can make Themi call the
+  simulator (a message sent), so blocking its loop would deadlock.
+- `DevFakes.act` checks are periodic task names or async reads, and `DevFakes.read` gives
+  the state view. Some checks read directly because the periodic task wouldn't look yet.
+  Email polls every linked inbox (`gmail.poll` waits 3 minutes after the last poll), then
+  runs triage. The vacuum uses the watcher's `read` (a docked robot is read every 5
+  minutes). Laundry polls (for before pushes connect), then listens.
+- Deviations: there's no "bin full" status in the fixtures, so the vacuum offers the dock's
+  dust bag as a worn part, plus the clean-water-empty and dirty-water-full statuses. Home
+  Connect's fake has no door state, so "door opened" is left out. "Reorder a list" is
+  "Move a to-do to the top". A worn part waits for Themi's 6-hourly parts read; its help
+  says to skip ahead.
+- Fixed on the way (failing test first): the session report dropped chat-wide notices
+  (skips, panel actions) when nobody had chatted in that session. They now get their own
+  section.
+- While Themi starts, `/control/schema` says so and the page retries, so a page opened at
+  startup isn't told there are no fakes.
+- Tests: `tests/integration/test_dev_controls.py` (through the simulator's endpoints) and
+  `tests/scenarios/test_dev_controls.py` (the panel over the harness: the washer's nudge,
+  a triaged email, a chore ticked on the wall). The dev boot moved to
+  `tests/fixtures/dev.py`. Tried for real: five actions on a running `make dev`, each in
+  the report.
+- Setup: none.
 
 ### D5c · Dev control panel: faults, the Safeway helper, travel and scenes
 Status: [ ]
