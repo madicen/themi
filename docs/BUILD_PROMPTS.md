@@ -173,6 +173,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24a | Feedback: asked for again, the open task is raised, not made twice | Feedback | [x] 2026-11-03 |
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
+| F25a | Feedback: a vacuum routine item is checked off when the robot shows it sorted | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 | D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
 | D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [ ] |
@@ -8334,6 +8335,46 @@ Notes (2026-11-03):
 - Only new mail is parsed this way. Email 810 stays as stored, and its alert has been sent.
   Mark #134 reviewed.
 - Setup: restart `themi run`. No migration.
+
+### F25a · Feedback (2026-11-03): a vacuum routine item is checked off when the robot shows it sorted
+Status: [x] 2026-11-03
+Depends on: V1, F23e, H1
+Read first: "Integrations" (devices). Asked 2026-11-03 (Michael): a vacuum chore moved to
+him and then into a routine (F23e) no longer closes when the robot shows it sorted. F23e
+cancels the task, so V1's `_gone` has nothing open to close, and the routine item has no tie
+to the robot. He wants the routine checked off "the same way cycle dishwasher does" (H1),
+whether or not it started out as a task.
+- A problem the robot stops showing (V1's `gone` events, worn parts too) looks for today's
+  unticked wall routine items about it (`open_matching`, as the dishwasher does) and stages a
+  tick for each in a new category, `vacuum_done` ("Check off the vacuum's routine items when
+  the robot shows them sorted"), to whoever's item it is: a card until a rule makes it
+  automatic. This doesn't depend on any task or `vacuum_problems` row.
+- An item is about it when its title names the vacuum ("vacuum", "vac", "robot",
+  "roborock" or the robot's own name) and the problem: stuck (stuck, free, trapped),
+  jammed (jam, unjam, clog, unclog, brush, tangle), the dock's water (water, tank, refill
+  or empty), the dustbin (bin, dustbin, dust, bag), the dock (dock, home, back). A worn
+  part needs the part's name and a word for replacing or cleaning it. "Vacuum upstairs
+  bedroom" (a person's chore) never matches.
+
+Tests: failing first. Scenarios: a "Refill vacuum water" routine item is checked off (with a
+yes) when the dock's water alert clears, with no task left open (moved into the routine).
+With the rule on, it's ticked without asking. "Vacuum upstairs bedroom" isn't. Unit: the
+matching words.
+
+Notes (2026-11-03):
+- `Vacuum._check_off` runs on every `gone` event, after V1's task handling, and reads
+  `wall_routines.open_items()` (split out of `open_matching`, which now filters it). The
+  matching is `vacuum.about()`: `words_in_common` with the robot's words and the problem's,
+  with "'s" taken off first ("vac's" didn't match "vac"). A fault has no words, so it ticks
+  nothing.
+- Each card says what the robot shows ("The vacuum's dock has clean water again: check off
+  Refill vacuum water on the wall") and lasts until midnight, like the dishwasher's.
+- Not done: open hand-written tasks about the vacuum ("Unclog the robot vacuum") aren't
+  closed, though the dishwasher closes its tasks. Water ones check off both water problems
+  ("water" can't tell clean from dirty).
+- The build plan has no vacuum section, so it wasn't read.
+- Setup: restart `themi run` (applies 0100). To skip the cards, turn on "Check off the
+  vacuum's routine items when the robot shows them sorted" under "What Themi does alone".
 
 ### D4 · Dev tooling: `make dev` with a copy of the Pi's data
 Status: [x] 2026-11-03
