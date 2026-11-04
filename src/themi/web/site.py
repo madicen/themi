@@ -90,6 +90,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         google_pages,
         knowledge_pages,
         list_pages,
+        maintenance_pages,
         safeway_pages,
         spending_pages,
         task_pages,
@@ -151,6 +152,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(list_pages.routes(kit))
     web.include_router(week_pages.routes(kit))
     web.include_router(spending_pages.routes(kit))
+    web.include_router(maintenance_pages.routes(kit))
     web.include_router(safeway_pages.routes(kit))
     web.include_router(email_pages.routes(kit))
     web.include_router(ai_pages.routes(kit))
@@ -393,6 +395,7 @@ def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
     household = [
         ("/knowledge", "Rules & memory", "What Themi keeps to and remembers"),
         ("/tiers", "What Themi does alone", "What asks first and what's automatic"),
+        ("/maintenance", "Maintenance", "Filters, gutters and other upkeep"),
         ("/spending", "Spending", "Takeout and business expenses"),
         ("/safeway", "Safeway", "The cart helper and remembered products"),
     ]

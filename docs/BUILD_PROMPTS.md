@@ -137,7 +137,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 30 | LG ThinQ connector | 5 Devices | [x] |
 | 31 | Laundry module and rescue protocol | 5 Devices | [x] |
 | 32 | SmartLife / Tuya feeders | 5 Devices | [ ] |
-| 33 | Seasonal and long-term maintenance | 5 Devices | [ ] |
+| 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
 | 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
@@ -6492,7 +6492,7 @@ Tests:
 Commit when done.
 
 ### 33 · Seasonal and long-term maintenance
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: 26, 19
 Read first: "Module behaviour" → C (Maintenance).
 
@@ -6511,6 +6511,44 @@ Tests:
 - History recorded.
 
 Commit when done.
+
+Notes (2026-11-04):
+- Taken ahead of 32, whose dependency 29 is still `[~]`; 33's (26, 19) are done.
+- `themi.core.maintenance`, migration 0102: `maintenance_items` (name, interval in days,
+  active months as JSON month numbers, the guide as JSON steps, an optional owner, the
+  first due date) and `maintenance_runs` (day, who, notes). `calendar_events.source` now
+  allows 'maintenance' (the table is rebuilt; nothing points at it).
+- Due: the interval after the last run, else the day it was added (so a new item with no
+  last-done date is due at once). Out of season it waits for the next active month's first
+  day; one overdue as its season ends waits for the next season.
+- The offer (`maintenance.offer`, every 15 minutes): one new item a day for the household
+  (my reading of the plan's "at most one of these a day"), soonest due first, only while
+  the person it's for is in a good window right now (receptive or better, outside quiet
+  hours and busy times; someone tracking nothing always is, as with the outbox), and not
+  in burnout mode. For the owner if set, else `Matcher.roomiest`. It becomes an effort-2
+  physical task with the guide as its steps (my choice of effort; the plan gives none),
+  nudged through `own_nudges` as the outbox kind `maintenance`, so the existing
+  "/pause maintenance" holds it. The nudge names the interval and the last run, quotes the
+  steps and the last note. Later asks again the next day. While one offer is open no other
+  is made, unless it's been open a week. Cancelled, the item waits a week.
+- Done: tapping Done, `complete_task` or ticking it on the wall records a run (a done
+  hook); `log_maintenance` records one with notes, offered or not, and an earlier day if
+  they said; said again the same day, it adds to the notes.
+- Chat: `set_maintenance` (add or change; empty values keep what's there),
+  `remove_maintenance`, `get_maintenance_guide` (one item's steps and notes, or every item
+  with its next due date), `log_maintenance`. A new tool group, "maintenance", with words,
+  12 examples and three routing cases (`maint-*`, written by me: a person should check
+  the labels, as P7a's were).
+- Calendar: an item's next due date is one all-day event (source 'maintenance', event id
+  letter `m`), staged once as `calendar_write`; that yes covers moving it each time it's
+  done and deleting it with the item, as 26 does for tasks. Its description has the
+  steps. Unlike task events, it goes on the calendar when the wall's lists are synced too:
+  the calendar is the only place a due date months away shows.
+- Website: a Maintenance page (More, then Household) for everyone: add, change, done with
+  notes, past runs, remove.
+- Follow-ups: no twin set (P6) with `set_task_schedule` yet, since that needs eval
+  cases with a real model; the descriptions tell them apart for now. Maintenance isn't an
+  energy input.
 
 ---
 

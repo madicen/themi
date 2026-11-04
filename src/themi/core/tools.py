@@ -192,6 +192,13 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"how (?:much )?longer|time left|still running|is it done|"
         r"robot|roborock|the vacuum\b|vacuum'?s\b",
     ),
+    "maintenance": (
+        "seasonal and long-term upkeep: filters, gutters, fertilizing, their guides and notes",
+        r"maintenance|upkeep|filters?\b|gutters?|fertili[sz]|furnace|hvac|air con|"
+        r"smoke (?:alarm|detector)|water heater|water softener|descal|sprinklers?|winteri[sz]|"
+        r"chimney|septic|dryer vent|caulk|seal(?:ant|ing)? the|oil change|"
+        r"tyres?\b|tires?\b|last time we|how do (?:i|we) (?:change|clean|service)",
+    ),
     "spending": (
         "money spent: takeout, eating out, business expenses",
         r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
@@ -322,6 +329,20 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Is the robot vacuum still cleaning?",
         "Where's the vacuum stuck?",
     ),
+    "maintenance": (
+        "The furnace filter wants changing every three months",
+        "Add clearing the gutters to the maintenance list, spring and autumn",
+        "We fertilize the fruit trees every six weeks from March to September",
+        "Changed the fridge water filter today",
+        "Cleaned the dryer vent, it was full of lint",
+        "How do I flush the water heater again?",
+        "What did we use on the lawn last time?",
+        "When's the smoke alarm test next due?",
+        "Take the pool cover off the upkeep list",
+        "The sprinkler blowout is done in October only",
+        "What maintenance is coming up?",
+        "Add a step to the AC service: check the drain line",
+    ),
     "spending": (
         "We spent $30 on burgers",
         "Got takeout tonight, $45",
@@ -430,6 +451,10 @@ TOOL_GROUPS: dict[str, str] = {
     ),
     **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
     "appliance_status": "devices",
+    **dict.fromkeys(
+        ("set_maintenance", "remove_maintenance", "get_maintenance_guide", "log_maintenance"),
+        "maintenance",
+    ),
     **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
 }
 

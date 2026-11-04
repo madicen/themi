@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from themi.core.journal import Journal
     from themi.core.laundry import Laundry
     from themi.core.lists import Lists
+    from themi.core.maintenance import Maintenance
     from themi.core.meals import Meals
     from themi.core.memory import Memory
     from themi.core.noise_digest import NoiseDigest
@@ -180,6 +181,7 @@ class Services:
     dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
     thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
     laundry: Laundry | None = None  # wet loads moved, or rescued with a rewash (31)
+    maintenance: Maintenance | None = None  # seasonal and long-term upkeep (33)
     appliances: Appliances | None = None  # how they're doing, asked in chat (F20b)
     roborock: RoborockWatcher | None = None  # the robot vacuum, from Roborock (V1)
     vacuum: Vacuum | None = None  # its chores when it needs a hand (V1)

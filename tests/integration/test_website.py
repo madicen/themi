@@ -324,6 +324,7 @@ async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
         "/knowledge",
         "/tiers",
         "/spending",
+        "/maintenance",
         "/safeway",
         "/email/noise",
     )
