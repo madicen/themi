@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 
 # From tests/evals/test_naming_thresholds.py on 2026-11-03 (P8b's Notes).
 THRESHOLD = 0.6
-MARGIN = 0.05
+MARGIN = 0.08
 GROUP_MARGIN = 0.05
 TIMEOUT = 1.0  # seconds
 SHORT_ANSWER = 3  # words or fewer ("Yes please"): read with what Themi asked before it

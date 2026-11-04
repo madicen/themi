@@ -4950,17 +4950,23 @@ Notes (2026-11-03):
 - "All", "both", "everything": in a longer message, every task within `GROUP_MARGIN` of the
   best; after a short answer, only the tasks whose whole title Themi's message listed (a
   shared "clean" pulled the kitchen into "Still open: Clean left bathroom, ...").
-- Settings: threshold 0.6, margin 0.05, group margin 0.05 (`make evals PROVIDER=gemini
+- Settings: threshold 0.6, margin 0.08 (0.05 at first, raised once the new cases were
+  reviewed, below), group margin 0.05 (`make evals PROVIDER=gemini
   EVAL_ARGS='-k naming_thresholds -s'`). On the 45 reviewed cases: 42 right, 2 wrongly
   refused ("Counters are clear", "Headphones are on the charger"), 1 wrongly accepted
   ("Drank a glass of water" as "Drink green tea"), against the words' 19 / 9 / 18. No
   setting refuses the water and tea pair (both drinks), so the eval allows that one and
   nothing else. 0.5 gets 43 right but lets a vaguer message closer to a task; the threshold
   barely moves the numbers, the margin does.
-- 18 new cases (near twins, short answers, paraphrases, near misses) are in the file with
-  `"reviewed": false`: printed, not counted. The check gets 15 right; it misses "Right
-  bathroom's done", "Cleared off the kitchen table", and accepts "Charged the car" as the
-  tires. Review them and drop the flag.
+- 18 new cases (near twins, short answers, paraphrases, near misses), reviewed by the user
+  2026-11-03, so 63 in all. A case marked `"reviewed": false` is printed but not counted,
+  for the next ones. On all 63: words 23 right / 11 refused / 30 accepted; margin 0.05
+  gives 57 / 4 / 2 ("Charged the car" as the tires, and the water); margin 0.08 gives
+  55 / 7 / 1, only the water. Fewest wrong accepts first, so 0.08: a wrong refusal costs
+  an "Is it done?", a wrong accept marks the wrong thing done. Refused at 0.08: "Left
+  bathroom is clean" and "Right bathroom's done" (the twin is too close), "Finished my
+  miles", "Counters are clear", "Cleared off the kitchen table", "Recycling is flattened
+  and out", "Headphones are on the charger".
 - The "did my 5k" fix: a leading did/have/has/was reads as a question only with someone
   after it ("Did I clean the bird cage" still asks).
 - Fake-embedder tests in `tests/scenarios/test_which_task.py` (`TopicEmbedder`), and the

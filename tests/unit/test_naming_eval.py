@@ -16,8 +16,9 @@ from tests.evals.naming import (
     word_check,
 )
 
-# The word check on tests/evals/naming_cases.json, 2026-11-03 (P8a's Notes).
-BASELINE = (45, 19, 9, 18)  # cases, right, wrongly refused, wrongly accepted
+# The word check on tests/evals/naming_cases.json: 45 cases at P8a, 63 once P8b's were
+# reviewed (2026-11-03).
+BASELINE = (63, 23, 11, 30)  # cases, right, wrongly refused, wrongly accepted
 
 
 def case(id: str, message: str, means: tuple[str, ...], *, before: str = "") -> NamingCase:
