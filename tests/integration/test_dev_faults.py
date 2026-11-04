@@ -84,6 +84,24 @@ async def test_tuya_lapsing_tells_the_admins_and_working_again_relinks(panel: Pa
     assert panel.device_state("Cat Feeder") == "plenty of food (64% left)"
 
 
+async def test_catgenie_refusing_the_sign_in_tells_the_admins_and_working_again_relinks(
+    panel: Panel,
+) -> None:
+    await panel.ok("litter_box", "fault", fault="It goes offline")
+    assert panel.device_state("CatGenie") == "offline"
+    await panel.ok("litter_box", "fault", fault="The next read comes back empty")
+    assert panel.device_state("CatGenie") == "offline"  # as it was, not emptied
+    await panel.ok("litter_box", "fault", fault="The sign-in is refused")
+    watcher = panel.run.runtime.app.services.catgenie
+    assert watcher is not None and watcher.account.problem()  # the "Link it again" chip
+    told = panel.rows("SELECT text FROM outbox WHERE kind = 'litter_box'")
+    assert len(told) == 1 and told[0]["text"].startswith("CatGenie stopped answering")
+    happened = await panel.ok("litter_box", "fault", fault="CatGenie works again")
+    assert happened.endswith("relinked as from the Accounts page")
+    assert watcher.account.problem() is None
+    assert panel.device_state("CatGenie") == "ready, 39% sani-solution left"
+
+
 async def test_home_connect_revoked_then_approved_again(panel: Panel) -> None:
     await panel.ok("dishwasher", "fault", fault="Access revoked")
     await panel.ok("dishwasher", "state", state="Running", minutes="60")

@@ -20,6 +20,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from tests.fakes.catgenie import CODE as CATGENIE_CODE
+from tests.fakes.catgenie import PHONE as CATGENIE_PHONE
 from tests.fakes.gmail_api import _Mailbox
 from tests.fakes.gtasks_api import DEFAULT as MY_TASKS
 from tests.fakes.roborock import CODE as ROBOROCK_CODE
@@ -30,6 +32,8 @@ from tests.fakes.tuya import ACCESS_ID as TUYA_ACCESS_ID
 from tests.fakes.tuya import SECRET as TUYA_SECRET
 from tests.fakes.wiring import wall_list
 from themi import clock
+from themi.connectors.catgenie.events import read_device as read_litter_box
+from themi.connectors.catgenie.events import state_word as litter_word
 from themi.connectors.roborock import RoborockError
 from themi.connectors.roborock.events import PARTS, problems, read_status, state_word
 from themi.connectors.tuya.events import read_status as read_feeder
@@ -39,6 +43,7 @@ from tools.dev.fakes import (
     DISHWASHER,
     DRYER,
     FEEDER,
+    LITTER,
     MOCHI,
     ROBOT,
     WASHER,
@@ -1019,6 +1024,112 @@ FEEDERS_SECTION = Section(
 )
 
 
+# ----- the litter box (CatGenie) -----------------------------------------------------------
+
+
+async def _read_litter_box(fakes: DevFakes) -> None:
+    """The litter box read now (a poll comes every 10 minutes)."""
+    assert fakes.app is not None
+    if fakes.app.services.catgenie is not None:
+        await fakes.app.services.catgenie.poll()
+
+
+def _sani(fakes: DevFakes, v: Values) -> str:
+    left = int(v.number("left"))
+    if not 0 <= left <= 100:
+        raise ControlError("sani-solution left is 0 to 100%")
+    fakes.catgenie.set(LITTER, sani=left)
+    return f"CatGenie: {left}% sani-solution left"
+
+
+def _litter_error(fakes: DevFakes, v: Values) -> str:
+    code = v["code"]
+    fakes.catgenie.set(LITTER, error=code)
+    return f"CatGenie shows {code}" if code else "CatGenie shows no error"
+
+
+def _litter_alert(fakes: DevFakes, v: Values) -> str:
+    fakes.catgenie.alert(LITTER, v["code"], clock.now())
+    return f"The CatGenie app was alerted: {v['code']}"
+
+
+def _cleans(fakes: DevFakes, v: Values) -> str:
+    times = int(v.number("times"))
+    if times < 1:
+        raise ControlError("at least one clean")
+    for _ in range(times):
+        fakes.catgenie.clean(LITTER, clock.now())
+    return f"CatGenie cleaned {times} time{'s' if times != 1 else ''}"
+
+
+def _litter_box_state(fakes: DevFakes) -> list[str]:
+    lines = []
+    for box in fakes.catgenie.devices.values():
+        reading = read_litter_box(box)
+        lines.append(f"{box['name']}: {litter_word(reading)}, {reading.cycles} cleans ever")
+    errors = [n for n in fakes.catgenie.notifications if '"errorType": ""' not in n["data"]]
+    if errors:
+        lines.append(f"{len(errors)} alert{'s' if len(errors) != 1 else ''} naming an error")
+    return lines
+
+
+LITTER_BOX = Section(
+    "litter_box",
+    "Litter box (CatGenie)",
+    ("catgenie",),
+    (
+        Action(
+            "sani",
+            "Set the sani-solution",
+            (Field("left", "Sani-solution left (%)", "number", default="15"),),
+            _sani,
+            (_read_litter_box,),
+            "20% or under is running low, 0 is out; more than it was is a new cartridge.",
+        ),
+        Action(
+            "error",
+            "Set its error",
+            (Field("code", "Error code (blank: none)", default="", required=False),),
+            _litter_error,
+            (_read_litter_box,),
+            'Codes have no words yet, so it reads like "it shows an error (heater fault)".',
+        ),
+        Action(
+            "alert",
+            "An alert in the app",
+            (Field("code", "Error code", default="DOME_OPEN"),),
+            _litter_alert,
+            (_read_litter_box,),
+            "Live until the box cleans again after it.",
+        ),
+        Action(
+            "clean",
+            "Cleans",
+            (Field("times", "How many", "number", default="1"),),
+            _cleans,
+            (_read_litter_box,),
+            "Counts toward the granules, once a number is set on the Accounts page.",
+        ),
+    ),
+    _litter_box_state,
+)
+
+
+def _catgenie_back(fakes: DevFakes, v: Values) -> Awaitable[str]:
+    async def relink() -> str:
+        fakes.catgenie.set(LITTER, online=True)
+        assert fakes.app is not None
+        watcher = fakes.app.services.catgenie
+        if watcher is None or not watcher.account.problem():
+            return "CatGenie works again"
+        admin = next(m for m in fakes.app.store.list_members() if m.is_admin)
+        await watcher.send_code(CATGENIE_PHONE)
+        await watcher.link(admin, CATGENIE_PHONE, CATGENIE_CODE)
+        return "CatGenie works again, relinked as from the Accounts page"
+
+    return relink()
+
+
 # ----- energy (dev only) --------------------------------------------------------------------
 
 DAY_LEVELS = {"Low": -1.0, "Medium": 0.0, "High": 1.0}
@@ -1461,6 +1572,23 @@ FAULTS: dict[str, Action] = {
         f"A lapsed plan tells the admins once. To relink by hand: the Accounts page with "
         f"{TUYA_ACCESS_ID}, the secret {TUYA_SECRET}, Western America.",
     ),
+    "litter_box": _fault_action(
+        {
+            "It goes offline": _say(
+                "the CatGenie is offline", lambda f: f.catgenie.set(LITTER, online=False)
+            ),
+            "The next read comes back empty": _say(
+                "PetNovations answers the next call with nothing", lambda f: f.catgenie.filter()
+            ),
+            "The sign-in is refused": _say(
+                "PetNovations refused the sign-in", lambda f: f.catgenie.revoke()
+            ),
+            "CatGenie works again": _catgenie_back,
+        },
+        (_read_litter_box,),
+        f"A refused sign-in tells the admins once. To relink by hand: the Accounts page with "
+        f"{CATGENIE_PHONE} and the code {CATGENIE_CODE}.",
+    ),
 }
 
 
@@ -1481,6 +1609,7 @@ SECTIONS = tuple(
         DISHWASHER_SECTION,
         VACUUM,
         FEEDERS_SECTION,
+        LITTER_BOX,
         SAFEWAY,
         TRAVEL,
         ENERGY,
