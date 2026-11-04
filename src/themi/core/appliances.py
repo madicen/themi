@@ -3,7 +3,8 @@
 "How much longer on the current wash cycle?" was answered "25 minutes left", and "And the
 dryer?" "The dryer isn't running", both made up: no tool read the appliances. Now
 `appliance_status` reads each one live (LG ThinQ for the washer and dryer, Home Connect for
-the dishwasher, Roborock for the vacuum, V1, Tuya for the pet feeders, 32), keeps what it
+the dishwasher, Roborock for the vacuum, V1, Tuya for the pet feeders, 32, CatGenie for the
+litter box, CG1a), keeps what it
 saw as a poll would, and says the time left when the appliance reports it. One that can't be
 read now is told as it was last seen, with the time, and one that was never seen says so.
 Reading changes nothing in the house, so it isn't staged through the trust tiers.
@@ -18,6 +19,8 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import Device
+from themi.connectors.catgenie import CatGenieError
+from themi.connectors.catgenie.events import state_word as litter_words
 from themi.connectors.homeconnect import HomeConnectError
 from themi.connectors.roborock import RoborockError
 from themi.connectors.roborock.events import problems, state_word
@@ -30,7 +33,8 @@ from themi.core.tools import ToolContext, tool
 
 log = logging.getLogger(__name__)
 
-APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder")
+APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder", "litter_box")
+IN_WORDS = ("vacuum", "feeder", "litter_box")  # their states are kept in words already
 # Home Connect's words, as LG's three (and its own few that are neither).
 HOME_CONNECT = {
     "Run": RUNNING,
@@ -41,7 +45,8 @@ HOME_CONNECT = {
     "Aborting": IDLE,
 }
 NONE_LINKED = (
-    "No washer, dryer, dishwasher, vacuum or feeder is linked to Themi, so Themi can't see "
+    "No washer, dryer, dishwasher, vacuum, feeder or litter box is linked to Themi, so Themi "
+    "can't see "
     "them. An admin can link them on the website's Accounts page. Say so; don't guess how "
     "they're doing."
 )
@@ -88,7 +93,7 @@ class Appliances:
             state = states.get(device.id)
             if state is None:
                 continue
-            if device.appliance in ("vacuum", "feeder"):  # kept in words already
+            if device.appliance in IN_WORDS:
                 lines.append(f"{device.name}: {state}")
                 continue
             state = HOME_CONNECT.get(state, state)
@@ -106,6 +111,8 @@ class Appliances:
             return await self._vacuum(device, name)
         if device.provider == "tuya":
             return await self._feeder(device, name)
+        if device.provider == "catgenie":
+            return await self._litter_box(device, name)
         try:
             state, minutes = await self._read(device)
         except (ThinqError, HomeConnectError) as exc:
@@ -165,6 +172,22 @@ class Appliances:
         chores = feeders.chores(device.id) if feeders is not None else []
         return " ".join([f"{name}, read just now: {said}.", *chores])
 
+    async def _litter_box(self, device: Device, name: str) -> str:
+        """The litter box: cleaning or not, its sani-solution, any error, its last clean."""
+        watcher = self.services.catgenie
+        if watcher is None:
+            return f"{name}: couldn't be read just now. {self._last_seen(device)}"
+        try:
+            reading = await watcher.read(device)
+        except CatGenieError as exc:
+            log.info("Couldn't read %s for a status question: %s", device.name, exc)
+            return f"{name}: couldn't be read just now. {self._last_seen(device)}"
+        said = litter_words(reading)
+        if reading.last_clean is not None:
+            said += f"; last cleaned {self._local_words(reading.last_clean)}"
+            said += self._day_words(reading.last_clean)
+        return f"{name}, read just now: {said}."
+
     def _words(self, device: Device, state: str, minutes: int | None) -> str:
         if state == RUNNING:
             since = self._cycle(device, "started_at", open_only=True)
@@ -187,7 +210,7 @@ class Appliances:
             return "Themi hasn't seen it yet, so its state isn't known."
         state = HOME_CONNECT.get(str(row["state"]), str(row["state"]))
         seen = self._local_words(datetime.fromisoformat(row["seen_at"]))
-        if device.appliance in ("vacuum", "feeder"):  # kept in words already
+        if device.appliance in IN_WORDS:
             return f"As of {seen} it was {state}."
         was = {RUNNING: "running", FINISHED: "finished"}.get(state, "not running")
         return f"As of {seen} it was {was}."
@@ -228,11 +251,12 @@ def _minutes(minutes: int) -> str:
 
 @tool(
     "appliance_status",
-    "How the washer, dryer, dishwasher, robot vacuum or pet feeder is doing right now: running "
-    "or not, the time left when the appliance says, what the vacuum needs, and the feeder's "
-    "food and last feeding. Use it for any "
-    "question about them ('how long on the wash?', 'is the dryer done?', 'where's the "
-    "vacuum?', 'has the cat been fed?'); never answer those from memory or the conversation.",
+    "How the washer, dryer, dishwasher, robot vacuum, pet feeder or litter box is doing right "
+    "now: running or not, the time left when the appliance says, what the vacuum needs, the "
+    "feeder's food and last feeding, and the litter box's sani-solution, errors and last "
+    "clean. Use it for any question about them ('how long on the wash?', 'is the dryer "
+    "done?', 'where's the vacuum?', 'has the cat been fed?', 'is the litter box ok?'); never "
+    "answer those from memory or the conversation.",
     {
         "appliance": {
             "type": "string",

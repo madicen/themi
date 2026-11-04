@@ -36,6 +36,8 @@ PATTERNS = [
     re.compile(r"\bgAAAAA[0-9A-Za-z_=-]{20,}"),
     # Authorization headers
     re.compile(r"(?i)(bearer\s+)[^\s'\"]+"),
+    # JSON web tokens (PetNovations' sign-in, CG1a), wherever they turn up
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
     # key=value / key: value for sensitive-sounding names
     re.compile(
         r"(?i)((?:api[_-]?key|token|secret|password|passwd|authorization)['\"]?\s*[:=]\s*['\"]?)"

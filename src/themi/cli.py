@@ -96,6 +96,16 @@ def build_parser() -> argparse.ArgumentParser:
         "(no ids, keys or names), so a mapping can be written for its model",
     )
     tuya_capture.add_argument("--out", default="tuya-captures", help="the folder to write to")
+    catgenie = commands.add_parser("catgenie", help="the litter box, through CatGenie's cloud")
+    catgenie_commands = catgenie.add_subparsers(dest="catgenie_command", required=True)
+    catgenie_capture = catgenie_commands.add_parser(
+        "capture",
+        help="read what the litter box reports, and the app's notifications, and save them as "
+        "a test fixture (no ids, names or numbers), so its errors can be put in words",
+    )
+    catgenie_capture.add_argument(
+        "--out", default="catgenie-captures", help="the folder to write to"
+    )
     return parser
 
 
@@ -118,6 +128,7 @@ def build_runtime(
     (`make dev` passes the fakes this way, D5a)."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
+    from themi.connectors.catgenie import CatGenieConfig
     from themi.connectors.cozyla import CozylaClient
     from themi.connectors.gkeep import GKeepAccount
     from themi.connectors.homeconnect import HomeConnectClient
@@ -147,6 +158,7 @@ def build_runtime(
         "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
         "roborock": roborock_library.available(),
         "tuya": TuyaConfig(),
+        "catgenie": CatGenieConfig(),
         "keep": GKeepAccount,
     }
     if connectors is not None:
@@ -430,6 +442,39 @@ def _tuya_capture(out: str) -> int:
     return 0
 
 
+def _catgenie_capture(out: str) -> int:
+    import asyncio
+    from pathlib import Path
+
+    from themi.connectors.catgenie import (
+        CatGenieAccount,
+        CatGenieConfig,
+        CatGenieError,
+        CatGenieWatcher,
+    )
+    from themi.connectors.catgenie.watch import write_captures
+
+    store = _store()
+    watcher = CatGenieWatcher(store, CatGenieAccount(store.db, store.cipher, CatGenieConfig()))
+    if not watcher.account.linked():
+        print("Link the litter box on the website's Accounts page first.", file=sys.stderr)
+        return 1
+
+    async def run() -> Path:
+        try:
+            return await write_captures(watcher, Path(out))
+        finally:
+            await watcher.account.close()
+
+    try:
+        written = asyncio.run(run())
+    except CatGenieError as exc:
+        print(f"CatGenie capture failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote {written}")
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -469,6 +514,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _keep(args.keep_command, args.name, getattr(args, "list", ""))
         elif args.command == "tuya":
             return _tuya_capture(args.out)
+        elif args.command == "catgenie":
+            return _catgenie_capture(args.out)
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:

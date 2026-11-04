@@ -17,6 +17,7 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "httpx>=0.28",
+    "curl_cffi>=0.17",  # CatGenie: its cloud drops requests that don't look like a phone (CG1a)
     "python-dateutil>=2.9",  # chore schedules as RFC 5545 recurrence rules (F7)
 ]
 
