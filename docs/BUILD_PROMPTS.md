@@ -87,7 +87,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | E2 | Email: an audit instead of single questions | Feedback | [x] |
 | E2b | Email audit: off the wall, and sliding scales | Feedback | [x] |
 | P2a | Response timing, and a word while a reply is slow | Feedback | [x] |
-| P2b | Faster replies, from the numbers | Feedback | [ ] |
+| P2b | Faster replies, from the numbers | Feedback | [x] 2026-11-04 |
 | P3 | Router metrics: how well the tool groups are chosen | Feedback | [x] |
 | P4 | Wrong actions: marked in chat, labelled in review | Feedback | [x] |
 | P5 | Evals that can compare: repeats, timings, and every tool vs groups | Feedback | [x] 2026-10-30 |
@@ -4440,11 +4440,54 @@ Notes (2026-10-28):
 - Setup: restart (applies 0065).
 
 ### P2b · Faster replies, from the numbers
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: P2a, and a week of its timings
 Split from P2 (2026-10-28): the speed-ups need P2a's numbers first.
 - The speed-ups the numbers point to: a faster model for conversation, fewer tool
   rounds, smaller prompts (each call sends about 10,000 tokens, mostly tool schemas).
+
+Notes (2026-11-04):
+- The numbers: `replies`, `reply_tools` and `ai_calls` from the Pi copy D4 took on
+  2026-11-03 (`data/dev-prod/`), 2026-10-28 to 11-03, timings only (one message read, for
+  reply 204 below). 233 replies: median 4.5 s, p90 19.7 s, mean 9.3 s, 18 "still coming".
+  The model took 82% of reply time, tools 3%, the outbox the rest. 152 replies took two
+  model calls, 36 three. Per conversation call: p50 1.2 s, p75 1.9 s, p90 14 s, max 66 s.
+  The calls over 15 s were 5% of the calls and 42% of all model time, and almost none had
+  a retry: the free tier is just sometimes slow.
+- What that pointed to, and what was done:
+    - **Fewer rounds.** After a list add, F21a already sends Themi's own confirmation, but
+      the agent still made the model's next round and threw its words away: 55 replies
+      that week, 2.5 s each. Now a tool round where every call was done as they asked and
+      left its own reply (`ToolContext.asked`, from `Proposal.requested` and `said`) ends
+      the turn. Not when the model inferred the item (reply 204: an automatic add of an
+      item that wasn't their words, then the task they really meant in the next round, 1
+      of the 55), not after a failed add (it may retry shorter), and not when another tool
+      ran in the same round.
+    - **The slow calls.** The router sends an interactive chat call again if it hasn't
+      answered after `HEDGE_AFTER` (5 s), and uses whichever answers first; the other is
+      cancelled. An error counts only when both fail, and then the chain falls back as
+      before. Not for background calls (nobody waits, and triage shares the free tier's
+      quota), transcription or embeddings. At most one extra call per slow call: about
+      100 extra calls that week (about 15 a day, on about 180 a day in all). Migration 0101
+      adds `ai_calls.hedge` ('first' or 'second', whichever answered). The Development
+      page counts the week's ("N slow model calls were sent a second time; the second
+      answered first M times"), and each slow reply's step says "sent again, the second
+      answered".
+    - **A faster model:** none to move to. Conversation is already on
+      `gemini-3.5-flash-lite`.
+    - **Smaller prompts:** not done. Without the slow calls, a first round with under 40
+      tools took 1.3 s and one with 40 or more 2.0 s, so about 0.7 s a round, against 2.5 s
+      for a skipped round and over 10 s for a stuck call. Worth doing after these, if the
+      next week's numbers still point to it: fewer twin sets sent whole (P6), or shorter
+      tool descriptions.
+- Tests: `build_app(hedge_after=)`, which the scenario harness sets to None so a
+  scripted slow call (P2a's tests) stays slow; tests turn it on with
+  `scenario.app.router.hedge_after`. `ScriptedProvider.drop()` forgets a queued closing
+  line the turn no longer asks for (test_lists' `call` helper uses it).
+- Follow-up: see whether the hedge pays. If the second call rarely answers first, the
+  slowness is per key, not per request, and the hedge only costs quota. Then try a
+  shorter timeout and the fallback backend instead.
+- Setup: restart (applies 0101).
 
 ### P3 · Router metrics: how well the tool groups are chosen
 Status: [x] 2026-10-29
