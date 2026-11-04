@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
+from themi.core import naming
 from themi.core.memory import terms
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -180,7 +181,7 @@ async def add_follow_up(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not title:
         raise ToolFailed("What should the follow-up say?")
     if ctx.request_text and not _named(after, ctx.request_text, title):
-        raise ToolFailed(NOT_NAMED.format(after=after.title))
+        raise ToolFailed(NOT_NAMED.format(after=after.title), refused=naming.NOT_NAMED)
     steps = [" ".join(str(s).split()) for s in args["steps"] if str(s).strip()]
     follow_ups.add(after, ctx.member, title, steps, ctx.member)
     each = EACH_ROUND if after.repeats else ""

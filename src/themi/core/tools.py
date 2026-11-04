@@ -28,6 +28,7 @@ import jsonschema
 
 from themi.accounts.models import Member
 from themi.ai.types import ToolCall, ToolResult, ToolSpec
+from themi.core import naming
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -86,11 +87,13 @@ Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
 class ToolFailed(Exception):
     """A tool couldn't do what was asked (no such task, not theirs...). The message goes
     back to the model as an error result, and the turn knows nothing was done. `reply`:
-    what to tell them, when it's plain enough to say as it is (ToolContext.replies)."""
+    what to tell them, when it's plain enough to say as it is (ToolContext.replies).
+    `refused`: a naming check's kind of no (themi.core.naming), counted for P8a."""
 
-    def __init__(self, message: str, reply: str | None = None) -> None:
+    def __init__(self, message: str, reply: str | None = None, refused: str | None = None) -> None:
         super().__init__(message)
         self.reply = reply
+        self.refused = refused
 
 
 class ToolDeclined(Exception):
@@ -557,6 +560,11 @@ class ToolRegistry:
         task_id = call.arguments.get("task_id")
         if outcome == "ok" and isinstance(task_id, int) and task_id > 0:  # 0 is none (F23e)
             ctx.tasks.append(task_id)
+        named = naming.task_of(call.arguments)
+        if outcome == "ok" and call.name in naming.CHECKED and named is not None:  # P8a
+            naming.NamingRefusals(ctx.services.store.db).went_through(
+                ctx.member.id, call.name, named
+            )
         return result
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
@@ -576,6 +584,10 @@ class ToolRegistry:
         except ToolFailed as exc:
             if exc.reply:
                 ctx.replies.append(exc.reply)
+            if exc.refused:
+                naming.NamingRefusals(ctx.services.store.db).refused(
+                    ctx.member.id, call.name, exc.refused, naming.task_of(call.arguments)
+                )
             return ToolResult(call.id, f"{exc} Nothing was changed.", is_error=True), "failed"
         except Exception as exc:
             log.exception("Tool %s failed for member %s", call.name, ctx.member.id)
