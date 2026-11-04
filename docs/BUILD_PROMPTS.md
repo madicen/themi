@@ -174,7 +174,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
-| D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [ ] |
+| D5a | Dev control panel: the fakes wired into `make dev`, linked and kept between runs | Dev tooling | [x] 2026-11-03 |
 | D5b | Dev control panel: the page, with email, calendar, wall, lists and devices | Dev tooling | [ ] |
 | D5c | Dev control panel: faults, the Safeway helper, travel and scenes | Dev tooling | [ ] |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
@@ -8381,7 +8381,7 @@ Notes (2026-11-03):
   copy; `make dev-reset` deletes it.
 
 ### D5a · Dev control panel: the fakes wired into `make dev`, linked and kept between runs
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: D1, D2, D4
 From Michael (2026-11-03): `make dev` can't show the whole Themi experience, because
 nothing outside the chat ever happens: no email arrives, the washer never finishes, the
@@ -8424,6 +8424,30 @@ scenarios pass unchanged). Snapshot and restore round-trip for each fake, includ
 Cozyla to-do Themi made, which isn't deleted after a restart. `act` runs on the loop.
 An integration test boots the dev wiring on a temp folder with a frozen clock: linked
 once, not twice on the second run. No real network.
+
+Notes (2026-11-03):
+- `tests/fakes/snapshot.py`: a tagged-JSON codec and a `Snapshots` mixin. Each fake lists
+  its state in `SNAPSHOT`; call logs, injected failures, locks and connections aren't
+  saved. Sets save sorted, so the file is stable. Dataclasses come back only from
+  `tests.fakes` or `themi.connectors` (no pickle).
+- `tests/fakes/wiring.py`: `connector_options`, `google_config`, `cozyla_client` and
+  `wall_list`, moved out of the harness. `build_runtime(settings, connectors=...)` is the
+  only production change.
+- `tools/dev/fakes.py`: `DevFakes` (`start`, `connectors`, `bind`, `act`, `check_now`,
+  `save`, `linked`). The fill is a washer and dryer (LG), a dishwasher (Bosch), "Robbie"
+  (Roborock), the wall's "Family" list with Erin and Husband, and a Keep shopping list for
+  each. Linking goes through Themi's own paths. Google is linked with its link listeners
+  held back and the inbox set to watched, so the chat doesn't open with "Watch it?".
+- Saved by a `dev.fakes_save` periodic task (Themi's clock, so a skip saves too), after each
+  `act`, and on stop. The fake Google also accepts the dev website's callback (127.0.0.1 and
+  localhost), so relinking from the Accounts page works.
+- On a restart Themi subscribes to LG pushes again, and the fake answers "already
+  subscribed" (1207), as LG does. It's logged at INFO and is harmless.
+- `make dev FAKES=0` (`python -m tools.dev --no-fakes`) runs without them. `make dev-prod`
+  never has them.
+- Tried for real on a scratch folder: two runs, linked once, restored on the second.
+- Setup: none. An existing `data/dev/` gets linked on its next `make dev`; `make dev-reset`
+  also deletes `fakes.json`.
 
 ### D5b · Dev control panel: the page, with email, calendar, wall, lists and devices
 Status: [ ]

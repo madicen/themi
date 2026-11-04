@@ -41,7 +41,10 @@ opens the management site signed in as that person.
 - To try pairing: `make dev-invite NAME=Sam`, then send the `/start` code as *Someone new*.
 - *Copy session* copies the conversations and Themi's log as text, to paste into a Claude
   session. *New session* marks where the next copy starts.
-- Only Telegram is simulated. Replies use real Gemini, and Google and OurGroceries are off.
+- Every outside service is played by its test fake: Gmail, Calendar and Tasks for
+  `erin@gmail.com` and `husband@gmail.com`, Keep, the wall, OurGroceries, an LG washer and
+  dryer, a Bosch dishwasher and a Roborock. They're linked on the first run and kept in
+  `data/dev/fakes.json`. `make dev FAKES=0` runs without them. Replies use real Gemini.
 - `make dev-prod` runs the same way on a fresh copy of the Pi's data, in `data/dev-prod/`
   (over ssh to `THEMI_PI`, default `themi@themi`). `make dev-prod BACKUP=latest` copies from
   the encrypted backups instead, and `KEEP=1` reuses the last copy. The copy is cleaned
