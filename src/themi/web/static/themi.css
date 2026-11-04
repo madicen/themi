@@ -129,8 +129,11 @@ label > input[type=number], label > input[type=time] { display: inline-block; ma
   line-height: 1; transition: transform .15s; }
 .row-item > details[open] > summary::after { transform: rotate(90deg); }
 .row-item > details[open] > summary { background: var(--soft); }
-.row-item.has-actions > details > summary { padding-right: 7.5rem; }
-.row-actions { position: absolute; top: 0; right: 2.25rem; height: 56px; display: flex; align-items: center; gap: var(--space-1); }
+.row-item.has-actions > details > summary { padding-right: 7.75rem; }
+.row-item.has-actions > details > summary::after { position: absolute; right: var(--space-4); top: 28px;
+  transform: translateY(-50%); }
+.row-item.has-actions > details[open] > summary::after { transform: translateY(-50%) rotate(90deg); }
+.row-actions { position: absolute; top: 0; right: 2.5rem; height: 56px; display: flex; align-items: center; gap: var(--space-1); }
 .row-actions form { margin: 0; }
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .row-title { font-weight: 500; overflow-wrap: anywhere; }
@@ -148,7 +151,7 @@ label > input[type=number], label > input[type=time] { display: inline-block; ma
 .rows > details.add > summary::before { content: "+"; margin-right: var(--space-2); font-size: 1.2rem; }
 .rows > details.add > :not(summary) { padding: 0 var(--space-4) var(--space-4); }
 
-.chips { display: flex; flex-wrap: wrap; gap: var(--space-1); justify-content: flex-end; flex: none; max-width: 50%; }
+.chips { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); margin-right: var(--space-2); vertical-align: 1px; }
 .chip { display: inline-block; font-size: .78rem; font-weight: 600; line-height: 1.2; padding: .2rem .55rem;
   border-radius: 999px; background: var(--soft); color: var(--muted); white-space: nowrap; }
 .chip.good { background: var(--good-bg); color: var(--good); }
@@ -174,3 +177,12 @@ form.row > span, div.row > span { flex: 1 1 12rem; }
   padding: .25rem 0; border-bottom: 1px solid var(--line); }
 .list-item button.link { color: var(--fg); text-align: left; min-height: var(--tap); }
 .list-item button.ticked, .ticked { text-decoration: line-through; color: var(--muted); }
+
+/* A collapsed section (W2): "You added for someone else", "Recently". */
+details.group { margin: var(--space-5) 0 var(--space-2); }
+details.group > summary { list-style: none; display: flex; align-items: center; min-height: var(--tap);
+  color: var(--muted); font-weight: 600; }
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::after { content: "›"; margin-left: var(--space-2); font-size: 1.3rem; transition: transform .15s; }
+details.group[open] > summary::after { transform: rotate(90deg); }
+.row-done .row-meta { color: var(--accent); }

@@ -33,8 +33,11 @@ from themi.accounts.models import DAY_NAMES
 from themi.autonomy import Decision
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
+from themi.web.task_pages import task_rows
 
 __all__ = ["SiteContext", "install_site"]
+
+HOME_TASKS = 5
 
 TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
@@ -222,7 +225,15 @@ def core_routes(kit: Kit) -> APIRouter:
         failed = [a for a in actions if a.status == "failed"]
         if failed:
             alerts.append(f"{len(failed)} action(s) didn't go through and can be tried again.")
+        tasks: dict[str, Any] = {"mine": [], "more_tasks": 0}
+        if app.services.taskboard is not None:  # W2: the first few, with Done
+            tasks = task_rows(app, member, limit=HOME_TASKS)
+            total = len(app.services.taskboard.open_for(member))
+            tasks["more_tasks"] = total if total > HOME_TASKS else 0
+        appliances = app.services.appliances
         return {
+            **tasks,
+            "around_the_house": appliances.at_a_glance() if appliances else None,
             "actions": actions,
             "activity": [
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity

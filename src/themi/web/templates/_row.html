@@ -21,9 +21,10 @@ A chip is (text, kind) or plain text; kinds: good, warn, bad, info (none: neutra
     <summary>
       <span class="row-main">
         <span class="row-title">{{ title }}</span>
-        {%- if meta %}<span class="row-meta">{{ meta }}</span>{% endif %}
+        {%- if meta or chips %}<span class="row-meta">
+          {%- if chips %}<span class="chips">{% for c in chips %}{% if c is string %}{{ chip(c) }}{% else %}{{ chip(c[0], c[1]) }}{% endif %}{% endfor %}</span>{% endif %}
+          {{- meta or "" }}</span>{% endif %}
       </span>
-      {%- if chips %}<span class="chips">{% for c in chips %}{% if c is string %}{{ chip(c) }}{% else %}{{ chip(c[0], c[1]) }}{% endif %}{% endfor %}</span>{% endif %}
     </summary>
     <div class="row-body">{{ caller("body") }}</div>
   </details>

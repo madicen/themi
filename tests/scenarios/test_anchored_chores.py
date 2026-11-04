@@ -364,7 +364,7 @@ async def test_the_tasks_page_shows_the_next_dates(
     await sign_in(scenario, site, "Erin")
     page = (await site.get("/tasks")).text
     assert "Every Tuesday at 6 pm" in page
-    assert "Next: Tue 27 Oct, Tue 03 Nov, Tue 10 Nov" in page
+    assert "Next: Tue 27 Oct, Tue 3 Nov, Tue 10 Nov" in page
 
 
 async def test_a_new_chore_isnt_nudged_before_its_first_day(scenario: Scenario) -> None:

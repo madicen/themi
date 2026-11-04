@@ -175,7 +175,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
-| W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [ ] |
+| W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [ ] |
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [ ] |
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [ ] |
@@ -8432,7 +8432,7 @@ Notes (2026-11-03):
 - Checked by eye at 390px and 1280px with headless Chrome on pages the test harness rendered.
 
 ### W2 · Website redesign: Tasks as compact rows with Done, and Home
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: W1, F6b, F7
 Read first: "Shadow Calendar" → Tasks; W1's principles.
 - `/tasks`: one row per task. Collapsed: the title, then one line with the due date, the
@@ -8458,6 +8458,26 @@ once, advances a repeating chore by one round, and refuses a task the member can
 change. Overdue sorts first. Home shows five tasks and the device line from fake device
 states, and no device section with nothing linked. Scenario: Erin taps Done on a shared
 overdue chore on the website, and Michael is told as he would be from chat.
+
+Notes (2026-11-03):
+- `task_pages.task_rows(app, member, limit)` gives `_task_row.html` its values; Home uses it
+  with `limit=5` (`site.HOME_TASKS`) and links "All N tasks" past that.
+- Done (`POST /tasks/{id}/done`) is allowed for the tasks the page shows (the member's own,
+  shared ones, ones they added), or any for an admin. Chat lets anyone mark any task done;
+  the website is narrower on purpose. It calls `TaskBoard.complete(..., interactive=True)`,
+  so praise, rounds, routines and settling sent nudges all happen as in chat. HTMX swaps
+  the row for `_task_done.html` with the reply; a plain POST redirects (to Home when the
+  form says `back=home`).
+- There's no separate partner message when a task is done, in chat or here. "Told as from
+  chat" means his nudge about the shared chore is edited to "Marked done: …", which the
+  scenario checks.
+- "Around the house" is `Appliances.at_a_glance()`: stored states only (no live reads, so
+  Home never waits on an appliance). It shows a washer, dryer or dishwasher running or
+  finished, and the vacuum's state in words. Left out when nothing is linked; "Nothing's
+  running." when nothing is.
+- Wording changes: "Last done Wed 21 Oct by Erin. Before that: …", and days without a
+  leading zero ("Tue 3 Nov"). Two tests were updated for them.
+- Chips sit on the row's second line, before the status text, so a long title keeps its width.
 
 ### W3 · Website redesign: outside connections move to Accounts, Family slimmed
 Status: [ ]

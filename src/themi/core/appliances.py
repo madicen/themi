@@ -69,6 +69,33 @@ class Appliances:
         lines = [await self._line(d) for d in devices]
         return "\n".join(lines) + "\n\n" + SAY_ONLY
 
+    def at_a_glance(self) -> list[str] | None:
+        """W2, the website's Home: what's worth knowing, from the states last seen (no reads,
+        so the page never waits on an appliance). None when nothing is linked."""
+        devices = [d for d in self.services.store.list_devices() if d.appliance in APPLIANCES]
+        if not devices:
+            return None
+        states = {
+            r["device_id"]: str(r["state"])
+            for r in self.db.query("SELECT device_id, state FROM device_states")
+        }
+        lines = []
+        for device in devices:
+            state = states.get(device.id)
+            if state is None:
+                continue
+            if device.appliance == "vacuum":  # kept in words already
+                lines.append(f"{device.name}: {state}")
+                continue
+            state = HOME_CONNECT.get(state, state)
+            if state == RUNNING:
+                since = self._cycle(device, "started_at", open_only=True)
+                lines.append(f"{device.name}: running" + (f" since {since}" if since else ""))
+            elif state == FINISHED:
+                ended = self._cycle(device, "ended_at")
+                lines.append(f"{device.name}: finished" + (f" at {ended}" if ended else ""))
+        return lines
+
     async def _line(self, device: Device) -> str:
         name = f"{device.name} ({device.appliance})"
         if device.provider == "roborock":
