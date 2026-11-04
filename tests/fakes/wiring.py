@@ -23,6 +23,7 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
+from tests.fakes.tuya import FakeTuya
 from themi.connectors.cozyla import CozylaClient, CozylaConfig
 from themi.connectors.google import GoogleConfig
 from themi.storage.secrets import Secret
@@ -43,6 +44,7 @@ def connector_options(
     home_connect: FakeHomeConnect | None = None,
     thinq: FakeThinq | None = None,
     roborock: FakeRoborock | None = None,
+    tuya: FakeTuya | None = None,
     keep: FakeKeep | None = None,
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
@@ -54,6 +56,7 @@ def connector_options(
         "home_connect": home_connect.client() if home_connect else None,
         "thinq": thinq.config() if thinq else None,
         "roborock": roborock,
+        "tuya": tuya.config() if tuya else None,
         "keep": keep.connect if keep else None,
     }
 

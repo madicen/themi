@@ -1,0 +1,26 @@
+[
+ {
+  "code": "surplus_grain",
+  "value": 15
+ },
+ {
+  "code": "feed_report",
+  "value": 2
+ },
+ {
+  "code": "feed_state",
+  "value": "done"
+ },
+ {
+  "code": "battery_percentage",
+  "value": 100
+ },
+ {
+  "code": "charge_state",
+  "value": true
+ },
+ {
+  "code": "light",
+  "value": true
+ }
+]

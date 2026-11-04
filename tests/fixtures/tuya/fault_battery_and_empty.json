@@ -1,0 +1,18 @@
+[
+ {
+  "code": "meal_plan",
+  "value": "fwYAAQE="
+ },
+ {
+  "code": "feed_state",
+  "value": "standby"
+ },
+ {
+  "code": "fault",
+  "value": 5
+ },
+ {
+  "code": "feed_report",
+  "value": 1
+ }
+]

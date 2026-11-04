@@ -1,0 +1,37 @@
+{
+ "category": "cwwsq",
+ "functions": [
+  {
+   "code": "meal_plan",
+   "type": "Raw",
+   "values": "{}"
+  },
+  {
+   "code": "manual_feed",
+   "type": "Integer",
+   "values": "{\"unit\": \"\", \"min\": 1, \"max\": 12, \"scale\": 0, \"step\": 1}"
+  }
+ ],
+ "status": [
+  {
+   "code": "meal_plan",
+   "type": "Raw",
+   "values": "{}"
+  },
+  {
+   "code": "feed_state",
+   "type": "Enum",
+   "values": "{\"range\": [\"standby\", \"feeding\", \"done\"]}"
+  },
+  {
+   "code": "fault",
+   "type": "Bitmap",
+   "values": "{\"label\": [\"low_battery\", \"food_shortage\", \"food_empty\", \"motor_fault\", \"desiccant_expired\"], \"maxlen\": 5}"
+  },
+  {
+   "code": "feed_report",
+   "type": "Integer",
+   "values": "{\"unit\": \"\", \"min\": 0, \"max\": 12, \"scale\": 0, \"step\": 1}"
+  }
+ ]
+}
