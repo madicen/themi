@@ -174,6 +174,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
+| W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [ ] |
+| W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [ ] |
+| W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [ ] |
+| W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [ ] |
+| W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [ ] |
 
 ## Fixed technical choices
 
@@ -8371,3 +8376,132 @@ Notes (2026-11-03):
 - Setup: none. `.env` needs `GEMINI_API_KEY` for replies, and the `THEMI_BACKUP_*`
   settings and the real `THEMI_SECRET_KEY` for `BACKUP=`. `data/dev-prod/` now holds a
   copy; `make dev-reset` deletes it.
+
+### W1 · Website redesign: phone-first shell, navigation and row components
+Status: [ ]
+Depends on: 15, 16
+Read first: "How the family uses Themi" → The management website (the site's areas:
+Family, Per person, Devices, Trust tiers, Rules and memory, AI backend, Activity; "works on
+a phone"). From Michael's feedback (2026-11-03): the site has become unwieldy, task items are
+huge, outside accounts sit under Family, and Michael and Erin use it on their phones.
+
+Principles for W1–W5:
+- Collapsed list first, details on tap. Every collection (tasks, accounts, connections,
+  people, rules, tiers, AI jobs, lists) shows one row per item: a name, one line of
+  status, a chevron. Tapping opens the full controls in place, with native
+  `<details>`/`<summary>` (no new JS; HTMX stays optional).
+- Phone first, designed at 390px wide and widened on desktop. Tap targets ≥ 44px, inputs
+  ≥ 16px (no iOS zoom), safe-area insets, no sideways scroll.
+- Status at a glance: small chips on the collapsed row ("Watching", "Needs relinking",
+  "Automatic", "Asks first", "Overdue", "Repeats weekly").
+- Destructive actions (unlink, remove, delete, retire) go last in the expanded panel,
+  set apart and quiet, never beside Save.
+- URLs and POST endpoints keep working: bookmarks and `/site` links still land.
+  No energy scores anywhere (as now).
+
+This prompt:
+- `base.html`: on phones a fixed bottom bar (Home, Tasks, Lists, More); at ≥ 900px the
+  same items in a slim top bar. The member's name opens a small menu with Sign out.
+- `/more`: a grouped menu page. You (My settings, My week, My AI) · Accounts (Google
+  accounts, Household connections: admins only) · Household (Family: admins only, Rules &
+  memory, What Themi does alone, Spending, Safeway) · Admin (Development: admins only).
+  The current page's group is highlighted in the bars.
+- `themi.css`: spacing and type scale as tokens, light and dark kept; chip styles; a row
+  style; a sticky save bar (`.savebar`) for long forms.
+- `_row.html` macros: `row(title, meta, chips, open=False)` wrapping `<details>` with a
+  caller block for the body, and `chip(text, kind)`. W2–W5 build every list from these.
+- Pages are otherwise unchanged here; they just render inside the new shell.
+
+Tests: the bottom bar and `/more` render for a member and for an admin (admin-only links
+absent for members). Every existing page still renders signed in. The macro renders a
+closed row with its chips, and an open one when asked.
+
+### W2 · Website redesign: Tasks as compact rows with Done, and Home
+Status: [ ]
+Depends on: W1, F6b, F7
+Read first: "Shadow Calendar" → Tasks; W1's principles.
+- `/tasks`: one row per task. Collapsed: the title, then one line with the due date, the
+  schedule's short summary and "on both your lists" when shared; an "Overdue" chip. Overdue
+  first, then by due date, undated last.
+- Each row has a **Done** button on the collapsed row (a CSRF-checked POST
+  `/tasks/{id}/done`, HTMX swapping the row; a plain POST redirects). It goes through
+  `TaskBoard.complete(task_id, member)`, the same path as chat and the wall, so its
+  permissions, repeating rounds, routines and partner messages all apply. The reply text
+  from `complete` shows as the flash or in the swapped row.
+- Expanded: next dates, the last runs ("Last done Sat 4 Oct by Erin"), and the title and
+  steps form with Save.
+- "Added for someone else" is one collapsed group, each row carrying the person's name.
+- Home: "Waiting on you" approval cards stay cards. Then "On your list": the first five
+  task rows (with Done) and a link to Tasks. Then "Around the house": one line per linked
+  device in a state worth knowing (washer finished and waiting, dryer running, vacuum
+  stuck or docked, dishwasher running), from the same reads the laundry and vacuum chores
+  use; left out when nothing is linked. Then the grocery list rows with "Got it". "Recently"
+  starts collapsed.
+
+Tests: each a failing test first where it's a fix. Done from the website marks a task done
+once, advances a repeating chore by one round, and refuses a task the member can't
+change. Overdue sorts first. Home shows five tasks and the device line from fake device
+states, and no device section with nothing linked. Scenario: Erin taps Done on a shared
+overdue chore on the website, and Michael is told as he would be from chat.
+
+### W3 · Website redesign: outside connections move to Accounts, Family slimmed
+Status: [ ]
+Depends on: W1, 21, 26, V1, 35c
+Read first: "Accounts and data model"; "How the family uses Themi" → management website
+(Family and Devices are separate areas).
+- `/accounts` has two parts:
+  - **My Google accounts** (everyone): one row per address, chip "Watching", "Not
+    watched" or "Needs relinking". Expanded: the watched toggle, urgent senders, the
+    calendars link, the Google Tasks note, and expected emails as their own collapsed
+    sub-list with an Add row. Unlink last. "Link a Gmail account" as the final row.
+  - **Household connections** (admins only; members don't see the section at all, and
+    its routes stay admin-only): Home Connect, LG ThinQ (with washer/dryer mapping and
+    laundry freshness and rewash times), Roborock (with the emailed-code flow), the family
+    calendar (account and name), and Safeway helpers. Each row's chip says "Linked · 2
+    devices", "Not linked" or the problem ("Link it again").
+- The existing POST routes (`/family/thinq/...`, `/family/roborock/...`,
+  `/family/home-connect/...`, `/family/calendar`, `/safeway/...`) stay, and now redirect back
+  to `/accounts#<connection>`, with that row open. The Home Connect OAuth callback lands
+  there too. `/safeway` keeps the remembered products and links to the helper row.
+- `/family` keeps only the household (name, timezone, takeout budget, staples, home
+  address) and People: one row per person ("Erin · admin · on Telegram"), expanded for
+  role, invite code, sign-in address and Remove. "Add someone" is a collapsed row at the
+  end.
+
+Tests: a member sees no Household connections and gets 403 from their routes. An admin
+links and unlinks ThinQ, maps a device and is sent back to `/accounts`. The Home Connect
+callback lands on `/accounts`. `/family` no longer shows any connection. Existing
+connection tests move with the forms.
+
+### W4 · Website redesign: My settings in sections, Lists for the shop
+Status: [ ]
+Depends on: W1, F3, F21a
+- `/settings`: each fieldset becomes a collapsible section whose summary shows its current
+  value ("Quiet hours · 10 pm–7 am", "Gentle phrasing · on, medium", "Morning summary ·
+  7:30 am"). It stays one form, with the sticky save bar, so nothing saved is lost
+  between sections. Busy times become rows with an Add row.
+- `/lists`: each list is a row with a count ("Packing · 4 of 12"). Expanded, items are
+  full-width tap-to-tick rows. "Usually from…" and Remove move behind a per-item `⋯`.
+  Add item stays at the top of the open list; Clear ticked and Delete list go last.
+
+Tests: summaries reflect saved values (quiet hours, phrasing, morning summary blank vs
+set). Saving from the sticky bar saves every section. List counts, ticking and the store
+field still work.
+
+### W5 · Website redesign: Tiers, Rules & memory, AI and the remaining pages
+Status: [ ]
+Depends on: W1
+- What Themi does alone: one row per category, chip "Automatic", "Asks first", "Always
+  asks" or "Paused"; the escalation reason on the collapsed row. Buttons in the panel.
+- Rules & memory: household rules, your personal rules, drafts and remembered facts as
+  rows (summary collapsed, text and Retire in the panel); context repairs as a collapsed
+  log.
+- My AI: one row per job, its chain on the collapsed row ("Claude → Gemini"); the chain
+  editor and test button in the panel. Backends the same way; keys never shown.
+- Spending, My week, Development, Email noise, calendars and Safeway products: the new
+  spacing and rows where they list things, no structural change.
+- Check every page at 390px and 1280px with `make dev-prod` (D4) and note anything still
+  awkward in the Notes.
+
+Tests: chips for each tier state, a paused category's reason, an AI job's chain summary.
+Every page renders for a member and an admin.
