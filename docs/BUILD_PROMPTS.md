@@ -8552,6 +8552,11 @@ Notes (2026-11-03):
   the list stays open while you tick in the shop. A single list opens by itself.
 - Ticking still reloads the page (no HTMX), so it works without JavaScript. Swapping only
   the item with HTMX could come later if the reload feels slow in the shop.
+- Follow-up (2026-11-03, Michael's ask): the grocery list is the first row on Lists, open
+  by default. "Got it" (`/groceries/{id}/bought` with `back=lists`) returns there. A new
+  `POST /groceries/add` stages `grocery_list_add` with `requested=True`, as chat does: typing
+  it in is their yes, unless the category is paused (then it waits on a yes). Duplicates,
+  and items already waiting on a yes, get "That's on it already."
 
 ### W5 · Website redesign: Tiers, Rules & memory, AI and the remaining pages
 Status: [x] 2026-11-03

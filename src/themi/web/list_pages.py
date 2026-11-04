@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member
+from themi.core.groceries import CATEGORY, EXECUTOR, item_name, list_summary
 from themi.core.lists import ListItem, Lists, NamedList
 from themi.web.kit import Kit
 
@@ -38,14 +39,40 @@ def routes(kit: Kit) -> APIRouter:
     def lists_page(request: Request, opened: str = Query("", alias="open")) -> HTMLResponse:
         session = kit.current(request)
         found = lists().visible(session.member)
+        groceries = app.services.groceries
+        if not opened:  # the grocery list is the one used most; else a list on its own
+            opened = "groceries" if groceries else str(found[0].id) if len(found) == 1 else ""
         return kit.with_flash(
             request,
             "lists.html",
             session,
             lists=found,
             stores={nl.id: lists().stores(nl) for nl in found if nl.purpose},
-            opened=int(opened) if opened.isdigit() else (found[0].id if len(found) == 1 else None),
+            groceries=groceries.needed() if groceries else None,
+            opened=opened,
         )
+
+    @router.post("/groceries/add")
+    async def add_grocery(request: Request) -> Response:
+        """The grocery list (OurGroceries' too), from the Lists page. Typed in here, it's
+        asked for in their own words, as in chat: that's their yes, unless the category
+        always asks or is paused (then it waits on a yes like any other)."""
+        session, form = await kit.checked(request)
+        groceries = app.services.groceries
+        to = "/lists?open=groceries#groceries"
+        if groceries is None:
+            return kit.redirect(to, "The grocery list isn't set up on this server.")
+        try:
+            name = item_name(str(form.get("item", "")))
+        except InvalidValue:
+            return kit.redirect(to, "That doesn't look like an item.")
+        if groceries.is_needed(name) or name in groceries.awaiting_approval():
+            return kit.redirect(to, "That's on it already.")
+        outcome = await app.services.autonomy.stage(
+            CATEGORY, session.member, list_summary([name]), {"items": [name]}, EXECUTOR,
+            requested=True,
+        )  # fmt: skip
+        return kit.redirect(to, outcome.message)
 
     @router.post("/lists")
     async def create_list(request: Request) -> Response:

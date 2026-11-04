@@ -38,6 +38,7 @@ from themi.web.task_pages import task_rows
 __all__ = ["SiteContext", "install_site"]
 
 HOME_TASKS = 5
+GROCERIES_ON_LISTS = "/lists?open=groceries#groceries"
 
 TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
@@ -254,16 +255,17 @@ def core_routes(kit: Kit) -> APIRouter:
 
     @router.post("/groceries/{item_id}/bought")
     async def grocery_bought(request: Request, item_id: int) -> Response:
-        await kit.checked(request)
+        _, form = await kit.checked(request)
+        back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"
         groceries, pantry = app.services.groceries, app.services.pantry
         item = groceries.get(item_id) if groceries else None
         if item is None or item.status != "needed" or groceries is None:
-            return kit.redirect("/", "That one is already off the list.")
+            return kit.redirect(back, "That one is already off the list.")
         if pantry is not None:
             pantry.set_status(item.name, "plenty", source="list")  # takes it off the list too
         else:
             groceries.finish(item.name)
-        return kit.redirect("/", f"Took {item.name} off the list.")
+        return kit.redirect(back, f"Took {item.name} off the list.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:

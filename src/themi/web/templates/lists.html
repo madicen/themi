@@ -7,13 +7,38 @@
 for everyone; yours are only yours.</p>
 
 <div class="rows">
+  {% if groceries is not none %}
+  {% call(part) row("Groceries", meta=(groceries | length ~ " to get") if groceries else "Nothing to get", id="groceries", open=opened == "groceries") %}
+  {% if part == "body" %}
+    <form method="post" action="/groceries/add" class="add-item">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="item" placeholder="Add to the grocery list" aria-label="Add to the grocery list" maxlength="60" required>
+      <button>Add</button>
+    </form>
+    <ul class="items">
+      {% for item in groceries %}
+      <li>
+        <form method="post" action="/groceries/{{ item.id }}/bought" class="tick">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="back" value="lists">
+          <button class="tick" aria-label="Got {{ item.name }}"><span class="box" aria-hidden="true"></span>{{ item.name }}</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="muted">The list is empty.</li>
+      {% endfor %}
+    </ul>
+    <p class="muted">Tick what you've got and it comes off the list. Adding here is like asking Themi in chat.</p>
+  {% endif %}
+  {% endcall %}
+  {% endif %}
   {% for nl in lists %}
   {% set left = nl.items | rejectattr("done") | list | length %}
   {% set chips = [] %}
   {% if nl.personal %}{% set chips = chips + [("Just yours", "info")] %}{% endif %}
   {% if nl.wall_id %}{% set chips = chips + ["On the wall"] %}{% endif %}
   {% set meta = (left ~ " to go" ~ (", " ~ nl.ticked|length ~ " ticked" if nl.ticked else "")) if nl.items else "Empty" %}
-  {% call(part) row(nl.name, meta=meta, chips=chips, id="list-" ~ nl.id, open=opened == nl.id) %}
+  {% call(part) row(nl.name, meta=meta, chips=chips, id="list-" ~ nl.id, open=opened == nl.id | string) %}
   {% if part == "body" %}
     <form method="post" action="/lists/{{ nl.id }}/add" class="add-item">
       <input type="hidden" name="csrf" value="{{ csrf }}">
