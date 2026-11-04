@@ -13,6 +13,7 @@ SAMPLES = {
     "gemini": "AIzaSyFAKE-fake_FAKEfakeFAKEfakeFAKE123",
     "google_access": "ya29.a0FAKEfakeFAKEfakeFAKEfakeFAKEfake",
     "google_refresh": "1//0gFAKEfakeFAKEfakeFAKEfake",
+    "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmYWtlZmFrZSJ9.ZmFrZWZha2VmYWtlZmFrZQ",  # CG1a
 }
 
 

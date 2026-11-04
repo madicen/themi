@@ -1,4 +1,5 @@
-"""Household connections (W3): Home Connect, LG ThinQ, Roborock, Tuya and the family calendar, on
+"""Household connections (W3): Home Connect, LG ThinQ, Roborock, Tuya, CatGenie (CG1a) and the
+family calendar, on
 the Accounts page beside each person's Google accounts. Admins only, both the section and
 its routes; members never see it.
 
@@ -14,6 +15,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, Response
 
 from themi.accounts import AccountsError, Member
+from themi.connectors.catgenie import CatGenieError
 from themi.connectors.google import TASKS_SCOPE
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi.connectors.roborock import RoborockError
@@ -51,6 +53,7 @@ def household_values(app: Any) -> dict[str, Any]:
         "thinq": _thinq(app),
         "roborock": _roborock(app),
         "tuya": _tuya(app),
+        "catgenie": _catgenie(app),
     }
 
 
@@ -118,6 +121,22 @@ def _tuya(app: Any) -> dict[str, Any] | None:
         "regions": [(key, name) for key, (name, _) in REGIONS.items()],
         "problem": watcher.account.problem(),
         "devices": [(d, states.get(d.id), watcher.raw(d)) for d in watcher.devices()],
+    }
+
+
+def _catgenie(app: Any) -> dict[str, Any] | None:
+    watcher = app.services.catgenie
+    if watcher is None:
+        return None
+    states = watcher.states()
+    chores = app.services.litter_box
+    return {
+        "linked": watcher.account.linked(),
+        "problem": watcher.account.problem(),
+        "devices": [
+            (d, states.get(d.id), watcher.raw(d), chores.granules(d.id) if chores else None)
+            for d in watcher.devices()
+        ],
     }
 
 
@@ -236,6 +255,76 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(to, "A Tuya device is a feeder, or not used.")
         device = store.set_device_appliance(session.member, device_id, appliance)
         return kit.redirect(to, f"{device.name}: {appliance or 'not used'}.")
+
+    # ----- CatGenie, for the litter box (CG1a) -----------------------------------------
+
+    @router.post("/family/catgenie/code")
+    async def catgenie_code(request: Request) -> Response:
+        """The first step: PetNovations texts a code to the app account's phone."""
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.catgenie
+        to = back("catgenie")
+        if watcher is None:
+            return kit.redirect(to, "The litter box isn't set up on this server.")
+        try:
+            phone = await watcher.send_code(str(form.get("phone", "")))
+        except CatGenieError as exc:
+            return kit.redirect(to, f"No code was sent: {exc}")
+        return kit.page(  # the number stays out of the URL
+            request,
+            "accounts.html",
+            member=session.member,
+            csrf=session.csrf_token,
+            flash=f"PetNovations was asked to text a code to {phone}.",
+            **accounts_values(app, session.member, catgenie_code_sent=phone, opened="catgenie"),
+        )
+
+    @router.post("/family/catgenie/link")
+    async def link_catgenie(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.catgenie
+        to = back("catgenie")
+        if watcher is None:
+            return kit.redirect(to, "The litter box isn't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member, str(form.get("phone", "")), str(form.get("code", ""))
+            )
+        except (CatGenieError, AccountsError) as exc:
+            return kit.redirect(to, f"CatGenie wasn't linked: {exc}")
+        if not watcher.devices():
+            return kit.redirect(to, "Linked CatGenie, but the account has no litter box on it yet.")
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(to, f"Linked CatGenie. Found {names}." if names else "Linked CatGenie.")
+
+    @router.post("/family/catgenie/granules/{device_id}")
+    async def catgenie_granules(request: Request, device_id: int) -> Response:
+        """CG1b: every how many cleans the granules want topping up (blank: never asked)."""
+        _session, form = await kit.checked(request, admin=True)
+        watcher, chores = app.services.catgenie, app.services.litter_box
+        to = back("catgenie")
+        if watcher is None or chores is None:
+            return kit.redirect(to, "The litter box isn't set up on this server.")
+        device = next((d for d in watcher.devices() if d.id == device_id), None)
+        if device is None:
+            return kit.redirect(to, "That isn't one of the litter boxes.")
+        every = str(form.get("every", "")).strip()
+        if not every:
+            chores.set_granules(device.id, None)
+            return kit.redirect(to, f"{device.name}: no granule reminders.")
+        if not every.isdigit() or int(every) <= 0:
+            return kit.redirect(to, "Not saved: the number of cleans must be a whole number.")
+        chores.set_granules(device.id, int(every))
+        return kit.redirect(
+            to, f"{device.name}: a granule top-up every {int(every)} cleans, counted from now."
+        )
+
+    @router.post("/family/catgenie/unlink")
+    async def unlink_catgenie(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.catgenie is not None:
+            await app.services.catgenie.unlink()
+        return kit.redirect(back("catgenie"), "Unlinked CatGenie.")
 
     # ----- LG ThinQ (30) ----------------------------------------------------------------
 

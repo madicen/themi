@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import EMAIL as COZYLA_EMAIL
 from tests.fakes.cozyla import PASSWORD as COZYLA_PASSWORD
 from tests.fakes.cozyla import FakeCozyla
@@ -45,6 +46,7 @@ def connector_options(
     thinq: FakeThinq | None = None,
     roborock: FakeRoborock | None = None,
     tuya: FakeTuya | None = None,
+    catgenie: FakeCatGenie | None = None,
     keep: FakeKeep | None = None,
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
@@ -57,6 +59,7 @@ def connector_options(
         "thinq": thinq.config() if thinq else None,
         "roborock": roborock,
         "tuya": tuya.config() if tuya else None,
+        "catgenie": catgenie.config() if catgenie else None,
         "keep": keep.connect if keep else None,
     }
 

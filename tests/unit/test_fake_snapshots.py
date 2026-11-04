@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
@@ -147,6 +148,15 @@ def tuya() -> FakeTuya:
     return fake
 
 
+def catgenie() -> FakeCatGenie:
+    fake = FakeCatGenie()
+    fake.add_box("CGR0000001", "CatGenie")
+    fake.set("CGR0000001", sani=12, error="HEATER_FAULT")
+    fake.alert("CGR0000001", "DOME_OPEN", datetime(2026, 11, 4, 7, tzinfo=UTC))
+    fake.refresh_tokens.add("refresh")
+    return fake
+
+
 def keep() -> FakeKeep:
     fake = FakeKeep()
     fake.check(ERIN, fake.put(ERIN, "milk"))
@@ -177,6 +187,7 @@ FAKES: dict[str, Callable[[], Snapshots]] = {
     "thinq": thinq,
     "roborock": roborock,
     "tuya": tuya,
+    "catgenie": catgenie,
     "keep": keep,
     "ourgroceries": ourgroceries,
     "travel": travel,

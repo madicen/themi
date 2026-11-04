@@ -26,12 +26,13 @@ async def test_the_first_run_links_everything_and_the_next_doesnt_again(boot: Bo
         "Robbie",
         "Cat Feeder",
         "Mochi's feeder",
+        "CatGenie",
         "Dishwasher",
         "the Safeway helper",
     ]
     assert first.count("SELECT COUNT(*) FROM linked_accounts WHERE watched = 1") == 2
     assert first.count("SELECT COUNT(*) FROM keep_accounts") == 2
-    assert first.count("SELECT COUNT(*) FROM devices") == 6
+    assert first.count("SELECT COUNT(*) FROM devices") == 7
     assert not first.fakes.restored
     refresh_tokens = set(first.fakes.google.state.refresh_tokens)
 
@@ -39,7 +40,7 @@ async def test_the_first_run_links_everything_and_the_next_doesnt_again(boot: Bo
     assert second.fakes.restored
     assert second.linked == first.linked
     assert second.count("SELECT COUNT(*) FROM linked_accounts") == 2
-    assert second.count("SELECT COUNT(*) FROM devices") == 6
+    assert second.count("SELECT COUNT(*) FROM devices") == 7
     assert set(second.fakes.google.state.refresh_tokens) == refresh_tokens  # no new links
 
 

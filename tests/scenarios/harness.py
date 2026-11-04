@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
@@ -93,6 +94,7 @@ class Scenario:
         thinq: FakeThinq | None = None,
         roborock: FakeRoborock | None = None,
         tuya: FakeTuya | None = None,
+        catgenie: FakeCatGenie | None = None,
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         runner: FakeRunner | None = None,
@@ -140,6 +142,7 @@ class Scenario:
                 thinq=thinq,
                 roborock=roborock,
                 tuya=tuya,
+                catgenie=catgenie,
                 keep=keep,
                 timezone=family.family.timezone,
             ),
@@ -313,7 +316,8 @@ async def scenario(
     `fake_ourgroceries`, and Google Calendar when it uses `fake_gcal`, and the Cozyla to-do
     sync (a "Family" list) when it uses `fake_cozyla`, and Home Connect when it uses
     `fake_home_connect`, LG ThinQ (30) when it uses `fake_thinq`, Roborock (V1) when it uses
-    `fake_roborock`, Tuya's feeders (32) when it uses `fake_tuya`, Google Keep (GK1) when it
+    `fake_roborock`, Tuya's feeders (32) when it uses `fake_tuya`, the CatGenie litter box (CG1a)
+    when it uses `fake_catgenie`, Google Keep (GK1) when it
     uses `fake_keep`, and the control folder for updates from the website (D3a) when it uses
     `fake_runner`.
     """
@@ -334,6 +338,7 @@ async def scenario(
         thinq=optional("fake_thinq"),
         roborock=optional("fake_roborock"),
         tuya=optional("fake_tuya"),
+        catgenie=optional("fake_catgenie"),
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
         runner=optional("fake_runner"),

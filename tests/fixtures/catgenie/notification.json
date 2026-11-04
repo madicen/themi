@@ -1,0 +1,5 @@
+{
+ "id": "00000000-0000-0000-0000-000000000002",
+ "creationTime": "2026-10-20T08:00:00.000",
+ "data": "{\"errorType\":\"\",\"parentDeviceId\":\"CGR0000001\",\"type\":24,\"version\":\"8.7.205R\",\"deviceName\":\"CatGenie\",\"deviceId\":\"000000000001\",\"eventTimestamp\":\"2026-10-20T08:00:00.000\"}"
+}

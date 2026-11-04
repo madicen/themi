@@ -187,12 +187,13 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
     ),
     "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
     "devices": (
-        "the washer, dryer, dishwasher, robot vacuum and pet feeders: running, done, time "
-        "left, stuck, food left, last fed",
+        "the washer, dryer, dishwasher, robot vacuum, pet feeders and litter box: running, "
+        "done, time left, stuck, food left, last fed, sani-solution, errors",
         r"wash(?:er|ing)?\b|dryer|drying|dishwasher|laundry|cycle|load\b|appliance|"
         r"how (?:much )?longer|time left|still running|is it done|"
         r"robot|roborock|the vacuum\b|vacuum'?s\b|"
-        r"feeders?\b|kibble|been fed|fed the (?:cat|dog)s?|pet food|cat food|dog food",
+        r"feeders?\b|kibble|been fed|fed the (?:cat|dog)s?|pet food|cat food|dog food|"
+        r"litter|cat ?genie|sani.?solution|cartridge|granules?\b",
     ),
     "maintenance": (
         "seasonal and long-term upkeep: filters, gutters, fertilizing, their guides and notes",
@@ -332,6 +333,8 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Where's the vacuum stuck?",
         "Has the cat been fed this morning?",
         "How much food is left in the feeder?",
+        "Is the litter box working?",
+        "How much sani-solution is left?",
     ),
     "maintenance": (
         "The furnace filter wants changing every three months",

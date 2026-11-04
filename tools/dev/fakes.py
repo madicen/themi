@@ -1,12 +1,12 @@
 """D5a: `make dev` with the test fakes for every outside service, linked and kept.
 
 `DevFakes` holds the fakes from `tests/fakes` (Google sign-in, Gmail, Calendar and Tasks
-as local servers; the wall, ThinQ, Home Connect, Tuya and travel as transports; Keep,
+as local servers; the wall, ThinQ, Home Connect, Tuya, CatGenie and travel as transports; Keep,
 OurGroceries and Roborock at their interfaces) and hands them to `build_runtime` the way
 the scenario harness hands them to `build_app` (`tests.fakes.wiring`).
 
 On the first run it fills them (a washer and dryer, a dishwasher, a robot, two pet
-feeders, the wall's "Family" list) and links them through Themi's own link paths, so
+feeders, a litter box, the wall's "Family" list) and links them through Themi's own link paths, so
 `data/dev/` holds real linked accounts. What the fakes hold is saved in
 `data/dev/fakes.json` (each minute, after each `act`, and on stop) and comes back on the
 next run, so Themi's sync cursors and remote ids still match.
@@ -27,6 +27,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 from urllib.parse import parse_qs, urlparse
 
+from tests.fakes.catgenie import CODE as CATGENIE_CODE
+from tests.fakes.catgenie import PHONE as CATGENIE_PHONE
+from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
@@ -65,6 +68,7 @@ WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 DISHWASHER = "BOSCH-SMV-1"
 ROBOT = "rr-duid-1"
 FEEDER, MOCHI = "ebfeeder1", "ebfeeder2"  # the standard kind, and one with a fault code
+LITTER = "CGR0000001"  # the CatGenie
 
 T = TypeVar("T")
 Check = str | Callable[[], Awaitable[object]]  # a periodic task's name, or a read
@@ -92,6 +96,7 @@ class DevFakes:
         self.home_connect = FakeHomeConnect()
         self.roborock = FakeRoborock()
         self.tuya = FakeTuya()
+        self.catgenie = FakeCatGenie()
         self.keep = FakeKeep()
         self.ourgroceries = FakeOurGroceries()
         self.travel = FakeTravel()
@@ -115,6 +120,7 @@ class DevFakes:
             "home_connect": self.home_connect,
             "roborock": self.roborock,
             "tuya": self.tuya,
+            "catgenie": self.catgenie,
             "keep": self.keep,
             "ourgroceries": self.ourgroceries,
             "travel": self.travel,
@@ -150,6 +156,7 @@ class DevFakes:
             thinq=self.thinq,
             roborock=self.roborock,
             tuya=self.tuya,
+            catgenie=self.catgenie,
             keep=self.keep,
             timezone=timezone,
         )
@@ -246,6 +253,8 @@ class DevFakes:
         if FEEDER not in self.tuya.devices:
             self.tuya.add_feeder(FEEDER, "Cat Feeder")
             self.tuya.add_feeder(MOCHI, "Mochi's feeder", "fault")
+        if LITTER not in self.catgenie.devices:
+            self.catgenie.add_box(LITTER, "CatGenie")
         wall_list(self.cozyla)
         for address in ADDRESSES.values():
             self.keep.user(address)
@@ -277,6 +286,9 @@ class DevFakes:
             await services.roborock.link(admin, ROBOROCK_EMAIL, ROBOROCK_CODE)
         if services.tuya is not None and not services.tuya.account.linked():
             await services.tuya.link(admin, TUYA_ACCESS_ID, TUYA_SECRET, "us")
+        if services.catgenie is not None and not services.catgenie.account.linked():
+            await services.catgenie.send_code(CATGENIE_PHONE)
+            await services.catgenie.link(admin, CATGENIE_PHONE, CATGENIE_CODE)
         if services.home_connect is not None and not services.home_connect.linked():
             await self.link_home_connect(app, admin, site_url)
         safeway = services.safeway

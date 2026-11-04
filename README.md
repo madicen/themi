@@ -277,6 +277,41 @@ lists each feeder's data points; to send them for a proper mapping, run
 `themi tuya capture --out tuya-captures` (in Docker: `docker compose exec themi themi tuya
 capture --out /data/tuya-captures`). The files leave out the devices' ids, keys and names.
 
+### The litter box, through CatGenie (optional)
+
+A CatGenie A.I. can tell Themi how it's doing: cleaning or not, its sani-solution and any
+error. CatGenie has no official API, so Themi talks to the CatGenie app's own cloud
+(PetNovations) the way the community client
+[kclif9/catgenieapi](https://github.com/kclif9/catgenieapi) found it works. It may stop
+working when they change things; the admin then hears once, and the litter box goes quiet.
+Themi only reads it; it never starts, stops or changes a clean.
+
+1. As an admin, open the Accounts page, enter the phone number the CatGenie app signs in
+   with under **Litter box**, and press **Send code**.
+2. Enter the code that's texted to it and press **Link CatGenie**. Themi keeps the sign-in
+   (encrypted), not the number.
+
+The litter box is read every 10 minutes. An error (on the box, or an alert the app was sent),
+or the sani-solution running low (20% or under) or out, becomes a chore for whoever has more
+room, with a nudge 10 minutes later; one sorted in the meantime sends nothing, and the box
+showing it's sorted (the error gone, a clean after the alert, a new cartridge) closes the
+chore. An error or no sani-solution stops it cleaning, so those nudges aren't held by the
+daily limit. "/pause litter" holds them for a while. If the sign-in stops working, the admin
+hears once; link it again. Asked "is the litter box ok?" or "how much sani-solution is
+left?", Themi reads it.
+
+The CatGenie can't tell how many granules are left, so Themi counts its cleans instead: set
+**Top up the granules every _ cleans** under the litter box on the Accounts page, and a
+chore comes round each time that many have gone by. Marking it done starts the count again.
+Leave it blank for none.
+
+Nobody has published what the CatGenie's error codes mean, so for now each one is shown in
+plain words from the code itself. To send real ones for a proper mapping, run
+`themi catgenie capture --out catgenie-captures` (in Docker: `docker compose exec themi
+themi catgenie capture --out /data/catgenie-captures`), ideally a few times as the box shows
+different things: cleaning, the cartridge low, the dome off, an error. The files leave out
+the box's ids and names and the account's number.
+
 ### Groceries said to Google Home, through Google Keep (optional, a trial)
 
 "Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API
