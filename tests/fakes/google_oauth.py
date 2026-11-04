@@ -31,6 +31,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from tests.fakes._server import BackgroundServer
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.google.oauth import GoogleConfig
 from themi.storage.secrets import Secret
 
@@ -77,7 +78,9 @@ def _error(status: int, error: str, description: str = "") -> JSONResponse:
     return JSONResponse({"error": error, "error_description": description}, status_code=status)
 
 
-class FakeGoogle:
+class FakeGoogle(Snapshots):
+    SNAPSHOT = ("state",)  # D5a: what `make dev` keeps between runs
+
     def __init__(self) -> None:
         self.state = FakeGoogleState()
         self._lock = threading.Lock()

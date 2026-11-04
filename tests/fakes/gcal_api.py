@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, Response
 
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.google import GoogleConfig
 
 EVENT_ID = re.compile(r"[a-v0-9]{5,1024}")
@@ -40,7 +41,9 @@ class _Calendar:
     events: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
-class FakeGcal:
+class FakeGcal(Snapshots):
+    SNAPSHOT = ("calendars", "_ids")  # D5a: what `make dev` keeps between runs
+
     def __init__(self, google: FakeGoogle) -> None:
         self.google = google
         self._lock = threading.Lock()

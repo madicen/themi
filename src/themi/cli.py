@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from themi import __version__
@@ -101,8 +101,13 @@ def _store() -> AccountStore:
     return AccountStore(open_database(settings.db_path), settings.cipher())
 
 
-def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
-    """Wire Themi from its settings, as `themi run` (and `make dev`) runs it."""
+def build_runtime(
+    settings: Settings, *, connectors: Mapping[str, Any] | None = None, **runtime_options: Any
+) -> Runtime:
+    """Wire Themi from its settings, as `themi run` (and `make dev`) runs it.
+
+    `connectors` replaces `build_app`'s connector arguments that settings would give
+    (`make dev` passes the fakes this way, D5a)."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
     from themi.connectors.cozyla import CozylaClient
@@ -122,6 +127,20 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
     # With Telegram disabled the channel is never started; sends simply queue.
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
+    options: dict[str, Any] = {
+        "google": settings.google(),
+        "grocery_list": (
+            OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None
+        ),
+        "cozyla": CozylaClient(wall) if (wall := settings.cozyla()) else None,
+        "travel": TravelClient(settings.tomtom_api_key),
+        "home_connect": HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
+        "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
+        "roborock": roborock_library.available(),
+        "keep": GKeepAccount,
+    }
+    if connectors is not None:
+        options.update(connectors)
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
@@ -132,17 +151,10 @@ def build_runtime(settings: Settings, **runtime_options: Any) -> Runtime:
             base_url=f"{api}/bot" if api else None,
             base_file_url=f"{api}/file/bot" if api else None,
         ),
-        google=settings.google(),
         backup=settings.backup,
-        grocery_list=OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None,
-        cozyla=CozylaClient(wall) if (wall := settings.cozyla()) else None,
-        travel=TravelClient(settings.tomtom_api_key),
-        home_connect=HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
-        thinq=dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
-        roborock=roborock_library.available(),
-        keep=GKeepAccount,
         tool_routing=settings.tool_routing,
         control_dir=settings.control_dir,
+        **options,
     )
     return Runtime(
         app,

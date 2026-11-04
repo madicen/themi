@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.roborock import (
     BadCode,
     LoginExpired,
@@ -87,7 +88,19 @@ class FakeSession:
         self.closed = True
 
 
-class FakeRoborock:
+class FakeRoborock(Snapshots):
+    # D5a: what `make dev` keeps between runs
+    SNAPSHOT = (
+        "robots",
+        "statuses",
+        "parts",
+        "rooms",
+        "offline_robots",
+        "codes_sent",
+        "token",
+        "expired",
+    )
+
     def __init__(self) -> None:
         self.robots: dict[str, VacuumDevice] = {}
         self.statuses: dict[str, dict[str, Any]] = {}

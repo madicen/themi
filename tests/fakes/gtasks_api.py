@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, Response
 
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.snapshot import Snapshots
 from themi import clock
 from themi.connectors.google import GoogleConfig
 
@@ -36,7 +37,9 @@ def _now() -> str:
     return clock.now().astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-class FakeGtasks:
+class FakeGtasks(Snapshots):
+    SNAPSHOT = ("accounts", "_ids", "page_size")  # D5a: what `make dev` keeps between runs
+
     def __init__(self, google: FakeGoogle) -> None:
         self.google = google
         self._lock = threading.Lock()

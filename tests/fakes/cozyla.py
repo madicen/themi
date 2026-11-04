@@ -33,6 +33,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
+from tests.fakes.snapshot import Snapshots
 from themi import clock
 
 EMAIL = "family@x.example"
@@ -55,7 +56,21 @@ class Call:
     headers: dict[str, str] = field(default_factory=dict)
 
 
-class FakeCozyla:
+class FakeCozyla(Snapshots):
+    # D5a: what `make dev` keeps between runs
+    SNAPSHOT = (
+        "members",
+        "lists",
+        "todos",
+        "chores",
+        "chore_ticks",
+        "routines",
+        "routine_ticks",
+        "takes_order",
+        "tokens",
+        "_ids",
+    )
+
     def __init__(self, email: str = EMAIL, password: str = PASSWORD) -> None:
         self.email, self.password = email, password
         self._key = rsa.generate_private_key(public_exponent=65537, key_size=2048)

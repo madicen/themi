@@ -19,13 +19,16 @@ from urllib.parse import unquote
 import httpx
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.travel import TravelClient
 from themi.storage.secrets import Secret
 
 KEY = "tomtom-test-key"
 
 
-class FakeTravel:
+class FakeTravel(Snapshots):
+    SNAPSHOT = ("places", "minutes", "use_tomtom")  # D5a: what `make dev` keeps between runs
+
     def __init__(self) -> None:
         self.places: dict[str, tuple[float, float]] = {}
         self.minutes = 30

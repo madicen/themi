@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.gkeep import KeepError, KeepItem, KeepLogin
 from themi.storage.secrets import Secret
 
@@ -33,7 +34,9 @@ class FakeKeepUser:
     lists: dict[str, list[FakeItem]] = field(default_factory=dict)
 
 
-class FakeKeep:
+class FakeKeep(Snapshots):
+    SNAPSHOT = ("users", "_ids")  # D5a: what `make dev` keeps between runs
+
     def __init__(self) -> None:
         self.users: dict[str, FakeKeepUser] = {}
         self.calls: Counter[str] = Counter()
