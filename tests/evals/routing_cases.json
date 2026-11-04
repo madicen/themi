@@ -799,6 +799,31 @@
    "tools": [
     "appliance_status"
    ]
+  },
+  {
+   "id": "maint-add",
+   "kind": "plain",
+   "message": "Put changing the furnace filter on the maintenance list, every 90 days",
+   "tools": [
+    "set_maintenance"
+   ]
+  },
+  {
+   "id": "maint-guide-para",
+   "kind": "paraphrase",
+   "message": "Remind me how we clean the gutters, step by step",
+   "tools": [
+    "get_maintenance_guide"
+   ]
+  },
+  {
+   "id": "maint-done-follow",
+   "kind": "follow-up",
+   "message": "Done, and we used the 16x25 one",
+   "before": "How do I change the furnace filter?",
+   "tools": [
+    "log_maintenance"
+   ]
   }
  ]
 }

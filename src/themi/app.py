@@ -64,6 +64,7 @@ from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry
 from themi.core.lists import Lists
+from themi.core.maintenance import Maintenance
 from themi.core.meals import Meals
 from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
@@ -227,6 +228,8 @@ def build_app(
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
         travel_heads_ups.install()
+    maintenance = Maintenance(services, tasks, services.calendar, scheduler)
+    maintenance.install()
     routines = Routines(services)
     routines.install()
     habits = HabitReserve(services)
@@ -260,6 +263,7 @@ def build_app(
         PeriodicTask("safeway.expire", timedelta(minutes=5), safeway.expire_stale),
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
+        PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
     ]
     server = ServerControl(services, control_dir)
     server.install()

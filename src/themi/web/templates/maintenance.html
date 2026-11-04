@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% from "_row.html" import row %}
+{% block title %}Maintenance · Themi{% endblock %}
+{% macro fields(item=None) %}
+    <label>Name <input type="text" name="name" maxlength="80" value="{{ item.name if item else '' }}" required></label>
+    <label>Every <input type="number" name="interval_days" min="1" max="3650" value="{{ item.interval_days if item else '' }}" required> days</label>
+    <fieldset class="months">
+      <legend>Done in (none ticked: all year)</legend>
+      {% for name in months %}
+      <label class="check"><input type="checkbox" name="m{{ loop.index }}" {% if item and loop.index in item.active_months %}checked{% endif %}> {{ name[:3] }}</label>
+      {% endfor %}
+    </fieldset>
+    <label>Steps, one a line <textarea name="steps" rows="4">{{ item.guide | join("\n") if item else "" }}</textarea></label>
+    <label>Who does it
+      <select name="owner">
+        <option value="">Whoever has room</option>
+        {% for m in members %}
+        <option value="{{ m.id }}" {% if item and item.owner == m.id %}selected{% endif %}>{{ m.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+{% endmacro %}
+{% block content %}
+<h1>Maintenance</h1>
+<p class="muted">The jobs that come round every few months or once a season: filters, gutters,
+fertilizing the trees. Themi offers at most one a day, at a good moment for whoever does it,
+and puts due dates on the family calendar. Tell it in chat too ("changed the furnace filter,
+used the 16x25").</p>
+
+<div class="rows">
+  {% for r in rows %}
+  {% set chips = [] %}
+  {% if r.offered %}{% set chips = chips + [("Offered", "info")] %}{% elif r.overdue %}{% set chips = chips + [("Due", "warn")] %}{% endif %}
+  {% set meta = "Due " ~ ("today" if r.due == today else r.due.strftime("%a %-d %b")) ~ " · " ~ r.every ~ ", " ~ r.months %}
+  {% call(part) row(r.item.name, meta=meta, chips=chips, id="item-" ~ r.item.id, open=opened == r.item.id | string) %}
+  {% if part == "body" %}
+    <p class="muted">{% if r.last %}Last done {{ r.last.strftime("%a %-d %b %Y") }}.{% else %}Not done here yet.{% endif %}
+      {% if r.owner %}{{ r.owner }} looks after it.{% endif %}</p>
+    {% if r.item.guide %}
+    <ol class="steps">{% for step in r.item.guide %}<li>{{ step }}</li>{% endfor %}</ol>
+    {% endif %}
+    <form method="post" action="/maintenance/{{ r.item.id }}/done" class="add-item">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="notes" placeholder="Notes for next time (optional)" aria-label="Notes for next time" maxlength="500">
+      <button>Done today</button>
+    </form>
+    {% if r.runs %}
+    <h3>Past runs</h3>
+    <ul class="items">
+      {% for run in r.runs %}
+      <li>{{ run.done_on.strftime("%-d %b %Y") }}{% if run.done_by %} · {{ names.get(run.done_by, "") }}{% endif %}{% if run.notes %} · {{ run.notes }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <details class="more">
+      <summary>Change it</summary>
+      <form method="post" action="/maintenance/{{ r.item.id }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {{ fields(r.item) }}
+        <button class="primary">Save</button>
+      </form>
+    </details>
+    <div class="danger-zone buttons">
+      <details>
+        <summary>Remove this item</summary>
+        <form method="post" action="/maintenance/{{ r.item.id }}/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="danger">Remove {{ r.item.name }} and its history</button>
+        </form>
+      </details>
+    </div>
+  {% endif %}
+  {% endcall %}
+  {% else %}
+  <p class="empty muted">Nothing on the maintenance list yet.</p>
+  {% endfor %}
+  <details class="add">
+    <summary>A new item</summary>
+    <form method="post" action="/maintenance">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {{ fields() }}
+      <label>Last done (if you know) <input type="date" name="last_done" max="{{ today.isoformat() }}"></label>
+      <button class="primary">Add it</button>
+    </form>
+  </details>
+</div>
+{% endblock %}
