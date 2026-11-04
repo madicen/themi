@@ -23,6 +23,7 @@ pytest_plugins = [
     "tests.fakes.thinq",
     "tests.fakes.roborock",
     "tests.fakes.tuya",
+    "tests.fakes.catgenie",
     "tests.fakes.travel",
     "tests.fakes.ourgroceries",
     "tests.fakes.keep",
