@@ -14,11 +14,14 @@ from datetime import datetime
 
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi import clock
 from themi.connectors.ourgroceries import MirrorError, RemoteItem
 
 
-class FakeOurGroceries:
+class FakeOurGroceries(Snapshots):
+    SNAPSHOT = ("list_name", "list", "_ids")  # D5a: what `make dev` keeps between runs
+
     def __init__(self, list_name: str = "Groceries") -> None:
         self.list_name = list_name
         self.list: dict[str, RemoteItem] = {}

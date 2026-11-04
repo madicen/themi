@@ -30,6 +30,7 @@ from fastapi.responses import JSONResponse
 
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.snapshot import Snapshots
 from themi import clock
 from themi.connectors.gmail.parse import TABS
 from themi.connectors.google import GoogleConfig
@@ -68,7 +69,9 @@ class _Failure:
     retry_after: int | None
 
 
-class FakeGmail:
+class FakeGmail(Snapshots):
+    SNAPSHOT = ("mailboxes", "_ids")  # D5a: what `make dev` keeps between runs
+
     def __init__(self, google: FakeGoogle) -> None:
         self.google = google
         self._lock = threading.Lock()

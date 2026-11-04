@@ -8,7 +8,11 @@ The first run seeds the test family (Erin and Husband, both paired) and puts
 `GEMINI_API_KEY` from `.env` on each person's default AI backend. Each run
 prints a sign-in link for the website.
 
-    python -m tools.dev            # run
+Every outside service is played by its test fake (tools/dev/fakes.py, D5a), linked on
+the first run and kept in `data/dev/fakes.json`. `make dev-prod` runs without them.
+
+    python -m tools.dev            # run, with the fakes for Gmail, the wall, devices... (D5a)
+    python -m tools.dev --no-fakes # run with no outside services, as before D5a
     python -m tools.dev invite Sam # a new member's invite code, for the "Someone new" chat
     python -m tools.dev reset      # delete data/dev and data/dev-prod
     python -m tools.dev prod       # a fresh copy of the Pi's data, then run on it (D4)
@@ -43,6 +47,7 @@ from themi.storage.secrets import Secret, generate_key
 
 if TYPE_CHECKING:
     from themi.runtime import Runtime
+    from tools.dev.fakes import DevFakes
     from tools.dev.simulator import Simulator
 
 DEV_DIR = Path("data/dev")
@@ -180,8 +185,11 @@ def invite(settings: Settings, name: str) -> str:
         store.db.close()
 
 
-def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = False) -> None:
-    """`copy`: dev_dir holds a copy of the family's data (D4), not the seeded test family."""
+def run(
+    dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = False, fakes: bool = True
+) -> None:
+    """`copy`: dev_dir holds a copy of the family's data (D4), not the seeded test family.
+    `fakes`: the outside services are played by the test fakes (D5a; never with `copy`)."""
     from themi.cli import build_runtime
     from themi.logs import configure_logging
     from tools.dev.simulator import Simulator
@@ -189,6 +197,7 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = Fal
     env = {**read_dotenv(Path(".env")), **os.environ}
     simulator = Simulator(port)
     simulator.start()
+    dev_fakes: DevFakes | None = None
     try:
         settings = dev_settings(dev_dir, simulator.url, env)
         gemini_key = env.get("GEMINI_API_KEY", "").strip()
@@ -203,23 +212,57 @@ def run(dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = Fal
         continue_numbering(settings, simulator)
         configure_logging(settings.log_level)
         logging.getLogger().addHandler(simulator.logs)  # for the page's Copy session
-        runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK)
+        connectors = None
+        if fakes and not copy:
+            from tools.dev.fakes import FAKES_FILE, DevFakes
+
+            dev_fakes = DevFakes(dev_dir / FAKES_FILE)
+            dev_fakes.start(site_urls(settings))
+            connectors = dev_fakes.connectors(family_timezone(settings))
+        runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK, connectors=connectors)
         simulator.login = lambda telegram_user_id: login_link(settings, telegram_user_id)
         simulator.energy_debug = lambda telegram_user_id: energy_numbers(runtime, telegram_user_id)
         link = login_link(settings) or ""
-        print(_banner(simulator.url, link, result, dev_dir, source), flush=True)
 
         async def main() -> None:
             runtime.install_signal_handlers()
+            linked = await dev_fakes.bind(runtime, site_urls(settings)[0]) if dev_fakes else None
+            print(_banner(simulator.url, link, result, dev_dir, source, linked), flush=True)
             await runtime.run()
 
         asyncio.run(main())
     finally:
+        if dev_fakes is not None:
+            if dev_fakes.app is not None:
+                dev_fakes.save()  # what the fakes got since the last minute's save
+            dev_fakes.stop()
         simulator.stop()
 
 
+def site_urls(settings: Settings) -> list[str]:
+    """The dev website's addresses: the one Themi uses for links first, then localhost."""
+    from themi.web import site_base_url
+
+    base = site_base_url(settings.public_url, settings.http_host, settings.http_port)
+    return [base, base.replace("127.0.0.1", "localhost")]
+
+
+def family_timezone(settings: Settings) -> str:
+    store = _store(settings)
+    try:
+        family = store.get_family()
+        return family.timezone if family else "America/Los_Angeles"
+    finally:
+        store.db.close()
+
+
 def _banner(
-    simulator_url: str, link: str, result: SeedResult, dev_dir: Path, copy: str | None = None
+    simulator_url: str,
+    link: str,
+    result: SeedResult,
+    dev_dir: Path,
+    copy: str | None = None,
+    fakes: list[str] | None = None,
 ) -> str:
     lines = [
         "",
@@ -233,6 +276,11 @@ def _banner(
             f"  A private copy of the family's data ({copy}): their messages and email.",
             "  Member 1 is Erin and member 2 is Husband in the simulator. No links work:",
             "  Gmail, Keep, the wall and the devices aren't reached, and nothing goes to Telegram.",
+        ]
+    if fakes is not None:
+        lines += [
+            "  Fakes:    " + "; ".join(fakes),
+            f"            kept in {dev_dir}/fakes.json (make dev FAKES=0 runs without them)",
         ]
     if result.seeded:
         lines.append("  Seeded Erin and Husband, both paired.")
@@ -256,6 +304,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--from-backup", metavar="NAME", help="a snapshot ('latest', or from `themi backup --list`)"
     )
     prod_parser.add_argument("--keep", action="store_true", help="run on the copy already there")
+    parser.add_argument(
+        "--no-fakes", action="store_true", help="run without the fakes for outside services"
+    )
     args = parser.parse_args(argv)
     if args.command == "reset":
         for folder in (DEV_DIR, PROD_DIR):
@@ -268,7 +319,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         code = invite(settings, args.name)
         print(f'In the simulator, pick "Someone new" and send:  /start {code}')
     else:
-        run()
+        run(fakes=not args.no_fakes)
 
 
 def prod(backup: str | None, keep: bool) -> None:

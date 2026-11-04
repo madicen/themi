@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi import clock
 from themi.connectors.homeconnect import HomeConnectClient, HomeConnectConfig
 from themi.connectors.homeconnect.client import OPERATION_STATE, REMAINING_TIME, STATE_PREFIX
@@ -32,7 +33,18 @@ CLIENT_SECRET = "home-connect-secret"
 ACCESS_LIFETIME = timedelta(hours=24)
 
 
-class FakeHomeConnect:
+class FakeHomeConnect(Snapshots):
+    # D5a: what `make dev` keeps between runs
+    SNAPSHOT = (
+        "appliances",
+        "states",
+        "seconds_left",
+        "codes",
+        "access",
+        "refresh_tokens",
+        "_offline",
+    )
+
     def __init__(self) -> None:
         self.appliances: dict[str, dict] = {}
         self.states: dict[str, str] = {}

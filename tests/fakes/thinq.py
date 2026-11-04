@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 import pytest
 
+from tests.fakes.snapshot import Snapshots
 from themi.connectors.thinq import MqttLogin, ThinqConfig
 from themi.connectors.thinq.client import API_KEY
 
@@ -48,7 +49,19 @@ class FakeMqtt:
         self.closed = True
 
 
-class FakeThinq:
+class FakeThinq(Snapshots):
+    # D5a: what `make dev` keeps between runs
+    SNAPSHOT = (
+        "devices",
+        "states",
+        "tokens",
+        "clients",
+        "subscribed",
+        "certificates",
+        "broker_up",
+        "_offline",
+    )
+
     def __init__(self) -> None:
         self.devices: dict[str, dict[str, Any]] = {}
         self.states: dict[str, Any] = {}

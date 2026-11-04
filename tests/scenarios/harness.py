@@ -24,8 +24,6 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from tests.fakes.cozyla import EMAIL as COZYLA_EMAIL
-from tests.fakes.cozyla import PASSWORD as COZYLA_PASSWORD
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
@@ -40,6 +38,7 @@ from tests.fakes.server_runner import FakeRunner
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
+from tests.fakes.wiring import connector_options, wall_list
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.accounts import Member
@@ -49,8 +48,6 @@ from themi.ai.router import ProviderFactory
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
-from themi.connectors.cozyla import CozylaClient, CozylaConfig
-from themi.connectors.google import GoogleConfig
 from themi.storage.secrets import Secret
 
 START = datetime(2026, 10, 21, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
@@ -109,7 +106,7 @@ class Scenario:
         self.gmail = gmail
         self.models = ModelBank()
         self.cozyla = cozyla
-        self.cozyla_list = _cozyla_list(cozyla) if cozyla else 0  # the synced list's id
+        self.cozyla_list = wall_list(cozyla) if cozyla else 0  # the synced list's id
         self.app: App = build_app(
             family.db,
             family.store.cipher,
@@ -124,16 +121,22 @@ class Scenario:
             ),
             provider_factory=(provider_factory if real_models else self.models),
             sleep=asyncio.sleep if real_models else _no_sleep,
-            google=_google_config(google, gmail, gcal, gtasks),
-            grocery_list=ourgroceries,
-            cozyla=_cozyla_client(cozyla, family) if cozyla else None,
-            travel=travel.client() if travel else None,
-            home_connect=home_connect.client() if home_connect else None,
-            thinq=thinq.config() if thinq else None,
-            roborock=roborock,
-            keep=keep.connect if keep else None,
             tool_routing=tool_routing,
             control_dir=runner.folder if runner else None,
+            **connector_options(
+                google=google,
+                gmail=gmail,
+                gcal=gcal,
+                gtasks=gtasks,
+                ourgroceries=ourgroceries,
+                cozyla=cozyla,
+                travel=travel,
+                home_connect=home_connect,
+                thinq=thinq,
+                roborock=roborock,
+                keep=keep,
+                timezone=family.family.timezone,
+            ),
         )
         if not real_models:
             for member in (family.erin, family.husband):
@@ -293,17 +296,6 @@ class Scenario:
         return any(int(p["chat_id"]) == chat for p in self.telegram.calls("sendChatAction"))
 
 
-def _google_config(
-    google: FakeGoogle | None,
-    gmail: FakeGmail | None,
-    gcal: FakeGcal | None,
-    gtasks: FakeGtasks | None = None,
-) -> GoogleConfig | None:
-    config = gmail.config() if gmail else google.config() if google else None
-    config = gcal.config(config) if gcal else config
-    return gtasks.config(config) if gtasks else config
-
-
 @pytest.fixture
 async def scenario(
     family: SeededFamily, fake_telegram: FakeTelegram, request: pytest.FixtureRequest
@@ -341,24 +333,3 @@ async def scenario(
     await s.start()
     yield s
     await s.stop()
-
-
-def _cozyla_list(fake: FakeCozyla) -> int:
-    """The fake's "Family" list, made if the test hasn't."""
-    for list_id, todo_list in fake.lists.items():
-        if todo_list["todoListTitle"] == "Family":
-            return list_id
-    return fake.add_list("Family")
-
-
-def _cozyla_client(fake: FakeCozyla, family: SeededFamily) -> CozylaClient:
-    config = CozylaConfig(COZYLA_EMAIL, Secret(COZYLA_PASSWORD), todo_list="Family", chores=True)
-    for name in ("Erin", "Husband"):
-        if not any(m["memberName"] == name for m in fake.members):
-            fake.add_member(name)
-    return CozylaClient(
-        config,
-        timezone=family.family.timezone,
-        password_key=fake.public_key,
-        transport=fake.transport,
-    )
