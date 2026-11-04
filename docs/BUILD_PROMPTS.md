@@ -4851,8 +4851,7 @@ Notes (2026-11-03):
   title in, accepted out), so P8b's is scored the same way; `make naming-eval` prints it.
 - `tests/evals/naming_cases.json`: 45 cases over a board of 17 open tasks, written from the
   kinds of thing in the family's chat (read locally), paraphrased, no names of theirs.
-  **Not reviewed by a person yet** (P7a's rule): check the `means` labels before P8b leans
-  on them.
+  Reviewed by the user, 2026-11-03.
 - Baseline (word check, `BASELINE` in `tests/unit/test_naming_eval.py`): 19/45 right;
   9 cases wrongly refused, all paraphrases ("jogged this morning", "Counters are clear",
   "Headphones are on the charger"); 18 wrongly accepted. Live: one refusal in the local
@@ -4914,10 +4913,10 @@ picking the single closest task can't work.
   any setting allows it, then as few wrongly refused as possible. Say why in the Notes.
   Keep the offline scoring as an opt-in eval (like `test_router_thresholds.py`: the test
   key, vectors cached in `results/`), plus a fake-embedder version in `make test-all`.
-- **Before tuning**: someone reviews `tests/evals/naming_cases.json`'s labels (P8a left them
-  unreviewed), and the cases grow: more near twins (the kitchen pair, the bathrooms),
-  more short answers, and "Counters are clear" / "Headphones are on the charger", the
-  paraphrases embeddings still missed.
+- **Before tuning**: the cases grow: more near twins (the kitchen pair, the bathrooms),
+  more short answers, and paraphrases like "Counters are clear" and "Headphones are on the
+  charger", the ones embeddings still missed. The 45 in `tests/evals/naming_cases.json`
+  were reviewed 2026-11-03; new ones get the same review before they count.
 - Also fix while here: "did my 5k" never reaches the naming check, since `QUESTION` reads
   a message starting "did" as a question (P8a's Notes).
 - P8a's weekly numbers in `themi feedback` show whether it worked: fewer wrong refusals
