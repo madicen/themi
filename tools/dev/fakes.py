@@ -18,12 +18,13 @@ thread (the simulator's, D5b) and waits for it, so the fakes need no locks.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from urllib.parse import parse_qs, urlparse
 
 from tests.fakes.cozyla import FakeCozyla
@@ -65,6 +66,16 @@ T = TypeVar("T")
 Check = str | Callable[[], Awaitable[object]]  # a periodic task's name, or a read
 
 
+class HelperSeat(Snapshots):
+    """The Safeway helper's token (35d), kept like the fakes so the helper stays paired.
+    Themi keeps only its hash, as it does for the extension's."""
+
+    SNAPSHOT = ("token",)
+
+    def __init__(self) -> None:
+        self.token = ""
+
+
 class DevFakes:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -79,8 +90,11 @@ class DevFakes:
         self.keep = FakeKeep()
         self.ourgroceries = FakeOurGroceries()
         self.travel = FakeTravel()
+        self.safeway = HelperSeat()
+        self.web: Any = None  # Themi's website (ASGI), for the Safeway helper's API (D5c)
         self.restored = False  # True when the fakes came back from the last run
         self.app: App | None = None
+        self.site_url = ""
         self.loop: asyncio.AbstractEventLoop | None = None
         self._servers = (self.google, self.gmail, self.gcal, self.gtasks)
 
@@ -98,6 +112,7 @@ class DevFakes:
             "keep": self.keep,
             "ourgroceries": self.ourgroceries,
             "travel": self.travel,
+            "safeway": self.safeway,
         }
 
     # ----- starting and stopping --------------------------------------------------------
@@ -132,10 +147,15 @@ class DevFakes:
             timezone=timezone,
         )
 
-    async def bind(self, app: App, site_url: str, scheduler: Scheduler | None = None) -> list[str]:
+    async def bind(
+        self, app: App, site_url: str, scheduler: Scheduler | None = None, web: Any = None
+    ) -> list[str]:
         """On Themi's loop, before it runs: link what isn't linked yet, and save each
-        minute on `scheduler` (the runtime's). Returns what's linked, for the banner."""
+        minute on `scheduler` (the runtime's). `web`: Themi's website app, which the Safeway
+        helper calls. Returns what's linked, for the banner."""
         self.app = app
+        self.web = web
+        self.site_url = site_url
         self.loop = asyncio.get_running_loop()
         await self.link(app, site_url)
         if scheduler is not None:
@@ -165,13 +185,14 @@ class DevFakes:
 
     # ----- changes from other threads ---------------------------------------------------
 
-    def act(self, change: Callable[[], T], check: Check | Sequence[Check] = ()) -> T:
-        """Make `change` to the fakes on Themi's loop and wait for it; then run `check` so
-        Themi sees it now: periodic tasks by name, or reads of its own. Safe from any thread
-        but Themi's own."""
+    def act(self, change: Callable[[], T | Awaitable[T]], check: Check | Sequence[Check] = ()) -> T:
+        """Make `change` to the fakes on Themi's loop (awaited, if it's async) and wait for
+        it; then run `check` so Themi sees it now: periodic tasks by name, or reads of its
+        own. Safe from any thread but Themi's own."""
 
         async def on_loop() -> T:
-            result = change()
+            made = change()
+            result = cast(T, await made if inspect.isawaitable(made) else made)
             self.save()
             for step in (check,) if isinstance(check, str) or callable(check) else check:
                 await (self.check_now(step) if isinstance(step, str) else step())
@@ -244,12 +265,22 @@ class DevFakes:
         if services.roborock is not None and not services.roborock.account.linked():
             await services.roborock.send_code(ROBOROCK_EMAIL)
             await services.roborock.link(admin, ROBOROCK_EMAIL, ROBOROCK_CODE)
-        account, dishwasher = services.home_connect, services.dishwasher
-        if account is not None and dishwasher is not None and not account.linked():
-            redirect = HomeConnectAccount.redirect_uri(site_url)
-            state, code = self.home_connect.approve(account.authorization_url(admin, redirect))
-            await account.complete(state, code, redirect)
-            await dishwasher.add_appliances(admin)
+        if services.home_connect is not None and not services.home_connect.linked():
+            await self.link_home_connect(app, admin, site_url)
+        safeway = services.safeway
+        if safeway is not None and safeway.helper_for(self.safeway.token) is None:
+            self.safeway.token = safeway.connect(admin)  # as Connect on the Safeway page does
+
+    async def link_home_connect(self, app: App, by: Member, site_url: str) -> None:
+        """Home Connect's OAuth, with its fake saying yes (its sign-in page is at an address
+        a browser can't open, so the website's link can't be finished by hand)."""
+        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        if account is None or dishwasher is None:
+            return
+        redirect = HomeConnectAccount.redirect_uri(site_url)
+        state, code = self.home_connect.approve(account.authorization_url(by, redirect))
+        await account.complete(state, code, redirect)
+        await dishwasher.add_appliances(by)
 
     async def _link_google(self, app: App, member: Member, address: str, site_url: str) -> None:
         """As if they linked Google from the website and tapped "Watch it": the inbox is
@@ -284,6 +315,8 @@ class DevFakes:
             found.append("Keep")
         found += ["the wall", "OurGroceries"]
         found += [d.name for d in store.list_devices()]
+        if app.services.safeway is not None and self.safeway.token:
+            found.append("the Safeway helper")
         return found
 
 

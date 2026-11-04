@@ -232,7 +232,7 @@ def run(
                 from tools.dev.controls import ControlPanel
 
                 linked = await dev_fakes.bind(
-                    runtime.app, site_urls(settings)[0], runtime.scheduler
+                    runtime.app, site_urls(settings)[0], runtime.scheduler, runtime.web
                 )
                 simulator.controls = ControlPanel(dev_fakes)
             print(_banner(simulator.url, link, result, dev_dir, source, linked), flush=True)

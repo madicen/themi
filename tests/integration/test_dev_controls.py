@@ -2,64 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import httpx
-import pytest
 
 from tests.fakes.wiring import wall_list
-from tests.fixtures.dev import Boot, DevRun
-from tools.dev.controls import SECTIONS, ControlPanel
+from tests.fixtures.dev import Panel
+from tools.dev.controls import SECTIONS
 from tools.dev.fakes import DevFakes
 from tools.dev.simulator import Simulator
 
 
-@dataclass
-class Panel:
-    run: DevRun
-    sim: Simulator
-    client: httpx.AsyncClient
-
-    async def act(self, section: str, action: str, **values: Any) -> httpx.Response:
-        return await self.client.post(
-            "/control/act", json={"section": section, "action": action, "values": values}
-        )
-
-    async def ok(self, section: str, action: str, **values: Any) -> str:
-        response = await self.act(section, action, **values)
-        assert response.status_code == 200, response.text
-        return response.json()["happened"]
-
-    def rows(self, sql: str, *params: Any) -> list[dict[str, Any]]:
-        return self.run.runtime.app.db.query(sql, params)
-
-    def device_state(self, name: str) -> str:
-        (row,) = self.rows(
-            "SELECT s.state FROM device_states s JOIN devices d ON d.id = s.device_id "
-            "WHERE d.name = ?",
-            name,
-        )
-        return row["state"]
-
-
-@pytest.fixture
-async def panel(boot: Boot) -> AsyncIterator[Panel]:
-    run = await boot()
-    sim = Simulator()
-    sim.start()
-    sim.controls = ControlPanel(run.fakes)
-    # Async, so Themi's loop (this test's) is free to make each change while we wait.
-    async with httpx.AsyncClient(base_url=sim.url, timeout=30) as client:
-        yield Panel(run, sim, client)
-    sim.stop()
-
-
-def test_every_fake_has_a_section_but_travel(tmp_path: Path) -> None:
+def test_every_fake_has_a_section(tmp_path: Path) -> None:
     driven = {name for section in SECTIONS for name in section.uses}
-    assert driven == set(DevFakes(tmp_path / "fakes.json").held()) - {"travel"}  # D5c
+    assert driven == set(DevFakes(tmp_path / "fakes.json").held())
 
 
 async def test_the_schema_and_page(panel: Panel) -> None:
