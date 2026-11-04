@@ -174,7 +174,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F24b | Idea: time blocked for a task moves its due date | Feedback | [x] 2026-11-03 |
 | F24c | Feedback: an email is read as its reader sees it | Feedback | [x] 2026-11-03 |
 | D4 | Dev tooling: `make dev` with a copy of the Pi's data | Dev tooling | [x] 2026-11-03 |
-| W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [ ] |
+| W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [ ] |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [ ] |
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [ ] |
@@ -8378,7 +8378,7 @@ Notes (2026-11-03):
   copy; `make dev-reset` deletes it.
 
 ### W1 · Website redesign: phone-first shell, navigation and row components
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: 15, 16
 Read first: "How the family uses Themi" → The management website (the site's areas:
 Family, Per person, Devices, Trust tiers, Rules and memory, AI backend, Activity; "works on
@@ -8415,6 +8415,21 @@ This prompt:
 Tests: the bottom bar and `/more` render for a member and for an admin (admin-only links
 absent for members). Every existing page still renders signed in. The macro renders a
 closed row with its chips, and an open one when asked.
+
+Notes (2026-11-03):
+- `base.html`: one `nav.tabs` that CSS puts at the bottom on phones and in the top bar from
+  900px. The tab comes from `request.url.path` (Home `/`, Tasks `/tasks*`, Lists `/lists*`,
+  everything else More). Sign out moved into the name menu (`details.menu`).
+- `/more` is `site.more_groups(member)`; Family, Development and "Household connections"
+  (`/accounts#household`, filled in by W3) are admins only.
+- `_row.html`: `row(title, meta, chips, open, id)` called with `{% call(part) %}`: the
+  caller renders `part == "actions"` (buttons on the collapsed row, kept outside the
+  `<summary>` so tapping them doesn't toggle it) and `part == "body"` (the panel). `chip(text,
+  kind)`; kinds good, warn, bad, info. CSS also has `.rows` (the list's frame),
+  `.row-plain` (a row that doesn't open), `details.add` (an "Add …" row), `.savebar`,
+  `button.danger` and `.danger-zone`.
+- The CSP allows no inline styles, so icons are inline SVG styled from the stylesheet.
+- Checked by eye at 390px and 1280px with headless Chrome on pages the test harness rendered.
 
 ### W2 · Website redesign: Tasks as compact rows with Done, and Home
 Status: [ ]

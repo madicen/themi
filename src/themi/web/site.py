@@ -267,6 +267,11 @@ def core_routes(kit: Kit) -> APIRouter:
             )
         return kit.redirect("/", message)
 
+    @router.get("/more", response_class=HTMLResponse)
+    def more(request: Request) -> HTMLResponse:
+        session = kit.current(request)
+        return kit.with_flash(request, "more.html", session, groups=more_groups(session.member))
+
     # ----- personal settings ------------------------------------------------------
 
     def settings_values(member: Member, **extra: Any) -> dict[str, Any]:
@@ -358,6 +363,39 @@ def core_routes(kit: Kit) -> APIRouter:
         return kit.redirect("/settings", "Busy time removed.")
 
     return router
+
+
+def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
+    """The More page (W1): every page past the bottom bar's three, grouped."""
+    admin = member.is_admin
+    accounts = [("/accounts", "Google accounts", "Gmail, calendars and Google Tasks")]
+    if admin:
+        accounts.append(
+            ("/accounts#household", "Household connections", "Appliances, vacuum, calendar")
+        )
+    household = [
+        ("/knowledge", "Rules & memory", "What Themi keeps to and remembers"),
+        ("/tiers", "What Themi does alone", "What asks first and what's automatic"),
+        ("/spending", "Spending", "Takeout and business expenses"),
+        ("/safeway", "Safeway", "The cart helper and remembered products"),
+    ]
+    if admin:
+        household.insert(0, ("/family", "Family", "The household and its people"))
+    groups = [
+        (
+            "You",
+            [
+                ("/settings", "My settings", "Quiet hours, messages, phrasing"),
+                ("/week", "My week", "How Themi sees your week"),
+                ("/ai", "My AI", "Which AI does each job"),
+            ],
+        ),
+        ("Accounts", accounts),
+        ("Household", household),
+    ]
+    if admin:
+        groups.append(("Admin", [("/dev", "Development", "Update or restart the server")]))
+    return groups
 
 
 def _parse_time(text: str) -> time:

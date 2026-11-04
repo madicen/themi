@@ -279,3 +279,79 @@ async def test_busy_times_can_be_added_and_removed(
     assert scenario.app.store.get_member(erin.id).busy_times == ()
     missing = await site.post("/settings/busy/5/remove", data={"csrf": csrf})
     assert missing.status_code == 303  # already gone: nothing to do
+
+
+# ----- the shell (W1) -------------------------------------------------------------
+
+
+async def test_the_bottom_bar_marks_the_page_youre_on(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    for path, current in (("/", "/"), ("/tasks", "/tasks"), ("/lists", "/lists"), ("/ai", "/more")):
+        page = (await site.get(path)).text
+        assert f'<a href="{current}" aria-current="page">' in page
+        assert page.count('aria-current="page"') == 1
+    home = (await site.get("/")).text
+    assert "Sign out" in home and 'aria-label="Signed in as Husband"' in home
+
+
+async def test_the_more_page_shows_admin_pages_only_to_admins(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    member = (await site.get("/more")).text
+    assert 'href="/settings"' in member and 'href="/tiers"' in member
+    for admin_only in ('href="/family"', 'href="/dev"', 'href="/accounts#household"'):
+        assert admin_only not in member
+    async with web_client(scenario) as admin_site:
+        await sign_in(scenario, admin_site, "Erin")
+        admin = (await admin_site.get("/more")).text
+        for admin_only in ('href="/family"', 'href="/dev"', 'href="/accounts#household"'):
+            assert admin_only in admin
+
+
+async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
+    pages = (
+        "/",
+        "/tasks",
+        "/lists",
+        "/more",
+        "/settings",
+        "/week",
+        "/ai",
+        "/accounts",
+        "/knowledge",
+        "/tiers",
+        "/spending",
+        "/safeway",
+        "/email/noise",
+    )
+    for name, extra in (("Husband", ()), ("Erin", ("/family", "/dev"))):
+        async with web_client(scenario) as client:
+            await sign_in(scenario, client, name)
+            for path in (*pages, *extra):
+                response = await client.get(path)
+                assert response.status_code == 200, path
+                assert 'class="tabs"' in response.text, path
+
+
+def test_a_row_opens_on_tap_and_shows_its_chips() -> None:
+    from jinja2 import Environment, FileSystemLoader
+
+    from themi.web.kit import HERE
+
+    env = Environment(loader=FileSystemLoader(str(HERE / "templates")), autoescape=True)
+    template = env.from_string(
+        '{% from "_row.html" import row %}'
+        '{% call(part) row(title, meta="Due Thu", chips=[("Overdue", "warn"), "Weekly"],'
+        " open=open) %}"
+        '{% if part == "actions" %}<button>Done</button>{% else %}<p>Panel</p>{% endif %}'
+        "{% endcall %}"
+    )
+    closed = template.render(title="Bins <out>", open=False)
+    assert "<details>" in closed and "Bins &lt;out&gt;" in closed
+    assert '<span class="chip warn">Overdue</span>' in closed
+    assert '<span class="chip">Weekly</span>' in closed
+    assert 'class="row-item has-actions"' in closed and "<button>Done</button>" in closed
+    assert "<details open>" in template.render(title="Bins", open=True)

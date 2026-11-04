@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}More · Themi{% endblock %}
+{% block content %}
+<h1>More</h1>
+{% for group, links in groups %}
+<h2>{{ group }}</h2>
+<nav class="menu-list" aria-label="{{ group }}">
+  {% for href, label, hint in links %}
+  <a href="{{ href }}"><span class="row-main"><span class="row-title">{{ label }}</span><span class="row-meta">{{ hint }}</span></span></a>
+  {% endfor %}
+</nav>
+{% endfor %}
+{% endblock %}

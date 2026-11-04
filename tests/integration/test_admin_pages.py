@@ -385,6 +385,7 @@ async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncC
     assert (await site.get("/dev")).status_code == 403
     assert (await site.get("/ai/timing")).status_code == 403
     assert "/dev" not in (await site.get("/")).text
+    assert "/dev" not in (await site.get("/more")).text
 
 
 async def test_reply_times_moved_to_the_development_page(
@@ -394,4 +395,4 @@ async def test_reply_times_moved_to_the_development_page(
     await sign_in(scenario, site, "Erin")
     response = await site.get("/ai/timing")
     assert response.status_code == 303 and response.headers["location"] == "/dev"
-    assert '<a href="/dev">Development</a>' in (await site.get("/")).text
+    assert 'href="/dev"' in (await site.get("/more")).text  # W1: on the More page
