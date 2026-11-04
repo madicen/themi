@@ -10,6 +10,8 @@ injects updates and shows everything the bot sends:
 - skip Themi's clock ahead, so scheduled nudges fire now
 - open the website signed in as the chosen person (`login` makes the link)
 - copy the test session (conversations and Themi's log) as text, from `/sim/report`
+- drive the outside services' fakes from the control panel at `/control` (D5b), beside
+  the chat on wide screens; each action shows in the transcript as a "⚙" notice
 
 The page polls `/sim/state` for one chat's transcript. Entries in chat 0
 (skips, session marks) show in every chat.
@@ -17,6 +19,8 @@ The page polls `/sim/state` for one chat's transcript. Entries in chat 0
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -24,7 +28,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from itertools import count
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
@@ -33,7 +37,15 @@ from tests.fakes.telegram_api import NAMES, FakeTelegram
 from themi import clock
 from themi.logs import RecentLogs
 
+if TYPE_CHECKING:
+    from tools.dev.controls import ControlPanel
+
+log = logging.getLogger(__name__)
+
 PAGE = Path(__file__).with_name("simulator.html")
+CONTROL_PAGE = Path(__file__).with_name("control.html")
+NO_CONTROLS = "There are no fakes to drive: make dev FAKES=0 runs without them."
+STARTING = "Themi is still starting; the panel comes in a moment."
 NEWCOMER_ID = 1003
 PEOPLE = [
     *({"id": i, "name": n} for i, n in NAMES.items()),
@@ -76,6 +88,8 @@ class Simulator(FakeTelegram):
         self.login: Callable[[int], str | None] | None = None
         # Telegram user id -> the energy model's numbers as text (dev only, never the website).
         self.energy_debug: Callable[[int], str] | None = None
+        self.controls: ControlPanel | None = None  # the fakes' control panel (D5b)
+        self.controls_coming = False  # the fakes are being linked; the panel follows
         self.app.add_api_route("/", self._page, methods=["GET"], response_class=HTMLResponse)
         self.app.add_api_route("/sim/state", self._state, methods=["GET"])
         self.app.add_api_route("/sim/send", self._send, methods=["POST"])
@@ -86,6 +100,11 @@ class Simulator(FakeTelegram):
         self.app.add_api_route("/sim/energy", self._energy, methods=["GET"])
         self.app.add_api_route("/sim/report", self._report, methods=["GET"])
         self.app.add_api_route("/sim/session", self._new_session, methods=["POST"])
+        page = HTMLResponse
+        self.app.add_api_route("/control", self._control_page, methods=["GET"], response_class=page)
+        self.app.add_api_route("/control/schema", self._control_schema, methods=["GET"])
+        self.app.add_api_route("/control/state", self._control_state, methods=["GET"])
+        self.app.add_api_route("/control/act", self._control_act, methods=["POST"])
 
     def number_messages_after(self, message_id: int) -> None:
         """Continue Telegram message ids past an earlier run's, as Telegram itself would."""
@@ -261,6 +280,50 @@ class Simulator(FakeTelegram):
         self._add(EVERY_CHAT, "notice", f"Skipped ahead {_duration(minutes)}")
         return JSONResponse({"ok": True, "now": now.isoformat()})
 
+    # ----- the control panel (D5b) ---------------------------------------------
+    # The panel's calls wait on Themi's loop, which may call this server meanwhile (a
+    # message sent during a check), so they run in a worker thread, never on this loop.
+
+    async def _control_page(self) -> HTMLResponse:
+        return HTMLResponse(CONTROL_PAGE.read_text())
+
+    async def _control_schema(self) -> JSONResponse:
+        if self.controls is None:
+            waiting = self.controls_coming
+            error = STARTING if waiting else NO_CONTROLS
+            return JSONResponse({"sections": [], "error": error, "retry": waiting})
+        return JSONResponse({"sections": self.controls.schema()})
+
+    async def _control_state(self) -> JSONResponse:
+        if self.controls is None:
+            return JSONResponse({})
+        return JSONResponse(await asyncio.to_thread(self.controls.state))
+
+    async def _control_act(self, request: Request) -> JSONResponse:
+        from tools.dev.controls import ControlError
+
+        if self.controls is None:
+            if self.controls_coming:
+                return JSONResponse({"ok": False, "error": STARTING}, status_code=503)
+            return JSONResponse({"ok": False, "error": NO_CONTROLS}, status_code=404)
+        body = await request.json()
+        try:
+            happened = await asyncio.to_thread(
+                self.controls.act,
+                str(body.get("section", "")),
+                str(body.get("action", "")),
+                dict(body.get("values") or {}),
+            )
+        except ControlError as exc:
+            return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+        except Exception as exc:
+            log.exception("A control panel action failed")
+            return JSONResponse(
+                {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, status_code=500
+            )
+        self._add(EVERY_CHAT, "notice", f"⚙ {happened}")
+        return JSONResponse({"ok": True, "happened": happened})
+
     # ----- the session report -------------------------------------------------
 
     def new_session(self) -> None:
@@ -286,13 +349,19 @@ class Simulator(FakeTelegram):
             "Times are this computer's clock, to match the log; Themi's clock is shown "
             "when it differs.",
         ]
+        chats = 0
         for person in PEOPLE:
             own = [e for e in fresh if e.chat_id == person["id"]]
             if not own:
                 continue
+            chats += 1
             lines += ["", f"## {person['name']} (Telegram {person['id']})", ""]
             for entry in sorted(own + everywhere, key=lambda e: e.seq):
                 lines += _report_lines(entry, person["name"])
+        if everywhere and not chats:  # skips and control panel actions, with no chat to go in
+            lines += ["", "## Skips and the control panel", ""]
+            for entry in everywhere:
+                lines += _report_lines(entry, "")
         logs = self.logs.since(self._session_log)
         lines += ["", f"## Themi log ({len(logs)} lines)", ""]
         lines += logs or ["(nothing logged)"]

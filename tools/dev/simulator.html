@@ -36,7 +36,7 @@
     border-radius: 8px; padding: 4px 10px; cursor: pointer;
   }
   button:hover { border-color: var(--accent); }
-  #website, #energy { color: var(--accent); text-decoration: none; }
+  #website, #energy, #control { color: var(--accent); text-decoration: none; }
   #website:hover { text-decoration: underline; }
   nav { background: var(--panel); border-right: 1px solid var(--line); padding: 8px; }
   nav button {
@@ -121,6 +121,18 @@
   }
   form button { background: var(--accent); color: var(--accent-text); border: 0; padding: 0 16px; }
   .empty { color: var(--muted); text-align: center; margin-top: 30vh; }
+  /* D5b: the control panel beside the chat, on wide screens. */
+  #panel { display: none; }
+  #toggle-panel { display: none; }
+  @media (min-width: 1100px) {
+    #toggle-panel { display: inline-block; }
+    body.with-panel { grid-template-columns: 200px 1fr 420px; }
+    body.with-panel header { grid-column: 1 / 4; }
+    body.with-panel #panel {
+      display: block; min-height: 0; border-left: 1px solid var(--line); background: var(--bg);
+    }
+    #panel iframe { width: 100%; height: 100%; border: 0; display: block; }
+  }
   @media (max-width: 640px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
     header { grid-column: 1; }
@@ -140,6 +152,8 @@
   <button data-skip="1440">1 day</button>
   <a id="website" target="_blank" rel="noopener">Website ↗</a>
   <a id="energy" target="_blank" rel="noopener" title="The Shadow Calendar's numbers (dev only)">Energy ↗</a>
+  <a id="control" href="/control" target="_blank" rel="noopener" title="Make things happen outside the chat: email, the wall, devices">Control panel ↗</a>
+  <button id="toggle-panel" title="Show or hide the control panel beside the chat">Panel</button>
   <button id="copy" title="Copy the conversations and Themi's log, to paste into Claude">Copy session</button>
   <button id="session" title="Start a new test session: later copies begin here">New session</button>
 </header>
@@ -162,6 +176,7 @@
     </form>
   </div>
 </main>
+<aside id="panel"></aside>
 <script>
 const NOTES = {
   1001: "paired, admin",
@@ -375,6 +390,23 @@ document.getElementById("session").onclick = async () => {
   await post("/sim/session", {});
   toast("New session started: copies begin here");
 };
+
+function showPanel(on) {
+  document.body.classList.toggle("with-panel", on);
+  const panel = document.getElementById("panel");
+  if (on && !panel.firstChild) {
+    const frame = el("iframe");
+    frame.src = "/control?embedded=1";
+    frame.title = "Control panel";
+    panel.append(frame);
+  }
+  try { localStorage.setItem("themi-sim-panel", on ? "on" : "off"); } catch {}
+}
+document.getElementById("toggle-panel").onclick = () =>
+  showPanel(!document.body.classList.contains("with-panel"));
+let panelOn = true;
+try { panelOn = localStorage.getItem("themi-sim-panel") !== "off"; } catch {}
+if (matchMedia("(min-width: 1100px)").matches) showPanel(panelOn);
 
 poll();
 setInterval(poll, 700);
