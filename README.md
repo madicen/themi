@@ -242,6 +242,40 @@ and send it back to its dock" under "What Themi does alone" to skip asking. A pa
 out (filter, brushes, the dock's filter) becomes a chore too. "/pause vacuum" holds these
 nudges for a while. If the sign-in stops working, the admin hears once; link it again.
 
+### The pet feeders, through SmartLife / Tuya (optional)
+
+Feeders on the SmartLife (or Tuya Smart) app can tell Themi when their food runs low or out,
+or something's stuck, through a cloud project on Tuya's developer platform. Themi only reads
+them; it never feeds.
+
+1. Sign up at [platform.tuya.com](https://platform.tuya.com) and create a cloud project
+   (Cloud, Development): development method "Smart Home", and the data centre the app
+   account lives in ("Western America" for an account made in the US). Keep the API
+   services it offers (IoT Core and Authorization Token Management are the ones Themi uses).
+2. In the project's **Devices** tab, **Link App Account**, and scan the QR code it shows
+   from the SmartLife app (Me, then the scan icon). The feeders appear in the project.
+3. Still under Devices, set the feeders' **control instruction mode** to "DP Instruction"
+   if it offers it, so their own data points (a fault code, say) reach Themi too.
+4. From the project's Overview, copy the **Access ID** and **Access Secret**. As an admin,
+   open the Accounts page, paste them under **Pet feeders** with the same data centre, and
+   press **Link Tuya**. Feeders map themselves; anything else (a water fountain) is "Not
+   used" until set. The secret is kept encrypted.
+5. Tuya's free IoT Core plan lasts a month at a time and has to be extended on Tuya's site
+   (it's free to extend). When it lapses, the admin hears once; extend it, then link again.
+
+Each feeder is read every 10 minutes. Food running low (20% or under, when the feeder says
+how much is left) or out, food stuck, or another fault becomes a chore for whoever has more
+room, with a nudge 10 minutes later; one sorted in the meantime sends nothing, and the feeder
+showing it's sorted closes the chore. Out of food or stuck can't wait for tomorrow, so those
+nudges aren't held by the daily limit. "/pause feeders" holds them for a while. Asked "has
+the cat been fed?", Themi reads the feeder and its last feeding.
+
+Feeders name their data points differently from model to model, so the mapping was written
+from Tuya's standard feeder and common shapes, not from these feeders. The Accounts page
+lists each feeder's data points; to send them for a proper mapping, run
+`themi tuya capture --out tuya-captures` (in Docker: `docker compose exec themi themi tuya
+capture --out /data/tuya-captures`). The files leave out the devices' ids, keys and names.
+
 ### Groceries said to Google Home, through Google Keep (optional, a trial)
 
 "Hey Google, add tomatoes to my shopping list" puts them in Google Keep. Google's Keep API
