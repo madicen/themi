@@ -6,7 +6,7 @@ whatever a form says. Changes here are the person's own, so nothing waits for a 
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member
@@ -28,8 +28,14 @@ def routes(kit: Kit) -> APIRouter:
     def item_of(nl: NamedList, item_id: int) -> ListItem | None:
         return next((i for i in nl.items if i.id == item_id), None)
 
+    def back(nl: NamedList | None, message: str | None = None) -> Response:
+        """The Lists page with this list open (W4), so ticking in the shop keeps your place."""
+        if nl is None:
+            return kit.redirect("/lists", message)
+        return kit.redirect(f"/lists?open={nl.id}#list-{nl.id}", message)
+
     @router.get("/lists", response_class=HTMLResponse)
-    def lists_page(request: Request) -> HTMLResponse:
+    def lists_page(request: Request, opened: str = Query("", alias="open")) -> HTMLResponse:
         session = kit.current(request)
         found = lists().visible(session.member)
         return kit.with_flash(
@@ -38,6 +44,7 @@ def routes(kit: Kit) -> APIRouter:
             session,
             lists=found,
             stores={nl.id: lists().stores(nl) for nl in found if nl.purpose},
+            opened=int(opened) if opened.isdigit() else (found[0].id if len(found) == 1 else None),
         )
 
     @router.post("/lists")
@@ -48,7 +55,7 @@ def routes(kit: Kit) -> APIRouter:
             nl = lists().create(session.member, str(form.get("name", "")), personal=personal)
         except InvalidValue as exc:
             return kit.redirect("/lists", f"{str(exc).capitalize()}.")
-        return kit.redirect("/lists", f"Made the list {nl.name}.")
+        return back(nl, f"Made the list {nl.name}.")
 
     @router.post("/lists/{list_id}/add")
     async def add_item(request: Request, list_id: int) -> Response:
@@ -59,8 +66,8 @@ def routes(kit: Kit) -> APIRouter:
         try:
             added = lists().add(nl, [str(form.get("item", ""))], session.member)
         except InvalidValue as exc:
-            return kit.redirect("/lists", f"{str(exc).capitalize()}.")
-        return kit.redirect("/lists", f"Added to {nl.name}." if added else "That's on it already.")
+            return back(nl, f"{str(exc).capitalize()}.")
+        return back(nl, f"Added to {nl.name}." if added else "That's on it already.")
 
     @router.post("/lists/{list_id}/items/{item_id}/tick")
     async def tick_item(request: Request, list_id: int, item_id: int) -> Response:
@@ -70,7 +77,7 @@ def routes(kit: Kit) -> APIRouter:
         if item is None:
             return kit.redirect("/lists", "That item isn't on a list you can see.")
         lists().tick(item, form.get("done") == "1", session.member)
-        return kit.redirect("/lists")
+        return back(nl)
 
     @router.post("/lists/{list_id}/items/{item_id}/remove")
     async def remove_item(request: Request, list_id: int, item_id: int) -> Response:
@@ -80,7 +87,7 @@ def routes(kit: Kit) -> APIRouter:
         if item is None:
             return kit.redirect("/lists", "That item isn't on a list you can see.")
         lists().remove(item)
-        return kit.redirect("/lists", f"Took {item.name} off.")
+        return back(nl, f"Took {item.name} off.")
 
     @router.post("/lists/{list_id}/items/{item_id}/store")
     async def set_store(request: Request, list_id: int, item_id: int) -> Response:
@@ -94,9 +101,9 @@ def routes(kit: Kit) -> APIRouter:
         store = " ".join(str(form.get("store", "")).split())[:40]
         if store:
             buying.remember(item.name, store=store)
-            return kit.redirect("/lists", f"{item.name}: usually from {store}.")
+            return back(nl, f"{item.name}: usually from {store}.")
         buying.forget_store(item.name)
-        return kit.redirect("/lists", f"Forgot where {item.name} comes from.")
+        return back(nl, f"Forgot where {item.name} comes from.")
 
     @router.post("/lists/{list_id}/clear")
     async def clear_ticked(request: Request, list_id: int) -> Response:
@@ -105,7 +112,7 @@ def routes(kit: Kit) -> APIRouter:
         if nl is None:
             return kit.redirect("/lists", "That list isn't one you can see.")
         cleared = lists().clear_ticked(nl)
-        return kit.redirect("/lists", f"Cleared {cleared} ticked from {nl.name}.")
+        return back(nl, f"Cleared {cleared} ticked from {nl.name}.")
 
     @router.post("/lists/{list_id}/delete")
     async def delete_list(request: Request, list_id: int) -> Response:

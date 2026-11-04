@@ -1,67 +1,82 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}Lists · Themi{% endblock %}
 {% block content %}
 <h1>Lists</h1>
-<p class="muted">Lists Themi keeps for you: ask in chat ("make a packing list") or make one
-here. The household's are for everyone; yours are only yours.</p>
+<p class="muted">Ask in chat ("make a packing list") or make one here. The household's are
+for everyone; yours are only yours.</p>
 
-{% for nl in lists %}
-<article class="card">
-  <p class="summary">{{ nl.name }}{% if nl.personal %} <span class="muted">· just yours</span>{% endif %}{% if nl.wall_id %} <span class="muted">· on the wall</span>{% endif %}</p>
-  {% for item in nl.items %}
-  <div class="row list-item">
-    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/tick" class="inline">
+<div class="rows">
+  {% for nl in lists %}
+  {% set left = nl.items | rejectattr("done") | list | length %}
+  {% set chips = [] %}
+  {% if nl.personal %}{% set chips = chips + [("Just yours", "info")] %}{% endif %}
+  {% if nl.wall_id %}{% set chips = chips + ["On the wall"] %}{% endif %}
+  {% set meta = (left ~ " to go" ~ (", " ~ nl.ticked|length ~ " ticked" if nl.ticked else "")) if nl.items else "Empty" %}
+  {% call(part) row(nl.name, meta=meta, chips=chips, id="list-" ~ nl.id, open=opened == nl.id) %}
+  {% if part == "body" %}
+    <form method="post" action="/lists/{{ nl.id }}/add" class="add-item">
       <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="hidden" name="done" value="{{ 0 if item.done else 1 }}">
-      <button class="link{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}">{{ '☑' if item.done else '☐' }} {{ item.name }}</button>
+      <input type="text" name="item" placeholder="Add an item" aria-label="Add an item to {{ nl.name }}" required>
+      <button>Add</button>
     </form>
-    {% if nl.purpose %}
-    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/store" class="inline store">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <input type="text" name="store" value="{{ stores[nl.id].get(item.id, '') }}" placeholder="Usually from…" aria-label="Where {{ item.name }} usually comes from" maxlength="40">
-      <button class="quiet">Save</button>
-    </form>
-    {% endif %}
-    <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/remove" class="inline">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button class="quiet" aria-label="Take {{ item.name }} off">Remove</button>
-    </form>
-  </div>
-  {% else %}
-  <p class="muted">Nothing on it yet.</p>
-  {% endfor %}
-  <form method="post" action="/lists/{{ nl.id }}/add" class="row">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="text" name="item" placeholder="Add an item" aria-label="Add an item to {{ nl.name }}" required>
-    <button>Add</button>
-  </form>
-  <div class="buttons">
-    {% if nl.ticked %}
-    <form method="post" action="/lists/{{ nl.id }}/clear">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <button class="quiet">Clear ticked ({{ nl.ticked|length }})</button>
-    </form>
-    {% endif %}
-    <details>
-      <summary>Delete this list{% if nl.wall_id %} (from the wall too){% endif %}</summary>
-      <form method="post" action="/lists/{{ nl.id }}/delete">
+    <ul class="items">
+      {% for item in nl.items %}
+      <li>
+        <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/tick" class="tick">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="done" value="{{ 0 if item.done else 1 }}">
+          <button class="tick{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}"><span class="box" aria-hidden="true">{{ '✓' if item.done else '' }}</span>{{ item.name }}{% if nl.purpose and stores[nl.id].get(item.id) %} <span class="muted">· {{ stores[nl.id][item.id] }}</span>{% endif %}</button>
+        </form>
+        <details class="more">
+          <summary aria-label="More for {{ item.name }}">⋯</summary>
+          <div class="more-panel">
+            {% if nl.purpose %}
+            <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/store" class="inline-field">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <label>Usually from <input type="text" name="store" value="{{ stores[nl.id].get(item.id, '') }}" aria-label="Where {{ item.name }} usually comes from" maxlength="40"></label>
+              <button class="small">Save</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/remove">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="small danger" aria-label="Take {{ item.name }} off">Remove</button>
+            </form>
+          </div>
+        </details>
+      </li>
+      {% else %}
+      <li class="muted">Nothing on it yet.</li>
+      {% endfor %}
+    </ul>
+    <div class="danger-zone buttons">
+      {% if nl.ticked %}
+      <form method="post" action="/lists/{{ nl.id }}/clear">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button>Delete {{ nl.name }} and everything on it</button>
+        <button class="quiet">Clear ticked ({{ nl.ticked|length }})</button>
       </form>
-    </details>
-  </div>
-</article>
-{% else %}
-<p class="muted">No lists yet.</p>
-{% endfor %}
-
-<form method="post" action="/lists" class="card settings">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <fieldset>
-    <legend>A new list</legend>
-    <label>Name <input type="text" name="name" maxlength="60" required></label>
-    <label class="check"><input type="checkbox" name="personal"> Just for me</label>
-  </fieldset>
-  <button class="primary">Make it</button>
-</form>
+      {% endif %}
+      <details>
+        <summary>Delete this list{% if nl.wall_id %} (from the wall too){% endif %}</summary>
+        <form method="post" action="/lists/{{ nl.id }}/delete">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="danger">Delete {{ nl.name }} and everything on it</button>
+        </form>
+      </details>
+    </div>
+  {% endif %}
+  {% endcall %}
+  {% else %}
+  <p class="empty muted">No lists yet.</p>
+  {% endfor %}
+  <details class="add">
+    <summary>A new list</summary>
+    <form method="post" action="/lists">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Name <input type="text" name="name" maxlength="60" required></label>
+      <label class="check"><input type="checkbox" name="personal"> Just for me</label>
+      <button class="primary">Make it</button>
+    </form>
+  </details>
+</div>
 {% endblock %}

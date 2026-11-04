@@ -355,3 +355,49 @@ def test_a_row_opens_on_tap_and_shows_its_chips() -> None:
     assert '<span class="chip">Weekly</span>' in closed
     assert 'class="row-item has-actions"' in closed and "<button>Done</button>" in closed
     assert "<details open>" in template.render(title="Bins", open=True)
+
+
+# ----- My settings in sections (W4) ---------------------------------------------------
+
+
+async def test_each_settings_section_says_what_its_set_to(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    form = {
+        "csrf": csrf,
+        "quiet_start": "22:00",
+        "quiet_end": "07:30",
+        "daily_limit": "4",
+        "phrasing": "gentle",
+        "pda_enabled": "on",
+        "pda_strength": "3",
+        "morning_summary": "",
+        "track_text_notes": "on",
+        "track_reactions": "on",
+    }
+    await site.post("/settings", data=form)
+    page = (await site.get("/settings")).text
+    assert '<span class="row-meta">10 pm\u20137:30 am</span>' in page  # an en dash
+    assert "At most 4 a day" in page
+    assert "Gentle: indirect and low-key</span>" in page
+    assert '<span class="row-meta">On, strict</span>' in page
+    assert "No summary of my day" in page
+    assert "2 of 5 on" in page
+
+    await site.post("/settings", data={**form, "morning_summary": "07:15", "phrasing": "plain"})
+    page = (await site.get("/settings")).text
+    assert "Summary of my day at 7:15 am" in page and "Plain: say it straight</span>" in page
+
+
+async def test_one_save_bar_saves_every_section(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/settings")).text
+    form = page[page.index('<form method="post" action="/settings"') :]
+    form = form[: form.index("</form>")]
+    for field in ("quiet_start", "daily_limit", "chart_limit", "noise_emails", "phrasing",
+                  "pda_strength", "track_text_notes"):  # fmt: skip
+        assert f'name="{field}"' in form, field
+    assert '<div class="savebar">' in form and form.count("<button") == 1

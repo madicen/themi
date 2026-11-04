@@ -177,7 +177,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W1 | Website redesign: phone-first shell, navigation and row components | Website redesign | [x] 2026-11-03 |
 | W2 | Website redesign: Tasks as compact rows with Done, and Home | Website redesign | [x] 2026-11-03 |
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
-| W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [ ] |
+| W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [x] 2026-11-03 |
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [ ] |
 
 ## Fixed technical choices
@@ -8527,7 +8527,7 @@ Notes (2026-11-03):
   narrow widths.
 
 ### W4 · Website redesign: My settings in sections, Lists for the shop
-Status: [ ]
+Status: [x] 2026-11-03
 Depends on: W1, F3, F21a
 - `/settings`: each fieldset becomes a collapsible section whose summary shows its current
   value ("Quiet hours · 10 pm–7 am", "Gentle phrasing · on, medium", "Morning summary ·
@@ -8540,6 +8540,18 @@ Depends on: W1, F3, F21a
 Tests: summaries reflect saved values (quiet hours, phrasing, morning summary blank vs
 set). Saving from the sticky bar saves every section. List counts, ticking and the store
 field still work.
+
+Notes (2026-11-03):
+- `/settings`: one form, each fieldset a row whose second line is its current value
+  ("10 pm–7:30 am", "At most 6 a day", "On, strict", "2 of 5 on"). Times use the kit's new
+  `clock` filter. The Save bar is sticky above the bottom bar. Busy times have their own
+  forms, so they're a section after the main form, with "Add a busy time" as an add row.
+- `/lists`: each list is a row ("3 to go, 1 ticked", with Just yours / On the wall chips).
+  Items are full-width tap-to-tick rows with a checkbox; ⋯ opens "Usually from" (lists of
+  things to buy) and Remove. Every list action redirects to `/lists?open=<id>#list-<id>`, so
+  the list stays open while you tick in the shop. A single list opens by itself.
+- Ticking still reloads the page (no HTMX), so it works without JavaScript. Swapping only
+  the item with HTMX could come later if the reload feels slow in the shop.
 
 ### W5 · Website redesign: Tiers, Rules & memory, AI and the remaining pages
 Status: [ ]
