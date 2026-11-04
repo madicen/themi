@@ -9,7 +9,9 @@ from tests.evals.naming import (
     Totals,
     format_naming,
     load_naming_cases,
+    meaning_check,
     score,
+    texts_needed,
     totals,
     word_check,
 )
@@ -59,11 +61,28 @@ def test_a_short_answer_is_read_with_themis_question() -> None:
 
 def test_the_case_file_is_sound_and_holds_the_baseline() -> None:
     cases = load_naming_cases()
-    assert len({c.id for c in cases}) == len(cases)
-    for c in cases:
+    every = [*cases, *load_naming_cases(drafts=True)]
+    assert len({c.id for c in every}) == len(every)
+    for c in every:
         assert c.kind in KINDS
         assert set(c.means) <= set(c.tasks), c.id
     t = totals(score(cases, word_check))
     cases_, right, refused, accepted = BASELINE
     assert t.cases == cases_
     assert t.right >= right and t.wrongly_refused <= refused and t.wrongly_accepted <= accepted
+
+
+def test_p8bs_check_is_scored_from_similarities() -> None:
+    """The fake scores put each message nearest the task it means, the dishwasher near none."""
+    near = {
+        "I went for a run": "Go for a run",
+        "did my 5k": "Go for a run",
+        "We contacted Sam's parents": "Contact Sam's parents about babysitting",
+    }
+    titles = CASES[0].tasks
+    sims = {
+        text: {t: 0.9 if near.get(text) == t else 0.3 for t in titles}
+        for text in texts_needed(CASES)
+    }
+    t = totals(score(CASES, meaning_check(sims)))
+    assert t == Totals(cases=4, right=4, wrongly_refused=0, wrongly_accepted=0)

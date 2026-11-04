@@ -378,6 +378,165 @@
    "message": "Yes please",
    "before": "Want a reminder about the dentist tomorrow?",
    "means": []
+  },
+  {
+   "id": "right-bath-done",
+   "kind": "near-miss",
+   "message": "Right bathroom's done",
+   "means": [
+    "Clean right bathroom"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "left-bath-scrubbed",
+   "kind": "near-miss",
+   "message": "Scrubbed the left bathroom",
+   "means": [
+    "Clean left bathroom"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "clothes-dryer",
+   "kind": "near-miss",
+   "message": "Put the clothes in the dryer",
+   "means": [
+    "Move the wet load to the dryer"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "clothes-upstairs",
+   "kind": "near-miss",
+   "message": "Carried the clean clothes upstairs",
+   "means": [
+    "Bring the laundry upstairs"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "kitchen-table",
+   "kind": "near-miss",
+   "message": "Cleared off the kitchen table",
+   "means": [
+    "Declutter the kitchen"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "kitchen-mopped",
+   "kind": "near-miss",
+   "message": "Mopped and wiped the kitchen",
+   "means": [
+    "Clean the kitchen"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "yep-feeders",
+   "kind": "short-answer",
+   "message": "Yep",
+   "before": "Refill pet feeders: done already, or later?",
+   "means": [
+    "Refill pet feeders"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "all-of-it-baths",
+   "kind": "all",
+   "message": "All of it",
+   "before": "Still open: Clean left bathroom, Clean right bathroom.",
+   "means": [
+    "Clean left bathroom",
+    "Clean right bathroom"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "did-it-email",
+   "kind": "short-answer",
+   "message": "Did it",
+   "before": "Answer the client email: done already, or later?",
+   "means": [
+    "Answer the client email"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "sure-bins",
+   "kind": "short-answer",
+   "message": "Sure",
+   "before": "Should I move \"Bring bins in\" to Friday?",
+   "means": [
+    "Bring bins in"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "tires-pressure",
+   "kind": "paraphrase",
+   "message": "Tires are at the right pressure now",
+   "means": [
+    "Add air to the car tires"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "recycling-flat",
+   "kind": "paraphrase",
+   "message": "Recycling is flattened and out",
+   "means": [
+    "Process the cardboard outside"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "client-emailed",
+   "kind": "paraphrase",
+   "message": "Emailed the client back",
+   "means": [
+    "Answer the client email"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "jog-block",
+   "kind": "paraphrase",
+   "message": "Took a jog around the block",
+   "means": [
+    "Go for a run"
+   ],
+   "reviewed": false
+  },
+  {
+   "id": "vitamins",
+   "kind": "near-miss",
+   "message": "Took my vitamins",
+   "means": [],
+   "reviewed": false
+  },
+  {
+   "id": "walked-dog",
+   "kind": "near-miss",
+   "message": "Walked the dog",
+   "means": [],
+   "reviewed": false
+  },
+  {
+   "id": "inbox-cleaned",
+   "kind": "near-miss",
+   "message": "Cleaned up my email inbox",
+   "means": [],
+   "reviewed": false
+  },
+  {
+   "id": "car-charged",
+   "kind": "near-miss",
+   "message": "Charged the car",
+   "means": [],
+   "reviewed": false
   }
  ]
 }

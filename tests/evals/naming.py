@@ -16,11 +16,12 @@ health or money details of theirs. `make naming-eval` prints the table.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from themi.core.tasks import meant_instead, names_task
+from themi.core.which_task import Said, texts_to_score, which
 
 NAMING_FILE = Path(__file__).parent / "naming_cases.json"
 KINDS = ("plain", "paraphrase", "short-answer", "all", "near-miss")
@@ -54,7 +55,34 @@ def word_check(case: NamingCase, tried: str) -> bool:
     return names_task(tried, case.message, case.earlier, case.before)
 
 
-def load_naming_cases(path: Path = NAMING_FILE) -> list[NamingCase]:
+def said_of(case: NamingCase) -> Said:
+    return Said(case.message, case.earlier, case.before)
+
+
+def texts_needed(cases: Sequence[NamingCase]) -> list[str]:
+    """Every text P8b's check embeds for these cases: what's scored, and the titles."""
+    texts = [t for c in cases for t in texts_to_score(said_of(c), dict(enumerate(c.tasks)))]
+    return list(dict.fromkeys([*texts, *(t for c in cases for t in c.tasks)]))
+
+
+def meaning_check(sims: Mapping[str, Mapping[str, float]], **settings: float) -> Check:
+    """P8b's check (`which_task.which`), from each text's similarity to each title."""
+
+    def check(case: NamingCase, tried: str) -> bool:
+        titles = dict(enumerate(case.tasks))
+        said = said_of(case)
+        scored = {
+            text: {i: sims[text][title] for i, title in titles.items()}
+            for text in texts_to_score(said, titles)
+        }
+        return case.tasks.index(tried) in which(said, titles, scored, **settings)
+
+    return check
+
+
+def load_naming_cases(path: Path = NAMING_FILE, *, drafts: bool = False) -> list[NamingCase]:
+    """The reviewed cases; or, with `drafts`, only the ones still waiting for a person to
+    check their labels (`"reviewed": false`), which don't count until then."""
     raw = json.loads(path.read_text())
     board = tuple(raw["board"])
     return [
@@ -68,6 +96,7 @@ def load_naming_cases(path: Path = NAMING_FILE) -> list[NamingCase]:
             means=tuple(item["means"]),
         )
         for item in raw["cases"]
+        if item.get("reviewed", True) != drafts
     ]
 
 
