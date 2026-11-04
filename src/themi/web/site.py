@@ -33,8 +33,12 @@ from themi.accounts.models import DAY_NAMES
 from themi.autonomy import Decision
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
+from themi.web.task_pages import task_rows
 
 __all__ = ["SiteContext", "install_site"]
+
+HOME_TASKS = 5
+GROCERIES_ON_LISTS = "/lists?open=groceries#groceries"
 
 TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
@@ -80,6 +84,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     from themi.web import (
         admin_pages,
         ai_pages,
+        connection_pages,
         dev_pages,
         email_pages,
         google_pages,
@@ -138,6 +143,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
 
     web.include_router(core_routes(kit))
     web.include_router(admin_pages.routes(kit))
+    web.include_router(connection_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
     web.include_router(task_pages.routes(kit))
     web.include_router(list_pages.routes(kit))
@@ -222,7 +228,15 @@ def core_routes(kit: Kit) -> APIRouter:
         failed = [a for a in actions if a.status == "failed"]
         if failed:
             alerts.append(f"{len(failed)} action(s) didn't go through and can be tried again.")
+        tasks: dict[str, Any] = {"mine": [], "more_tasks": 0}
+        if app.services.taskboard is not None:  # W2: the first few, with Done
+            tasks = task_rows(app, member, limit=HOME_TASKS)
+            total = len(app.services.taskboard.open_for(member))
+            tasks["more_tasks"] = total if total > HOME_TASKS else 0
+        appliances = app.services.appliances
         return {
+            **tasks,
+            "around_the_house": appliances.at_a_glance() if appliances else None,
             "actions": actions,
             "activity": [
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
@@ -241,16 +255,17 @@ def core_routes(kit: Kit) -> APIRouter:
 
     @router.post("/groceries/{item_id}/bought")
     async def grocery_bought(request: Request, item_id: int) -> Response:
-        await kit.checked(request)
+        _, form = await kit.checked(request)
+        back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"
         groceries, pantry = app.services.groceries, app.services.pantry
         item = groceries.get(item_id) if groceries else None
         if item is None or item.status != "needed" or groceries is None:
-            return kit.redirect("/", "That one is already off the list.")
+            return kit.redirect(back, "That one is already off the list.")
         if pantry is not None:
             pantry.set_status(item.name, "plenty", source="list")  # takes it off the list too
         else:
             groceries.finish(item.name)
-        return kit.redirect("/", f"Took {item.name} off the list.")
+        return kit.redirect(back, f"Took {item.name} off the list.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:
@@ -266,6 +281,11 @@ def core_routes(kit: Kit) -> APIRouter:
                 request, "_action_card.html", action=action, result=message, csrf=session.csrf_token
             )
         return kit.redirect("/", message)
+
+    @router.get("/more", response_class=HTMLResponse)
+    def more(request: Request) -> HTMLResponse:
+        session = kit.current(request)
+        return kit.with_flash(request, "more.html", session, groups=more_groups(session.member))
 
     # ----- personal settings ------------------------------------------------------
 
@@ -358,6 +378,39 @@ def core_routes(kit: Kit) -> APIRouter:
         return kit.redirect("/settings", "Busy time removed.")
 
     return router
+
+
+def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
+    """The More page (W1): every page past the bottom bar's three, grouped."""
+    admin = member.is_admin
+    accounts = [("/accounts", "Google accounts", "Gmail, calendars and Google Tasks")]
+    if admin:
+        accounts.append(
+            ("/accounts#household", "Household connections", "Appliances, vacuum, calendar")
+        )
+    household = [
+        ("/knowledge", "Rules & memory", "What Themi keeps to and remembers"),
+        ("/tiers", "What Themi does alone", "What asks first and what's automatic"),
+        ("/spending", "Spending", "Takeout and business expenses"),
+        ("/safeway", "Safeway", "The cart helper and remembered products"),
+    ]
+    if admin:
+        household.insert(0, ("/family", "Family", "The household and its people"))
+    groups = [
+        (
+            "You",
+            [
+                ("/settings", "My settings", "Quiet hours, messages, phrasing"),
+                ("/week", "My week", "How Themi sees your week"),
+                ("/ai", "My AI", "Which AI does each job"),
+            ],
+        ),
+        ("Accounts", accounts),
+        ("Household", household),
+    ]
+    if admin:
+        groups.append(("Admin", [("/dev", "Development", "Update or restart the server")]))
+    return groups
 
 
 def _parse_time(text: str) -> time:

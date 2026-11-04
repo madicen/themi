@@ -4,6 +4,7 @@
   a member's sign-in address gets in.
 - `/accounts` lists the signed-in member's linked Gmail accounts, with a
   button to link another (a POST, so it's CSRF-checked) and one to unlink each.
+  Admins also see the household's connections there (connection_pages, W3).
 - `/auth/google/callback` finishes both. A linking flow started from Telegram
   (`/link gmail`) lands here too, possibly in a browser that isn't signed in:
   the state carries the member, so it works either way.
@@ -11,14 +12,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.connectors.gcal import CalendarError
-from themi.connectors.google import CALENDAR_SCOPE, TASKS_SCOPE, GoogleAccounts, OAuthError
+from themi.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
 from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
+from themi.web.connection_pages import accounts_values
 from themi.web.kit import Kit
 
 NOT_SET_UP = "Google sign-in isn't set up on this server. /site in Telegram sends a sign-in link."
@@ -92,22 +94,10 @@ def routes(kit: Kit) -> APIRouter:
     # ----- My accounts ----------------------------------------------------------
 
     @router.get("/accounts", response_class=HTMLResponse)
-    def accounts_page(request: Request) -> HTMLResponse:
+    def accounts_page(request: Request, opened: str = Query("", alias="open")) -> HTMLResponse:
         session = kit.current(request)
         return kit.with_flash(
-            request,
-            "accounts.html",
-            session,
-            accounts=app.store.linked_accounts(session.member.id),
-            can_link=google() is not None,
-            expected={
-                account.id: app.services.expected.for_account(account.id)
-                for account in app.store.linked_accounts(session.member.id)
-            }
-            if app.services.expected is not None
-            else {},
-            protectable=[c for c in app.services.autonomy.categories() if not c.capped],
-            tasks_scope=TASKS_SCOPE,
+            request, "accounts.html", session, **accounts_values(app, session.member, opened=opened)
         )
 
     @router.post("/accounts/link")

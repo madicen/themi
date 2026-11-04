@@ -242,22 +242,22 @@ async def test_an_account_without_calendar_access_is_not_used(
     await task(scenario)
     assert calendar_actions(scenario) == []  # nothing to ask about yet
     await sign_in(scenario, site, "Erin")
-    page = (await site.get("/family")).text
+    page = (await site.get("/accounts")).text  # W3: with the household's connections
     assert "was linked before Themi asked for calendar access" in page
 
 
-async def test_choosing_the_calendar_on_the_family_page(
+async def test_choosing_the_family_calendar_on_the_accounts_page(
     scenario: Scenario, linked: FakeGcal, site: httpx.AsyncClient
 ) -> None:
     csrf = await sign_in(scenario, site, "Erin")
-    page = (await site.get("/family")).text
+    page = (await site.get("/accounts")).text
     assert f'Writing to "Themi" on {ERIN}.' in page
     account = scenario.app.store.linked_account_by_address("gmail", ERIN)
     assert account is not None
     await site.post(
         "/family/calendar", data={"csrf": csrf, "account": str(account.id), "name": "Cozyla"}
     )
-    assert "Saved the calendar settings." in await flash(site, "/family")
+    assert "Saved the calendar settings." in await flash(site, "/accounts")
     await task(scenario)
     await approve(scenario)
     await scenario.run_jobs()

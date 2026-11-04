@@ -77,7 +77,7 @@ class Settings(BaseModel):
     home_connect_client_id: str = ""
     home_connect_client_secret: Secret | None = None
     home_connect_url: str = HOME_CONNECT_URL
-    # 30: LG ThinQ needs no settings (the token is added on the Family page); this only
+    # 30: LG ThinQ needs no settings (the token is added on the Accounts page); this only
     # points it at a fake instead of LG's regional servers.
     thinq_url: str = ""
     backup: BackupConfig | None = None

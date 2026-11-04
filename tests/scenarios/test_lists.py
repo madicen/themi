@@ -178,7 +178,10 @@ async def test_the_lists_page(scenario: Scenario, site: httpx.AsyncClient) -> No
 
     nl = named(scenario, "Husband", "packing")
     hats = next(i for i in nl.items if i.name == "hats")
-    await site.post(f"/lists/{nl.id}/items/{hats.id}/tick", data={"csrf": csrf, "done": "1"})
+    ticked = await site.post(
+        f"/lists/{nl.id}/items/{hats.id}/tick", data={"csrf": csrf, "done": "1"}
+    )
+    assert ticked.headers["location"] == f"/lists?open={nl.id}#list-{nl.id}"  # W4: stays open
     await site.post(f"/lists/{nl.id}/add", data={"csrf": csrf, "item": "Swimsuits"})
     assert items(scenario, "Erin", "packing") == [
         ("sunscreen", False),
@@ -186,7 +189,10 @@ async def test_the_lists_page(scenario: Scenario, site: httpx.AsyncClient) -> No
         ("passports", False),
         ("Swimsuits", False),
     ]
-    assert 'class="link ticked"' in (await site.get("/lists")).text
+    page = (await site.get(f"/lists?open={nl.id}")).text
+    assert 'class="tick ticked"' in page
+    assert f'id="list-{nl.id}">\n  <details open>' in page
+    assert "3 to go, 1 ticked" in page
 
     await site.post(f"/lists/{nl.id}/clear", data={"csrf": csrf})
     assert ("hats", True) not in items(scenario, "Erin", "packing")

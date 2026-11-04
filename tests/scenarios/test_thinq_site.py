@@ -1,5 +1,5 @@
-"""30: LG ThinQ on the Family page. An admin pastes the token, Themi finds the appliances,
-and each one is mapped to the washer, the dryer or nothing."""
+"""30: LG ThinQ on the Accounts page (W3; it was on the Family page). An admin pastes the
+token, Themi finds the appliances, and each one is mapped to the washer, the dryer or nothing."""
 
 from __future__ import annotations
 
@@ -11,15 +11,16 @@ from tests.scenarios.harness import Scenario
 
 
 async def link(scenario: Scenario, site: httpx.AsyncClient, token: str = TOKEN) -> str:
-    """Erin (an admin) links LG ThinQ from the Family page; returns the page after."""
+    """Erin (an admin) links LG ThinQ from the Accounts page; returns the page after."""
     await sign_in(scenario, site, "Erin")
-    page = await site.get("/family")
+    page = await site.get("/accounts")
     response = await site.post(
         "/family/thinq/link",
         data={"csrf": csrf_of(page.text), "token": token, "country": "US"},
     )
-    assert response.status_code == 303 and response.headers["location"] == "/family"
-    return await flash(site, "/family")
+    assert response.status_code == 303
+    assert response.headers["location"] == "/accounts?open=thinq#thinq"
+    return await flash(site, "/accounts")
 
 
 async def test_linking_finds_the_washer_and_dryer(
@@ -52,19 +53,19 @@ async def test_an_appliance_is_mapped_on_the_page(
     await link(scenario, site)
     (device,) = scenario.app.store.list_devices()
     assert device.appliance is None
-    page = await site.get("/family")
+    page = await site.get("/accounts")
     response = await site.post(
         f"/family/thinq/devices/{device.id}",
         data={"csrf": csrf_of(page.text), "appliance": "washer"},
     )
     assert response.status_code == 303
-    assert "Combo: washer." in await flash(site, "/family")
+    assert "Combo: washer." in await flash(site, "/accounts")
     assert scenario.app.store.get_device(device.id).appliance == "washer"
     response = await site.post(
         f"/family/thinq/devices/{device.id}",
         data={"csrf": csrf_of(page.text), "appliance": "feeder"},
     )
-    assert "the washer, the dryer, or neither" in await flash(site, "/family")
+    assert "the washer, the dryer, or neither" in await flash(site, "/accounts")
     assert scenario.app.store.get_device(device.id).appliance == "washer"
 
 
@@ -86,6 +87,6 @@ async def test_unlinking(
     page = await link(scenario, site)
     response = await site.post("/family/thinq/unlink", data={"csrf": csrf_of(page)})
     assert response.status_code == 303
-    page = await flash(site, "/family")
+    page = await flash(site, "/accounts")
     assert "Unlinked LG ThinQ." in page and "Link LG ThinQ" in page
     assert scenario.app.store.list_devices() == []

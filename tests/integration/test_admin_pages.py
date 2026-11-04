@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
@@ -11,6 +12,41 @@ from themi.autonomy import Tier
 from themi.storage.secrets import Secret
 
 GEMINI_KEY = "AIzaVeryDistinctiveTestKey000000000000000"
+
+
+# ----- household connections on Accounts (W3) --------------------------------------
+
+
+@pytest.mark.usefixtures("fake_thinq", "fake_roborock", "fake_home_connect")
+async def test_household_connections_are_on_accounts_for_admins_only(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    member = (await site.get("/accounts")).text
+    assert "My Google accounts" in member
+    assert 'id="household"' not in member and "/family/thinq/link" not in member
+    async with web_client(scenario) as admin_site:
+        await sign_in(scenario, admin_site, "Erin")
+        accounts = (await admin_site.get("/accounts")).text
+        assert 'id="household"' in accounts
+        for row in ("thinq", "roborock", "home-connect"):
+            assert f'id="{row}"' in accounts
+        family = (await admin_site.get("/family")).text
+        for gone in ("LG ThinQ", "Roborock", "Home Connect", "/family/calendar"):
+            assert gone not in family
+        assert 'href="/accounts#household"' in family
+
+
+@pytest.mark.usefixtures("fake_thinq", "fake_roborock")
+async def test_a_connection_row_opens_when_asked(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    closed = (await site.get("/accounts")).text
+    opened = (await site.get("/accounts?open=thinq")).text
+    assert '<div class="row-item" id="thinq">\n  <details open>' in opened
+    assert '<div class="row-item" id="thinq">\n  <details>' in closed
+    assert '<div class="row-item" id="roborock">\n  <details>' in opened
 
 
 # ----- family (admins only) ----------------------------------------------------
@@ -385,6 +421,7 @@ async def test_reply_times_are_for_admins(scenario: Scenario, site: httpx.AsyncC
     assert (await site.get("/dev")).status_code == 403
     assert (await site.get("/ai/timing")).status_code == 403
     assert "/dev" not in (await site.get("/")).text
+    assert "/dev" not in (await site.get("/more")).text
 
 
 async def test_reply_times_moved_to_the_development_page(
@@ -394,4 +431,38 @@ async def test_reply_times_moved_to_the_development_page(
     await sign_in(scenario, site, "Erin")
     response = await site.get("/ai/timing")
     assert response.status_code == 303 and response.headers["location"] == "/dev"
-    assert '<a href="/dev">Development</a>' in (await site.get("/")).text
+    assert 'href="/dev"' in (await site.get("/more")).text  # W1: on the More page
+
+
+# ----- rows with chips (W5) ---------------------------------------------------------
+
+
+def row_of(page: str, row_id: str) -> str:
+    start = page.index(f'id="{row_id}"')
+    return page[start : page.index("</summary>", start)]
+
+
+async def test_each_tier_says_its_state_on_the_row(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
+    await site.post("/tiers/email_mark_read/automatic", data={"csrf": csrf})
+    scenario.app.services.autonomy.escalate("email_mark_read", "a bill confirmation is late")
+    page = (await site.get("/tiers")).text
+    assert '<span class="chip good">Automatic</span>' in row_of(page, "tier-grocery_list_add")
+    paused = row_of(page, "tier-email_mark_read")
+    assert '<span class="chip warn">Paused</span>' in paused
+    assert "Asking again because: a bill confirmation is late" in paused
+    capped = row_of(page, "tier-email_reply")
+    assert '<span class="chip">Always asks</span>' in capped and "Yours to switch" not in capped
+    archive = row_of(page, "tier-email_archive_noise")
+    assert '<span class="chip">Asks first</span>' in archive and "Yours to switch" in archive
+
+
+async def test_each_ai_job_shows_its_chain(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/ai")).text
+    labels = [b.label for b in scenario.app.ai_settings.backends(scenario.member("Erin").id)]
+    chain = row_of(page, "job-conversation")
+    assert "Conversation" in chain and " → ".join(labels[:2]) in chain

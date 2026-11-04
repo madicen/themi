@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
@@ -18,6 +18,15 @@ from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
 HERE = Path(__file__).parent
 FLASH_COOKIE = "themi_flash"
+
+
+def clock(moment: time | None) -> str:
+    """A time of day as people say it: "10 pm", "7:30 am" (W4's summaries)."""
+    if moment is None:
+        return ""
+    hour = moment.hour % 12 or 12
+    minutes = f":{moment.minute:02d}" if moment.minute else ""
+    return f"{hour}{minutes} {'am' if moment.hour < 12 else 'pm'}"
 
 
 class NotSignedIn(Exception):
@@ -42,6 +51,7 @@ class Kit:
         self.auth = WebAuth(ctx.app.store)
         self.templates = Jinja2Templates(directory=str(HERE / "templates"))
         self.templates.env.filters["local_time"] = self.local_time
+        self.templates.env.filters["clock"] = clock
 
     def timezone(self) -> str:
         family = self.app.store.get_family()

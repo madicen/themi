@@ -1,39 +1,36 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}My settings · Themi{% endblock %}
 {% block content %}
 <h1>My settings</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<form method="post" action="/settings" class="card settings">
+<form method="post" action="/settings" class="settings">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="rows">
 
-  <fieldset>
-    <legend>Quiet hours</legend>
+  {% call(part) row("Quiet hours", meta=(member.quiet_start | clock) ~ "–" ~ (member.quiet_end | clock), id="quiet") %}{% if part == "body" %}
     <p class="muted">Nothing that can wait reaches you between these times.</p>
     <label>From <input type="time" name="quiet_start" value="{{ member.quiet_start.strftime('%H:%M') }}" required></label>
     <label>Until <input type="time" name="quiet_end" value="{{ member.quiet_end.strftime('%H:%M') }}" required></label>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>How often Themi starts a conversation</legend>
+  {% call(part) row("How often Themi starts a conversation", meta="At most " ~ member.daily_limit ~ " a day", id="limit") %}{% if part == "body" %}
     <label>At most <input type="number" name="daily_limit" min="0" max="50" value="{{ member.daily_limit }}" required> messages a day</label>
     <p class="muted">Replies to you and urgent alerts don't count.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>Breaks</legend>
+  {% call(part) row("Breaks", meta="Offer " ~ member.break_extend_minutes ~ " minutes more", id="breaks") %}{% if part == "body" %}
     <label>When a break is up, offer to extend it by <input type="number" name="break_extend_minutes" min="5" max="120" value="{{ member.break_extend_minutes }}" required> minutes</label>
     <p class="muted">Say "I'm taking a break" (or /break 30) and task nudges and check-ins wait until it's over.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>The wall's chore chart</legend>
+  {% call(part) row("The wall's chore chart", meta=("All of my chores" if member.chart_limit == 0 else member.chart_limit ~ " of my chores at a time"), id="chart") %}{% if part == "body" %}
     <label>Show <input type="number" name="chart_limit" min="0" max="10" value="{{ member.chart_limit }}"> of my chores at a time</label>
     <label class="check"><input type="checkbox" name="chart_counts_shared" {% if member.chart_counts_shared %}checked{% endif %}> Chores either of us can do count toward that number</label>
     <p class="muted">0 shows them all. The rest wait their turn; medicines and other important chores always show. Unticked, chores for either of you always show too.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>My calendars</legend>
+  {% call(part) row("My calendars", meta=("Summary of my day at " ~ (member.morning_summary | clock)) if member.morning_summary else "No summary of my day", id="calendars") %}{% if part == "body" %}
     <label>Who sees what's on my calendars
       <select name="calendar_details">
         <option value="me" {% if member.calendar_details == "me" %}selected{% endif %}>Just me</option>
@@ -44,11 +41,11 @@
     <label class="check"><input type="checkbox" name="morning_summary_empty" {% if member.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>
     <label class="check"><input type="checkbox" name="leave_heads_up" {% if member.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>
     <label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ member.getting_ready_minutes }}"> minutes</label>
-    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">My accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
-  </fieldset>
+    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">Accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>My email</legend>
+  {% set noise_words = {"daily": "Once a day", "twice": "Twice a day", "every_other_day": "Every other day"} %}
+  {% call(part) row("My email", meta="Noise emails: " ~ noise_words.get(member.noise_emails, member.noise_emails) | lower, id="email") %}{% if part == "body" %}
     <label>Ask me about emails that look like noise, all together,
       <select name="noise_emails">
         <option value="daily" {% if member.noise_emails == "daily" %}selected{% endif %}>once a day (6 pm)</option>
@@ -57,10 +54,9 @@
       </select>
     </label>
     <p class="muted">One message lists them, with a button to archive them all. You can also pick on <a href="/email/noise">Emails to archive</a>. Emails you've already moved out of your inbox are left out.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>How Themi says things</legend>
+  {% call(part) row("How Themi says things", meta=("Plain: say it straight" if member.phrasing == "plain" else "Gentle: indirect and low-key"), id="phrasing") %}{% if part == "body" %}
     <label>Style
       <select name="phrasing">
         <option value="plain" {% if member.phrasing == "plain" %}selected{% endif %}>Plain: say it straight (what, when, which)</option>
@@ -75,10 +71,9 @@
     <label>Your own notes on phrasing
       <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
     </label>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>Gentle phrasing</legend>
+  {% call(part) row("Gentle phrasing", meta=("On, " ~ (strengths[member.pda_strength].split(":")[0] | lower)) if member.pda_enabled else "Off", id="pda") %}{% if part == "body" %}
     <label class="check"><input type="checkbox" name="pda_enabled" {% if member.pda_enabled %}checked{% endif %}> Soften anything that reads like an instruction</label>
     <label>How much
       <select name="pda_strength">
@@ -88,43 +83,51 @@
       </select>
     </label>
     <p class="muted">Telling Themi "that was too pushy" or "just tell me" adjusts this too.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
 
-  <fieldset>
-    <legend>What Themi notices about you</legend>
+  {% set noticing = tracking | selectattr(2) | list | length %}
+  {% call(part) row("What Themi notices about you", meta=noticing ~ " of " ~ tracking | length ~ " on", id="tracking") %}{% if part == "body" %}
     {% for name, words, on in tracking %}
     <label class="check"><input type="checkbox" name="track_{{ name }}" {% if on %}checked{% endif %}> {{ words }}</label>
     {% endfor %}
     <p class="muted">Only you see these. Your partner never sees what's noticed about you.</p>
-  </fieldset>
+  {% endif %}{% endcall %}
+  </div>
 
-  <button class="primary">Save</button>
+  <div class="savebar">
+    <span class="muted">Saves every section</span>
+    <button class="primary">Save</button>
+  </div>
 </form>
 
-<section class="card settings">
-  <h2>Busy times</h2>
-  <p class="muted">Like quiet hours, for the week: work, school runs, appointments. Themi holds
-  anything that can wait until a busy time ends. Replies to you and urgent alerts still come
-  through.</p>
+<h2 id="busy">Busy times</h2>
+<p class="muted">Themi holds anything that can wait until a busy time ends. Replies to you and
+urgent alerts still come through.</p>
+<div class="rows">
   {% for busy in member.busy_times %}
-  <form method="post" action="/settings/busy/{{ loop.index0 }}/remove" class="row">
+  <form method="post" action="/settings/busy/{{ loop.index0 }}/remove" class="row-plain">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <span>{{ busy.label() }}</span> <button class="quiet">Remove</button>
+    <span>{{ busy.label() }}</span> <button class="small quiet">Remove</button>
   </form>
   {% else %}
-  <p class="muted">None yet.</p>
+  <p class="empty muted">None yet.</p>
   {% endfor %}
-  <form method="post" action="/settings/busy">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <fieldset>
-      <legend>Add a busy time</legend>
-      {% for name in day_names %}
-      <label class="check"><input type="checkbox" name="day_{{ loop.index0 }}" {% if loop.index0 < 5 %}checked{% endif %}> {{ name }}</label>
-      {% endfor %}
-      <label>From <input type="time" name="start" value="09:00" required></label>
-      <label>Until <input type="time" name="end" value="17:00" required></label>
-    </fieldset>
-    <button>Add</button>
-  </form>
-</section>
+  <details class="add">
+    <summary>Add a busy time</summary>
+    <form method="post" action="/settings/busy">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <fieldset>
+        <legend>Days</legend>
+        <div class="days">
+        {% for name in day_names %}
+        <label class="check"><input type="checkbox" name="day_{{ loop.index0 }}" {% if loop.index0 < 5 %}checked{% endif %}> {{ name }}</label>
+        {% endfor %}
+        </div>
+        <label>From <input type="time" name="start" value="09:00" required></label>
+        <label>Until <input type="time" name="end" value="17:00" required></label>
+      </fieldset>
+      <button>Add</button>
+    </form>
+  </details>
+</div>
 {% endblock %}

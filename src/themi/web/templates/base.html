@@ -2,34 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
   <title>{% block title %}Themi{% endblock %}</title>
   <link rel="stylesheet" href="/static/themi.css">
   <script src="/static/htmx.min.js" defer></script>
 </head>
-<body{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
+{% set path = request.url.path %}
+{% set tab = "home" if path == "/" else "tasks" if path.startswith("/tasks") else "lists" if path.startswith("/lists") else "more" %}
+<body class="{% if member %}signed-in{% endif %}"{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
   <header class="top">
     <a class="brand" href="/">Themi</a>
     {% if member %}
-    <nav>
-      <a href="/">Home</a>
-      <a href="/tasks">Tasks</a>
-      <a href="/lists">Lists</a>
-      <a href="/spending">Spending</a>
-      <a href="/safeway">Safeway</a>
-      <a href="/week">My week</a>
-      <a href="/settings">My settings</a>
-      <a href="/accounts">My accounts</a>
-      <a href="/ai">My AI</a>
-      <a href="/knowledge">Rules &amp; memory</a>
-      <a href="/tiers">What Themi does alone</a>
-      {% if member.is_admin %}<a href="/family">Family</a> <a href="/dev">Development</a>{% endif %}
-      <form method="post" action="/logout" class="inline">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="link">Sign out</button>
-      </form>
+    <nav class="tabs" aria-label="Main">
+      <a href="/" {% if tab == "home" %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
+      <a href="/tasks" {% if tab == "tasks" %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>Tasks</a>
+      <a href="/lists" {% if tab == "lists" %}aria-current="page"{% endif %}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Lists</a>
+      <a href="/more" {% if tab == "more" %}aria-current="page"{% endif %}>
+        <svg class="dots" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>More</a>
     </nav>
+    <details class="menu">
+      <summary aria-label="Signed in as {{ member.name }}">{{ member.name }}</summary>
+      <div class="menu-panel">
+        <a href="/settings">My settings</a>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="link">Sign out</button>
+        </form>
+      </div>
+    </details>
     {% endif %}
   </header>
   <main>

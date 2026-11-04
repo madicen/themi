@@ -281,6 +281,42 @@ async def test_the_dashboard_shows_the_list(
     assert fake_ourgroceries.values() == ["cat food"]
 
 
+async def test_the_grocery_list_on_the_lists_page(
+    scenario: Scenario, site: httpx.AsyncClient, fake_ourgroceries: FakeOurGroceries
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    groceries(scenario).add(["eggs"], by=scenario.member("Erin"))
+    page = (await site.get("/lists")).text
+    assert '<div class="row-item" id="groceries">\n  <details open>' in page  # first, and open
+    assert "1 to get" in page and "eggs" in page
+
+    added = await site.post("/groceries/add", data={"csrf": csrf, "item": "Oat milk"})
+    assert added.headers["location"] == "/lists?open=groceries#groceries"
+    assert "Added oat milk to the grocery list." in await flash(site, "/lists")
+    assert on_list(scenario) == ["eggs", "oat milk"]  # typed in: their yes, as in chat
+    await site.post("/groceries/add", data={"csrf": csrf, "item": "oat milk"})
+    assert "That&#39;s on it already." in await flash(site, "/lists")
+    await scenario.run_periodic("groceries.mirror")
+    assert fake_ourgroceries.values() == ["eggs", "oat milk"]
+
+    (eggs, _) = groceries(scenario).needed()
+    got = await site.post(f"/groceries/{eggs.id}/bought", data={"csrf": csrf, "back": "lists"})
+    assert got.headers["location"] == "/lists?open=groceries#groceries"
+    assert "Took eggs off the list." in await flash(site, "/lists")
+    assert on_list(scenario) == ["oat milk"]
+
+
+async def test_a_paused_grocery_list_waits_on_a_yes_from_the_lists_page(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/tiers/grocery_list_add/automatic", data={"csrf": csrf})
+    scenario.app.services.autonomy.escalate("grocery_list_add", "something looked off")
+    await site.post("/groceries/add", data={"csrf": csrf, "item": "coffee"})
+    assert "Waiting on your yes: Coffee for the grocery list" in await flash(site, "/lists")
+    assert on_list(scenario) == []
+
+
 async def test_items_waiting_on_a_yes_are_not_staged_again(scenario: Scenario) -> None:
     pantry_says(scenario, ("eggs", "out"))
     await scenario.say("Erin", "out of eggs")  # eggs now wait on a yes

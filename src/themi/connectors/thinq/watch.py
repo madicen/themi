@@ -54,7 +54,7 @@ class ThinqWatcher:
         self.listeners: list[ApplianceListener] = []
         self._last_poll: datetime | None = None
 
-    # ----- linking (the Family page) ---------------------------------------------------
+    # ----- linking (the Accounts page) -------------------------------------------------
 
     async def link(self, by: Member, token: str, country: str) -> list[Device]:
         """Keep the token and add the appliances it can see (new ones only)."""

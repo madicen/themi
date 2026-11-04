@@ -88,7 +88,7 @@ SENSORS_TITLE, SENSORS_TEXT = (
 )
 EXPIRED_TEXT = (
     "The Roborock sign-in stopped working, so Themi can't see the vacuum for now. It can "
-    "be linked again on the Family page."
+    "be linked again on the website's Accounts page."
 )
 DONE, LATER = "Done", "Later"
 WAIT = timedelta(minutes=5)  # a problem's first nudge waits this long

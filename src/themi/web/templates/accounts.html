@@ -1,76 +1,268 @@
 {% extends "base.html" %}
-{% block title %}My accounts · Themi{% endblock %}
+{% from "_row.html" import row %}
+{% block title %}Accounts · Themi{% endblock %}
 {% block content %}
-<h1>My accounts</h1>
+<h1>Accounts</h1>
+
+<h2>My Google accounts</h2>
 <p class="muted">Gmail accounts Themi can read, label and archive for you. It never deletes mail,
-and it only sends after you say yes. You can link as many as you like.</p>
+and it only sends after you say yes.</p>
+<div class="rows">
+  {% for account in accounts %}
+  {% set waiting_for = expected.get(account.id, []) %}
+  {% if not account.enabled %}{% set chips = [("Needs relinking", "bad")] %}
+  {% elif account.watched %}{% set chips = [("Watching", "good")] %}
+  {% else %}{% set chips = [("Not watched", "")] %}{% endif %}
+  {% set meta = (waiting_for|length ~ " expected email" ~ ("" if waiting_for|length == 1 else "s")) if waiting_for else "" %}
+  {% call(part) row(account.address, meta=meta, chips=chips, id="account-" ~ account.id, open=opened == "account-" ~ account.id) %}
+  {% if part == "body" %}
+    {% if not account.enabled %}
+    <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
+    {% endif %}
+    <form method="post" action="/accounts/{{ account.id }}/settings">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>
+      <label>Senders that always count as time-sensitive (one per line: an address, or @domain)
+        <textarea name="urgent_senders" rows="3">{{ account.urgent_senders | join("\n") }}</textarea>
+      </label>
+      <button>Save</button>
+    </form>
+    <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
+    {% if tasks_scope in account.scopes %}
+    <p class="muted">Google Tasks: Themi takes what you add by voice to My Tasks, then clears it.</p>
+    {% else %}
+    <p class="muted">Google Tasks isn't allowed for this account yet. Linking it again lets Themi
+    take what you add to Google Tasks by voice.</p>
+    {% endif %}
 
-{% for account in accounts %}
-<article class="card">
-  <p class="summary">{{ account.address }}</p>
-  {% if not account.enabled %}
-  <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
+    <h3>Expected emails</h3>
+    <p class="muted">Recurring mail, like a bill confirmation. If one doesn't arrive on time,
+    Themi says so, and anything automatic it protects goes back to asking first.</p>
+    <div class="rows">
+      {% for item in waiting_for %}
+      <form method="post" action="/accounts/{{ account.id }}/expected/{{ item.id }}/remove" class="row-plain">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <span class="row-main"><span class="row-title">{{ item.name }}</span>
+          <span class="row-meta">From {{ item.sender_pattern }}{% if item.subject_pattern %}, subject has "{{ item.subject_pattern }}"{% endif %},
+          every {{ item.cadence_days }} days ({{ item.grace_days }} days' grace).
+          {% if item.last_seen_at %}Last seen {{ item.last_seen_at.date().isoformat() }}.{% else %}Not seen yet.{% endif %}</span></span>
+        <button class="small quiet">Stop watching</button>
+      </form>
+      {% endfor %}
+      <details class="add">
+        <summary>Add an expected email</summary>
+        <form method="post" action="/accounts/{{ account.id }}/expected">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label>What it is <input name="name" placeholder="the PG&amp;E confirmation" required></label>
+          <label>From (an address, or @domain) <input name="sender" required></label>
+          <label>Subject has (optional) <input name="subject"></label>
+          <label>Comes every <input name="cadence_days" type="number" min="1" max="400" value="30"> days</label>
+          <label>Grace <input name="grace_days" type="number" min="0" max="60" value="3"> days</label>
+          <label>Protects
+            <select name="category">
+              {% for category in protectable %}
+              <option value="{{ category.name }}" {% if category.name == "email_mark_read" %}selected{% endif %}>{{ category.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button>Add</button>
+        </form>
+      </details>
+    </div>
+
+    <div class="danger-zone">
+      <form method="post" action="/accounts/{{ account.id }}/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink {{ account.address }}</button>
+      </form>
+    </div>
   {% endif %}
-  <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
-  {% if tasks_scope in account.scopes %}
-  <p class="muted">Google Tasks: Themi takes what you add by voice to My Tasks, then clears it.</p>
-  {% else %}
-  <p class="muted">Google Tasks isn't allowed for this account yet. Linking it again lets Themi
-  take what you add to Google Tasks by voice.</p>
-  {% endif %}
-  <form method="post" action="/accounts/{{ account.id }}/settings" class="settings">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>
-    <label>Senders that always count as time-sensitive (one per line: an address, or @domain)
-      <textarea name="urgent_senders" rows="3">{{ account.urgent_senders | join("\n") }}</textarea>
-    </label>
-    <button>Save</button>
-  </form>
-  <h2>Expected emails</h2>
-  <p class="muted">Recurring mail, like a bill confirmation. If one doesn't arrive on time,
-  Themi says so, and anything automatic it protects goes back to asking first.</p>
-  {% for item in expected.get(account.id, []) %}
-  <form method="post" action="/accounts/{{ account.id }}/expected/{{ item.id }}/remove" class="row">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <span><strong>{{ item.name }}</strong>: from {{ item.sender_pattern }}{% if item.subject_pattern %}, subject has "{{ item.subject_pattern }}"{% endif %},
-    every {{ item.cadence_days }} days ({{ item.grace_days }} days' grace).
-    {% if item.last_seen_at %}Last seen {{ item.last_seen_at.date().isoformat() }}.{% else %}Not seen yet.{% endif %}</span>
-    <button class="quiet">Stop watching</button>
-  </form>
+  {% endcall %}
   {% endfor %}
-  <form method="post" action="/accounts/{{ account.id }}/expected" class="settings">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label>What it is <input name="name" placeholder="the PG&amp;E confirmation" required></label>
-    <label>From (an address, or @domain) <input name="sender" required></label>
-    <label>Subject has (optional) <input name="subject"></label>
-    <label>Comes every (days) <input name="cadence_days" type="number" min="1" max="400" value="30"></label>
-    <label>Grace (days) <input name="grace_days" type="number" min="0" max="60" value="3"></label>
-    <label>Protects
-      <select name="category">
-        {% for category in protectable %}
-        <option value="{{ category.name }}" {% if category.name == "email_mark_read" %}selected{% endif %}>{{ category.label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button>Add</button>
-  </form>
-  <form method="post" action="/accounts/{{ account.id }}/unlink">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="quiet">Unlink</button>
-  </form>
-</article>
-{% else %}
-<p>No accounts linked yet.</p>
-{% endfor %}
+  {% if can_link %}
+  <details class="add"{% if not accounts %} open{% endif %}>
+    <summary>Link a Gmail account</summary>
+    <form method="post" action="/accounts/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">Google will show a warning that the app isn't verified: Themi is your
+      family's own server, so that's expected. "Advanced", then "Go to Themi", continues.</p>
+      <button class="primary">Link a Gmail account</button>
+    </form>
+  </details>
+  {% elif not accounts %}
+  <p class="empty muted">No accounts linked yet. Linking Gmail isn't set up on this server yet.</p>
+  {% else %}
+  <p class="empty muted">Linking Gmail isn't set up on this server yet.</p>
+  {% endif %}
+</div>
 
-{% if can_link %}
-<form method="post" action="/accounts/link" class="card">
-  <input type="hidden" name="csrf" value="{{ csrf }}">
-  <p class="muted">Google will show a warning that the app isn't verified: Themi is your
-  family's own server, so that's expected. "Advanced", then "Go to Themi", continues.</p>
-  <button class="primary">Link a Gmail account</button>
-</form>
-{% else %}
-<p class="muted">Linking Gmail isn't set up on this server yet.</p>
+{% if household %}
+{% set family = household.family %}
+<h2 id="household">Household connections</h2>
+<p class="muted">The household's appliances and calendar. Only admins see these.</p>
+<div class="rows">
+  {% set hc = household.home_connect %}
+  {% if hc %}
+  {% set chips = [("Linked · " ~ hc.devices|length ~ (" appliance" if hc.devices|length == 1 else " appliances"), "good")] if hc.linked else [("Not linked", "")] %}
+  {% call(part) row("Dishwasher", meta="Home Connect (Bosch)", chips=chips, id="home-connect", open=opened == "home-connect") %}
+  {% if part == "body" %}
+    <p class="muted">Themi reads whether the dishwasher is running from Home Connect, the Bosch
+    app, and nothing else. A cycle starting checks off the dishwasher on the wall's routines.</p>
+    {% if hc.linked %}
+    {% for device, state in hc.devices %}
+    <p>{{ device.name }}{% if device.appliance %} · {{ device.appliance }}{% endif %}{% if state %} · {{ state | lower }}{% endif %}</p>
+    {% else %}
+    <p>Linked, but no appliances were found.</p>
+    {% endfor %}
+    <div class="danger-zone">
+      <form method="post" action="/family/home-connect/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink Home Connect</button>
+      </form>
+    </div>
+    {% else %}
+    <form method="post" action="/family/home-connect/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary">Link Home Connect</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% endcall %}
+  {% endif %}
+
+  {% set thinq = household.thinq %}
+  {% if thinq %}
+  {% set chips = [("Linked · " ~ thinq.devices|length ~ (" appliance" if thinq.devices|length == 1 else " appliances"), "good")] if thinq.linked else [("Not linked", "")] %}
+  {% call(part) row("Washer and dryer", meta="LG ThinQ", chips=chips, id="thinq", open=opened == "thinq") %}
+  {% if part == "body" %}
+    <p class="muted">Themi reads whether the LG washer and dryer are running from LG ThinQ, and
+    nothing else: it can't start or stop them. When the washer finishes, whoever has more
+    room gets a nudge to move the load.</p>
+    {% if thinq.linked %}
+    {% for device, state in thinq.devices %}
+    <form method="post" action="/family/thinq/devices/{{ device.id }}" class="buttons">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <span>{{ device.name }}{% if state %} · {{ state }}{% endif %}</span>
+      <select name="appliance" aria-label="What {{ device.name }} is">
+        <option value="washer" {% if device.appliance == "washer" %}selected{% endif %}>Washer</option>
+        <option value="dryer" {% if device.appliance == "dryer" %}selected{% endif %}>Dryer</option>
+        <option value="" {% if not device.appliance %}selected{% endif %}>Not used</option>
+      </select>
+      <button class="small">Save</button>
+    </form>
+    {% else %}
+    <p>Linked, but no appliances were found.</p>
+    {% endfor %}
+    <p class="muted">{{ "Updates arrive as they happen." if thinq.pushes else "Checked every few minutes." }}</p>
+    <h3>Laundry</h3>
+    <form method="post" action="/family/laundry">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">A wet load left longer than this gets a rewash suggestion instead, timed
+      to finish when there's room to move it.</p>
+      <label>Fresh for <input name="fresh_hours" type="number" min="1" max="48" step="0.5" value="{{ family.laundry_fresh_hours | round(1) }}"> hours</label>
+      <label>A rewash takes <input name="rinse_minutes" type="number" min="5" max="180" value="{{ family.laundry_rinse_minutes }}"> minutes</label>
+      <button>Save</button>
+    </form>
+    <div class="danger-zone">
+      <form method="post" action="/family/thinq/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink LG ThinQ</button>
+      </form>
+    </div>
+    {% else %}
+    <form method="post" action="/family/thinq/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">Make a personal access token at connect-pat.lgthinq.com, signed in with
+      the LG account the appliances are on, with "view all devices" and "view all device
+      statuses" ticked.</p>
+      <label>Personal access token <input name="token" type="password" autocomplete="off" required></label>
+      <label>Country <input name="country" value="{{ thinq.country }}" maxlength="2" size="3"></label>
+      <button class="primary">Link LG ThinQ</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% endcall %}
+  {% endif %}
+
+  {% set roborock = household.roborock %}
+  {% if roborock %}
+  {% if roborock.linked and roborock.problem %}{% set chips = [("Link it again", "bad")] %}
+  {% elif roborock.linked %}{% set chips = [("Linked", "good")] %}
+  {% else %}{% set chips = [("Not linked", "")] %}{% endif %}
+  {% call(part) row("Robot vacuum", meta="Roborock", chips=chips, id="roborock", open=opened == "roborock" or roborock_code_sent) %}
+  {% if part == "body" %}
+    <p class="muted">Themi reads the Roborock vacuum's state, alerts and parts. When it needs a
+    hand (stuck, a jam, the dock's water, a worn part) whoever has more room gets a nudge, with
+    the room it's in when the map says. With a yes (or a rule), Themi can clear its alert and
+    send it back to its dock; it doesn't start cleans.</p>
+    {% if roborock.linked %}
+    {% if roborock.problem %}<p class="error">{{ roborock.problem }} Link it again below.</p>{% endif %}
+    {% for device, state in roborock.devices %}
+    <p>{{ device.name }}{% if state %} · {{ state }}{% endif %}</p>
+    {% else %}
+    <p>Linked, but no vacuum was found.</p>
+    {% endfor %}
+    <p class="muted">Signed in as {{ roborock.email }}.</p>
+    {% endif %}
+    {% if not roborock.linked or roborock.problem %}
+    {% if roborock_code_sent %}
+    <form method="post" action="/family/roborock/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="email" value="{{ roborock_code_sent }}">
+      <label>The code Roborock emailed to {{ roborock_code_sent }}
+        <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+      <button class="primary">Link Roborock</button>
+    </form>
+    {% else %}
+    <form method="post" action="/family/roborock/code">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">The email the Roborock app signs in with. Roborock emails a code to it.</p>
+      <label>Email <input name="email" type="email" value="{{ roborock.email }}" autocomplete="off" required></label>
+      <button class="primary">Send code</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if roborock.linked %}
+    <div class="danger-zone">
+      <form method="post" action="/family/roborock/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink Roborock</button>
+      </form>
+    </div>
+    {% endif %}
+  {% endif %}
+  {% endcall %}
+  {% endif %}
+
+  {% set calendar = household.calendar %}
+  {% if calendar %}
+  {% if calendar.problem %}{% set chips = [("Needs attention", "bad")] %}
+  {% elif calendar.using %}{% set chips = [("Writing", "good")] %}
+  {% else %}{% set chips = [("Not set up", "")] %}{% endif %}
+  {% call(part) row("Family calendar", meta=('"' ~ calendar.name ~ '" on ' ~ calendar.using) if calendar.using else "Google Calendar, for the wall", chips=chips, id="family-calendar", open=opened == "family-calendar") %}
+  {% if part == "body" %}
+    <p class="muted">Tasks with dates go on this Google calendar (once someone says yes), so
+    Cozyla shows them. Themi finds the calendar by name, or makes it.</p>
+    {% if calendar.problem %}<p class="alert">{{ calendar.problem }}</p>
+    {% elif calendar.using %}<p>Writing to "{{ calendar.name }}" on {{ calendar.using }}.</p>{% endif %}
+    <form method="post" action="/family/calendar">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Account
+        <select name="account">
+          <option value="" {% if calendar.chosen is none %}selected{% endif %}>The first admin's account that allows it</option>
+          {% for account in calendar.accounts %}
+          <option value="{{ account.id }}" {% if calendar.chosen == account.id %}selected{% endif %}>{{ account.address }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Calendar name <input name="name" value="{{ calendar.name }}"></label>
+      <button>Save</button>
+    </form>
+  {% endif %}
+  {% endcall %}
+  {% endif %}
+
+  <p class="row-plain"><span class="row-main"><span class="row-title">Safeway helper</span><span class="row-meta">Anyone can connect one, on the <a href="/safeway">Safeway page</a></span></span></p>
+</div>
 {% endif %}
 {% endblock %}

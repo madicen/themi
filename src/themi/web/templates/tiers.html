@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_row.html" import row %}
 {% block title %}What Themi does alone · Themi{% endblock %}
 {% block content %}
 <h1>What Themi does on its own</h1>
@@ -6,14 +7,21 @@
 the rest always need a yes. Things that are your own, like your email, are automatic only
 for whoever turns them on. Shared things are the household's{% if not member.is_admin %},
 and admins change those{% endif %}.</p>
+<div class="rows">
 {% for category in categories %}
 {% set personal = category.scope == "member" %}
 {% set on = category.name in mine %}
-<article class="card">
-  <p class="summary">{{ category.label }}</p>
-  {% if category.escalated %}
-    <p class="alert">Asking again because: {{ category.escalation_reason }}</p>
-  {% endif %}
+{% set automatic = (personal and on) or (not personal and category.tier == 2) %}
+{% if category.capped %}{% set chips = [("Always asks", "")] %}
+{% elif automatic and category.escalated %}{% set chips = [("Paused", "warn")] %}
+{% elif automatic %}{% set chips = [("Automatic for you" if personal else "Automatic", "good")] %}
+{% else %}{% set chips = [("Asks first", "")] %}{% endif %}
+{% if category.escalated %}{% set meta = "Asking again because: " ~ category.escalation_reason %}
+{% elif personal and others[category.name] %}{% set meta = "Automatic for " ~ others[category.name] | join(", ") %}
+{% elif personal and not category.capped %}{% set meta = "Yours to switch" %}
+{% else %}{% set meta = "" %}{% endif %}
+{% call(part) row(category.label, meta=meta, chips=chips, id="tier-" ~ category.name) %}
+{% if part == "body" %}
   {% if category.capped %}
     <p class="muted">Always asks first. This can't become automatic.</p>
   {% elif personal %}
@@ -24,6 +32,9 @@ and admins change those{% endif %}.</p>
   {% else %}
     <p class="muted">Asks first.</p>
   {% endif %}
+  {% if category.escalated %}
+    <p class="alert">Asking again because: {{ category.escalation_reason }}</p>
+  {% endif %}
   {% if member.is_admin or (personal and not category.capped) %}
   <div class="buttons">
     {% if category.escalated and member.is_admin %}
@@ -32,7 +43,7 @@ and admins change those{% endif %}.</p>
     </form>
     {% endif %}
     {% if not category.capped %}
-      {% if (personal and on) or (not personal and category.tier == 2) %}
+      {% if automatic %}
       <form method="post" action="/tiers/{{ category.name }}/supervised">
         <input type="hidden" name="csrf" value="{{ csrf }}"><button>Ask first again</button>
       </form>
@@ -43,7 +54,11 @@ and admins change those{% endif %}.</p>
       {% endif %}
     {% endif %}
   </div>
+  {% elif not category.capped %}
+  <p class="muted">An admin can change this one.</p>
   {% endif %}
-</article>
+{% endif %}
+{% endcall %}
 {% endfor %}
+</div>
 {% endblock %}

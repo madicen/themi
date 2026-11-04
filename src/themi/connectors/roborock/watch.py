@@ -63,7 +63,7 @@ class RoborockWatcher:
         self._parts_at: dict[int, datetime] = {}
         self._logged: set[str] = set()
 
-    # ----- linking (the Family page) ---------------------------------------------------
+    # ----- linking (the Accounts page) -------------------------------------------------
 
     async def send_code(self, email: str) -> str:
         return await self.account.send_code(email)

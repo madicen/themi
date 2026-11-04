@@ -7,15 +7,14 @@ Tell Themi in chat ("just spent $40 on DoorDash", "that lunch was for work"); ta
 emails are added on their own.</p>
 {% if takeout %}<p>{{ takeout }}</p>{% endif %}
 
-<section class="card">
+<div class="rows">
   {% for row in rows %}
-  <div class="row">
-    <span>{{ row.on.strftime("%a %d %b") }} · {{ row.place }} · {{ row.amount }} · {{ row.kind }}{% if row.business %}, business{% endif %} <span class="muted">· {{ row.who }}{% if row.receipt %} · receipt email{% endif %}</span></span>
-  </div>
+  <p class="row-plain"><span class="row-main"><span class="row-title">{{ row.place }} · {{ row.amount }}</span>
+    <span class="row-meta">{{ row.on.strftime("%a %-d %b") }} · {{ row.kind }}{% if row.business %}, business{% endif %} · {{ row.who }}{% if row.receipt %} · receipt email{% endif %}</span></span></p>
   {% else %}
-  <p class="muted">Nothing logged this month.</p>
+  <p class="empty muted">Nothing logged this month.</p>
   {% endfor %}
-</section>
+</div>
 
 <p>Your business expenses this month: {{ business_total }}.
 <a href="/spending/business.csv?month={{ month.strftime('%Y-%m') }}">Download as CSV</a></p>

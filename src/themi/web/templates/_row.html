@@ -1,0 +1,35 @@
+{#- Rows (W1): one line per item, the full controls on tap.
+
+  {% from "_row.html" import row, chip %}
+  {% call(part) row("Title", meta="One line of status", chips=[("Overdue", "warn")]) %}
+    {% if part == "actions" %}...buttons always shown on the row...{% else %}...the panel...{% endif %}
+  {% endcall %}
+
+A row without actions puts its panel under {% if part == "body" %}.
+
+A chip is (text, kind) or plain text; kinds: good, warn, bad, info (none: neutral).
+-#}
+
+{% macro chip(text, kind="") -%}
+<span class="chip{% if kind %} {{ kind }}{% endif %}">{{ text }}</span>
+{%- endmacro %}
+
+{% macro row(title, meta=None, chips=(), open=False, id=None) -%}
+{%- set actions = caller("actions") | trim -%}
+<div class="row-item{% if actions %} has-actions{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+  <details{% if open %} open{% endif %}>
+    <summary>
+      <span class="row-main">
+        <span class="row-title">{{ title }}</span>
+        {%- if meta or chips %}<span class="row-meta">
+          {%- if chips %}<span class="chips">{% for c in chips %}{% if c is string %}{{ chip(c) }}{% else %}{{ chip(c[0], c[1]) }}{% endif %}{% endfor %}</span>{% endif %}
+          {{- meta or "" }}</span>{% endif %}
+      </span>
+    </summary>
+    <div class="row-body">{{ caller("body") }}</div>
+  </details>
+  {%- if actions %}
+  <div class="row-actions">{{ actions | safe }}</div>
+  {%- endif %}
+</div>
+{%- endmacro %}

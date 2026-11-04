@@ -57,12 +57,12 @@ def tired(scenario: Scenario) -> None:
     scenario.app.services.energy.record(scenario.member("Erin"), "text_note", -3, "worn out")
 
 
-async def test_linking_from_the_family_page(
+async def test_linking_from_the_accounts_page(
     scenario: Scenario, site: httpx.AsyncClient, fake_roborock: FakeRoborock
 ) -> None:
     fake_roborock.add_robot(ROBOT, "Robbie")
     await sign_in(scenario, site, "Erin")
-    page = await site.get("/family")
+    page = await site.get("/accounts")
     assert "Robot vacuum" in page.text and "Send code" in page.text
     asked = await site.post(
         "/family/roborock/code", data={"csrf": csrf_of(page.text), "email": EMAIL}
@@ -74,7 +74,8 @@ async def test_linking_from_the_family_page(
         data={"csrf": csrf_of(asked.text), "email": EMAIL, "code": CODE},
     )
     assert done.status_code == 303
-    page_text = await flash(site, "/family")
+    assert done.headers["location"] == "/accounts?open=roborock#roborock"
+    page_text = await flash(site, "/accounts")
     assert "Linked Roborock. Found Robbie." in page_text
     assert f"Signed in as {EMAIL}" in page_text
 
