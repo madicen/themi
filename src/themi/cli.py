@@ -88,6 +88,14 @@ def build_parser() -> argparse.ArgumentParser:
     keep_link.add_argument("--list", default="Shopping list", help="the Keep list to watch")
     keep_unlink = keep_commands.add_parser("unlink", help="forget a member's Google Keep")
     keep_unlink.add_argument("name")
+    tuya = commands.add_parser("tuya", help="the SmartLife feeders, through Tuya's cloud")
+    tuya_commands = tuya.add_subparsers(dest="tuya_command", required=True)
+    tuya_capture = tuya_commands.add_parser(
+        "capture",
+        help="read each linked Tuya device's data points and save them as test fixtures "
+        "(no ids, keys or names), so a mapping can be written for its model",
+    )
+    tuya_capture.add_argument("--out", default="tuya-captures", help="the folder to write to")
     return parser
 
 
@@ -117,6 +125,7 @@ def build_runtime(
     from themi.connectors.roborock import library as roborock_library
     from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
+    from themi.connectors.tuya import TuyaConfig
     from themi.runtime import Runtime
     from themi.settings import SettingsError
     from themi.storage import open_database
@@ -137,6 +146,7 @@ def build_runtime(
         "home_connect": HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
         "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
         "roborock": roborock_library.available(),
+        "tuya": TuyaConfig(),
         "keep": GKeepAccount,
     }
     if connectors is not None:
@@ -388,6 +398,46 @@ def _keep(command: str, name: str, list_name: str) -> int:
     return 0
 
 
+def _tuya_capture(out: str) -> int:
+    import asyncio
+    import json
+    from pathlib import Path
+
+    from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
+
+    store = _store()
+    watcher = TuyaWatcher(store, TuyaAccount(store.db, store.cipher, TuyaConfig()))
+    if not watcher.account.linked():
+        print("Link Tuya on the website's Accounts page first.", file=sys.stderr)
+        return 1
+    folder = Path(out)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    async def run() -> list[Path]:
+        written = []
+        try:
+            for n, device in enumerate(watcher.devices(), 1):
+                captured = await watcher.capture(device)
+                stem = captured["product_id"] or captured["category"] or "device"
+                path = folder / f"{stem}-{n}.json"
+                path.write_text(json.dumps(captured, indent=1, sort_keys=True) + "\n")
+                written.append(path)
+        finally:
+            await watcher.account.close()
+        return written
+
+    try:
+        written = asyncio.run(run())
+    except TuyaError as exc:
+        print(f"Tuya capture failed: {exc}", file=sys.stderr)
+        return 1
+    for path in written:
+        print(f"Wrote {path}")
+    if not written:
+        print("Tuya is linked, but it has no devices.")
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -425,6 +475,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cozyla_check(args.titles, args.fields)
         elif args.command == "keep":
             return _keep(args.keep_command, args.name, getattr(args, "list", ""))
+        elif args.command == "tuya":
+            return _tuya_capture(args.out)
         else:
             parser.print_help()
     except (SettingsError, AccountsError, BackupError, S3Error, DecryptionError) as exc:

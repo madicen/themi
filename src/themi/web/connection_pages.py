@@ -1,4 +1,4 @@
-"""Household connections (W3): Home Connect, LG ThinQ, Roborock and the family calendar, on
+"""Household connections (W3): Home Connect, LG ThinQ, Roborock, Tuya and the family calendar, on
 the Accounts page beside each person's Google accounts. Admins only, both the section and
 its routes; members never see it.
 
@@ -18,6 +18,7 @@ from themi.connectors.google import TASKS_SCOPE
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi.connectors.roborock import RoborockError
 from themi.connectors.thinq import ThinqError
+from themi.connectors.tuya import REGIONS, TuyaError
 from themi.web.kit import Kit
 
 
@@ -49,6 +50,7 @@ def household_values(app: Any) -> dict[str, Any]:
         "home_connect": _home_connect(app),
         "thinq": _thinq(app),
         "roborock": _roborock(app),
+        "tuya": _tuya(app),
     }
 
 
@@ -101,6 +103,21 @@ def _roborock(app: Any) -> dict[str, Any] | None:
         "email": watcher.account.email() or "",
         "problem": watcher.account.problem(),
         "devices": [(d, states.get(d.id)) for d in watcher.devices()],
+    }
+
+
+def _tuya(app: Any) -> dict[str, Any] | None:
+    watcher = app.services.tuya
+    if watcher is None:
+        return None
+    states = watcher.states()
+    return {
+        "linked": watcher.account.linked(),
+        "access_id": watcher.account.access_id() or "",
+        "region": watcher.account.region() or "us",
+        "regions": [(key, name) for key, (name, _) in REGIONS.items()],
+        "problem": watcher.account.problem(),
+        "devices": [(d, states.get(d.id), watcher.raw(d)) for d in watcher.devices()],
     }
 
 
@@ -170,6 +187,55 @@ def routes(kit: Kit) -> APIRouter:
         if app.services.roborock is not None:
             await app.services.roborock.unlink()
         return kit.redirect(back("roborock"), "Unlinked Roborock.")
+
+    # ----- Tuya, for the feeders (32) ---------------------------------------------------
+
+    @router.post("/family/tuya/link")
+    async def link_tuya(request: Request) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.tuya
+        to = back("tuya")
+        if watcher is None:
+            return kit.redirect(to, "The feeders aren't set up on this server.")
+        try:
+            added = await watcher.link(
+                session.member,
+                str(form.get("access_id", "")),
+                str(form.get("secret", "")),
+                str(form.get("region", "")),
+            )
+        except (TuyaError, AccountsError) as exc:
+            return kit.redirect(to, f"Tuya wasn't linked: {exc}")
+        if not watcher.devices():
+            return kit.redirect(
+                to,
+                "Linked Tuya, but it sees no devices yet: link the SmartLife app account to "
+                "the cloud project (Devices, Link App Account), then link here again.",
+            )
+        names = ", ".join(d.name for d in added)
+        return kit.redirect(to, f"Linked Tuya. Found {names}." if names else "Linked Tuya.")
+
+    @router.post("/family/tuya/unlink")
+    async def unlink_tuya(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        if app.services.tuya is not None:
+            await app.services.tuya.unlink()
+        return kit.redirect(
+            back("tuya"), "Unlinked Tuya. Deleting the cloud project on Tuya's site finishes it."
+        )
+
+    @router.post("/family/tuya/devices/{device_id}")
+    async def map_tuya_device(request: Request, device_id: int) -> Response:
+        session, form = await kit.checked(request, admin=True)
+        watcher = app.services.tuya
+        to = back("tuya")
+        if watcher is None or device_id not in {d.id for d in watcher.devices()}:
+            return kit.redirect(to, "That device isn't one of Tuya's.")
+        appliance = str(form.get("appliance", "")) or None
+        if appliance not in (None, "feeder"):
+            return kit.redirect(to, "A Tuya device is a feeder, or not used.")
+        device = store.set_device_appliance(session.member, device_id, appliance)
+        return kit.redirect(to, f"{device.name}: {appliance or 'not used'}.")
 
     # ----- LG ThinQ (30) ----------------------------------------------------------------
 

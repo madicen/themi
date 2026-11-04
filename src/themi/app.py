@@ -35,6 +35,7 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
+from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
 from themi.core.agent import Agent
 from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
@@ -54,6 +55,7 @@ from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.feedback import FeedbackChat
+from themi.core.feeders import Feeders
 from themi.core.focus import Focus
 from themi.core.follow_ups import FollowUps
 from themi.core.google_tasks import GoogleTasksInbox
@@ -140,6 +142,7 @@ def build_app(
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
+    tuya: TuyaConfig | None = None,
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
@@ -330,6 +333,10 @@ def build_app(
         vacuum = Vacuum(services, tasks, services.roborock)
         vacuum.install()
         periodic.append(PeriodicTask("vacuum.wall", timedelta(minutes=1), vacuum.onto_wall))
+    if tuya is not None:
+        services.tuya = TuyaWatcher(store, TuyaAccount(db, cipher, tuya))
+        periodic.append(PeriodicTask("devices.feeders", timedelta(minutes=10), services.tuya.poll))
+        Feeders(services, tasks, services.tuya).install()
     Appliances(services).install()  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(
