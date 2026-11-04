@@ -8188,15 +8188,19 @@ Eval: email 810's shape isn't urgent.
 
 Notes (2026-11-03):
 - Deviation (narrower): the plain part is still preferred. It gives way to the HTML only
-  when it shares under half of the snippet's first eight words (of four letters or more)
-  and the HTML shares more (`parse._agrees`). Switching every email to HTML would have
+  when the HTML has more of the snippet's first eight words (of four letters or more)
+  than the plain part (`parse._snippet_words`). Switching every email to HTML would have
   changed receipts (pantry) and every stored body. Hidden preheaders aren't stripped: the
   snippet is often the preheader, so stripping it would break the comparison.
 - Triage's block gets "Preview: ..." (the snippet, unescaped, padding characters removed).
   SYSTEM says subject and preview win over a body that says otherwise, with unsure set.
-- Not checked against real mail. Fetching email 810's parts on the Pi (Erin's Gmail) was
-  refused by the permission check, so the plain-vs-HTML cause is inferred from the subject
-  and snippet against the stored body. Worth a look with permission.
+- Checked on the Pi (Michael's go-ahead, 2026-11-03, read-only, through Themi's Gmail
+  client). Email 810's HTML says "autopay is coming up on 11/13/2026 ... no action is
+  needed"; its plain part is the "You've cancelled" template. The first rule (the plain part
+  kept when it had half the snippet's words) would have kept it: it has 2 of 4. Fixed by
+  comparing the two parts against each other. On 810, 846, 847 and 851: 810 and 846
+  (Nextdoor, whose plain part is a digest) take the HTML, and 847 (AWS) and 851 keep the
+  plain part.
 - No eval: the evals cover chat tool calls, not triage. Covered instead by
   `test_the_email_is_read_as_its_reader_sees_it` (fake Gmail, scripted model).
 - Only new mail is parsed this way. Email 810 stays as stored, and its alert has been sent.
