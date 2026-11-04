@@ -64,6 +64,9 @@ message arriving, and its parts.</p>
     <li>Tools: {{ medians.tool_seconds }} s (median).</li>
     <li>Sending: {{ medians.outbox_seconds }} s (median).</li>
   </ul>
+  {% if hedged[0] %}
+  <p>{{ hedged[0] }} slow model {{ "call was" if hedged[0] == 1 else "calls were" }} sent a second time; the second answered first {{ hedged[1] }} {{ "time" if hedged[1] == 1 else "times" }}.</p>
+  {% endif %}
   {% else %}
   <p class="muted">No replies yet this week.</p>
   {% endif %}

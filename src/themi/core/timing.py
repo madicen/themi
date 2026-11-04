@@ -207,6 +207,8 @@ def _model_step(call: dict[str, Any]) -> Step:
         detail.append(f"waited {call['waited']:.1f} s")
     if call["retries"]:
         detail.append(f"{call['retries']} {'retry' if call['retries'] == 1 else 'retries'}")
+    if call["hedge"]:
+        detail.append(f"sent again, the {call['hedge']} answered")
     if not call["ok"]:
         detail.append("failed")
     what = "Model" if call["task"] == "conversation" else f"Model ({call['task']})"
@@ -273,6 +275,17 @@ def week_of_replies(db: Database) -> list[Reply]:
             )
         )
     return replies
+
+
+def hedges(db: Database) -> tuple[int, int]:
+    """P2b: the week's model calls sent a second time, and how often the second answered
+    first."""
+    row = db.one(
+        "SELECT COUNT(*) AS sent, COALESCE(SUM(hedge = 'second'), 0) AS won FROM ai_calls "
+        "WHERE hedge IS NOT NULL AND started_at >= ?",
+        (to_utc_iso(clock.now() - REPLIES_KEPT),),
+    )
+    return (row["sent"], row["won"]) if row else (0, 0)
 
 
 def medians(replies: list[Reply]) -> dict[str, float]:

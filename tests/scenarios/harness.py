@@ -97,9 +97,11 @@ class Scenario:
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
+        hedge_after: float | None = None,
     ) -> None:
         """`real_models`: the router builds real adapters from each member's AI settings and
-        retries with real waits (the evals); otherwise every model is a ScriptedProvider."""
+        retries with real waits (the evals); otherwise every model is a ScriptedProvider.
+        `hedge_after`: off unless asked for, so a scripted slow call stays slow (P2b)."""
         self.family = family
         self.telegram = telegram
         self.google = google
@@ -123,6 +125,7 @@ class Scenario:
             sleep=asyncio.sleep if real_models else _no_sleep,
             tool_routing=tool_routing,
             control_dir=runner.folder if runner else None,
+            hedge_after=hedge_after,
             **connector_options(
                 google=google,
                 gmail=gmail,
