@@ -191,6 +191,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F26b | Idea: approvals from one email thread in one message | Feedback | [ ] |
 | F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
+| F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
+| F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
+| F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -9415,3 +9418,137 @@ Notes (2026-11-04):
   @BotFather: /setprivacy, @themi_ai_bot, Disable; then remove the bot from "Madicen
   Family", add it back, and send /familygroup@themi_ai_bot there. Mark #143 reviewed once
   "Themi, ..." is answered in the group.
+
+### F28a · Feedback (2026-11-05): a new due date sent to the wall is put back by the wall's order
+Status: [x] 2026-11-05
+Depends on: C1b, F18d, F24b
+Read first: C1b's and F18d's notes (the wall's to-do sync and its order). From Michael's bug
+#146 (2026-11-05, 8:34 am, "the due date for the mimi and merlin box tasks keeps getting
+reset even after changing it twice to match the calendar event"). At 10:39 pm and again at
+11:43 pm he asked for tasks 59 and 10 to be due in the time blocked on Saturday;
+`reschedule_task` ran both times and replied "set to Saturday 7 November, 1-5 pm". On the
+Pi the next morning both tasks had `from_time` 13:00 and `due_time` 17:00 but `due_on`
+2026-10-29 again, the same as their `cozyla_seen` rows. So the wall still had 29 Oct, and
+the pull moved the tasks back to it.
+
+Cause (from the code, check it with a failing test first): in
+`CozylaTodoSync._send`, an update does `current[todo.id] = replace(todo, ..., due=due)`, which
+leaves `todo.raw` with the old `dueDateTime`. `_order` runs next in the same sync and
+calls `client.place(todo, ...)`, which sends `todo.raw`'s `UPDATE_FIELDS` back, old due date
+included. The new date moved both tasks from overdue to not yet due, so their places on
+the list changed and `place` ran. `_remember` then stored Saturday as seen, and the next
+pull saw 29 Oct as a change made on the wall and called `board.reschedule(task, 29 Oct)`.
+Times were kept, because that call keeps them.
+- `place` and `update` send what Themi last set, not the to-do as first read. Keep `raw`
+  in step when `_send` changes a to-do (title, assignee, `dueDateTime`), or have `place`
+  send only the order fields if the API allows it (check with the fake's rules and C1b's
+  notes on which fields `todosInfo/update` needs).
+- Look for the same stale-`raw` pattern elsewhere in the Cozyla sync code (routines,
+  chores, lists) and fix any you find the same way.
+- A due date changed on the wall that undoes the change Themi pushed in the sync before
+  is logged at info level (task id, both dates), so a back-and-forth leaves a trace.
+- The fake Cozyla's `todosInfo/update` applies every field it's sent, as the real one
+  does, so a stale field in the body shows in tests.
+
+Tests: each a failing test first. An overdue wall to-do rescheduled to a later day keeps
+that day after two syncs, with `_order` moving it. A title change that moves it keeps its
+title. The log line when the wall's date undoes Themi's.
+Scenario: bug #146. A task on the wall due last Thursday is rescheduled into Saturday's
+block, and it's still due Saturday the next morning.
+
+Setup after deploying: tasks 59 and 10 on the Pi are still due 29 Oct. Ask Michael to
+send his request again, or reschedule them once from the website.
+
+Notes (2026-11-05):
+- Confirmed with a failing test, as the cause above said. `CozylaClient.update` now returns
+  the to-do as it was just set, with `raw` merged with the body it sent. `_send` (to-dos) and
+  `CozylaListSync._send` (list items) keep that one. `place` still sends `raw`'s fields:
+  the fake, like the real API, clears any field left out, so it can't send only the order.
+- Chores and routines don't have this bug: their updates take everything Themi changes
+  as arguments, and take only cosmetic fields (icon, coins, description) from `raw`.
+- Deviation (wider): every due date changed on the wall is logged at info ("Cozyla to-do
+  … is due … on the wall (was …); task … follows"), not only one that undoes Themi's.
+  Telling the two apart would need the last pushed date stored, and every log line is
+  already the trace that was missing.
+- No change to the fake was needed: its `todosInfo/update` already keeps only what it's
+  sent, which is what showed the bug.
+- Setup: deploy, then reschedule tasks 59 and 10 once more (in chat or on the website).
+  No migration.
+
+### F28b · Feedback (2026-11-05): a confirmation's amount is what the reader paid
+Status: [x] 2026-11-05
+Depends on: 24, F24c
+Read first: "Gmail triage"; prompt 24 (expected emails and anomaly detection); "Security
+and privacy" (email text is data). From Michael's bug #145 (2026-11-05, 8:03 am, "a
+kickstarter reaching its funding goal is not the amount I spent on it"). At 8:00 am
+Themi sent "A confirmation from Kickstarter shows $336,444.00, well above the usual
+$179.00: 'Eldritch Pirate | Dice Sets reached its funding goal'". That email is a project
+update, not a receipt. Triage still called it a `confirmation`, and `parse_amount` found
+no "total", "paid" and so on before any amount, so it took the largest dollar figure:
+the total pledged by all backers. Because it was flagged, the email category was escalated
+to asking first.
+- The amount comes from triage: `Verdict` gets `amount_paid` (cents, or none). It's
+  only set when the email says what the reader paid, was charged, pledged or owes: a
+  receipt, an order, a pledge or a bill. A project's total, a goal, a price in an advert, a
+  balance someone else holds are none. The model gives the figure as written; Themi keeps
+  it only if that figure appears in the email's text (it can't invent one).
+- `parse_amount` stays as the fallback for when triage doesn't give one, but it only
+  takes an amount next to one of the payment words. If there's no labelled amount, it
+  returns none instead of the largest. Add "pledge"/"pledged" only with "your" before it
+  ("your pledge", "you pledged").
+- The unusual-amount alert goes only on an amount from either of those, so "reached its
+  funding goal" doesn't escalate a category.
+- Look on the Pi (read-only) at Kickstarter's earlier `confirmation` rows with
+  `amount_cents` (subjects and amounts only) to see whether $179 was a real pledge. If
+  some stored amounts are totals, say so in the Notes. Don't rewrite them without asking.
+
+Tests: each a failing test first. A made-up "reached its funding goal" email with
+"$336,444 pledged of $10,000 goal" gives no amount and no alert. A pledge receipt
+("Your pledge: $179.00") gives $179. A receipt with a total still gives the total. A
+model figure that isn't in the text is dropped. `parse_amount` with no payment word
+returns none.
+
+Notes (2026-11-05):
+- `Verdict.amount_paid`: the model's figure as written, "" for none, or None when the model
+  gave no field (older fakes, and as a safeguard). `ExpectedEmails.on_triaged` keeps it
+  through `paid_amount` only if that figure is in the subject or body. If it gives "", there
+  is no amount. If its figure isn't in the email, or there's no field, `parse_amount` is
+  used. SCHEMA requires `amount_paid`, and SYSTEM says what counts.
+- `parse_amount` takes only a figure with a payment word in the 40 characters before it
+  ("total", "paid", "charged", "your pledge", ...), and skips any followed within a few
+  characters by "pledged", "goal", "raised", "funded" or "backers". The old "largest"
+  fallback is gone (its unit test changed with it).
+- Checked on the Pi (read-only, 2026-11-05): of the 15 Kickstarter emails with an amount,
+  5 had stored another project's total: 453 and 468 (both mails about Michael's own
+  backing, whose stored text has no pledge of his) and 531, 784 and 938 (funding goals).
+  The new `parse_amount`, run on their stored text there, gives none for those five and
+  the same figure as before for the other ten. Those five rows still hold the old
+  amounts. With no rewrite they will skew Kickstarter's "usual" for the next few emails,
+  upwards, so a big pledge is flagged less often. Clearing them is one UPDATE; ask
+  Michael first.
+- The 8 am alert and the escalation it caused stay as they are: "Mark confirmation
+  emails as read" asks first until it's resumed (the button on that message, or the
+  website).
+- Setup: restart. No migration.
+
+### F28c · Idea (2026-11-05): choosing which pages are on the website's menu bar
+Status: [ ]
+Depends on: W1
+Read first: W1's notes (the bottom bar and `/more`). From Michael's idea #144 (2026-11-04,
+10:30 pm, "allow swapping which items are on the primary menu of the website"). The bar
+is fixed as Home, Tasks, Lists, More; everything else is a tap into More.
+- Each person picks the bar's pages for themselves (it's their phone): up to four from
+  Home, Tasks, Lists and the More page's entries that they can open. More is always last.
+  The default is today's bar.
+- Set it on `/more`: each entry gets a quiet "Pin to bar"/"Unpin" control, and the bar's
+  pages can be moved up or down. No new JS: forms posting to a small endpoint, as W1–W5
+  do.
+- Stored per member, like the other site settings. A page that person can no longer open
+  (an admin page after the role changed) is left off the bar.
+- The highlight for the current page's group (W1) still works for pinned pages, and the
+  desktop top bar shows the same choice.
+
+Tests: the default bar; pinning Spending puts it on the bar for that person only; a fifth
+is refused, with a message; an admin page pinned and then the role lost isn't shown;
+unpinning brings back the order. A page test at 390px wide shows no sideways scroll with
+four items.

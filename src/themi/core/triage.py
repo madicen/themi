@@ -103,6 +103,11 @@ short title ("Vet: Biscuit's checkup"), the date (YYYY-MM-DD), start and end
 (HH:MM, 24-hour; both empty for an all-day event) and the place, as written.
 Otherwise leave every event field empty.
 
+For a confirmation or receipt, give amount_paid: what the reader paid, was charged,
+pledged or owes, exactly as the email writes it ("$179.00"). Leave it empty when the
+email isn't about the reader's own money: a project's total pledged or its goal, a
+price in an advert, someone else's figures.
+
 Each email's subject and preview are what the family sees in the inbox. If the body
 says something else (a payment "scheduled" in the subject, "cancelled" in the body),
 go by the subject and preview, and set unsure; never call it urgent on the body alone.
@@ -130,6 +135,7 @@ SCHEMA: dict[str, Any] = {
                     "severe": {"type": "boolean"},
                     "summary": {"type": "string"},
                     "reply_draft": {"type": "string"},
+                    "amount_paid": {"type": "string"},
                     "event": {
                         "type": "object",
                         "properties": {
@@ -151,6 +157,7 @@ SCHEMA: dict[str, Any] = {
                     "severe",
                     "summary",
                     "reply_draft",
+                    "amount_paid",
                     "event",
                 ],
                 "additionalProperties": False,
@@ -187,6 +194,9 @@ class Verdict:
     # for the calendar; None when there's none.
     event: dict[str, str] | None = None
     unsure: bool = False  # E2: the model couldn't tell; the email audit asks
+    # F28b: what the reader paid, as the email writes it; "" for none, None when the
+    # model didn't say (then the email's labelled amount is used).
+    amount_paid: str | None = None
 
 
 @dataclass(frozen=True)
@@ -529,6 +539,7 @@ def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
         if email_id not in batch_ids or category not in CATEGORIES or email_id in verdicts:
             continue
         kind = str(item.get("urgent_kind") or "")
+        paid = item.get("amount_paid")
         verdicts[email_id] = Verdict(
             email_id,
             category,
@@ -538,6 +549,7 @@ def _verdicts(data: dict[str, Any], batch_ids: set[int]) -> dict[int, Verdict]:
             str(item.get("reply_draft") or "") if category == "needs_reply" else "",
             _event(item.get("event")) if category == "confirmation" else None,
             bool(item.get("unsure")),
+            None if paid is None else " ".join(str(paid).split())[:40],
         )
     return verdicts
 

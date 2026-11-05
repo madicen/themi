@@ -5,7 +5,13 @@ import pytest
 from themi.accounts import InvalidValue, sender_matches, sender_pattern
 from themi.channels.pda import find_demands
 from themi.core import expected
-from themi.core.expected import ExpectedEmail, cadence_words, dollars, parse_amount
+from themi.core.expected import (
+    ExpectedEmail,
+    cadence_words,
+    dollars,
+    paid_amount,
+    parse_amount,
+)
 
 START = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
@@ -73,7 +79,8 @@ def test_missed_periods_start_after_cadence_and_grace() -> None:
 def test_amounts_prefer_the_labelled_one() -> None:
     assert parse_amount("Thanks! We received your payment of $1,112.40 today.") == 111240
     assert parse_amount("Save $5 next time. Total charged: $84.20") == 8420
-    assert parse_amount("Credit limit $5,000. Statement $12.00 and $30") == 500000  # largest
+    # Bug #145: with no payment word, no amount (the largest was someone else's total).
+    assert parse_amount("Credit limit $5,000. Statement $12.00 and $30") is None
     assert parse_amount("No money here, 30 days") is None
     assert dollars(111240) == "$1,112.40" and dollars(5) == "$0.05"
 
@@ -114,3 +121,30 @@ def test_anomaly_texts_pass_the_strictest_pda_check() -> None:
     ]
     for text in texts:
         assert find_demands(text, 3) == [], text
+
+
+# Shaped like Kickstarter's emails (bug #145): other projects' totals come before "pledged".
+FUNDED = (
+    "Eldritch Pirate reached its goal!\n\nby Someone\n\n$336,444\n\npledged\n\n3,886\n\nbackers"
+)
+COLLECTED = (
+    "**$2,000** goal\n\n$3,338 pledged\nYour pledge\nDetails\nCollector's Set \u2014 US$269\n\n"
+    "$269.00\n\nShipping to United States\n\n$0.00\n\nPledge total\n****3271\n\n"
+    "Expires 2/2028\n\n$269.00\n\nback another one today.\n\nHK$ 414,868\n------\n\npledged"
+)
+BACKED = "If it reaches its funding goal, your card will be charged $179.00 on November 1."
+
+
+def test_a_projects_totals_are_not_what_the_reader_paid() -> None:
+    assert parse_amount(FUNDED) is None
+    assert parse_amount(COLLECTED) == 26900
+    assert parse_amount(BACKED) == 17900
+    assert parse_amount("Your pledge: $179.00. $5,000 pledged so far.") == 17900
+
+
+def test_the_models_amount_is_kept_only_when_the_email_says_it() -> None:
+    assert paid_amount("$179.00", BACKED) == 17900
+    assert paid_amount("US$269", COLLECTED) == 26900
+    assert paid_amount("$500.00", BACKED) is None  # not in the email: invented
+    assert paid_amount("", BACKED) is None
+    assert paid_amount("about forty dollars", BACKED) is None

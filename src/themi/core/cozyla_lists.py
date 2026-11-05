@@ -212,8 +212,9 @@ class WallLists:
         """Changed in Themi: the wall's to-do is made to match."""
         try:
             if todo.title != row["name"]:
-                await self.client.update(todo, title=row["name"], assignee=None, due=todo.due)
-                todo = replace(todo, title=row["name"])
+                todo = await self.client.update(
+                    todo, title=row["name"], assignee=None, due=todo.due
+                )
             if todo.completed != bool(row["done"]):
                 await self.client.set_done(todo.id, bool(row["done"]))
                 todo = replace(todo, completed=bool(row["done"]))

@@ -160,3 +160,40 @@ async def test_no_warm_word_when_its_off_or_whose_tick_is_unknown(
     assert board.get(task.id).status == "done"
     for name in ("Erin", "Husband"):
         assert not any(t.startswith("Ticked off") for t in scenario.inbox(name))
+
+
+async def test_a_task_moved_into_saturdays_block_is_still_due_saturday_next_morning(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #146: Michael moved the cat-box tasks (on the wall, overdue since Thursday) into
+    Saturday's 1-5 pm block, twice; each morning they were due Thursday again."""
+    from datetime import date
+
+    board = scenario.app.services.taskboard
+    assert board is not None
+    husband = scenario.member("Husband")
+    box = await board.create(
+        husband, "Split Merlin's cat box", "physical", 3, date(2026, 10, 15), assignee=husband
+    )
+    await board.create(husband, "Call the vet", "call", 1, date(2026, 10, 23), assignee=husband)
+    await scenario.run_periodic("cozyla.sync")
+    await scenario.run_periodic("cozyla.sync")  # on the wall, in order
+
+    move = {"due_date": "2026-10-24", "due_time": "17:00", "from_time": "13:00"}
+    scenario.primary.queue_tool_call("reschedule_task", {"task_id": box.id, **move})
+    scenario.primary.queue_text("Set to Saturday 24 October, 1-5 pm.")
+    await scenario.say("Husband", "Set the cat box task to Saturday's time set aside for it")
+    for _ in range(3):  # overnight
+        await scenario.run_periodic("cozyla.sync")
+        await scenario.advance(hours=3)
+
+    task = board.get(box.id)
+    assert (task.due_on, str(task.from_time), str(task.due_time)) == (
+        date(2026, 10, 24),
+        "13:00:00",
+        "17:00:00",
+    )
+    assert fake_cozyla.wall_order(scenario.cozyla_list) == [
+        "Call the vet",
+        "Split Merlin's cat box",
+    ]

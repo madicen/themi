@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -210,11 +210,14 @@ class CozylaClient:
 
     async def update(
         self, todo: Todo, *, title: str, assignee: str | None, due: datetime | None
-    ) -> None:
-        """Change the title, assignee and due date; every other field is sent back as is."""
+    ) -> Todo:
+        """Change the title, assignee and due date; every other field is sent back as is.
+        Returns the to-do as it now is, `raw` included: a later update or `place` sends
+        `raw` back, and a stale one put the old due date back (bug #146)."""
         body = {name: todo.raw[name] for name in UPDATE_FIELDS if name in todo.raw}
         body.update(todoTitle=title, assignMemberUid=assignee, dueDateTime=_ms(due))
         await self._call("rewards/todosInfo/update", {"todoId": int(todo.id), **body})
+        return replace(todo, title=title, assignee=assignee, due=due, raw={**todo.raw, **body})
 
     async def place(self, todo: Todo, display: float, profile: float) -> None:
         """Where it shows on the list (F18d): the wall goes by `profileDisplayOrder`, highest

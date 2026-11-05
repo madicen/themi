@@ -291,6 +291,14 @@ class CozylaTodos:
             await self.board.update(task.id, self._admin(), title=todo.title)
         due_on = self._due_on(todo)
         if due_on != before.due_on:
+            # A trace for a date that goes back and forth (bug #146): the wall's wins.
+            log.info(
+                "Cozyla to-do %s is due %s on the wall (was %s); task %s follows",
+                todo.id,
+                due_on,
+                before.due_on,
+                task.id,
+            )
             await self.board.reschedule(task.id, due_on)
 
     async def _reassigned(self, task: Task, todo: Todo) -> None:
@@ -396,8 +404,9 @@ class CozylaTodos:
             current[todo_id] = Todo(todo_id, target, task.title, assignee, due, False)
             return todo_id
         if (todo.title, todo.assignee, todo.due) != (task.title, assignee, due):
-            await self.client.update(todo, title=task.title, assignee=assignee, due=due)
-            todo = current[todo.id] = replace(todo, title=task.title, assignee=assignee, due=due)
+            todo = current[todo.id] = await self.client.update(
+                todo, title=task.title, assignee=assignee, due=due
+            )
         if todo.completed:
             await self.client.set_done(todo.id, False)
             current[todo.id] = replace(todo, completed=False)
