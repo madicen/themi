@@ -192,6 +192,7 @@ def build_turn(
     calendars: str = "",
     lands: str = "",
     signals: Sequence[str] = (),
+    in_group: bool = False,
 ) -> str:
     items = "\n".join(f"- {i.summary}" for i in open_items) if open_items else "none"
     lines = []
@@ -215,9 +216,17 @@ def build_turn(
     signals_part = (  # O1a: overwhelm, from the message's own words
         f"What {member.name}'s message signals: {'; '.join(signals)}\n" if signals else ""
     )
+    where = (  # 34b: the partner reads it too
+        "Where: the family group. Everyone in the family reads your reply, so keep "
+        f"{member.name}'s private things (their calendar, email, energy, health, journal) "
+        "out of it unless they said them here.\n"
+        if in_group
+        else ""
+    )
     return (
         "<context>\n"
         f"Talking with: {member.name}{' (admin)' if member.is_admin else ''}\n"
+        f"{where}"
         f"Local time: {when} ({timezone})\n"
         f"Themi's own messages wait for: {'; '.join(holds)}\n"
         f"How {member.name} seems: {energy_label}\n"

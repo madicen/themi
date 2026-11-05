@@ -28,6 +28,7 @@ class FakeSender:
         self.failures = 0
         self.edited: list[tuple[int, str, tuple[Button, ...]]] = []
         self.previews: list[bool] = []
+        self.chats: list[int | None] = []  # where each went: None for the member's own chat
         self._ids = iter(range(500, 10_000))
 
     async def send_text(
@@ -38,19 +39,29 @@ class FakeSender:
         *,
         kind: str = "chat",
         link_preview: bool = True,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> int:
         self.previews.append(link_preview)
         if self.failures:
             self.failures -= 1
             raise ConnectionError("telegram unreachable")
         self.sent.append((member.name, text, tuple(buttons), kind))
+        self.chats.append(chat_id)
         return next(self._ids)
 
     def texts(self) -> list[str]:
         return [text for _, text, _, _ in self.sent]
 
     async def edit_text(
-        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+        self,
+        member: Member,
+        message_id: int,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> None:
         if self.failures:
             self.failures -= 1

@@ -53,6 +53,7 @@ from themi.channels.telegram import TelegramChannel
 from themi.storage.secrets import Secret
 
 START = datetime(2026, 10, 21, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
+GROUP_CHAT = -5001  # a Telegram group with the family (34b)
 
 
 async def _no_sleep(seconds: float) -> None:
@@ -260,6 +261,73 @@ class Scenario:
         target = next(r for r in rows if to_text is None or r["text"] == to_text)
         message_id = target["telegram_message_id"]
         return await self._collect(name, lambda c: self.telegram.react(c, message_id, [emoji]))
+
+    # ----- the family group (34b) ---------------------------------------------
+
+    def group_texts(self) -> list[str]:
+        """Everything Themi has sent to the family group so far."""
+        return self.telegram.sent_texts(GROUP_CHAT)
+
+    async def _in_group(self, act: Callable[[], object]) -> list[str]:
+        before = len(self.group_texts())
+        act()
+        await self.app.channel.poll_once()
+        return self.group_texts()[before:]
+
+    async def say_in_group(
+        self, name: str, text: str, *, reply_to_text: str | None = None, user_id: int | None = None
+    ) -> list[str]:
+        """`name` says `text` in the group (`user_id` for someone outside the family).
+        Returns what Themi said in the group. With `reply_to_text`, it's a Reply to Themi's
+        latest group message with exactly that text."""
+        sender = user_id if user_id is not None else self.member(name).telegram_user_id
+        assert sender is not None
+        reply_to = None
+        if reply_to_text is not None:
+            reply_to = next(
+                self._message_id_for(p)
+                for p in reversed(self.telegram.calls("sendMessage"))
+                if int(p["chat_id"]) == GROUP_CHAT and p["text"] == reply_to_text
+            )
+        return await self._in_group(
+            lambda: self.telegram.send_text(
+                sender, text, chat_id=GROUP_CHAT, chat_type="group", reply_to=reply_to
+            )
+        )
+
+    async def link_group(self) -> list[str]:
+        return await self.say_in_group("Erin", "/familygroup")
+
+    async def tap_in_group(self, name: str, label: str) -> list[str]:
+        """`name` taps the latest button labelled `label` in the group."""
+        user = self.member(name).telegram_user_id
+        assert user is not None
+        for method, params in reversed(
+            self.telegram.calls_in_order("sendMessage", "editMessageText")
+        ):
+            if int(params["chat_id"]) != GROUP_CHAT or not params.get("reply_markup"):
+                continue
+            for button in (b for row in params["reply_markup"]["inline_keyboard"] for b in row):
+                if button["text"] == label:
+                    message_id = (
+                        int(params["message_id"])
+                        if method == "editMessageText"
+                        else self._message_id_for(params)
+                    )
+                    token = button["callback_data"]
+                    return await self._in_group(
+                        lambda t=token, m=message_id: self.telegram.tap(
+                            user, t, m, chat_id=GROUP_CHAT, chat_type="group"
+                        )
+                    )
+        raise AssertionError(f"no button {label!r} was sent to the group")
+
+    def group_edits(self) -> list[str]:
+        return [
+            p["text"]
+            for p in self.telegram.calls("editMessageText")
+            if int(p["chat_id"]) == GROUP_CHAT
+        ]
 
     async def run_jobs(self) -> list[int]:
         """Run the queued background jobs that are due, as the scheduler would."""

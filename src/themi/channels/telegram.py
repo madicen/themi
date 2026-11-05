@@ -12,7 +12,10 @@ Who may talk to the bot:
 - Everyone else is ignored. Only their Telegram user id is logged, never
   what they wrote.
 
-Only private chats are handled for now; the family group arrives in Phase 2.
+Groups (34b): only the family group, once an admin links it by sending /familygroup there
+(`themi.channels.family_group`). In it, only family members' messages meant for Themi are
+handled: a command, a mention of the bot, or a Reply to one of Themi's messages. Every
+other group is ignored, apart from an admin's /familygroup.
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ import json
 import logging
 import os
 import random
+import re
 import secrets
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
@@ -58,6 +62,7 @@ from themi.channels.events import (
     Reaction,
     VoiceNote,
 )
+from themi.channels.family_group import FamilyGroup, replies_to_group
 from themi.logs import quiet_chatty_libraries
 from themi.storage.secrets import Secret
 
@@ -89,6 +94,16 @@ ALREADY_PAIRED_TEXT = "You're already connected. Nothing more to set up here."
 BAD_CODE_TEXT = "That code didn't work. An admin can make a fresh one with `themi invite`."
 NOT_YOURS_TEXT = "That one isn't yours to answer."
 ALREADY_HANDLED_TEXT = "Already taken care of."
+LINK_COMMAND = "/familygroup"
+GROUP_LINKED_TEXT = (
+    "This is the family group now. Here I only read messages meant for me (mention me, "
+    "reply to me, or use a command), and only from the family. I'll ask questions for you "
+    "both here, at times that suit you both."
+)
+GROUP_UNLINKED_TEXT = "This isn't the family group any more. I'll stay quiet here."
+GROUP_NOT_LINKED_TEXT = "This group wasn't the family group."
+GROUP_ADMIN_ONLY_TEXT = "Only an admin can make this the family group."
+GROUP_CHATS = (ChatType.GROUP, ChatType.SUPERGROUP)
 
 
 class TelegramChannel:
@@ -109,6 +124,7 @@ class TelegramChannel:
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._pairing_failures: dict[int, list[datetime]] = {}
+        self.family_group = FamilyGroup(store.db)
         self.last_poll_at: datetime | None = None  # for /health
         # PTB logs whole updates (what people write) at DEBUG, and httpx logs
         # request URLs, which contain the bot token, at INFO.
@@ -237,6 +253,9 @@ class TelegramChannel:
         user = message.from_user
         if user is None:
             return
+        if message.chat.type in GROUP_CHATS:
+            await self._on_group_message(update_id, message)
+            return
         if message.chat.type != ChatType.PRIVATE:
             log.info("Ignoring a %s chat message (chat %s)", message.chat.type, message.chat.id)
             return
@@ -278,6 +297,112 @@ class TelegramChannel:
         else:
             return  # stickers, photos and the like aren't handled yet
         await self._dispatch(event)
+
+    async def _on_group_message(self, update_id: int, message: Message) -> None:
+        """A group message: the link command, or a family member talking to Themi in the
+        family group. Nothing else is handled or logged (never what anyone wrote)."""
+        chat = message.chat
+        if message.migrate_to_chat_id is not None:
+            if self.family_group.moved(chat.id, message.migrate_to_chat_id):
+                log.info("The family group became a supergroup; following it")
+            return
+        user = message.from_user
+        member = self.store.member_by_telegram(user.id) if user is not None else None
+        text = message.text or ""
+        command = text.split(maxsplit=1)[0].lower() if text.strip() else ""
+        if command.split("@")[0] == LINK_COMMAND and self._for_this_bot(command):
+            if member is not None:
+                await self._link_group(member, chat.id, chat.title or "", text)
+            return
+        if not self.family_group.is_family(chat.id):
+            log.info("Ignoring a message in an unlinked group (chat %s)", chat.id)
+            return
+        if member is None:
+            log.info("Ignoring a family group message from a non-member (%s)", user and user.id)
+            return
+        if not self._addressed_to_me(message, text):
+            return  # the family talking among themselves
+        text = self._without_mention(text)
+        voice = await self._download_voice(message)
+        if voice is not None:
+            self.store.log_message(
+                member.id, "in", "[voice note, group]", "voice", message.message_id
+            )
+            event = InboundEvent(
+                "voice",
+                member,
+                chat.id,
+                message.message_id,
+                clock.now(),
+                update_id,
+                voice=voice,
+                in_group=True,
+            )
+        elif text:
+            self.store.log_message(member.id, "in", text, "group", message.message_id)
+            event = InboundEvent(
+                "text",
+                member,
+                chat.id,
+                message.message_id,
+                clock.now(),
+                update_id,
+                text=text,
+                reply_to_message_id=(
+                    message.reply_to_message.message_id if message.reply_to_message else None
+                ),
+                in_group=True,
+            )
+        else:
+            return
+        await self._dispatch(event)
+
+    async def _link_group(self, member: Member, chat_id: int, title: str, text: str) -> None:
+        argument = text.split(maxsplit=1)[1].strip().lower() if " " in text.strip() else ""
+        if not member.is_admin:
+            await self._send_raw(member, chat_id, GROUP_ADMIN_ONLY_TEXT, kind="system")
+            return
+        if argument in ("off", "unlink", "stop"):
+            linked = self.family_group.is_family(chat_id)
+            if linked:
+                self.family_group.unlink()
+                log.info("Member %s unlinked the family group", member.id)
+            words = GROUP_UNLINKED_TEXT if linked else GROUP_NOT_LINKED_TEXT
+            await self._send_raw(member, chat_id, words, kind="system")
+            return
+        self.family_group.link(chat_id, title, member)
+        log.info("Member %s linked chat %s as the family group", member.id, chat_id)
+        await self._send_raw(member, chat_id, GROUP_LINKED_TEXT, kind="system")
+
+    @property
+    def _username(self) -> str:
+        try:
+            return (self.bot.username or "").lower()
+        except RuntimeError:  # not initialized (unit tests that skip start())
+            return ""
+
+    def _for_this_bot(self, command: str) -> bool:
+        """`/familygroup@other_bot` is for another bot in the same group."""
+        _, _, target = command.partition("@")
+        return not target or target == self._username
+
+    def _addressed_to_me(self, message: Message, text: str) -> bool:
+        if text.startswith("/"):
+            return self._for_this_bot(text.split(maxsplit=1)[0].lower())
+        replied = message.reply_to_message
+        if replied is not None and replied.from_user is not None and replied.from_user.is_bot:
+            try:
+                return replied.from_user.id == self.bot.id
+            except RuntimeError:  # not initialized
+                return False
+        name = self._username
+        return bool(name) and f"@{name}" in text.lower()
+
+    def _without_mention(self, text: str) -> str:
+        name = self._username
+        if not name or text.startswith("/"):
+            return text.strip()
+        return re.sub(rf"@{re.escape(name)}\b[,:]?", "", text, flags=re.IGNORECASE).strip()
 
     async def _dispatch(self, event: InboundEvent) -> None:
         if self.handler is None:
@@ -330,24 +455,32 @@ class TelegramChannel:
             await self._answer(query)
             return
         row = self.store.db.one("SELECT * FROM callback_tokens WHERE token = ?", (query.data,))
-        if row is None or row["member_id"] != member.id:
+        if row is None or (row["member_id"] != member.id and not row["anyone"]):
             await self._answer(query, NOT_YOURS_TEXT if row else ALREADY_HANDLED_TEXT)
             return
         if row["used_at"] is not None or datetime.fromisoformat(row["expires_at"]) <= clock.now():
             await self._answer(query, ALREADY_HANDLED_TEXT)
             return
-        # One answer per keyboard: the other buttons on it stop working too.
-        self.store.db.execute(
-            "UPDATE callback_tokens SET used_at = ? WHERE group_id = ? AND used_at IS NULL",
-            (clock.now().isoformat(), row["group_id"]),
-        )
+        if not row["anyone"]:  # a keyboard for everyone is the handler's to close
+            # One answer per keyboard: the other buttons on it stop working too.
+            self.store.db.execute(
+                "UPDATE callback_tokens SET used_at = ? WHERE group_id = ? AND used_at IS NULL",
+                (clock.now().isoformat(), row["group_id"]),
+            )
         await self._answer(query)
         message_id = query.message.message_id if query.message is not None else row["message_id"]
         self.store.log_message(member.id, "in", f"[tapped: {row['label']}]", "button", message_id)
         press = ButtonPress(row["label"], row["kind"], json.loads(row["payload"]), message_id)
         chat_id = query.message.chat.id if query.message is not None else member.telegram_user_id
         event = InboundEvent(
-            "button", member, chat_id or 0, message_id, clock.now(), update_id, button=press
+            "button",
+            member,
+            chat_id or 0,
+            message_id,
+            clock.now(),
+            update_id,
+            button=press,
+            in_group=chat_id is not None and self.family_group.is_family(chat_id),
         )
         await self._dispatch(event)
 
@@ -390,11 +523,20 @@ class TelegramChannel:
         *,
         kind: str = "chat",
         link_preview: bool = True,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> int:
-        """Send a message (with up to a few buttons on one row). Returns its message id."""
-        chat_id = _chat_id(member)
+        """Send a message (with buttons) to the member's own chat, or to `chat_id` (the
+        family group) on their behalf. `anyone`: any family member may tap its buttons.
+        Returns its message id."""
         return await self._send_raw(
-            member, chat_id, text, buttons, kind=kind, link_preview=link_preview
+            member,
+            chat_id if chat_id is not None else _chat_id(member),
+            text,
+            buttons,
+            kind=kind,
+            link_preview=link_preview,
+            anyone=anyone,
         )
 
     async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
@@ -410,8 +552,9 @@ class TelegramChannel:
         *,
         kind: str = "chat",
         link_preview: bool = True,
+        anyone: bool = False,
     ) -> int:
-        group_id, markup = self._keyboard(member, buttons)
+        group_id, markup = self._keyboard(member, buttons, anyone=anyone)
         preview = None if link_preview else LinkPreviewOptions(is_disabled=True)
         sent = await self._with_flood_retry(
             lambda: self.bot.send_message(
@@ -427,13 +570,22 @@ class TelegramChannel:
         return sent.message_id
 
     async def edit_text(
-        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+        self,
+        member: Member,
+        message_id: int,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> None:
-        """Replace a message's text (and buttons; none given removes them)."""
-        group_id, markup = self._keyboard(member, buttons)
+        """Replace a message's text (and buttons; none given removes them), in the member's
+        own chat or in `chat_id` (the family group)."""
+        group_id, markup = self._keyboard(member, buttons, anyone=anyone)
+        chat = chat_id if chat_id is not None else _chat_id(member)
         await self._with_flood_retry(
             lambda: self.bot.edit_message_text(
-                text, chat_id=_chat_id(member), message_id=message_id, reply_markup=markup
+                text, chat_id=chat, message_id=message_id, reply_markup=markup
             )
         )
         if group_id is not None:
@@ -452,8 +604,10 @@ class TelegramChannel:
 
     @asynccontextmanager
     async def typing(self, member: Member) -> AsyncIterator[None]:
-        """Show "typing…" for as long as the block runs."""
-        chat_id = _chat_id(member)
+        """Show "typing…" for as long as the block runs (in the family group while
+        answering someone there)."""
+        group = self.family_group.chat_id() if replies_to_group(member) else None
+        chat_id = group if group is not None else _chat_id(member)
 
         async def show() -> None:
             with suppress(TelegramError):
@@ -474,7 +628,7 @@ class TelegramChannel:
                 await task
 
     def _keyboard(
-        self, member: Member, buttons: Sequence[Button]
+        self, member: Member, buttons: Sequence[Button], *, anyone: bool = False
     ) -> tuple[str | None, InlineKeyboardMarkup | None]:
         if not buttons:
             return None, None
@@ -485,7 +639,7 @@ class TelegramChannel:
             token = secrets.token_urlsafe(12)  # Telegram allows 64 bytes of callback data
             self.store.db.execute(
                 "INSERT INTO callback_tokens (token, group_id, member_id, label, kind, payload, "
-                "created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, expires_at, anyone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     token,
                     group_id,
@@ -495,6 +649,7 @@ class TelegramChannel:
                     json.dumps(button.payload),
                     now.isoformat(),
                     (now + BUTTON_TTL).isoformat(),
+                    int(anyone),
                 ),
             )
             made.append(InlineKeyboardButton(button.label, callback_data=token))

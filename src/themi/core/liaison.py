@@ -13,12 +13,19 @@ assigned to them, so it reaches them as a nudge. The person must have asked for 
 to be passed on in their own words (`ASKS_TO_PASS_ON`); the model's say-so isn't enough.
 
 Notes not passed on yet are open items for whoever asked. Each is recorded in
-`liaison_items` and marked delivered when its message goes. Prompt 34b adds the family
-group and alignment prompts.
+`liaison_items` and marked delivered when its message goes.
+
+Alignment prompts (34b): when two expectations conflict (how full the feeders should be),
+`flag_expectation_conflict` queues a short two-option question to the family group. It goes
+only when everyone is free and predicted receptive at once (`Outbox.send(to_group=True)`).
+Each person's tap is recorded (a change of mind counts until everyone has answered); when
+they all pick the same, that choice is put forward as a household rule, to lock in with a
+YES as any rule is. Different picks change nothing: it's theirs to talk over.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -27,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.accounts import Member
+from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import OutboxResult, Priority
 from themi.core.prompts import OpenItem
 from themi.core.tasks import clock_words
@@ -43,6 +51,18 @@ URGENCIES = ("urgent", "today", "whenever")
 EARLY_EVENING = time(18, 0)  # a "today" note goes by then at the latest
 SAME_NOTE = timedelta(minutes=30)  # the same note asked for again this soon: already done
 MAX_BODY = 1000
+ALIGNMENT = "alignment"  # the liaison kind, the outbox kind and the button kind
+ALIGNMENT_WAIT = timedelta(days=7)  # a question that hasn't found a moment by then is dropped
+MAX_OPTION = 60  # characters: it's a button label
+QUESTION_TEXT = "A quick one for you both: {question}"
+PICKED_TEXT = "{name} picked: {option}. Waiting on {waiting}."
+AGREED_TEXT = "You both picked: {option}."
+AGREED_ALL_TEXT = "You all picked: {option}."
+RULE_TEXT = " I've put it forward as a household rule below; a YES locks it in."
+DIFFERENT_TEXT = (
+    "You picked differently ({picks}). Nothing changes for now; it's yours to talk over "
+    "whenever suits."
+)
 
 # What the person must have said: a message to pass on, not a job for them ("ask him to
 # take the bins out" is a task). "Tell Hundo I wuv u", "let Erin know...", "message him",
@@ -113,6 +133,11 @@ class Liaison:
     def install(self) -> None:
         self.services.liaison = self
         self.services.tools.register(relay_to_partner)
+        self.services.tools.register(flag_expectation_conflict)
+        self.services.button_handlers[ALIGNMENT] = self.on_alignment_button
+        self.services.add_command(
+            "/familygroup", self.on_family_group_command, "Set up the family group"
+        )
         self.services.open_item_sources.append(self.open_items)
         self.outbox.sent_listeners.append(self.on_sent)
 
@@ -254,15 +279,15 @@ class Liaison:
         """Notes this person asked to pass on that haven't gone yet."""
         rows = self.db.query(
             "SELECT l.* FROM liaison_items l JOIN outbox o ON o.id = l.outbox_id "
-            "WHERE l.from_member_id = ? AND l.delivered_at IS NULL AND o.status = 'queued' "
-            "ORDER BY l.id",
+            "WHERE l.from_member_id = ? AND l.kind = 'relay' AND l.delivered_at IS NULL "
+            "AND o.status = 'queued' ORDER BY l.id",
             (member.id,),
         )
         return [_relay(r) for r in rows]
 
     def on_sent(self, row: dict[str, Any], message_id: int | None) -> None:
         """Outbox listener: a note went out."""
-        if row["kind"] != KIND:
+        if row["kind"] not in (KIND, ALIGNMENT):
             return
         found = self.db.one("SELECT id FROM liaison_items WHERE outbox_id = ?", (row["id"],))
         if found is not None:
@@ -283,7 +308,206 @@ class Liaison:
             items.append(
                 OpenItem(f"A note for {recipient.name}, not passed on yet{by}: {relay.body[:80]}")
             )
+        for row in self._alignments_waiting(member):
+            items.append(
+                OpenItem(
+                    "A question for you both in the family group, not asked yet: "
+                    + row["body"][:80]
+                )
+            )
         return items
+
+    # ----- alignment prompts (34b) ------------------------------------------------------
+
+    async def on_family_group_command(self, member: Member, argument: str) -> None:
+        """/familygroup in someone's own chat: how to set the group up (the command itself
+        works in the group, where the channel handles it)."""
+        group = self.outbox.family_group.get()
+        if group is not None:
+            text = (
+                f"The family group is linked{f' ({group.title})' if group.title else ''}. "
+                "To change it, an admin sends /familygroup in the new group "
+                "(or /familygroup off in the linked group to unlink it)."
+            )
+        else:
+            text = (
+                "To set up a family group: make a Telegram group with the family, add me to "
+                "it, and "
+                + (
+                    "send /familygroup there."
+                    if member.is_admin
+                    else "ask an admin to send /familygroup there."
+                )
+            )
+        await self.outbox.send(member, text, priority=Priority.REPLY)
+
+    def _alignments_waiting(self, member: Member) -> list[dict[str, Any]]:
+        return self.db.query(
+            "SELECT l.* FROM liaison_items l JOIN outbox o ON o.id = l.outbox_id "
+            "WHERE l.from_member_id = ? AND l.kind = 'alignment' AND l.delivered_at IS NULL "
+            "AND o.status = 'queued' ORDER BY l.id",
+            (member.id,),
+        )
+
+    async def flag_conflict(
+        self, member: Member, topic: str, question: str, options: tuple[str, str]
+    ) -> tuple[int, OutboxResult]:
+        topic, question = topic.strip()[:120], question.strip()[:MAX_BODY]
+        choices = tuple(o.strip()[:MAX_OPTION] for o in options)
+        if not topic or not question:
+            raise ToolFailed("Not asked: it needs a topic and a question.")
+        if not all(choices) or choices[0].lower() == choices[1].lower():
+            raise ToolFailed("Not asked: it needs two different options.")
+        if self.outbox.family_group.chat_id() is None:
+            raise ToolFailed(
+                "Not asked: there's no family group yet. An admin can add the Themi bot to a "
+                "Telegram group with the family and send /familygroup there."
+            )
+        if len(self.outbox.group_members()) < 2:
+            raise ToolFailed("Not asked: only one person in the family uses Themi so far.")
+        if self._open_alignment(topic) is not None:
+            raise ToolDeclined(f"There's already a question for you both about {topic}.")
+        now = clock.now()
+        item_id = self.db.execute(
+            "INSERT INTO liaison_items (kind, from_member_id, body, urgency, topic, options, "
+            "created_at) VALUES ('alignment', ?, ?, 'whenever', ?, ?, ?)",
+            (member.id, question, topic, json.dumps(choices), to_utc_iso(now)),
+        )
+        result = await self.outbox.send(
+            member,
+            QUESTION_TEXT.format(question=question),
+            priority=Priority.NORMAL,
+            kind=ALIGNMENT,
+            buttons=[
+                Button(choice, ALIGNMENT, {"item": item_id, "choice": i})
+                for i, choice in enumerate(choices)
+            ],
+            dedupe_key=f"alignment:{item_id}",
+            expires=now + ALIGNMENT_WAIT,
+            to_group=True,
+        )
+        if result.status == "failed":
+            self.db.execute("DELETE FROM liaison_items WHERE id = ?", (item_id,))
+            raise ToolFailed("Not asked: the family group couldn't be reached.")
+        self.db.execute(
+            "UPDATE liaison_items SET outbox_id = ? WHERE id = ?", (result.outbox_id, item_id)
+        )
+        if result.status == "sent":
+            self._delivered(item_id)
+        log.info("Alignment question %s from member %s: %s", item_id, member.id, result.status)
+        return item_id, result
+
+    def _open_alignment(self, topic: str) -> dict[str, Any] | None:
+        """An unsettled question on this topic (still waiting to go, or not answered yet)."""
+        return self.db.one(
+            "SELECT l.* FROM liaison_items l LEFT JOIN outbox o ON o.id = l.outbox_id "
+            "WHERE l.kind = 'alignment' AND l.resolved_at IS NULL AND lower(l.topic) = lower(?) "
+            "AND (o.status IS NULL OR o.status != 'failed') "
+            "AND (l.delivered_at IS NOT NULL OR o.status = 'queued')",
+            (topic,),
+        )
+
+    def alignment_said_back(self, result: OutboxResult) -> str:
+        if result.status == "sent":
+            return "I've asked you both in the family group."
+        if result.send_after is not None:
+            return (
+                "I'll ask you both in the family group when it's a good moment for you both "
+                f"(likely {self._when(result.send_after)})."
+            )
+        return "I'll ask you both in the family group when it's a good moment for you both."
+
+    def answers(self, item_id: int) -> dict[int, int]:
+        rows = self.db.query(
+            "SELECT member_id, choice FROM alignment_answers WHERE item_id = ?", (item_id,)
+        )
+        return {r["member_id"]: r["choice"] for r in rows}
+
+    async def on_alignment_button(self, event: InboundEvent) -> None:
+        """Someone tapped an option on an alignment question in the group."""
+        assert event.button is not None
+        payload = event.button.payload
+        item = self.db.one(
+            "SELECT * FROM liaison_items WHERE id = ? AND kind = 'alignment'",
+            (int(payload.get("item", 0)),),
+        )
+        if item is None or item["resolved_at"] is not None:
+            return
+        choice = int(payload.get("choice", 0))
+        member = event.member
+        self.db.execute(
+            "INSERT INTO alignment_answers (item_id, member_id, choice, answered_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT(item_id, member_id) DO UPDATE SET "
+            "choice = excluded.choice, answered_at = excluded.answered_at",
+            (item["id"], member.id, choice, to_utc_iso(clock.now())),
+        )
+        options: list[str] = json.loads(item["options"])
+        everyone = self.outbox.group_members()
+        answers = self.answers(item["id"])
+        question = QUESTION_TEXT.format(question=item["body"])
+        owner = self.store.get_member(item["from_member_id"])
+        message_id = event.button.message_id
+        waiting = [m for m in everyone if m.id not in answers]
+        if waiting:
+            picked = PICKED_TEXT.format(
+                name=member.name,
+                option=options[choice],
+                waiting=" and ".join(m.name for m in waiting),
+            )
+            buttons = [
+                Button(o, ALIGNMENT, {"item": item["id"], "choice": i})
+                for i, o in enumerate(options)
+            ]
+            if message_id is not None:
+                await self.outbox.edit(
+                    owner,
+                    message_id,
+                    f"{question}\n\n{picked}",
+                    buttons,
+                    in_group=True,
+                    anyone=True,
+                )
+            return
+        picks = {answers[m.id] for m in everyone}
+        now = to_utc_iso(clock.now())
+        if len(picks) == 1:
+            agreed = options[picks.pop()]
+            words = (AGREED_TEXT if len(everyone) == 2 else AGREED_ALL_TEXT).format(option=agreed)
+            rule_id = await self._propose_rule(member, item["topic"], agreed)
+            self.db.execute(
+                "UPDATE liaison_items SET resolved_at = ?, outcome = 'agreed', rule_id = ? "
+                "WHERE id = ?",
+                (now, rule_id, item["id"]),
+            )
+            if rule_id is not None:
+                words += RULE_TEXT
+        else:
+            listed = "; ".join(f"{m.name}: {options[answers[m.id]]}" for m in everyone)
+            words = DIFFERENT_TEXT.format(picks=listed)
+            self.db.execute(
+                "UPDATE liaison_items SET resolved_at = ?, outcome = 'different' WHERE id = ?",
+                (now, item["id"]),
+            )
+        log.info("Alignment question %s settled", item["id"])
+        if message_id is not None:
+            await self.outbox.edit(owner, message_id, f"{question}\n\n{words}", in_group=True)
+
+    async def _propose_rule(self, member: Member, topic: str, agreed: str) -> int | None:
+        """The agreed choice as a household rule draft, its card to the person whose tap
+        settled it (in the group, answering their tap), who can lock it in."""
+        from themi.core.rules import RuleError
+
+        rulebook = self.services.rulebook
+        if rulebook is None:
+            return None
+        summary = f"{topic.rstrip('.?')}: {agreed}"
+        text = f"{summary} (agreed by everyone in the family group)"
+        try:
+            rule = await rulebook.propose(member, summary, text, priority=Priority.REPLY)
+        except RuleError as exc:
+            log.info("An agreed alignment couldn't become a rule (%s)", exc)
+            return None
+        return rule.id
 
 
 def _liaison(ctx: ToolContext) -> Liaison:
@@ -321,3 +545,29 @@ async def relay_to_partner(ctx: ToolContext, args: dict[str, Any]) -> str:
     said = liaison.said_back(recipient, relay, result)
     ctx.replies.append(said)
     return f"{said} (note {relay.id})"
+
+
+@tool(
+    "flag_expectation_conflict",
+    "When two family members' expectations about the same household thing conflict (one "
+    "wants the feeders topped up when half empty, the other only when nearly empty), ask "
+    "them both a short two-option question in the family group. It goes when it's a good "
+    "moment for both. topic: what it settles, a few words ('How full the feeders should "
+    "be'). question: one short, neutral line to both of them. option_a, option_b: the two "
+    "choices, a few words each (button labels). Only for a real conflict between them, "
+    "never to settle something one person can decide alone.",
+    {
+        "topic": {"type": "string"},
+        "question": {"type": "string"},
+        "option_a": {"type": "string"},
+        "option_b": {"type": "string"},
+    },
+)
+async def flag_expectation_conflict(ctx: ToolContext, args: dict[str, Any]) -> str:
+    liaison = _liaison(ctx)
+    item_id, result = await liaison.flag_conflict(
+        ctx.member, args["topic"], args["question"], (args["option_a"], args["option_b"])
+    )
+    said = liaison.alignment_said_back(result)
+    ctx.replies.append(said)
+    return f"{said} (question {item_id})"

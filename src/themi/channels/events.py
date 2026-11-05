@@ -58,6 +58,7 @@ class InboundEvent:
     button: ButtonPress | None = None
     reaction: Reaction | None = None
     reply_to_message_id: int | None = None  # the message this one replies to (Telegram's Reply)
+    in_group: bool = False  # said in the family group (34b): answered there
 
 
 class InboundHandler(Protocol):

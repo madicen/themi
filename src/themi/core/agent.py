@@ -34,6 +34,7 @@ from themi.ai.router import AllProvidersFailed
 from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.events import InboundEvent
+from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
 from themi.core import focus, listening, partner
 from themi.core.approvals import ASK_TEXT
@@ -216,6 +217,18 @@ class Agent:
         self._rng = rng or random.Random()
 
     async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+        """Something said in the family group (34b) is answered there: the outbox sends
+        this person's replies to the group while it's handled."""
+        if not event.in_group:
+            await self._handle(event, channel)
+            return
+        token = group_replies.set(event.member.id)
+        try:
+            await self._handle(event, channel)
+        finally:
+            group_replies.reset(token)
+
+    async def _handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
         if self.services.outcomes is not None:
             self.services.outcomes.observe(member, event)
@@ -442,9 +455,11 @@ class Agent:
             history=history,
             notes=notes,
             timezone=timezone,
-            calendars=services.calendar_context(member),
+            # K1: their calendar is theirs; in the group everyone reads the reply
+            calendars="" if event.in_group else services.calendar_context(member),
             lands=services.what_lands(member),
             signals=self._signals(member, text),
+            in_group=event.in_group,
         )
         messages = [Message.user(turn)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
