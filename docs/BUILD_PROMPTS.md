@@ -186,6 +186,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W3 | Website redesign: outside connections move to Accounts, Family slimmed | Website redesign | [x] 2026-11-03 |
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [x] 2026-11-03 |
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [x] 2026-11-03 |
+| F26a | Feedback: a one-off routine item already gone stopped the wall's routine sync | Feedback | [x] 2026-11-04 |
+| F26b | Idea: approvals from one email thread in one message | Feedback | [ ] |
+| F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
 
 ## Fixed technical choices
 
@@ -9205,3 +9208,88 @@ Notes (2026-11-03):
 - Checked by eye at 390px and 1280px: headless Chrome on pages the test harness rendered,
   with seeded tasks, accounts, a list and LG ThinQ. Not yet tried on a real phone against
   `make dev-prod`; worth a look on both phones before relying on it.
+
+### F26a · Feedback (2026-11-04): a one-off routine item already gone stopped the wall's routine sync
+Status: [x] 2026-11-04
+Depends on: C3, R1b, F23e
+Read first: "Shadow Calendar" → Task matching; the wall's routines (C3, R1b). From
+Michael's bug #141 (2026-11-04, 8:27 am, "one off tasks I moved to routine should only
+exist for one day"): on Wednesday his evening routine still had Tuesday's just-for-today
+items "Refill the vacuum's clean water" and "Refill cat feeders" (task 72, moved there by
+F23e), so he removed them by hand. The Pi's log had "Cozyla routine sync stopped partway
+... delRoutine (code 30005)" every 15 minutes from 1:34 am. `wall_routine_once` held three
+items for 3 Nov (1621621, 1622064, 1622239), and none of them was on the wall any more. One
+had been removed on Tuesday (13:53, "Removed."). The wall answers 30005 when asked to delete
+a routine it no longer has. `_expire_once` let that error escape, which stopped C3's whole
+sync: the other one-offs, the ticks and Themi's check-ins on the wall. It retried every
+time, so the sync stayed stopped all day. Second cause: R1b's `_pull` brought
+add_to_wall_routine's item into Themi as an every-day item, so Themi's own checks listed
+it for as long as the wall kept it.
+
+Build:
+- `_expire_once` gets the ids the sync just read from the wall. An item no longer there is
+  forgotten without a call. A 30005 on delete counts as gone. Any other refusal leaves that
+  item for the next sync and the rest carries on.
+- R1b's `_pull`: a wall routine in `wall_routine_once` comes into Themi with `only_on`
+  set to its day.
+- The fake Cozyla answers 30005 when asked to delete a routine it doesn't have.
+
+Tests (failing first): three one-offs, one deleted on the wall the same day; the next day
+the other two are gone, a check-in routine is still pushed, and `wall_routine_once` is
+empty. A one-off the wall won't delete isn't in Thursday's evening check, and its Themi
+item has `only_on` set to Wednesday.
+
+Notes (2026-11-04):
+- Data (the Pi): nothing to repair. Once this is live, the next `cozyla.routines` sync
+  forgets the three stale rows and the sync works again. Until then, Themi's check-ins on
+  the wall don't sync either. Mark #141 reviewed once it's live.
+- Seen in #141, not fixed: asked to "remove the regular cat feeders from my evening
+  routine", the model first called `add_to_wall_routine` with repeat '' (staged as "every
+  day", action 448), then removed it. That card came back at 11:30, and "No, and delete that
+  task" got "Done." and a 👎. Worth an eval: a removal shouldn't stage an add.
+- Setup: restart `themi run`. No migration.
+
+### F26b · Idea (2026-11-03): approvals from one email thread in one message
+Status: [ ]
+Depends on: 12, 23, F16b
+Read first: "Gmail triage"; "Trust tiers" → Approvals in Telegram; PDA shield (fewer
+messages). From Erin's idea #137 (2026-11-03, 6:45 pm, "since they're all tutoring session
+confirmations with the same client (and most of them are not for several weeks) it would
+have been better to batch them in a single notification/summary"). At 3:24 pm five
+approval cards came at once from Jennifer Noble's emails: a reply draft, two calendar
+events from invitations and two "mark as read" confirmations. A third invitation
+followed at 4:21 pm.
+- Approvals staged from the same sender or thread, in the same few minutes, go in one
+  message: one line each, and buttons "Go ahead with all", "One by one" and "Not now".
+  One by one sends today's single cards.
+- A "mark as read" that only goes with an invitation also being added to the calendar
+  isn't a line of its own. It's done when the event is.
+- Events weeks away say so in the line ("Mon 16 Nov"), with no extra urgency.
+- Ask Erin first: should a later email in the thread (4:21 pm) join the waiting message
+  (edited), or get a message of its own?
+
+Tests: idea #137's five cards come as one message. "Go ahead with all" runs each action
+once. "One by one" sends the cards. Approvals from two different senders stay apart.
+Scenario: Erin's 3:24 pm burst.
+
+### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
+Status: [ ]
+Depends on: F6a, F4, O1a
+Read first: "Shadow Calendar" → Task matching, capacity; F6a (steps on tasks). From
+Michael's idea #142 (2026-11-04, 1:32 pm, "be able to take tasks that have multiple steps
+and break them down into smaller tasks comprised of the steps that can be spread out or
+moved between people so if someone doesn't have the energy to do a full task, they can
+at least do part of it"). For example task 10, Split Merlin's cat box, has three steps.
+- A `split_task` tool: chosen steps (or all) become tasks of their own, each with an
+  assignee ('me', the partner, either) and a due date if one is said. The model calls it
+  for "split X up", "I'll do the first part", "give her the last step".
+- Ask Michael first which way the original goes: (a) it stays as a parent and is done when
+  its parts are, shown as "2 of 3 parts done" (recommended), or (b) it's replaced by the
+  parts.
+- Each part counts as a task in its own right for capacity, nudges, the wall and "too much
+  today" (O1a), so a low-energy day can offer just one part.
+- A repeating chore's steps aren't split (its schedule is its own); refused, saying so.
+
+Tests: task 10 split three ways between Erin and Michael; each part on the right list and
+the wall; the parent done when the last part is. A part done counts as done in the
+summary. A repeating chore is refused.
