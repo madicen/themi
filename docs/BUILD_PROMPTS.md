@@ -194,7 +194,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
-| CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [ ] |
+| CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [ ] |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [ ] |
 
@@ -9599,7 +9599,7 @@ Agreed changes to the spec (2026-11-05), because the plan's rules win:
 - Opt-in for one person first. It goes wider only after CM1c's evals.
 
 ### CM1a · Conversation mode: the setting and the chat branch
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: 06, 09, F5, F22e
 Read first: the plan's AI backend section (routing per task) and Module behaviour A
 (Communication: PDA shielding, plain phrasing). This section's intro.
@@ -9627,6 +9627,33 @@ remark to `_chat`, a button and a bare "yes" as before, the group always to the 
 the chat prompt has no energy score and no tools; a chat reply that claims "I've added it"
 is replaced; the new routes on the AI page. A scenario: with the mode on, "long day, the
 kids were a lot" gets a warm reply from one model call and no tool is offered.
+
+Notes (2026-11-05):
+- `themi.core.conversation_mode`: `ConversationMode` (installed in `build_app`, on
+  `Services.conversation`) has the switch, `/chat`, `takes(member, text, in_group=)` and
+  `reply`. `is_request(text, list_names)` is the one place that sends a message to the tool
+  agent: a verb of doing at its start (after "please", "can you", "Themi,"...), "remind
+  me", "we're out of", "put X on the...", a question about the household's own state (the
+  list, a chore, the laundry, the calendar, dinner, "what do I have tomorrow"), or a list
+  name and a full stop or colon (F21a). "ugh, I need to call the vet Thursday" is chat: the
+  sidecar's to pick out.
+- `Agent._handle` picks the branch after the fast path; `Agent._chat` says failures as
+  `_converse` does. `take_in` (things said elsewhere, GT1a) keeps the tool agent.
+- The chat call: `CHAT_SYSTEM` (fixed, so it caches) and `build_chat_turn`: who, local
+  time, phrasing and notes, modes (burnout, active pauses), listening signals (F22e; none
+  in burnout), open items' summaries, notes from memory, recent conversation. No energy
+  label at all, and no tools. `honest` drops each sentence the agent's `CLAIMS_DONE`
+  matches, leaving "Got it." if nothing's left; `listening.trimmed` runs first.
+- Migration 0109: `members.conversation_mode`, and `ai_routes` rebuilt for the `chat` and
+  `sidecar` tasks. Existing members' `chat` chain is a copy of their `conversation` chain,
+  and `sidecar` a copy of `structured_misc`.
+- Deviation: instead of "only on the dev server until CM1b", a rollout setting,
+  `THEMI_CONVERSATION_MODE` (`Settings.conversation_mode`, `Services.conversation_rollout`):
+  `trial` (the default) lets `/chat on` work for whoever sends it, keeps `/chat` off the
+  command menu, and shows the website's switch only to someone who has it on. `on` puts
+  `/chat` on the menu and the switch on everyone's settings. `off` turns it off for all.
+  CM1a–c were built together, so there was no gap to cover.
+- Setup: restart (migration 0109 runs at start). Then whoever is trying it sends `/chat on`.
 
 ### CM1b · Conversation mode: the sidecar
 Status: [ ]
