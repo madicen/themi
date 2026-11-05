@@ -191,7 +191,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F26b | Idea: approvals from one email thread in one message | Feedback | [ ] |
 | F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
-| F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [ ] |
+| F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [ ] |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [ ] |
 
@@ -9420,7 +9420,7 @@ Notes (2026-11-04):
   "Themi, ..." is answered in the group.
 
 ### F28a · Feedback (2026-11-05): a new due date sent to the wall is put back by the wall's order
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: C1b, F18d, F24b
 Read first: C1b's and F18d's notes (the wall's to-do sync and its order). From Michael's bug
 #146 (2026-11-05, 8:34 am, "the due date for the mimi and merlin box tasks keeps getting
@@ -9459,8 +9459,24 @@ block, and it's still due Saturday the next morning.
 Setup after deploying: tasks 59 and 10 on the Pi are still due 29 Oct. Ask Michael to
 send his request again, or reschedule them once from the website.
 
+Notes (2026-11-05):
+- Confirmed with a failing test, as the cause above said. `CozylaClient.update` now returns
+  the to-do as it was just set, with `raw` merged with the body it sent. `_send` (to-dos) and
+  `CozylaListSync._send` (list items) keep that one. `place` still sends `raw`'s fields:
+  the fake, like the real API, clears any field left out, so it can't send only the order.
+- Chores and routines don't have this bug: their updates take everything Themi changes
+  as arguments, and take only cosmetic fields (icon, coins, description) from `raw`.
+- Deviation (wider): every due date changed on the wall is logged at info ("Cozyla to-do
+  … is due … on the wall (was …); task … follows"), not only one that undoes Themi's.
+  Telling the two apart would need the last pushed date stored, and every log line is
+  already the trace that was missing.
+- No change to the fake was needed: its `todosInfo/update` already keeps only what it's
+  sent, which is what showed the bug.
+- Setup: deploy, then reschedule tasks 59 and 10 once more (in chat or on the website).
+  No migration.
+
 ### F28b · Feedback (2026-11-05): a confirmation's amount is what the reader paid
-Status: [ ]
+Status: [~]
 Depends on: 24, F24c
 Read first: "Gmail triage"; prompt 24 (expected emails and anomaly detection); "Security
 and privacy" (email text is data). From Michael's bug #145 (2026-11-05, 8:03 am, "a
