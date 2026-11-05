@@ -4,7 +4,10 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
+
+import pytest
 
 from tests.scenarios.harness import GROUP_CHAT, START, Scenario
 from themi.accounts import Member
@@ -12,6 +15,7 @@ from themi.ai.types import ToolResult
 from themi.channels.outbox import Priority
 from themi.channels.telegram import (
     GROUP_ADMIN_ONLY_TEXT,
+    GROUP_LINKED_PRIVACY_TEXT,
     GROUP_LINKED_TEXT,
     GROUP_UNLINKED_TEXT,
 )
@@ -135,6 +139,61 @@ async def test_a_mention_is_answered_in_the_group(scenario: Scenario) -> None:
     turn = scenario.primary.last_request.messages[0].text
     assert "Where: the family group" in turn
     assert "Erin says:\nwhat's on today?" in turn  # the mention taken out
+
+
+async def test_themis_name_first_is_answered_in_the_group(scenario: Scenario) -> None:
+    """Bug #143: "Themi, are you seeing this?" went unanswered."""
+    await scenario.link_group()
+    scenario.primary.queue_text("I am.")
+    assert await scenario.say_in_group("Husband", "Themi, are you seeing this?") == ["I am."]
+    turn = scenario.primary.last_request.messages[0].text
+    assert "says:\nare you seeing this?" in turn  # the name taken out
+    scenario.primary.queue_text("Nothing today.")
+    assert await scenario.say_in_group("Erin", "hey themi what's on today") == ["Nothing today."]
+    assert "says:\nwhat's on today" in scenario.primary.last_request.messages[0].text
+
+
+async def test_themi_named_in_passing_isnt_for_themi(scenario: Scenario) -> None:
+    await scenario.link_group()
+    before = model_calls(scenario)
+    assert await scenario.say_in_group("Erin", "I told Themi about the vet") == []
+    assert await scenario.say_in_group("Erin", "Themis was a Titan") == []
+    assert model_calls(scenario) == before
+
+
+async def test_a_message_not_for_themi_leaves_a_trace_without_its_words(
+    scenario: Scenario, caplog: pytest.LogCaptureFixture
+) -> None:
+    await scenario.link_group()
+    caplog.set_level(logging.DEBUG, logger="themi.channels.telegram")
+    await scenario.say_in_group("Erin", "Dinner at six?")
+    assert "not meant for Themi" in caplog.text
+    assert "Dinner" not in caplog.text
+
+
+async def test_with_group_privacy_on_the_link_says_what_reaches_themi(
+    scenario: Scenario,
+) -> None:
+    """Bug #143: the bot's privacy mode was on, so the mention never arrived, though the
+    link message said mentions work."""
+    scenario.telegram.state.group_privacy = True
+    (linked_text,) = await scenario.link_group()
+    assert linked_text == GROUP_LINKED_PRIVACY_TEXT
+    assert "/setprivacy" in linked_text
+    before = model_calls(scenario)
+    assert await scenario.say_in_group("Husband", f"{BOT} are you seeing this?") == []
+    assert model_calls(scenario) == before  # Telegram never delivered it
+    scenario.primary.queue_text("Yes.")
+    assert await scenario.say_in_group(
+        "Husband", "Are you there?", reply_to_text=GROUP_LINKED_PRIVACY_TEXT
+    ) == ["Yes."]
+
+
+async def test_a_privacy_change_shows_at_the_next_link(scenario: Scenario) -> None:
+    scenario.telegram.state.group_privacy = True
+    assert await scenario.link_group() == [GROUP_LINKED_PRIVACY_TEXT]
+    scenario.telegram.state.group_privacy = False  # turned off in @BotFather
+    assert await scenario.link_group() == [GROUP_LINKED_TEXT]
 
 
 async def test_a_reply_to_themi_in_the_group_is_answered_there(scenario: Scenario) -> None:

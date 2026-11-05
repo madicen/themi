@@ -49,6 +49,9 @@ class FakeTelegramState:
     calls: list[ApiCall] = field(default_factory=list)
     files: dict[str, bytes] = field(default_factory=dict)
     failures: dict[str, list[_Failure]] = field(default_factory=dict)
+    # The bot's group privacy mode (@BotFather, /setprivacy). On, Telegram delivers only
+    # commands and Replies to the bot from a group: not mentions, not anything else.
+    group_privacy: bool = False
 
 
 class FakeTelegram:
@@ -138,6 +141,12 @@ class FakeTelegram:
         if text.startswith("/"):
             command = text.split()[0]
             message["entities"] = [{"type": "bot_command", "offset": 0, "length": len(command)}]
+        if (
+            chat_type != "private"
+            and self.state.group_privacy
+            and not (text.startswith("/") or reply_to is not None)
+        ):
+            return 0  # Telegram never sends it to the bot
         return self._push("message", message)
 
     def send_voice(self, user_id: int, data: bytes, *, duration: int = 4) -> int:
@@ -271,7 +280,11 @@ class FakeTelegram:
 
     def _result(self, method: str, params: dict[str, Any]) -> Any:
         if method == "getMe":
-            return BOT_USER
+            return {
+                **BOT_USER,
+                "can_join_groups": True,
+                "can_read_all_group_messages": not self.state.group_privacy,
+            }
         if method == "getUpdates":
             offset = int(params.get("offset") or 0)
             with self._lock:

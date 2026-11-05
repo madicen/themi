@@ -2,9 +2,10 @@
 
 An admin adds the bot to a group and sends /familygroup there; that links it (and
 "/familygroup off" unlinks it). In the linked group, Themi reads only family members'
-messages, and only those meant for it: a command, a mention of the bot, or a Reply to one
-of its messages. Everything else said there (the partners talking to each other, anyone
-outside the family) is left alone and never logged.
+messages, and only those meant for it: a command, a mention of the bot, a message starting
+with "Themi" (F27), or a Reply to one of its messages. Everything else said there (the
+partners talking to each other, anyone outside the family) is left alone, and its words are
+never logged.
 
 A message said to Themi in the group is answered in the group: while it's handled,
 `group_replies` holds the speaker's member id, and the outbox sends that person's replies

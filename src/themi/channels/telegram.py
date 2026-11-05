@@ -14,8 +14,11 @@ Who may talk to the bot:
 
 Groups (34b): only the family group, once an admin links it by sending /familygroup there
 (`themi.channels.family_group`). In it, only family members' messages meant for Themi are
-handled: a command, a mention of the bot, or a Reply to one of Themi's messages. Every
-other group is ignored, apart from an admin's /familygroup.
+handled: a command, a mention of the bot, a message starting with Themi's name ("Themi,
+...", F27), or a Reply to one of Themi's messages. Every other group is ignored, apart from
+an admin's /familygroup. With the bot's group privacy mode on (@BotFather's default),
+Telegram itself sends only commands and Replies, so the link message and a warning at
+start say so (bug #143).
 """
 
 from __future__ import annotations
@@ -96,14 +99,34 @@ NOT_YOURS_TEXT = "That one isn't yours to answer."
 ALREADY_HANDLED_TEXT = "Already taken care of."
 LINK_COMMAND = "/familygroup"
 GROUP_LINKED_TEXT = (
-    "This is the family group now. Here I only read messages meant for me (mention me, "
-    "reply to me, or use a command), and only from the family. I'll ask questions for you "
-    "both here, at times that suit you both."
+    "This is the family group now. Here I only read messages meant for me (start with "
+    '"Themi", mention me, reply to me, or use a command), and only from the family. I\'ll '
+    "ask questions for you both here, at times that suit you both."
+)
+# Bug #143: with the bot's group privacy mode on, Telegram sends it only commands and
+# Replies to its own messages from a group, so a mention or "Themi, ..." never arrives.
+GROUP_LINKED_PRIVACY_TEXT = (
+    "This is the family group now. I'll ask questions for you both here, at times that suit "
+    "you both. For now Telegram only shows me replies to my messages and commands here, so "
+    "reply to one of mine to talk to me. To talk to me by name too, an admin turns off my "
+    "group privacy: in @BotFather send /setprivacy, pick me, choose Disable, then remove me "
+    "from this group and add me back."
 )
 GROUP_UNLINKED_TEXT = "This isn't the family group any more. I'll stay quiet here."
 GROUP_NOT_LINKED_TEXT = "This group wasn't the family group."
 GROUP_ADMIN_ONLY_TEXT = "Only an admin can make this the family group."
 GROUP_CHATS = (ChatType.GROUP, ChatType.SUPERGROUP)
+PRIVACY_WARNING = (
+    "Telegram hides most family group messages from Themi: the bot's group privacy mode is "
+    "on, so only commands and Replies to Themi arrive. To fix: in @BotFather send "
+    "/setprivacy, pick the bot, choose Disable, then remove the bot from the group and add "
+    "it back."
+)
+# "Themi, ...", "hey Themi ...": the name first means the message is for Themi (F27).
+# "Themis" or "Themi's list" don't count, and nor does the name later in a sentence.
+NAME_FIRST = re.compile(
+    r"^\s*(?:(?:hey|hi|hello|ok|okay)\s+)?themi\b(?![\'\u2019])[\s,:;!?.\-]*", re.IGNORECASE
+)
 
 
 class TelegramChannel:
@@ -162,6 +185,15 @@ class TelegramChannel:
         await self.bot.initialize()
         # Polling and webhooks are exclusive; make sure no webhook is left over.
         await self.bot.delete_webhook(drop_pending_updates=False)
+        if self.family_group.chat_id() is not None and not self._reads_group_messages():
+            log.warning(PRIVACY_WARNING)
+
+    def _reads_group_messages(self) -> bool:
+        """Does Telegram send the bot every group message (group privacy mode off)?"""
+        try:
+            return bool(self.bot.can_read_all_group_messages)
+        except RuntimeError:  # not initialized (unit tests that skip start())
+            return True
 
     async def stop(self) -> None:
         await self.bot.shutdown()
@@ -321,7 +353,9 @@ class TelegramChannel:
             log.info("Ignoring a family group message from a non-member (%s)", user and user.id)
             return
         if not self._addressed_to_me(message, text):
-            return  # the family talking among themselves
+            # the family talking among themselves; who, never the words
+            log.debug("A family group message from member %s, not meant for Themi", member.id)
+            return
         text = self._without_mention(text)
         voice = await self._download_voice(message)
         if voice is not None:
@@ -372,7 +406,14 @@ class TelegramChannel:
             return
         self.family_group.link(chat_id, title, member)
         log.info("Member %s linked chat %s as the family group", member.id, chat_id)
-        await self._send_raw(member, chat_id, GROUP_LINKED_TEXT, kind="system")
+        with suppress(TelegramError, RuntimeError):
+            await self.bot.get_me()  # the privacy setting may have changed since start
+        if self._reads_group_messages():
+            words = GROUP_LINKED_TEXT
+        else:
+            log.warning(PRIVACY_WARNING)
+            words = GROUP_LINKED_PRIVACY_TEXT
+        await self._send_raw(member, chat_id, words, kind="system")
 
     @property
     def _username(self) -> str:
@@ -395,12 +436,17 @@ class TelegramChannel:
                 return replied.from_user.id == self.bot.id
             except RuntimeError:  # not initialized
                 return False
+        if NAME_FIRST.match(text):
+            return True
         name = self._username
         return bool(name) and f"@{name}" in text.lower()
 
     def _without_mention(self, text: str) -> str:
+        if text.startswith("/"):
+            return text.strip()
+        text = NAME_FIRST.sub("", text, count=1)
         name = self._username
-        if not name or text.startswith("/"):
+        if not name:
             return text.strip()
         return re.sub(rf"@{re.escape(name)}\b[,:]?", "", text, flags=re.IGNORECASE).strip()
 
