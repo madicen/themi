@@ -128,7 +128,11 @@ class RoutinesWall:
             if link is None:
                 member = self.store.get_member(to_member[wall_routine.member])
                 routine = self._routine_for(member, wall_routine.part)
-                item = self.routines.add_item(routine, wall_routine.title, now.days)
+                once = self.db.scalar(  # add_to_wall_routine's just-for-today (bug #141)
+                    "SELECT day FROM wall_routine_once WHERE routine_id = ?", (wall_routine.id,)
+                )
+                only_on = date.fromisoformat(once) if once else None
+                item = self.routines.add_item(routine, wall_routine.title, now.days, only_on)
                 self._linked(item.id, wall_routine.id, now)
                 continue
             if link["state"] == "pending":

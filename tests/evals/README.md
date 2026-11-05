@@ -31,8 +31,7 @@ staged approval or a task. A case checks four things:
   strictness, and nothing that looks like an energy score. Quoted `> ` lines
   are exempt.
 
-Cases whose `requires` tools aren't built yet are skipped. The relay cases, for
-example, wait for prompt 34.
+Cases whose `requires` tools aren't built yet are skipped.
 
 ## Output
 

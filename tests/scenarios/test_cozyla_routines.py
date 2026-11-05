@@ -215,6 +215,54 @@ async def test_a_task_moved_to_a_routine_is_the_routine_item_and_no_longer_a_tas
     assert not any(r["routineTitle"] == "Vacuum water" for r in fake_cozyla.routines.values())
 
 
+async def test_one_off_items_go_the_next_day_though_one_is_gone_already(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #141: three just-for-today items on an evening routine. One was removed
+    that day, so deleting it the next day got the wall's 30005, which stopped the whole
+    sync, every time: the other two stayed on the routine, and check-ins stopped
+    syncing too."""
+    await at(scenario, WED, 9, 30)
+    for title in ("Vacuum water", "Refill cat feeders", "Cover the birdcage"):
+        await add(scenario, f"Add {title} to my evening routine tonight", {
+            "title": title, "part": "Evening", "repeat": "today",
+        })  # fmt: skip
+    gone = fake_cozyla.routine_named("Vacuum water")["id"]
+    del fake_cozyla.routines[gone]  # removed on the wall (or in chat) that day
+
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await board(scenario).set_schedule(run.id, erin, repeat=parse("every Saturday", WED))
+    await at(scenario, WED + timedelta(days=1), 9)
+
+    titles = {r["routineTitle"] for r in fake_cozyla.routines.values()}
+    assert not titles & {"Refill cat feeders", "Cover the birdcage"}
+    assert "Go for a run" in titles  # the rest of the sync ran
+    assert scenario.app.db.query("SELECT * FROM wall_routine_once") == []
+
+
+async def test_a_one_off_item_from_the_wall_is_just_for_its_day_in_themi(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #141: R1b brought add_to_wall_routine's item into Themi as every day, so until
+    the wall let it go, Themi's own evening check kept listing it."""
+    await at(scenario, WED, 9, 30)
+    await add(scenario, "Add refill cat feeders to my evening routine tonight", {
+        "title": "Refill cat feeders", "part": "Evening", "repeat": "today",
+    })  # fmt: skip
+    fake_cozyla.fail("delRoutine", times=50)  # the wall won't let it go for now
+    await at(scenario, WED, 9, 45)
+    thursday = WED + timedelta(days=1)
+    await at(scenario, thursday, 20, 30)  # Thursday's evening check
+    assert not any("Refill cat feeders" in t for t in routine_texts(scenario, "Erin"))
+    row = scenario.app.db.one("SELECT only_on FROM routine_items WHERE title = ?", (
+        "Refill cat feeders",
+    ))  # fmt: skip
+    assert row is not None and row["only_on"] == WED.isoformat()
+
+
 async def test_a_new_routine_item_like_an_open_task_leaves_the_task_alone(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:

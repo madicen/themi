@@ -66,6 +66,7 @@ from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry
+from themi.core.liaison import Liaison
 from themi.core.lists import Lists
 from themi.core.litter_box import LitterBox
 from themi.core.maintenance import Maintenance
@@ -198,6 +199,7 @@ def build_app(
     ThingsToBuy(services, lists).install()
     WhichList(services).install()
     Spending(services).install()
+    Liaison(services).install()
     Breaks(services).install()
     pantry = Pantry(services, groceries)
     pantry.install()

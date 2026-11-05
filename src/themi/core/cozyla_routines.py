@@ -59,6 +59,7 @@ MORNING_CHECK_ENDS = time(17)  # the wall's evening: a morning check after it is
 EVENING_BEFORE_QUIET = timedelta(hours=1)
 CHECKED_PARTS = ("Morning", "Evening")
 ONCE = "today"  # add_to_wall_routine's repeat for just today
+ROUTINE_GONE = 30005  # the wall's answer to deleting a routine it no longer has (bug #141)
 JUST_TODAY = re.compile(r"\b(?:today|tonight|just for|this (?:morning|afternoon|evening))\b")
 EVERY_DAY = re.compile(  # bug #47: these keep an item, whatever the model sent
     r"\b(?:until further notice|from now on|every (?:day|morning|afternoon|evening|night)|"
@@ -124,7 +125,7 @@ class CozylaRoutines:
         self._to_member = member_map(members, self.store.list_members())
         self._to_cozyla = {mid: uid for uid, mid in self._to_member.items()}
         try:
-            await self._expire_once(today)
+            await self._expire_once(today, {r.id for r in routines})
             await self._ticks_from_wall(today, records)
             await self._ticks_to_wall()
             await self._push({r.id: r for r in routines}, today)
@@ -220,15 +221,22 @@ class CozylaRoutines:
                 await self.client.update_routine(made, title, part, schedule, today, order)
         return " (it went at the end: the wall kept its own order, so it needs moving there)"
 
-    async def _expire_once(self, today: date) -> None:
-        """Just-for-today items go the day after."""
+    async def _expire_once(self, today: date, on_wall: set[int]) -> None:
+        """Just-for-today items go the day after. One already gone from the wall is just
+        forgotten: deleting it gets a refusal (bug #141). One the wall won't delete yet waits
+        for the next sync, without holding up the rest."""
         for row in self.db.query(
             "SELECT routine_id FROM wall_routine_once WHERE day < ?", (today.isoformat(),)
         ):
-            await self.client.delete_routine(row["routine_id"], today)
-            self.db.execute(
-                "DELETE FROM wall_routine_once WHERE routine_id = ?", (row["routine_id"],)
-            )
+            routine_id = row["routine_id"]
+            if routine_id in on_wall:
+                try:
+                    await self.client.delete_routine(routine_id, today)
+                except CozylaError as exc:
+                    if exc.code != ROUTINE_GONE:
+                        log.warning("A just-for-today routine item waits to go: %s", exc)
+                        continue
+            self.db.execute("DELETE FROM wall_routine_once WHERE routine_id = ?", (routine_id,))
 
     # ----- Themi's check-ins as routines ------------------------------------------------------
 

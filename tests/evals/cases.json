@@ -35,10 +35,10 @@
     {"id": "approve-not-now", "category": "approvals", "setup": [{"stage_grocery": ["eggs"]}], "message": "not now", "expect": []},
     {"id": "approve-staged-not-done", "category": "approvals", "message": "Add bananas to the shopping list please", "expect": ["add_to_grocery_list"], "reply_must_not": "(?i)\\b(i've added|i have added|it's on the list now|is now on the list)\\b"},
 
-    {"id": "relay-late", "category": "relays", "message": "Tell my husband I'll be home late tonight", "expect": ["relay_message"], "requires": ["relay_message"]},
-    {"id": "relay-dog-fed", "category": "relays", "from": "Husband", "message": "Let Erin know the dog's been fed", "expect": ["relay_message"], "requires": ["relay_message"]},
-    {"id": "relay-gas", "category": "relays", "message": "Can you pass on to him that the car needs gas?", "expect": ["relay_message"], "requires": ["relay_message"]},
-    {"id": "relay-takeout", "category": "relays", "from": "Husband", "message": "Ask Erin if she wants takeout tonight", "expect": ["relay_message"], "requires": ["relay_message"]},
+    {"id": "relay-late", "category": "relays", "message": "Tell my husband I'll be home late tonight", "expect": ["relay_to_partner"], "requires": ["relay_to_partner"]},
+    {"id": "relay-dog-fed", "category": "relays", "from": "Husband", "message": "Let Erin know the dog's been fed", "expect": ["relay_to_partner"], "requires": ["relay_to_partner"]},
+    {"id": "relay-gas", "category": "relays", "message": "Can you pass on to him that the car needs gas?", "expect": ["relay_to_partner"], "requires": ["relay_to_partner"]},
+    {"id": "relay-takeout", "category": "relays", "from": "Husband", "message": "Ask Erin if she wants takeout tonight", "expect": ["relay_to_partner"], "requires": ["relay_to_partner"]},
 
     {"id": "talk-morning", "category": "small_talk", "message": "Good morning!", "expect": []},
     {"id": "talk-thanks", "category": "small_talk", "message": "Thanks, that's really helpful", "expect": []},
