@@ -480,3 +480,23 @@ async def test_a_warm_word_for_a_tick_doesnt_count_toward_the_day(
         family.erin, "Ticked off on the wall: x.", priority=Priority.NORMAL, kind="praise"
     )
     assert outbox.sent_today(family.erin.id) == 0
+
+
+async def test_a_reaction_needs_a_sender_that_can_react(
+    family: SeededFamily, outbox: Outbox, sender: FakeSender
+) -> None:
+    """CM1b's ✍: a sender without reactions (or one that fails) is said as False."""
+    assert not await outbox.react(family.erin, 5, "✍")
+    reacted: list[tuple[int, str]] = []
+
+    async def react(member: Member, message_id: int, emoji: str) -> None:
+        reacted.append((message_id, emoji))
+
+    sender.react = react  # type: ignore[attr-defined]
+    assert await outbox.react(family.erin, 5, "✍") and reacted == [(5, "✍")]
+
+    async def broken(member: Member, message_id: int, emoji: str) -> None:
+        raise RuntimeError("telegram said no")
+
+    sender.react = broken  # type: ignore[attr-defined]
+    assert not await outbox.react(family.erin, 5, "✍")

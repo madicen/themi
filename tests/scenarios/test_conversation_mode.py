@@ -7,6 +7,7 @@ import httpx
 
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
+from themi.ai.types import CallKind
 from themi.core.conversation_mode import (
     CHAT_SYSTEM,
     NOT_OFFERED_TEXT,
@@ -22,9 +23,7 @@ async def chat_on(scenario: Scenario, name: str = "Erin") -> None:
 
 def queue_nothing_picked_out(scenario: Scenario) -> None:
     """CM1b's sidecar reads each chat turn after its reply; here it finds nothing."""
-    sidecar = getattr(scenario, "queue_sidecar", None)
-    if sidecar is not None:
-        sidecar({})
+    scenario.primary.queue_text("nothing")
 
 
 async def test_chat_on_and_off(scenario: Scenario) -> None:
@@ -43,8 +42,8 @@ async def test_a_remark_gets_one_call_with_no_tools(scenario: Scenario) -> None:
     queue_nothing_picked_out(scenario)
     replies = await scenario.say("Erin", "long day, the kids were a lot")
     assert replies == ["That sounds like a lot. How are you holding up?"]
-    chats = [r for r in scenario.primary.requests if r.op == "chat"]
-    assert len(chats) == 1
+    chats = [r for r in scenario.primary.requests if r.kind is CallKind.INTERACTIVE]
+    assert len(chats) == 1  # the reply; the sidecar's pass is a background call (CM1b)
     assert chats[0].tools == () and chats[0].system == CHAT_SYSTEM
     turn = chats[0].messages[0].text
     assert "long day, the kids were a lot" in turn and "seems" not in turn
