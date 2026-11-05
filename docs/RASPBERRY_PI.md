@@ -10,8 +10,9 @@ plus a few repo changes that make it smooth.
 ```
 laptop                      GitHub                         Raspberry Pi
 ------                      ------                         ------------
-jj commit, push   ──►  CI: lint, tests, smoke-test
-tag v1.4.0        ──►  release: build amd64 + arm64,
+jj commit, push   ──►  CI: lint, unit tests
+pull request      ──►  CI: lint, all tests, smoke-test
+tag v1.4.0        ──►  release: all the checks again, build amd64 + arm64,
                         push ghcr.io/madicen/themi:1.4.0
                         deploy (optional): over Tailscale ──►  ~/themi/update.sh 1.4.0
                                                                  1. backup snapshot
@@ -62,7 +63,8 @@ Done, and how it turned out:
   backup is taken too when `THEMI_BACKUP_BUCKET` is set. A failed version's database is kept
   as `themi.db.failed-<version>`. Waits up to 180 s (`HEALTH_WAIT`).
 - `tools/release.sh` tags `main@origin`, not the working copy, after checking main's latest
-  CI run passed (`gh`), so a release is always what's merged and tested.
+  CI run passed (`gh`); the release workflow then runs the full checks on the tagged commit
+  before building, so a release is always what's merged and tested.
 - `deploy/bootstrap-pi.sh`: steps 3 to 6 below, each checked before it changes anything.
 - `THEMI_MEM_LIMIT` in `.env` sets the cap (`deploy/compose.yml`).
 - Tests: `tests/integration/test_deploy_scripts.py` runs `update.sh` against a stand-in
@@ -163,8 +165,8 @@ the restore drill DEPLOY.md asks for.
 
 Once what you want is merged and main's CI is green: on GitHub, **Actions > Release > Run
 workflow**, pick `minor`, `patch` or `major`, and run it. It works out the next version from
-the latest tag (`tools/next_version.sh`), checks main's CI passed, tags main, builds both
-images (about 10 minutes) and creates a GitHub release with notes from the merged pull
+the latest tag (`tools/next_version.sh`), runs the full checks on main, tags it, builds both
+images (about 20 minutes with the checks) and creates a GitHub release with notes from the merged pull
 requests. The run's summary says which version it made. Then, on Themi's website,
 **Development**, **Update to the newest release** (D3a, D3b; set up in DEPLOY.md section 9).
 You get a Telegram message when it's done. Without the website, over ssh:

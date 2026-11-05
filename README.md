@@ -18,7 +18,7 @@ Needs Python 3.12+ and [jj](https://jj-vcs.github.io/jj/) (the repo is a colocat
 make venv        # create .venv (pin an interpreter with VENV_PYTHON=/path/to/python3.x)
 make install     # editable install with dev tools
 make test        # unit tests, the fast loop while coding
-make test-all    # unit + integration + scenarios (what CI runs)
+make test-all    # unit + integration + scenarios (what CI runs on a pull request)
 make lint        # ruff, pyright, and the clock check
 ```
 
@@ -348,4 +348,5 @@ docker compose run --rm themi invite <name>
 
 The database lives in the `themi-data` volume. `docker compose down` stops Themi gracefully:
 the message or job in progress finishes first. `tools/smoke_container.sh` builds the image and
-checks it starts, reports healthy, and stops cleanly. CI runs it on every push.
+checks it starts, reports healthy, and stops cleanly. CI runs it on every pull request and
+before every release.
