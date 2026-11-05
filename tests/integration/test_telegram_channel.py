@@ -83,6 +83,40 @@ async def test_start_deletes_any_webhook(channel: TelegramChannel, fake_telegram
     assert fake_telegram.calls("deleteWebhook") == [{"drop_pending_updates": False}]
 
 
+async def test_start_warns_when_telegram_hides_the_family_groups_messages(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    recorder: Recorder,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Bug #143: with the bot's group privacy on, mentions in the group never arrive."""
+    fake_telegram.state.group_privacy = True
+    ch = make_channel(family, fake_telegram, recorder)
+    ch.family_group.link(-100, "Family", family.erin)
+    await ch.start()
+    await ch.stop()
+    assert "/setprivacy" in caplog.text
+    assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+async def test_start_is_quiet_with_group_privacy_off_or_no_group(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    recorder: Recorder,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake_telegram.state.group_privacy = True
+    ch = make_channel(family, fake_telegram, recorder)
+    await ch.start()  # no family group linked: nothing to warn about
+    await ch.stop()
+    fake_telegram.state.group_privacy = False  # turned off in @BotFather, then a restart
+    ch = make_channel(family, fake_telegram, recorder)
+    ch.family_group.link(-100, "Family", family.erin)
+    await ch.start()
+    await ch.stop()
+    assert "/setprivacy" not in caplog.text
+
+
 async def test_invite_code_pairs_a_new_member(
     family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram
 ) -> None:
