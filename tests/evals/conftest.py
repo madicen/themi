@@ -11,9 +11,12 @@ import pytest
 from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend, backend
 from tests.evals.scoring import Outcome, format_summary, load_cases, summarise
+from tests.evals.sidecar import Scored
+from tests.evals.sidecar import summary as sidecar_summary
 
 RESULTS_DIR = Path(__file__).with_name("results")
 OUTCOMES: list[Outcome] = []
+SIDECAR_RESULTS: list[Scored] = []  # CM1c
 
 
 @pytest.fixture(scope="session")
@@ -47,6 +50,8 @@ def eval_factory(eval_backend: EvalBackend) -> PacedFactory:
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus: int, config: pytest.Config) -> None:
+    if SIDECAR_RESULTS:
+        _sidecar_summary(terminalreporter, config)
     if not OUTCOMES:
         return
     provider = str(config.getoption("--provider"))
@@ -92,4 +97,44 @@ def pytest_terminal_summary(terminalreporter, exitstatus: int, config: pytest.Co
     )
     terminalreporter.write_line(
         f"Saved {path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path}"
+    )
+
+
+def _sidecar_summary(terminalreporter, config: pytest.Config) -> None:
+    """CM1c: precision and recall per kind of item, and the cases that went wrong."""
+    provider = str(config.getoption("--provider"))
+    kinds = sidecar_summary(SIDECAR_RESULTS)
+    terminalreporter.write_sep("=", "Sidecar evals (CM1c)")
+    passed = sum(r.passed for r in SIDECAR_RESULTS)
+    terminalreporter.write_line(f"{provider}: {passed}/{len(SIDECAR_RESULTS)} cases right")
+    for kind, c in kinds.items():
+        terminalreporter.write_line(
+            f"  {kind}: precision {c['precision']}, recall {c['recall']} "
+            f"({c['hits']} right, {c['extras']} made wrongly, {c['misses']} missed)"
+        )
+    for r in SIDECAR_RESULTS:
+        if not r.passed:
+            terminalreporter.write_line(
+                f"  {r.case.id}: missed {r.misses or 'nothing'}, made {r.extras or 'nothing'}"
+            )
+    RESULTS_DIR.mkdir(exist_ok=True)
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M")  # names a file; not app logic
+    (RESULTS_DIR / f"sidecar-{provider}-{stamp}.json").write_text(
+        json.dumps(
+            {
+                "provider": provider,
+                "kinds": kinds,
+                "cases": [
+                    {
+                        "id": r.case.id,
+                        "passed": r.passed,
+                        "hits": r.hits,
+                        "misses": r.misses,
+                        "extras": r.extras,
+                    }
+                    for r in SIDECAR_RESULTS
+                ],
+            },
+            indent=2,
+        )
     )
