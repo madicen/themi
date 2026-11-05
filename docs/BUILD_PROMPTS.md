@@ -194,6 +194,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
+| CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [ ] |
+| CM1b | Conversation mode: the sidecar | Conversation mode | [ ] |
+| CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [ ] |
 
 ## Fixed technical choices
 
@@ -9572,3 +9575,114 @@ Notes (2026-11-05):
   Lists, Spending, More) and the More page, and 1280px for the top bar. Tab labels can't
   wrap, and are cut short if a long one ever doesn't fit.
 - Setup: restart (migration 0108 runs at start).
+
+## Conversation mode
+
+From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
+2026-11-05; a PDF, not in the repo). Its idea: in conversation mode a person talks to a
+plain, warm chat model with no tools, while a quiet background pass (the sidecar) reads
+each turn and picks out tasks, calendar events and mode changes. The spec's extraction
+schema has `tasks_to_add`, `tasks_to_update`, `calendar_events`, `state_updates` and
+`mode_toggles`.
+
+Agreed changes to the spec (2026-11-05), because the plan's rules win:
+- The sidecar never writes state itself. Each extracted item becomes a call to an existing
+  tool, run through `ToolRegistry.run`, so trust tiers, approval cards, duplicate checks
+  (F24a) and name checks (P8a) all still apply.
+- No token streaming. The outbox shields whole messages (PDA), and Telegram is the only
+  chat surface. The speed comes from one model call with no tools.
+- The spec's `SIDE_EFFECT_LOGGED` UI toast becomes an internal event plus a ✍️ reaction
+  on the person's own message. Tier 1 items still send their usual approval card.
+- The chat reply can't know whether anything was done, so it never says it was.
+- A plain request ("add milk to the list", "remind me tomorrow at 9") goes to the tool
+  agent as today, not to the sidecar, so the instant "Added" stays.
+- Opt-in for one person first. It goes wider only after CM1c's evals.
+
+### CM1a · Conversation mode: the setting and the chat branch
+Status: [ ]
+Depends on: 06, 09, F5, F22e
+Read first: the plan's AI backend section (routing per task) and Module behaviour A
+(Communication: PDA shielding, plain phrasing). This section's intro.
+- A per-member setting, off by default: `/chat on`, `/chat off` (and `/chat` saying which
+  is on), and a switch under My settings. Only the member sets their own. While the
+  sidecar (CM1b) isn't built, the switch is visible only on the dev server.
+- Two new AI tasks, each with its own route on the AI page: `chat` (the reply) and
+  `sidecar` (the background pass, CM1b). New members' routes default to the same Gemini
+  backend as `conversation`.
+- In `Agent._handle`, with the mode on and not in the family group: button taps, commands,
+  the yes/no fast path and voice transcription work as today. A plain request goes to
+  `_converse` as today: a small check over the message's start (add, put, remind, schedule,
+  book, mark, tick, done, cancel, delete, move, order, "can you ...", a list name and a
+  colon...), kept in one place and unit tested. Everything else goes to a new `_chat`.
+- `_chat`: one `chat` call with no tools. The system prompt is short: who they are, their
+  local date and time, any active modes (burnout, a pause), their phrasing choice and notes
+  (plain or gentle), recent history, and their open items' titles so the reply can refer to
+  them. No energy scores, no tool instructions, no JSON. It's told it can't change anything
+  itself, and not to say anything was added or done. The reply still goes through
+  `_honest`, `listening.trimmed`, the reply timer and the outbox.
+- Failures say the same as today (BUSY_TEXT, SETUP_NEEDED_TEXT).
+
+Tests: the mode switch and who may set it; routing (a request goes to the tool loop, a
+remark to `_chat`, a button and a bare "yes" as before, the group always to the tool loop);
+the chat prompt has no energy score and no tools; a chat reply that claims "I've added it"
+is replaced; the new routes on the AI page. A scenario: with the mode on, "long day, the
+kids were a lot" gets a warm reply from one model call and no tool is offered.
+
+### CM1b · Conversation mode: the sidecar
+Status: [ ]
+Depends on: CM1a, 11, 12, 14, F24a
+Read first: the plan's Trust tiers section and Security (outside text is data). CM1a's
+notes.
+- After a `_chat` reply has gone out, the sidecar runs in the background: one `structured`
+  call (`sidecar` route, `CallKind.BACKGROUND`) over the person's message, the reply sent,
+  the last few turns and their open items with ids. The message, reply and history go in
+  delimited blocks as data. Something pasted in (an email, a web page) is only acted on
+  when the person's own words ask for it.
+- The schema is the spec's, narrowed to things Themi has tools for. Each item maps to a
+  tool call run with a `ToolContext` for that member:
+  - `tasks_to_add` → `create_task` (the title, a due date, and priority as urgent or
+    important, T1)
+  - `tasks_to_update` → `complete_task` or `cancel_task`, only for an id among the open
+    items it was shown; any other id is dropped and logged
+  - `calendar_events` → `add_calendar_event`
+  - `mode_toggles` → an allowlist: burnout (start only from their own words, as F22d
+    says), `pause_messages`, `focus_now`
+  - `state_updates` → `remember_fact` only. Energy remarks are left to `_catch_energy`.
+  Each item also says why (the words it came from), stored with the event for CM1c.
+- Calls are not `requested` (F5) unless the item quotes their words as a direct ask, so
+  anything risky waits for a yes on a card, as today.
+- One sidecar at a time per member, in order: a second message's pass waits for the
+  first's, so two quick messages can't add the same task twice. A failure is logged and
+  never said to the person. The pass is started through a hook that tests can await, with
+  time from `themi.clock` and no sleeps.
+- When something went through or is waiting on a card: a `side_effect_logged` event row
+  (member, turn, items, outcomes, the words each came from), and a ✍️ reaction on their
+  message through the channel. No reaction when nothing was extracted.
+- The website's chat history (or the dev page) lists what the sidecar logged per turn, so
+  a wrong one can be found and undone.
+
+Tests: each mapping, with the fake provider's structured output; an unknown task id
+dropped; burnout from a partner's words refused; a pasted email's "add a task" ignored;
+two quick turns give one task, not two; a Tier 1 item sends its card and claims nothing; the
+reaction only when something was logged; a sidecar failure says nothing. Scenarios: "ugh, I
+need to call the vet Thursday" gets a warm reply, then the task appears with a ✍️; "I
+should really clean the garage someday" makes nothing.
+
+### CM1c · Conversation mode: sidecar evals and wider rollout
+Status: [ ]
+Depends on: CM1b, 28
+Read first: the plan's Testing section (evals). CM1b's notes and the `side_effect_logged`
+rows from the person who opted in.
+- An eval set in `tests/evals` of turns in conversation mode: venting, hypotheticals
+  ("someday", "I should really"), someone else's job, plain tasks said in passing, dates
+  said loosely, a task already open. Each case says what should and shouldn't come out.
+  Real turns are used only with their owner's say-so, with names and details changed.
+- Report precision (nothing made that wasn't meant) and recall (nothing missed) per item
+  kind. Precision matters more: a wrong task is worse than a missed one.
+- A `/bug` or "that wasn't a task" after a sidecar item undoes it and records the turn as
+  a miss (F1, F20a's way of catching wrong replies).
+- Open the switch to everyone only once precision meets the target the family sets. Until
+  then it stays off for everyone but the person who opted in.
+
+Tests: the eval set runs under `make evals` with recorded provider responses; undoing a
+sidecar item from chat; the switch's visibility follows the rollout flag.
