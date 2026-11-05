@@ -17,6 +17,11 @@ moment is dropped, never sent late (a day's summary, bug #57).
 A kind with a bundler (task nudges) may go as one message when several are
 waiting at once: the bundler sends it and takes back the ones it covers.
 
+The family group (34b): a reply to something said in the group goes back to the group,
+and `to_group=True` sends a question to the family there. A group question waits until
+everyone in the family is free at once (quiet hours, busy times, their pauses, a good
+window). Group messages are shielded with the stricter partner's settings.
+
 Messages are stored as written and shielded (PDA) at the moment they go out.
 A failed send stays queued and is retried with backoff, so a Telegram outage
 loses nothing.
@@ -37,6 +42,7 @@ from themi.accounts import AccountStore, Member
 from themi.ai.router import current_reply
 from themi.ai.types import CallKind
 from themi.channels.events import Button
+from themi.channels.family_group import FamilyGroup, replies_to_group, shared_reader
 from themi.channels.pauses import PauseBook
 from themi.channels.pda import PdaShield
 from themi.localtime import (
@@ -98,10 +104,19 @@ class Sender(Protocol):
         *,
         kind: str = "chat",
         link_preview: bool = True,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> int: ...
 
     async def edit_text(
-        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+        self,
+        member: Member,
+        message_id: int,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        chat_id: int | None = None,
+        anyone: bool = False,
     ) -> None: ...
 
 
@@ -168,6 +183,7 @@ class Outbox:
         # Several of a kind waiting at once, sent as one (the morning list, bug #49).
         self.bundlers: dict[str, Bundler] = {}
         self.refreshers: dict[str, Refresher] = {}
+        self.family_group = FamilyGroup(store.db)
 
     @property
     def _tz(self) -> str:
@@ -189,31 +205,45 @@ class Outbox:
         link_preview: bool = True,
         not_before: datetime | None = None,
         expires: datetime | None = None,
+        to_group: bool = False,
     ) -> OutboxResult:
         """`not_before` holds a proactive message until then at the earliest (replies and
-        urgent messages never wait); after that, the usual timing rules apply."""
+        urgent messages never wait); after that, the usual timing rules apply.
+        `to_group`: a question for the family, sent to the family group (for `member`, who
+        owns it) when everyone is free, with buttons anyone may tap. Without a group linked
+        it fails."""
         now = clock.now()
         priority = Priority(priority)
+        chat_id = None
+        if to_group or (priority in IMMEDIATE and replies_to_group(member)):
+            chat_id = self.family_group.chat_id()
+            # unlinked while they were talking: a reply goes to their own chat instead
+            if chat_id is None and to_group:
+                return OutboxResult("failed", None)
         if dedupe_key and self._is_duplicate(member.id, dedupe_key, now):
             return OutboxResult("duplicate", None)
-        when = self.send_time(
-            member, priority, deadline=deadline, kind=kind, not_before=not_before, now=now
-        )
-        # A gate (one task nudge at a time) is checked again at every flush, not stored:
-        # answering the nudge before it lets this one go at once.
-        stored = self.send_time(
-            member,
-            priority,
-            deadline=deadline,
-            kind=kind,
-            not_before=not_before,
-            now=now,
-            gated=False,
-        )
+        if to_group and chat_id is not None:
+            start = max(now, not_before) if not_before and priority not in IMMEDIATE else now
+            when = stored = self._earliest_together(member, priority, start, deadline, kind)
+        else:
+            when = self.send_time(
+                member, priority, deadline=deadline, kind=kind, not_before=not_before, now=now
+            )
+            # A gate (one task nudge at a time) is checked again at every flush, not stored:
+            # answering the nudge before it lets this one go at once.
+            stored = self.send_time(
+                member,
+                priority,
+                deadline=deadline,
+                kind=kind,
+                not_before=not_before,
+                now=now,
+                gated=False,
+            )
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
-            "send_after, deadline, created_at, link_preview, expires_at, reply_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "send_after, deadline, created_at, link_preview, expires_at, reply_id, chat_id, "
+            "shared_buttons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id,
                 text,
@@ -227,6 +257,8 @@ class Outbox:
                 int(link_preview),
                 to_utc_iso(expires) if expires else None,
                 current_reply.get(),  # P4: sent while a reply was being written
+                chat_id,
+                int(to_group),
             ),
         )
         if when > now:
@@ -280,7 +312,10 @@ class Outbox:
             member = self.store.get_member(row["member_id"])
             deadline = datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
             priority = Priority(row["priority"])
-            when = self._earliest(member, priority, now, deadline, row["kind"], gated=False)
+            if row["shared_buttons"] and row["chat_id"] is not None:
+                when = self._earliest_together(member, priority, now, deadline, row["kind"])
+            else:
+                when = self._earliest(member, priority, now, deadline, row["kind"], gated=False)
             if when > now:
                 self.store.db.execute(
                     "UPDATE outbox SET send_after = ? WHERE id = ?", (to_utc_iso(when), row["id"])
@@ -364,14 +399,18 @@ class Outbox:
         buttons = tuple(_button_from_json(b) for b in json.loads(row["buttons"]))
         priority = Priority(row["priority"])
         kind = CallKind.INTERACTIVE if priority in IMMEDIATE else CallKind.BACKGROUND
+        chat_id = row["chat_id"]
+        reader = self._group_reader(member) if chat_id is not None else member
         try:
-            shielded = await self.shield.apply(row["text"], member, buttons=buttons, kind=kind)
+            shielded = await self.shield.apply(row["text"], reader, buttons=buttons, kind=kind)
             message_id = await self.sender.send_text(
                 member,
                 shielded.text,
                 shielded.buttons,
                 kind=row["kind"],
                 link_preview=bool(row["link_preview"]),
+                chat_id=chat_id,
+                anyone=bool(row["shared_buttons"]),
             )
         except Exception as exc:
             return self._record_failure(row, exc)
@@ -388,16 +427,35 @@ class Outbox:
         return OutboxResult("sent", row["id"], message_id)
 
     async def edit(
-        self, member: Member, message_id: int, text: str, buttons: Sequence[Button] = ()
+        self,
+        member: Member,
+        message_id: int,
+        text: str,
+        buttons: Sequence[Button] = (),
+        *,
+        in_group: bool = False,
+        anyone: bool = False,
     ) -> bool:
         """Change a message already sent (e.g. to show an approval's result).
 
         Edits are shielded like any message. A failed edit is logged and
-        reported as False; it's never worth retrying.
+        reported as False; it's never worth retrying. `in_group`: the message is in the
+        family group (as is anything edited while answering someone there).
         """
+        chat_id = None
+        if in_group or replies_to_group(member):
+            chat_id = self.family_group.chat_id()
+        reader = self._group_reader(member) if chat_id is not None else member
         try:
-            shielded = await self.shield.apply(text, member, buttons=buttons)
-            await self.sender.edit_text(member, message_id, shielded.text, shielded.buttons)
+            shielded = await self.shield.apply(text, reader, buttons=buttons)
+            await self.sender.edit_text(
+                member,
+                message_id,
+                shielded.text,
+                shielded.buttons,
+                chat_id=chat_id,
+                anyone=anyone,
+            )
         except Exception as exc:
             log.info("Couldn't edit message %s (%s)", message_id, type(exc).__name__)
             return False
@@ -499,6 +557,36 @@ class Outbox:
                 return before
         return when
 
+    def group_members(self) -> list[Member]:
+        """Everyone in the family group: the members connected to Telegram."""
+        return [m for m in self.store.list_members() if m.telegram_user_id is not None]
+
+    def _group_reader(self, owner: Member) -> Member:
+        return shared_reader(owner, self.group_members())
+
+    def _earliest_together(
+        self,
+        owner: Member,
+        priority: Priority,
+        now: datetime,
+        deadline: datetime | None,
+        kind: str,
+    ) -> datetime:
+        """The first moment that suits everyone in the group: each one's earliest from
+        there, until they agree. A daily limit counts for each of them."""
+        if priority in IMMEDIATE:
+            return now
+        members = self.group_members() or [owner]
+        when = now
+        for _ in range(12):  # each round only moves later; this settles in two or three
+            latest = max(
+                self._earliest(m, priority, when, deadline, kind, gated=False) for m in members
+            )
+            if latest == when:
+                return when
+            when = latest
+        return when
+
     def _gated(self, member: Member, kind: str, now: datetime, priority: Priority) -> bool:
         if priority in IMMEDIATE:
             return False
@@ -519,10 +607,10 @@ class Outbox:
         for a tick on the wall (F19b) or an update's result (F23a) is an answer to what they
         did: it doesn't count."""
         midnight = start_of_local_day(now or clock.now(), self._tz)
-        return self.store.db.scalar(
-            "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND status = 'sent' "
-            "AND priority IN ('urgent', 'normal', 'low') AND kind NOT IN (?, ?) "
-            "AND sent_at >= ?",
+        return self.store.db.scalar(  # a question to the family group counts for everyone
+            "SELECT COUNT(*) FROM outbox WHERE (member_id = ? OR shared_buttons = 1) "
+            "AND status = 'sent' AND priority IN ('urgent', 'normal', 'low') "
+            "AND kind NOT IN (?, ?) AND sent_at >= ?",
             (member_id, *ANSWER_KINDS, to_utc_iso(midnight)),
         )
 
