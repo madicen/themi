@@ -140,7 +140,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 33 | Seasonal and long-term maintenance | 5 Devices | [x] 2026-11-04 |
 | CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [x] 2026-11-04 |
 | CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [x] 2026-11-04 |
-| 34 | Liaison: relays, family group, alignment prompts | 6 Liaison and food | [ ] |
+| 34a | Liaison: relays between partners | 6 Liaison and food | [x] 2026-11-04 |
+| 34b | Liaison: family group and alignment prompts | 6 Liaison and food | [ ] |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
@@ -6805,11 +6806,14 @@ Notes (2026-11-04):
 
 ## Milestone 6: Liaison and food (Phase 2)
 
-### 34 · Liaison: relays, family group, alignment prompts
-Status: [ ]
+### 34 · Liaison: relays, family group, alignment prompts (split into 34a and 34b)
+Split on 2026-11-04: relays (34a) stand alone. The family group needs group chats in the
+Telegram channel, the agent and the outbox, which is a prompt of its own (34b).
+
+### 34a · Liaison: relays between partners
+Status: [x] 2026-11-04
 Depends on: 20, 29
-Read first: "Module behaviour" → A (Relays, Alignment prompts); "How the family uses Themi"
-(family group added in Phase 2).
+Read first: "Module behaviour" → A (Relays); "Accounts and data model" (Liaison item).
 
 Build:
 - `relay_to_partner` tool with urgency:
@@ -6817,14 +6821,53 @@ Build:
     - today: by early evening at the latest
     - whenever: the next good window
   Delivery is formatted for the recipient (with their PDA settings).
-- Family group setup: add the bot to a group, and an admin links it with a command. Only member
-  messages in the group are processed.
-- Alignment prompts: `flag_expectation_conflict` queues a short two-option question to the
-  group, sent only when both partners are predicted receptive. Each person's tap is recorded and
-  an agreed outcome can become a proposed rule.
+- Replaces F14b's "Themi can't pass messages on yet": `remember_fact` still refuses a
+  relay, and points at the new tool. The eval relay cases run.
 
 Tests:
 - Each urgency's delivery timing.
+- The recipient's PDA settings, not the sender's.
+- Only when they asked to pass something on; never to someone outside the family.
+
+Notes (2026-11-04):
+- `themi.core.liaison`: `liaison_items` (migration 0106) keeps each note, its urgency, its
+  outbox message and when it went (an outbox sent-listener). Outbox kind `relay`, already
+  held by the "notes" pause topic. urgent is an urgent outbox message (quiet hours too);
+  today is normal with a deadline at 6 pm local (said later, it's due at once, so only
+  quiet hours and busy times hold it); whenever is normal with no deadline (the energy
+  engine's receptive window, the daily limit). The delivered text is "From Husband: ..."
+  ("Urgent, from ..."), shielded with the recipient's settings as every outbox message is.
+- The sender's reply comes from the tool (`ToolContext.replies`): "Passed on to Erin.", or
+  "I'll pass that on to Erin at a good moment today, by 6 pm at the latest." / "... (likely
+  today around 2 pm)". Notes not sent yet are the sender's open items.
+- Checks: the person's message must ask to pass something on (`ASKS_TO_PASS_ON`: tell X,
+  let X know, message/text X, pass it on, ask X if/what/...); "ask him to take the bins out"
+  stays a task (prompts.py says so too). `to` is a family member's name, "partner"/"him"
+  with only one other person, or a nickname a household note gives exactly one member.
+  Anyone else ("tell Mom") is refused, never sent to the partner. The same note to the same
+  person within 30 minutes (or still waiting) isn't sent twice.
+- The tool is core (not in a group), so a relay is never missing its tool. Eval cases
+  `relay_message` renamed to `relay_to_partner`; they now run.
+- Not done: withdrawing a waiting note ("never mind, don't tell her"), and a relay held
+  in the recipient's burnout mode (relays aren't in the "burnout" topic; the partner knows).
+- Setup: restart `themi run`; migration 0106 runs on start.
+
+### 34b · Liaison: family group and alignment prompts
+Status: [ ]
+Depends on: 34a
+Read first: "Module behaviour" → A (Alignment prompts); "How the family uses Themi"
+(family group added in Phase 2); "AI backend" (shared tasks run on the owner's backend).
+
+Build:
+- Family group setup: add the bot to a group, and an admin links it with a command. Only member
+  messages in the group are processed. Group messages need a path through the Telegram
+  channel (today it ignores non-private chats), the agent and the outbox (today addressed
+  to one member): decide how a group message is shielded (the stricter partner's settings).
+- Alignment prompts: `flag_expectation_conflict` queues a short two-option question to the
+  group, sent only when both partners are predicted receptive. Each person's tap is recorded and
+  an agreed outcome can become a proposed rule. `liaison_items.kind` gains 'alignment'.
+
+Tests:
 - Group linking and the non-member filter.
 - An alignment prompt waits for both windows.
 - The outcome leads to a rule proposal.
