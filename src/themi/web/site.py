@@ -350,6 +350,12 @@ def core_routes(kit: Kit) -> APIRouter:
             ],
             "strengths": STRENGTH_LABELS,
             "conversation_offered": conversation_mode.offered(app.services, member),
+            "picked_out": (  # CM1b: what the sidecar picked out lately
+                app.services.conversation.sidecar.recent(member, 10)
+                if app.services.conversation is not None
+                and conversation_mode.offered(app.services, member)
+                else []
+            ),
             **extra,
         }
 

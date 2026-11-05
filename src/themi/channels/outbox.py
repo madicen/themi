@@ -461,6 +461,19 @@ class Outbox:
             return False
         return True
 
+    async def react(self, member: Member, message_id: int, emoji: str) -> bool:
+        """A reaction on one of their own messages (CM1b's ✍): a quiet acknowledgement, not
+        a message, so it isn't shielded, held or counted. False if it couldn't be set."""
+        react = getattr(self.sender, "react", None)
+        if react is None:
+            return False
+        try:
+            await react(member, message_id, emoji)
+        except Exception as exc:
+            log.info("Couldn't react to message %s (%s)", message_id, type(exc).__name__)
+            return False
+        return True
+
     def cancel(self, outbox_id: int) -> bool:
         """Withdraw a message that hasn't gone out yet. False if it already went."""
         return bool(

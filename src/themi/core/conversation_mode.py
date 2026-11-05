@@ -11,7 +11,9 @@ Each person can turn it on for themselves (`/chat on`, or My settings). Then:
   modes they're in, how they like things said, their open items' names and recent
   conversation. Never an energy score.
 - The reply can't know whether anything was done, so it's told never to say so, and a
-  sentence that does is dropped (`honest`). The sidecar (CM1b) does the picking out.
+  sentence that does is dropped (`honest`). The sidecar (CM1b, `themi.core.sidecar`) does
+  the picking out, after the reply has gone; "that wasn't a task" takes its latest back
+  (CM1c).
 
 Button taps, commands, a bare "yes" and voice notes work as before, and the family group
 always has the tool agent.
@@ -37,6 +39,7 @@ from themi.channels.outbox import Priority
 from themi.core import listening
 from themi.core.agent import CLAIMS_DONE
 from themi.core.prompts import PHRASING_WORDS
+from themi.core.sidecar import Sidecar
 from themi.localtime import to_local
 from themi.logs import redact
 
@@ -192,6 +195,7 @@ def build_chat_turn(
 class ConversationMode:
     def __init__(self, services: Services) -> None:
         self.services = services
+        self.sidecar = Sidecar(services)
 
     def install(self) -> None:
         s = self.services
@@ -232,6 +236,17 @@ class ConversationMode:
         if in_group or not self.is_on(member):
             return False
         return not is_request(text, self._list_names())
+
+    def after_reply(
+        self,
+        member: Member,
+        text: str,
+        reply: str,
+        message_id: int | None,
+        history: Sequence[LoggedMessage],
+    ) -> None:
+        """The sidecar's pass over a turn that got the chat reply (CM1b)."""
+        self.sidecar.schedule(member, text, reply, message_id, history)
 
     def _list_names(self) -> list[str]:
         rows = self.services.store.db.query("SELECT name FROM lists")
