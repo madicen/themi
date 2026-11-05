@@ -141,7 +141,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CG1a | CatGenie litter box: unofficial client, sign-in by text code, captures | 5 Devices | [x] 2026-11-04 |
 | CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [x] 2026-11-04 |
 | 34a | Liaison: relays between partners | 6 Liaison and food | [x] 2026-11-04 |
-| 34b | Liaison: family group and alignment prompts | 6 Liaison and food | [ ] |
+| 34b | Liaison: family group and alignment prompts | 6 Liaison and food | [x] 2026-11-04 |
 | 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
@@ -6853,7 +6853,7 @@ Notes (2026-11-04):
 - Setup: restart `themi run`; migration 0106 runs on start.
 
 ### 34b · Liaison: family group and alignment prompts
-Status: [ ]
+Status: [x] 2026-11-04
 Depends on: 34a
 Read first: "Module behaviour" → A (Alignment prompts); "How the family uses Themi"
 (family group added in Phase 2); "AI backend" (shared tasks run on the owner's backend).
@@ -6873,6 +6873,43 @@ Tests:
 - The outcome leads to a rule proposal.
 
 Commit when done.
+
+Notes (2026-11-04):
+- `themi.channels.family_group`: one linked group (`family_group`, migration 0107). An admin
+  sends `/familygroup` in the group to link it, `/familygroup off` to unlink; a non-admin is
+  told only an admin can; anyone outside the family gets nothing. `/familygroup@other_bot`
+  is left alone. A move to a supergroup (`migrate_to_chat_id`) follows the group. In their
+  own chat, `/familygroup` says how to set it up.
+- In the linked group only family members' messages meant for Themi are handled: a command,
+  an @mention, or a Reply to Themi. The rest (the partners talking to each other, anyone
+  else) is neither handled nor logged. Every other group is ignored. Decision: Themi doesn't
+  answer every family message in the group, which also matches Telegram's privacy mode.
+- Group messages: `InboundEvent.in_group`; the agent sets `group_replies` (a contextvar)
+  while handling one, so that person's replies, cards and edits go to the group (stored on
+  the outbox row as `chat_id`). Anything else sent meanwhile (a relay to the partner) stays
+  private. In the group, the turn says "Where: the family group" (keep private things out),
+  and the calendar context isn't given (K1).
+- Shielding in the group: the stricter partner's settings (`shared_reader`: on if anyone
+  has it on, the highest strength, gentle if anyone likes gentle, both people's phrasing
+  notes), rewritten on the owner's backend.
+- `Outbox.send(..., to_group=True)`: waits until everyone is free at once (quiet hours, busy
+  times, their pauses, their receptive windows), worked out to a fixed point
+  (`_earliest_together`). It counts toward everyone's daily limit. Its buttons can be tapped
+  by any member (`callback_tokens.anyone`, not used up by the first tap). Fails with no group.
+- `flag_expectation_conflict(topic, question, option_a, option_b)` (core tool):
+  `liaison_items.kind = 'alignment'` (no recipient; `topic`, `options`, `resolved_at`,
+  `outcome`, `rule_id`), one open question per topic, dropped after 7 days unsent. Taps are
+  kept in `alignment_answers`; a change of mind counts until everyone has answered. The
+  same pick from everyone becomes a household rule draft ("<topic>: <choice>"), whose card goes
+  to the group for the person whose tap settled it to lock in. Different picks change nothing.
+  The "notes" pause topic and burnout mode hold the questions.
+- Not done: Themi doesn't yet notice conflicts by itself from the devices (feeder refill
+  levels): the model calls the tool when a conversation shows one. Household-wide notices to
+  the group aren't sent yet. `message_log` has no chat column, so group messages are logged
+  under the speaker like private ones.
+- Setup: restart `themi run` (migration 0107). In Telegram, make a group with the family,
+  add the bot, and have an admin send `/familygroup` there. With BotFather's privacy mode on
+  (the default) the bot only sees commands, mentions and replies, which is all it needs.
 
 ### 35a · Meal reminders and takeout rescue
 Status: [ ]
