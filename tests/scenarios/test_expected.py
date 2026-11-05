@@ -297,3 +297,60 @@ async def test_expected_emails_on_the_website(
     await site.post(f"/accounts/{account.id}/expected/{item.id}/remove", data={"csrf": csrf})
     assert "No longer watching for the PG&amp;E confirmation." in await flash(site, "/accounts")
     assert expected_emails(scenario).for_account(account.id) == []
+
+
+# ----- bug #145: a project's total isn't what was paid --------------------------------
+
+
+KICKSTARTER = "Kickstarter <no-reply@kickstarter.example>"
+
+
+def pledge(amount: str) -> dict[str, Any]:
+    return {
+        "sender": KICKSTARTER,
+        "subject": "We've collected your pledge",
+        "text": f"Pledge total\n****3271\n\n{amount}\n\nback another one: $48,000 pledged",
+    }
+
+
+async def sort_paid(scenario: Scenario, ids: list[int], paid: str) -> None:
+    scenario.primary.queue_structured(
+        {"results": [{**verdict(i, "confirmation"), "amount_paid": paid} for i in ids]}
+    )
+    await scenario.run_periodic("email.triage")
+
+
+async def test_a_projects_funding_goal_isnt_an_unusual_amount(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """Bug #145: "Eldritch Pirate | Dice Sets reached its funding goal" (triage called it a
+    confirmation) was "$336,444.00, well above the usual $179.00", and paused automatic
+    mark-as-read."""
+    automatic(scenario)
+    for amount in ("$179.00", "$169.00", "$190.00"):
+        await sort_paid(scenario, await arrive(scenario, inbox, pledge(amount)), amount)
+    mark = outbox_mark(scenario)
+    funded = {
+        "sender": KICKSTARTER,
+        "subject": "Eldritch Pirate | Dice Sets reached its funding goal",
+        "text": "Thanks to you, it's happening!\n\n$336,444\n\npledged\n\n3,886\n\nbackers",
+    }
+    (email,) = await arrive(scenario, inbox, funded)
+    await sort_paid(scenario, [email], "")
+    assert not scenario.app.services.autonomy.category(CATEGORY).escalated
+    assert not any("336,444" in t for t in queued_since(scenario, mark))
+    amounts = scenario.app.db.query("SELECT amount_cents FROM emails ORDER BY id")
+    assert [r["amount_cents"] for r in amounts] == [17900, 16900, 19000, None]
+
+
+async def test_a_pledge_far_above_the_usual_is_still_flagged(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    automatic(scenario)
+    for amount in ("$179.00", "$169.00", "$190.00"):
+        await sort_paid(scenario, await arrive(scenario, inbox, pledge(amount)), amount)
+    # The model's figure isn't in the email: Themi reads the pledge total itself.
+    await sort_paid(scenario, await arrive(scenario, inbox, pledge("$899.00")), "$5,000")
+    assert scenario.app.services.autonomy.category(CATEGORY).escalated
+    last = scenario.app.db.one("SELECT amount_cents FROM emails ORDER BY id DESC LIMIT 1")
+    assert last is not None and last["amount_cents"] == 89900
