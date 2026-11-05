@@ -1,0 +1,86 @@
+name: Checks
+
+# The checks themselves, called by CI (ci.yml) and Release (release.yml).
+#   quick: lint, type check and unit tests on one Python. A couple of minutes.
+#   full:  lint once, then unit, integration and scenario tests with the coverage gates
+#          on every supported Python, the Safeway extension tests, and the container
+#          smoke test, all in parallel.
+on:
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    if: ${{ !inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Lint and type check
+        run: make lint PYTHON=python
+      - name: Unit tests
+        run: make test PYTHON=python
+
+  lint:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"   # pyright checks against 3.12 whatever runs it (pyproject)
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Lint and type check
+        run: make lint PYTHON=python
+
+  test:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]   # requires-python's floor, and the image's
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Unit, integration and scenario tests, with the coverage gates
+        run: make cov PYTHON=python
+
+  extension:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Safeway extension tests
+        run: node --test extension/safeway/tests/*.test.js
+
+  container:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image and smoke-test it
+        run: tools/smoke_container.sh themi:ci

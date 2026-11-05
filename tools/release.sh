@@ -2,7 +2,7 @@
 # Release what's merged on main: ./tools/release.sh 1.4.0   (docs/RASPBERRY_PI.md, Part 4)
 #
 # Checks main's latest CI run passed, then tags that commit v1.4.0 and pushes the tag. The
-# release workflow builds the images (amd64 and arm64) with the version in them; then, on
+# release workflow runs the full checks on it (checks.yml), then builds the images (amd64 and arm64) with the version in them; then, on
 # the server: ~/themi/update.sh 1.4.0. Nothing on your working copy changes.
 set -euo pipefail
 

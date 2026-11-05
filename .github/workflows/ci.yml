@@ -1,33 +1,58 @@
 name: CI
 
+# Each commit is tested once, at the depth its event deserves (checks.yml):
+#   pull request (opened, pushed to, reopened)  full checks, on the merge with main
+#   push to a branch with no open pull request  quick checks: lint and unit tests
+#   push to a branch with an open pull request  nothing; the pull request run covers it
+#   push to main (a merge)                      quick checks; the pull request ran the
+#                                               full ones, and Release runs them again
+#   Actions > CI > Run workflow                 full checks on the chosen branch
+# A newer push cancels the run it replaces, except on main.
 on:
   push:
+    branches: ["**"]   # tags are Release's
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read   # to see whether a pushed branch has an open pull request
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  test:
+  plan:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      full: ${{ steps.plan.outputs.full }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-      - name: Install
-        run: make install PYTHON=python
-      - name: Lint and type check
-        run: make lint PYTHON=python
-      - name: Unit, integration and scenario tests, with the coverage gates
-        run: make cov PYTHON=python
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          run=true full=false
+          if [ "$EVENT" != push ]; then
+            full=true
+          elif [ "$BRANCH" != main ]; then
+            prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open \
+                --json number --jq length)"
+            if [ "$prs" != 0 ]; then
+              run=false
+              echo "Pull request open for $BRANCH: its run does the checks." >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
 
-  container:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build the image and smoke-test it
-        run: tools/smoke_container.sh themi:ci
+  checks:
+    needs: plan
+    if: needs.plan.outputs.run == 'true'
+    uses: ./.github/workflows/checks.yml
+    with:
+      full: ${{ needs.plan.outputs.full == 'true' }}
