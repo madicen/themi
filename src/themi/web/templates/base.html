@@ -9,20 +9,15 @@
   <script src="{{ asset('htmx.min.js') }}" defer></script>
 </head>
 {% set path = request.url.path %}
-{% set tab = "home" if path == "/" else "tasks" if path.startswith("/tasks") else "lists" if path.startswith("/lists") else "more" %}
 <body class="{% if member %}signed-in{% endif %}"{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
   <header class="top">
     <a class="brand" href="/">Themi</a>
     {% if member %}
     <nav class="tabs" aria-label="Main">
-      <a href="/" {% if tab == "home" %}aria-current="page"{% endif %}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</a>
-      <a href="/tasks" {% if tab == "tasks" %}aria-current="page"{% endif %}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>Tasks</a>
-      <a href="/lists" {% if tab == "lists" %}aria-current="page"{% endif %}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Lists</a>
-      <a href="/more" {% if tab == "more" %}aria-current="page"{% endif %}>
-        <svg class="dots" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>More</a>
+      {% for item in menu_bar(member, path) %}
+      <a href="{{ item.href }}" {% if item.current %}aria-current="page"{% endif %}>
+        <svg {% if item.dots %}class="dots" {% endif %}viewBox="0 0 24 24" aria-hidden="true"><path d="{{ item.icon }}"/></svg>{{ item.label }}</a>
+      {% endfor %}
     </nav>
     <details class="menu">
       <summary aria-label="Signed in as {{ member.name }}">{{ member.name }}</summary>

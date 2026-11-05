@@ -1,13 +1,46 @@
 {% extends "base.html" %}
 {% block title %}More · Themi{% endblock %}
+{% macro bar_form(action, href, text, label, kind="quiet") %}
+<form method="post" action="/more/bar" class="inline">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="action" value="{{ action }}">
+  <input type="hidden" name="href" value="{{ href }}">
+  <button class="small {{ kind }}" aria-label="{{ label }}">{{ text }}</button>
+</form>
+{% endmacro %}
 {% block content %}
 <h1>More</h1>
 {% for group, links in groups %}
 <h2>{{ group }}</h2>
 <nav class="menu-list" aria-label="{{ group }}">
   {% for href, label, hint in links %}
-  <a href="{{ href }}"><span class="row-main"><span class="row-title">{{ label }}</span><span class="row-meta">{{ hint }}</span></span></a>
+  <div class="menu-entry">
+    <a href="{{ href }}"><span class="row-main"><span class="row-title">{{ label }}</span><span class="row-meta">{{ hint }}</span></span></a>
+    {% if href in pinnable and href not in on_bar and not bar_full %}
+    {{ bar_form("pin", href, "Pin", "Pin " ~ label ~ " to the menu bar") }}
+    {% endif %}
+  </div>
   {% endfor %}
 </nav>
 {% endfor %}
+
+<h2 id="bar">Your menu bar</h2>
+<p class="muted">Up to four pages, then More. Only you see your choice.{% if bar_full %} The bar is full: unpin one to pin another.{% endif %}</p>
+<div class="rows">
+  {% for href, label in bar %}
+  <div class="row-plain">
+    <span>{{ label }}</span>
+    <span class="buttons">
+      {% if not loop.first %}{{ bar_form("up", href, "↑", "Move " ~ label ~ " earlier") }}{% endif %}
+      {% if not loop.last %}{{ bar_form("down", href, "↓", "Move " ~ label ~ " later") }}{% endif %}
+      {{ bar_form("unpin", href, "Unpin", "Take " ~ label ~ " off the menu bar") }}
+    </span>
+  </div>
+  {% else %}
+  <p class="empty muted">Only More is on the bar.</p>
+  {% endfor %}
+</div>
+{% if member.menu_bar is not none %}
+<div class="buttons">{{ bar_form("reset", "", "Back to Home, Tasks and Lists", "Put the usual pages back on the menu bar") }}</div>
+{% endif %}
 {% endblock %}

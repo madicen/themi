@@ -166,6 +166,12 @@ label > input[type=number], label > input[type=time] { display: inline-block; ma
   border-bottom: 1px solid var(--line); text-decoration: none; color: var(--fg); }
 .menu-list a:last-child { border-bottom: none; }
 .menu-list a::after { content: "›"; color: var(--muted); font-size: 1.4rem; margin-left: var(--space-2); }
+/* An entry with a "Pin" button beside its link (F28c). */
+.menu-entry { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.menu-entry:last-child { border-bottom: none; }
+.menu-entry > a { flex: 1; min-width: 0; border-bottom: none; }
+.menu-entry > form { margin: 0 var(--space-3) 0 0; flex: none; }
+.tabs a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ----- older shapes still in use ----- */
 details { margin: var(--space-2) 0; }

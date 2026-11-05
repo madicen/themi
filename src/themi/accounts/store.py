@@ -53,6 +53,7 @@ DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie", "home_connect", "roborock")
 APPLIANCES = ("washer", "dryer", "dishwasher", "vacuum", "feeder", "litter_box")
 TASK_KINDS = ("text", "call", "physical", "errand")
 EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+MENU_BAR_MAX = 4  # pages on the website's menu bar, before More (F28c)
 
 
 class AccountsError(Exception):
@@ -157,6 +158,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         noise_emails=row["noise_emails"],
         getting_ready_minutes=row["getting_ready_minutes"],
         leave_heads_up=bool(row["leave_heads_up"]),
+        menu_bar=tuple(json.loads(row["menu_bar"])) if row["menu_bar"] else None,
     )
 
 
@@ -502,6 +504,26 @@ class AccountStore:
             changes["id"] = member_id
             assignments = ", ".join(f"{c} = :{c}" for c in changes if c != "id")
             self.db.execute(f"UPDATE members SET {assignments} WHERE id = :id", changes)
+        return self.get_member(member_id)
+
+    def set_menu_bar(self, actor: Actor, member_id: int, pages: Sequence[str] | None) -> Member:
+        """The website's menu bar for this member (F28c): their own choice, at most
+        MENU_BAR_MAX pages, each once; None goes back to the usual bar. Which pages exist
+        and who may open them is the website's to check."""
+        self._require_self(actor, member_id)
+        if pages is not None:
+            if len(pages) > MENU_BAR_MAX:
+                raise InvalidValue(f"the bar holds {MENU_BAR_MAX} pages, and More")
+            if len(set(pages)) != len(pages):
+                raise InvalidValue("a page is on the bar once")
+        self.db.execute(
+            "UPDATE members SET menu_bar = ?, updated_at = ? WHERE id = ?",
+            (
+                None if pages is None else json.dumps(list(pages)),
+                _iso(clock.now()),
+                member_id,
+            ),
+        )
         return self.get_member(member_id)
 
     def _admin_count(self) -> int:
