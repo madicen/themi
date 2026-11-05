@@ -190,6 +190,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F26a | Feedback: a one-off routine item already gone stopped the wall's routine sync | Feedback | [x] 2026-11-04 |
 | F26b | Idea: approvals from one email thread in one message | Feedback | [ ] |
 | F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
+| F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 
 ## Fixed technical choices
 
@@ -9373,3 +9374,44 @@ at least do part of it"). For example task 10, Split Merlin's cat box, has three
 Tests: task 10 split three ways between Erin and Michael; each part on the right list and
 the wall; the parent done when the last part is. A part done counts as done in the
 summary. A repeating chore is refused.
+
+### F27 · Feedback (2026-11-04): the family group hears "Themi, ..." and says when Telegram hides messages
+Status: [x] (2026-11-04)
+Depends on: 34b
+Read first: 34b's notes (the family group). From Michael's bug #143 (2026-11-04, 9:37 pm,
+"I'm not getting any responses from Themi in the family group chat"). After linking the
+group at 9:31 pm he wrote "@themi_ai_bot How can I help Erin during this period of low
+energy?" (9:35) and "Themi, are you seeing this?" (9:36); neither reached the Pi, and only
+the /bug at 9:37 was answered. `getMe` showed `can_read_all_group_messages: false`: the
+bot's group privacy mode was on, so Telegram delivered only commands and Replies to
+Themi, not mentions or anything else. The link message promised that mentions work.
+- The channel reads `can_read_all_group_messages` at start and again when the group is
+  linked. With privacy on, the link message says only Replies and commands reach Themi
+  there, and how an admin turns that off (@BotFather, /setprivacy, Disable, then remove
+  the bot from the group and add it back); start logs a warning when a group is linked.
+- A family message starting with Themi's name ("Themi, ...", "hey Themi ...") counts as
+  meant for Themi; the name is taken out like a mention. A message only mentioning Themi
+  in passing ("I told Themi") does not.
+- A family group message that isn't for Themi is logged at debug level (who, never the
+  words), so the next "it's ignoring me" leaves a trace.
+- The fake Telegram has group privacy mode: `getMe` reports it, and with it on, group
+  messages other than commands and Replies to the bot aren't delivered.
+
+Tests: "Themi, ..." and "hey themi ..." answered in the group, "I told Themi" not; the
+link message with privacy on and off; the warning at start; the debug line without the
+words; the fake withholding a mention under privacy mode.
+
+Notes (2026-11-04):
+- `TelegramChannel._reads_group_messages` reads PTB's `can_read_all_group_messages` (from
+  `getMe` at start); `_link_group` calls `get_me()` again first, so a change in @BotFather
+  shows at the next /familygroup without a restart. The warning is `PRIVACY_WARNING`; the
+  link text with privacy on is `GROUP_LINKED_PRIVACY_TEXT`, and `GROUP_LINKED_TEXT` now
+  lists "start with Themi".
+- `NAME_FIRST` matches "Themi" (optionally after hey, hi, hello, ok, okay) at the start,
+  not "Themis" or "Themi's"; `_without_mention` strips it.
+- `FakeTelegramState.group_privacy` (default off) withholds group messages other than
+  commands and Replies, and `getMe` reports it.
+- Setup (Michael): the live bot has privacy on (`getMe` on the Pi, 2026-11-04). In
+  @BotFather: /setprivacy, @themi_ai_bot, Disable; then remove the bot from "Madicen
+  Family", add it back, and send /familygroup@themi_ai_bot there. Mark #143 reviewed once
+  "Themi, ..." is answered in the group.
