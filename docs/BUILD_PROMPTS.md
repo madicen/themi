@@ -195,8 +195,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
-| CM1b | Conversation mode: the sidecar | Conversation mode | [ ] |
-| CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [ ] |
+| CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
+| CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
 
 ## Fixed technical choices
 
@@ -9656,7 +9656,7 @@ Notes (2026-11-05):
 - Setup: restart (migration 0109 runs at start). Then whoever is trying it sends `/chat on`.
 
 ### CM1b · Conversation mode: the sidecar
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: CM1a, 11, 12, 14, F24a
 Read first: the plan's Trust tiers section and Security (outside text is data). CM1a's
 notes.
@@ -9695,8 +9695,42 @@ reaction only when something was logged; a sidecar failure says nothing. Scenari
 need to call the vet Thursday" gets a warm reply, then the task appears with a ✍️; "I
 should really clean the garage someday" makes nothing.
 
+Notes (2026-11-05):
+- `themi.core.sidecar.Sidecar`, on `ConversationMode.sidecar`. `Agent._handle` calls
+  `conversation.after_reply(...)` once a chat reply has gone (not after BUSY, SETUP or
+  DECLINED texts), with the history the reply was given. `schedule` chains each member's
+  passes in order; `drain()` awaits them (the scenario harness drains after each message).
+- Deviation: function calling rather than a JSON schema of its own (the spec allows "Strict
+  Structured JSON Schema / Function Calling"). The pass is one `chat` call on the
+  `sidecar` route (`CallKind.BACKGROUND`) offered only `SIDECAR_TOOLS`, with their own
+  schemas, and their calls run once (no second round). Building `create_task`'s ten
+  required arguments by hand from the spec's `{title, due_date, priority}` would have been
+  fragile. Mapping: `create_task`; `complete_task`/`cancel_task` (a `task_id` not in the
+  "Task N" open items it was shown is dropped and logged); `add_calendar_event` (Google
+  only); `remember_fact`; `start_burnout`, `end_burnout`, `pause_messages`,
+  `resume_messages`. Not `focus_now`: it sends a list, which out of the blue would be a
+  demand. Burnout's own few words still go to them (`SAYS_ITSELF`); other tools'
+  confirmations don't, as the ✍ says it.
+- "Requested" (F5) comes from the tools themselves, which check the person's words
+  (`ToolContext.request_text` is their message): a passing mention of the plumber is a
+  card, "put the dentist on my calendar" would be done at once (but that's a request, so
+  it goes to the tool agent anyway).
+- The turn: local time and the open items outside, then `<data>` with the last six
+  messages and this turn's message and reply. The system prompt says what counts and what
+  never does, and "when in doubt, record nothing".
+- Migration 0110: `sidecar_log` (member, their message's Telegram id, items as JSON with
+  each tool, arguments, outcome, result and touched task ids, the pass's own note,
+  `status`). A row only when something went through. `log.info("SIDE_EFFECT_LOGGED ...")`
+  too. No other event bus: Telegram has no toasts, and nothing else listens yet.
+- `Outbox.react(member, message_id, emoji)`: the ✍ (`✍` without a variation selector,
+  as Telegram's reaction list has it) goes through the outbox, using the sender's `react`
+  if it has one. Not shielded, held or counted: it isn't a message.
+- My settings, under the switch: "Picked out lately", the last ten passes in words ("New
+  task: Call the vet"), from `Sidecar.recent`. There's no chat history page to put it on.
+- Setup: restart (migration 0110).
+
 ### CM1c · Conversation mode: sidecar evals and wider rollout
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: CM1b, 28
 Read first: the plan's Testing section (evals). CM1b's notes and the `side_effect_logged`
 rows from the person who opted in.
@@ -9713,3 +9747,35 @@ rows from the person who opted in.
 
 Tests: the eval set runs under `make evals` with recorded provider responses; undoing a
 sidecar item from chat; the switch's visibility follows the rollout flag.
+
+Notes (2026-11-05):
+- `tests/evals/sidecar_cases.json`: 19 made-up turns, 10 that should make nothing
+  (venting, "someday", a wish, a hypothetical, already done, someone else's job, a pasted
+  scam, a line only Themi said, a task already open, a partner's burnout) and 9 that should
+  make one thing (3 tasks, a done and a cancelled task, a dinner for the calendar, a fact,
+  their own burnout mode). No real turns yet: none had been shared.
+- `tests/evals/test_sidecar_evals.py` (opt-in, `make evals EVAL_ARGS='-k sidecar'`) runs one
+  `Sidecar.run` per case with the case's chat reply (no chat call), and
+  `tests/evals/sidecar.py` scores it. The summary prints precision and recall per kind and
+  saves `results/sidecar-<provider>-<time>.json`.
+- First run, 2026-11-05, Gemini `gemini-3.5-flash-lite` on the test key: 19/19 right,
+  precision and recall 1.0 for every kind. Small and made-up, so it says the prompt and
+  plumbing work, not that real turns will go as well.
+- Deviation: "recorded provider responses" became unit tests of the scoring
+  (`tests/unit/test_sidecar_scoring.py`, in `make test`). The evals' real point is a real
+  model, and recordings would only replay the plumbing the scenarios already cover.
+- Undo: "that wasn't a task", "undo that", "take that off", "don't add that" (`UNDO`), with
+  conversation mode on and outside the group, is answered without a model by
+  `Sidecar.undo`. It takes back the latest pass within the hour: made tasks are cancelled,
+  a one-off ticked done is opened again (`TaskBoard.reopen`, which nudges as usual), and the
+  rest (a cancelled task, a fact, a card, a mode) is said to be kept, since there's no undo
+  for those here. The row becomes `missed`.
+- Deviation: `/bug` soon after a pass marks it `missed` (and the report's snapshot carries
+  `sidecar`, the last three passes) but undoes nothing: a bug report can be about
+  anything.
+- Wider rollout is `THEMI_CONVERSATION_MODE=on` (CM1a's setting): the switch on everyone's
+  settings, and `/chat` on the command menu. Until then it stays `trial`. Before switching
+  it on, the family should set a precision target and check the `sidecar_log` rows marked
+  `missed` from the trial (with real turns, with the owner's say-so, as eval cases).
+- The undo and `/bug` code went into CM1b's commits (`sidecar.py`, the agent's hook,
+  `feedback.py`), since the two prompts were built and tested together.
