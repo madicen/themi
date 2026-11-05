@@ -102,6 +102,12 @@ class FakeTelegram:
             self.state.updates.append({"update_id": update_id, kind: payload})
             return update_id
 
+    def migrate(self, user_id: int, chat_id: int, new_chat_id: int) -> int:
+        """Telegram turned a group into a supergroup (a service message in the old one)."""
+        message = self._message(user_id, chat_id, "group")
+        message["migrate_to_chat_id"] = new_chat_id
+        return self._push("message", message)
+
     def _message(self, user_id: int, chat_id: int | None, chat_type: str) -> dict[str, Any]:
         return {
             "message_id": next(self._message_ids),
@@ -148,7 +154,17 @@ class FakeTelegram:
         }
         return self._push("message", message)
 
-    def tap(self, user_id: int, callback_data: str, message_id: int) -> int:
+    def tap(
+        self,
+        user_id: int,
+        callback_data: str,
+        message_id: int,
+        *,
+        chat_id: int | None = None,
+        chat_type: str = "private",
+    ) -> int:
+        """A button tap; in a group with `chat_id` and `chat_type`."""
+        chat = self._chat(chat_id if chat_id is not None else user_id, chat_type)
         return self._push(
             "callback_query",
             {
@@ -159,7 +175,7 @@ class FakeTelegram:
                 "message": {
                     "message_id": message_id,
                     "date": next(self._dates),
-                    "chat": self._chat(user_id, "private"),
+                    "chat": chat,
                     "from": BOT_USER,
                     "text": "(the bot's message)",
                 },
