@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
@@ -331,3 +334,49 @@ async def test_themis_own_to_dos_are_kept_in_order_and_wall_ones_stay_put(
     start = len(fake_cozyla.paths())
     await sync(scenario)
     assert writes_since(fake_cozyla, start) == []  # in order already: nothing sent
+
+
+async def test_a_new_due_date_that_moves_a_to_do_stays_on_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """Bug #146: rescheduled out of overdue, the to-do moved down the list, and putting it
+    in its place sent the old due date (and title) back. The next pull moved the task back."""
+    family = scenario.cozyla_list
+    today = date(2026, 10, 21)
+    box = await add_task(scenario, "Move Mimi's box", due_on=today - timedelta(days=7))
+    await add_task(scenario, "Next week", due_on=today + timedelta(days=7))
+    await sync(scenario)  # made on the wall
+    await sync(scenario)  # read back with their places
+    assert fake_cozyla.wall_order(family) == ["Move Mimi's box", "Next week"]
+
+    saturday = today + timedelta(days=10)
+    await board(scenario).reschedule(box.id, saturday, interactive=True)
+    await board(scenario).update(box.id, scenario.member("Erin"), title="Move Mimi's box up")
+    await sync(scenario)  # sent, and put below "Next week"
+    assert fake_cozyla.wall_order(family) == ["Next week", "Move Mimi's box up"]
+    await sync(scenario)
+    await sync(scenario)
+
+    assert board(scenario).get(box.id).due_on == saturday
+    todo = wall(fake_cozyla, scenario)["Move Mimi's box up"]
+    assert datetime.fromtimestamp(todo["dueDateTime"] / 1000, LA).date() == saturday
+
+
+async def test_a_due_date_changed_on_the_wall_is_logged(
+    scenario: Scenario, fake_cozyla: FakeCozyla, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Bug #146: the task went back to its old date with no trace of why."""
+    stamps = await add_task(scenario, "Buy stamps", due_on=date(2026, 10, 22))
+    await sync(scenario)
+    (todo,) = fake_cozyla.in_list(scenario.cozyla_list)
+    fake_cozyla.edit(
+        todo["todoId"],
+        dueDateTime=int(datetime(2026, 10, 29, 23, 59, tzinfo=LA).timestamp() * 1000),
+    )
+    with caplog.at_level(logging.INFO, logger="themi.core.cozyla_todos"):
+        await sync(scenario)
+    assert board(scenario).get(stamps.id).due_on == date(2026, 10, 29)
+    assert (
+        f"Cozyla to-do {todo['todoId']} is due 2026-10-29 on the wall (was 2026-10-22); "
+        f"task {stamps.id} follows"
+    ) in caplog.messages
