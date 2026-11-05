@@ -220,3 +220,37 @@ def test_allowing_roborock_keeps_what_points_at_the_devices() -> None:
         (now,),
     )
     assert db.scalar("PRAGMA foreign_key_check") is None
+
+
+def test_chat_and_sidecar_routes_start_from_what_members_use_now() -> None:
+    # CM1a: chat copies each member's conversation chain, the sidecar their quick-jobs one.
+    db = Database(":memory:")
+    known = discover()
+    apply(db, [m for m in known if m.version < 109])
+    now = "2026-11-05T00:00:00+00:00"
+    db.execute(
+        "INSERT INTO members (id, name, role, created_at, updated_at) "
+        "VALUES (1, 'Erin', 'admin', ?, ?)",
+        (now, now),
+    )
+    for backend_id in (1, 2):
+        db.execute(
+            "INSERT INTO ai_backends (id, member_id, label, kind, created_at, updated_at) "
+            "VALUES (?, 1, ?, 'gemini', ?, ?)",
+            (backend_id, f"b{backend_id}", now, now),
+        )
+    for task, position, backend_id, model in (
+        ("conversation", 0, 1, None),
+        ("conversation", 1, 2, "fast"),
+        ("structured_misc", 0, 2, None),
+    ):
+        db.execute(
+            "INSERT INTO ai_routes (member_id, task, position, backend_id, model) "
+            "VALUES (1, ?, ?, ?, ?)",
+            (task, position, backend_id, model),
+        )
+    apply(db, known)
+    route = "SELECT position, backend_id, model FROM ai_routes WHERE task = ? ORDER BY position"
+    assert db.query(route, ("chat",)) == db.query(route, ("conversation",))
+    assert db.query(route, ("sidecar",)) == [{"position": 0, "backend_id": 2, "model": None}]
+    assert db.scalar("SELECT conversation_mode FROM members WHERE id = 1") == 0
