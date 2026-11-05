@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from themi.core.habits import HabitReserve
     from themi.core.journal import Journal
     from themi.core.laundry import Laundry
+    from themi.core.liaison import Liaison
     from themi.core.lists import Lists
     from themi.core.litter_box import LitterBox
     from themi.core.maintenance import Maintenance
@@ -197,6 +198,7 @@ class Services:
     journal: Journal | None = None  # each person's private journal of conversations (M1)
     google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
     routines: Routines | None = None  # routines kept in Themi (R1a)
+    liaison: Liaison | None = None  # notes passed on between partners (34a)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
