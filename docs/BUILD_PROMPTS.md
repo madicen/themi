@@ -192,7 +192,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
-| F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [ ] |
+| F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [ ] |
 
 ## Fixed technical choices
@@ -9476,7 +9476,7 @@ Notes (2026-11-05):
   No migration.
 
 ### F28b · Feedback (2026-11-05): a confirmation's amount is what the reader paid
-Status: [~]
+Status: [x] 2026-11-05
 Depends on: 24, F24c
 Read first: "Gmail triage"; prompt 24 (expected emails and anomaly detection); "Security
 and privacy" (email text is data). From Michael's bug #145 (2026-11-05, 8:03 am, "a
@@ -9507,6 +9507,29 @@ Tests: each a failing test first. A made-up "reached its funding goal" email wit
 ("Your pledge: $179.00") gives $179. A receipt with a total still gives the total. A
 model figure that isn't in the text is dropped. `parse_amount` with no payment word
 returns none.
+
+Notes (2026-11-05):
+- `Verdict.amount_paid`: the model's figure as written, "" for none, or None when the model
+  gave no field (older fakes, and as a safeguard). `ExpectedEmails.on_triaged` keeps it
+  through `paid_amount` only if that figure is in the subject or body. If it gives "", there
+  is no amount. If its figure isn't in the email, or there's no field, `parse_amount` is
+  used. SCHEMA requires `amount_paid`, and SYSTEM says what counts.
+- `parse_amount` takes only a figure with a payment word in the 40 characters before it
+  ("total", "paid", "charged", "your pledge", ...), and skips any followed within a few
+  characters by "pledged", "goal", "raised", "funded" or "backers". The old "largest"
+  fallback is gone (its unit test changed with it).
+- Checked on the Pi (read-only, 2026-11-05): of the 15 Kickstarter emails with an amount,
+  5 had stored another project's total: 453 and 468 (both mails about Michael's own
+  backing, whose stored text has no pledge of his) and 531, 784 and 938 (funding goals).
+  The new `parse_amount`, run on their stored text there, gives none for those five and
+  the same figure as before for the other ten. Those five rows still hold the old
+  amounts. With no rewrite they will skew Kickstarter's "usual" for the next few emails,
+  upwards, so a big pledge is flagged less often. Clearing them is one UPDATE; ask
+  Michael first.
+- The 8 am alert and the escalation it caused stay as they are: "Mark confirmation
+  emails as read" asks first until it's resumed (the button on that message, or the
+  website).
+- Setup: restart. No migration.
 
 ### F28c · Idea (2026-11-05): choosing which pages are on the website's menu bar
 Status: [ ]
