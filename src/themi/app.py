@@ -47,6 +47,7 @@ from themi.core.calendar import TaskCalendar
 from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
+from themi.core.conversation_mode import ConversationMode
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -150,6 +151,7 @@ def build_app(
     keep: KeepFactory | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
+    conversation_mode: str = "trial",
     control_dir: Path | None = None,
     hedge_after: float | None = HEDGE_AFTER,
 ) -> App:
@@ -163,6 +165,7 @@ def build_app(
     outbox.sent_listeners.append(outcomes.on_sent)
     services = Services(
         tool_routing=tool_routing,
+        conversation_rollout=conversation_mode,
         group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db)),
         task_namer=TaskNamer(RouterEmbedder(router), VectorCache(db)),
         store=store,
@@ -215,6 +218,7 @@ def build_app(
     Focus(services, tasks, day_summary).install()
     burnout = Burnout(services, tasks)
     burnout.install()
+    ConversationMode(services).install()
     reviews = CheckinReviews(services)
     reviews.install()
     Meals(services, pantry).install()

@@ -32,6 +32,7 @@ from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
+from themi.core import conversation_mode
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
 from themi.web.task_pages import task_rows
@@ -348,6 +349,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 (name, TRACKING_LABELS[name], member.tracks(name)) for name in TRACKING_INPUTS
             ],
             "strengths": STRENGTH_LABELS,
+            "conversation_offered": conversation_mode.offered(app.services, member),
             **extra,
         }
 
@@ -386,6 +388,11 @@ def core_routes(kit: Kit) -> APIRouter:
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
+                conversation_mode=(  # CM1a: only when the switch was on the page
+                    form.get("conversation_mode") == "on"
+                    if conversation_mode.offered(app.services, member)
+                    else None
+                ),
             )
         except InvalidValue as exc:
             return kit.page(

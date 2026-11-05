@@ -159,6 +159,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         getting_ready_minutes=row["getting_ready_minutes"],
         leave_heads_up=bool(row["leave_heads_up"]),
         menu_bar=tuple(json.loads(row["menu_bar"])) if row["menu_bar"] else None,
+        conversation_mode=bool(row["conversation_mode"]),
     )
 
 
@@ -408,6 +409,7 @@ class AccountStore:
         leave_heads_up: bool | None = None,
         break_extend_minutes: int | None = None,
         noise_emails: str | None = None,  # one of NOISE_EMAILS
+        conversation_mode: bool | None = None,  # CM1a
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -483,6 +485,8 @@ class AccountStore:
             changes["done_praise"] = int(done_praise)
         if listen_first is not None:
             changes["listen_first"] = int(listen_first)
+        if conversation_mode is not None:
+            changes["conversation_mode"] = int(conversation_mode)
         if day_budget is not None:
             if not 0 <= day_budget <= MAX_DAY_BUDGET:
                 raise InvalidValue(f"a day's budget is between 0 and {MAX_DAY_BUDGET}")

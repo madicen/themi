@@ -277,10 +277,17 @@ class Agent:
         energy_mark = self.services.store.db.scalar(
             "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
         )
+        conversation = self.services.conversation
+        chatting = conversation is not None and conversation.takes(
+            member, text, in_group=event.in_group
+        )
         timer.start()
         try:
             async with channel.typing(member), self._slow_notice(member, event, timer):
-                reply = await self._converse(member, text, event, timer)
+                if chatting:  # CM1a: a plain chat reply, no tools
+                    reply = await self._chat(member, text, event)
+                else:
+                    reply = await self._converse(member, text, event, timer)
             self._catch_energy(member, text, energy_mark)
             if reply:  # empty when a tool's message was the whole answer
                 async with timer.outbox():
@@ -541,6 +548,19 @@ class Agent:
         finally:
             timer.added(ctx.groups - offered)
         return _done_first(ctx.done, TANGLED_TEXT)
+
+    async def _chat(self, member: Member, text: str, event: InboundEvent) -> str:
+        """Conversation mode's reply (CM1a): one model call with no tools."""
+        assert self.services.conversation is not None
+        try:
+            return await self.services.conversation.reply(
+                member, text, self._history(member, event)
+            )
+        except RefusalError:
+            return DECLINED_TEXT
+        except AllProvidersFailed as exc:
+            log.warning("No AI backend answered member %s: %s", member.id, exc)
+            return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
 
     def _signals(self, member: Member, text: str) -> list[str]:
         """What the message, or the mode they're in, asks of this turn: its size, and

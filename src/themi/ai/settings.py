@@ -41,6 +41,8 @@ class AITask(StrEnum):
     STRUCTURED_MISC = "structured_misc"
     TRANSCRIPTION = "transcription"
     EMBEDDING = "embedding"  # P7b: which tool groups a message needs
+    CHAT = "chat"  # CM1a: the reply in conversation mode, no tools
+    SIDECAR = "sidecar"  # CM1b: the background pass that picks out tasks and events
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)

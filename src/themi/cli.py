@@ -175,6 +175,7 @@ def build_runtime(
         ),
         backup=settings.backup,
         tool_routing=settings.tool_routing,
+        conversation_mode=settings.conversation_mode,
         control_dir=settings.control_dir,
         **options,
     )

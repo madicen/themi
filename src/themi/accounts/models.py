@@ -90,6 +90,8 @@ class Member:
     noise_emails: str = "daily"  # when noise emails are offered for archiving, together (F16b)
     # The website's menu bar, in order (F28c): paths, at most MENU_BAR_MAX; None: the usual.
     menu_bar: tuple[str, ...] | None = None
+    # CM1a: talk with a plain chat model; a background pass picks out tasks (CM1b).
+    conversation_mode: bool = False
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

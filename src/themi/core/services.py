@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from themi.core.buying import ThingsToBuy
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
+    from themi.core.conversation_mode import ConversationMode
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
@@ -145,6 +146,7 @@ class Services:
     command_help: dict[str, str] = field(default_factory=dict)
     site_url: str = ""  # the website's base address, for /site links
     tool_routing: str = "groups"  # P5: or "all", every tool on every call; P7b "embeddings"
+    conversation_rollout: str = "trial"  # CM1a: "off", "trial" or "on"
     group_router: EmbeddingRouter | None = None  # P7b, used when tool_routing is "embeddings"
     task_namer: TaskNamer | None = None  # P8b: which open task a message names, by meaning
     rulebook: Rulebook | None = None
@@ -179,6 +181,7 @@ class Services:
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
+    conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)
     follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)

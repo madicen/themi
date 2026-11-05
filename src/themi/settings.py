@@ -25,6 +25,7 @@ from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 ToolRouting = Literal["groups", "all", "embeddings"]
+ConversationRollout = Literal["off", "trial", "on"]
 
 
 GOOGLE_ENDPOINT_VARIABLES = {
@@ -55,6 +56,10 @@ class Settings(BaseModel):
     # P5: "groups" sends the core tools and the groups a message calls for (P1); "all"
     # sends every tool, to compare.
     tool_routing: ToolRouting = "groups"
+    # CM1a-c: conversation mode. "trial": /chat turns it on for whoever asks, and the
+    # website shows its switch only to them; "on": the switch is on everyone's settings;
+    # "off": not offered, and nobody's turns use it.
+    conversation_mode: ConversationRollout = "trial"
     http_host: str = "127.0.0.1"
     http_port: int = 8080
     # Off only for smoke tests and diagnostics: the process runs without polling Telegram.
@@ -165,6 +170,9 @@ class Settings(BaseModel):
         routing = (get("THEMI_TOOL_ROUTING") or "groups").lower()
         if routing not in ("groups", "all", "embeddings"):
             problems.append(f"THEMI_TOOL_ROUTING must be groups, all or embeddings, not {routing}")
+        rollout = (get("THEMI_CONVERSATION_MODE") or "trial").lower()
+        if rollout not in ("off", "trial", "on"):
+            problems.append(f"THEMI_CONVERSATION_MODE must be off, trial or on, not {rollout}")
 
         port_text = get("THEMI_HTTP_PORT") or "8080"
         if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
@@ -235,6 +243,7 @@ class Settings(BaseModel):
             telegram_api_url=telegram_url.rstrip("/"),
             log_level=level,  # type: ignore[arg-type]  # validated above
             tool_routing=routing,  # type: ignore[arg-type]  # validated above
+            conversation_mode=rollout,  # type: ignore[arg-type]  # validated above
             http_host=get("THEMI_HTTP_HOST") or "127.0.0.1",
             http_port=int(port_text),
             telegram_enabled=get("THEMI_DISABLE_TELEGRAM").lower() not in ("1", "true", "yes"),
