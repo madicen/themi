@@ -39,6 +39,7 @@ from themi import clock
 EMAIL = "family@x.example"
 PASSWORD = "wall-calendar"
 FUTURE_TICK = 30016  # the live wall's answer to a tick on a day still to come (2026-10-29)
+ROUTINE_GONE = 30005  # the live wall's answer to deleting a routine it no longer has (bug #141)
 
 
 class Refused(Exception):
@@ -449,6 +450,8 @@ class FakeCozyla(Snapshots):
             routine["displayOrder"] = body["displayOrder"]
 
     def _delete_routine(self, body: dict[str, Any]) -> None:
+        if body["id"] not in self.routines:
+            raise Refused(ROUTINE_GONE)
         del self.routines[body["id"]]
 
     def _routine_records(self, body: dict[str, Any]) -> list[dict[str, Any]]:
