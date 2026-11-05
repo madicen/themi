@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
 import httpx
 import pytest
 
-from tests.fixtures.web import sign_in, web_client
+from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.accounts import Role
 from themi.autonomy import ExecutionContext
 from themi.web.auth import COOKIE_NAME, WebAuth
 
@@ -421,3 +423,88 @@ async def test_a_changed_stylesheet_is_never_served_from_an_old_cache(
         assert f"/static/{name}?v={digest}" in page, name
         response = await site.get(f"/static/{name}?v={digest}")
         assert response.status_code == 200 and response.headers["cache-control"] == "no-cache"
+
+
+# ----- choosing the bar's pages (F28c, idea #144) -----------------------------------
+
+
+def bar(page: str) -> list[str]:
+    """The menu bar's links, in order."""
+    nav = page[page.index('<nav class="tabs"') :]
+    return re.findall(r'<a href="([^"]+)"', nav[: nav.index("</nav>")])
+
+
+async def bar_change(site: httpx.AsyncClient, action: str, href: str = "") -> httpx.Response:
+    csrf = csrf_of((await site.get("/more")).text)
+    return await site.post("/more/bar", data={"csrf": csrf, "action": action, "href": href})
+
+
+async def test_a_pinned_page_is_on_that_persons_bar_only(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    assert bar((await site.get("/")).text) == ["/", "/tasks", "/lists", "/more"]  # the default
+
+    pinned = await bar_change(site, "pin", "/spending")
+    assert pinned.status_code == 303
+    spending = (await site.get("/spending")).text
+    assert bar(spending) == ["/", "/tasks", "/lists", "/spending", "/more"]
+    assert '<a href="/spending" aria-current="page">' in spending
+    assert spending.count('aria-current="page"') == 1
+    assert scenario.app.store.get_member(scenario.member("Husband").id).menu_bar == (
+        "/",
+        "/tasks",
+        "/lists",
+        "/spending",
+    )
+    async with web_client(scenario) as erins:
+        await sign_in(scenario, erins, "Erin")
+        assert bar((await erins.get("/")).text) == ["/", "/tasks", "/lists", "/more"]
+
+
+async def test_the_bar_holds_four_pages_and_more(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    await bar_change(site, "pin", "/spending")
+    refused = await bar_change(site, "pin", "/tiers")
+    assert refused.status_code == 303
+    page = (await site.get(refused.headers["location"])).text
+    assert "The bar holds four pages" in page
+    assert bar(page) == ["/", "/tasks", "/lists", "/spending", "/more"]
+    nowhere = await bar_change(site, "pin", "https://example.com")
+    assert nowhere.status_code == 400
+    assert len(scenario.app.store.get_member(scenario.member("Husband").id).menu_bar or ()) == 4
+
+
+async def test_pages_move_come_off_and_go_back_to_the_usual(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Husband")
+    await bar_change(site, "unpin", "/lists")
+    more = (await site.get("/more")).text
+    assert bar(more) == ["/", "/tasks", "/more"]
+    assert 'href="/lists"' in more[more.index("</nav>") :]  # still reachable from More
+    await bar_change(site, "pin", "/week")
+    await bar_change(site, "up", "/week")
+    assert bar((await site.get("/")).text) == ["/", "/week", "/tasks", "/more"]
+    await bar_change(site, "down", "/")
+    assert bar((await site.get("/")).text) == ["/week", "/", "/tasks", "/more"]
+    await bar_change(site, "reset")
+    assert bar((await site.get("/")).text) == ["/", "/tasks", "/lists", "/more"]
+    assert scenario.app.store.get_member(scenario.member("Husband").id).menu_bar is None
+
+
+async def test_an_admin_page_leaves_the_bar_when_the_role_does(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    await bar_change(site, "pin", "/family")
+    assert "/family" in bar((await site.get("/")).text)
+    store = scenario.app.store
+    erin = store.get_member(scenario.member("Erin").id)
+    store.set_role(erin, scenario.member("Husband").id, Role.ADMIN)
+    store.set_role(erin, erin.id, Role.MEMBER)
+    assert bar((await site.get("/")).text) == ["/", "/tasks", "/lists", "/more"]
+    refused = await bar_change(site, "pin", "/dev")
+    assert refused.status_code == 400

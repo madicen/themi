@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
+from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
@@ -98,6 +99,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     )
 
     kit = Kit(ctx)
+    kit.templates.env.globals["menu_bar"] = menu_bar
     google = ctx.app.services.google
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
     form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
@@ -289,7 +291,53 @@ def core_routes(kit: Kit) -> APIRouter:
     @router.get("/more", response_class=HTMLResponse)
     def more(request: Request) -> HTMLResponse:
         session = kit.current(request)
-        return kit.with_flash(request, "more.html", session, groups=more_groups(session.member))
+        member = session.member
+        pages = pinnable(member)
+        on_bar = bar_pages(member)
+        groups = more_groups(member)
+        off_bar = [(h, label, hint) for h, label, hint in MAIN_PAGES if h not in on_bar]
+        if off_bar:  # Home, Tasks or Lists taken off the bar: still a tap away
+            groups.insert(0, ("Main", off_bar))
+        return kit.with_flash(
+            request,
+            "more.html",
+            session,
+            groups=groups,
+            bar=[(href, pages[href]) for href in on_bar],
+            on_bar=set(on_bar),
+            bar_full=len(on_bar) >= MENU_BAR_MAX,
+            pinnable=set(pages),
+        )
+
+    @router.post("/more/bar")
+    async def change_bar(request: Request) -> Response:
+        """Pin, unpin or move a page on the signed-in member's own menu bar (F28c)."""
+        session, form = await kit.checked(request)
+        member = session.member
+        action, href = str(form.get("action", "")), str(form.get("href", ""))
+        bar = bar_pages(member)
+        if action == "reset":
+            app.store.set_menu_bar(member, member.id, None)
+            return kit.redirect("/more", "The bar is back to Home, Tasks and Lists.")
+        if action == "pin" and href not in pinnable(member):
+            return kit.page(request, "message.html", 400, title="Not a page", body=NOT_A_PAGE)
+        if action not in ("pin", "unpin", "up", "down") or (action != "pin" and href not in bar):
+            return kit.redirect("/more")
+        if action == "pin":
+            if href in bar:
+                return kit.redirect("/more")
+            if len(bar) >= MENU_BAR_MAX:
+                return kit.redirect("/more", BAR_FULL_TEXT)
+            bar.append(href)
+        elif action == "unpin":
+            bar.remove(href)
+        else:
+            at = bar.index(href)
+            to = at - 1 if action == "up" else at + 1
+            if 0 <= to < len(bar):
+                bar[at], bar[to] = bar[to], bar[at]
+        app.store.set_menu_bar(member, member.id, bar)
+        return kit.redirect("/more")
 
     # ----- personal settings ------------------------------------------------------
 
@@ -416,6 +464,94 @@ def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
     if admin:
         groups.append(("Admin", [("/dev", "Development", "Update or restart the server")]))
     return groups
+
+
+# ----- the menu bar (F28c, idea #144) ---------------------------------------------
+
+MAIN_PAGES = [
+    ("/", "Home", "Today, and what's waiting on you"),
+    ("/tasks", "Tasks", "Everything to do"),
+    ("/lists", "Lists", "Shopping and the other lists"),
+]
+DEFAULT_BAR = ("/", "/tasks", "/lists")
+BAR_FULL_TEXT = "The bar holds four pages, and More. Unpin one first, then pin this one."
+NOT_A_PAGE = "Only pages from the More page can go on the bar."
+# The bar's short names; pages not named here use their More-page label.
+BAR_LABELS = {
+    "/settings": "Settings",
+    "/week": "Week",
+    "/ai": "AI",
+    "/accounts": "Accounts",
+    "/knowledge": "Rules",
+    "/tiers": "Tiers",
+    "/maintenance": "Upkeep",
+    "/family": "Family",
+    "/dev": "Dev",
+}
+# Inline SVG paths (the CSP allows no inline styles; the stylesheet strokes them).
+BAR_ICONS = {
+    "/": "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
+    "/tasks": "m4 12 5 5L20 6",
+    "/lists": "M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01",
+    "/settings": "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
+    "/week": "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
+    "/ai": "M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6",
+    "/accounts": "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6",
+    "/knowledge": "M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h11",
+    "/tiers": "M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z",
+    "/maintenance": "M14 6a4 4 0 0 0 5 5L11 19a2 2 0 0 1-3-3l8-8a4 4 0 0 0-2-2z",
+    "/spending": "M12 3v18M17 7H10a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6H6",
+    "/safeway": "M3 4h3l2 11h11l2-8H7M10 20h.01M17 20h.01",
+    "/family": (
+        "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20c0-3 3-5 6-5s6 2 6 5"
+        "M16 5a3 3 0 0 1 0 6M18 15c2 1 3 3 3 5"
+    ),
+    "/dev": "m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14",
+}
+ICON_OTHER = "M12 12h.01M12 5h.01M12 19h.01"
+ICON_MORE = "M5 12h.01M12 12h.01M19 12h.01"
+
+
+def pinnable(member: Member) -> dict[str, str]:
+    """Every page this member can open that can go on the bar: path -> label. A part of a
+    page ("/accounts#household") can't; its page can."""
+    pages = {href: label for href, label, _ in MAIN_PAGES}
+    for _, links in more_groups(member):
+        pages.update({href: label for href, label, _ in links if "#" not in href})
+    return pages
+
+
+def bar_pages(member: Member) -> list[str]:
+    """The pages on this member's bar, in order: their choice, less any they can no longer
+    open (an admin page after the role changed)."""
+    pages = pinnable(member)
+    chosen = DEFAULT_BAR if member.menu_bar is None else member.menu_bar
+    return [href for href in chosen if href in pages]
+
+
+def _is_on(href: str, path: str) -> bool:
+    return path == href if href == "/" else path == href or path.startswith(f"{href}/")
+
+
+def menu_bar(member: Member, path: str) -> list[dict[str, Any]]:
+    """The bar for base.html: the member's pages and More, the one for `path` current
+    (More for any page not on the bar)."""
+    pages = pinnable(member)
+    items = [
+        {
+            "href": href,
+            "label": BAR_LABELS.get(href, pages[href]),
+            "icon": BAR_ICONS.get(href, ICON_OTHER),
+            "current": _is_on(href, path),
+            "dots": False,
+        }
+        for href in bar_pages(member)
+    ]
+    on_some = any(item["current"] for item in items)
+    items.append(
+        {"href": "/more", "label": "More", "icon": ICON_MORE, "current": not on_some, "dots": True}
+    )
+    return items
 
 
 def _parse_time(text: str) -> time:

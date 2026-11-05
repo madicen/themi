@@ -193,7 +193,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
-| F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [ ] |
+| F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
 
 ## Fixed technical choices
 
@@ -9524,15 +9524,15 @@ Notes (2026-11-05):
   The new `parse_amount`, run on their stored text there, gives none for those five and
   the same figure as before for the other ten. Those five rows still hold the old
   amounts. With no rewrite they will skew Kickstarter's "usual" for the next few emails,
-  upwards, so a big pledge is flagged less often. Clearing them is one UPDATE; ask
-  Michael first.
+  upwards, so a big pledge is flagged less often. Cleared on the Pi with Michael's
+  go-ahead (2026-11-05): `amount_cents` set to NULL for those five.
 - The 8 am alert and the escalation it caused stay as they are: "Mark confirmation
   emails as read" asks first until it's resumed (the button on that message, or the
   website).
 - Setup: restart. No migration.
 
 ### F28c · Idea (2026-11-05): choosing which pages are on the website's menu bar
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: W1
 Read first: W1's notes (the bottom bar and `/more`). From Michael's idea #144 (2026-11-04,
 10:30 pm, "allow swapping which items are on the primary menu of the website"). The bar
@@ -9552,3 +9552,23 @@ Tests: the default bar; pinning Spending puts it on the bar for that person only
 is refused, with a message; an admin page pinned and then the role lost isn't shown;
 unpinning brings back the order. A page test at 390px wide shows no sideways scroll with
 four items.
+
+Notes (2026-11-05):
+- `members.menu_bar` (0108): a JSON list of paths, NULL for the usual Home, Tasks, Lists.
+  `AccountStore.set_menu_bar(actor, member_id, pages)` lets only the member themselves
+  set it, takes at most `MENU_BAR_MAX` (4) pages, each once, and None resets it.
+- `site.pinnable(member)`: Home, Tasks, Lists and the More entries they can open, less
+  parts of pages (`/accounts#household`). `bar_pages` drops any they can no longer open.
+  `menu_bar(member, path)` (a template global) builds the bar for `base.html`. A page is
+  current when the path is it or under it, and More is current for every other page. Short
+  bar labels and inline SVG icons are in `BAR_LABELS` and `BAR_ICONS`.
+- `/more`: a quiet "Pin" beside each entry until the bar is full, and a "Your menu bar"
+  section at the end with ↑, ↓, Unpin and "Back to Home, Tasks and Lists". Home, Tasks or
+  Lists taken off the bar appear in a "Main" group at the top, so they stay a tap away.
+  `POST /more/bar` takes `action` (pin, unpin, up, down, reset) and `href`. Pinning a
+  page that isn't theirs to open answers 400. A fifth page is refused with a message.
+- Deviation: no automated check for sideways scroll. Checked by eye instead, with
+  headless Chrome on pages the test harness rendered: 390px with five tabs (Home, Tasks,
+  Lists, Spending, More) and the More page, and 1280px for the top bar. Tab labels can't
+  wrap, and are cut short if a long one ever doesn't fit.
+- Setup: restart (migration 0108 runs at start).

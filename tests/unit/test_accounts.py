@@ -96,6 +96,22 @@ def test_members_change_only_their_own_settings(family: SeededFamily) -> None:
         store.update_settings(family.erin, family.husband.id, daily_limit=1)
 
 
+def test_the_menu_bar_is_each_persons_own_and_holds_four(family: SeededFamily) -> None:
+    """F28c (idea #144)."""
+    store = family.store
+    assert family.erin.menu_bar is None  # the usual bar
+    erin = store.set_menu_bar(family.erin, family.erin.id, ["/", "/spending"])
+    assert erin.menu_bar == ("/", "/spending")
+    with pytest.raises(InvalidValue, match="4 pages"):
+        store.set_menu_bar(erin, erin.id, ["/", "/tasks", "/lists", "/week", "/ai"])
+    with pytest.raises(InvalidValue, match="once"):
+        store.set_menu_bar(erin, erin.id, ["/", "/"])
+    with pytest.raises(PermissionDenied):
+        store.set_menu_bar(erin, family.husband.id, ["/"])
+    assert store.set_menu_bar(erin, erin.id, None).menu_bar is None
+    assert store.get_member(family.husband.id).menu_bar is None
+
+
 @pytest.mark.parametrize(
     "change",
     [
