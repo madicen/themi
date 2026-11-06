@@ -194,6 +194,14 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
+| F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [ ] |
+| F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [ ] |
+| F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [ ] |
+| F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [ ] |
+| F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [ ] |
+| F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [ ] |
+| F29g | Idea: list items with sub-items, at any depth | Feedback | [ ] |
+| F29h | Idea: the family's own guides, such as the Instant Pot grain chart | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -9575,6 +9583,345 @@ Notes (2026-11-05):
   Lists, Spending, More) and the More page, and 1280px for the top bar. Tab labels can't
   wrap, and are cut short if a long one ever doesn't fit.
 - Setup: restart (migration 0108 runs at start).
+
+### F29a · Feedback (2026-11-05): an event's place, title and notes can be changed, on the copy they mean
+Status: [ ]
+Depends on: K3, F23c
+Read first: "Calendar" (the calendar tools and which calendars Themi writes to); the agent's
+`_honest` check (bugs #3, #5). From Michael's bug #158 (2026-11-05, 4:30 pm, "should be able
+to just edit the location of the event") and Erin's #154 (2:11 pm, "it crapped out on me at
+first"), #149 (11:26 am, "confirm that this exchange worked as expected") and idea #150
+(11:27 am, "make this setting (noting the actual event start time) the default").
+
+What the Pi shows:
+- No tool changes an event's location, title or description. `move_calendar_event` takes
+  only `event`, `on`, `date`, `start`, `end`, and its schema refuses anything else. Reply
+  275 (Erin, "set the location on the tutoring events to my parent's house", 28 s, "I got a
+  bit tangled up") tried `move_calendar_event` with `location`, then `add_calendar_event`
+  twice, `delete_calendar_event` twice, and gave up. Reply 285 (Michael, "set the location
+  ... to my in law's house") staged a delete of the family calendar's copy (action 497, his
+  account) and an add to his own calendar with a new title, "Tutor Gabriel" without
+  "(Illems)" (action 498). He said no to both.
+- Two copies with the same title and time (Erin's own, `themif0764a22a9e6`, and the family
+  calendar's, `...e10`, copied at 2:07 pm, action 490) made every later call fail with "More
+  than one event matches", and `on` can't tell them apart.
+- Two replies said it was done when nothing had changed. Reply 276, "Location updated to
+  your parent's house on the tutoring events", after all six calls failed or changed nothing.
+  Reply 258, "Updated the event description ... to note that the session starts at 4:00 PM",
+  after only a `move_calendar_event` to the same time it had already. `CLAIMS_DONE` has
+  no "updated" or "set", so `_honest` let both through.
+- Erin's rule 26 ("Note actual start time in description when adjusting calendar event
+  times") can't be kept: there's no description to write to.
+
+Build:
+- `move_calendar_event` becomes `change_calendar_event` (keep the old name as an alias for
+  one release, as other renames did): any of `date`, `start`, `end`, `location`, `title`,
+  `notes` (the description: `add` text or `replace` it), each '' for "leave it". Same
+  tiers as today: events Themi made change at once, others need a yes. The card says only
+  what changes ("Tutor Gabriel (Illems), Thu 5 Nov: location to 790 La Para Ave").
+- `calendar`: 'mine', 'family' or '' when there's only one match. When the same event
+  is on their calendar and the family calendar (same title and time), a change with
+  `calendar` '' goes to both, in one card, and says so. Themi copied one from the other,
+  so they're one event to the family. The same applies to `delete_calendar_event`.
+  "More than one" is left for real duplicates on one calendar, and names their calendars.
+- A copy Themi made (`calendar_write` with `source` "chat" from an existing event) remembers
+  the event it came from, so a later change finds both.
+- Set-up time is written down (idea #150, made the default): when a change moves an
+  event's start earlier and leaves its end, the description gets "Starts at 4:00 pm. The
+  time before it is set-up time." (one line, replaced if moved again). Per member setting,
+  on by default, on the website's calendar settings. Once this is live, rule 26 says what
+  Themi does anyway: say so in the Notes, and ask Erin before setting it aside.
+- `CLAIMS_DONE` gets "updated", "set to", "changed" in the "X updated" and "I've updated"
+  forms, so a claim with every call failed or declined is replaced as before. Test it on
+  replies 258 and 276 word for word.
+- A location that names a place they've told Themi about ("my parent's house", "my in-laws'")
+  is written as that address (F29e's place lookup). Otherwise as they said it.
+
+Tests: each a failing test first. A location change to a Themi-made event is done at once,
+and to another event staged, with the card naming only the change. A change with copies on
+their calendar and the family's changes both. Notes added and replaced. An earlier start
+writes the set-up line, and the setting off doesn't. Replies 258 and 276 are replaced by
+the plain "nothing has changed" text. The old tool name still works.
+Scenario: bug #158. An event on Erin's calendar and its family copy; Michael asks to set
+the location to the in-laws' house. One card, both copies changed, title kept.
+
+Setup after deploying: none. Data (Michael decides): action 497 is snoozed and still
+deletes the family copy if it's ever tapped; decline it. The 5 Nov event's location was
+never set (it's past now). Mark #149, #150, #154 (with F29e) and #158 reviewed once live.
+
+### F29b · Feedback (2026-11-05): an emailed invitation already on the calendar isn't added again
+Status: [ ]
+Depends on: 23, K3
+Read first: "Gmail triage" (events from emails); F26b (an email thread's approvals). From
+Michael's bug #159 (2026-11-05, 5:10 pm, "this created duplicate events on the calendar").
+
+What the Pi shows: a Google Calendar invitation for Mon 9 Nov, 12-2:30 pm ("Samuel | Craig,
+Gina, and 2 more people") went to both michael@madicen.com and erin@madicen.com. Each email
+(984, 987) has an `invite.ics` attachment (`text/calendar`). Triage made a
+`calendar_from_email` card for each of them. Erin tapped Go ahead at 4:23 pm; Michael at
+4:55 pm. Michael's calendar now has the invitation's own event (`nnu27n4oq4noqi61747s4hoge4`)
+and Themi's copy (`themif0764a22a9e13`), same title and time. Erin's has only Themi's copy,
+since the invite was sent to her madicen.com address, not the Google account Themi reads.
+
+Build:
+- Before staging a `calendar_from_email` card, and again when it runs (the card can wait
+  hours, and accepting the invite in Gmail adds the event), look for an event on that
+  member's calendars with the same start and a title that matches (the
+  `add_calendar_event` "Already on your calendar" check). If one is found, there's no card,
+  or the tapped card says "Already on your calendar, from the invitation. Nothing new was
+  added." and does nothing.
+- An email with a `text/calendar` part sent to an address whose calendar Themi reads is
+  an invitation Google has already added. Its card offers only "mark as read", not an add.
+  Sent to an address Themi can't see the calendar of (Erin's madicen.com), the add stays,
+  and the card says the invitation was sent to that address.
+- Both partners invited to the same event (same `.ics` UID, or same title and start) get
+  one card between them: "Both of you are invited", with the add going to the family
+  calendar if either says yes. This follows F26b's grouping if F26b is done by then.
+
+Tests: each a failing test first. An invitation already on their calendar gives no add
+card. A card tapped after the event appeared adds nothing and says so. An invitation to an
+unread address keeps the add. The same invitation to both partners gives one card.
+Scenario: bug #159, both invitation emails, each partner's taps, one event each in the end.
+
+Data (Michael decides): delete Themi's copy `themif0764a22a9e13` from his calendar, or ask
+Themi to once F29a is live. Mark #159 reviewed once live.
+
+### F29c · Feedback (2026-11-05): "tell her urgently" sends a waiting note now, and a held note offers to
+Status: [ ]
+Depends on: 34a, F22d
+Read first: "Liaison"; prompt 34a's notes (relays and urgency). From Michael's bug #155
+(2026-11-05, 2:58 pm, "telling urgently should get a different sort of response") and idea
+#156 (4:10 pm, "if a note won't be delivered because of quiet or busy time, add an option
+to the confirmation message to send urgently").
+
+What the Pi shows: reply 280 relayed "You're amazing and I'm really glad to be married to
+you" as `whenever` (note 2, "likely tomorrow around 8 am"). "Tell her urgently" (reply
+281) called `relay_to_partner` again with `urgent` and the same text. `_same_note` found
+note 2 waiting and declined ("it wasn't sent twice"), and the reply became
+`NOTHING_CHANGED_TEXT`. Note 2 is still waiting. At 3:57 pm he sent a new one as urgent,
+which went at once.
+
+Build:
+- The same note, still waiting, sent again with a more urgent urgency changes the waiting
+  one: its urgency and timing are raised, and the outbox row is resent at the new time (now,
+  for urgent). The reply says "Sent it to Erin now." Not a second note. A less urgent one
+  changes nothing, as today.
+- "Urgently", "now", "right away" after a note held for later, with no new text, mean
+  that note (the agent sees the last held note in the tool's result, so the model can
+  call it with the same text).
+- Idea #156: the confirmation of a note held for quiet hours, busy time or the daily limit
+  gets one button, "Send now", which does the same. Urgent bypasses still follow the
+  outbox's rules for urgent (burnout mode's holds, F22d, still apply, and the button isn't
+  there then). The button goes once the note has gone.
+- The reply text says why it's held, once ("Erin's in quiet hours until 8 am").
+
+Tests: each a failing test first. The same note sent again as urgent goes now, with one row in
+`liaison_items`. Less urgent changes nothing. The button sends it, and is gone after.
+No button in burnout mode. The text names the reason.
+Scenario: bug #155, the note at 2:58 pm, "Tell her urgently", Erin gets it at once.
+
+Data: note 2 to Erin may still be waiting; leave it. Mark #155 and #156 reviewed once live.
+
+### F29d · Feedback (2026-11-05): a card is the whole answer, and a corrected request replaces its card
+Status: [ ]
+Depends on: F21a, F21b
+Read first: F21a's and F21b's notes (Themi's own confirmation ends the turn; a reply that
+repeats the card). From Erin's bug #157 (2026-11-05, 4:25 pm, "there is no need for two
+separate confirmation messages").
+
+What the Pi shows: "add another tutoring session with Gabriel next Thurs at 4pm" (reply
+283) sent the approval card "Tutor Gabriel, Thu 12 Nov, 4-5 pm (at Parent's house), for
+your calendar / Go ahead, or not now?" and then the model's "Staged for your calendar:
+Tutor Gabriel, Thu 12 Nov, 4–5 pm at Parent's house. Go ahead, or not now?" `_repeats_card`
+missed it: the "Staged for your calendar:" prefix, the en dash and the missing parentheses.
+Same again at 4:25 pm (reply 284). Also, the corrected card (action 496, 4-4:55, with
+"(Illems)") didn't replace the first (action 495, 4-5 pm, still `pending` on the Pi).
+`replace_waiting` didn't match it because the title changed.
+
+Build:
+- A tool round where every call staged a card, and nothing else ran, ends the turn with
+  no model text, as F21a's done adds do. Not when the model's text asks a question the
+  card doesn't ("Which calendar?") or a call failed.
+- `_repeats_card` compares words only: punctuation and dashes dropped, "staged",
+  "staged for", "waiting for a yes" and the card's question dropped, before comparing.
+- A new add staged in the same conversation within 10 minutes, on the same date with an
+  overlapping time, replaces the card it corrects: the old card is edited to "Replaced by
+  the one below." and its action is declined by `system`. That holds for a changed title or
+  length too, not only the exact payload `replace_waiting` matches today.
+
+Tests: each a failing test first. Reply 283's text is dropped, word for word. A card with a
+question the card doesn't ask keeps it. The corrected add declines the first and edits its
+card. Two different events the same evening are both kept.
+Scenario: bug #157, the request, the correction, one card left, one message each time.
+
+Data: decline action 495 on the Pi (it's for an event that's now on the calendar as 496), or
+let it expire on the 12th. Mark #157 reviewed once live.
+
+### F29e · Feedback (2026-11-05): drive time to a place they've named, and a private calendar isn't an empty one
+Status: [ ]
+Depends on: K1, K4b, F22a
+Read first: "Calendars" (K1's privacy, K4b's notes); F22a's notes (asking about your partner). From
+Erin's bug #154 (2026-11-05, 2:11 pm, "then gave a bad answer to the travel time, then gave
+the right one"), and what Michael heard at 1:14 pm in #155's thread.
+
+What the Pi shows:
+- "When should we leave the house ... for tutoring?" (reply 277) found the event without a
+  location, remembered "Parent's house is the location for tutoring events" (fact 4), then
+  called `drive_time` with address "parent's house". The geocoder found a place called
+  that near Oroville (39.437, -121.593, cached in `geocodes` as "parent's house" and
+  "parents house"): 3 hr 20 min, "Leave at 12:10 PM". Fact 3 says "Erin's parents' address
+  is 790 La Para Ave, Palo Alto", and the 29 Oct tutoring event has that address.
+- Michael asked "How long will it take to get to our tutoring appointment today? ... It's on
+  Erin's calendar". `drive_time` found nothing of his. `day_summary` for Erin listed only
+  tasks, because she keeps calendar details private, and the model said "Erin has no
+  calendar events today." She had the tutoring session.
+
+Build:
+- `drive_time` and event locations resolve a named place before geocoding: "my parents'",
+  "my parent's house", "the in-laws'", "grandma's", "home", "work" are looked up in facts
+  (an address in a fact about that place, either spelling, either partner's wording: Erin's
+  parents are Michael's in-laws). Found: that address, and the result names it. Not found: no
+  geocode. The tool says "Not sure where 'parent's house' is; ask for the address once, and
+  remember_fact it."
+- The geocoder's answer for a phrase with no street number or town is used only if it's
+  within 100 km of home. Further than that, the tool asks to check the address first,
+  naming the town it found.
+- Delete the two cached "parent's house" rows on deploy (a migration that removes
+  `geocodes` rows for phrases with no digit and no comma).
+- A partner's private calendar: `day_summary` for them says "Erin keeps her calendar
+  private, so her events aren't shown; she may have some", and never "no events".
+  `drive_time` for "our"/"her" event can use the partner's event for timing and place
+  without showing its title, when that partner's calendar details are private: "For
+  Erin's 3:30 pm event: leave at 2:50 pm." (only its time and drive, the same as busy
+  times show today). Check the plan's privacy section allows the time; if not, say "It's
+  on Erin's calendar; she can ask, or share it to the family calendar."
+
+Tests: each a failing test first. "parent's house" with fact 3 gives the Palo Alto drive, and
+without it, the question and no geocode. A far geocode is checked. The migration drops the
+two rows. The private partner summary's line, and the model's "no events" isn't possible
+from it (an eval line). The partner's event for timing, if the plan allows it.
+Scenario: bug #154, "when should we leave for tutoring?" with the event's location as
+"Parent's house": leave at 2:50 pm, the first time.
+
+Setup after deploying: the migration. Mark #154 reviewed with F29a once both are live.
+
+### F29f · Feedback (2026-11-05): "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine
+Status: [ ]
+Depends on: F21a, F22a, C3
+Read first: F21a's notes (list adds); F22a's notes (asking for your partner); "Routines" on the
+wall. From Erin's bug #151 (2026-11-05, 11:35 am, "'add' was not meant to go on the list,
+it was a direction for Themi") and Michael's #147 (8:55 am, "created a routine when that has
+nothing to do with what I asked").
+
+What the Pi shows:
+- "Add body double, move from room to room to service dog tasks" (reply 264): `add_to_list`
+  with items `["Add body double, move from room to room"]` (action 483). The model kept
+  the verb.
+- "What tasks from Erin could I take to make her day easier?" (reply 249, groups core,
+  calendar, email, schedules): the model asked for the wall tools and staged
+  `add_to_wall_routine` "Erin's tasks", Morning, every day, `task_id` 0 (action 473), then a
+  day summary for Erin. He wanted her open tasks he could do, and a way to take one.
+
+Build:
+- `add_to_list`: an item that starts with "add"/"put" when their message starts with that
+  same word, followed by the item, loses the word ("Add milk to groceries" → "milk"). The
+  same check as F21a's "as they asked" words: only when the item is in their message.
+- `add_to_wall_routine` refuses when their message has none of "routine", "morning",
+  "afternoon", "evening", "tonight", "every day", or when `task_id` is 0 and the title
+  names a person ("Erin's tasks"). The refusal tells the model to answer with tasks
+  instead (the MAKE_TIME pattern, F23c).
+- "Tasks of Erin's I could take / do for her / help with" is F22a's partner question with
+  a hand-over. The answer lists her open tasks that aren't private and can be moved (not
+  ones only she can do, by the task's own settings), with a "Take it" button on each, at
+  most five. A tap reassigns the task to him through `update_task` (its tier as today) and
+  tells Erin once, gently, at a good time ("Michael took Put the laundry away"). Add this
+  to the routing words so the core or schedules group is enough, not the wall's.
+
+Tests: each a failing test first. Reply 264's request adds "body double, move from room to
+room". "Add Add-ons to the list" style edge: an item whose own text starts with "add" and
+isn't a verb in their message is kept. `add_to_wall_routine` refused for reply 249's call.
+The take-a-task answer and its buttons, a tap reassigning and Erin's notice.
+Scenario: bug #147, Michael asks, taps "Take it" on the laundry, Erin hears at 8 am.
+
+Data: none (action 473 was declined; Erin fixed the list by hand). Mark #147 and #151
+reviewed once live.
+
+### F29g · Idea (2026-11-05): list items with sub-items, at any depth
+Status: [ ]
+Depends on: L1a, L1b, F21a
+Read first: "Lists" (the plan's list model and the wall's lists); L1a's and L1b's notes (Themi's lists and the
+wall's). From Erin's bug #152 (2026-11-05, 11:44 am) and idea #153 (11:54 am), both quoted
+in full in `themi feedback`.
+
+What the Pi shows: Erin wanted "Service dog tasks / - body doubling / -- go upstairs / --
+go downstairs". The model tried `update_task` with steps (no such task), then stored one
+item, "body doubling: go upstairs, go downstairs". She locked in rules 27 and 28 ("Format
+tasks with indented subtasks using double dashes") to get the look. Those rules only
+change the model's words, so the next reply (271) was garbled ("- body doubling / Up
+next:"). Lists are flat, and the model has no way to nest.
+
+Erin's spec (#153): any depth; shown with one dash per level by default, and the marks
+customizable; "add a sub item under cat food" finds "cat food" wherever it is and adds one
+level below it, even when "cat food" is already a sub-item. Themi keeps lists and tasks
+apart inside, but what people call them varies ("items" and "tasks" both), so the context
+decides which one they mean, not the word.
+
+Build:
+- `list_items.parent_id` (nullable, same list, on delete cascade) and `position`. A
+  migration, existing items at the top level.
+- `add_to_list` takes `under` (words from an existing item). The item goes one level below
+  that one, at the end. Ambiguous `under` asks which, naming each one's parent. Several
+  levels in one go: items written with leading dashes in their message ("- body doubling /
+  -- go upstairs") keep that shape.
+- `show_lists` renders the tree: one dash per level by default ("- ", "-- ", "--- "), from
+  a per-member setting (dashes, indented bullets, numbers) on the website's list page. The
+  reply is Themi's own text, as F21a's list replies are, so the model can't reformat it.
+- Ticking or removing an item does its sub-items too, and says how many. Moving an item
+  ("put go upstairs under body doubling") is `move_list_item`.
+- The wall (Cozyla) and OurGroceries have flat lists. A nested list pushed there is
+  flattened as "body doubling: go upstairs" lines, or kept off the wall: check the L1b
+  sync and choose the one that doesn't break the two-way sync, and say which in the Notes.
+- Items or tasks: tool descriptions for `add_to_list`, `add_task` and `update_task` say
+  "people call list items tasks and tasks items; a named list means a list item, a due
+  date or a person means a task". When a named list exists, "add a task to <list>" is a
+  list item. A routing eval with Erin's wordings from 5 Nov.
+- Once live, rules 27 and 28 say what Themi now does. Ask Erin before setting them aside.
+
+Tests: the migration; add under at each depth; "a sub item under cat food" where cat food is
+a sub-item makes a third level; an ambiguous `under`; rendering in each style; ticking a
+parent; the wall's flattening (or exclusion); the routing eval.
+Scenario: Erin builds the service dog list from bug #152's messages and sees it in her
+format.
+
+Setup after deploying: the migration. Mark #152 and #153 reviewed once live.
+
+### F29h · Idea (2026-11-05): the family's own guides, such as the Instant Pot grain chart
+Status: [ ]
+Depends on: 14, 27
+Read first: "Memory" (facts and their search); prompt 27's notes (meal suggestions); "Security
+and privacy" (outside text is data). From Erin's idea #148 (2026-11-05, 9:25 am, "Themi
+should have access to our instant pot grain cooking guide").
+
+Not known yet: where the guide lives (a photo, a PDF, a printed sheet, a web page). Ask
+Erin before building: the build below takes any of them.
+
+Build:
+- A guide is a named document the family gives Themi: a photo or PDF sent in chat with
+  "save this as our <name> guide", or a file uploaded on a new website page, Guides.
+  Photos and PDFs are read once into text (the router's vision path); the text and the
+  original are kept, encrypted at rest like other files.
+- `look_up_guide` (core group, a lookup): finds the guide by name or topic and returns the
+  relevant part inside a `<data source="guide: ...">` block. Answers cite it ("From your
+  Instant Pot guide: brown rice, 22 min high pressure, 10 min natural release").
+- Guides are family-wide by default; one can be marked just for its owner.
+- Meal suggestions (prompt 27) may use a guide's cooking times when one fits.
+
+Tests: saving from a photo (a fake vision answer) and from a PDF; the lookup by topic; the
+answer citing it; a guide's text containing instructions is data, not followed; a private
+guide not found by the partner.
+Scenario: Erin sends a photo of the grain chart, then asks "how long for quinoa?"
+
+Mark #148 reviewed once live.
 
 ## Conversation mode
 
