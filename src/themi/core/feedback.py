@@ -153,6 +153,10 @@ def _item_lines(item: FeedbackItem) -> list[str]:
         for n, call in enumerate(reply.get("calls", []), 1):
             said = call["result"].replace("\n", " ")
             lines.append(f"{n}. {call['name']} {call['arguments']} → {said}")
+        for shaped in reply.get("shaped", []):
+            before = shaped["before"].replace("\n", " ")
+            after = shaped["after"].replace("\n", " ")
+            lines.append(f'Gentle phrasing changed "{before}" to "{after}".')
     if ctx.get("conversation"):
         lines += ["", "**Recent conversation:**", "", "```"]
         for m in ctx["conversation"]:
@@ -292,8 +296,14 @@ class FeedbackChat:
             "SELECT name, arguments, result FROM reply_tools WHERE reply_id = ? ORDER BY id",
             (reply.id,),
         )
+        shaped = db.query(  # F30b: what the gentle-phrasing shield changed, before and after
+            "SELECT text, sent_text FROM outbox WHERE reply_id = ? AND sent_text IS NOT NULL "
+            "AND sent_text != text ORDER BY id",
+            (reply.id,),
+        )
         return {
             "id": reply.id,
+            "shaped": [{"before": r["text"], "after": r["sent_text"]} for r in shaped],
             "tools": list(reply.tools),
             "calls": [c for c in calls if c["arguments"] is not None],
             "groups": None if reply.groups is None else list(reply.groups),
