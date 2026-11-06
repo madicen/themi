@@ -19,8 +19,10 @@ import re
 import threading
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from email import message_from_bytes
+from email.message import EmailMessage
+from email.utils import format_datetime
 from itertools import count
 from typing import Any
 
@@ -311,6 +313,9 @@ class FakeGmail(Snapshots):
         message = box.messages.get(mid)
         if message is None:
             return _error(404, "NOT_FOUND", "Requested entity was not found.")
+        if request.query_params.get("format") == "raw":  # F31d: forwarding
+            raw = base64.urlsafe_b64encode(_raw(message)).decode("ascii")
+            return JSONResponse({"id": message.id, "threadId": message.thread_id, "raw": raw})
         return JSONResponse(self._resource(message, box))
 
     async def _history(self, request: Request) -> JSONResponse:
@@ -395,15 +400,66 @@ class FakeGmail(Snapshots):
         raw = base64.urlsafe_b64decode(body["raw"] + "=" * (-len(body["raw"]) % 4))
         parsed = message_from_bytes(raw)
         gid = f"s{next(self._ids):05d}"
+        text = next(
+            (p for p in parsed.walk() if p.get_content_type() == "text/plain"), parsed
+        )  # a multipart one (a forward, F31d) is read by its text part
         box.sent.append(
             {
                 "id": gid,
                 "threadId": body.get("threadId"),
                 "headers": dict(parsed.items()),
-                "body": parsed.get_payload(decode=True).decode().strip(),  # type: ignore[union-attr]
+                "body": text.get_payload(decode=True).decode().strip(),  # type: ignore[union-attr]
+                "html": next(
+                    (
+                        p.get_payload(decode=True).decode()  # type: ignore[union-attr]
+                        for p in parsed.walk()
+                        if p.get_content_type() == "text/html"
+                    ),
+                    None,
+                ),
+                "attachments": [
+                    (p.get_filename(), p.get_content_type(), len(p.get_payload(decode=True)))  # type: ignore[arg-type]
+                    for p in parsed.walk()
+                    if p.get_filename()
+                ],
             }
         )
         return JSONResponse({"id": gid, "threadId": body.get("threadId"), "labelIds": ["SENT"]})
+
+
+def _raw(m: _Message) -> bytes:
+    """The message as Gmail's `format=raw` gives it: its headers, bodies and attachments
+    (each attachment's bytes are filler of its size)."""
+    payload = m.payload
+    headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+    parts = payload.get("parts") or [payload]
+    flat: list[dict[str, Any]] = []
+    for part in parts:
+        flat.extend(part.get("parts") or [part])
+    message = EmailMessage()
+    for name, value in headers.items():
+        message[name] = value
+    message["Date"] = format_datetime(datetime.fromtimestamp(m.internal_ms / 1000, UTC))
+    text = next((p for p in flat if p["mimeType"] == "text/plain"), None)
+    html = next((p for p in flat if p["mimeType"] == "text/html"), None)
+
+    def decoded(part: dict[str, Any]) -> str:
+        data = part["body"]["data"]
+        return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode()
+
+    message.set_content(decoded(text) if text else "")
+    if html:
+        message.add_alternative(decoded(html), subtype="html")
+    for part in flat:
+        if part.get("filename"):
+            main, sub = part["mimeType"].split("/", 1)
+            message.add_attachment(
+                b"x" * int(part["body"]["size"]),
+                maintype=main,
+                subtype=sub,
+                filename=part["filename"],
+            )
+    return bytes(message)
 
 
 def _error(status: int, reason: str, message: str) -> JSONResponse:

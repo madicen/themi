@@ -38,6 +38,7 @@ from themi.connectors.search import SearchBackend
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
+from themi.core import email_forward
 from themi.core.agent import Agent
 from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
@@ -195,6 +196,7 @@ def build_app(
         services.gmail = GmailSync(store, services.google, outbox)
         install_executors(services.autonomy.executors, services.gmail)
         EmailTriage(services, services.gmail).install()
+        email_forward.install(services)  # F31d
         SenderSuggestions(services).install()
         ExpectedEmails(services, services.gmail).install()
         NoiseDigest(services, approvals, services.gmail).install()

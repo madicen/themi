@@ -26,6 +26,7 @@ CAPPED = {
     "habit_trial",
     "chore_step_up",  # F6b: Themi never changes a chore's schedule on its own
     "calendar_event_change",  # K3: another's event is never changed without a yes
+    "email_forward",  # F31d: sends as the person, so it always asks
 }
 CAN_BE_AUTOMATIC = {
     "email_mark_read",

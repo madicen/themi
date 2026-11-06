@@ -184,7 +184,7 @@ class CozylaRoutines:
             return ""
         whose = self.board.whose_list(task)
         await self.board.cancel(task_id, ctx.member)
-        return f" Task {task_id} ({task.title}) is closed and off {whose}: it's this item now."
+        return f" The task is closed and off {whose}: it's this item now."
 
     async def _order(self, member: str, part: str, position: str) -> tuple[float | None, str]:
         """The displayOrder that puts it there (bug #38), and the words for where; None for
@@ -612,7 +612,14 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     asked = "routine" in said and (
         all(w in said for w in words) or (moved is not None and bool(MOVED.search(said)))
     )
-    instead = f", in place of task {moved.id} ({moved.title})" if moved else ""
+    instead = ""
+    if moved is not None:  # F31b (bug #166): named by its title, never its number
+        same = name_key(moved.title) == name_key(title)
+        instead = (
+            f", moved from {board_list(ctx, moved)}"
+            if same
+            else f", in place of the task {moved.title}"
+        )
     proposal = Proposal(
         ADD_CATEGORY,
         f"{title} for the {str(args['part']).lower()} routine{when}{instead}",
@@ -627,6 +634,11 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         },
     )
     return replace(proposal, requested=asked)
+
+
+def board_list(ctx: ToolContext, task: Task) -> str:
+    board = ctx.services.taskboard
+    return board.whose_list(task) if board is not None else "its list"
 
 
 def _moved_task(ctx: ToolContext, task_id: int, title: str, said: str) -> Task | None:

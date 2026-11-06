@@ -207,6 +207,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
 | F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
 | F30d | Idea: Themi looks things up online | Feedback | [x] 2026-11-06 |
+| F31a | Feedback: an untick on the wall stays unticked | Feedback | [x] 2026-11-06 |
+| F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
+| F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
+| F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10409,6 +10413,312 @@ Notes (2026-11-06):
   then restart `themi run` (migration 0116). For Firecrawl instead: `FIRECRAWL_API_KEY`,
   and `THEMI_SEARCH_BACKEND=firecrawl` if both are set.
 
+### F31a · Feedback (2026-11-06): an untick on the wall stays unticked
+Status: [x] 2026-11-06
+Depends on: R1b, F23b
+Read first: R1b's notes (ticks both ways); F23b's notes (a check follows ticks made on the
+wall); C3's and C2b's notes (check-ins and chores on the wall). From Michael's bug #169
+(2026-11-06, 9:23 am, "unchecking items from the wall calendar doesn't remain").
+
+What the Pi shows: "Cycle Dishwasher" (routine item 2, Michael's) was ticked on the wall at
+1:32 am, and the wall recorded it for Fri 06 Nov (`routine_ticks`: item 2, 2026-11-06,
+09:32 UTC). Themi praised it at 1:33 am ("Ticked off on the wall: Cycle Dishwasher"). That
+morning Michael unticked it, and it came back. `RoutinesWall._ticks`
+(`themi/core/routines_wall.py`, the `elif ticked and ... not in done_on_wall` branch) can't
+tell "Themi's tick hasn't reached the wall yet" from "someone unticked it on the wall". It
+ticks the wall again at every 5-minute sync. Nothing in Themi ever removes a routine tick.
+The wall's to-do list already gets this right: an untick reopens the task
+(`cozyla_todos.py`, `before.completed and not todo.completed`). Chores tick the wall only
+once (`_first_time`), so they don't come back, but Themi still counts them as done.
+
+Build:
+- Migration: `routine_ticks.on_wall_at` (NULL until the wall has shown the tick, or Themi
+  sent it and the wall took it). Set it when the wall's record shows the item done, and when
+  `on_tick` or the sync's push succeeds.
+- `_ticks`: ticked in Themi, not done on the wall, and `on_wall_at` is NULL: send it (as
+  now). Ticked in Themi, not done on the wall, and `on_wall_at` set: it was unticked
+  there, so remove Themi's tick for that day (`Routines.untick`, new). No message, no
+  praise. The routine's evening check counts it as open again.
+- `Routines.untick(item, day)` also undoes what the tick fed (F23b's check-ins follow it;
+  the energy signal from a routine done is taken back if it was counted).
+- Check-ins on the wall (C3, `cozyla_routines._ticks_from_wall`) and chores (C2b): a round
+  completed from a wall tick, unticked on the wall the same day, reopens that round
+  (`TaskBoard.reopen`, or an undo of the last `task_runs` row if reopen doesn't cover
+  repeating tasks). Rounds done in Themi (chat, a button) aren't undone by the wall
+  missing a tick. They're re-sent once, as now. If undoing a repeating round needs more
+  than a small change, leave check-ins and chores, and write it in the Notes as a
+  follow-up.
+
+Tests: each a failing test first. Bug #169: an item ticked on the wall, then unticked
+there; after the next sync it's unticked in Themi and the wall isn't ticked again. A tick
+made in Themi that didn't reach the wall (Cozyla error) is still sent at the next sync. An
+untick sends no message. A check-in round ticked and unticked on the wall is open again
+(or, if left out, a test pinning today's behaviour, with the Notes saying so).
+Scenario: Michael ticks "Cycle Dishwasher" on the wall at night, unticks it in the morning,
+and the evening check lists it as still open.
+
+Data: none. Michael can untick "Cycle Dishwasher" once this is live. Mark #169 reviewed once
+live.
+
+Notes (2026-11-06):
+- Migration 0117: `routine_ticks.on_wall_at`. `Routines.mark_on_wall` sets it when the
+  wall shows the tick, or when Themi's tick reached the wall (`on_tick`, or the sync). In
+  `RoutinesWall._ticks`, a tick Themi has that the wall had and doesn't any more is
+  removed (`Routines.untick`), and the day's check is edited to show it open again (no
+  new message, no praise). A tick that never reached the wall is still sent.
+- Energy: a routine's lift or dip is only recorded at its check, so an untick before the
+  check needs no undo.
+- Left out: check-ins (C3) and chores (C2b) unticked on the wall. `TaskBoard.reopen` covers
+  only one-off tasks; undoing a repeating round (its run, due date, chart and praise) is
+  more than a small change. `test_a_check_in_unticked_on_the_wall_isnt_ticked_again` pins
+  today's behaviour: the round stays done in Themi and the wall isn't ticked again.
+  Follow-up if the family notices.
+- Ticks from before this release have no `on_wall_at`, so one that's unticked on the
+  wall now is sent once more and then sticks. Untick "Cycle Dishwasher" again after the
+  update.
+- Setup: restart `themi run` (migration 0117).
+
+### F31b · Feedback (2026-11-06): a card after a retried call is the whole answer, and no task numbers in what people read
+Status: [x] 2026-11-06
+Depends on: F29d, F23e, F29c
+Read first: F29d's notes (a card is the whole answer); F23e's notes (a task moved into a
+routine); F29c's notes ("Send now"). From Michael's bug #166 (2026-11-06, 7:29 am, "we gotta
+stop with this double message thing. Just the card was fine (but stop referring to tasks by
+number when communicating to users)").
+
+What the Pi shows:
+- 7:28 am (reply 307): "I'll handle the vacuum's water. Can you move it to my chores?" The
+  first `add_to_wall_routine` call failed ("Invalid arguments: Additional properties are not
+  allowed ('job' was unexpected)"). The model called it again without `job`, and that call
+  staged action 508. F29d keeps the model's words when "a call failed", so the card was
+  followed by "'Refill the vacuum's clean water' is staged to move to your evening routine
+  for tonight, and 'Refill the vacuum's clean water' will close."
+- The card read "... just today, in place of task 80 (Refill the vacuum's clean water)", and
+  its done line "Task 80 (Refill the vacuum's clean water) is closed and off both lists".
+  Those come from `cozyla_routines.py` (`instead = ", in place of task ..."` and
+  `" Task {task_id} ({task.title}) is closed and off ..."`).
+- Also in this report's thread (12:10-12:11 am): Michael's note to Erin, "today" urgency,
+  was sent at once with [Send now], and Erin got "Urgent, from Michael: The new version
+  with web searching is out now". `Liaison.on_send_now` hurries the note as `"urgent"`, so
+  `liaison.py`'s label says "Urgent". Michael didn't call it urgent.
+- And at 8:43 am, the email audit ended with "Marked done: Email audit (1 to look at)".
+  The count in the title was stale, since all 8 were sorted.
+
+Build:
+- F29d's rule: a call that failed on its arguments ("Invalid arguments", the schema check)
+  and was followed in the same turn by a call of the same tool that succeeded is a retry,
+  not a failure. A turn of cards and retried calls ends with the cards alone. A failure
+  that wasn't retried keeps the model's words, as now.
+- What people read never names a task by number: card summaries (`pending_actions.summary`),
+  executor results shown on cards, and messages. A task is named by its title. Fix the two
+  in `cozyla_routines.py` ("in place of Refill the vacuum's clean water", "That task is
+  closed and off both lists: it's this item now."), and find any others. Tool results the
+  model reads can keep numbers. Those are for the model, and it's told not to repeat them.
+- A guard in the scenario harness: any message, card or edit sent to a person matching
+  `\btask \d+\b` (case-insensitive) fails the scenario. This catches the next one.
+- "Send now" sends the note now, past quiet hours and the daily limit as it does today, but
+  the label is the urgency it was sent with: "From Michael: ...". Only a note sent as urgent
+  says "Urgent, from".
+- A counted title ("Email audit (12 to look at)") drops its count in the line that marks it
+  done: "Marked done: Email audit."
+
+Tests: each a failing test first. Reply 307's two calls, in order: only the card is sent.
+A failure that isn't retried still keeps the model's line. The routine card and its done
+line name the task by title. The harness guard fails a scenario that sends "task 80". [Send
+now] on a "today" note delivers "From Michael: ...". The email audit's done line has no
+count.
+Scenario: bug #166, "move it to my chores", one card, Go ahead, a done line with no number.
+
+Data: none. Mark #166 reviewed once live.
+
+Notes (2026-11-06):
+- `agent._counted_calls`: F29d's "every call made a card" leaves out a call refused with
+  "Invalid arguments" that the same tool then did successfully in the same turn, and
+  `more_tools` (it only offers tools, and often runs before the call that stages). A
+  refusal on its sense ("There's no task with that number") still counts as a failure.
+- `cozyla_routines`: a moved task is named by its title. Same title as the item: ", moved
+  from Erin's list"; otherwise ", in place of the task <title>". The done line says "The
+  task is closed and off ...".
+- The scenario harness (`scenario` fixture teardown) fails a scenario whose messages or
+  edits match `\btask\s+#?\d+\b`. With the routine fix, all 993 scenarios pass it, so
+  the other "Task N" strings in the code are tool results only. The model's own replies
+  were already rewritten by name (bug #71's `_by_name`).
+- `Liaison.hurry` takes a `label`. "Send now" sends at urgent timing, labelled with the
+  note's own urgency. `test_idea_156_send_now_sends_a_held_note` expected "Urgent, from"
+  and was changed.
+- The email audit's task is retitled "Email audit" in its row just before it's marked
+  done (`_done_task`), so the line is "Marked done: Email audit. Thank you."
+- Setup: restart `themi run`. No migration.
+
+### F31c · Idea (2026-11-06): web searches near home, and a different place isn't the one asked for
+Status: [x] 2026-11-06
+Depends on: F30d, F29e
+Read first: F30d's notes (the search tools, the privacy check); F29e's notes (places
+they've named); `Travel.home()` (`family_home`). From Michael's idea #165 (2026-11-06, 12:18
+am, "searching the web should default our location to our house if a location is required
+for searching"), and what bug #169's thread shows at 9:13 am.
+
+What the Pi shows:
+- 12:12 am (replies 300-301): "Can you find the phone number for Contemporary Dental?" Themi
+  searched "Contemporary Dental phone number" and "Contemporary Dental near me". Tavily
+  doesn't know where "me" is, and gave Texas and North Carolina. Themi asked "Which city or
+  area?" twice, even after "The closest to our house". The family home is set (`family_home`:
+  "2541 Betlo Ave Mountain View CA 94043").
+- 12:13 am (reply 302): "Contemporary Dental Mountain View CA phone number" returned My CC
+  Dentistry (Young Jun Chang, DDS). Themi answered with its number as though it were the
+  practice asked for.
+- 12:14 am (reply 304): "Contemporary Dental San Mateo CA phone number" returned the Texas
+  company's page first. Themi said there's no such practice in San Mateo. Only the street
+  address found it (reply 305, a WebMD page: Contemporary Dental, 105 37th Ave, (650)
+  557-2636).
+- 12:15 am (reply 306): "update the task to call their office to include the phone number".
+  `update_task` on task 79 put 650-557-2636, Contemporary Dental's number, on the step "Call
+  Dr. Scheinbach to check if he's still practicing". That's a wrong fact in a task. Dr.
+  Scheinbach's number was never found.
+- 9:13 am (replies 310-311): "search for dentists near our home" searched "dentists near
+  home", then asked for an address or ZIP code.
+
+Decided with Michael (idea #165, 2026-11-06): the family home's city and ZIP may go into a
+search for places near them. The street and number never do. This loosens F30d's "no
+addresses from Themi's memory" for that one case.
+
+Build:
+- `search_web`: when the query is for a place or business and names no place (no city, ZIP
+  or address in the query), or their message says "near me", "near us", "near home",
+  "nearby", "closest" or "local", the home's city, state and ZIP are added ("Mountain
+  View, CA 94043"). They're parsed from `family_home.address` (or kept when the home is
+  set; migration only if parsing isn't reliable). The result's first line says so: "Searched
+  near home (Mountain View, CA 94043)." No home set: the tool says to ask where, as now.
+- The tool description tells the model the home area is filled in, so it shouldn't ask
+  "which city?" first. A place they name ("in San Mateo") wins over home.
+- F30d's privacy check lets that city, state and ZIP through, and still refuses a street
+  number from memory.
+- `search_web` gains an optional `name`: the business or person being looked for, in their
+  words ("Contemporary Dental"). The result marks each hit that contains the name (case and
+  punctuation ignored). When none do, it says so first: "None of these results is
+  'Contemporary Dental'. Say so; don't give another place's details as theirs." When no
+  result names it, the search runs once more at Tavily's `advanced` depth (Firecrawl: 10
+  results), counted against the daily cap as two.
+- A phone number written into a task's title or steps (`create_task`, `update_task`) that
+  isn't in their message has to come from this person's web results in the last 30
+  minutes, next to a name that the same step also has (within about 200 characters of the
+  number in the result). Otherwise the change is refused: "Not changed: 650-557-2636 is
+  Contemporary Dental's number in the results, and that step is about Dr. Scheinbach."
+  Keep the results' text per member in memory, as F30d keeps the links.
+
+Tests: each a failing test first. "Phone number for Contemporary Dental" with a home set
+searches "... Mountain View, CA 94043" and the result says so. "Dentists near our home"
+searches with the ZIP and never the street. A place they name wins. Reply 302's results
+with `name` give the "none of these" line. No hit, then an advanced search, counted as two.
+Reply 306's step is refused, and the same number on the Contemporary Dental step is
+accepted. The privacy check still refuses "2541 Betlo Ave".
+Scenario: Michael asks "Can you find the phone number for Contemporary Dental?" with the
+fake search's results for home and San Mateo, then asks for it in the task. The number
+lands on the right step.
+
+Data (Michael decides): task 79's first step has Contemporary Dental's number on the Dr.
+Scheinbach step. Remove "(number: 650-557-2636)" from it, or tell Themi in chat. Mark #165
+reviewed once live.
+
+Notes (2026-11-06):
+- `web_search.home_area` reads the city, state and ZIP from `family_home.address` (after
+  the last street word such as "Ave" or "Ter", or after the last comma), with the ZIP
+  alone as a fallback. No migration. The Pi's three stored addresses parse.
+- `search_web` gains `near_home` and `name`, both defaulted, so older calls still work.
+  The home area is added when `near_home` is true, or when the query or their message says
+  near me/us/home/our house, nearby, closest, nearest or local. It isn't added when the
+  query names a place (a ZIP, a state code such as "San Mateo CA", or "in <Place>"). "Near
+  home" in a query becomes "near Mountain View, CA 94043"; otherwise the area goes at the
+  end. The result starts "Searched near home (...)". With no home set, the tool says to ask
+  where.
+- The privacy check lets the home's ZIP through. A street number from memory is still
+  refused.
+- `name`: a hit counts as that place when it has the name and the city searched near
+  (other than the state), so the Texas "Contemporary Dental, PC" isn't the San Mateo one.
+  With no hit, one deeper search runs (`SearchBackend.search(deep=True)`: Tavily
+  `search_depth: advanced`, Firecrawl 10 results), counted as two lookups. Hits are marked
+  "[names X]", and with none, "None of these results is 'X'..." comes first.
+- Phone numbers on task steps (`create_task`, `update_task`, `tasks._numbers_where_found`
+  calling `WebSearch.misplaced_number`): a number that this person's results in the last
+  30 minutes have next to other names (within 200 characters), and not next to the step's
+  own names, is refused. The owner is named from another step when one matches.
+  Deviation: a number that isn't in any recent result isn't refused (it may come from an
+  email, a guide or their own words a while back). Numbers made up from nothing are F30b's
+  job.
+- `tests/fakes/search.py`: `result(..., deep=True)` for hits only a deep search finds, and
+  `queries()`.
+- Setup: restart `themi run`. No migration.
+
+### F31d · Idea (2026-11-06): forwarding an email
+Status: [x] 2026-11-06
+Depends on: 21, F16c, 34a
+Read first: the plan's Gmail triage and Trust tiers; triage's `email_reply` (always asks)
+and `gmail.send_reply` (`connectors/gmail/executors.py`: a retry never sends twice).
+From Michael's idea #168 (2026-11-06, 9:05 am, "allow email forwarding"). At 8:57 am Themi
+told Michael about an urgent email (the Sugarmill's roofing inspection notice). At 9:04 am
+he asked "Can you forward that email to Erin?" and heard "I can't forward emails
+directly".
+
+Build:
+- `forward_email` (email group): which email, to whom, and an optional note.
+  - Which: "that email" is the one in the latest email notice or card in this conversation,
+    or one found by the email lookup tools. If it isn't clear which, the tool says so, and
+    the model asks.
+  - To whom: the partner (their Google sign-in address, `members.email`, or with several
+    linked Gmail accounts, a choice on the card), or an address said in this message. No
+    addresses from memory, as F30d's privacy check.
+- It stages a card in a new category `email_forward` (each person's own, max tier 1, so it
+  always asks, like `email_reply`): "Forwarding to Erin (erin@...): 'Notice of upcoming
+  roofing inspection...' from The Sugarmill Community Corporation." [Go ahead] [Not now].
+  The card is the whole answer (F29d).
+- `gmail.forward` executor: it fetches the original (`format=raw`) from the account it came
+  to, and sends a new message from that account. Subject "Fwd: <subject>". The body is
+  their note, then Gmail's "---------- Forwarded message ---------" header block (From,
+  Date, Subject, To), then the original text and HTML parts, with attachments attached
+  again (up to Gmail's 25 MB, else the card says they're left out). It's not in the
+  original thread. Like `send_reply`, a retry never sends twice.
+- The email's own text stays data: it's never read as instructions, and the note is theirs
+  alone.
+- The done line: "Forwarded to Erin: Notice of upcoming roofing inspection."
+
+Tests: unit tests for the message built (headers, quoted block, attachments, a big
+attachment left out), the category always asking, "that email" picked from the notice, an
+unclear one asked about, an address from memory refused, a retry not sending twice (fake
+Gmail in `tests/fakes`). Eval: "forward that to Erin", "send this email to
+jenn@example.com", "can Erin see this email?" all reach `forward_email`.
+Scenario: idea #168, the urgent notice, "Can you forward that email to Erin?", the card,
+Go ahead, the fake Gmail's sent message to Erin.
+
+Setup: none. `gmail.modify` already allows sending. Mark #168 reviewed once live.
+
+Notes (2026-11-06):
+- `themi.core.email_forward`: `forward_email` (email group; "forward" added to its routing
+  words, with three examples). `email` is words from the sender or subject (triage's
+  `find_email`), or empty / "that email" for the newest email Themi told them about (an
+  urgent notice, `email-urgent:<id>`) or put on a card, in the last two days, from their
+  own accounts.
+- `to`: a family member's name (or "her"/"him"/"my partner" when there's one other
+  person). Their address is `members.email`, else their one linked Gmail account.
+  Deviation: with several and no sign-in address, the tool lists them and asks, rather
+  than a choice on the card. Any other address has to be in this message or the one
+  before.
+- Migration 0118: the category `email_forward` ('member', max tier 1, so it always asks).
+  The card reads `Forwarding to Husband (husband@...): "<subject>" from <sender>`, plus
+  the note when there is one.
+- `gmail.forward` (`connectors/gmail/executors.py`): `GmailClient.get_raw` (`format=raw`),
+  then `forward_message` builds "Fwd: <subject>". It has their note, Gmail's "----------
+  Forwarded message ---------" block (From, Date, Subject, To, Cc) and the original text,
+  plus an HTML part when the original had one. Attachments go again up to 24 MB in all;
+  the rest are named in the done line ("Left out, too big to send: ..."). It's sent from
+  the account the email came to, not in the original thread, keyed in `email_sends` like
+  replies.
+- `tests/fakes/gmail_api.py`: `format=raw` (a MIME message built from the stored payload,
+  with filler bytes for attachments), and `sent` records the HTML and attachments of a
+  multipart message.
+- The routing eval is a unit test (`test_forwarding_an_email_reaches_the_email_tools`);
+  `tests/evals` wasn't changed.
+- Setup: restart `themi run` (migration 0118). No new Google scope.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -10946,6 +11256,15 @@ Agreed changes to the spec (2026-11-06), because the plan's rules win:
   (`money`, `date`, `text`, `choice` with its choices, `number`), and whether it's critical.
   Built-in fields: amount, date, vendor, category, note; business sheets add purpose and
   who was there.
+- **A spreadsheet holds several sheets, as tabs** (Erin's idea #167, 2026-11-06: "the
+  business spreadsheet might have tabs for expenses, income, and mileage"). A *book* is one
+  spreadsheet, with a title and an owner. Each sheet belongs to one book and is one tab in
+  its Google Sheet and one CSV file. A new sheet goes in a new book of its own unless they
+  say which ("add a mileage tab to the business spreadsheet"). The built-in Business sheet
+  is the first tab of each person's "Business" book. Income and mileage are custom sheets,
+  with their own fields (a mileage sheet: date, miles as a `number`, from, to, purpose).
+  They aren't spending, so nothing on them counts toward a spending total or the takeout
+  budget.
 - **Left out for now:** photographed receipts (reading amounts from a Telegram photo needs a
   model that reads images), and budgets per sheet beyond the existing takeout budget.
 
@@ -10966,9 +11285,12 @@ spending") and Module behaviour D (the takeout budget).
 Start by adding a short "Expense sheets" part to the plan's Integrations and Module
 behaviour, from this section's intro (Michael checks the wording before it's written to
 the doc).
-- Migration: `expense_sheets` (title, mode, owner member or NULL for the household,
-  `prompt_on_missing_critical`, `csv_enabled`, keywords, `google_spreadsheet_id` NULL,
-  built-in kind NULL / `takeout` / `business`, created_at, archived_at),
+- Migration: `expense_books` (title, owner member or NULL for the household,
+  `google_spreadsheet_id` NULL, created_at, archived_at; idea #167), `expense_sheets`
+  (book, title, mode, owner member or NULL for the household,
+  `prompt_on_missing_critical`, `csv_enabled`, keywords, `google_tab_id` NULL, position
+  in its book, counts as spending (default yes), built-in kind NULL / `takeout` /
+  `business`, created_at, archived_at),
   `expense_fields` (sheet, key, label, type, choices JSON, critical, position),
   `expense_entries` (sheet, member, created_at, removed_at) and `expense_values` (entry,
   field, value as JSON or NULL, status, confidence or NULL, source type, source reference,
@@ -10977,7 +11299,9 @@ the doc).
   its category), business ones into that person's Business sheet. The receipt email
   becomes the lineage (`email_receipt`, its Gmail id); chat rows are
   `direct_user_input`. Keep `spending` as a read-only view for one release, then drop it.
-- `themi.core.expenses`: `Expenses` with sheets, fields, entries and values, and `Value`
+- The two built-in sheets each get a book of their own ("Takeout & eating out";
+  "Business" per person).
+- `themi.core.expenses`: `Expenses` with books, sheets, fields, entries and values, and `Value`
   (value, status, confidence, lineage). Money stays integer cents.
 - `Spending` keeps its methods and tools, now built on `Expenses`.
 Tests: every X1 test passes unchanged; unit tests for the migration on a copy with chat,
@@ -10992,18 +11316,24 @@ section's intro.
   project". One structured call (a new AI task `expense_sheet_fields`, its own route on the
   AI page) proposes the mode, the fields and the critical ones. Shown first:
   "Here's the sheet: ..." [Make it] [Change it]; "Change it" takes their words.
+- A sheet in a book they name is a new tab there: "add a mileage tab to the business
+  spreadsheet", "the business spreadsheet should have expenses, income and mileage" (three
+  tabs proposed together, one card). Tabs can be renamed, reordered and archived. Archiving
+  a book's last tab archives the book.
 - Adding to one: "$84 at Merit for the Henderson lunch", "about $40 on paint, pretty sure".
   Said values are `direct_user_input`; an estimate is `user_estimate`, with the confidence
   they said ("pretty sure" is 0.8, "maybe" 0.5; a % they say is used as is).
 - Verifying: [Looks right] on Themi's message about a fill, "the Merit one is right", or a
   tick on the website, sets `verified` for the entry's values.
-- Tools: `make_expense_sheet`, `add_expense`, `verify_expense`, `move_expense`,
+- Tools: `make_expense_sheet` (with an optional book), `add_expense`, `verify_expense`, `move_expense`,
   `expense_summary` (in X1's "spending" tool group).
-- Website: Spending shows a sheet at a time (a picker), each value with its status as a
+- Website: Spending shows a sheet at a time (a picker of books, then their tabs), each value with its status as a
   word and a small mark, the source as a link (Gmail, the calendar event), and a field
   editor for the sheet's owner. Business sheets are their owner's only, as in X1.
-Tests: unit tests for fields, estimates, verification and permissions; scenarios: making a
-"Business travel" sheet in chat and adding to it, an estimate later verified. Evals: field
+Tests: unit tests for fields, estimates, verification and permissions, and for books and
+tabs (a mileage tab not counted as spending); scenarios: making a "Business travel" sheet
+in chat and adding to it, an estimate later verified, a business book with expenses, income
+and mileage tabs (idea #167). Evals: field
 proposals for ten sheet requests; "pretty sure" and "maybe" read as estimates.
 
 ### EX2a · Expense sheets: filling in from receipts, calendars and chat
@@ -11075,7 +11405,8 @@ section's intro.
 - `drive.file` added to the link scopes. Accounts shows "Link again for expense sheets"
   on an account without it; nothing else changes for those accounts. DEPLOY.md: add the
   scope in the Google Cloud console and turn on the Sheets API.
-- `themi.connectors.gsheets`: create a spreadsheet, write a header, add rows, update rows
+- `themi.connectors.gsheets`: create a spreadsheet, add, rename, reorder and delete its tabs
+  (`addSheet`, `updateSheetProperties`, `deleteSheet`), write a header, add rows, update rows
   found by the hidden id column, set background colours and cell notes, in batched
   requests. Retries and backoff as the Gmail client.
 - The trust category "expense sheet sync" (a person's own, Tier 1 to start, may become
@@ -11088,9 +11419,11 @@ live smoke test (opt-in, `tests/live`).
 Status: [ ]
 Depends on: EX4a, EX1b
 Read first: EX4a's notes; this section's intro.
-- When a sheet is made (or "put this sheet in Google Sheets" for one that already exists),
-  Themi asks which linked Google account, makes the spreadsheet there and offers the rule
-  ("Keep this sheet up to date on its own?" [Yes, always] [Ask me]).
+- When a book is made (or "put this in Google Sheets" for one that already exists),
+  Themi asks which linked Google account, makes the spreadsheet there with a tab per sheet,
+  and offers the rule ("Keep this spreadsheet up to date on its own?" [Yes, always] [Ask
+  me]). A sheet added to a book that's in Google Sheets is a new tab there, under the same
+  rule.
 - A sync queue (`expense_sync`: entry, sheet, wanted at, attempts, done at), filled when an
   entry or value changes and drained by a job every few minutes through the trust tiers.
   Failures retry with backoff; after a day of failures the owner hears once, in words.
@@ -11098,8 +11431,9 @@ Read first: EX4a's notes; this section's intro.
   estimate", "Missing"), the colour for each value's status, and a note on each value
   with its source, its confidence as a %, and the link. Verifying in Themi updates the
   database first, then the cells.
-- A spreadsheet deleted in Google: the sheet forgets it and says so once; it can be made
-  again.
+- A spreadsheet deleted in Google: the book forgets it and says so once; it can be made
+  again. A tab deleted there is made again at the next sync, since Themi's database is the
+  truth (archive the sheet in Themi to drop it).
 Tests: unit tests for the queue, the cell formatting per status, an update not adding a
-second row; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
+second row, a new sheet becoming a tab; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
 from amber to green, a deleted spreadsheet.

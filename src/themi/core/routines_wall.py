@@ -91,6 +91,8 @@ class RoutinesWall:
                 await self.client.check_routine(link["wall_id"], day, True)
             except CozylaError as exc:  # the next sync carries it over
                 log.warning("Couldn't tick routine %s on the wall yet: %s", link["wall_id"], exc)
+            else:
+                self.routines.mark_on_wall(item, day)
 
     async def sync(self) -> int:
         """Scheduler job. Returns how many of Themi's changes were sent."""
@@ -233,13 +235,22 @@ class RoutinesWall:
             if item is None or not item.applies(today):
                 continue
             ticked = self.routines.ticked(item, today)
-            if link["wall_id"] in done_on_wall and not ticked:
+            on_wall = link["wall_id"] in done_on_wall
+            if on_wall and not ticked:
                 self.routines.tick(item, today)
+                self.routines.mark_on_wall(item, today)
                 await self.routines.show_tick(item, today)  # bug #129: the check follows
                 member = self.store.get_member(self.routines.get(item.routine_id).member_id)
                 await praise.from_wall(self.services.outbox, member, item.title, f"r{item.id}")
-            elif ticked and link["wall_id"] not in done_on_wall:
+            elif on_wall:
+                self.routines.mark_on_wall(item, today)
+            elif ticked and self.routines.on_wall(item, today):
+                # F31a, bug #169: the wall had it, so it was unticked there. Not sent again.
+                self.routines.untick(item, today)
+                await self.routines.show_tick(item, today)
+            elif ticked:  # Themi's tick hasn't reached the wall yet
                 await self.client.check_routine(link["wall_id"], today, True)
+                self.routines.mark_on_wall(item, today)
 
     # ----- small things -------------------------------------------------------------------
 

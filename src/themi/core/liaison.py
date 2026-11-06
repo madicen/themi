@@ -245,10 +245,16 @@ class Liaison:
         return self.get(relay_id), result
 
     async def hurry(
-        self, relay: Relay, sender: Member, recipient: Member, urgency: str
+        self,
+        relay: Relay,
+        sender: Member,
+        recipient: Member,
+        urgency: str,
+        label: str | None = None,
     ) -> tuple[Relay, OutboxResult] | None:
         """A note still waiting goes sooner: its queued message is taken back and sent
-        again at the new urgency (F29c). None if it went meanwhile."""
+        again at the new urgency (F29c). None if it went meanwhile. `label` is the urgency
+        its words say, when that isn't the one it's sent with ("Send now", F31b)."""
         if relay.outbox_id is not None and not self.outbox.cancel(relay.outbox_id):
             self._delivered(relay.id)
             return None
@@ -256,7 +262,7 @@ class Liaison:
         priority, deadline = timing(urgency, clock.now(), self.timezone)
         result = await self.outbox.send(
             recipient,
-            delivery_text(sender, relay.body, urgency),
+            delivery_text(sender, relay.body, label or urgency),
             priority=priority,
             kind=KIND,
             deadline=deadline,
@@ -313,7 +319,9 @@ class Liaison:
         recipient = self.store.get_member(relay.to_member_id)
         text = GONE_TEXT.format(name=recipient.name)
         if relay.delivered_at is None:
-            hurried = await self.hurry(relay, event.member, recipient, "urgent")
+            hurried = await self.hurry(
+                relay, event.member, recipient, "urgent", label=relay.urgency
+            )
             if hurried is not None:
                 text = HURRIED_TEXT.format(name=recipient.name)
         if event.button.message_id is not None:

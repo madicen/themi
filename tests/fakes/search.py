@@ -5,6 +5,7 @@
     fake_search.page("https://dds.example/s", "Dr. Scheinbach sees patients Mon-Thu.")
     fake_search.backend = "firecrawl"        # the other backend, over the same fake
     fake_search.fail("search", 429)          # the next search is refused
+    fake_search.result(..., deep=True)       # found only by a deeper search (F31c)
 
 The scenario harness hands Themi a backend over this transport when a test uses the
 `fake_search` fixture. No real network calls.
@@ -28,16 +29,20 @@ KEY = "tvly-test-key-0000000000000000"
 class FakeSearch:
     def __init__(self) -> None:
         self.results: dict[str, list[dict[str, str]]] = {}  # query words -> results
+        self.deep: dict[str, list[dict[str, str]]] = {}  # found only by a deep search
         self.pages: dict[str, str] = {}
         self.backend = "tavily"
         self.calls: list[tuple[str, dict[str, Any]]] = []  # (kind, body)
         self._failures: Counter[str] = Counter()
         self.transport = httpx.MockTransport(self._handle)
 
-    def result(self, words: str, title: str, url: str, snippet: str) -> None:
-        self.results.setdefault(words.lower(), []).append(
+    def result(self, words: str, title: str, url: str, snippet: str, *, deep: bool = False) -> None:
+        (self.deep if deep else self.results).setdefault(words.lower(), []).append(
             {"title": title, "url": url, "snippet": snippet}
         )
+
+    def queries(self) -> list[str]:
+        return [str(b["query"]) for k, b in self.calls if k == "search"]
 
     def page(self, url: str, text: str) -> None:
         self.pages[url] = text
@@ -55,9 +60,12 @@ class FakeSearch:
     def count(self, kind: str) -> int:
         return sum(1 for k, _ in self.calls if k == kind)
 
-    def _found(self, query: str) -> list[dict[str, str]]:
+    def _found(self, query: str, deep: bool = False) -> list[dict[str, str]]:
         query = query.lower()
-        return [r for words, rs in self.results.items() if words in query for r in rs]
+        found = [r for words, rs in self.results.items() if words in query for r in rs]
+        if deep:
+            found += [r for words, rs in self.deep.items() if words in query for r in rs]
+        return found
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         assert request.headers.get("Authorization") == f"Bearer {KEY}"
@@ -71,7 +79,8 @@ class FakeSearch:
                 self._failures[failure] -= 1
                 return httpx.Response(int(status))
         if request.url.host == "tavily.test" and path == "/search":
-            found = self._found(body["query"])[: body.get("max_results", 5)]
+            deep = body.get("search_depth") == "advanced"
+            found = self._found(body["query"], deep)[: body.get("max_results", 5)]
             return _json(
                 {
                     "results": [
@@ -85,7 +94,7 @@ class FakeSearch:
             done = [{"url": url, "raw_content": self.pages[url]}] if url in self.pages else []
             return _json({"results": done, "failed_results": [] if done else [{"url": url}]})
         if request.url.host == "firecrawl.test" and path == "/v2/search":
-            found = self._found(body["query"])[: body.get("limit", 5)]
+            found = self._found(body["query"], body.get("limit", 5) >= 10)[: body.get("limit", 5)]
             web = [{"title": r["title"], "url": r["url"], "description": r["snippet"]}
                    for r in found]  # fmt: skip
             return _json({"success": True, "data": {"web": web}})

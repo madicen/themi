@@ -206,3 +206,41 @@ async def test_themis_check_ins_stay_c3s(scenario: Scenario, fake_cozyla: FakeCo
     await scenario.run_periodic("cozyla.routines")  # C3 puts it on the wall
     await sync(scenario)
     assert items(scenario, "Erin", "Afternoon") == []  # not a routine item
+
+
+async def test_an_untick_on_the_wall_stays_unticked(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F31a, bug #169: Cycle Dishwasher, ticked on the wall at night, unticked there in the
+    morning, came back at every sync."""
+    dishwasher = fake_cozyla.add_routine("m-erin", "Cycle dishwasher", "Evening")
+    await sync(scenario)
+    fake_cozyla.tick_routine(dishwasher, WED)
+    await sync(scenario)
+    item = routines(scenario).find_item(scenario.member("Erin"), "cycle dishwasher")
+    assert item is not None and routines(scenario).ticked(item, WED)
+    await scenario.advance(minutes=2)  # the tick's warm word goes
+    sent = len(scenario.inbox("Erin"))
+    fake_cozyla.tick_routine(dishwasher, WED, done=False)  # unticked on the wall
+    await sync(scenario)
+    await sync(scenario)
+    assert (dishwasher, WED.isoformat()) not in fake_cozyla.routine_ticks
+    assert not routines(scenario).ticked(item, WED)
+    await scenario.advance(minutes=2)
+    assert len(scenario.inbox("Erin")) == sent  # no message for an untick
+
+
+async def test_a_tick_that_didnt_reach_the_wall_is_sent_next_sync(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    pills = fake_cozyla.add_routine("m-erin", "Take meds", "Morning")
+    await sync(scenario)
+    fake_cozyla.fail("checkUserRoutine")
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "meds"})
+    scenario.primary.queue_text("Nice.")
+    await scenario.say("Erin", "took my meds")
+    assert (pills, WED.isoformat()) not in fake_cozyla.routine_ticks
+    await sync(scenario)
+    assert (pills, WED.isoformat()) in fake_cozyla.routine_ticks
+    item = routines(scenario).find_item(scenario.member("Erin"), "take meds")
+    assert item is not None and routines(scenario).ticked(item, WED)
