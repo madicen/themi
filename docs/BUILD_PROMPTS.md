@@ -204,8 +204,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
 | F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
 | F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [x] 2026-11-06 |
-| F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [ ] |
-| F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [ ] |
+| F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
+| F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
 | F30d | Idea: Themi looks things up online | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -10191,7 +10191,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F30b · Feedback (2026-11-05): a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 08, F20c, CM1a
 Read first: prompt 08 (the PDA shield); F20c's notes (rewrites that drop facts); CM1a's notes
 (the chat prompt). From Erin's bug #160 (2026-11-05, 8:20 pm, "it just hallucinated a dentist
@@ -10247,8 +10247,33 @@ statements" reaches Erin with both places to look.
 
 Mark #160 and #161 reviewed once live.
 
+Notes (2026-11-06):
+- The text before the shield was on the Pi after all: `outbox.text` is what was asked to
+  be sent, `sent_text` what went. Reply 290 (outbox 1317): the chat model wrote "The
+  Redwood City dentist is Dr. Evans, and their office number is 650-555-0144", and the
+  rewrite only dropped its first sentence. So the invention was the chat model's. Reply
+  292 (outbox 1320): the chat model listed bank and card statements, the insurance portal
+  and searching email for "dental", "dentist" or "appointment". The rewrite made it
+  "Options for finding past dental payments." So each half of this prompt fixes one bug.
+- No `original_text` column (a deviation): `outbox.text` already holds it. A report's
+  reply snapshot gets `shaped` (before and after, where they differ), and `themi
+  feedback` prints 'Gentle phrasing changed "..." to "..."'. Only reports made after this
+  is live have it.
+- `pda.unfaithful(original, rewrite)`: refuses a rewrite that adds a number, a link or
+  email address, or a capitalised name the original doesn't have. For originals of 120
+  characters or more (`LONG_ENOUGH`), it also refuses one that keeps under a third of the
+  content words or is under 40% of the length. Short lines are reworded freely, as
+  before. A refused rewrite is softened deterministically, and the reason (no text) is
+  logged at info level. Two older PDA tests had fake rewrites adding "Michael". They
+  were changed to rewrites that don't add a name.
+- The rewrite prompt and the chat prompt (`CHAT_SYSTEM`) got the lines from the prompt.
+  Not done: the eval set of "I don't remember X" messages. A unit test checks the line.
+- Not done: the turn going to the tool agent to search her email. There's no
+  `search_email` tool; the chat prompt offers to check email if she asks.
+- Setup: restart `themi run`. No migration.
+
 ### F30c · Feedback (2026-11-05): a stranger's Nextdoor post isn't a tenant emergency
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 23, F16c
 Read first: "Gmail triage"; F16c's notes (time-sensitive and urgent). From Michael's bug #164
 (2026-11-05, 9:17 pm, "the email has nothing to do with a tenant").
@@ -10280,6 +10305,20 @@ prompt line is present. An eval case with email 1002's subject and snippet (with
 changed), not in the default run.
 
 Mark #164 reviewed once live.
+
+Notes (2026-11-06):
+- The three urgent Nextdoor emails on the Pi were all community posts, none of them the
+  family's: 397 (family) an ICE-activity alert at Mission and Tamarack; 926 (property)
+  "Your package came to my doorstep!", a neighbour with someone's package; 1002 (tenant)
+  this one. The ICE alert may be worth a heads-up, which time-sensitive still gives.
+- The triage prompt has the paragraph from the prompt. In code, an urgent, severe verdict
+  from a `COMMUNITY_DOMAINS` sender (nextdoor.com and its subdomains) becomes
+  time-sensitive, kind "other", unless the sender is on that account's urgent list.
+  Time-sensitive waits for quiet hours and the daily limit, so no alert at 9:13 pm.
+- Deviation: the community list is a constant, not a setting on the email page. Adding
+  one is a small follow-up if another site needs it.
+- Not done: the eval case (not in the default run).
+- Setup: restart `themi run`. No migration.
 
 ### F30d · Idea (2026-11-05): Themi looks things up online
 Status: [ ]
