@@ -882,6 +882,14 @@
    "tools": [
     "find_recipe"
    ]
+  },
+  {
+   "id": "recipe-shop",
+   "kind": "plain",
+   "message": "Can you put what we need for the chana masala on the grocery list?",
+   "tools": [
+    "add_recipe_to_grocery_list"
+   ]
   }
  ]
 }

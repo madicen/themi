@@ -1,9 +1,9 @@
 # ruff: noqa: RUF001  (the doc's own dashes and quote marks, kept as written)
 """A trimmed copy of the family cookbook doc's structure (RC1a), for the fake Docs API.
 
-The real doc ("Madicen Family Cookbook", read 2026-11-06) has 132 entries. This keeps a
-dozen with the same shape, including each irregular one the parser has to take: Bean Dip
-and Ube Gelato (part names typed as text), Biryani ("Ingredients" twice), Roasted
+The real doc ("Madicen Family Cookbook", read 2026-11-06) has 132 entries. This keeps 13
+recipes and 3 charts with the same shape, including each irregular one the parser has to
+take: Bean Dip and Ube Gelato (part names typed as text), Biryani ("Ingredients" twice), Roasted
 Vegetables (a table, so a chart), a recipe named twice, and the References tables. Recipe
 text is as the doc has it, trimmed; nothing else of the family's is in here.
 """
@@ -90,6 +90,34 @@ BEAN_DIP: list[Block] = [
     ("P", "Mix everything in a pot, heat until bubbling. Eat with chips"),
     ("P", "-----"),
 ]
+
+BECHAMEL = recipe(
+    "Bechamel Sauce",
+    [
+        "½ onion",
+        "2 cloves",
+        "1 bay leaf",
+        "550ml soy milk",
+        "4 Tbsp butter",
+        "50g all purpose flour",
+        "Pinch of ground nutmeg",
+        "Salt and pepper to taste",
+    ],
+    [
+        "Place the onion, cloves, bay leaf and soy milk in a medium saucepan and place over "
+        "medium/low heat. Once steam starts to rise from the soy milk (but before it starts to "
+        "boil) turn off the heat, cover with a lid and leave to infuse for a minimum of 10 "
+        "minutes. Once infused, remove the onion, cloves and bay leaf from the soy milk and "
+        "discard.",
+        "To make the roux, place a separate medium saucepan over medium/low heat and add the "
+        "vegan butter. Once melted, add the plain white flour and whisk until a paste forms. "
+        "Keep whisking for a further minute.",
+        "Little by little, add the infused soy milk to the roux, whisking constantly until all "
+        "the soy milk is added. Continue to cook for 5 - 10 minutes or until the sauce has "
+        "thickened.",
+        "Finally whisk in the nutmeg and season with salt and pepper to taste.",
+    ],
+)
 
 PARMESAN = recipe(
     "Simple Parmesan",
@@ -293,6 +321,7 @@ def cookbook() -> list[Block]:
         *ALFREDO,
         *RANCH,
         *BEAN_DIP,
+        *BECHAMEL,
         ("H3", "Other"),
         *PARMESAN,
         ("H1", "Breakfast"),

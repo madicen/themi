@@ -109,6 +109,7 @@
     {"id": "recipe-by-name", "category": "recipes", "message": "Can you pull up the alfredo sauce?", "expect": ["find_recipe"], "_note": "RC1b: a cookbook recipe by name"},
     {"id": "recipe-by-ingredient", "category": "recipes", "message": "Got anything in the cookbook with chickpeas?", "expect": ["find_recipe"]},
     {"id": "recipe-chart", "category": "recipes", "message": "How long do I roast carrots in the oven?", "expect": ["find_recipe"], "_note": "RC1b: the Roasted Vegetables chart answers it"},
-    {"id": "recipe-not-a-task", "category": "recipes", "message": "I am cooking tonight, finally feeling up to it", "expect": [], "allow": ["find_recipe", "log_energy_note", "log_energy_level", "suggest_meals"], "forbid": ["create_task"], "_note": "RC1b: cooking tonight is news, not a task"}
+    {"id": "recipe-not-a-task", "category": "recipes", "message": "I am cooking tonight, finally feeling up to it", "expect": [], "allow": ["find_recipe", "log_energy_note", "log_energy_level", "suggest_meals"], "forbid": ["create_task"], "_note": "RC1b: cooking tonight is news, not a task"},
+    {"id": "recipe-shop", "category": "recipes", "message": "Add the lasagna to the grocery list", "expect": ["add_recipe_to_grocery_list"], "forbid": ["add_to_grocery_list"], "_note": "RC2a: a recipe card, never the ingredients listed from memory"}
   ]
 }

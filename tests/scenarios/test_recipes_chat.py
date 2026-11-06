@@ -85,7 +85,7 @@ async def test_the_context_says_theres_a_cookbook(cookbook: Scenario) -> None:
     cookbook.primary.queue_text("Hello!")
     await cookbook.say("Erin", "Hi")
     turn = cookbook.primary.requests[0].messages[0].text
-    assert "The family cookbook has 15 recipes and charts (find_recipe)." in turn
+    assert "The family cookbook has 16 recipes and charts (find_recipe)." in turn
 
 
 def test_recipe_words_are_requests_in_conversation_mode() -> None:

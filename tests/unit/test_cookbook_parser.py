@@ -27,10 +27,11 @@ def named(cookbook: book.Cookbook, name: str) -> book.ParsedRecipe:
 def test_the_whole_fixture() -> None:
     cookbook = parse()
     names = [r.name for r in cookbook.recipes]
-    assert names[:4] == [
+    assert names[:5] == [
         "Alfredo Sauce",
         "Silken Tofu Ranch Dressing",
         "Bean Dip",
+        "Bechamel Sauce",
         "Simple Parmesan",
     ]
     assert names.count("Chocolate Peanut Butter Bars") == 2  # both kept

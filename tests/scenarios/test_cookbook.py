@@ -18,7 +18,7 @@ from themi.connectors.google import DRIVE_FILE_SCOPE
 from themi.connectors.google.oauth import LINK_SCOPES
 
 READ = (
-    "I've read 12 recipes and 3 charts from the cookbook. 3 need a look: Bean Dip (headings typed "
+    "I've read 13 recipes and 3 charts from the cookbook. 3 need a look: Bean Dip (headings typed "
     "as text), Biryani (two Ingredients headings), Ube Gelato (headings typed as text)."
 )
 
@@ -57,7 +57,7 @@ async def test_the_cookbook_is_chosen_and_read(
     scenario: Scenario, linked: FakeGdocs, site: httpx.AsyncClient
 ) -> None:
     page = await choose(scenario, site)
-    assert "read 12 recipes and 3 charts" in page.text
+    assert "read 13 recipes and 3 charts" in page.text
     assert "Biryani" in page.text and "two Ingredients headings" in page.text  # needs a look
     inbox = scenario.inbox("Erin")
     assert READ in inbox
