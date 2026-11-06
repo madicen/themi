@@ -203,6 +203,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
 | F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
 | F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
+| F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [ ] |
+| F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [ ] |
+| F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [ ] |
+| F30d | Idea: Themi looks things up online | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10109,6 +10113,189 @@ read says so and keeps nothing; the size cap; the guide's text is data.
 Scenario: Erin sends a photo of the grain chart, then asks "how long for quinoa?"
 
 Mark #148 reviewed once F29ha or F29hb is live, whichever fits Erin's guide.
+
+Update (2026-11-06): the grain guide is text (Michael pasted it: six grains with ratio,
+high-pressure and natural-release times), so F29ha covers it. This prompt waits until a
+guide comes as a photo or a PDF.
+
+### F30a · Feedback (2026-11-05): a refused task change changes nothing, and "the task you just made" is that one
+Status: [ ]
+Depends on: F6a, F24a, P8a
+Read first: F6a's notes (steps); F24a's notes (asked for again); P8a's notes (the naming
+check). From Erin's idea #163 (2026-11-05, 8:36 pm, "review this whole dentist
+conversation to ensure everything is working as expected and doesn't have any hidden
+bugs").
+
+What the Pi shows:
+- 8:31 pm (reply 296): "maybe I should just have Michael call his office" made task 78,
+  "Call Contemporary Dental", for Michael.
+- 8:33 pm (reply 297): "Can you update the task you just made...". The model called
+  `update_task` on task 60, not 78. Task 60 is Erin's "Mimi pill - 1 tab", a medicine
+  chore that ended on 30 Oct (status done). `TaskBoard.update` saved the new title and
+  steps first. Then the `assign_to` check refused ("a chore's people are its schedule's")
+  and the result said "Nothing was changed". Task 60 is now titled "Call dentist office
+  to check Dr. Scheinbach and schedule appointments", with the dentist steps.
+- The model then made task 79, "Call dentist office" (the same job as 78), and tried
+  `cancel_task` 60 ("already settled"). The reply said "I've updated the task for Michael".
+  Michael has 78 and 79 open, for one job.
+
+Build:
+- `update_task` checks everything before it writes: the assignee, a repeating chore's
+  people, the title. Nothing is saved when any part is refused, so "Nothing was changed"
+  is true. The same goes for the other tools that change a task in steps (check
+  `reschedule_task`, `set_task_schedule`).
+- A task that's done or cancelled can't be renamed or given new steps: "Task 60 (Mimi pill
+  - 1 tab) is closed. To do something new, create a task."
+- "The task you just made" / "that task" / "it": when this conversation made or changed a
+  task in the last few turns (`ToolContext.tasks` from earlier turns, kept per member for
+  30 minutes), `update_task` on a different task that shares no words with their message
+  or that task's title is refused, naming the recent one: "They likely mean task 78 (Call
+  Contemporary Dental), made at 8:31 pm." This is P8a's naming check, counted the same way.
+- `create_task` for an assignee who has an open task made in the last 30 minutes whose job
+  the new one replaces (same kind and assignee, and their words say update, change or
+  instead) is refused, pointing to `update_task` on that task.
+- The reply says what happened: when an `update_task` failed and a `create_task` made a
+  new task in the same turn, a reply saying "updated" is replaced with "Made a new task
+  for Michael: Call dentist office." (the `_honest` family, by tool).
+
+Tests: each a failing test first. Reply 297's three calls, in order: task 60 keeps its
+title and steps, the refusal is true, and the update names task 78. A closed task can't
+be renamed. "Update the task you just made" with the right id works. The duplicate create
+is refused. The reply after a failed update and a create says what was made.
+Scenario: Erin's 8:31 and 8:33 messages; Michael ends up with one task, with the five
+steps.
+
+Data (Michael decides): restore task 60's title to "Mimi pill - 1 tab" and its steps from
+the last backup before 2026-11-06 04:33 UTC (the steps before that are unknown here).
+Cancel task 78 or 79, whichever Michael isn't using; 79 has the full steps. Mark #163
+reviewed once live (with F30b).
+
+### F30b · Feedback (2026-11-05): a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know
+Status: [ ]
+Depends on: 08, F20c, CM1a
+Read first: prompt 08 (the PDA shield); F20c's notes (rewrites that drop facts); CM1a's notes
+(the chat prompt). From Erin's bug #160 (2026-11-05, 8:20 pm, "it just hallucinated a dentist
+name and phone number, as well as how it got that name and number. If it doesn't know a
+thing, it should say that. And suggest ways for me to find the information") and #161 (8:21
+pm, "it failed to answer my question. Should have suggested things like looking through
+old emails for receipts").
+
+What the Pi shows (conversation mode, Erin, Gemini free tier):
+- Reply 290, to "I don't remember the dentist's name": "The Redwood City dentist is Dr.
+  Evans, and their office number is 650-555-0144." Nothing Themi knows says that. It
+  went through the AI rewrite (`ai_calls` 1472, `pda_rewrite`) after the chat call.
+- Reply 291, "How did you find that?": "It's in the contact records on your phone." Themi
+  has no access to her phone. This one wasn't rewritten: the chat model made up a
+  source for the earlier answer.
+- Reply 292, to "How can I find the name myself? Like what records should I look for?":
+  "Options for finding past dental payments." That's all of it. It also went through the
+  rewrite (1477). Suggestions ("look through...", "check...") read as commands, and the
+  rewrite replaced them with a heading.
+- The text before the rewrite isn't kept anywhere, so which step made "Dr. Evans" up can't
+  be told now. Replies 289 and 291, not rewritten, were sound.
+
+Build:
+- The shield keeps a rewrite only when it's faithful (`pda.faithful(original, rewrite)`):
+  no number, phone number, email address, link or capitalised name that isn't in the
+  original; at least two thirds of the original's content words kept; not under 40% of
+  its length, and every list line's item still there. Otherwise the deterministic
+  softener is used, as when the rewrite fails. Log the reason at info level, with no text.
+- The rewrite prompt: "Don't answer the message, add information or invent anything:
+  names, numbers, places, sources. A list of suggestions stays a list, every suggestion
+  kept, each said as an option ('One place to look: old emails from the dentist')."
+- Keep what the shield changed: the outbox row gets `original_text` (the text before the
+  shield) when it changed. `themi feedback` shows both for the replies in a report, so
+  the next report like this can be traced. Migration.
+- The chat prompt: "Never make up names, phone numbers, addresses, prices or where you
+  learned something. You can't see their phone, contacts, accounts or the web. If you
+  don't know, say so plainly, then offer two or three places they could look (old
+  emails, card or bank statements, an insurance portal, asking someone, a web search),
+  or offer to check their email if it's linked." Plus an eval set of five "I don't
+  remember X" messages that must not produce a made-up name or number.
+- Asked about her own records ("what records should I look for?"), the turn may go to the
+  tool agent, which can search her linked email (`search_email`, if it exists; else say
+  so in the Notes).
+
+Tests: each a failing test first. A rewrite adding "Dr. Evans" and a phone number is
+refused and softened instead. A rewrite that turns three suggestions into a heading is
+refused. A faithful rewrite is kept. `original_text` is stored and shown in `themi
+feedback`. The chat prompt's line is present, and the eval set runs (not in the default
+test run).
+Scenario: in conversation mode, "I don't remember the dentist's name" with the scripted
+chat model answering "I don't know it; you could look through old emails or card
+statements" reaches Erin with both places to look.
+
+Mark #160 and #161 reviewed once live.
+
+### F30c · Feedback (2026-11-05): a stranger's Nextdoor post isn't a tenant emergency
+Status: [ ]
+Depends on: 23, F16c
+Read first: "Gmail triage"; F16c's notes (time-sensitive and urgent). From Michael's bug #164
+(2026-11-05, 9:17 pm, "the email has nothing to do with a tenant").
+
+What the Pi shows: email 1002, from "Pavan near Alvarado Historic District"
+<reply@ss.email.nextdoor.com>, subject "URGENT REQUEST", a neighbour's post to a stranger
+("Dear Mr. Ferdows Wahab, If you happen to see this post on Nextdoor...") about Creekside
+Village Apartments. Triage made it urgent, kind tenant, and the alert went at once at
+9:13 pm. The same post in the digest (email 827) was noise. Nextdoor mail so far: 22
+noise, 2 routine, and three urgent (family, property, tenant). On the snippets, all
+three look wrong.
+
+Build:
+- The triage prompt: "Urgent is about this family's own affairs. 'Tenant' means a tenant
+  of theirs, about a property they own or rent out. A post, digest or alert from a
+  community site (Nextdoor, neighbourhood groups, school-wide lists), or a message to
+  someone else, is never urgent for them because of its own words ('URGENT REQUEST'):
+  it's noise or routine, unless it names them or their address."
+- In code: senders from community platforms (a short list: nextdoor.com, and any domain
+  the family marks on the email settings page) are capped at time-sensitive, never
+  urgent, unless the sender is on the person's urgent-senders list. The alert says
+  where it came from.
+- Look on the Pi (read-only) at the three urgent Nextdoor emails, and in the Notes say
+  whether any was real.
+
+Tests: each a failing test first. A scripted urgent/tenant verdict for a Nextdoor post is
+capped, and no urgent alert goes. A Nextdoor sender on the urgent list still alerts. The
+prompt line is present. An eval case with email 1002's subject and snippet (with names
+changed), not in the default run.
+
+Mark #164 reviewed once live.
+
+### F30d · Idea (2026-11-05): Themi looks things up online
+Status: [ ]
+Depends on: 06, F29ha
+Read first: "AI layer" (the router); "Security and privacy" (web pages are data, never
+instructions); F29ha's notes (a lookup answered from data). From Erin's idea #162
+(2026-11-05, 8:28 pm, "themi should be able to look things up online"). She'd asked "Can you
+tell me if [Dr. Scheinbach]'s still practicing?", and Themi could only point her to the
+dental board's site.
+
+Before building, ask Michael which search API to use and to put its key in `.env`. One
+with a free tier (Brave Search, Google Programmable Search) is enough for a family.
+
+Build:
+- `search_web` (a lookup, a new `web` group called for by "look up", "search", "online",
+  "find out", "is ... still", "what's the number for"): the query, the top five results'
+  titles, links and snippets, inside a `<data source="web">` block. Fetching one page is
+  `read_web_page` (a link from those results only, text extracted and capped, as data).
+- Answers name their source with its link, and say when the results don't settle it
+  ("The dental board lists a Dr. Scheinbach in San Mateo with an active licence (link);
+  the office would know if he still sees patients").
+- No personal details go into a query unless they said them in this message (no
+  addresses, emails or names from Themi's memory).
+- A daily cap per family (default 50 searches) and a timeout. Off without a key, and the
+  tool says how to set it up. The default test run uses a fake search service in
+  `tests/fakes`.
+- Conversation mode: "can you look up..." is a request (CM1a's `is_request`), so it goes
+  to the tool agent.
+
+Tests: a search with the fake returns results as data with links; a page's text with
+instructions in it isn't followed; the daily cap; no key, the setup line; a query with a
+remembered address left out; the routing words.
+Scenario: "Can you tell me if Dr. Scheinbach in San Mateo is still practicing?" answered
+from the fake's results, with the link.
+
+Setup: the search API key in `.env` (named in the Notes). Mark #162 reviewed once live.
 
 ## Conversation mode
 
