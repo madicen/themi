@@ -287,8 +287,12 @@ async def test_a_booking_already_on_the_calendar_gets_no_card(
     assert not [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
     await booking(4, "Piano", "2026-10-29", "16:00", "17:00")
     await booking(5, "Piano lesson", "2026-10-29", "16:00", "17:00")  # the same, again
-    cards = [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
-    assert len(cards) == 1 and "Piano" in cards[0]
+    # One sender's emails a few minutes apart share one message (F26b): Piano is in it once.
+    shown = scenario.edits("Erin")[-1]["text"]
+    assert shown.startswith("5 things from Tutor's emails:")
+    assert [line for line in shown.splitlines() if "Piano" in line] == [
+        "- Piano, Thu 29 Oct, 4-5 pm (at Online), for your calendar"
+    ]
 
 
 async def test_a_newer_card_for_the_same_event_takes_the_older_ones_place(
