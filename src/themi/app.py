@@ -51,6 +51,7 @@ from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
 from themi.core.conversation_mode import ConversationMode
+from themi.core.cookbook_save import CookbookSave
 from themi.core.cooking import Cooking
 from themi.core.cooking_timers import CookingTimers
 from themi.core.cozyla_chores import CozylaChores
@@ -234,6 +235,8 @@ def build_app(
     Guides(services).install()
     recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
     recipes.install()
+    services.cookbook_save = CookbookSave(services, recipes)  # RC5
+    services.cookbook_save.install()
     recipe_groceries = RecipeGroceries(services, recipes)  # RC2a
     recipe_groceries.install()
     cooking = Cooking(services, recipes, recipe_groceries)  # RC3a

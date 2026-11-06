@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.conversation_mode import ConversationMode
+    from themi.core.cookbook_save import CookbookSave
     from themi.core.cooking import Cooking
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
@@ -200,6 +201,7 @@ class Services:
     cooking: Cooking | None = None  # cooking a recipe with Themi (RC3a)
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
     web_recipes: WebRecipes | None = None  # recipes from a link or a search (RC4a, RC4b)
+    cookbook_save: CookbookSave | None = None  # a liked recipe into the cookbook doc (RC5)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
