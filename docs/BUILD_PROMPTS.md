@@ -237,7 +237,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
-| RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [ ] |
+| RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [ ] |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [ ] |
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [ ] |
@@ -11838,7 +11838,7 @@ Decisions (2026-11-06, with Michael):
   Back and Next) goes in a small shared helper that BD1b reuses.
 
 ### RC1a · Recipes: the cookbook, read from Google Docs
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 21, F29ha
 Read first: the plan's Integrations (Google rows and the app-verification notes) and Module
 behaviour D; 21's notes (linking and scopes); EX4a (the same scope); this section's intro.
@@ -11886,6 +11886,39 @@ Tests: unit tests for every parser rule and each irregular entry above, sync onl
 revision, a removed recipe, the scope check; integration test for the picker endpoint (only
 signed-in members, only Docs). Live smoke test (opt-in): read the real cookbook and compare
 the counts with the ones in this intro.
+
+Notes (2026-11-06):
+- The plan's wording (Module behaviour D "Recipes" and the Integrations row) is drafted but
+  not written to the doc yet: it waits for Michael's check, as this prompt asks.
+- `themi.connectors.gdocs`: `DocsClient` (`get`, `file`, `batch_update` with a required
+  revision) and `doc_id_from` (a link or an id). `GoogleConfig` gains `docs_url`,
+  `drive_url`, `picker_api_key` and `project_number` (`GOOGLE_DOCS_URL`, `GOOGLE_DRIVE_URL`,
+  `GOOGLE_PICKER_API_KEY`, `GOOGLE_PROJECT_NUMBER`). `DRIVE_FILE_SCOPE` is in the link scopes
+  (EX4a needn't add it).
+- `themi.core.cookbook` parses the Docs API's structure (pure functions; `entry_requests`
+  for RC5 is here too). The needs-a-look reasons are short: "headings typed as text", "two
+  Ingredients headings", "no Ingredients heading", "no ingredients found", "no steps found".
+- `themi.core.recipes.Recipes`: migration 0120 (`cookbook`, one row with the doc, the
+  account, versions, the last problem and `diet`; `recipes` with FTS5 over name, section and
+  words). Recipes gone from the doc get `removed_at`. `recipes.sync` runs every 15 minutes
+  and reads the doc only when Drive's `version` changed.
+- The first import's line starts "I've read 12 recipes and 3 charts...": "Read 12 recipes"
+  was taken by the PDA shield as an instruction and became "Up next: read...". Charts in
+  References are offered once as guides, unless a guide with a matching name is there.
+- Website: Accounts links each account with `drive.file` to `/accounts/{id}/cookbook`; that
+  page alone gets the picker's Content-Security-Policy (`X-Themi-Page: picker`, removed by
+  the security-headers middleware). It loads `static/cookbook_picker.js`, which gets its
+  token from Google Identity Services in the browser. A pasted link works too, where Google
+  already lets Themi open the doc. The picker and its CSP haven't met the real Google yet:
+  the first real pick may need an origin added to `PICKER_POLICY` (the browser console names
+  it).
+- `tests/fakes/gdocs_api.py` (docs and drive on one server, `shared_with` standing in for
+  drive.file) and `tests/fixtures/cookbook.py` (12 recipes and 3 charts in the real doc's
+  shape). The live test reads the real doc with `THEMI_LIVE_COOKBOOK_DOC` set.
+- Setup (README step 12): enable the Docs, Drive and Picker APIs, add the drive.file scope,
+  make a Picker API key, add the Funnel origin to the OAuth client's JavaScript origins, set
+  `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`, restart (migration 0120), link the
+  account again with Google Drive ticked, then choose the cookbook on Accounts.
 
 ### RC1b · Recipes: finding and showing one in chat
 Status: [ ]
