@@ -72,14 +72,15 @@ DOING = (
     r"add|put|remind|schedule|book|mark|tick|check off|cross off|complete|cancel|delete|"
     r"remove|move|reschedule|order|buy|set|start|stop|turn|pause|resume|snooze|assign|give|"
     r"hand|tell|send|archive|text|email|reply|make time|block|clear|undo|change|rename|"
-    r"show|list|find|look up|search|google|plan|log|note|track|record|done|finished"
+    r"show|list|find|look up|search|google|plan|log|note|track|record|done|finished|cook|bake"
 )
 REQUEST = re.compile(
     _LEAD + rf"(?:{_POLITE})?(?:{DOING})\b"
     rf"|\b{_POLITE}(?:{DOING})\b"
     r"|\bremind me\b|\bdon'?t let me forget\b|\bput (?:it|that|them|this) on\b"
     r"|\b(?:i|we) need (?:to buy|more|some)\b|\bwe(?:'re| are) (?:out of|low on)\b"
-    r"|\b(?:put|add) [^.?!]{1,60}\b(?:on|to) (?:the|my|our)\b",
+    r"|\b(?:put|add) [^.?!]{1,60}\b(?:on|to) (?:the|my|our)\b"
+    r"|\brecipes?\b|\bcookbook\b",  # RC1b: a recipe is looked up, never made up
     re.IGNORECASE,
 )
 # A question about the household's own state needs the tools (F20b: the laundry is looked
