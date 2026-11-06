@@ -195,8 +195,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
 | F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [x] 2026-11-05 |
-| F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [ ] |
-| F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [ ] |
+| F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [x] 2026-11-05 |
+| F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [x] 2026-11-05 |
 | F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [ ] |
 | F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [ ] |
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [ ] |
@@ -9675,7 +9675,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run` (migration 0111). Data: decline action 497 on the Pi.
 
 ### F29b · Feedback (2026-11-05): an emailed invitation already on the calendar isn't added again
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: 23, K3
 Read first: "Gmail triage" (events from emails); F26b (an email thread's approvals). From
 Michael's bug #159 (2026-11-05, 5:10 pm, "this created duplicate events on the calendar").
@@ -9711,8 +9711,25 @@ Scenario: bug #159, both invitation emails, each partner's taps, one event each 
 Data (Michael decides): delete Themi's copy `themif0764a22a9e13` from his calendar, or ask
 Themi to once F29a is live. Mark #159 reviewed once live.
 
+Notes (2026-11-05):
+- An email with a `text/calendar` or `application/ics` part is an invitation. The address
+  it was sent to comes from the end of Google's subject ("... (erin@madicen.com)").
+  Sent to the linked account's own address: no add card (Google adds it there).
+  Otherwise the card says "(an invitation sent to <address>)".
+- On the Pi both invitations went to madicen.com addresses. Michael's was on his calendar
+  by the time he tapped and Erin's wasn't, so the address alone couldn't tell. The fix that
+  matters: an email's add checks Google itself when tapped (`Events._there_now`: an event
+  that isn't Themi's, same start, matching title) and says "Already on your calendar, from
+  the invitation. Nothing new was added." A failed check adds as before.
+- Staging also skips an email event when the last calendar read has the same start and a
+  matching title, whatever the end.
+- Not done: one card for both partners. It belongs with F26b's grouping, which isn't
+  built. With the check above, each partner gets at most one copy on their own calendar.
+- The fake Gmail's `deliver` takes `to`.
+- Setup: restart `themi run`. Data: delete `themif0764a22a9e13` from Michael's calendar.
+
 ### F29c · Feedback (2026-11-05): "tell her urgently" sends a waiting note now, and a held note offers to
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: 34a, F22d
 Read first: "Liaison"; prompt 34a's notes (relays and urgency). From Michael's bug #155
 (2026-11-05, 2:58 pm, "telling urgently should get a different sort of response") and idea
@@ -9746,6 +9763,23 @@ No button in burnout mode. The text names the reason.
 Scenario: bug #155, the note at 2:58 pm, "Tell her urgently", Erin gets it at once.
 
 Data: note 2 to Erin may still be waiting; leave it. Mark #155 and #156 reviewed once live.
+
+Notes (2026-11-05):
+- `Liaison.hurry`: the same note asked for again at a higher urgency (whenever < today <
+  urgent) takes its queued outbox row back (`Outbox.cancel`) and sends it again. One row
+  in `liaison_items` (its urgency raised), and "Sent it to Erin now." If it went in the
+  meantime, it's "already went" as before. Lower or the same urgency changes nothing.
+- A held note's confirmation is a message the tool sends itself, with a "Send now"
+  button (kind `relay_now`). `ToolContext.cards` counts it as that call's answer, so the
+  turn ends there with no model words, as P2b's `asked` does. Migration 0112 adds
+  `liaison_items.card_outbox_id`. `Outbox.after_sent` (async listeners) lets the button
+  go once the note has gone: the confirmation becomes "Passed on to Erin."
+- No button in burnout mode (`Burnout.current(recipient)`). There a note waits for the
+  burnout hold as before.
+- The reason, said once: quiet hours ("Erin's in quiet hours until 8 am"), the daily
+  limit, or a busy time. A plain good-window wait reads as before.
+- In tests, a held note's turn has no model round: don't queue reply text after it.
+- Setup: restart `themi run` (migration 0112).
 
 ### F29d · Feedback (2026-11-05): a card is the whole answer, and a corrected request replaces its card
 Status: [ ]
