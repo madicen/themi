@@ -270,3 +270,17 @@ def test_0113_drops_map_answers_for_phrases_with_no_street_number() -> None:
     apply(db, every)
     rows = db.query("SELECT query_key FROM geocodes")
     assert [r["query_key"] for r in rows] == ["790 la para ave palo alto ca 94306 usa"]
+
+
+def test_0114_items_start_at_the_top_level() -> None:
+    """F29g: existing list items have no parent; members see dashes."""
+    db = Database(":memory:")
+    every = discover()
+    apply(db, [m for m in every if m.version < 114])
+    db.execute("INSERT INTO lists (name, created_at) VALUES ('Pets', '2026-11-05T00:00:00+00:00')")
+    db.execute(
+        "INSERT INTO list_items (list_id, name, added_at) "
+        "VALUES (1, 'cats', '2026-11-05T00:00:00+00:00')"
+    )
+    apply(db, every)
+    assert db.scalar("SELECT parent_id FROM list_items") is None

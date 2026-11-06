@@ -259,3 +259,15 @@ def test_a_quoted_task_name_isnt_an_order() -> None:
     assert find_demands('"Refill water and food bowls" is taken off the list.', 3) == []
     assert find_demands("“Call the vet” is due Friday.", 3) == []
     assert find_demands("Refill the water bowls.", 3)  # unquoted, still one
+
+
+def test_sub_items_and_numbered_lines_arent_commands() -> None:
+    """F29g (reply 271): "-- go upstairs" came out as "Up next: -- go upstairs"."""
+    from themi.channels.pda import find_demands, soften
+
+    shown = "Service dog tasks\n- body doubling\n-- go upstairs\n--- go downstairs"
+    numbered = "Pets\n1. cats\n1.1. feed them\n1.1.1. buy kibble"
+    for text in (shown, numbered):
+        assert not [f for f in find_demands(text) if f.rule == "imperative"]
+        assert soften(text, plain=True) == text
+    assert soften("Go upstairs.", plain=True) == "Up next: go upstairs."  # a sentence still is
