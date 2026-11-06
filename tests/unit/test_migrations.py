@@ -284,3 +284,14 @@ def test_0114_items_start_at_the_top_level() -> None:
     )
     apply(db, every)
     assert db.scalar("SELECT parent_id FROM list_items") is None
+
+
+def test_the_test_template_matches_a_fresh_migration() -> None:
+    """Fixtures copy one migrated template (tests/fixtures/db.py); it must be the real schema."""
+    from tests.fixtures.db import migrated_db
+
+    schema = "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+    copied, fresh = migrated_db(), open_database(":memory:")
+    assert copied.query(schema) == fresh.query(schema)
+    assert copied.scalar("SELECT MAX(version) FROM schema_version") == migrations.latest_version()
+    assert copied.scalar("PRAGMA foreign_keys") == 1

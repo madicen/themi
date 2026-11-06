@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 import pytest
 
+from tests.fixtures.db import migrated_db
 from themi.accounts import SYSTEM, AccountStore, Family, Member, Role
-from themi.storage import open_database
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, generate_key
 
@@ -81,7 +81,7 @@ def seed_family(store: AccountStore) -> SeededFamily:
 
 
 def make_store() -> AccountStore:
-    return AccountStore(open_database(":memory:"), Cipher(generate_key()))
+    return AccountStore(migrated_db(), Cipher(generate_key()))
 
 
 @pytest.fixture
