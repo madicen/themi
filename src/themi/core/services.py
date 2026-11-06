@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
     from themi.core.vacuum import Vacuum
+    from themi.core.web_search import WebSearch
     from themi.core.which_list import WhichList
     from themi.core.which_task import TaskNamer
     from themi.energy.outcomes import OutcomeTracker
@@ -183,6 +184,7 @@ class Services:
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
+    web_search: WebSearch | None = None  # looking things up online (F30d)
     guides: Guides | None = None  # the family's own guides (F29ha)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)

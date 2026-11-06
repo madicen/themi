@@ -172,6 +172,12 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
         r"block|time for|find (?:me )?time|summary",
     ),
+    "web": (  # F30d: looking things up online
+        "searching the web, reading a web page",
+        r"look (?:it |that |this )?up|search|google|online|on the web|internet|website|"
+        r"find out|still (?:open|practi[cs]ing|in business|working)|phone number|"
+        r"opening hours|reviews?",
+    ),
     "lists": (
         "named lists, the wall's lists, usual stores",
         r"list|packing|ideas|tick|cross|check off|clear|things to cook|store|amazon|"
@@ -253,6 +259,20 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Find me a free hour this week for the taxes",
         "Set aside Sunday afternoon for meal prep",
         "What's coming up next week?",
+    ),
+    "web": (  # F30d
+        "Can you look up whether Dr. Scheinbach is still practicing?",
+        "Search online for the vet's opening hours",
+        "What's the phone number for Contemporary Dental in San Mateo?",
+        "Find out if the farmers market is open on Sundays",
+        "Google the reviews for that plumber",
+        "Is the Thai place on El Camino still in business?",
+        "Look up how long to cook farro",
+        "Check the website for the library's holiday hours",
+        "Search for kid-friendly hikes near Mountain View",
+        "Can you find the recall notice for our car seat online?",
+        "What does the internet say about rosemary for cats?",
+        "Look it up: when does daylight saving end this year?",
     ),
     "lists": (
         "Make a list for the camping trip",
@@ -388,6 +408,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(("search_web", "read_web_page"), "web"),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),

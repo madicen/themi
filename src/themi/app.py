@@ -34,6 +34,7 @@ from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
+from themi.connectors.search import SearchBackend
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
@@ -94,6 +95,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
+from themi.core.web_search import WebSearch
 from themi.core.which_list import WhichList
 from themi.core.which_task import TaskNamer
 from themi.core.wrong_replies import WrongReplies
@@ -145,6 +147,7 @@ def build_app(
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
+    search: SearchBackend | None = None,
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
@@ -240,6 +243,7 @@ def build_app(
         Events(services).install()
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
+    WebSearch(services, search).install()  # F30d: says how to set it up without a key
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)

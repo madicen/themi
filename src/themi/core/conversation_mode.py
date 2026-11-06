@@ -72,7 +72,7 @@ DOING = (
     r"add|put|remind|schedule|book|mark|tick|check off|cross off|complete|cancel|delete|"
     r"remove|move|reschedule|order|buy|set|start|stop|turn|pause|resume|snooze|assign|give|"
     r"hand|tell|send|archive|text|email|reply|make time|block|clear|undo|change|rename|"
-    r"show|list|find|look up|plan|log|note|track|record|done|finished"
+    r"show|list|find|look up|search|google|plan|log|note|track|record|done|finished"
 )
 REQUEST = re.compile(
     _LEAD + rf"(?:{_POLITE})?(?:{DOING})\b"
