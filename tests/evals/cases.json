@@ -114,6 +114,7 @@
     {"id": "recipe-cook", "category": "recipes", "message": "Lets make the alfredo sauce together", "expect": ["start_cooking"], "allow": ["find_recipe"], "_note": "RC3a: a cooking session, not the recipe read out"},
     {"id": "recipe-link", "category": "recipes", "message": "Save me a trip, what do I need for this? https://www.example.com/recipes/vegan-lentil-soup", "expect": ["recipe_from_link"], "allow": ["add_recipe_to_grocery_list"], "_note": "RC4a: the link is read, never answered from memory"},
     {"id": "recipe-web", "category": "recipes", "message": "Look up a recipe for jackfruit tacos online", "expect": ["find_web_recipe"], "allow": ["find_recipe", "search_web"], "_note": "RC4b"},
-    {"id": "recipe-save", "category": "recipes", "message": "We loved those brownies, can you put them in our cookbook?", "setup": [], "expect": ["save_recipe_to_cookbook"], "allow": ["find_recipe"], "_note": "RC5"}
+    {"id": "recipe-save", "category": "recipes", "message": "We loved those brownies, can you put them in our cookbook?", "setup": [], "expect": ["save_recipe_to_cookbook"], "allow": ["find_recipe"], "_note": "RC5"},
+    {"id": "recipe-ideas-no-energy", "category": "recipes", "message": "Im wiped, what can we make from the cookbook with what we have?", "expect_any": ["cookbook_recipes_we_can_make", "suggest_meals"], "allow": ["log_energy_note", "log_energy_level", "find_recipe"], "reply_must_not": "(?i)\\\\b(energy|score|capacity|percent)\\\\b", "_note": "RC7: no energy words in the offer"}
   ]
 }
