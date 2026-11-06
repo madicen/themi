@@ -34,6 +34,7 @@ roborock = ["python-roborock==7.15.1"]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-xdist>=3.6",
     "hypothesis>=6.100",
     "coverage[toml]>=7.6",
     "ruff>=0.8",
@@ -68,6 +69,9 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["themi"]
 branch = true
+# make cov runs the tests in parallel (xdist): measure each worker, then combine.
+patch = ["subprocess"]
+parallel = true
 
 [tool.coverage.report]
 show_missing = true
