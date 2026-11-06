@@ -212,6 +212,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
+| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [ ] |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [ ] |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [ ] |
@@ -10903,6 +10904,76 @@ Scenario: none beyond F33c's: with F33c, reply 237 doesn't reach this round. Thi
 backstop.
 
 Data: none.
+
+### F32b · Feedback (2026-11-06): "my chores" is the chore chart, and a routine item moves there in one go
+Status: [ ]
+Depends on: C2b, R1a, F23e, F29d
+Read first: C2b's notes (the chore chart, `put_task_on_chore_chart`); R1a's and R1b's notes
+(routine items, just-for-today ones); F23e's notes (a task moved into a routine becomes
+the item); F29d's notes (a corrected card replaces its card). From Michael's bug #171
+(2026-11-06, 10:45 am, "That exchange took way too many attempts").
+
+What the Pi shows:
+- 10:44 am (reply 314): "Move the vacuum water item to my chore chart please" became
+  `add_to_wall_routine` ("replace vacuum water", Evening, just today), card 512. The
+  evening routine already had "Refill the vacuum's clean water", the item made at 7:28 am.
+  Michael tapped Not now.
+- 10:45 am (reply 315): "Move the 'replace vacuum water' routing item to the chore list on
+  the wall calendar": the same call, card 513, Not now again. Cards 512 and 513 are
+  `snoozed`, so both will come back.
+- 10:45 am (reply 316): "...routine item to the chore list..." worked in three calls:
+  `remove_routine_item`, then `create_task` (task 81), then `put_task_on_chore_chart`. Task
+  81 is open, on the chart, undated.
+- No tool moves a routine item to the chore chart, so the model reached for
+  `add_to_wall_routine`. That tool takes "move" as moving a task into a routine (bug #133's
+  `MOVED`), and doesn't check that they said chore chart or chores, not routine. Its
+  `ROUTINE_WORDS` guard only covers "what tasks could I take". It doesn't notice the item is
+  on that routine already ("vacuum water" in both titles).
+- The same mix-up was behind this morning's #166 thread. "I'll handle the vacuum's water.
+  Can you move it to my chores?" put Erin's task 80 on Michael's *evening routine* (card
+  508). "My chores" is his column on the chore chart, which is where the routine item was
+  then asked to go.
+- (The "To do: Refill the vacuum's clean water. Done already, or later?" under reply 316
+  in the report is task 81's first nudge, queued for 8 am Saturday, not sent then.)
+
+Build:
+- `put_task_on_chore_chart` gains `routine_item` (a title on one of their routines, or
+  ''), with `task_id` 0. It takes the item off the routine (`Routines.remove_item`, the
+  wall following at its sync), makes the task assigned to the routine's owner, and puts it
+  on the chart:
+  - A just-for-today item (`only_on`): a one-off due that day, on the chart.
+  - A repeating item: a repeating chore with the item's days (every day if it has none), on
+    the chart as repeating chores are. The reply says so ("Cycle Dishwasher is a chore now,
+    every day, on your column of the chart").
+  - One call, one line back: "Moved Refill the vacuum's clean water from your evening
+    routine to the chore chart, for today." It runs without a card, as the chart move does
+    now.
+- `add_to_wall_routine` is refused when their message names the chore chart, the chore list
+  or their chores ("chart", "chores?", "chore list") and no routine word: "They asked for
+  the chore chart, not a routine. A task goes there with put_task_on_chore_chart (task_id);
+  a routine item with put_task_on_chore_chart (routine_item)." Bug #166's "move it to my
+  chores" with a task of Erin's becomes: assign it to him, then put it on the chart. Check
+  the tool descriptions say so, and add routing examples.
+- `add_to_wall_routine` refuses an item like one already on that routine for that day
+  (`title_matches`, or two shared words of three letters or more, such as "vacuum water"),
+  naming it: "Refill the vacuum's clean water is on the evening routine already."
+- A card staged while an identical one (same category and payload) waits, pending or
+  snoozed, for the same person, replaces it: the old card is edited to "Replaced by the
+  newer card." and declined by `system`. That's F29d's calendar rule, for every category.
+
+Tests: each a failing test first. Reply 314's call is refused (chore chart, not routine), and
+"Move the vacuum water item to my chore chart" with `routine_item` moves it in one call. The
+routine loses it, task 81's double is on the chart for today, and the wall's routine drops it
+at the next sync. A repeating item becomes a repeating chore with its days. Bug #166's "move
+it to my chores" is refused for the routine. The duplicate "replace vacuum water" is refused,
+naming the item. A second identical card replaces the first, snoozed or not. "Add replace
+vacuum water to my evening routine tonight" (bug #22's case) still works.
+Scenario: bug #171, Michael's first message, one call, one line, the item on the chart and
+off the routine. No card, nothing snoozed.
+
+Data (Michael decides): decline actions 512 and 513 on the Pi (snoozed cards that would
+add "replace vacuum water" to the evening routine), or they'll come back. Task 81 is right
+as it is. Mark #171 reviewed once live.
 
 ## Conversation mode
 
