@@ -79,6 +79,7 @@ from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
+from themi.core.recipes import Recipes
 from themi.core.reminders import Reminders
 from themi.core.routines import Routines
 from themi.core.routines_wall import RoutinesWall
@@ -225,6 +226,8 @@ def build_app(
     Focus(services, tasks, day_summary).install()
     Taking(services, tasks).install()
     Guides(services).install()
+    recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
+    recipes.install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()
@@ -286,6 +289,7 @@ def build_app(
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
         PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
+        PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
     ]
     server = ServerControl(services, control_dir)
     server.install()

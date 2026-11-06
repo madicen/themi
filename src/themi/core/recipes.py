@@ -1,0 +1,447 @@
+"""The family's recipes (RC1a onwards): the cookbook doc, read into Themi's own copy.
+
+- The cookbook is a Google Doc a person picks once on Accounts (Google's file picker, scope
+  `drive.file`, so Themi can open that doc and nothing else of theirs). `choose` checks it's
+  a doc Themi can open, reads it, and says in one line what it found.
+- Every 15 minutes (`recipes.sync`) Drive's version of the file is checked; only a new
+  version is read again. Recipes whose heading is gone are marked removed, not deleted, so
+  a cooking session or grocery card naming one still works.
+- The References section's tables are reference charts, not recipes: the first import
+  offers them once as guides (F29ha), unless a guide on that topic is there already.
+
+Recipe text is the family's (or a website's, RC4a): data, shown as written, never
+instructions to Themi.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+from themi import clock
+from themi.accounts import LinkedAccount, Member
+from themi.channels.events import Button, InboundEvent
+from themi.channels.outbox import Priority
+from themi.connectors.gdocs import DOC_MIME, DocsClient, DocsError
+from themi.connectors.google import DRIVE_FILE_SCOPE, GoogleAccounts, OAuthError, TokenRevoked
+from themi.core import cookbook as book
+from themi.core.cookbook import Line, ParsedRecipe
+from themi.core.lists import name_key
+from themi.localtime import to_utc_iso
+
+if TYPE_CHECKING:
+    from themi.connectors.google import GoogleConfig
+    from themi.core.services import Services
+
+log = logging.getLogger(__name__)
+
+KIND = "recipes"  # how its messages show in the outbox
+SHOWN_LOOKS = 5  # recipes that need a look, named in the first import's line
+GUIDE_WORDS = {"guide", "chart", "timings", "timing", "of", "the", "common", "and", "for"}
+NOT_LINKED_TEXT = (
+    "That Google account can't open docs for Themi yet: linking it again on Accounts (with "
+    "the Google Drive box ticked) lets Themi open the one file you pick."
+)
+NOT_A_DOC_TEXT = "That file isn't a Google Doc, so it can't be the cookbook."
+NO_COOKBOOK_TEXT = (
+    "There's no cookbook yet. Someone can choose the family's recipe doc on the website's "
+    "Accounts page."
+)
+
+
+@dataclass(frozen=True)
+class Recipe:
+    id: int
+    key: str
+    source: str  # "doc" or "web"
+    url: str | None
+    section: str
+    subsection: str
+    name: str
+    ingredients: tuple[Line, ...]
+    steps: tuple[Line, ...]
+    notes: tuple[str, ...]
+    source_text: str
+    kind: str  # "recipe" or "chart"
+    chart: tuple[tuple[str, ...], ...]
+    yield_count: int | None
+    yield_said: int | None
+    needs_look: str
+    removed: bool
+    updated_at: datetime
+
+    @property
+    def is_chart(self) -> bool:
+        return self.kind == "chart"
+
+    @property
+    def makes(self) -> int | None:
+        """How many it makes, as written or as someone told Themi (RC2b)."""
+        return self.yield_said or self.yield_count
+
+
+def _lines(raw: str) -> tuple[Line, ...]:
+    return tuple(Line(str(d.get("text", "")), str(d.get("group", ""))) for d in json.loads(raw))
+
+
+def recipe_from_row(row: dict[str, Any]) -> Recipe:
+    return Recipe(
+        id=row["id"],
+        key=row["key"],
+        source=row["source"],
+        url=row["url"],
+        section=row["section"],
+        subsection=row["subsection"],
+        name=row["name"],
+        ingredients=_lines(row["ingredients"]),
+        steps=_lines(row["steps"]),
+        notes=tuple(json.loads(row["notes"])),
+        source_text=row["source_text"],
+        kind=row["kind"],
+        chart=tuple(tuple(r) for r in json.loads(row["chart"])),
+        yield_count=row["yield_count"],
+        yield_said=row["yield_said"],
+        needs_look=row["needs_look"],
+        removed=row["removed_at"] is not None,
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+    )
+
+
+def _words(recipe: ParsedRecipe) -> str:
+    parts = [i.text for i in recipe.ingredients] + recipe.notes
+    parts += [" ".join(row) for row in recipe.chart]
+    return "\n".join(parts)
+
+
+@dataclass(frozen=True)
+class SyncResult:
+    recipes: int
+    charts: int
+    added: int
+    changed: int
+    removed: int
+    needs_look: list[tuple[str, str]]  # (name, first reason)
+
+
+class Recipes:
+    def __init__(
+        self,
+        services: Services,
+        google: GoogleAccounts | None = None,
+        config: GoogleConfig | None = None,
+    ) -> None:
+        self.services = services
+        self.google = google
+        self.config = config
+        self.db = services.store.db
+
+    def install(self) -> None:
+        self.services.recipes = self
+        self.services.button_handlers["recipe"] = self.on_button
+
+    # ----- the cookbook doc -----------------------------------------------------------------
+
+    def settings(self) -> dict[str, Any]:
+        row = self.db.one("SELECT * FROM cookbook WHERE id = 1")
+        assert row is not None
+        return row
+
+    @property
+    def doc_id(self) -> str | None:
+        return self.settings()["doc_id"]
+
+    def diet(self) -> str:
+        return str(self.settings()["diet"] or "")
+
+    def set_diet(self, diet: str) -> None:
+        self.db.execute(
+            "UPDATE cookbook SET diet = ?, updated_at = ? WHERE id = 1",
+            (diet.strip().lower(), to_utc_iso(clock.now())),
+        )
+
+    def ready(self) -> bool:
+        return self.google is not None and self.config is not None
+
+    def client(self, account_id: int) -> DocsClient:
+        assert self.google is not None and self.config is not None
+        google = self.google
+        return DocsClient(
+            self.config.docs_url,
+            self.config.drive_url,
+            lambda: google.access_token(account_id),
+            lambda: google.forget_access_token(account_id),
+        )
+
+    def accounts_for(self, member: Member) -> list[LinkedAccount]:
+        """The member's linked accounts that can open a picked doc."""
+        return [
+            a
+            for a in self.services.store.linked_accounts(member.id)
+            if a.enabled and a.allows(DRIVE_FILE_SCOPE)
+        ]
+
+    async def choose(self, member: Member, account_id: int, doc_id: str) -> str:
+        """Make `doc_id` the cookbook, read through `account_id` (one of the member's), and
+        read it now. Returns what to tell them; raises DocsError with a plain reason."""
+        if not self.ready():
+            raise DocsError("Google isn't set up for Themi, so it can't read a cookbook.")
+        account = next((a for a in self.accounts_for(member) if a.id == account_id), None)
+        if account is None:
+            raise DocsError(NOT_LINKED_TEXT)
+        try:
+            record = await self.client(account.id).file(doc_id)
+        except (TokenRevoked, OAuthError) as exc:
+            raise DocsError(str(exc) or NOT_LINKED_TEXT) from exc
+        if record.get("mimeType") != DOC_MIME:
+            raise DocsError(NOT_A_DOC_TEXT)
+        same = self.doc_id == doc_id
+        self.db.execute(
+            "UPDATE cookbook SET doc_id = ?, account_id = ?, member_id = ?, title = ?, "
+            "version = NULL, problem = NULL, guides_offered = CASE WHEN ? THEN guides_offered "
+            "ELSE 0 END, updated_at = ? WHERE id = 1",
+            (
+                doc_id,
+                account.id,
+                member.id,
+                str(record.get("name") or "Cookbook"),
+                int(same),
+                to_utc_iso(clock.now()),
+            ),
+        )
+        result = await self.sync(force=True)
+        if result is None:
+            raise DocsError(self.settings()["problem"] or "The cookbook couldn't be read.")
+        said = self.summary(result)
+        await self.services.outbox.send(member, said, priority=Priority.REPLY, kind=KIND)
+        await self.offer_guides(member)
+        return said
+
+    async def sync(self, *, force: bool = False) -> SyncResult | None:
+        """Scheduler job (every 15 minutes): read the doc again if Drive says it changed.
+        None when there's no cookbook or it couldn't be read (the reason is kept)."""
+        row = self.settings()
+        if not row["doc_id"] or row["account_id"] is None or not self.ready():
+            return None
+        client = self.client(row["account_id"])
+        try:
+            record = await client.file(row["doc_id"])
+            version = str(record.get("version") or record.get("modifiedTime") or "")
+            if not force and version and version == row["version"]:
+                return SyncResult(0, 0, 0, 0, 0, [])
+            parsed = book.parse(await client.get(row["doc_id"]))
+        except (DocsError, TokenRevoked, OAuthError) as exc:
+            reason = str(exc) or type(exc).__name__
+            log.warning("The cookbook wasn't read: %s", reason)
+            self.db.execute(
+                "UPDATE cookbook SET problem = ?, updated_at = ? WHERE id = 1",
+                (reason, to_utc_iso(clock.now())),
+            )
+            return None
+        result = self.store_doc(parsed.recipes)
+        now = to_utc_iso(clock.now())
+        self.db.execute(
+            "UPDATE cookbook SET version = ?, revision = ?, read_at = ?, title = ?, "
+            "problem = NULL, updated_at = ? WHERE id = 1",
+            (version, parsed.revision, now, parsed.title or row["title"], now),
+        )
+        return result
+
+    def store_doc(self, parsed: list[ParsedRecipe]) -> SyncResult:
+        """Bring the stored copy in step with what the doc holds now."""
+        now = to_utc_iso(clock.now())
+        existing = {
+            r["key"]: r
+            for r in self.db.query("SELECT key, hash, removed_at FROM recipes WHERE source = 'doc'")
+        }
+        added = changed = 0
+        with self.db.transaction():
+            for recipe in parsed:
+                digest = recipe.content_hash()
+                values = (
+                    recipe.section,
+                    recipe.subsection,
+                    recipe.name,
+                    json.dumps([{"text": i.text, "group": i.group} for i in recipe.ingredients]),
+                    json.dumps([{"text": s.text, "group": s.group} for s in recipe.steps]),
+                    json.dumps(recipe.notes),
+                    recipe.source,
+                    recipe.kind,
+                    json.dumps(recipe.chart),
+                    recipe.yield_count,
+                    "; ".join(recipe.needs_look),
+                    _words(recipe),
+                    digest,
+                    recipe.position,
+                    now,
+                )
+                old = existing.get(recipe.key)
+                if old is None:
+                    self.db.execute(
+                        "INSERT INTO recipes (section, subsection, name, ingredients, steps, "
+                        "notes, source_text, kind, chart, yield_count, needs_look, words, hash, "
+                        "position, updated_at, key, source, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'doc', ?)",
+                        (*values, recipe.key, now),
+                    )
+                    added += 1
+                elif old["hash"] != digest or old["removed_at"] is not None:
+                    self.db.execute(
+                        "UPDATE recipes SET section = ?, subsection = ?, name = ?, "
+                        "ingredients = ?, steps = ?, notes = ?, source_text = ?, kind = ?, "
+                        "chart = ?, yield_count = ?, needs_look = ?, words = ?, hash = ?, "
+                        "position = ?, updated_at = ?, removed_at = NULL WHERE key = ?",
+                        (*values, recipe.key),
+                    )
+                    changed += 1
+                elif old["hash"] == digest:  # same words; the order may have moved
+                    self.db.execute(
+                        "UPDATE recipes SET position = ? WHERE key = ?",
+                        (recipe.position, recipe.key),
+                    )
+            keys = {r.key for r in parsed}
+            gone = [k for k, r in existing.items() if k not in keys and r["removed_at"] is None]
+            for key in gone:
+                self.db.execute(
+                    "UPDATE recipes SET removed_at = ?, updated_at = ? WHERE key = ?",
+                    (now, now, key),
+                )
+        return SyncResult(
+            recipes=sum(1 for r in parsed if r.kind == "recipe" and not r.is_reference),
+            charts=sum(1 for r in parsed if r.kind == "chart" or r.is_reference),
+            added=added,
+            changed=changed,
+            removed=len(gone),
+            needs_look=[(r.name, r.needs_look[0]) for r in parsed if r.needs_look],
+        )
+
+    @staticmethod
+    def summary(result: SyncResult) -> str:
+        charts = f" and {result.charts} chart{'s' if result.charts != 1 else ''}"
+        charts = charts if result.charts else ""
+        said = f"I've read {result.recipes} recipes{charts} from the cookbook."
+        if result.needs_look:
+            shown = [f"{name} ({reason})" for name, reason in result.needs_look[:SHOWN_LOOKS]]
+            more = len(result.needs_look) - len(shown)
+            said += f" {len(result.needs_look)} need a look: " + ", ".join(shown)
+            said += f", and {more} more (on the Recipes page)." if more else "."
+        return said
+
+    # ----- References charts as guides ------------------------------------------------------
+
+    def reference_charts(self) -> list[Recipe]:
+        return [r for r in self.all(include_charts=True) if r.is_chart and _is_reference(r)]
+
+    def _has_guide_for(self, member: Member, recipe: Recipe) -> bool:
+        guides = self.services.guides
+        if guides is None:
+            return True
+        wanted = {w.rstrip("s") for w in name_key(recipe.name).split() if w not in GUIDE_WORDS}
+        for guide in guides.visible(member):
+            words = {w.rstrip("s") for w in name_key(guide.name).split()}
+            if len(wanted & words) >= min(2, len(wanted)):
+                return True
+        return False
+
+    async def offer_guides(self, member: Member) -> None:
+        """Once per cookbook: the References charts that aren't guides yet, as guides."""
+        if self.settings()["guides_offered"] or self.services.guides is None:
+            return
+        charts = [r for r in self.reference_charts() if not self._has_guide_for(member, r)]
+        self.db.execute("UPDATE cookbook SET guides_offered = 1 WHERE id = 1")
+        if not charts:
+            return
+        names = ", ".join(f'"{r.name}"' for r in charts)
+        await self.services.outbox.send(
+            member,
+            f"The cookbook's References has {names}. Want "
+            + ("them as guides, so you can ask me about them?" if len(charts) > 1
+               else "it as a guide, so you can ask me about it?"),
+            priority=Priority.REPLY,
+            kind=KIND,
+            buttons=[
+                Button("Save as guides" if len(charts) > 1 else "Save as a guide", "recipe",
+                       {"action": "guides", "ids": [r.id for r in charts]}),
+                Button("Not now", "recipe", {"action": "guides_no"}),
+            ],
+        )  # fmt: skip
+
+    def save_charts_as_guides(self, member: Member, ids: list[int]) -> list[str]:
+        guides = self.services.guides
+        assert guides is not None
+        saved = []
+        for recipe_id in ids:
+            recipe = self.get(int(recipe_id))
+            if recipe is None or not recipe.is_chart:
+                continue
+            guides.save(member, recipe.name, chart_guide_text(recipe), personal=False)
+            saved.append(recipe.name)
+        return saved
+
+    # ----- reading the stored copy ------------------------------------------------------------
+
+    def get(self, recipe_id: int) -> Recipe | None:
+        row = self.db.one("SELECT * FROM recipes WHERE id = ?", (recipe_id,))
+        return recipe_from_row(row) if row else None
+
+    def all(self, *, include_charts: bool = False, source: str | None = None) -> list[Recipe]:
+        rows = self.db.query(
+            "SELECT * FROM recipes WHERE removed_at IS NULL AND (? OR kind = 'recipe') "
+            "AND (? IS NULL OR source = ?) ORDER BY source, position, name",
+            (int(include_charts), source, source),
+        )
+        return [recipe_from_row(r) for r in rows]
+
+    def link(self, recipe: Recipe) -> str | None:
+        """Where it is: the heading in the doc, or the web page it came from."""
+        if recipe.source == "web":
+            return recipe.url
+        doc_id = self.doc_id
+        if not doc_id:
+            return None
+        anchor = f"#heading={recipe.key}" if recipe.key.startswith("h.") else ""
+        return f"https://docs.google.com/document/d/{doc_id}/edit{anchor}"
+
+    # ----- buttons ----------------------------------------------------------------------------
+
+    async def on_button(self, event: InboundEvent) -> None:
+        assert event.button is not None
+        payload = event.button.payload
+        action = payload.get("action")
+        member = self.services.store.get_member(event.member.id)
+        text: str | None = None
+        if action == "guides":
+            saved = self.save_charts_as_guides(member, list(payload.get("ids") or []))
+            text = (
+                "Saved as guides: "
+                + ", ".join(f'"{n}"' for n in saved)
+                + ". Ask me anything in them."
+                if saved
+                else "Those charts aren't in the cookbook any more."
+            )
+        elif action == "guides_no":
+            text = "Left them in the cookbook."
+        else:
+            handler = self.button_actions.get(str(action))
+            if handler is not None:
+                await handler(event)
+            return
+        if text and event.button.message_id is not None:
+            await self.services.outbox.edit(member, event.button.message_id, text)
+
+    @property
+    def button_actions(self) -> dict[str, Any]:
+        """Later prompts' buttons on the same "recipe" kind (show, cook, grocery card...)."""
+        return self.services.recipe_buttons
+
+
+def _is_reference(recipe: Recipe) -> bool:
+    return recipe.section.strip().lower() == book.REFERENCES
+
+
+def chart_guide_text(recipe: Recipe) -> str:
+    """A chart as a guide: its name, then a line per row ("Brown Rice: Ratio 1:1, ...")."""
+    parsed = ParsedRecipe(recipe.key, recipe.name, chart=[list(r) for r in recipe.chart])
+    return f"{recipe.name}\n{book.chart_text(parsed)}"

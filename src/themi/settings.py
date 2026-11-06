@@ -36,6 +36,11 @@ GOOGLE_ENDPOINT_VARIABLES = {
     "gmail_url": "GOOGLE_GMAIL_URL",
     "calendar_url": "GOOGLE_CALENDAR_URL",
     "tasks_url": "GOOGLE_TASKS_URL",
+    "docs_url": "GOOGLE_DOCS_URL",
+    "drive_url": "GOOGLE_DRIVE_URL",
+    # RC1a: not endpoints, but strings for the same config: Google's file picker.
+    "picker_api_key": "GOOGLE_PICKER_API_KEY",
+    "project_number": "GOOGLE_PROJECT_NUMBER",
 }
 
 

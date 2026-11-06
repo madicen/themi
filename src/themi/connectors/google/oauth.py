@@ -45,8 +45,11 @@ CALENDAR_CREATE_SCOPE = "https://www.googleapis.com/auth/calendar.app.created"
 CALENDAR_SCOPES = (CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, CALENDAR_CREATE_SCOPE)
 # GT1a: Google Tasks, which "Hey Google, add a task" fills: read, and delete once handled.
 TASKS_SCOPE = "https://www.googleapis.com/auth/tasks"
+# RC1a: only the files Themi makes or a person picks for it (the family's cookbook, picked once
+# in Google's file picker). EX4a's expense sheets use the same scope.
+DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 SIGNIN_SCOPES = ("openid", "email")
-LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES, TASKS_SCOPE)
+LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES, TASKS_SCOPE, DRIVE_FILE_SCOPE)
 STATE_TTL = timedelta(minutes=10)
 TIMEOUT = 20.0
 
@@ -62,6 +65,12 @@ class GoogleConfig:
     gmail_url: str = "https://gmail.googleapis.com"
     calendar_url: str = "https://www.googleapis.com"
     tasks_url: str = "https://tasks.googleapis.com"
+    docs_url: str = "https://docs.googleapis.com"  # RC1a: the cookbook
+    drive_url: str = "https://www.googleapis.com"  # RC1a: a file's version, before reading it
+    # RC1a: Google's file picker on the website (a browser key limited to the Picker API, and
+    # the Cloud project's number). Without them the cookbook page offers a pasted link only.
+    picker_api_key: str = ""
+    project_number: str = ""
 
 
 class OAuthError(Exception):

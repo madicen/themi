@@ -98,7 +98,8 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
 1. **Project.** At <https://console.cloud.google.com>, create a project (for example
    "Themi Household").
 2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API**, the
-   **Google Calendar API** and the **Google Tasks API**.
+   **Google Calendar API**, the **Google Tasks API**, and for the cookbook (RC1a) the
+   **Google Docs API**, the **Google Drive API** and the **Google Picker API**.
 3. **Consent screen.** Under *Google Auth Platform → Branding*, give the app a name
    ("Themi") and a support email. Under *Audience*, choose **External**.
 4. **Scopes.** Under *Data Access*, add `openid`, `.../auth/userinfo.email`,
@@ -106,7 +107,9 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
    `https://www.googleapis.com/auth/calendar.events`,
    `https://www.googleapis.com/auth/calendar.calendarlist.readonly` (to find the "Themi"
    calendar), `https://www.googleapis.com/auth/calendar.app.created` (to make it if
-   it's missing) and `https://www.googleapis.com/auth/tasks` (the Google Tasks inbox).
+   it's missing), `https://www.googleapis.com/auth/tasks` (the Google Tasks inbox) and
+   `https://www.googleapis.com/auth/drive.file` (only the files someone picks for Themi,
+   such as the cookbook, or that it makes).
 5. **Publish, unverified.** Under *Audience*, press **Publish app** and don't submit it
    for verification. Google shows an "unverified app" warning at sign-in ("Advanced", then
    "Go to Themi" continues). `gmail.modify` is a restricted scope, so an unverified app can
@@ -135,6 +138,15 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
    their Google Tasks. Each minute Themi takes new items from their default list ("My
    Tasks") as if they'd sent them, answers in Telegram, and deletes them there: the list is
    a queue. An account linked before this needs linking again; *My accounts* says so.
+12. **The family cookbook (RC1a).** Themi reads the family's recipe doc and can add to it,
+   but with `drive.file` it can open only a doc someone picks in Google's file picker. For
+   the picker: under *APIs & Services → Credentials*, create an **API key** restricted to
+   the Google Picker API (and to the site's address under *Website restrictions*); copy the
+   project **number** from the project's *Dashboard*; in the OAuth client add
+   `<THEMI_PUBLIC_URL>` (the Funnel address, no path) as an **Authorized JavaScript origin**.
+   Put them in `.env` as `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`, restart, then
+   on *Accounts* open the account's *Choose the family cookbook* and pick the doc. An
+   account linked before this needs linking again (with Google Drive ticked).
 
 To try the flow without a Google project, run the fake Google with
 `.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.

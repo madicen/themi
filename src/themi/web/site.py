@@ -69,12 +69,32 @@ STRENGTH_LABELS = {
 EXPIRED_LINK = "Sign-in links work once, for 10 minutes. Sending /site to Themi gets a fresh one."
 
 
+# RC1a: the cookbook page runs Google's file picker, the one page that loads Google's own
+# scripts (agreed 2026-11-06). Only a page that asks for it (the X-Themi-Page header) gets it.
+PICKER_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' https://apis.google.com https://accounts.google.com https://*.gstatic.com; "
+    "style-src 'self' 'unsafe-inline' https://accounts.google.com https://*.gstatic.com; "
+    "img-src 'self' data: https://*.gstatic.com https://*.googleusercontent.com; "
+    "frame-src https://docs.google.com https://drive.google.com https://accounts.google.com "
+    "https://content.googleapis.com; "
+    "connect-src 'self' https://*.googleapis.com https://accounts.google.com; "
+)
+
+
 def security_headers(response: Response, form_targets: str = "") -> None:
     """`form_targets`: extra origins a form may lead to (Google's sign-in page, via redirect)."""
     form_action = f"'self' {form_targets}".strip()
+    page = response.headers.get("X-Themi-Page")
+    if page is not None:
+        del response.headers["X-Themi-Page"]
+    base = (
+        PICKER_POLICY
+        if page == "picker"
+        else "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+    )
     response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-        f"frame-ancestors 'none'; form-action {form_action}; base-uri 'none'"
+        f"{base}frame-ancestors 'none'; form-action {form_action}; base-uri 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -94,6 +114,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         knowledge_pages,
         list_pages,
         maintenance_pages,
+        recipe_pages,
         safeway_pages,
         spending_pages,
         task_pages,
@@ -153,6 +174,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(connection_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
     web.include_router(guide_pages.routes(kit))
+    web.include_router(recipe_pages.routes(kit))
     web.include_router(task_pages.routes(kit))
     web.include_router(list_pages.routes(kit))
     web.include_router(week_pages.routes(kit))

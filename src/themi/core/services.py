@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
     from themi.core.reactions import Reactions
+    from themi.core.recipes import Recipes
     from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
@@ -186,6 +187,9 @@ class Services:
     burnout: Burnout | None = None  # everything held, no demands (F22d)
     web_search: WebSearch | None = None  # looking things up online (F30d)
     guides: Guides | None = None  # the family's own guides (F29ha)
+    recipes: Recipes | None = None  # the family cookbook, from its Google Doc (RC1a)
+    # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
+    recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
