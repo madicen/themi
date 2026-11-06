@@ -201,7 +201,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [x] 2026-11-05 |
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [x] 2026-11-05 |
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
-| F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [~] |
+| F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
 | F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -10047,7 +10047,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run` (migration 0114).
 
 ### F29ha · Idea (2026-11-05): the family's own guides, given as text, and looked up
-Status: [~]
+Status: [x] 2026-11-05
 Depends on: 14, 27
 Read first: "Memory" (facts and their search); prompt 27's notes (meal suggestions); "Security
 and privacy" (outside text is data). From Erin's idea #148 (2026-11-05, 9:25 am, "Themi
@@ -10071,6 +10071,21 @@ Tests: saving from chat; text the model made up is refused; the lookup by topic;
 guide's text containing instructions is data, not followed; a private guide not found by
 the partner; the Guides page adds and deletes.
 Scenario: Erin pastes the grain chart, then Michael asks "how long for quinoa?".
+
+Notes (2026-11-05):
+- `themi.core.guides`: migration 0115's `guides` table (name, body, owner or NULL for
+  the household). Not encrypted: it's family reference text, not a secret. Say so if
+  that should change.
+- `save_guide` keeps the text only if it's in their message (or the one before), word for
+  word, so the model can't invent a guide. It ends the turn with "Saved ..." (P2b's
+  `asked`).
+- `look_up_guide` picks the guide whose name and text best match the topic. It returns
+  the whole guide when short (2,000 characters), else its first line and the matching
+  lines, inside a `<data source="guide ...">` block. With no match it declines and says
+  not to answer from memory. The context lists the guides they can see.
+- The Guides page (More → Household) lists, adds (name, text, "just for me") and deletes.
+- Setup: restart `themi run` (migration 0115). Then Erin can paste the grain chart in
+  chat or on the Guides page. If it's a photo or PDF, that's F29hb.
 
 ### F29hb · Idea (2026-11-05): a guide from a photo or a PDF
 Status: [ ]
