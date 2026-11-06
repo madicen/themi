@@ -101,7 +101,8 @@ class TavilySearch(_Http):
         for r in body.get("results") or []:
             if isinstance(r, dict) and r.get("raw_content"):
                 return str(r["raw_content"])[:MAX_PAGE]
-        raise SearchError("that page couldn't be read")
+        # Some sites refuse the fetch ("Failed to fetch url"); another result may read fine.
+        raise SearchError("that site wouldn't let the page be read; another result may work")
 
 
 class FirecrawlSearch(_Http):
@@ -130,7 +131,7 @@ class FirecrawlSearch(_Http):
         data = body.get("data") or {}
         text = data.get("markdown") if isinstance(data, dict) else None
         if not text:
-            raise SearchError("that page couldn't be read")
+            raise SearchError("that site wouldn't let the page be read; another result may work")
         return str(text)[:MAX_PAGE]
 
 
