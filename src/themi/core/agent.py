@@ -134,6 +134,24 @@ def _repeats_card(reply: str, waiting: list[str]) -> bool:
     return bool(said) and any(said == _card_words(s) for s in waiting)
 
 
+def _counted_calls(calls: list[tuple[str, str, str]]) -> int:
+    """The calls that count for "every call made a card" (F29d). Left out (F31b, bug #166):
+    one that failed on its arguments and was made again, successfully, later in the turn
+    (a retry), and `more_tools`, which only offers tools."""
+    counted = 0
+    for i, (name, outcome, content) in enumerate(calls):
+        if name == "more_tools":
+            continue
+        if (
+            outcome == "failed"
+            and content.startswith("Invalid arguments")
+            and any(n == name and o == "ok" for n, o, _ in calls[i + 1 :])
+        ):
+            continue
+        counted += 1
+    return counted
+
+
 def _asks_its_own(reply: str) -> bool:
     """A question the card doesn't ask ("Which calendar?")."""
     rest = reply.replace(ASK_QUESTION, "").replace(ASK_QUESTION.lower(), "")
@@ -587,7 +605,7 @@ class Agent:
                         return _done_first(ctx.done, "")
                     if (
                         ctx.staged
-                        and len(ctx.staged) == len(ctx.outcomes)
+                        and len(ctx.staged) == _counted_calls(ctx.calls)
                         and not _asks_its_own(reply)
                     ):  # F29d (#157): every call made a card, and the cards say it
                         return _done_first(ctx.done, "")

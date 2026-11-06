@@ -17,6 +17,7 @@ Every member's chain for every AI task is primary, then fallback.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import AsyncIterator, Callable
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -420,3 +421,15 @@ async def scenario(
     await s.start()
     yield s
     await s.stop()
+    _no_task_numbers(fake_telegram)
+
+
+# F31b (bug #166): people read tasks by their titles, never "task 80".
+TASK_NUMBER = re.compile(r"\btask\s+#?\d+\b", re.IGNORECASE)
+
+
+def _no_task_numbers(telegram: FakeTelegram) -> None:
+    for _, params in telegram.calls_in_order("sendMessage", "editMessageText"):
+        text = str(params.get("text") or "")
+        found = TASK_NUMBER.search(text)
+        assert found is None, f"A task number reached a person ({found.group(0)!r}): {text!r}"

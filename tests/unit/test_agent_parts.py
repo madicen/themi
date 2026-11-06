@@ -414,3 +414,30 @@ def test_a_card_repeated_with_other_dashes_and_words_about_it_is_a_repeat() -> N
     )
     assert _repeats_card(said, [card])
     assert not _repeats_card("Tutor Gabriel at 4. Want a reminder before it?", [card])
+
+
+def test_a_retried_call_doesnt_count_as_a_failure() -> None:
+    """F31b, bug #166 (reply 307): a call refused on its arguments, made again and staged."""
+    calls = [
+        ("add_to_wall_routine", "failed", "Invalid arguments: 'job' was unexpected"),
+        ("add_to_wall_routine", "ok", "Staged for approval (action 508): ..."),
+    ]
+    assert agent_module._counted_calls(calls) == 1
+
+
+def test_a_failure_that_isnt_retried_still_counts() -> None:
+    calls = [
+        ("add_to_wall_routine", "failed", "Invalid arguments: 'job' was unexpected"),
+        ("add_calendar_event", "ok", "Staged for approval (action 9): ..."),
+    ]
+    assert agent_module._counted_calls(calls) == 2
+    other = [
+        ("add_to_wall_routine", "failed", "There's no task with that number."),
+        ("add_to_wall_routine", "ok", "Staged for approval (action 9): ..."),
+    ]
+    assert agent_module._counted_calls(other) == 2  # refused on its sense, not its form
+
+
+def test_more_tools_doesnt_count() -> None:
+    calls = [("more_tools", "ok", "Those tools are here already."), ("x", "ok", "Staged")]
+    assert agent_module._counted_calls(calls) == 1

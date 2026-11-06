@@ -144,6 +144,10 @@ async def test_an_email_triage_isnt_sure_about_waits_in_the_audit(
     await scenario.tap("Erin", "Time-sensitive")
     await scenario.tap("Erin", "Not important")
     assert scenario.app.db.scalar("SELECT category FROM emails WHERE id = ?", (email,)) == "urgent"
+    # F31b: the done line drops the count, which was stale by then
+    said = scenario.inbox("Erin") + [e["text"] for e in scenario.edits("Erin")]
+    done = [t for t in said if t.startswith("Marked done: Email audit")]
+    assert done and all(t.startswith("Marked done: Email audit.") for t in done), done
 
 
 async def test_stopping_partway_brings_it_back_later(scenario: Scenario, inbox: FakeGmail) -> None:

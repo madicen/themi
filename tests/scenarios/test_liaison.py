@@ -223,7 +223,8 @@ async def test_idea_156_send_now_sends_a_held_note(scenario: Scenario) -> None:
     await held(scenario, "Let Erin know the dog's been fed", "The dog's been fed.")
     before = len(scenario.inbox("Erin"))
     await scenario.tap("Husband", "Send now")
-    assert scenario.inbox("Erin")[before:] == ["Urgent, from Husband: The dog's been fed."]
+    # F31b (#166's thread): sent now, but not called urgent when it wasn't
+    assert scenario.inbox("Erin")[before:] == ["From Husband: The dog's been fed."]
     assert scenario.edits("Husband")[-1]["text"] == "Sent it to Erin now."
     assert not scenario.edits("Husband")[-1].get("reply_markup", {}).get("inline_keyboard")
     (note,) = notes(scenario)

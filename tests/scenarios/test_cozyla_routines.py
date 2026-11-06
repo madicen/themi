@@ -518,3 +518,28 @@ async def test_a_check_in_unticked_on_the_wall_isnt_ticked_again(
     await at(scenario, thursday, 16, 30)
     assert (routine["id"], thursday.isoformat()) not in fake_cozyla.routine_ticks
     assert board(scenario).get(run.id).due_on == date(2026, 10, 24)
+
+
+async def test_bug_166_a_card_after_a_retried_call_is_the_whole_answer(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F31b, bug #166 (reply 307): the first call failed on an argument the tool doesn't
+    take and was made again; the card was followed by the model's own words, and both named
+    the task by number."""
+    erin = scenario.member("Erin")
+    task = await board(scenario).create(
+        erin, "Refill the vacuum's clean water", "physical", 1, assignee=erin
+    )
+    await at(scenario, WED, 9, 30)
+    scenario.primary.queue_tool_call(
+        "add_to_wall_routine", {**VACUUM_ITEM, "task_id": task.id, "job": 0}
+    )
+    scenario.primary.queue_tool_call("add_to_wall_routine", {**VACUUM_ITEM, "task_id": task.id})
+    scenario.primary.queue_text(
+        '"Vacuum water" is staged to move to your evening routine for tonight, and '
+        '"Refill the vacuum\'s clean water" will close.'
+    )
+    replies = await scenario.say("Husband", "I'll handle the vacuum's water. Can you move it?")
+    assert len(replies) == 1, replies
+    assert "Refill the vacuum's clean water" in replies[0]
+    assert f"task {task.id}" not in replies[0].lower()

@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 TITLE = "Email audit ({n} to look at)"
+DONE_TITLE = "Email audit"  # F31b: the count was stale by the time it's done
 NUDGE_TEXT = "Email audit: {n} to look at, one at a time. Start now, or later?"
 SENDER_TEXT = "{i} of {n}. Mail from {label} ({address}), {reason}."
 EMAIL_TEXT = "{i} of {n}. An email from {label}: {subject}\n{summary}"
@@ -152,7 +153,7 @@ class EmailAudit:
         task = self._open_task(audit)
         if waiting == 0:
             if task is not None:
-                await self.board.complete(task.id, member)
+                await self._done_task(task.id, member)
             return
         title = TITLE.format(n=waiting)
         if task is None:
@@ -175,6 +176,13 @@ class EmailAudit:
             await self.board.prompt(task)  # now it's known as the audit: its own nudge
         elif task.title != title:
             await self.board.update(task.id, member, title=title)
+
+    async def _done_task(self, task_id: int, member: Member) -> None:
+        """Done, under its plain title: "Marked done: Email audit." (F31b)."""
+        # Straight to the row: the audit's task is off the wall, and a retitle through the
+        # board is a change people hear about.
+        self.db.execute("UPDATE tasks SET title = ? WHERE id = ?", (DONE_TITLE, task_id))
+        await self.board.complete(task_id, member)
 
     def waiting(self, member: Member) -> list[dict[str, Any]]:
         return self.db.query(  # a sender added from an older message's button is settled
@@ -373,7 +381,7 @@ class EmailAudit:
         words = ", ".join(f"{counts[a]} {ANSWER_WORDS[a]}" for a in ANSWERS if counts.get(a))
         task = self._open_task(audit)
         if task is not None:
-            await self.board.complete(task.id, member)
+            await self._done_task(task.id, member)
         await self.services.outbox.send(
             member, DONE_TEXT.format(n=total, counts=words), priority=Priority.REPLY
         )
