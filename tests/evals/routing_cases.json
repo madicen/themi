@@ -898,6 +898,14 @@
    "tools": [
     "start_cooking"
    ]
+  },
+  {
+   "id": "recipe-link",
+   "kind": "plain",
+   "message": "Can you pull the recipe off https://www.example.com/recipes/vegan-chili",
+   "tools": [
+    "recipe_from_link"
+   ]
   }
  ]
 }

@@ -111,6 +111,7 @@
     {"id": "recipe-chart", "category": "recipes", "message": "How long do I roast carrots in the oven?", "expect": ["find_recipe"], "_note": "RC1b: the Roasted Vegetables chart answers it"},
     {"id": "recipe-not-a-task", "category": "recipes", "message": "I am cooking tonight, finally feeling up to it", "expect": [], "allow": ["find_recipe", "log_energy_note", "log_energy_level", "suggest_meals"], "forbid": ["create_task"], "_note": "RC1b: cooking tonight is news, not a task"},
     {"id": "recipe-shop", "category": "recipes", "message": "Add the lasagna to the grocery list", "expect": ["add_recipe_to_grocery_list"], "forbid": ["add_to_grocery_list"], "_note": "RC2a: a recipe card, never the ingredients listed from memory"},
-    {"id": "recipe-cook", "category": "recipes", "message": "Lets make the alfredo sauce together", "expect": ["start_cooking"], "allow": ["find_recipe"], "_note": "RC3a: a cooking session, not the recipe read out"}
+    {"id": "recipe-cook", "category": "recipes", "message": "Lets make the alfredo sauce together", "expect": ["start_cooking"], "allow": ["find_recipe"], "_note": "RC3a: a cooking session, not the recipe read out"},
+    {"id": "recipe-link", "category": "recipes", "message": "Save me a trip, what do I need for this? https://www.example.com/recipes/vegan-lentil-soup", "expect": ["recipe_from_link"], "allow": ["add_recipe_to_grocery_list"], "_note": "RC4a: the link is read, never answered from memory"}
   ]
 }
