@@ -28,6 +28,7 @@ TASK_LABELS = {
     AITask.EMBEDDING: "Choosing which tools a message needs (embeddings, Gemini only)",
     AITask.CHAT: "Conversation mode: the chat reply",
     AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
+    AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",
 }
 KIND_LABELS = {
     "gemini": "Gemini",

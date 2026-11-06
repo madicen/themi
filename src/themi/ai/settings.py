@@ -43,6 +43,7 @@ class AITask(StrEnum):
     EMBEDDING = "embedding"  # P7b: which tool groups a message needs
     CHAT = "chat"  # CM1a: the reply in conversation mode, no tools
     SIDECAR = "sidecar"  # CM1b: the background pass that picks out tasks and events
+    RECIPES = "recipes"  # RC2a-RC4a: reading ingredients, prep and recipes from pages
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)

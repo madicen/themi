@@ -647,6 +647,9 @@ def search(recipes: list[Recipe], text: str, *, section: str = "") -> list[Match
         score = 3.0 * name_hits + body_hits + (5.0 if name == wanted else 0.0)
         found.append(Match(recipe, score, name_hits, len(wanted)))
     found.sort(key=lambda m: (-m.score, m.recipe.source != "doc", m.recipe.name))
+    if found:  # a stray word ("butter" in a sauce) isn't a match for "peanut butter bars"
+        best = found[0].score
+        found = [m for m in found if m.score * 3 >= best]
     return found
 
 
