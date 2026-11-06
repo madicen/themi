@@ -335,3 +335,19 @@ async def test_a_miss_with_no_routine_named_lists_each(scenario: Scenario) -> No
         "No item like stretches on Erin's routines. Morning: Vitamins. Evening: Take Meds. "
         "Nothing was changed."
     )
+
+
+async def test_an_add_in_a_removal_message_is_declined(scenario: Scenario) -> None:
+    # F33d (reply 237): asked to remove it, the model staged adding it
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    scenario.primary.queue_tool_call(
+        "add_routine_item",
+        {"title": "Refill cat feeders", "routine": "Evening", "days": [], "person": "",
+         "just_today": False},
+    )  # fmt: skip
+    scenario.primary.queue_text("Which one did you mean?")
+    await scenario.say("Erin", "Remove the regular cat feeders from my evening routine")
+    assert scenario.app.db.query("SELECT * FROM pending_actions") == []
+    assert evening_items(scenario) == ["Refill cat feeders"]
+    (result,) = tool_results(scenario, "add_routine_item")
+    assert result.startswith("Refill cat feeders is already on the Evening routine")

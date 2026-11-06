@@ -42,6 +42,8 @@ from themi.core.cozyla_routines import (
     EVENING_BEFORE_QUIET,
     ROUTINE_SIGNAL,
     SKIPPED_TEXT,
+    already_there,
+    asked_to_remove,
 )
 from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.groceries import and_list
@@ -635,6 +637,8 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     title = " ".join(str(args["title"]).split())[:50]
     if not title:
         raise ToolFailed("An item needs a name.")
+    if asked_to_remove(ctx.request_text):  # F33d
+        already_there(title, routine.name, [i.title for i in routines.items(routine)])
     days = _days(list(args.get("days") or []))
     only_on = routines.today() if args.get("just_today") else None
     asked = member.id == ctx.member.id and in_their_words(ctx, title)
