@@ -239,7 +239,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
-| RC2a | Recipes: ingredients onto the grocery list | Recipes | [ ] |
+| RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [ ] |
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [ ] |
 | RC3b | Cooking: one step at a time | Recipes | [ ] |
@@ -11962,7 +11962,7 @@ Notes (2026-11-06):
 - Evals: 4 cases in a new "recipes" category (not run here: no model key in this session).
 
 ### RC2a · Recipes: ingredients onto the grocery list
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC1b, 25, G1
 Read first: 25's and G1's notes (grocery list, staging); L2a's notes (which list).
 - Ingredient lines become items with one structured call, made the first time a recipe is
@@ -11986,6 +11986,29 @@ Tests: unit tests for the cache, the words-appear check, pantry and staple untic
 merging two recipes, the sub-recipe offer; scenario: Michael adds Biryani, unticks
 cardamom, taps Add 9, and they show up in OurGroceries. Evals: item names from 40 real
 ingredient lines (quantities and prep removed, nothing invented).
+
+Notes (2026-11-06):
+- One AI task for all of RC2a, RC3a and RC4a's reading, `recipes` ("Recipes: reading
+  ingredients, prep and recipe pages" on the AI page), not one per job: three routes for
+  one kind of work seemed more to manage than it's worth. Migration 0121 rebuilds
+  `ai_routes` for it and copies each person's `structured_misc` chain.
+- `themi.core.recipe_groceries`: lines are read by the model in one call per recipe (up to
+  80 lines), kept in `recipe_ingredient_lines` by a hash of the line. A model's item must
+  have all its words in the line, or the rule-based `read_line` is used for that line. With
+  no model, every line is read by rule and nothing is kept, so a later call can do better.
+- The card (`recipe_cards`): item lines are quoted ("> ✓ shallots"), because the PDA shield
+  took "· water" for an order and wrote "Up next: · water". Items start unticked when
+  they're a staple, optional, or something the pantry has plenty of (the family's staples,
+  olive oil among them, count). At most 30 items. Toggle buttons edit the card in place.
+- A cookbook recipe from the Ingredients section that a line names ("1 batch of Bechamel
+  Sauce") gets "Bechamel Sauce is in the cookbook too." and [Use the recipe: ...], which
+  merges its items into the card. The fixture gained Bechamel Sauce (13 recipes now).
+- [Add N] stages one `grocery_list_add` with `requested=True` and edits the card with what
+  happened; items already on the list or waiting are named, not added again.
+- `add_recipe_to_grocery_list` (recipes group; the group's words gained "what we need for"
+  and "shopping for"), one routing case, one behaviour eval, and an opt-in eval of 40 real
+  lines (`make evals EVAL_ARGS='-k recipe_items'`, 36 to pass). The evals weren't run here.
+- Setup: restart `themi run` (migration 0121).
 
 ### RC2b · Recipes: scaling (half, double, for 6)
 Status: [ ]
