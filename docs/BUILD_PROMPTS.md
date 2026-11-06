@@ -245,7 +245,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC3b | Cooking: one step at a time | Recipes | [x] 2026-11-06 |
 | RC3c | Cooking: step timers | Recipes | [x] 2026-11-06 |
 | RC4a | Recipes: a recipe from a link | Recipes | [x] 2026-11-06 |
-| RC4b | Recipes: finding them on the web | Recipes | [ ] |
+| RC4b | Recipes: finding them on the web | Recipes | [x] 2026-11-06 |
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [ ] |
 | RC6 | Recipes: the website's Recipes page | Recipes | [ ] |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [ ] |
@@ -12229,7 +12229,7 @@ Notes (2026-11-06):
   fixtures, with their owners' text). Follow-up.
 
 ### RC4b · Recipes: finding them on the web
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC4a
 - `find_web_recipe`: "find a vegan pad see ew recipe", "something with butternut squash
   online". The query gets "vegan" when `recipe_diet` is vegan and they didn't say "not
@@ -12244,6 +12244,20 @@ Depends on: RC4a
 Tests: unit tests for the query building (vegan added, not added), keeping only readable
 results, the cookbook-first offer, the 30-day clean-up; scenario: "find a vegan pad see ew"
 then cooking the second result. Evals: queries from 15 asks.
+
+Notes (2026-11-06):
+- `find_web_recipe` (what): the query gets "vegan" when the household's diet is vegan and
+  they didn't say "not vegan" or name a meat (a plant version like "chicken seitan" still
+  gets it), and "recipe" when it isn't there. One search, then up to 5 results fetched
+  with RC4a's careful reader; only pages with schema.org recipe data are kept (no model
+  call per result), up to 3. Every search and page read counts against the daily cap.
+- The offer: "Your cookbook has Chana Masala." with [Chana Masala (cookbook)] first when a
+  cookbook recipe clearly matches, then "From the web:" with a button per recipe labelled
+  "Vegan Pad See Ew (plants.example), 3 ingredients". Total time isn't on the label yet.
+  A web recipe picked from the buttons gets the vegan note too.
+- `recipes.forget_web` (daily) deletes web recipes not updated in 30 days, unless a cooking
+  session finished one. RC5's saved ones become cookbook recipes, so they stay.
+- The routing cases are at 110, the most the routing test allows; RC5 adds none.
 
 ### RC5 · Recipes: saving a liked one to the cookbook
 Status: [ ]
