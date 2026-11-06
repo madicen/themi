@@ -197,7 +197,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [x] 2026-11-05 |
 | F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [x] 2026-11-05 |
 | F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [x] 2026-11-05 |
-| F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [ ] |
+| F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [x] 2026-11-05 |
 | F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [ ] |
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [ ] |
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [ ] |
@@ -9782,7 +9782,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run` (migration 0112).
 
 ### F29d · Feedback (2026-11-05): a card is the whole answer, and a corrected request replaces its card
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: F21a, F21b
 Read first: F21a's and F21b's notes (Themi's own confirmation ends the turn; a reply that
 repeats the card). From Erin's bug #157 (2026-11-05, 4:25 pm, "there is no need for two
@@ -9815,6 +9815,24 @@ Scenario: bug #157, the request, the correction, one card left, one message each
 
 Data: decline action 495 on the Pi (it's for an event that's now on the calendar as 496), or
 let it expire on the 12th. Mark #157 reviewed once live.
+
+Notes (2026-11-05):
+- Deviation: the model's round still runs; its words are dropped afterwards. Every call
+  this turn made a card (`ToolContext.staged`), so the reply is empty unless the
+  model's text asks a question of its own (a "?" beyond the card's own question). Ending
+  before the round, as F21a does, would lose that question. A held note's card (F29c)
+  does end the turn early, through `ToolContext.cards`.
+- This takes over `_honest`'s "that's waiting for a yes on the card above" when cards
+  were all the turn did. A false "done" claim under a card isn't sent at all now. Five
+  tests that expected the model's line under a card were changed (approvals, staging,
+  pantry, Safeway, calendar events).
+- `_repeats_card` compares sorted words, without "staged", "waiting for a yes", "for
+  approval" and the card's question. That covers reply 283 word for word.
+- `Events.replace_waiting`: a chat add staged in the last 10 minutes
+  (`CORRECTION_WINDOW`), on the same calendar and day with overlapping times, is
+  withdrawn by the new one ("Replaced by the newer card.", declined by `system`), whatever
+  its title or length. Cards from emails aren't corrections.
+- Setup: restart `themi run`. No migration.
 
 ### F29e · Feedback (2026-11-05): drive time to a place they've named, and a private calendar isn't an empty one
 Status: [ ]
