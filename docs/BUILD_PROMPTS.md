@@ -216,7 +216,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
-| F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [ ] |
+| F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10920,7 +10920,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F33d · Feedback (2026-11-06): asked to remove an item, Themi doesn't offer to add it
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: F11, F33c
 Read first: F11's notes (`add_to_wall_routine`); F33c. From the same audit (reply 237).
 
@@ -10946,6 +10946,18 @@ Scenario: none beyond F33c's: with F33c, reply 237 doesn't reach this round. Thi
 backstop.
 
 Data: none.
+
+Notes (2026-11-06):
+- `cozyla_routines.asked_to_remove(text)`: "remove", "delete", "drop", "get rid of" or
+  "take ... off", and none of "add", "put", "swap", "switch", "replace", "instead",
+  "move", "new". `already_there` declines (`ToolDeclined`, nothing staged) when the title
+  matches an item on that routine, and says "... Use remove_routine_item."
+- `add_to_wall_routine` checks the wall's items for that part today
+  (`WallRoutines.titles_on`, [] if the wall can't be read) and Themi's routine of the same
+  name. `add_routine_item` checks the routine it was given.
+- An add of something that isn't on the routine still stages, as does any add in a
+  message with an add word ("remove X and add Y").
+- Setup: restart `themi run`. No migration.
 
 ### F32b · Feedback (2026-11-06): "my chores" is the chore chart, and a routine item moves there in one go
 Status: [ ]
