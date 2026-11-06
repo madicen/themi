@@ -179,3 +179,69 @@ async def test_the_same_note_isnt_sent_twice(scenario: Scenario) -> None:
     await relay(scenario, "Husband", said, "Erin", "The dog's been fed.", "whenever")
     assert "already went; it wasn't sent twice" in tool_result(scenario)
     assert scenario.inbox("Erin").count("From Husband: The dog's been fed.") == 1
+
+
+async def held(scenario: Scenario, said: str, body: str, urgency: str = "whenever") -> list[str]:
+    """A note that waits: its confirmation, with its button, is the whole reply (F29c)."""
+    scenario.primary.queue_tool_call(
+        "relay_to_partner", {"to": "Erin", "message": body, "urgency": urgency}
+    )
+    return await scenario.say("Husband", said)
+
+
+async def test_bug_155_the_same_note_asked_for_urgently_goes_now(scenario: Scenario) -> None:
+    """Bug #155: "Tell her urgently" after a note held for the morning got "Nothing changed
+    there", and the note still waited."""
+    clock.advance(timedelta(hours=13, minutes=30))  # 10:30 pm: Erin's quiet hours
+    body = "You're amazing and I'm really glad to be married to you"
+    replies = await held(scenario, "Can you let Erin know she's amazing", body)
+    assert replies == [
+        "I'll pass that on to Erin when I can: Erin's in quiet hours until 8 am (likely "
+        "tomorrow around 8 am)."
+    ]
+    assert scenario.last_buttons("Husband") == ["Send now"]
+    replies = await relay(scenario, "Husband", "Tell her urgently", "partner", body, "urgent")
+    assert replies == ["Sent it to Erin now."]
+    assert scenario.inbox("Erin")[-1] == f"Urgent, from Husband: {body}"
+    (note,) = notes(scenario)  # one note, not two
+    assert note["urgency"] == "urgent" and note["delivered_at"] is not None
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM outbox WHERE kind = 'relay'") == 1
+
+
+async def test_less_urgent_again_changes_nothing(scenario: Scenario) -> None:
+    hold_until(scenario, START + timedelta(hours=3))
+    said = "Let Erin know the dog's been fed"
+    await held(scenario, said, "The dog's been fed.", "today")
+    await relay(scenario, "Husband", said, "Erin", "The dog's been fed.", "whenever")
+    assert "is already waiting to go; it wasn't sent twice" in tool_result(scenario)
+    (note,) = notes(scenario)
+    assert note["urgency"] == "today" and note["delivered_at"] is None
+
+
+async def test_idea_156_send_now_sends_a_held_note(scenario: Scenario) -> None:
+    hold_until(scenario, START + timedelta(hours=3))  # her next good window: noon
+    await held(scenario, "Let Erin know the dog's been fed", "The dog's been fed.")
+    before = len(scenario.inbox("Erin"))
+    await scenario.tap("Husband", "Send now")
+    assert scenario.inbox("Erin")[before:] == ["Urgent, from Husband: The dog's been fed."]
+    assert scenario.edits("Husband")[-1]["text"] == "Sent it to Erin now."
+    assert not scenario.edits("Husband")[-1].get("reply_markup", {}).get("inline_keyboard")
+    (note,) = notes(scenario)
+    assert note["delivered_at"] is not None
+
+
+async def test_the_button_goes_once_the_note_has_gone(scenario: Scenario) -> None:
+    hold_until(scenario, START + timedelta(hours=3))
+    await held(scenario, "Let Erin know the dog's been fed", "The dog's been fed.")
+    await scenario.advance(hours=3, minutes=5)  # noon: it goes
+    assert scenario.inbox("Erin")[-1] == "From Husband: The dog's been fed."
+    assert scenario.edits("Husband")[-1]["text"] == "Passed on to Erin."
+
+
+async def test_no_send_now_in_burnout_mode(scenario: Scenario) -> None:
+    hold_until(scenario, START + timedelta(hours=3))
+    services = scenario.app.services
+    assert services.burnout is not None
+    await services.burnout.start(scenario.member("Erin"))
+    await held(scenario, "Let Erin know the dog's been fed", "The dog's been fed.")
+    assert scenario.app.db.scalar("SELECT card_outbox_id FROM liaison_items") is None
