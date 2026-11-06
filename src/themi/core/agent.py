@@ -109,11 +109,31 @@ CARD_WORDS = re.compile(r"[^\w]+")
 ASK_QUESTION = ASK_TEXT.partition("\n")[2]
 
 
+# F29d (#157): "Staged for your calendar: Tutor Gabriel, Thu 12 Nov, 4-5 pm at Parent's
+# house. Go ahead, or not now?" (with an en dash) under the card. Words about the card itself
+# don't count.
+CARD_TALK = re.compile(
+    r"\b(?:staged|waiting for (?:a|your) yes|for approval|needs? your (?:ok|okay|yes))\b",
+    re.IGNORECASE,
+)
+
+
+def _card_words(text: str) -> list[str]:
+    text = CARD_TALK.sub(" ", text.lower().replace(ASK_QUESTION.lower(), " "))
+    return sorted(CARD_WORDS.sub(" ", text).split())
+
+
 def _repeats_card(reply: str, waiting: list[str]) -> bool:
     """Is the reply only the text of a card sent this turn (its summary, with or without
-    the card's question)?"""
-    said = CARD_WORDS.sub(" ", reply.lower().replace(ASK_QUESTION.lower(), "")).strip()
-    return bool(said) and any(said == CARD_WORDS.sub(" ", s.lower()).strip() for s in waiting)
+    the card's question), in any order and punctuation?"""
+    said = _card_words(reply)
+    return bool(said) and any(said == _card_words(s) for s in waiting)
+
+
+def _asks_its_own(reply: str) -> bool:
+    """A question the card doesn't ask ("Which calendar?")."""
+    rest = reply.replace(ASK_QUESTION, "").replace(ASK_QUESTION.lower(), "")
+    return "?" in rest
 
 
 # Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
@@ -537,6 +557,12 @@ class Agent:
                     reply = listening.trimmed(reply, text)  # F22e: no "Anything else?"
                     waiting = self._waiting_since(member, mark)
                     if _repeats_card(reply, waiting):
+                        return _done_first(ctx.done, "")
+                    if (
+                        ctx.staged
+                        and len(ctx.staged) == len(ctx.outcomes)
+                        and not _asks_its_own(reply)
+                    ):  # F29d (#157): every call made a card, and the cards say it
                         return _done_first(ctx.done, "")
                     reply = _honest(reply, waiting, ctx.outcomes)
                     return _done_first(ctx.done, reply)

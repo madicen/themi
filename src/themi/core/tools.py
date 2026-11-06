@@ -71,6 +71,9 @@ class ToolContext:
     # Messages a tool sent them itself, with its own buttons (a held note's "Send now",
     # F29c; an approval card, F29d): that call's answer, so no model words follow it.
     cards: list[str] = field(default_factory=list)
+    # Approval cards staged this turn (F29d): when every call only staged one, the cards
+    # are the answer, and the model's words go only if they ask something of their own.
+    staged: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -659,6 +662,7 @@ class ToolRegistry:
         )
         action = outcome.action
         if action.status == "pending":
+            ctx.staged.append(proposal.summary)
             return (
                 f"Staged for approval (action {action.id}): {proposal.summary}. Nothing happens "
                 "until they say yes; don't describe it as done."

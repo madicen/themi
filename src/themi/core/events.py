@@ -69,6 +69,7 @@ MAKE_TIME = re.compile(
 )
 MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
 REPLACED_TEXT = "Replaced by the newer card."
+CORRECTION_WINDOW = timedelta(minutes=10)  # a new card this soon after, overlapping, corrects it
 ALREADY_TEXT = "Already on your calendar{why}. Nothing new was added."
 # F29b (bug #159): a Google Calendar invitation carries an .ics part.
 ICS_TYPES = {"text/calendar", "application/ics"}
@@ -404,22 +405,37 @@ class Events:
 
     async def replace_waiting(self, member: Member, payload: dict[str, Any]) -> None:
         """A card still waiting for the same event (title, day and calendar) gives way to the
-        new one; the very same event is already waiting, so nothing new (bug #35)."""
+        new one; the very same event is already waiting, so nothing new (bug #35). A card
+        asked for from chat in the last few minutes, the same day and overlapping times, is
+        one this corrects, even with another title or length (F29d, bug #157)."""
         tz = self._tz()
-        day = datetime.fromisoformat(payload["starts"]).astimezone(tz).date()
+        starts = datetime.fromisoformat(payload["starts"])
+        ends = datetime.fromisoformat(payload["ends"])
+        day = starts.astimezone(tz).date()
+        recent = clock.now() - CORRECTION_WINDOW
         for row in self.db.query(
-            "SELECT id, payload FROM pending_actions WHERE member_id = ? AND executor = ? "
-            "AND status IN ('pending', 'snoozed') ORDER BY id",
+            "SELECT id, payload, created_at FROM pending_actions WHERE member_id = ? "
+            "AND executor = ? AND status IN ('pending', 'snoozed') ORDER BY id",
             (member.id, ADD),
         ):
             old = json.loads(row["payload"])
+            old_starts = datetime.fromisoformat(old["starts"])
+            old_ends = datetime.fromisoformat(old["ends"])
             if (
                 old.get("calendar") != payload["calendar"]
-                or name_key(str(old.get("title", ""))) != name_key(payload["title"])
-                or datetime.fromisoformat(old["starts"]).astimezone(tz).date() != day
+                or old_starts.astimezone(tz).date() != day
             ):
                 continue
-            if (old["starts"], old["ends"]) == (payload["starts"], payload["ends"]):
+            same_title = name_key(str(old.get("title", ""))) == name_key(payload["title"])
+            correcting = (
+                old.get("source") == "chat" == payload.get("source")
+                and datetime.fromisoformat(row["created_at"]) >= recent
+                and old_starts < ends
+                and starts < old_ends
+            )
+            if not (same_title or correcting):
+                continue
+            if same_title and (old["starts"], old["ends"]) == (payload["starts"], payload["ends"]):
                 raise ToolDeclined("That's already waiting for a yes on its card.")
             await self.services.autonomy.withdraw(row["id"], REPLACED_TEXT)
 
