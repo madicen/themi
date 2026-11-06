@@ -238,7 +238,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
-| RC1b | Recipes: finding and showing one in chat | Recipes | [ ] |
+| RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [ ] |
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [ ] |
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [ ] |
@@ -11921,7 +11921,7 @@ Notes (2026-11-06):
   account again with Google Drive ticked, then choose the cookbook on Accounts.
 
 ### RC1b · Recipes: finding and showing one in chat
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC1a, P1
 Read first: P1's and P7a's notes (tool groups and routing); prompt 27's notes.
 - A new `recipes` tool group (routing words, about 12 examples, routing cases).
@@ -11940,6 +11940,26 @@ Read first: P1's and P7a's notes (tool groups and routing); prompt 27's notes.
 Tests: unit tests for search by name, ingredient and section, splitting, the chart row
 lookup; scenario: Erin asks for the ranch dressing and taps [Add to grocery list]. Evals:
 routing for 15 recipe asks, and "I'm cooking tonight" not mistaken for a task.
+
+Notes (2026-11-06):
+- `find_recipe` (query, section) and `show_recipe` (name), in a new `recipes` tool group (its
+  words, 12 examples, 4 routing cases). One clear match (every wanted word in its name, and
+  no other recipe as close) is sent whole as a card, which ends the turn; several go as up to
+  five buttons; nothing found declines, saying never to make a recipe up.
+- Search is plain Python over the stored copy (rough stems: "dressings", "roasted"), name
+  words weighing three times ingredient words; a section named alone ("a dessert") lists that
+  section. The FTS5 table from RC1a isn't used yet.
+- The card: the name and its section, then "Ingredients" and "Steps" with the recipe's own
+  lines quoted ("> "), so the PDA shield leaves them as written, then notes, source and the
+  heading's link in the doc. Over 3,800 characters it goes as two messages. [Cook this] and
+  [Add to grocery list] show only once RC3a and RC2a register their buttons
+  (`services.recipe_buttons`).
+- A chart's row answers a question as data ("how long do I roast broccoli?"), for the model
+  to say.
+- The context gains one line, "The family cookbook has N recipes and charts (find_recipe)."
+- Conversation mode: "cook" and "bake" are doing words, and "recipe" or "cookbook" anywhere
+  makes a message a request.
+- Evals: 4 cases in a new "recipes" category (not run here: no model key in this session).
 
 ### RC2a · Recipes: ingredients onto the grocery list
 Status: [ ]
