@@ -206,7 +206,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [x] 2026-11-06 |
 | F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
 | F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
-| F30d | Idea: Themi looks things up online | Feedback | [ ] |
+| F30d | Idea: Themi looks things up online | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10321,7 +10321,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F30d · Idea (2026-11-05): Themi looks things up online
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 06, F29ha
 Read first: "AI layer" (the router); "Security and privacy" (web pages are data, never
 instructions); F29ha's notes (a lookup answered from data). From Erin's idea #162
@@ -10329,8 +10329,17 @@ instructions); F29ha's notes (a lookup answered from data). From Erin's idea #16
 tell me if [Dr. Scheinbach]'s still practicing?", and Themi could only point her to the
 dental board's site.
 
-Before building, ask Michael which search API to use and to put its key in `.env`. One
-with a free tier (Brave Search, Google Programmable Search) is enough for a family.
+Decided with Michael (2026-11-06): no card on file. Tavily is the default (1,000 free
+credits a month, a basic search is 1 credit, no card), and Firecrawl can be used instead
+(1,000 free credits a month, 2 credits per 10 results, no card). Brave needs a card;
+Google's Custom Search is closed to new users; Gemini's free search grounding is only on
+the 2.5 models and writes the answer itself. So: one search interface, two backends.
+
+- `themi.connectors.search`: a `SearchBackend` protocol (`search(query, count)` -> results
+  with title, link and snippet; `read(url)` -> the page's text), `TavilySearch` and
+  `FirecrawlSearch` over `httpx`, and `SearchError`.
+- `.env`: `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, and `THEMI_SEARCH_BACKEND` (`tavily` or
+  `firecrawl`; empty picks whichever has a key, Tavily first). Documented in DEPLOY.md.
 
 Build:
 - `search_web` (a lookup, a new `web` group called for by "look up", "search", "online",
@@ -10355,6 +10364,33 @@ Scenario: "Can you tell me if Dr. Scheinbach in San Mateo is still practicing?" 
 from the fake's results, with the link.
 
 Setup: the search API key in `.env` (named in the Notes). Mark #162 reviewed once live.
+
+Notes (2026-11-06):
+- `themi.connectors.search`: `SearchBackend` (`search(query, count)`, `read(url)`),
+  `TavilySearch` (POST /search with basic depth; POST /extract for a page) and
+  `FirecrawlSearch` (POST /v2/search, which also reads v1's list answer; POST /v2/scrape
+  for markdown). Both send the key as a Bearer header. `choose()` picks: the named
+  backend, or Tavily, then Firecrawl, by which key is set. The request and answer shapes
+  follow each service's docs; check them on the first real search, since only the fakes
+  have run them.
+- Settings: `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, `THEMI_SEARCH_BACKEND`, documented in
+  `.env.example` (DEPLOY.md doesn't list optional keys). Both keys are redacted from logs
+  (`tvly-...`, `fc-...`).
+- `themi.core.web_search`: `search_web` and `read_web_page`, in a new `web` tool group
+  (routing words, 12 examples, three routing cases). Results go in a `<data
+  source="web">` block with their links. Only links from this member's results can be
+  read (kept in memory, so a restart forgets them). Without a key, the tools say how to
+  set one up.
+- Cap: 50 lookups a day for the family (`DAILY_CAP`), counted in migration 0116's
+  `web_lookups`, which keeps only who, what kind and when (no queries), for 31 days. That's
+  well inside either free plan.
+- Privacy: a query with an email address, a phone number or a street number (3+ digits,
+  years allowed) that isn't in their message or the one before is refused.
+- Conversation mode: "search" and "google" are request words now ("look up" and "tell"
+  were already).
+- Setup: a free Tavily key (tavily.com, no card) as `TAVILY_API_KEY` in the Pi's `.env`,
+  then restart `themi run` (migration 0116). For Firecrawl instead: `FIRECRAWL_API_KEY`,
+  and `THEMI_SEARCH_BACKEND=firecrawl` if both are set.
 
 ## Conversation mode
 
