@@ -63,6 +63,7 @@ from themi.core.follow_ups import FollowUps
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
+from themi.core.guides import Guides
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
@@ -218,6 +219,7 @@ def build_app(
     day_summary.install()
     Focus(services, tasks, day_summary).install()
     Taking(services, tasks).install()
+    Guides(services).install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()

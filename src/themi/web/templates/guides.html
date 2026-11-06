@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% from "_row.html" import row %}
+{% block title %}Guides · Themi{% endblock %}
+{% block content %}
+<h1>Guides</h1>
+<p class="muted">Your own guides, like a cooking chart or care instructions. Ask Themi about them in chat ("how long for quinoa?").</p>
+
+<div class="rows">
+{% for guide in guides %}
+{% call(part) row(guide.name, chips=[("Just for you", "info")] if guide.personal else [], id="guide-" ~ guide.id) %}
+{% if part == "body" %}
+  <pre class="guide">{{ guide.text }}</pre>
+  <div class="danger-zone">
+    <form method="post" action="/guides/{{ guide.id }}/delete">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete</button>
+    </form>
+  </div>
+{% endif %}
+{% endcall %}
+{% else %}
+<p class="muted">No guides yet.</p>
+{% endfor %}
+</div>
+
+<h2>Add a guide</h2>
+<form method="post" action="/guides" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Name <input name="name" maxlength="80" required placeholder="Instant Pot grains"></label>
+  <label>Its text <textarea name="text" rows="10" required></textarea></label>
+  <label class="check"><input type="checkbox" name="personal"> Just for me</label>
+  <button class="primary">Save</button>
+</form>
+<p class="muted">The same name again replaces that guide's text.</p>
+{% endblock %}
