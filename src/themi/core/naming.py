@@ -28,7 +28,9 @@ from themi.storage.db import Database
 log = logging.getLogger(__name__)
 
 # The tools with a naming check: one going through settles a refusal of the same tool.
-CHECKED = frozenset({"complete_task", "cancel_task", "reschedule_task", "add_follow_up"})
+CHECKED = frozenset(
+    {"complete_task", "cancel_task", "reschedule_task", "add_follow_up", "update_task"}
+)
 NOT_NAMED = "not_named"
 NAMES_OTHER = "names_other"
 SETTLE_WITHIN = timedelta(minutes=10)

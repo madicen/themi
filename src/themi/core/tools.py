@@ -74,6 +74,8 @@ class ToolContext:
     # Approval cards staged this turn (F29d): when every call only staged one, the cards
     # are the answer, and the model's words go only if they ask something of their own.
     staged: list[str] = field(default_factory=list)
+    # Each call this turn: (tool, outcome, result text), for replies checked by tool (F30a).
+    calls: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -607,6 +609,7 @@ class ToolRegistry:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
+        ctx.calls.append((call.name, outcome, result.content))
         task_id = call.arguments.get("task_id")
         if outcome == "ok" and isinstance(task_id, int) and task_id > 0:  # 0 is none (F23e)
             ctx.tasks.append(task_id)

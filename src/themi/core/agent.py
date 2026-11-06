@@ -104,6 +104,10 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+MADE_TASK = re.compile(r"Task (\d+) created")
+UPDATED = re.compile(r"\b(?:updated|changed|edited)\b", re.IGNORECASE)
+
+
 # F21b (#115, 5:19 am): the reply was the approval card's own text again, under the card.
 CARD_WORDS = re.compile(r"[^\w]+")
 ASK_QUESTION = ASK_TEXT.partition("\n")[2]
@@ -453,6 +457,29 @@ class Agent:
                 member, remark.source, remark.value, f"said: {remark.words}"
             )
 
+    def _not_updated(self, reply: str, ctx: ToolContext) -> str:
+        """F30a (#163): "I've updated the task" when the update failed and a new task was
+        made instead. The reply says what was made."""
+        failed = any(n == "update_task" and o == "failed" for n, o, _ in ctx.calls)
+        made = [
+            int(m.group(1))
+            for n, o, r in ctx.calls
+            if n == "create_task" and o == "ok" and (m := MADE_TASK.match(r))
+        ]
+        board = self.services.taskboard
+        if not (failed and made and UPDATED.search(reply)) or board is None:
+            return reply
+        lines = []
+        for task_id in made:
+            task = board.get(task_id)
+            whose = (
+                f" for {self.services.store.get_member(task.assignee).name}"
+                if task.assignee and task.assignee != ctx.member.id
+                else ""
+            )
+            lines.append(f"Made a new task{whose}: {task.title}.")
+        return "\n".join(lines)
+
     def _waiting_since(self, member: Member, mark: int) -> list[str]:
         """Approvals created for this member after `mark` that are still waiting on a yes."""
         rows = self.services.store.db.query(
@@ -565,6 +592,7 @@ class Agent:
                     ):  # F29d (#157): every call made a card, and the cards say it
                         return _done_first(ctx.done, "")
                     reply = _honest(reply, waiting, ctx.outcomes)
+                    reply = self._not_updated(reply, ctx)
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break
