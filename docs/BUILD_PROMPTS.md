@@ -212,6 +212,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
+| F33a | Feedback: a direct change made as asked ends the turn | Feedback | [ ] |
+| F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [ ] |
+| F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [ ] |
+| F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10765,6 +10769,140 @@ Scenario: Michael chooses "Urgency" on Tasks, sees "Urgent" with today's dentist
 it, comes back later and it's still grouped that way. Erin's page is still by due date.
 
 Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
+
+### F33a · Feedback (2026-11-06): a direct change made as asked ends the turn
+Status: [ ]
+Depends on: P2b, R1a
+Read first: P2b's notes (`ToolContext.asked`, and when the turn doesn't end early); R1a's
+notes (the routine tools). From a slow-reply audit of 2026-11-06 (reply 237, 166 s, Wed 4
+Nov 8:25 am).
+
+What the Pi shows: in the week to 2026-11-06, 145 of 219 replies took two model rounds,
+most of them a tool and then a round that only says it back. Reply 237's last round (16.8 s
+that day, about 2.5 s on a normal one) wrote "Removed." after `remove_routine_item` had
+returned "Removed Refill cat feeders." P2b ends the turn only on `ToolContext.asked`, which
+only a staged `Proposal` with `requested` and `said` fills. Tools that change things
+directly and return a done line (`remove_routine_item`, `tick_routine_item` and others like
+them) never fill it, so they always cost the extra round.
+
+Build:
+- A way for a direct tool to say "done as they asked": return a small `Done(said, asked)`
+  (or set `ctx.replies`/`ctx.asked` through one helper) instead of a bare string. The model
+  still gets the result text.
+- `asked` uses the same test as `add_routine_item`: the person is the one acting, and every
+  word of the item's title (over two letters) is in what they wrote (`name_key`). A match
+  the tool had to guess (F33c's near match, a different title) isn't asked.
+- Use it in `remove_routine_item` and `tick_routine_item` first. Go through the other
+  direct tools that end with a plain done line (list removes, task done/snooze if they
+  don't already, calendar removes) and convert the ones where it's clearly safe. List what
+  was converted, and what was left and why, in the Notes.
+- P2b's conditions stay: not after a failed call in the turn, not when the round also ran
+  a tool that didn't leave an `asked` reply, and `more_tools` doesn't count either way.
+- The reply sent is the tool's own line, e.g. "Removed Refill cat feeders from your evening
+  routine." (title in quotes if `_titles_quoted` would quote it). PDA phrasing rules still
+  apply to it.
+
+Tests: each a failing test first. "Remove the refill cat feeders from my evening routine":
+one model round, the reply is the tool's line. A removal where the model's title isn't in
+their words: two rounds, as now. A round with a removal and a failed call: two rounds. A
+tick from chat ("I took my meds"): one round.
+Scenario: Michael removes an evening routine item in chat and gets one line back, with a
+single model call in the reply's timing.
+
+Data: after a week live, compare the share of 2-round replies on the Pi with 145 of 219.
+
+### F33b · Feedback (2026-11-06): more_tools offers only what isn't here yet
+Status: [ ]
+Depends on: P1, P7b
+Read first: P1's notes (`more_tools`, `ToolContext.groups`); P7b's notes (groups added by
+meaning). From the same audit (reply 237).
+
+What the Pi shows: reply 237's second round (80.7 s, two 504s) was `more_tools(["wall"])`,
+and the wall tools were already loaded ("Those tools are here already."). Of 41
+`more_tools` calls on the Pi in the week to 2026-11-06, 29 asked only for groups the turn
+already had. Each one is a whole wasted model round. `more_tools`'s `groups` enum
+(`tools.py`) lists every group whatever was sent.
+
+Build:
+- `ToolRegistry.specs_for` (called again each round) builds `more_tools`'s spec for the turn:
+  the enum and description list only groups not in `ctx.groups`. When every group is in,
+  `more_tools` isn't sent (as "all" routing does now).
+- If a model still asks for a group that's here (an old spec, a stale call), the result
+  says which of the tools it already has fit, e.g. "The wall tools are already here:
+  show_routine, remove_routine_item, ... Use one of them now.", not just "here already".
+- P6 near-twin text and the timing's `tools_sent` count still see the right list.
+
+Tests: each a failing test first. With groups {core, calendar, schedules, wall}, the
+`more_tools` spec offers neither "wall" nor "calendar"; with every group, it's absent. A
+round that adds "pantry" offers one group fewer next round. A call for a loaded group
+names that group's tools.
+Scenario: none (nobody sees it beyond speed). Covered by the unit tests and the routing
+eval.
+
+Data: after a week live, the Pi's no-op `more_tools` count (result "Those tools are here
+already" or the new line) should be near zero.
+
+### F33c · Feedback (2026-11-06): "no such routine item" says what's there, and a near name is found
+Status: [ ]
+Depends on: R1a, F24a
+Read first: R1a's notes (`Routines.find_item`); F24a's notes (`events.near_twin`). From
+the same audit (reply 237).
+
+What the Pi shows: Michael wrote "Remove the regular cat feeders from my evening routine".
+The item is "Refill cat feeders". `find_item` uses `title_matches` (every word they used),
+so "regular" missed, and the result was only "No item like regular cat feeders on their
+routines." Without a list, the model asked for tools it had (round 2), then called
+`show_routine` (round 3), then staged an add of the very item (round 4, F33d), and only
+removed it in round 5. `near_twin("regular cat feeders", "Refill cat feeders")` is True
+(two words shared, all but one of the longer title's).
+
+Build:
+- `Routines.find_item`: if nothing matches by `title_matches`, and exactly one item in the
+  routine (or across their routines, when none was named) is a `near_twin`, that's the item.
+  Two or more near twins: no match, and the miss names them.
+- A miss (`remove_routine_item`, `tick_routine_item`) lists what's there: "No item like
+  regular cat feeders on Michael's Evening routine. It has: Cycle Dishwasher, Take Meds,
+  Cover the birdcage, Refill the vacuum's clean water, Refill cat feeders." Closest first
+  (`words_in_common`), at most 12. With no routine named, each routine's items, grouped.
+- An item found by a near match is not "asked" for F33a, so the model's next round still
+  says what was removed ("Removed Refill cat feeders.") and the person sees the real name.
+- Same for any other routine tool that looks items up by title.
+
+Tests: each a failing test first. Reply 237: "regular cat feeders" on Evening removes
+"Refill cat feeders". Two near twins: no removal, both named in the miss. A miss with no
+near twin lists the routine's items, closest first. A near match isn't "asked".
+Scenario: reply 237, two model rounds, the item removed, the reply names "Refill cat
+feeders".
+
+Data: none.
+
+### F33d · Feedback (2026-11-06): asked to remove an item, Themi doesn't offer to add it
+Status: [ ]
+Depends on: F11, F33c
+Read first: F11's notes (`add_to_wall_routine`); F33c. From the same audit (reply 237).
+
+What the Pi shows: in reply 237's fourth round, after `show_routine` listed "Refill cat
+feeders", the model called `add_to_wall_routine("Refill cat feeders")`. It staged action
+448, and Michael got "Refill cat feeders for the evening routine, every day. Go ahead, or
+not now?" in the middle of asking to remove it. He tapped Not now. The trust tiers caught
+it, but the card shouldn't have been made.
+
+Build:
+- `add_to_wall_routine` and `add_routine_item` decline (`ToolDeclined`, nothing staged)
+  when the message is a removal ("remove", "take off", "delete", "drop", "get rid of" in
+  `ctx.request_text`, as a word) and the item is already on that routine. The result says
+  so: "Refill cat feeders is already on the Evening routine, and they asked to remove
+  something. Use remove_routine_item."
+- An add in a message that also asks to add ("swap X for Y", "remove X and add Y") still
+  goes: only decline when there's no add word.
+
+Tests: each a failing test first. Reply 237's round 4: declined, no card. "Swap the cat
+feeders for the vacuum water": the add still stages. An add of an item not on the routine,
+in a removal message, still stages (it may be the other half of a swap).
+Scenario: none beyond F33c's: with F33c, reply 237 doesn't reach this round. This is the
+backstop.
+
+Data: none.
 
 ## Conversation mode
 
