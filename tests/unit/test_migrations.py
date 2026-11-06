@@ -254,3 +254,19 @@ def test_chat_and_sidecar_routes_start_from_what_members_use_now() -> None:
     assert db.query(route, ("chat",)) == db.query(route, ("conversation",))
     assert db.query(route, ("sidecar",)) == [{"position": 0, "backend_id": 2, "model": None}]
     assert db.scalar("SELECT conversation_mode FROM members WHERE id = 1") == 0
+
+
+def test_0113_drops_map_answers_for_phrases_with_no_street_number() -> None:
+    """F29e (bug #154): "parent's house" was cached as a place near Oroville."""
+    db = Database(":memory:")
+    every = discover()
+    apply(db, [m for m in every if m.version < 113])
+    for key in ("parent s house", "parents house", "790 la para ave palo alto ca 94306 usa"):
+        db.execute(
+            "INSERT INTO geocodes (query_key, lat, lon, found, fetched_at) "
+            "VALUES (?, 1, 1, 1, '2026-11-05T00:00:00+00:00')",
+            (key,),
+        )
+    apply(db, every)
+    rows = db.query("SELECT query_key FROM geocodes")
+    assert [r["query_key"] for r in rows] == ["790 la para ave palo alto ca 94306 usa"]

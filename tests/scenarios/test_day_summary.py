@@ -283,9 +283,11 @@ async def test_whats_on_her_plate(scenario: Scenario, linked: FakeGcal) -> None:
         "Erin, Wed 21 Oct:\n"
         "- 2 pm: Go for a run (check-in, 1.3 miles this week)\n"
         "- Return the library books (since Mon 19 Oct)\n"
-        "- Call the vet"
+        "- Call the vet\n"
+        "(Erin's calendar is private: events aren't shown here.)"  # F29e
     )
     assert "keeps calendar details private" in tool_result(scenario)
+    assert "Never say Erin has no events." in tool_result(scenario)
     erin = scenario.member("Erin")
     scenario.app.store.update_settings(erin, erin.id, calendar_details="partner")
     assert (await ask("Not for me, for Erin")).startswith(
