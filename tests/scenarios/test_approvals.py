@@ -261,7 +261,8 @@ async def test_approvals_raised_in_conversation_go_out_straight_away(
     clock.freeze(datetime(2026, 10, 21, 23, 0, tzinfo=PACIFIC))  # quiet hours, but she's here
     scenario.primary.queue_tool_call("archive_promos", {"count": 4})
     scenario.primary.queue_text("Lined up for your okay.")
-    assert await scenario.say("Erin", "archive the promos") == [ask(4), "Lined up for your okay."]
+    # F29d (#157): the card is the answer; words that only say it's waiting aren't sent
+    assert await scenario.say("Erin", "archive the promos") == [ask(4)]
 
 
 async def test_yes_after_themi_asked_something_else_goes_to_the_model(

@@ -13,7 +13,7 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_things_to_buy import inbox
 from tests.scenarios.test_triage import arrive, verdict
-from themi.core.agent import CLAIMS_DONE, WAITING_TEXT
+from themi.core.agent import CLAIMS_DONE
 from themi.core.safeway import SafewayCart
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
@@ -108,8 +108,9 @@ async def test_a_reply_saying_the_cart_is_filled_before_the_yes_is_replaced(
         "in the browser."
     )
     replies = await scenario.say("Erin", "fill the safeway cart")
-    assert replies[-1] == WAITING_TEXT.format(
-        summary="Eggs, 2 oat milk and bananas for the Safeway cart"
+    # F29d: the card is the whole answer, so the claim isn't sent at all
+    assert replies[-1] == (
+        "Eggs, 2 oat milk and bananas for the Safeway cart\nGo ahead, or not now?"
     )
     for claim in ("I've filled the Safeway cart.", "The cart is now filled.", "Filled the cart!"):
         assert CLAIMS_DONE.search(claim), claim

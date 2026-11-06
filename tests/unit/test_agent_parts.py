@@ -401,3 +401,16 @@ def test_a_done_task_claim_is_caught(claim: str) -> None:
     """Bug #119: "Marked done: Go for a run." went out when every complete_task failed."""
     assert agent_module.CLAIMS_DONE.search(claim)
     assert agent_module._honest(claim, [], ["failed"]) == agent_module.FAILED_TEXT
+
+
+def test_a_card_repeated_with_other_dashes_and_words_about_it_is_a_repeat() -> None:
+    """F29d, bug #157 (reply 283), word for word."""
+    from themi.core.agent import _repeats_card
+
+    card = "Tutor Gabriel, Thu 12 Nov, 4-5 pm (at Parent's house), for your calendar"
+    said = (
+        "Staged for your calendar: Tutor Gabriel, Thu 12 Nov, 4–5 pm at Parent's house. "  # noqa: RUF001
+        "Go ahead, or not now?"
+    )
+    assert _repeats_card(said, [card])
+    assert not _repeats_card("Tutor Gabriel at 4. Want a reminder before it?", [card])

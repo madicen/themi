@@ -405,10 +405,10 @@ async def test_a_move_said_as_done_while_its_card_waits_is_corrected(
     scenario.primary.queue_tool_call("move_calendar_event", move())
     scenario.primary.queue_text("Tutor Gabriel is moved to Wednesday at 12:00 PM.")
     replies = await scenario.say("Erin", "Move tutoring to 12")
-    assert replies[-1] == (
-        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 12-1 pm: that's waiting for a yes on "
-        "the card above."
-    )
+    # F29d: the card is the whole answer, so the claim isn't sent at all
+    assert replies == [
+        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 12-1 pm\nGo ahead, or not now?"
+    ]
 
 
 async def test_a_move_put_off_gives_way_to_a_newer_one(
@@ -557,3 +557,64 @@ async def test_an_email_event_with_the_same_start_and_title_gets_no_card(
     await scenario.run_periodic("calendar.busy")
     await invitation(scenario, fake_gmail, "erin@madicen.com")
     assert calendar_cards(scenario) == []
+
+
+def gabriel(**changes: str) -> dict[str, str]:
+    return dentist(
+        title="Tutor Gabriel", date="2026-10-29", start="16:00", end="17:00",
+        location="Parent's house",
+    ) | changes  # fmt: skip
+
+
+async def test_bug_157_the_card_is_the_whole_answer(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #157: the card, then the model's "Staged for your calendar: ... Go ahead, or not
+    now?" under it, word for word but its dashes and brackets."""
+    scenario.primary.queue_tool_call("add_calendar_event", gabriel())
+    scenario.primary.queue_text(
+        "Staged for your calendar: Tutor Gabriel, Thu 29 Oct, 4–5 pm at Parent's house. "  # noqa: RUF001
+        "Go ahead, or not now?"
+    )
+    replies = await scenario.say(
+        "Erin", "Can you add another tutoring session with Gabriel next Thurs at 4pm?"
+    )
+    assert replies == [
+        "Tutor Gabriel, Thu 29 Oct, 4-5 pm (at Parent's house), for your calendar\n"
+        "Go ahead, or not now?"
+    ]
+
+
+async def test_a_question_the_card_doesnt_ask_is_kept(scenario: Scenario, linked: FakeGcal) -> None:
+    scenario.primary.queue_tool_call("add_calendar_event", gabriel())
+    scenario.primary.queue_text("Should it go on the family calendar too?")
+    replies = await scenario.say("Erin", "Tutoring with Gabriel next Thursday at 4")
+    assert replies[-1] == "Should it go on the family calendar too?"
+
+
+async def test_bug_157_a_corrected_card_replaces_the_first(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #157: "the session length is 55 minutes ... the parent's name in parentheses"
+    made a second card, and the first (4-5 pm, "Tutor Gabriel") still waited."""
+    await say(scenario, "Tutoring with Gabriel next Thursday at 4", "add_calendar_event", gabriel())
+    await say(
+        scenario,
+        "That's close but the session length is 55 minutes, and (Illems) after his name",
+        "add_calendar_event",
+        gabriel(title="Tutor Gabriel (Illems)", end="16:55"),
+    )
+    rows = scenario.app.db.query("SELECT summary, status, resolved_by FROM pending_actions")
+    assert [(r["status"], r["resolved_by"]) for r in rows] == [("declined", "system"),
+                                                               ("pending", None)]  # fmt: skip
+    assert scenario.edits("Erin")[-1]["text"].endswith("Replaced by the newer card.")
+
+
+async def test_two_different_events_the_same_evening_are_both_kept(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await say(scenario, "Tutoring with Gabriel next Thursday at 4", "add_calendar_event", gabriel())
+    await say(
+        scenario, "And dinner with Sam at 7 that day", "add_calendar_event",
+        gabriel(title="Dinner with Sam", start="19:00", end="", location=""),
+    )  # fmt: skip
+    statuses = scenario.app.db.query("SELECT status FROM pending_actions")
+    assert [r["status"] for r in statuses] == ["pending", "pending"]
