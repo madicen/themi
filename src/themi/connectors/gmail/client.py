@@ -86,6 +86,15 @@ class GmailClient:
         body = await self._request("GET", "/messages", params=params)
         return [m["id"] for m in body.get("messages", [])], body.get("nextPageToken")
 
+    async def get_raw(self, message_id: str) -> bytes | None:
+        """The message as sent, MIME and all (F31d: forwarding), or None if it's gone."""
+        try:
+            body = await self._request("GET", f"/messages/{message_id}", params={"format": "raw"})
+        except _NotFound:
+            return None
+        raw = str(body.get("raw", ""))
+        return base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4))
+
     async def get_message(self, message_id: str) -> dict[str, Any] | None:
         """The full message, or None if it was deleted in the meantime."""
         try:

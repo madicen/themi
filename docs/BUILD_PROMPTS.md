@@ -210,7 +210,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31a | Feedback: an untick on the wall stays unticked | Feedback | [x] 2026-11-06 |
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
-| F31d | Idea: forwarding an email | Feedback | [ ] |
+| F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10650,7 +10650,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F31d · Idea (2026-11-06): forwarding an email
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 21, F16c, 34a
 Read first: the plan's Gmail triage and Trust tiers; triage's `email_reply` (always asks)
 and `gmail.send_reply` (`connectors/gmail/executors.py`: a retry never sends twice).
@@ -10690,6 +10690,34 @@ Scenario: idea #168, the urgent notice, "Can you forward that email to Erin?", t
 Go ahead, the fake Gmail's sent message to Erin.
 
 Setup: none. `gmail.modify` already allows sending. Mark #168 reviewed once live.
+
+Notes (2026-11-06):
+- `themi.core.email_forward`: `forward_email` (email group; "forward" added to its routing
+  words, with three examples). `email` is words from the sender or subject (triage's
+  `find_email`), or empty / "that email" for the newest email Themi told them about (an
+  urgent notice, `email-urgent:<id>`) or put on a card, in the last two days, from their
+  own accounts.
+- `to`: a family member's name (or "her"/"him"/"my partner" when there's one other
+  person). Their address is `members.email`, else their one linked Gmail account.
+  Deviation: with several and no sign-in address, the tool lists them and asks, rather
+  than a choice on the card. Any other address has to be in this message or the one
+  before.
+- Migration 0118: the category `email_forward` ('member', max tier 1, so it always asks).
+  The card reads `Forwarding to Husband (husband@...): "<subject>" from <sender>`, plus
+  the note when there is one.
+- `gmail.forward` (`connectors/gmail/executors.py`): `GmailClient.get_raw` (`format=raw`),
+  then `forward_message` builds "Fwd: <subject>". It has their note, Gmail's "----------
+  Forwarded message ---------" block (From, Date, Subject, To, Cc) and the original text,
+  plus an HTML part when the original had one. Attachments go again up to 24 MB in all;
+  the rest are named in the done line ("Left out, too big to send: ..."). It's sent from
+  the account the email came to, not in the original thread, keyed in `email_sends` like
+  replies.
+- `tests/fakes/gmail_api.py`: `format=raw` (a MIME message built from the stored payload,
+  with filler bytes for attachments), and `sent` records the HTML and attachments of a
+  multipart message.
+- The routing eval is a unit test (`test_forwarding_an_email_reaches_the_email_tools`);
+  `tests/evals` wasn't changed.
+- Setup: restart `themi run` (migration 0118). No new Google scope.
 
 ## Conversation mode
 
