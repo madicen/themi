@@ -214,7 +214,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
 | F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
-| F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [ ] |
+| F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [ ] |
 | F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -10831,7 +10831,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F33b · Feedback (2026-11-06): more_tools offers only what isn't here yet
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: P1, P7b
 Read first: P1's notes (`more_tools`, `ToolContext.groups`); P7b's notes (groups added by
 meaning). From the same audit (reply 237).
@@ -10860,6 +10860,19 @@ eval.
 
 Data: after a week live, the Pi's no-op `more_tools` count (result "Those tools are here
 already" or the new line) should be near zero.
+
+Notes (2026-11-06):
+- `tools.more_tools_for(groups)`: `more_tools`'s spec for one turn, with only the groups
+  it doesn't have in its enum and description. `ToolRegistry.specs(groups)` swaps it in
+  (and leaves it out when every group is in), so `specs_for`, P6's twin text and the
+  timing's `tools_sent` all see the same list. `specs()` with no groups (evals, admin) still
+  offers every group. Caching is unaffected: the spec follows the groups, which already
+  decide the tool list.
+- The registered spec still has every group, so a stale call passes the schema check.
+  Its result now names the tools of the group asked for: "The wall tools are here
+  already: remove_routine_item, show_routines, .... Use one of them now."
+- A router sending every group now sends one tool fewer (`test_router_eval` changed).
+- Setup: restart `themi run`. No migration.
 
 ### F33c · Feedback (2026-11-06): "no such routine item" says what's there, and a near name is found
 Status: [ ]
