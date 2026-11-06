@@ -41,7 +41,7 @@ from themi.connectors.recipe_page import (
 from themi.connectors.search import SearchError
 from themi.core.prompts import as_data
 from themi.core.recipes import Recipe, Recipes, site_name
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -50,6 +50,12 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 SHOWN_PAGE = 30_000  # characters of a page handed to the model
+SEARCHED = 5  # results looked at
+SHOWN = 3  # recipes offered
+SEARCH_SETUP_TEXT = (
+    "Themi can't search the web yet: it needs a free Tavily key (TAVILY_API_KEY) or a "
+    "Firecrawl key in .env. Say so; a link they send can still be read."
+)
 KEPT = 0.6  # of what the model read, at least this much must be on the page
 LINK = re.compile(r"https?://[^\s<>\"']+")
 NOT_VEGAN = re.compile(r"\bnot vegan\b|\bnon[- ]vegan\b|\bno need for vegan\b", re.IGNORECASE)
@@ -158,6 +164,7 @@ class WebRecipes:
     def install(self) -> None:
         self.services.web_recipes = self
         self.services.tools.register(recipe_from_link)
+        self.services.tools.register(find_web_recipe)  # RC4b
 
     # ----- reading -------------------------------------------------------------------------
 
@@ -271,10 +278,60 @@ class WebRecipes:
             return ""
         return vegan_note([i.text for i in recipe.ingredients], self.recipes.all())
 
+    def label(self, recipe: Recipe, minutes: int | None = None) -> str:
+        """ "Pad See Ew (rainbowplantlife.com), 12 ingredients" for a button."""
+        site = recipe.source_text or site_name(recipe.url or "")
+        label = f"{recipe.name} ({site}), {len(recipe.ingredients)} ingredients"
+        return label if len(label) <= 64 else label[:63] + "…"
+
     async def show_from(self, member: Member, url: str, said: str) -> Recipe:
         recipe = self.keep(url, await self.read(member, url))
         await self.recipes.send(member, recipe, note=self.note_for(recipe, said))
         return recipe
+
+    # ----- searching (RC4b) -------------------------------------------------------------
+
+    def query(self, asked: str, said: str) -> str:
+        """The search: vegan first when that's the household's diet and they didn't say
+        otherwise or name a meat; "recipe" when it isn't there."""
+        query = " ".join(asked.split())
+        lowered = query.lower()
+        meaty = bool(flags([lowered])) and not EXCUSED.search(lowered)
+        if (
+            self.recipes.diet() == "vegan"
+            and not NOT_VEGAN.search(f"{said} {query}")
+            and "vegan" not in lowered
+            and not meaty
+        ):
+            query = f"vegan {query}"
+        if "recipe" not in lowered:
+            query += " recipe"
+        return query
+
+    async def search(self, member: Member, asked: str, said: str) -> list[Recipe]:
+        """Up to three readable recipes from a web search: pages with recipe data only, so
+        no model call is spent on each."""
+        web = self.services.web_search
+        if web is None or web.backend is None:
+            raise ToolFailed(SEARCH_SETUP_TEXT)
+        web.spend(member.id, "search")
+        try:
+            results = await web.backend.search(self.query(asked, said), count=SEARCHED)
+        except SearchError as exc:
+            raise ToolFailed(f"The search didn't work: {exc}.") from exc
+        found: list[Recipe] = []
+        for result in results[:SEARCHED]:
+            if len(found) >= SHOWN:
+                break
+            try:
+                web.spend(member.id, "read")
+                fetched = await self.reader.fetch(result.url)
+            except (PageError, ToolFailed):
+                continue
+            page = schema_recipe(fetched.html, fetched.url)
+            if page is not None:
+                found.append(self.keep(fetched.url, page))
+        return found
 
     def forget_stale(self, days: int = 30) -> int:
         """RC4b: web recipes nobody cooked or saved, after `days`."""
@@ -311,3 +368,48 @@ async def recipe_from_link(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed(f"{exc} Say so, and give them the link back.", reply=None) from exc
     ctx.cards.append(recipe.name)
     return f"Sent them the recipe from the page, as written: {recipe.name}. Don't repeat it."
+
+
+@tool(
+    "find_web_recipe",
+    "Find recipes on the web when they ask for one online or the cookbook hasn't got it "
+    "('find a vegan pad see ew recipe', 'something with butternut squash online'): up to "
+    "three readable recipes as buttons, with a close cookbook recipe offered first. what: "
+    "the dish or ingredients they asked for, in their words.",
+    {"what": {"type": "string"}},
+)
+async def find_web_recipe(ctx: ToolContext, args: dict[str, Any]) -> str:
+    web = _web(ctx)
+    asked = str(args["what"]).strip()
+    if not asked:
+        raise ToolFailed("What should it look for? Ask them.")
+    from themi.channels.events import Button
+    from themi.channels.outbox import Priority
+    from themi.core.recipes import clear_match
+
+    own = clear_match(web.recipes.find(asked, charts=False))
+    found = await web.search(ctx.member, asked, ctx.request_text)
+    buttons = []
+    lines = []
+    if own is not None and own.source == "doc":
+        lines.append(f"Your cookbook has {own.name}.")
+        buttons.append(
+            Button(f"{own.name} (cookbook)"[:64], "recipe", {"action": "show", "id": own.id})
+        )
+    if found:
+        lines.append("From the web:")
+        buttons += [Button(web.label(r), "recipe", {"action": "show", "id": r.id}) for r in found]
+    if not buttons:
+        raise ToolDeclined(
+            f'No readable recipe for "{asked}" turned up online. Say so, and offer to try other '
+            "words."
+        )
+    text = "\n".join(lines)
+    await ctx.services.outbox.send(
+        ctx.member, text, priority=Priority.REPLY, kind="recipes", buttons=buttons
+    )
+    ctx.cards.append(text)
+    names = ", ".join(r.name for r in found)
+    return (
+        f"Sent them buttons to choose from ({names or 'the cookbook one'}). Don't list them again."
+    )

@@ -260,7 +260,8 @@ def build_app(
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     WebSearch(services, search).install()  # F30d: says how to set it up without a key
-    WebRecipes(services, recipes, recipe_pages).install()  # RC4a: recipes from links
+    web_recipes = WebRecipes(services, recipes, recipe_pages)  # RC4a: recipes from links
+    web_recipes.install()
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
@@ -303,6 +304,7 @@ def build_app(
         PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
         PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
         PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
+        PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
     ]
     server = ServerControl(services, control_dir)
     server.install()

@@ -484,7 +484,11 @@ class Recipes:
         recipe = self.get(int(event.button.payload.get("id", 0)))
         if recipe is None:
             return
-        await self.send(self.services.store.get_member(event.member.id), recipe)
+        note = ""
+        web = self.services.web_recipes
+        if recipe.source == "web" and web is not None:
+            note = web.note_for(recipe, "")  # RC4b: a web recipe picked from a search
+        await self.send(self.services.store.get_member(event.member.id), recipe, note=note)
 
     # ----- buttons ----------------------------------------------------------------------------
 

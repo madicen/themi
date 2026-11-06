@@ -463,6 +463,7 @@ TOOL_GROUPS: dict[str, str] = {
             "start_cooking",
             "stop_cooking",
             "recipe_from_link",
+            "find_web_recipe",
         ),
         "recipes",
     ),  # RC1b, RC2a, RC2b, RC3a
