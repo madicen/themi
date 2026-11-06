@@ -248,7 +248,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC4b | Recipes: finding them on the web | Recipes | [x] 2026-11-06 |
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
-| RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [ ] |
+| RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 
 ## Fixed technical choices
 
@@ -12333,7 +12333,7 @@ Notes (2026-11-06):
   nobody has looked at it on a phone yet. Worth a look before calling it done.
 
 ### RC7 · Recipes: cookbook recipes in meal ideas
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC2a, 27
 Read first: prompt 27's notes (`suggest_meals`); the plan's Module behaviour B (Energy,
 internal only) and D.
@@ -12348,3 +12348,18 @@ internal only) and D.
 Tests: unit tests for coverage, the missing-item limit, the low-energy filter, recency;
 scenario: a pantry with chickpeas, tomatoes and onion offering Chana Masala; evals: no
 energy words in the offers.
+
+Notes (2026-11-06):
+- `themi.core.recipe_ideas.RecipeIdeas`: the pick is in code. Only the cookbook's meals
+  (not Ingredients or References); what a recipe needs is its lines as already read (RC2a's
+  cache, or the rules), less staples and optional lines; the pantry has what isn't out, and
+  names match by words ("chickpeas" covers "dried chickpeas"; "onion" also covers "red
+  onion", a known looseness). At most two missing, never the first thing it needs.
+- Order: fewest missing, most use-soon items used, most finished cooking sessions; nothing
+  finished in the last 7 days. With `suggested_level` low: five steps or fewer and nothing
+  that needs time first. Never said.
+- `suggest_meals`' message gains "Or from the cookbook: Chana Masala (you'd need cilantro
+  leaves)." with [Cook this] and [Add cilantro leaves] (a tap: `grocery_list_add`
+  requested). A new tool, `cookbook_recipes_we_can_make`, lists up to five as buttons; the
+  recipes group's words gained "what can we make" and "with what we have".
+- One eval (no energy words in the reply), not run here.
