@@ -68,6 +68,9 @@ class ToolContext:
     # Open tasks create_task named as maybe the same job (bug #132): asked again this turn,
     # it's a different job, and it's made.
     named_twins: set[int] = field(default_factory=set)
+    # Messages a tool sent them itself, with its own buttons (a held note's "Send now",
+    # F29c; an approval card, F29d): that call's answer, so no model words follow it.
+    cards: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

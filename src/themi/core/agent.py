@@ -551,9 +551,12 @@ class Agent:
                         note.said(call.arguments, result.content)
                         results.append(result)
                 messages.append(Message.tool_results(*results))
-                if ctx.asked and len(ctx.asked) == len(ctx.outcomes):
+                if (ctx.asked or ctx.cards) and len(ctx.asked) + len(ctx.cards) == len(
+                    ctx.outcomes
+                ):
                     # P2b: all done as they asked, and said: the next round's words would
                     # be dropped (bug #118), so it isn't made (a list add took 2.5 s more).
+                    # F29c, F29d: a message a tool sent with its buttons is said already.
                     return "\n".join(dict.fromkeys(ctx.asked))
         except RefusalError:
             return DECLINED_TEXT
