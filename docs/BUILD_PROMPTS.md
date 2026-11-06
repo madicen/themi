@@ -246,7 +246,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC3c | Cooking: step timers | Recipes | [x] 2026-11-06 |
 | RC4a | Recipes: a recipe from a link | Recipes | [x] 2026-11-06 |
 | RC4b | Recipes: finding them on the web | Recipes | [x] 2026-11-06 |
-| RC5 | Recipes: saving a liked one to the cookbook | Recipes | [ ] |
+| RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [ ] |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [ ] |
 
@@ -12260,7 +12260,7 @@ Notes (2026-11-06):
 - The routing cases are at 110, the most the routing test allows; RC5 adds none.
 
 ### RC5 · Recipes: saving a liked one to the cookbook
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC4a, RC1a, 11
 Read first: the plan's Trust tiers; 11's and F21b's notes (categories and rules).
 - "We liked that one, add it to the cookbook", [Save to cookbook]: Themi picks the section
@@ -12280,6 +12280,24 @@ Read first: the plan's Trust tiers; 11's and F21b's notes (categories and rules)
 Tests: unit tests for the request body against the fake (heading styles, the place in the
 section), the revision conflict, the tier card; scenario: a web recipe cooked, [Save to
 cookbook], approved, then found by `find_recipe` as a cookbook recipe.
+
+Notes (2026-11-06):
+- `themi.core.cookbook_save.CookbookSave`: [Save to cookbook] on a web recipe card (and on
+  "all done" after cooking one), and the `save_recipe_to_cookbook` tool (recipe '' is the
+  web recipe they had last). The section is guessed from the recipe's name (a word table:
+  brownies -> Desserts, curry -> Entrees...); with no clear section, a button per section.
+- Before staging, Themi sends the entry as it will read in the doc (quoted), then stages
+  `cookbook_add` (migration 0125: household, Tier 1 to start, may become automatic). The tap
+  on Save isn't taken as the yes: the approval card is.
+- The executor reads the doc, inserts before the next section's Heading 1 with
+  `cookbook.entry_requests` (every paragraph's style set, since inserted text takes the
+  style where it lands), against the revision just read; a conflict means one more read
+  and try, then it fails ("kept changing; nothing was added"). Afterwards the web row takes
+  the new heading's id and becomes `doc`, so it's one recipe, found as the cookbook's.
+- A recipe already in the cookbook declines with its link: changes happen in the doc.
+- The fake Docs API gained `edits_before_write` for the conflict tests.
+- Setup: restart `themi run` (migration 0125). Whoever chose the cookbook needs edit
+  rights on the doc for writes to work.
 
 ### RC6 · Recipes: the website's Recipes page
 Status: [ ]
