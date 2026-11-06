@@ -220,6 +220,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD5a | Body double: built-in music | Body double | [ ] |
 | BD5b | Spotify: playing their own music | Body double | [ ] |
 | BD5c | Body double: music that suits the task | Body double | [ ] |
+| EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
+| EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
+| EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
+| EX2b | Expense sheets: when Themi asks | Expense sheets | [ ] |
+| EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
+| EX4a | Google Sheets connector | Expense sheets | [ ] |
+| EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
 
 ## Fixed technical choices
 
@@ -10874,3 +10881,225 @@ Read first: BD2's notes (the learning model); this section's intro.
 - Never started on its own; never mentions how sessions went.
 Tests: unit tests for the pick and thresholds; a scenario where the offer follows three
 finished sessions with the same playlist.
+
+## Expense sheets
+
+From the spec "Themi Intelligent Expense Tracking Engine: Data Ingestion, Verification
+Lineage, & Google Sheets / CSV Sync" (a one-page PDF shared in chat 2026-11-06; not in the
+repo). Its idea: the family makes expense sheets when they want them (dining out, business
+travel, a project's budget), each with its own fields. Themi fills them in from receipts,
+calendar events and chat, and keeps, for every value, where it came from and how sure it is.
+It asks as little as it can, and copies each sheet to Google Sheets and to CSV.
+
+The spec's data model, in short:
+- A sheet: title, mode (`personal`, `business` or `custom`), its Google Sheet, its fields,
+  which fields are critical, whether a missing critical field is asked about, and whether
+  CSV export is on.
+- An entry: one value per field. Each value has a status (`verified`, `unverified` or
+  `user_estimate`), a confidence (0 to 1) and its lineage: the source type
+  (`direct_user_input`, `email_receipt`, `calendar_event`, `chat_context`, `user_estimate`),
+  a reference (a Gmail thread, an event), the evidence and a time. Unknown is `null`, never
+  made up.
+- When to ask:
+
+  | Sheet | Missing field | What the search found | What Themi does |
+  |---|---|---|---|
+  | Personal | Amount (critical) | A receipt that matches | Fills it in quietly as unverified |
+  | Personal | Amount (critical) | Nothing | Asks the person for the amount |
+  | Personal | Vendor or category | Nothing | Leaves it empty, doesn't ask |
+  | Business | Any field | Little or nothing | Saves the question for a review |
+
+Agreed changes to the spec (2026-11-06), because the plan's rules win:
+- **One record.** X1's `spending` already holds what was spent (chat and takeout receipts,
+  business marked, a business CSV). Its rows move into the new model as two built-in
+  sheets: the household's "Takeout & eating out" and each person's "Business". `Spending`
+  (`log_spending`, the takeout budget, prompt 35's `month(kind="takeout")`) is rebuilt on
+  top of them, so nothing reads money from two places.
+- **Themi's database is the truth;** Google Sheets is a copy Themi writes. The spec's
+  `sheets_agent` is a connector, `themi.connectors.gsheets`. Each row carries a hidden entry
+  id, so an update finds its row and never adds a second one.
+- **Scope:** `drive.file` (only files Themi creates), not the full spreadsheets scope. Themi
+  makes each sheet's spreadsheet itself. Adding a scope means each person links their Google
+  account again once.
+- **Writing to a Google Sheet is a side effect**, so it goes through the trust tiers: a new
+  category, "expense sheet sync", each person's own, starting at Tier 1. When a sheet is
+  made, Themi offers the rule: "Keep this sheet up to date on its own?" It spends no money
+  and sends nothing as the person, so it may become automatic. Filling in Themi's own
+  record is a plain action, as X1's receipts already are.
+- **Confidence is set by code, not by the model.** Amount, date and vendor all matching a
+  receipt: 0.95. A vendor and date matching a calendar event: lower. A model's own "95%" is
+  never used. A value the model reads from text must come with a quote, and the quote must
+  be found word for word in that text, or the value is stored as `null`. That's how "never
+  made up" is kept.
+- **Only the person verifies.** Tapping [Looks right], or the website. Themi's fills stay
+  `unverified`.
+- **Asking goes through the outbox**, timed by energy, worded as an offer with [Skip].
+  - Personal, critical: asked only after a wait (24 hours by default), because receipts
+    often come hours after the meal.
+  - Business: saved for a batched review, never sent on a B1 break (a break is rest).
+- **Colour alone isn't enough.** The Google Sheet also has a status column in words, and a
+  cell note with the source and confidence. Confidence is about the data, so it may be
+  shown; energy never is.
+- **External text is data.** Receipts, emails and calendar titles go into delimited blocks.
+  Calendars give only title, place and times, as the plan allows.
+- `SheetFieldDefinition` isn't defined in the spec. Here a field is an id, a label, a type
+  (`money`, `date`, `text`, `choice` with its choices, `number`), and whether it's critical.
+  Built-in fields: amount, date, vendor, category, note; business sheets add purpose and
+  who was there.
+- **Left out for now:** photographed receipts (reading amounts from a Telegram photo needs a
+  model that reads images), and budgets per sheet beyond the existing takeout budget.
+
+Open decisions (defaults used until Michael says otherwise):
+- The business "review session" is a weekly message on a day the person picks (default
+  Friday afternoon), plus a "Needs filling in" list on the Spending page.
+- Edits made directly in the Google Sheet aren't read back: Themi rewrites its own columns
+  and leaves columns people add alone.
+- Each entry is on one sheet. "For work" goes to Business; otherwise each sheet's keywords
+  decide, then a cheap model call, and the person can move it ("that's travel").
+- The spec's author isn't recorded here yet.
+
+### EX1a · Expense sheets: the data model, with X1 moved onto it
+Status: [ ]
+Depends on: X1
+Read first: this section's intro; X1's notes; the plan's Integrations ("Receipts and
+spending") and Module behaviour D (the takeout budget).
+Start by adding a short "Expense sheets" part to the plan's Integrations and Module
+behaviour, from this section's intro (Michael checks the wording before it's written to
+the doc).
+- Migration: `expense_sheets` (title, mode, owner member or NULL for the household,
+  `prompt_on_missing_critical`, `csv_enabled`, keywords, `google_spreadsheet_id` NULL,
+  built-in kind NULL / `takeout` / `business`, created_at, archived_at),
+  `expense_fields` (sheet, key, label, type, choices JSON, critical, position),
+  `expense_entries` (sheet, member, created_at, removed_at) and `expense_values` (entry,
+  field, value as JSON or NULL, status, confidence or NULL, source type, source reference,
+  evidence, recorded_at). One value row per entry and field; changes replace it.
+- Move each `spending` row: takeout and eating out into the household sheet (kind becomes
+  its category), business ones into that person's Business sheet. The receipt email
+  becomes the lineage (`email_receipt`, its Gmail id); chat rows are
+  `direct_user_input`. Keep `spending` as a read-only view for one release, then drop it.
+- `themi.core.expenses`: `Expenses` with sheets, fields, entries and values, and `Value`
+  (value, status, confidence, lineage). Money stays integer cents.
+- `Spending` keeps its methods and tools, now built on `Expenses`.
+Tests: every X1 test passes unchanged; unit tests for the migration on a copy with chat,
+email and business rows; values keep their lineage.
+
+### EX1b · Expense sheets: making and filling them in, in chat and on the website
+Status: [ ]
+Depends on: EX1a, W1
+Read first: BD1b (the proposed-steps pattern); X1's notes (the Spending page); this
+section's intro.
+- Making a sheet: "start a sheet for business travel", "track what we spend on the kitchen
+  project". One structured call (a new AI task `expense_sheet_fields`, its own route on the
+  AI page) proposes the mode, the fields and the critical ones. Shown first:
+  "Here's the sheet: ..." [Make it] [Change it]; "Change it" takes their words.
+- Adding to one: "$84 at Merit for the Henderson lunch", "about $40 on paint, pretty sure".
+  Said values are `direct_user_input`; an estimate is `user_estimate`, with the confidence
+  they said ("pretty sure" is 0.8, "maybe" 0.5; a % they say is used as is).
+- Verifying: [Looks right] on Themi's message about a fill, "the Merit one is right", or a
+  tick on the website, sets `verified` for the entry's values.
+- Tools: `make_expense_sheet`, `add_expense`, `verify_expense`, `move_expense`,
+  `expense_summary` (in X1's "spending" tool group).
+- Website: Spending shows a sheet at a time (a picker), each value with its status as a
+  word and a small mark, the source as a link (Gmail, the calendar event), and a field
+  editor for the sheet's owner. Business sheets are their owner's only, as in X1.
+Tests: unit tests for fields, estimates, verification and permissions; scenarios: making a
+"Business travel" sheet in chat and adding to it, an estimate later verified. Evals: field
+proposals for ten sheet requests; "pretty sure" and "maybe" read as estimates.
+
+### EX2a · Expense sheets: filling in from receipts, calendars and chat
+Status: [ ]
+Depends on: EX1b, 23, 25, K1
+Read first: 23's notes (`ReceiptFound`); the pantry's receipt reader (`total_cents`);
+K1's notes (what Themi keeps from calendars); this section's intro (confidence by code,
+quotes checked).
+- A receipt (the pantry already reads it) is matched to open entries: same amount and
+  date within two days and the same vendor (normalised: "DoorDash - Merit" is Merit).
+  A match fills the missing values quietly: `unverified`, confidence 0.95, lineage
+  `email_receipt` with the Gmail id and the line quoted. No message.
+- A receipt with no entry yet becomes an entry on the sheet its routing picks (open
+  decisions), as X1's takeout receipts do now.
+- A calendar event at a restaurant or with "lunch", "dinner" or a client's name, on the
+  day of an entry with no vendor, fills the vendor and business purpose at 0.6
+  (`calendar_event`, the event id). An event alone never makes an entry.
+- From chat: what was said around a spend (in the same conversation) can fill a field,
+  `chat_context`, 0.7.
+- Every value a model reads comes with a quote. Code checks the quote is in the source
+  text; if not, the value is `null` and the miss is logged (never shown).
+- Confidence comes from a table in code (`themi.core.expense_matching`), pure functions,
+  easy to tune.
+Tests: unit tests for the matcher (amounts, dates, vendor names), the quote check
+(a made-up value becomes null), the confidence table; scenarios: a lunch said in chat then
+its receipt filling the amount quietly, a receipt for a meal never mentioned. Evals:
+receipts from the fixture set, every filled value quoted.
+
+### EX2b · Expense sheets: when Themi asks
+Status: [ ]
+Depends on: EX2a
+Read first: the plan's Module behaviour A (PDA) and B (timing); B1's notes (breaks); this
+section's intro (the table).
+- Personal sheet, a critical field still empty 24 hours after the entry (the wait is a
+  setting): one message through the outbox at a good time: "What did dinner at Merit come
+  to?" [Skip]. A typed amount fills it (`direct_user_input`). Skip leaves it empty and
+  never asks again about that entry.
+- Personal, not critical: stays empty, no message.
+- `prompt_on_missing_critical` off: never asks for that sheet.
+- Business: missing values wait for the person's review: one message on their chosen day
+  (migration: `members.expense_review_day`, `members.expense_review_time`, default Friday
+  15:00), listing the entries that need something, a button each, [Later] for the lot.
+  Never during a break, burnout mode or a body-double session; it waits until after.
+- The Spending page shows a "Needs filling in" list at any time.
+- A receipt arriving before the question goes out cancels it (`Outbox.cancel`).
+Tests: unit tests per row of the spec's table with a frozen clock, the cancel, Skip;
+scenarios: a dinner asked about the next day, a business week's review, a receipt landing
+in time so nothing is asked. Evals: the questions read as offers, no "you need to".
+
+### EX3 · Expense sheets: CSV export with an audit trail
+Status: [ ]
+Depends on: EX1b
+Read first: X1's notes (`business.csv`).
+- `/expenses/<sheet id>.csv?from=YYYY-MM-DD&to=YYYY-MM-DD` (default this month): one row
+  per entry, the sheet's fields, then for each a status and confidence column, then the
+  source type and a source link (Gmail, calendar). Only for people who can see the sheet;
+  only when `csv_enabled`.
+- `/spending/business.csv` keeps working, now from the Business sheet.
+- In chat, "send me the travel sheet for October" sends the file in Telegram: the outbox
+  gains `send_document` (fake in `tests/fakes/telegram_api.py`).
+Tests: unit tests for the columns, permissions, the date range, CSV quoting (vendor names
+with commas); a scenario of the file sent in chat.
+
+### EX4a · Google Sheets connector
+Status: [ ]
+Depends on: EX1a, 21, 11
+Read first: the plan's Integrations and Trust tiers; 21's notes (linking and scopes); this
+section's intro.
+- `drive.file` added to the link scopes. Accounts shows "Link again for expense sheets"
+  on an account without it; nothing else changes for those accounts. DEPLOY.md: add the
+  scope in the Google Cloud console and turn on the Sheets API.
+- `themi.connectors.gsheets`: create a spreadsheet, write a header, add rows, update rows
+  found by the hidden id column, set background colours and cell notes, in batched
+  requests. Retries and backoff as the Gmail client.
+- The trust category "expense sheet sync" (a person's own, Tier 1 to start, may become
+  automatic). At Tier 1 a sync is one approval per sheet per day, not per row.
+- `tests/fakes/gsheets_api.py`: a fake Sheets API holding cells, colours and notes.
+Tests: unit tests for the client against the fake, scope checks, the trust category;
+live smoke test (opt-in, `tests/live`).
+
+### EX4b · Expense sheets: keeping Google Sheets in step
+Status: [ ]
+Depends on: EX4a, EX1b
+Read first: EX4a's notes; this section's intro.
+- When a sheet is made (or "put this sheet in Google Sheets" for one that already exists),
+  Themi asks which linked Google account, makes the spreadsheet there and offers the rule
+  ("Keep this sheet up to date on its own?" [Yes, always] [Ask me]).
+- A sync queue (`expense_sync`: entry, sheet, wanted at, attempts, done at), filled when an
+  entry or value changes and drained by a job every few minutes through the trust tiers.
+  Failures retry with backoff; after a day of failures the owner hears once, in words.
+- In the sheet: the fields, a Status column ("Checked", "Filled in by Themi", "Your
+  estimate", "Missing"), the colour for each value's status, and a note on each value
+  with its source, its confidence as a %, and the link. Verifying in Themi updates the
+  database first, then the cells.
+- A spreadsheet deleted in Google: the sheet forgets it and says so once; it can be made
+  again.
+Tests: unit tests for the queue, the cell formatting per status, an update not adding a
+second row; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
+from amber to green, a deleted spreadsheet.
