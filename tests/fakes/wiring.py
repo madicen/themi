@@ -22,6 +22,7 @@ from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
+from tests.fakes.search import FakeSearch
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
@@ -42,6 +43,7 @@ def connector_options(
     ourgroceries: FakeOurGroceries | None = None,
     cozyla: FakeCozyla | None = None,
     travel: FakeTravel | None = None,
+    search: FakeSearch | None = None,
     home_connect: FakeHomeConnect | None = None,
     thinq: FakeThinq | None = None,
     roborock: FakeRoborock | None = None,
@@ -55,6 +57,7 @@ def connector_options(
         "grocery_list": ourgroceries,
         "cozyla": cozyla_client(cozyla, timezone) if cozyla else None,
         "travel": travel.client() if travel else None,
+        "search": search.client() if search else None,
         "home_connect": home_connect.client() if home_connect else None,
         "thinq": thinq.config() if thinq else None,
         "roborock": roborock,

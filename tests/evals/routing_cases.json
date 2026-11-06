@@ -824,6 +824,31 @@
    "tools": [
     "log_maintenance"
    ]
+  },
+  {
+   "id": "web-practising",
+   "kind": "plain",
+   "message": "Can you tell me if my old dentist in San Mateo is still seeing patients? Look it up",
+   "tools": [
+    "search_web"
+   ]
+  },
+  {
+   "id": "web-hours",
+   "kind": "plain",
+   "message": "Search online for when the hardware store closes tonight",
+   "tools": [
+    "search_web"
+   ]
+  },
+  {
+   "id": "web-follow",
+   "kind": "follow-up",
+   "message": "Can you find out online?",
+   "before": "I wonder if the pumpkin patch is still open",
+   "tools": [
+    "search_web"
+   ]
   }
  ]
 }
