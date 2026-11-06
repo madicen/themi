@@ -6,16 +6,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from themi.ai.adapters.anthropic import DEFAULT_EFFORT, AnthropicProvider
-from themi.ai.adapters.anthropic import DEFAULT_MODEL as ANTHROPIC_DEFAULT_MODEL
-from themi.ai.adapters.gemini import DEFAULT_MODEL as GEMINI_DEFAULT_MODEL
-from themi.ai.adapters.gemini import GeminiProvider
-from themi.ai.adapters.openai_compat import LM_STUDIO_URL, OLLAMA_URL, OpenAICompatProvider
+from themi.ai.adapters.defaults import (
+    ANTHROPIC_DEFAULT_EFFORT,
+    ANTHROPIC_DEFAULT_MODEL,
+    GEMINI_DEFAULT_MODEL,
+    LM_STUDIO_URL,
+    OLLAMA_URL,
+)
 from themi.ai.errors import PermanentError
 from themi.ai.provider import Capabilities, Provider
 from themi.storage.secrets import Secret
+
+if TYPE_CHECKING:
+    from themi.ai.adapters.anthropic import AnthropicProvider
+    from themi.ai.adapters.gemini import GeminiProvider
+    from themi.ai.adapters.openai_compat import OpenAICompatProvider
 
 AdapterKind = Literal["anthropic", "gemini", "ollama", "lm_studio", "openai_compat"]
 
@@ -52,16 +59,20 @@ def build_provider(config: AdapterConfig) -> Provider:
     if config.kind == "anthropic":
         if config.api_key is None:
             raise PermanentError("Claude needs an API key")
+        from themi.ai.adapters.anthropic import AnthropicProvider
+
         return AnthropicProvider(
             config.api_key,
             model,
             base_url=config.base_url,
             timeout=config.timeout,
-            effort=config.effort or DEFAULT_EFFORT,
+            effort=config.effort or ANTHROPIC_DEFAULT_EFFORT,
         )
     if config.kind == "gemini":
         if config.api_key is None:
             raise PermanentError("Gemini needs an API key")
+        from themi.ai.adapters.gemini import GeminiProvider
+
         return GeminiProvider(
             config.api_key,
             model,
@@ -77,6 +88,8 @@ def build_provider(config: AdapterConfig) -> Provider:
     base_url = config.base_url or default_urls.get(config.kind)
     if base_url is None:
         raise PermanentError("an OpenAI-compatible provider needs a base URL")
+    from themi.ai.adapters.openai_compat import OpenAICompatProvider
+
     return OpenAICompatProvider(
         model,
         base_url=base_url,
@@ -85,6 +98,23 @@ def build_provider(config: AdapterConfig) -> Provider:
         capabilities=capabilities,
         timeout=config.timeout,
     )
+
+
+# The SDKs load only when a provider is built (or one of these is imported by name),
+# so code that just reads AI settings starts quickly.
+_PROVIDERS = {
+    "AnthropicProvider": "themi.ai.adapters.anthropic",
+    "GeminiProvider": "themi.ai.adapters.gemini",
+    "OpenAICompatProvider": "themi.ai.adapters.openai_compat",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _PROVIDERS:
+        import importlib
+
+        return getattr(importlib.import_module(_PROVIDERS[name]), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

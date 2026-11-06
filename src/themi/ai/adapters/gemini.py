@@ -23,6 +23,11 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 from themi.ai.adapters._common import TRANSCRIBE_PROMPT, parse_json_object, transport_exceptions
+from themi.ai.adapters.defaults import (
+    GEMINI_DEFAULT_EMBEDDING_MODEL,
+    GEMINI_DEFAULT_MODEL,
+    GEMINI_DEFAULT_TRANSCRIPTION_MODEL,
+)
 from themi.ai.errors import (
     MalformedOutputError,
     RefusalError,
@@ -47,11 +52,9 @@ from themi.ai.types import (
 )
 from themi.storage.secrets import Secret
 
-# gemini-3.8-flash allowed only 20 free requests a day; flash-lite has room for a household.
-DEFAULT_MODEL = "gemini-3.5-flash-lite"
-DEFAULT_TRANSCRIPTION_MODEL = "gemini-3.5-flash-lite"
-# P7b: gemini-embedding-2 told "lie down" from "oat milk" further apart than -001 did.
-DEFAULT_EMBEDDING_MODEL = "gemini-embedding-2"
+DEFAULT_MODEL = GEMINI_DEFAULT_MODEL
+DEFAULT_TRANSCRIPTION_MODEL = GEMINI_DEFAULT_TRANSCRIPTION_MODEL
+DEFAULT_EMBEDDING_MODEL = GEMINI_DEFAULT_EMBEDDING_MODEL
 EMBEDDING_SIZE = 768  # of 3072: plenty to route on, and a quarter of the cache
 
 REFUSAL_FINISH_REASONS = frozenset(
