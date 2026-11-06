@@ -247,7 +247,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC4a | Recipes: a recipe from a link | Recipes | [x] 2026-11-06 |
 | RC4b | Recipes: finding them on the web | Recipes | [x] 2026-11-06 |
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
-| RC6 | Recipes: the website's Recipes page | Recipes | [ ] |
+| RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [ ] |
 
 ## Fixed technical choices
@@ -12300,7 +12300,7 @@ Notes (2026-11-06):
   rights on the doc for writes to work.
 
 ### RC6 · Recipes: the website's Recipes page
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC1b, RC2a, W1
 Read first: W1's notes (the shell and row components); F28c's notes (the menu bar).
 - `/recipes`: search box, sections as filters, rows with the name and section. A recipe
@@ -12315,6 +12315,22 @@ Read first: W1's notes (the shell and row components); F28c's notes (the menu ba
 - Phone first: no horizontal scroll at 360 px, light and dark.
 Tests: page tests for search, filters, scale, needs-a-look, kitchen view moving the chat
 card; integration test that only family members see it.
+
+Notes (2026-11-06):
+- `/recipes` (on More → Household): search (RC1b's search), section chips, a row per
+  recipe and chart, "Need a look" with links to the doc, and the vegan setting for web
+  recipes (`cookbook.diet`).
+- `/recipes/{id}`: ingredients at a scale (½, 1×, 2×, 3× buttons, or "for N", which needs a
+  yield as in chat), the scaled and baking lines, steps, notes, source, the doc or page
+  link; a chart shows as a table that scrolls on its own. [Add to grocery list] sends RC2a's
+  card to their Telegram chat; [Cook in the kitchen view] starts RC3a's session.
+- `/recipes/kitchen`: big text, the current phase (what needs time first, the ingredient
+  list, prep, then one step with Back and Next), polled every 5 seconds with htmx
+  (`/recipes/kitchen/state`). Taps post to the same `Cooking` methods, so the chat's card
+  moves too, and a tap in chat shows on the page at the next poll. `static/kitchen.js`
+  keeps the screen on where `navigator.wakeLock` is offered.
+- Phone width and dark mode use the site's tokens and new CSS at the end of `themi.css`;
+  nobody has looked at it on a phone yet. Worth a look before calling it done.
 
 ### RC7 · Recipes: cookbook recipes in meal ideas
 Status: [ ]
