@@ -207,7 +207,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
 | F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
 | F30d | Idea: Themi looks things up online | Feedback | [x] 2026-11-06 |
-| F31a | Feedback: an untick on the wall stays unticked | Feedback | [ ] |
+| F31a | Feedback: an untick on the wall stays unticked | Feedback | [x] 2026-11-06 |
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [ ] |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [ ] |
 | F31d | Idea: forwarding an email | Feedback | [ ] |
@@ -6953,7 +6953,7 @@ Notes (2026-11-04):
   (the default) the bot only sees commands, mentions and replies, which is all it needs.
 
 ### 35a · Meal reminders and takeout rescue
-Status: [ ]
+Status: [~]
 Depends on: 27, 19
 Read first: "Module behaviour" → D; "Integrations" → Safeway/DoorDash row.
 Split from prompt 35 on 2026-10-30; the Safeway cart moved to 35b and 35c.
@@ -9371,7 +9371,7 @@ Notes (2026-11-04):
 - Setup: restart `themi run`. No migration.
 
 ### F26b · Idea (2026-11-03): approvals from one email thread in one message
-Status: [ ]
+Status: [~]
 Depends on: 12, 23, F16b
 Read first: "Gmail triage"; "Trust tiers" → Approvals in Telegram; PDA shield (fewer
 messages). From Erin's idea #137 (2026-11-03, 6:45 pm, "since they're all tutoring session
@@ -10113,7 +10113,7 @@ Notes (2026-11-05):
   chat or on the Guides page. If it's a photo or PDF, that's F29hb.
 
 ### F29hb · Idea (2026-11-05): a guide from a photo or a PDF
-Status: [ ]
+Status: [~]
 Depends on: F29ha, 05
 Read first: F29ha's notes; prompt 05 (the adapters); "Security and privacy". Idea #148
 again: Erin's guide may be a photo, a PDF or a printed sheet. Ask Erin which it is before
@@ -10414,7 +10414,7 @@ Notes (2026-11-06):
   and `THEMI_SEARCH_BACKEND=firecrawl` if both are set.
 
 ### F31a · Feedback (2026-11-06): an untick on the wall stays unticked
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: R1b, F23b
 Read first: R1b's notes (ticks both ways); F23b's notes (a check follows ticks made on the
 wall); C3's and C2b's notes (check-ins and chores on the wall). From Michael's bug #169
@@ -10460,8 +10460,26 @@ and the evening check lists it as still open.
 Data: none. Michael can untick "Cycle Dishwasher" once this is live. Mark #169 reviewed once
 live.
 
+Notes (2026-11-06):
+- Migration 0117: `routine_ticks.on_wall_at`. `Routines.mark_on_wall` sets it when the
+  wall shows the tick, or when Themi's tick reached the wall (`on_tick`, or the sync). In
+  `RoutinesWall._ticks`, a tick Themi has that the wall had and doesn't any more is
+  removed (`Routines.untick`), and the day's check is edited to show it open again (no
+  new message, no praise). A tick that never reached the wall is still sent.
+- Energy: a routine's lift or dip is only recorded at its check, so an untick before the
+  check needs no undo.
+- Left out: check-ins (C3) and chores (C2b) unticked on the wall. `TaskBoard.reopen` covers
+  only one-off tasks; undoing a repeating round (its run, due date, chart and praise) is
+  more than a small change. `test_a_check_in_unticked_on_the_wall_isnt_ticked_again` pins
+  today's behaviour: the round stays done in Themi and the wall isn't ticked again.
+  Follow-up if the family notices.
+- Ticks from before this release have no `on_wall_at`, so one that's unticked on the
+  wall now is sent once more and then sticks. Untick "Cycle Dishwasher" again after the
+  update.
+- Setup: restart `themi run` (migration 0117).
+
 ### F31b · Feedback (2026-11-06): a card after a retried call is the whole answer, and no task numbers in what people read
-Status: [ ]
+Status: [~]
 Depends on: F29d, F23e, F29c
 Read first: F29d's notes (a card is the whole answer); F23e's notes (a task moved into a
 routine); F29c's notes ("Send now"). From Michael's bug #166 (2026-11-06, 7:29 am, "we gotta
@@ -10915,7 +10933,7 @@ with a break, a sprint left unanswered, a nudge held then delivered after. Evals
 phrases, "stop" mid-sprint, "pomodoro" not mistaken for a task title.
 
 ### BD1b · Body double: Guided Step-Through in chat
-Status: [ ]
+Status: [~]
 Depends on: BD1a
 Read first: F6a's and F26c's notes (steps on tasks); this section's intro.
 - Guided mode uses the task's own `steps`. A task without steps (or no task) gets proposed
@@ -10989,7 +11007,7 @@ endpoint per mode; integration tests for page access (someone else's session is 
 scenario where Next on the page edits the chat message.
 
 ### BD3b · Body double: Themi the chameleon
-Status: [ ]
+Status: [~]
 Depends on: BD3a
 Read first: this section's intro (the modes' scenes, original art only).
 - `themi/web/static/chameleon/`: one SVG character, original, drawn as named parts (body,
@@ -11013,7 +11031,7 @@ flag has a CSS state; a scenario of break chat on the page reaching Telegram too
 and Erin look at the scenes on their phones before it's marked done.
 
 ### BD4a · AI layer: image generation
-Status: [ ]
+Status: [~]
 Depends on: 06, F30d
 Read first: the plan's AI backend (providers, routing per task, retries); F30d's notes (the
 daily cap).
@@ -11053,7 +11071,7 @@ guided session where step 2's picture is redone. Evals: redo requests read as in
 for the picture, never acted on as anything else.
 
 ### BD5a · Body double: built-in music
-Status: [ ]
+Status: [~]
 Depends on: BD3a
 Read first: this section's intro (music).
 - A few built-in loops (lofi, rain, soft piano, brown noise) under `web/static/audio/`,
@@ -11087,7 +11105,7 @@ Tests: unit tests for OAuth, refresh, the Premium check, no device; scenarios: "
 while I work" in a session, a free account getting a link. Live smoke test opt-in.
 
 ### BD5c · Body double: music that suits the task
-Status: [ ]
+Status: [~]
 Depends on: BD2, BD5b
 Read first: BD2's notes (the learning model); this section's intro.
 - For each person × category × part of the day, what played in their `finished` sessions
@@ -11243,7 +11261,7 @@ and mileage tabs (idea #167). Evals: field
 proposals for ten sheet requests; "pretty sure" and "maybe" read as estimates.
 
 ### EX2a · Expense sheets: filling in from receipts, calendars and chat
-Status: [ ]
+Status: [~]
 Depends on: EX1b, 23, 25, K1
 Read first: 23's notes (`ReceiptFound`); the pantry's receipt reader (`total_cents`);
 K1's notes (what Themi keeps from calendars); this section's intro (confidence by code,
@@ -11269,7 +11287,7 @@ its receipt filling the amount quietly, a receipt for a meal never mentioned. Ev
 receipts from the fixture set, every filled value quoted.
 
 ### EX2b · Expense sheets: when Themi asks
-Status: [ ]
+Status: [~]
 Depends on: EX2a
 Read first: the plan's Module behaviour A (PDA) and B (timing); B1's notes (breaks); this
 section's intro (the table).

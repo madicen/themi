@@ -492,3 +492,29 @@ async def test_a_routine_question_brings_the_wall_tools_not_the_day(
     names = {t.name for t in scenario.primary.last_request.tools}
     assert "show_routine" in names
     assert "day_summary" not in names
+
+
+async def test_a_check_in_unticked_on_the_wall_isnt_ticked_again(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F31a pins today's behaviour: a check-in round ticked on the wall and then unticked
+    there stays done in Themi (undoing a repeating round is a follow-up), and Themi doesn't
+    tick the wall again."""
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await board(scenario).set_schedule(
+        run.id, erin, repeat=parse("every Tue, Thu and Sat afternoon", WED)
+    )
+    await scenario.run_periodic("cozyla.chores")
+    await at(scenario, WED, 9, 30)
+    routine = fake_cozyla.routine_named("Go for a run")
+    thursday = WED + timedelta(days=1)
+    fake_cozyla.tick_routine(routine["id"], thursday)
+    await at(scenario, thursday, 16)
+    assert board(scenario).get(run.id).due_on == date(2026, 10, 24)
+    fake_cozyla.tick_routine(routine["id"], thursday, done=False)
+    await at(scenario, thursday, 16, 30)
+    assert (routine["id"], thursday.isoformat()) not in fake_cozyla.routine_ticks
+    assert board(scenario).get(run.id).due_on == date(2026, 10, 24)

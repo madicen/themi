@@ -260,6 +260,31 @@ class Routines:
             except Exception:
                 log.warning("A routine tick listener failed for item %s", item.id, exc_info=True)
 
+    def untick(self, item: Item, day: date) -> bool:
+        """Unticked away from Themi (the wall, F31a). True if there was a tick."""
+        found = self.ticked(item, day)
+        self.db.execute(
+            "DELETE FROM routine_ticks WHERE item_id = ? AND day = ?", (item.id, day.isoformat())
+        )
+        return found
+
+    def mark_on_wall(self, item: Item, day: date) -> None:
+        """The wall has this tick now (seen there, or sent and taken)."""
+        self.db.execute(
+            "UPDATE routine_ticks SET on_wall_at = ? WHERE item_id = ? AND day = ? "
+            "AND on_wall_at IS NULL",
+            (to_utc_iso(clock.now()), item.id, day.isoformat()),
+        )
+
+    def on_wall(self, item: Item, day: date) -> bool:
+        return bool(
+            self.db.one(
+                "SELECT 1 FROM routine_ticks WHERE item_id = ? AND day = ? "
+                "AND on_wall_at IS NOT NULL",
+                (item.id, day.isoformat()),
+            )
+        )
+
     def ticked(self, item: Item, day: date) -> bool:
         return bool(
             self.db.one(
