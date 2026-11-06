@@ -244,7 +244,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [x] 2026-11-06 |
 | RC3b | Cooking: one step at a time | Recipes | [x] 2026-11-06 |
 | RC3c | Cooking: step timers | Recipes | [x] 2026-11-06 |
-| RC4a | Recipes: a recipe from a link | Recipes | [ ] |
+| RC4a | Recipes: a recipe from a link | Recipes | [x] 2026-11-06 |
 | RC4b | Recipes: finding them on the web | Recipes | [ ] |
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [ ] |
 | RC6 | Recipes: the website's Recipes page | Recipes | [ ] |
@@ -12170,7 +12170,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0124).
 
 ### RC4a · Recipes: a recipe from a link
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC1b, F30d
 Read first: F30d's and F31c's notes (web search, the daily cap, what counts as personal);
 the plan's Security and privacy (outside text is data).
@@ -12202,6 +12202,31 @@ Tests: unit tests for each address refusal (including a redirect to a private ad
 the caps, every JSON-LD shape, the appear-in-page check, the vegan words and their excuses;
 scenario: Erin pastes a link, taps [Add to grocery list]. Evals: extraction on 10 saved
 pages without JSON-LD (nothing invented).
+
+Notes (2026-11-06):
+- `themi.connectors.recipe_page`: `PageReader.fetch` (http(s) only; loopback, private,
+  link-local, multicast, reserved, CGNAT and `*.ts.net`/`.local`/`.internal`/`.lan` refused
+  after DNS on every hop, at most 3 redirects, 10 s, 2 MB, HTML only, no cookies, a plain
+  User-Agent); `schema_recipe` (JSON-LD alone, in a list or `@graph`; text, `HowToStep`,
+  `HowToSection` as step groups; yield and total time); `page_text`. Standard library only.
+  The transport and resolver are seams: `build_app(recipe_pages=...)`, and
+  `tests/fakes/recipe_site.py` (a mock transport and a fake DNS, no sockets).
+- `themi.core.web_recipes.WebRecipes` and the `recipe_from_link` tool (recipes group; the
+  group's words now also catch a link with recipe-ish words in it). The link must be in
+  their message or the one before. Each read counts against F30d's daily cap
+  (`WebSearch.spend`), with or without a search key.
+- No JSON-LD: the page's words go to one structured call on the `recipes` route; with the
+  site refusing (401, 403, 429, 451), the search backend's `read` instead. An ingredient or
+  step not on the page is dropped; if under 60% of either survives, "That page couldn't be
+  read cleanly" and the link goes back.
+- Kept as a `web` row (key `web:` + a hash of the link, so the same link updates it), shown
+  with the site's name, the link, and the vegan note under the name.
+- Vegan check: a fixed table of words and swaps with plant versions excused; the
+  cookbook's own version is named only from its Ingredients section (Simple Parmesan, Fish
+  Sauce, Honey), so "butter" doesn't name the Peanut Butter Bars. "Not vegan" in their
+  message skips it.
+- Not done: the eval over 10 saved pages without JSON-LD (it needs real pages saved as
+  fixtures, with their owners' text). Follow-up.
 
 ### RC4b · Recipes: finding them on the web
 Status: [ ]
