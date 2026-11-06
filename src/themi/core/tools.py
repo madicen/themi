@@ -198,6 +198,16 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"find out|still (?:open|practi[cs]ing|in business|working)|phone number|"
         r"opening hours|reviews?",
     ),
+    "recipes": (  # RC1b: the family cookbook
+        "the family cookbook: finding and showing recipes",
+        r"recipes?|cookbook|cook|bak(?:e|ing)|ingredients?|how (?:do|to) (?:i |we |you )?make|"
+        r"roast|instant pot|dressing|sauce|desserts?|soup|pancakes?|lasagna|masala|"
+        r"what (?:we|i) (?:would |will |'d |'ll )?need for|shop(?:ping)? for|"
+        r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d|"
+        r"walk (?:me|us) through|let'?s make|step by step|cooking|"
+        r"https?://\S*(?:recipe|food|kitchen|cook|bak|eat|vegan)|"
+        r"what (?:can|could) (?:i|we) make|with what (?:we|i) have",
+    ),
     "lists": (
         "named lists, the wall's lists, usual stores",
         r"list|packing|ideas|tick|cross|check off|clear|things to cook|store|amazon|"
@@ -293,6 +303,20 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Can you find the recall notice for our car seat online?",
         "What does the internet say about rosemary for cats?",
         "Look it up: when does daylight saving end this year?",
+    ),
+    "recipes": (  # RC1b
+        "Can you pull up the alfredo sauce recipe?",
+        "Show me the ranch dressing from our cookbook",
+        "What's in the chana masala?",
+        "Find something with chickpeas in the cookbook",
+        "Do we have a recipe for pancakes?",
+        "What desserts are in our cookbook?",
+        "How long do I roast carrots for?",
+        "Send me the lasagna recipe",
+        "How do I make the simple parmesan?",
+        "What ingredients does the biryani need?",
+        "I'd like to bake snickerdoodles, what's the recipe?",
+        "Pull up a soup from the recipes",
     ),
     "lists": (
         "Make a list for the camping trip",
@@ -431,6 +455,21 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(
+        (
+            "find_recipe",
+            "show_recipe",
+            "add_recipe_to_grocery_list",
+            "set_recipe_yield",
+            "start_cooking",
+            "stop_cooking",
+            "recipe_from_link",
+            "find_web_recipe",
+            "save_recipe_to_cookbook",
+            "cookbook_recipes_we_can_make",
+        ),
+        "recipes",
+    ),  # RC1b, RC2a, RC2b, RC3a
     **dict.fromkeys(("search_web", "read_web_page"), "web"),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(

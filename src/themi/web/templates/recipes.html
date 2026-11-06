@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% from "_row.html" import chip %}
+{% block title %}Recipes · Themi{% endblock %}
+{% block content %}
+<h1>Recipes</h1>
+{% if not has_cookbook %}<p class="muted">No cookbook doc yet: choose it under a Google account on <a href="/accounts">Accounts</a>.</p>{% endif %}
+<form method="get" action="/recipes" class="stack search">
+  <label>Find a recipe <input name="q" value="{{ q }}" placeholder="chickpeas, pancakes, a dessert"></label>
+  {% if section %}<input type="hidden" name="section" value="{{ section }}">{% endif %}
+  <button>Search</button>
+</form>
+<p class="filters">
+  <a href="/recipes{% if q %}?q={{ q | urlencode }}{% endif %}">{{ chip("All", "info" if not section else "") }}</a>
+  {% for s in sections %}<a href="/recipes?section={{ s | urlencode }}{% if q %}&q={{ q | urlencode }}{% endif %}">{{ chip(s, "info" if s == section else "") }}</a> {% endfor %}
+</p>
+<div class="rows">
+{% for recipe in recipes %}
+  <a class="row-link" href="/recipes/{{ recipe.id }}">
+    <span class="row-title">{{ recipe.name }}</span>
+    <span class="row-meta">{{ recipe.section or recipe.source_text or "From the web" }}{% if recipe.is_chart %} · chart{% endif %}{% if recipe.source == "web" %} · from the web{% endif %}</span>
+  </a>
+{% else %}
+  <p class="muted">{% if q %}Nothing matches "{{ q }}".{% else %}No recipes yet.{% endif %}</p>
+{% endfor %}
+</div>
+
+{% if looks %}
+<h2>Need a look</h2>
+<p class="muted">Themi read these, but had to guess about their layout. Fixing them in the doc is enough: Themi reads it again.</p>
+<ul>{% for recipe in looks %}<li>{% if link(recipe) %}<a href="{{ link(recipe) }}" rel="noopener">{{ recipe.name }}</a>{% else %}{{ recipe.name }}{% endif %}: {{ recipe.needs_look }}</li>{% endfor %}</ul>
+{% endif %}
+
+<h2>Recipes from the web</h2>
+<form method="post" action="/recipes/diet" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="check"><input type="checkbox" name="vegan" {% if diet == "vegan" %}checked{% endif %}> Look for vegan recipes, and point out what isn't</label>
+  <button>Save</button>
+</form>
+{% endblock %}

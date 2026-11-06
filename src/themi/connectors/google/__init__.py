@@ -4,6 +4,7 @@ from themi.connectors.google.accounts import CALLBACK_PATH, GoogleAccounts, Unli
 from themi.connectors.google.oauth import (
     CALENDAR_SCOPE,
     CALENDAR_SCOPES,
+    DRIVE_FILE_SCOPE,
     GMAIL_SCOPE,
     TASKS_SCOPE,
     GoogleConfig,
@@ -17,6 +18,7 @@ __all__ = [
     "CALENDAR_SCOPE",
     "CALENDAR_SCOPES",
     "CALLBACK_PATH",
+    "DRIVE_FILE_SCOPE",
     "GMAIL_SCOPE",
     "TASKS_SCOPE",
     "GoogleAccounts",

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Cookbook · Themi{% endblock %}
+{% block content %}
+<h1>The family cookbook</h1>
+<p class="muted">A Google Doc of recipes. Themi keeps a copy, reads it again when it changes,
+and can add a recipe you liked to it (after you say yes). With {{ account.address }}, Themi
+can open only the doc you pick here.</p>
+
+{% if cookbook.doc_id %}
+<div class="stack">
+  <p><strong>{{ cookbook.title or "Cookbook" }}</strong>{% if not chosen_here %} <span class="muted">(chosen through another account)</span>{% endif %}</p>
+  {% if cookbook.problem %}<p class="alert">{{ cookbook.problem }}</p>{% endif %}
+  {% if cookbook.read_at %}<p class="muted">Last read {{ cookbook.read_at | local_time }}.</p>{% endif %}
+  <form method="post" action="/accounts/{{ account.id }}/cookbook/read">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button>Read it again now</button>
+  </form>
+</div>
+{% endif %}
+
+{% if picker %}
+<div id="picker" data-client="{{ client_id }}" data-key="{{ picker_key }}" data-app="{{ project_number }}" data-address="{{ account.address }}">
+  <button id="pick" class="primary" type="button">{% if cookbook.doc_id %}Choose a different doc{% else %}Choose the cookbook doc{% endif %}</button>
+  <p class="alert problem" hidden>Google's file picker didn't load. Try again, or paste the doc's link below.</p>
+</div>
+{% endif %}
+<form id="picked" method="post" action="/accounts/{{ account.id }}/cookbook" class="stack">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>{% if picker %}Or the doc's link{% else %}The doc's link{% endif %}
+    <input name="doc" required placeholder="https://docs.google.com/document/d/...">
+  </label>
+  <button>Use this doc</button>
+</form>
+{% if not picker %}<p class="muted">Google's file picker isn't set up on this server
+(GOOGLE_PICKER_API_KEY and GOOGLE_PROJECT_NUMBER), so a pasted link only works for a doc
+Google already lets Themi open.</p>{% endif %}
+
+{% if looks %}
+<h2>Recipes that need a look</h2>
+<p class="muted">Themi read these, but had to guess about their layout.</p>
+<ul>
+{% for recipe in looks %}<li>{{ recipe.name }}: {{ recipe.needs_look }}</li>{% endfor %}
+</ul>
+{% endif %}
+{% if picker %}<script src="{{ asset('cookbook_picker.js') }}"></script>{% endif %}
+{% endblock %}

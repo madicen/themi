@@ -121,6 +121,12 @@ class WebSearch:
             (to_utc_iso(clock.now() - timedelta(days=31)),),
         )
 
+    def spend(self, member_id: int, kind: str) -> None:
+        """RC4a: a page read another way (a recipe link) counts against the same cap."""
+        if self.used_today() >= DAILY_CAP:
+            raise ToolFailed(CAP_TEXT.format(cap=DAILY_CAP))
+        self._count(member_id, kind)
+
     def _ready(self) -> SearchBackend:
         if self.backend is None:
             raise ToolFailed(SETUP_TEXT)

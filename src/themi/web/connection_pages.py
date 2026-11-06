@@ -16,7 +16,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from themi.accounts import AccountsError, Member
 from themi.connectors.catgenie import CatGenieError
-from themi.connectors.google import TASKS_SCOPE
+from themi.connectors.google import DRIVE_FILE_SCOPE, TASKS_SCOPE
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi.connectors.roborock import RoborockError
 from themi.connectors.thinq import ThinqError
@@ -40,6 +40,10 @@ def accounts_values(app: Any, member: Member, **extra: Any) -> dict[str, Any]:
         "expected": {a.id: expected.for_account(a.id) for a in accounts} if expected else {},
         "protectable": [c for c in app.services.autonomy.categories() if not c.capped],
         "tasks_scope": TASKS_SCOPE,
+        "cookbook_scope": DRIVE_FILE_SCOPE,  # RC1a
+        "cookbook": app.services.recipes.settings()
+        if app.services.recipes is not None and app.services.recipes.ready()
+        else None,
         "household": household_values(app) if member.is_admin else None,
         **extra,
     }

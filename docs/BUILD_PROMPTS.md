@@ -237,6 +237,18 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
+| RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
+| RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
+| RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
+| RC2b | Recipes: scaling (half, double, for 6) | Recipes | [x] 2026-11-06 |
+| RC3a | Cooking: getting ready (gather and prep) | Recipes | [x] 2026-11-06 |
+| RC3b | Cooking: one step at a time | Recipes | [x] 2026-11-06 |
+| RC3c | Cooking: step timers | Recipes | [x] 2026-11-06 |
+| RC4a | Recipes: a recipe from a link | Recipes | [x] 2026-11-06 |
+| RC4b | Recipes: finding them on the web | Recipes | [x] 2026-11-06 |
+| RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
+| RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
+| RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 
 ## Fixed technical choices
 
@@ -11737,7 +11749,7 @@ Status: [ ]
 Depends on: EX1a, 21, 11
 Read first: the plan's Integrations and Trust tiers; 21's notes (linking and scopes); this
 section's intro.
-- `drive.file` added to the link scopes. Accounts shows "Link again for expense sheets"
+- `drive.file` added to the link scopes (unless RC1a already added it, for the cookbook). Accounts shows "Link again for expense sheets"
   on an account without it; nothing else changes for those accounts. DEPLOY.md: add the
   scope in the Google Cloud console and turn on the Sheets API.
 - `themi.connectors.gsheets`: create a spreadsheet, add, rename, reorder and delete its tabs
@@ -11772,3 +11784,582 @@ Read first: EX4a's notes; this section's intro.
 Tests: unit tests for the queue, the cell formatting per status, an update not adding a
 second row, a new sheet becoming a tab; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
 from amber to green, a deleted spreadsheet.
+
+## Recipes
+
+From Michael's request (2026-11-06): go through the family's recipes, put what a recipe needs
+on the grocery list, have Themi walk through the prep and then the steps, find recipes on the
+web or pull one from a link, and keep a liked one by adding it to the family's Google Doc.
+
+The cookbook is the Google Doc "Madicen Family Cookbook" (doc id
+`12OocqIHwa2rLjZSMDZnMfnoYS_q4b6MdTOSEVSLkpkk`). Its shape, read on 2026-11-06 (166,645
+characters, 132 entries):
+- Heading 1 is a section: Ingredients (base recipes: sauces, seitan, crusts, used by other
+  recipes), Breakfast, Appetizers, Entrees, Desserts, Sides, Beverages, Snacks, References.
+  Only Ingredients has Heading 3 sub-sections (Sauces, Dressings & Dips; Meats; Pasta &
+  Noods; Other).
+- Heading 4 is a recipe's name. Heading 5 "Ingredients" and "Instructions" split it; Heading
+  6 groups ingredients ("*Masala Paste*"). After the steps: free text ("Recipe Notes: ...",
+  "Source: ..."), then a `-----` line.
+- Steps are paragraphs, some numbered by hand ("1\. ..."), some very long (Peasant Bread's
+  step 3). Yields are almost never written (2 of 132).
+- Irregular entries the parser has to take: Bean Dip and Ube Gelato have "Ingredients" and
+  "Instructions" as plain paragraphs, not headings; Biryani has "Ingredients" twice, the
+  second one over its steps; Roasted Vegetables and Steamed Instant Pot Vegetables are
+  tables (vegetable, temperature, time, prep, seasonings), so they're charts, not
+  step-by-step recipes; "Chocolate Peanut Butter Bars" appears twice. References holds two
+  tables (weights of common ingredients, Instant Pot grain timings) that are guides (F29ha),
+  not recipes.
+- Everything is plant-based, and some Ingredients recipes are vegan versions of things
+  (Honey, Fish Sauce, Mayonnaise, Chicken Seitan).
+
+Decisions (2026-11-06, with Michael):
+- **The doc is the family's cookbook; Themi keeps a copy.** Themi reads the doc into a
+  `recipes` table and reads it again when the doc changes. Edits happen in the doc (by
+  people) or through RC5's append (by Themi). A recipe from the web lives in Themi's table
+  until someone saves it to the doc.
+- **Access is `drive.file` plus Google's file picker**, not the broad `documents` scope:
+  the person who links the cookbook picks it once on Accounts, and Themi can open that file
+  and the files it creates, nothing else. EX4a uses the same scope; whichever prompt comes
+  first adds it. The picker page loads Google's own script (`apis.google.com`). It's the
+  one page that does, an exception to "vendored, no CDN" that Michael agreed to.
+- **Vegan by default.** A household setting `recipe_diet` (default "vegan"). Web searches
+  ask for vegan recipes, and a recipe from a link that has meat, dairy, eggs or honey is
+  shown with those flagged and the usual swaps, never refused. "Not vegan" in the request
+  turns it off for that search.
+- **Recipe text is data and is quoted as written** (as prompt 27's meal steps are). Themi's
+  own lines (the prep list, offers, timers) follow the PDA rules: offers with buttons, no
+  "you should", nothing said about a session left half-done. No energy scores anywhere; the
+  energy level may only change which recipes are offered first (RC7).
+- Extras agreed: step timers, scaling, a website Recipes page, cookbook recipes in meal
+  ideas.
+- Cooking sessions are their own module, not BD1b, because BD1b isn't built yet and cooking
+  has a prep phase, timers and scaling. The step card (one message edited in place, with
+  Back and Next) goes in a small shared helper that BD1b reuses.
+
+### RC1a · Recipes: the cookbook, read from Google Docs
+Status: [x] 2026-11-06
+Depends on: 21, F29ha
+Read first: the plan's Integrations (Google rows and the app-verification notes) and Module
+behaviour D; 21's notes (linking and scopes); EX4a (the same scope); this section's intro.
+Start by adding "Recipes" to the plan's Module behaviour D and a "Google Docs (the
+cookbook)" row to Integrations, from this section's intro. Michael checks the wording before
+it goes into the doc.
+- Scope: `drive.file` added to the link scopes (if EX4a hasn't already). Accounts shows
+  "Link again for the cookbook" on an account without it.
+- The picker: on Accounts, "Choose the cookbook" opens Google's file picker (Docs only)
+  using a token from Google Identity Services in the browser (same client id, `drive.file`),
+  so the server's own tokens never reach the page. The picked file id is saved as the
+  household's cookbook (migration: `cookbook` row: doc id, linked member, revision id,
+  last read). DEPLOY.md: turn on the Docs API and the Picker API, make a browser API key
+  limited to those, add the site's Funnel origin as an authorised JavaScript origin, and set
+  `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`.
+- `themi.connectors.gdocs`: `get(doc_id)` (Docs API `documents.get`), `revision(doc_id)`
+  (Drive `files.get` for `modifiedTime` and version), and `batch_update` (for RC5). Retries
+  and backoff as the Gmail client; `OAuthError` texts in plain words.
+- `themi.core.cookbook`: a parser over the Docs API's structure (paragraph styles, tables,
+  each heading's `headingId`), not over exported text. Rules: H1 is the section, H3 the
+  sub-section, H4 starts a recipe; H5 or a paragraph that is only "Ingredients" or
+  "Instructions" switches part; a second "Ingredients" after ingredient lines means
+  instructions; H6 lines are ingredient groups; "Recipe Notes", "Recipe Tip" and "Source:"
+  paragraphs are notes and source; `-----` ends the recipe; a recipe that's only a table
+  is a chart (kept as rows); hand numbering ("1\. ") is stripped from steps. Anything
+  ambiguous is kept and marked `needs_look` with a reason, never dropped.
+- Migration: `recipes` (key = the doc's heading id, or a generated id for web recipes;
+  source `doc` or `web`; url; section; sub-section; name; ingredient lines with their groups;
+  steps; notes; source text; kind `recipe` or `chart`; yield or NULL; `needs_look` reason;
+  hash; updated_at) with FTS5 over name, ingredients and notes. Two recipes with the same
+  name are both kept (the section tells them apart).
+- Sync: a scheduler job every 15 minutes reads the revision and re-reads the doc only when
+  it changed. Recipes whose heading is gone are removed; RC1b's links and RC3's sessions
+  keep working off the stored copy.
+- References: its tables aren't recipes. The first import offers them once as guides
+  (F29ha) unless a guide with that topic exists ("Save the Instant Pot grain timings as a
+  guide?" [Save] [Not now]).
+- The first import says what it read, in one line: "Read 128 recipes and 2 charts from the
+  cookbook. 2 need a look: Biryani (two Ingredients headings), Bean Dip (headings typed as
+  text)."
+- `tests/fakes/gdocs_api.py`: a fake Docs and Drive API serving a document built from
+  fixture JSON. The fixture is a trimmed copy of the real doc's structure (a dozen recipes
+  including each irregular one), with no family text beyond recipe content.
+Tests: unit tests for every parser rule and each irregular entry above, sync only on a new
+revision, a removed recipe, the scope check; integration test for the picker endpoint (only
+signed-in members, only Docs). Live smoke test (opt-in): read the real cookbook and compare
+the counts with the ones in this intro.
+
+Notes (2026-11-06):
+- The plan's wording (Module behaviour D "Recipes" and the Integrations row) is drafted but
+  not written to the doc yet: it waits for Michael's check, as this prompt asks.
+- `themi.connectors.gdocs`: `DocsClient` (`get`, `file`, `batch_update` with a required
+  revision) and `doc_id_from` (a link or an id). `GoogleConfig` gains `docs_url`,
+  `drive_url`, `picker_api_key` and `project_number` (`GOOGLE_DOCS_URL`, `GOOGLE_DRIVE_URL`,
+  `GOOGLE_PICKER_API_KEY`, `GOOGLE_PROJECT_NUMBER`). `DRIVE_FILE_SCOPE` is in the link scopes
+  (EX4a needn't add it).
+- `themi.core.cookbook` parses the Docs API's structure (pure functions; `entry_requests`
+  for RC5 is here too). The needs-a-look reasons are short: "headings typed as text", "two
+  Ingredients headings", "no Ingredients heading", "no ingredients found", "no steps found".
+- `themi.core.recipes.Recipes`: migration 0120 (`cookbook`, one row with the doc, the
+  account, versions, the last problem and `diet`; `recipes` with FTS5 over name, section and
+  words). Recipes gone from the doc get `removed_at`. `recipes.sync` runs every 15 minutes
+  and reads the doc only when Drive's `version` changed.
+- The first import's line starts "I've read 12 recipes and 3 charts...": "Read 12 recipes"
+  was taken by the PDA shield as an instruction and became "Up next: read...". Charts in
+  References are offered once as guides, unless a guide with a matching name is there.
+- Website: Accounts links each account with `drive.file` to `/accounts/{id}/cookbook`; that
+  page alone gets the picker's Content-Security-Policy (`X-Themi-Page: picker`, removed by
+  the security-headers middleware). It loads `static/cookbook_picker.js`, which gets its
+  token from Google Identity Services in the browser. A pasted link works too, where Google
+  already lets Themi open the doc. The picker and its CSP haven't met the real Google yet:
+  the first real pick may need an origin added to `PICKER_POLICY` (the browser console names
+  it).
+- `tests/fakes/gdocs_api.py` (docs and drive on one server, `shared_with` standing in for
+  drive.file) and `tests/fixtures/cookbook.py` (12 recipes and 3 charts in the real doc's
+  shape). The live test reads the real doc with `THEMI_LIVE_COOKBOOK_DOC` set.
+- Setup (README step 12): enable the Docs, Drive and Picker APIs, add the drive.file scope,
+  make a Picker API key, add the Funnel origin to the OAuth client's JavaScript origins, set
+  `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`, restart (migration 0120), link the
+  account again with Google Drive ticked, then choose the cookbook on Accounts.
+
+### RC1b · Recipes: finding and showing one in chat
+Status: [x] 2026-11-06
+Depends on: RC1a, P1
+Read first: P1's and P7a's notes (tool groups and routing); prompt 27's notes.
+- A new `recipes` tool group (routing words, about 12 examples, routing cases).
+- `find_recipe`: by name ("the alfredo sauce"), by ingredient ("something with chickpeas"),
+  by section ("a dessert"), over FTS5 with near-name matching (F33c's approach). Up to five
+  matches as buttons; one clear match shows it at once.
+- `show_recipe`: the name, the doc's section, ingredients (grouped), steps numbered, notes,
+  source, and a link to the heading in the doc
+  (`https://docs.google.com/document/d/<id>/edit#heading=<headingId>`). Quoted as written,
+  inside `as_data` for the model. A message over Telegram's limit splits into Ingredients
+  then Instructions. Buttons under it: [Cook this] (RC3a) [Add to grocery list] (RC2a).
+- A chart (Roasted Vegetables) shows its table as aligned lines, or the one row asked for
+  ("how long do I roast broccoli?" gives "400°F, 20 min, cut to florets").
+- "What can I make?" lists a few by section; RC7 makes it pantry-aware.
+- Conversation mode: "recipe" and "cook" become request words.
+Tests: unit tests for search by name, ingredient and section, splitting, the chart row
+lookup; scenario: Erin asks for the ranch dressing and taps [Add to grocery list]. Evals:
+routing for 15 recipe asks, and "I'm cooking tonight" not mistaken for a task.
+
+Notes (2026-11-06):
+- `find_recipe` (query, section) and `show_recipe` (name), in a new `recipes` tool group (its
+  words, 12 examples, 4 routing cases). One clear match (every wanted word in its name, and
+  no other recipe as close) is sent whole as a card, which ends the turn; several go as up to
+  five buttons; nothing found declines, saying never to make a recipe up.
+- Search is plain Python over the stored copy (rough stems: "dressings", "roasted"), name
+  words weighing three times ingredient words; a section named alone ("a dessert") lists that
+  section. The FTS5 table from RC1a isn't used yet.
+- The card: the name and its section, then "Ingredients" and "Steps" with the recipe's own
+  lines quoted ("> "), so the PDA shield leaves them as written, then notes, source and the
+  heading's link in the doc. Over 3,800 characters it goes as two messages. [Cook this] and
+  [Add to grocery list] show only once RC3a and RC2a register their buttons
+  (`services.recipe_buttons`).
+- A chart's row answers a question as data ("how long do I roast broccoli?"), for the model
+  to say.
+- The context gains one line, "The family cookbook has N recipes and charts (find_recipe)."
+- Conversation mode: "cook" and "bake" are doing words, and "recipe" or "cookbook" anywhere
+  makes a message a request.
+- Evals: 4 cases in a new "recipes" category (not run here: no model key in this session).
+
+### RC2a · Recipes: ingredients onto the grocery list
+Status: [x] 2026-11-06
+Depends on: RC1b, 25, G1
+Read first: 25's and G1's notes (grocery list, staging); L2a's notes (which list).
+- Ingredient lines become items with one structured call, made the first time a recipe is
+  used and cached by the line's hash (a new AI task `recipe_ingredients`, its own route):
+  quantity, unit, item, prep note, optional, and "staple" (salt, water, pepper). The
+  item's words must appear in the line, or the line is kept whole as the item. Calls go in
+  batches of whole recipes, never the whole cookbook at once (the free tier's daily limit).
+- "Add the lasagna to the grocery list" or [Add to grocery list]: one card listing what the
+  recipe needs, with items the pantry has as `plenty` and staples left unticked, and toggle
+  buttons per item, then [Add 7]. Optional ingredients are unticked and say "(optional)".
+- An ingredient that is a cookbook recipe from the Ingredients section ("homemade plant
+  cheese", "Alfredo Sauce") says so: "Simple Parmesan is in the cookbook." [Use the recipe]
+  adds that recipe's items too.
+- [Add N] stages one `grocery_list_add` proposal for all the ticked items. Tapping it is
+  the request (`requested=True`), so a locked rule or Tier 2 adds them at once. Items
+  already on the list or waiting are skipped as `add_to_grocery_list` does, and the reply
+  says which.
+- Several recipes at once ("add tacos and the chana masala") make one card; the same item
+  from both recipes is one row ("onion, for both").
+Tests: unit tests for the cache, the words-appear check, pantry and staple unticking,
+merging two recipes, the sub-recipe offer; scenario: Michael adds Biryani, unticks
+cardamom, taps Add 9, and they show up in OurGroceries. Evals: item names from 40 real
+ingredient lines (quantities and prep removed, nothing invented).
+
+Notes (2026-11-06):
+- One AI task for all of RC2a, RC3a and RC4a's reading, `recipes` ("Recipes: reading
+  ingredients, prep and recipe pages" on the AI page), not one per job: three routes for
+  one kind of work seemed more to manage than it's worth. Migration 0121 rebuilds
+  `ai_routes` for it and copies each person's `structured_misc` chain.
+- `themi.core.recipe_groceries`: lines are read by the model in one call per recipe (up to
+  80 lines), kept in `recipe_ingredient_lines` by a hash of the line. A model's item must
+  have all its words in the line, or the rule-based `read_line` is used for that line. With
+  no model, every line is read by rule and nothing is kept, so a later call can do better.
+- The card (`recipe_cards`): item lines are quoted ("> ✓ shallots"), because the PDA shield
+  took "· water" for an order and wrote "Up next: · water". Items start unticked when
+  they're a staple, optional, or something the pantry has plenty of (the family's staples,
+  olive oil among them, count). At most 30 items. Toggle buttons edit the card in place.
+- A cookbook recipe from the Ingredients section that a line names ("1 batch of Bechamel
+  Sauce") gets "Bechamel Sauce is in the cookbook too." and [Use the recipe: ...], which
+  merges its items into the card. The fixture gained Bechamel Sauce (13 recipes now).
+- [Add N] stages one `grocery_list_add` with `requested=True` and edits the card with what
+  happened; items already on the list or waiting are named, not added again.
+- `add_recipe_to_grocery_list` (recipes group; the group's words gained "what we need for"
+  and "shopping for"), one routing case, one behaviour eval, and an opt-in eval of 40 real
+  lines (`make evals EVAL_ARGS='-k recipe_items'`, 36 to pass). The evals weren't run here.
+- Setup: restart `themi run` (migration 0121).
+
+### RC2b · Recipes: scaling (half, double, for 6)
+Status: [x] 2026-11-06
+Depends on: RC2a
+- `themi.core.quantities`: parse quantities as written ("1½", "½", "1 1/2", "¼ –½",
+  "1.5 Cups (355mL)", "1 11oz package", "3-4") into numbers, and write them back nicely
+  (fractions for cups and spoons, whole numbers for cans, packages and eggs, rounding up with
+  the exact amount alongside: "2 cans (1½ needed)"). Hypothesis tests for the round trip.
+- "Half batch", "double it", "×3" work on any recipe. "For 6" needs a yield; with none,
+  Themi asks once ("How many does it make as written?") and keeps the answer on the recipe
+  (a Themi-side value; the doc isn't changed).
+- Scaling applies to the grocery card (RC2a) and the cooking session's ingredient list
+  (RC3). Steps stay as written, with one line: "Amounts in the steps are for the original;
+  the scaled ones are on the list." Baking recipes (the Desserts section, or yeast or baking
+  powder among the items) also get "Pan size and times may need changing."
+Tests: unit tests for parsing every quantity form in the fixture, rounding, the yield
+question asked once; scenario: "double the snickerdoodles" puts doubled amounts on the card.
+
+Notes (2026-11-06):
+- `themi.core.quantities`: `number`, `fraction` (to the nearest eighth or third), `write`,
+  `scale_line` and `leading_amount`, `scale_for` ("half", "double", "x3", "for 6") and
+  `describe`. Only the leading amount is scaled, with a weight or volume in brackets right
+  after it or at the end of the line ("1 Cup cashews, soaked ... (130g)" -> "2 Cups ...
+  (260g)"); a size inside the line ("1 11oz package") and times in notes stay as written.
+  Whole things round up with the exact amount alongside ("2 cans (1½ needed)"). Hypothesis
+  checks the fraction round trip.
+- `add_recipe_to_grocery_list` gained `scale`. A scaled card says the batch in its first
+  line ("For a double batch of Pancakes", "For Chana Masala for 6"), shows each item's scaled
+  amount, the "amounts in the steps are for the original" line, and "Pan size and times may
+  need changing." for desserts and recipes with yeast, baking powder or soda.
+- "For 6" with no yield: the tool declines and tells the model to ask once; the answer goes
+  through a new tool, `set_recipe_yield`, onto `recipes.yield_said` (the doc isn't changed),
+  so it isn't asked again. Migration 0122 adds `recipe_cards.scale_said`.
+- The scenario doubles the Pancakes rather than the snickerdoodles, which aren't in the
+  fixture; it shows the baking line too. RC3's cooking sessions use the same scale.
+- Setup: restart `themi run` (migration 0122).
+
+### RC3a · Cooking: getting ready (gather and prep)
+Status: [x] 2026-11-06
+Depends on: RC2a, 08
+Read first: F6a's notes (steps); BD1b (the step card it will share); the plan's Module
+behaviour A.
+- `themi.core.cooking`: `Cooking` with `start`, `current`, `end`. One session per person
+  (migration: `cooking_sessions`: member, recipe, scale, phase `prep` or `cook`, step index,
+  message id, started_at, ended_at, outcome `finished`, `stopped` or `left`). A session
+  started in the family group can be tapped by either partner.
+- `themi.channels.step_card`: one message edited in place (`Outbox.edit`) with a body and a
+  button row, plus typed "next", "back" and "done". BD1b uses it later.
+- [Cook this] or "let's make the pancakes": first, anything that needs time before cooking,
+  found in the ingredient notes and steps ("soaked for at least 10 minutes", "room
+  temperature", "overnight", "preheat", "thawed"): "Before anything else: soak the cashews
+  (10 min) and preheat the oven to 350°F." An overnight item the night before isn't possible
+  now, so it's said plainly with a choice: [Cook anyway] [Remind me tomorrow].
+- Then gather: the ingredient list (scaled) as a checklist card, items tick as tapped,
+  [All here]. Then prep: knife and measuring jobs from the prep notes ("garlic: peeled, left
+  whole", "onion: sliced"), grouped by tool where it helps, from one cached structured call
+  (`recipe_prep`, its own route). Each prep line names the ingredient line it came from, and
+  one that doesn't is dropped. [Prep done] [Skip prep].
+- "What do I need for this?" and "how much garlic?" during a session are answered from the
+  recipe (as data), at the session's scale.
+- A session with no taps for three hours ends quietly as `left`.
+Tests: unit tests for the long-lead finder (each phrase above), the checklist edit-in-place,
+dropped prep lines, the group session; scenario: Alfredo Sauce from [Cook this] to [Prep
+done], with the cashew soak first. Evals: prep lists for 15 recipes (short, from the
+recipe, nothing added).
+
+Notes (2026-11-06):
+- `themi.channels.step_card.StepCard`: one card edited in place; `fresh=True` (a typed
+  "next") sends a new card at the bottom and leaves the old one as "(Carried on below.)"
+  without buttons, so the current step is where they're looking. In the group anyone taps.
+- `themi.core.cooking.Cooking` (migration 0123: `cooking_sessions`, `recipe_prep`).
+  Phases `ready` (what needs time first), `gather`, `prep`, then `cook` (RC3b). `start_cooking`
+  and `stop_cooking` tools (recipes group, one routing case, one eval); [Cook this] on a
+  recipe card. A new session ends the old as `switched`.
+- `Services.text_handlers` (new): the agent offers each typed message to them before the
+  model, so "next", "done", "all here", "skip" and "stop cooking" during a session cost no
+  model call. A bare "done" while cooking goes to the session, not a task.
+- What needs time first is found by rule (soak with its minutes, overnight, room
+  temperature, thawed, "preheat the oven to 350 degrees" -> 350°F). An overnight need offers
+  [Cook anyway] [Remind me tomorrow]; tomorrow sends the recipe back at 5 pm with [Cook this].
+- Prep jobs come from one structured call on the `recipes` route, kept per recipe until its
+  words change; a job whose words aren't in the line it names is dropped. With no model,
+  lines with prep words ("peeled", "sliced") become jobs. Labels on the gather card use
+  only cached or rule readings (`RecipeGroceries.known`), never a model call.
+- During a session the context carries the recipe, at the session's scale, as data, so
+  "how much garlic?" is answered from it. `cooking.expire` (every 15 minutes) ends a session
+  with no tap for 3 hours as `left`, saying nothing.
+- Evals for prep lists (15 recipes) aren't written: a real-model pass over prep needs
+  recipes with real steps loaded, left for after RC4a's pages give more. Follow-up.
+- Setup: restart `themi run` (migration 0123).
+
+### RC3b · Cooking: one step at a time
+Status: [x] 2026-11-06
+Depends on: RC3a
+- After prep, the same card shows "Step 2 of 6" and the step as written, with [Back]
+  [Next] and, on the last, [All done]. A step over about 400 characters is split at
+  sentence ends into 2a, 2b, the words unchanged.
+- Typed or voice "next", "back", "repeat", "what's after this?", "go to step 4" work. Other
+  messages during cooking go to the agent as usual, with the recipe and the current step in
+  its context as data.
+- A step naming another cookbook recipe ("Alfredo Sauce", "Simple Parmesan") gets a [Show
+  Alfredo Sauce] button that sends that recipe without leaving the session.
+- Task nudges and check-ins wait while a session is open (a pause topic "cooking", B1's
+  machinery); replies, approvals, urgent alerts and timers still come.
+- [All done]: one warm line, and for a web recipe the RC5 offer, once: "Keep this one in the
+  cookbook?" [Save to cookbook] [Not now]. Outcome `finished`; it feeds RC7's picks.
+Tests: unit tests for navigation, the split, the sub-recipe button, nudges held and let
+through; scenarios: Pancakes from step 1 to All done with one Back; a nudge held during the
+session and delivered after.
+
+Notes (2026-11-06):
+- After prep the card shows "Pancakes: step 2 of 5" and the step quoted as written, with
+  [Back] [Next], and [All done] on the last. A step over 400 characters is split at sentence
+  ends into 2a, 2b (`step_parts`), the words unchanged; the count stays the recipe's own.
+- Typed, without the model: "next"/"done"/"skip", "back", "repeat", "go to step 4", and
+  "what's after this?" (sends the next step once, without moving the card).
+- A step naming another cookbook recipe (two or more words of its name) gets
+  [Show <name>], which sends that recipe and leaves the session as it is.
+- A "cooking" pause topic (task nudges, summaries, habits, routines, reviews) is set for at
+  most 6 hours when a session starts and lifted when it ends, with what waited released.
+- [All done]: "Pancakes, all done. Enjoy it!", outcome `finished`. For a web recipe, once
+  RC5 is built, the same message asks "Keep this one in the cookbook?" [Save to cookbook]
+  [Not now].
+- Other messages during cooking go to the model with the recipe and the step in the
+  context (RC3a's open item, now "on step 2 of 5").
+
+### RC3c · Cooking: step timers
+Status: [x] 2026-11-06
+Depends on: RC3b, 10
+- A step with a time ("cook for 10 minutes", "simmer until reduced by half, about 20
+  min", "1-2 minutes", "for 2 hours") gets [Timer 10 min]. A range offers the low end and
+  says the range: "1 min (1-2 min)". "Overnight" and "24 hours" offer a reminder instead.
+- Timers are scheduler jobs on `themi.clock`, kept in a `cooking_timers` table (session,
+  label from the step, ends_at), so a restart doesn't lose one. Several can run at once. When
+  one ends: "Time's up: the sauce (step 3)." at priority above held nudges, even in quiet
+  hours, since they asked.
+- "How long left?", "cancel the timer", "add 2 minutes". Ending the session asks whether to
+  keep running timers: [Keep timers] [Cancel them].
+Tests: unit tests for the duration finder over every step in the fixture, the range rule,
+restart survival, quiet hours; scenario: two timers running at once in Pad Thai, both firing
+in order with a frozen clock.
+
+Notes (2026-11-06):
+- `themi.core.cooking_timers`: `durations` finds digits with a unit ("10 minutes", "about
+  2 to 3 minutes", "1 hour"); a range offers its low end ("Timer 2 min (2-3)"); at most two
+  a step. Times written in words ("four hours") aren't found. "Overnight", and anything of
+  8 hours or more, offer [Remind me tomorrow] or [Remind me in 24 hrs] instead.
+- Migration 0124 (`cooking_timers`); each timer is also a `cooking.timer` scheduler job, so
+  it outlives a restart. It fires as an urgent message to the person's own chat ("Time's up:
+  2 min for step 5 of Pancakes."), quiet hours or not. A group session's timers go to the
+  person who started it, since a group message waits until everyone is free.
+- Typed while a timer runs: "how long left?", "add 2 minutes" (the job finds the new end
+  and waits again), "cancel the timer". Ending a session with one running asks [Keep
+  timers] [Cancel them].
+- A keyboard takes one tap in Telegram (the channel closes its other buttons), so tapping a
+  timer redraws the card with fresh buttons.
+- The two-timer scenario uses the Pancakes' last step (two ranges in one step), not Pad
+  Thai, which isn't in the fixture.
+- Setup: restart `themi run` (migration 0124).
+
+### RC4a · Recipes: a recipe from a link
+Status: [x] 2026-11-06
+Depends on: RC1b, F30d
+Read first: F30d's and F31c's notes (web search, the daily cap, what counts as personal);
+the plan's Security and privacy (outside text is data).
+- `themi.connectors.recipe_page`: fetch a link the person sent in this message (or the one
+  before) directly with httpx: http(s) only; refused for loopback, private, link-local,
+  CGNAT (100.64.0.0/10, so Tailscale) and `*.ts.net` addresses, checked after DNS on every
+  redirect (at most 3); 10 s timeout; 2 MB cap; HTML only; no cookies; a generic
+  "Themi recipe reader" User-Agent. Counts against F30d's daily cap.
+- Parse schema.org `Recipe` JSON-LD (in `@graph` or alone): name, `recipeIngredient`,
+  `recipeInstructions` (strings, `HowToStep`, `HowToSection` as step groups), `recipeYield`,
+  times. Stdlib `html.parser` only, no new dependency.
+- No JSON-LD, or the site refuses the fetch: the search backend's `read` (Firecrawl
+  markdown or Tavily extract), then one structured call (`recipe_extract`, its own route)
+  with the page inside a delimited block. Every ingredient and step it returns must appear
+  in the page text (normalised for spacing and punctuation), or it's dropped. When too much
+  is dropped, Themi says the page couldn't be read cleanly and sends the link back.
+- The result is a `recipes` row with source `web` and the url, shown as RC1b shows one,
+  with [Cook this] [Add to grocery list] [Save to cookbook].
+- Vegan check (`recipe_diet`): a fixed word list (chicken, beef, pork, bacon, fish, egg,
+  butter, milk, cream, cheese, honey, gelatin...) with plant modifiers excused ("vegan
+  butter", "non-dairy milk", "flax egg", "chicken seitan"). Flags come with swaps from a
+  fixed table, and with the cookbook's own version where one exists: "Has fish sauce; your
+  cookbook has a vegan Fish Sauce." Never from the model.
+- `read_web_page`'s rule that only links from search results can be read stays for that
+  tool; this connector is the path for links people send.
+- `tests/fakes`: recipe pages with JSON-LD (plain, `@graph`, `HowToSection`), without it,
+  and a 403.
+Tests: unit tests for each address refusal (including a redirect to a private address),
+the caps, every JSON-LD shape, the appear-in-page check, the vegan words and their excuses;
+scenario: Erin pastes a link, taps [Add to grocery list]. Evals: extraction on 10 saved
+pages without JSON-LD (nothing invented).
+
+Notes (2026-11-06):
+- `themi.connectors.recipe_page`: `PageReader.fetch` (http(s) only; loopback, private,
+  link-local, multicast, reserved, CGNAT and `*.ts.net`/`.local`/`.internal`/`.lan` refused
+  after DNS on every hop, at most 3 redirects, 10 s, 2 MB, HTML only, no cookies, a plain
+  User-Agent); `schema_recipe` (JSON-LD alone, in a list or `@graph`; text, `HowToStep`,
+  `HowToSection` as step groups; yield and total time); `page_text`. Standard library only.
+  The transport and resolver are seams: `build_app(recipe_pages=...)`, and
+  `tests/fakes/recipe_site.py` (a mock transport and a fake DNS, no sockets).
+- `themi.core.web_recipes.WebRecipes` and the `recipe_from_link` tool (recipes group; the
+  group's words now also catch a link with recipe-ish words in it). The link must be in
+  their message or the one before. Each read counts against F30d's daily cap
+  (`WebSearch.spend`), with or without a search key.
+- No JSON-LD: the page's words go to one structured call on the `recipes` route; with the
+  site refusing (401, 403, 429, 451), the search backend's `read` instead. An ingredient or
+  step not on the page is dropped; if under 60% of either survives, "That page couldn't be
+  read cleanly" and the link goes back.
+- Kept as a `web` row (key `web:` + a hash of the link, so the same link updates it), shown
+  with the site's name, the link, and the vegan note under the name.
+- Vegan check: a fixed table of words and swaps with plant versions excused; the
+  cookbook's own version is named only from its Ingredients section (Simple Parmesan, Fish
+  Sauce, Honey), so "butter" doesn't name the Peanut Butter Bars. "Not vegan" in their
+  message skips it.
+- Not done: the eval over 10 saved pages without JSON-LD (it needs real pages saved as
+  fixtures, with their owners' text). Follow-up.
+
+### RC4b · Recipes: finding them on the web
+Status: [x] 2026-11-06
+Depends on: RC4a
+- `find_web_recipe`: "find a vegan pad see ew recipe", "something with butternut squash
+  online". The query gets "vegan" when `recipe_diet` is vegan and they didn't say "not
+  vegan" (or name a meat). F30d's search, then each result's page through RC4a, keeping
+  those with a readable recipe.
+- Up to three as buttons with the site's name and, where the page gives them, total time
+  and ingredient count: "Pad See Ew (Rainbow Plant Life), 30 min, 12 ingredients". Picking
+  one shows it as RC4a does.
+- The cookbook comes first: a close cookbook match is offered above the web ones ("Your
+  cookbook has Mushroom Fried Rice Noodles.").
+- Web recipes not cooked or saved within 30 days are removed from the table.
+Tests: unit tests for the query building (vegan added, not added), keeping only readable
+results, the cookbook-first offer, the 30-day clean-up; scenario: "find a vegan pad see ew"
+then cooking the second result. Evals: queries from 15 asks.
+
+Notes (2026-11-06):
+- `find_web_recipe` (what): the query gets "vegan" when the household's diet is vegan and
+  they didn't say "not vegan" or name a meat (a plant version like "chicken seitan" still
+  gets it), and "recipe" when it isn't there. One search, then up to 5 results fetched
+  with RC4a's careful reader; only pages with schema.org recipe data are kept (no model
+  call per result), up to 3. Every search and page read counts against the daily cap.
+- The offer: "Your cookbook has Chana Masala." with [Chana Masala (cookbook)] first when a
+  cookbook recipe clearly matches, then "From the web:" with a button per recipe labelled
+  "Vegan Pad See Ew (plants.example), 3 ingredients". Total time isn't on the label yet.
+  A web recipe picked from the buttons gets the vegan note too.
+- `recipes.forget_web` (daily) deletes web recipes not updated in 30 days, unless a cooking
+  session finished one. RC5's saved ones become cookbook recipes, so they stay.
+- The routing cases are at 110, the most the routing test allows; RC5 adds none.
+
+### RC5 · Recipes: saving a liked one to the cookbook
+Status: [x] 2026-11-06
+Depends on: RC4a, RC1a, 11
+Read first: the plan's Trust tiers; 11's and F21b's notes (categories and rules).
+- "We liked that one, add it to the cookbook", [Save to cookbook]: Themi picks the section
+  (Entrees, Desserts... from the recipe; ask with buttons when it's unclear) and shows the
+  entry as it will appear in the doc.
+- A new trust category `cookbook_add` (household, Tier 1 to start: an approval card with
+  the section and the formatted entry). It writes to a shared document and spends nothing,
+  so it may become automatic.
+- The write: one `documents.batchUpdate` with `writeControl.requiredRevisionId` from a fresh
+  read, inserting at the end of the section (before the next Heading 1): the name as Heading
+  4, "Ingredients" and "Instructions" as Heading 5, a line per ingredient and per step,
+  "Source: <site name> (<url>)", and `-----`, matching the doc's style. If the revision
+  changed, re-read and retry once, then say it couldn't be saved.
+- Afterwards the row becomes a `doc` recipe (its new heading id), and the reply links to it.
+- "Edit the lasagna in the cookbook" is out of scope: Themi says the doc is the place for
+  that and links the heading.
+Tests: unit tests for the request body against the fake (heading styles, the place in the
+section), the revision conflict, the tier card; scenario: a web recipe cooked, [Save to
+cookbook], approved, then found by `find_recipe` as a cookbook recipe.
+
+Notes (2026-11-06):
+- `themi.core.cookbook_save.CookbookSave`: [Save to cookbook] on a web recipe card (and on
+  "all done" after cooking one), and the `save_recipe_to_cookbook` tool (recipe '' is the
+  web recipe they had last). The section is guessed from the recipe's name (a word table:
+  brownies -> Desserts, curry -> Entrees...); with no clear section, a button per section.
+- Before staging, Themi sends the entry as it will read in the doc (quoted), then stages
+  `cookbook_add` (migration 0125: household, Tier 1 to start, may become automatic). The tap
+  on Save isn't taken as the yes: the approval card is.
+- The executor reads the doc, inserts before the next section's Heading 1 with
+  `cookbook.entry_requests` (every paragraph's style set, since inserted text takes the
+  style where it lands), against the revision just read; a conflict means one more read
+  and try, then it fails ("kept changing; nothing was added"). Afterwards the web row takes
+  the new heading's id and becomes `doc`, so it's one recipe, found as the cookbook's.
+- A recipe already in the cookbook declines with its link: changes happen in the doc.
+- The fake Docs API gained `edits_before_write` for the conflict tests.
+- Setup: restart `themi run` (migration 0125). Whoever chose the cookbook needs edit
+  rights on the doc for writes to work.
+
+### RC6 · Recipes: the website's Recipes page
+Status: [x] 2026-11-06
+Depends on: RC1b, RC2a, W1
+Read first: W1's notes (the shell and row components); F28c's notes (the menu bar).
+- `/recipes`: search box, sections as filters, rows with the name and section. A recipe
+  page shows ingredients (with RC2b's scale control: ½, 1, 2, 3, or "for N"), steps, notes,
+  source, a link to the doc. [Add to grocery list] (the same staged card, sent to their
+  chat) and [Cook in chat] (starts RC3a and says so).
+- Kitchen view: big text, one step at a time, Back and Next, the screen kept on
+  (`navigator.wakeLock` where offered). Taps here move the same cooking session as chat,
+  through the same `Cooking` methods (polled state, as BD3a does).
+- "Need a look" recipes (RC1a) are listed with their reason and a link to the place in the
+  doc.
+- Phone first: no horizontal scroll at 360 px, light and dark.
+Tests: page tests for search, filters, scale, needs-a-look, kitchen view moving the chat
+card; integration test that only family members see it.
+
+Notes (2026-11-06):
+- `/recipes` (on More → Household): search (RC1b's search), section chips, a row per
+  recipe and chart, "Need a look" with links to the doc, and the vegan setting for web
+  recipes (`cookbook.diet`).
+- `/recipes/{id}`: ingredients at a scale (½, 1×, 2×, 3× buttons, or "for N", which needs a
+  yield as in chat), the scaled and baking lines, steps, notes, source, the doc or page
+  link; a chart shows as a table that scrolls on its own. [Add to grocery list] sends RC2a's
+  card to their Telegram chat; [Cook in the kitchen view] starts RC3a's session.
+- `/recipes/kitchen`: big text, the current phase (what needs time first, the ingredient
+  list, prep, then one step with Back and Next), polled every 5 seconds with htmx
+  (`/recipes/kitchen/state`). Taps post to the same `Cooking` methods, so the chat's card
+  moves too, and a tap in chat shows on the page at the next poll. `static/kitchen.js`
+  keeps the screen on where `navigator.wakeLock` is offered.
+- Phone width and dark mode use the site's tokens and new CSS at the end of `themi.css`;
+  nobody has looked at it on a phone yet. Worth a look before calling it done.
+
+### RC7 · Recipes: cookbook recipes in meal ideas
+Status: [x] 2026-11-06
+Depends on: RC2a, 27
+Read first: prompt 27's notes (`suggest_meals`); the plan's Module behaviour B (Energy,
+internal only) and D.
+- `suggest_meals` can offer one cookbook recipe whose items the pantry mostly covers (at
+  most two missing, neither a main item), next to its zero-effort option: "Or from the
+  cookbook: Chana Masala (you'd need cilantro)." [Cook this] [Add cilantro].
+- Which recipe: pantry coverage first, then use-soon items, then recipes finished in a
+  session before (RC3b), not one cooked in the last week. When the person's energy is low,
+  only short recipes (few steps, no long-lead prep) are offered. That's used only to choose
+  and is never said.
+- "What can I make with what we have?" uses the same pick and lists up to five.
+Tests: unit tests for coverage, the missing-item limit, the low-energy filter, recency;
+scenario: a pantry with chickpeas, tomatoes and onion offering Chana Masala; evals: no
+energy words in the offers.
+
+Notes (2026-11-06):
+- `themi.core.recipe_ideas.RecipeIdeas`: the pick is in code. Only the cookbook's meals
+  (not Ingredients or References); what a recipe needs is its lines as already read (RC2a's
+  cache, or the rules), less staples and optional lines; the pantry has what isn't out, and
+  names match by words ("chickpeas" covers "dried chickpeas"; "onion" also covers "red
+  onion", a known looseness). At most two missing, never the first thing it needs.
+- Order: fewest missing, most use-soon items used, most finished cooking sessions; nothing
+  finished in the last 7 days. With `suggested_level` low: five steps or fewer and nothing
+  that needs time first. Never said.
+- `suggest_meals`' message gains "Or from the cookbook: Chana Masala (you'd need cilantro
+  leaves)." with [Cook this] and [Add cilantro leaves] (a tap: `grocery_list_add`
+  requested). A new tool, `cookbook_recipes_we_can_make`, lists up to five as buttons; the
+  recipes group's words gained "what can we make" and "with what we have".
+- One eval (no energy words in the reply), not run here.

@@ -849,6 +849,71 @@
    "tools": [
     "search_web"
    ]
+  },
+  {
+   "id": "recipe-name",
+   "kind": "plain",
+   "message": "Can you show me the recipe for the mushroom stuffing?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-ingredient",
+   "kind": "plain",
+   "message": "Is there anything in the cookbook with lentils?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-chart",
+   "kind": "paraphrase",
+   "message": "How long does broccoli roast for again?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-follow",
+   "kind": "follow-up",
+   "message": "Can you find our recipe for it?",
+   "before": "Erin wants mac and cheese tonight",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-shop",
+   "kind": "plain",
+   "message": "Can you put what we need for the chana masala on the grocery list?",
+   "tools": [
+    "add_recipe_to_grocery_list"
+   ]
+  },
+  {
+   "id": "recipe-cook",
+   "kind": "plain",
+   "message": "Walk me through making the pancakes",
+   "tools": [
+    "start_cooking"
+   ]
+  },
+  {
+   "id": "recipe-link",
+   "kind": "plain",
+   "message": "Can you pull the recipe off https://www.example.com/recipes/vegan-chili",
+   "tools": [
+    "recipe_from_link"
+   ]
+  },
+  {
+   "id": "recipe-web",
+   "kind": "plain",
+   "message": "Can you find me a vegan recipe for mushroom stroganoff online?",
+   "tools": [
+    "find_web_recipe"
+   ]
   }
  ]
 }

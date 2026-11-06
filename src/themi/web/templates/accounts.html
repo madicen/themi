@@ -34,6 +34,14 @@ and it only sends after you say yes.</p>
     <p class="muted">Google Tasks isn't allowed for this account yet. Linking it again lets Themi
     take what you add to Google Tasks by voice.</p>
     {% endif %}
+    {% if cookbook is not none %}
+    {% if cookbook_scope in account.scopes %}
+    <p><a href="/accounts/{{ account.id }}/cookbook">{% if cookbook.doc_id and cookbook.account_id == account.id %}The family cookbook: {{ cookbook.title or "chosen" }}{% else %}Choose the family cookbook{% endif %}</a></p>
+    {% else %}
+    <p class="muted">Google Drive isn't allowed for this account yet. Linking it again lets you
+    pick the family's cookbook doc (Themi can open only the file you pick).</p>
+    {% endif %}
+    {% endif %}
 
     <h3>Expected emails</h3>
     <p class="muted">Recurring mail, like a bill confirmation. If one doesn't arrive on time,

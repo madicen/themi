@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from themi.accounts import AccountStore, Member
 from themi.ai.router import AIRouter
@@ -38,6 +38,8 @@ if TYPE_CHECKING:
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.conversation_mode import ConversationMode
+    from themi.core.cookbook_save import CookbookSave
+    from themi.core.cooking import Cooking
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
@@ -64,6 +66,9 @@ if TYPE_CHECKING:
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
     from themi.core.reactions import Reactions
+    from themi.core.recipe_groceries import RecipeGroceries
+    from themi.core.recipe_ideas import RecipeIdeas
+    from themi.core.recipes import Recipes
     from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
@@ -76,6 +81,7 @@ if TYPE_CHECKING:
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
     from themi.core.vacuum import Vacuum
+    from themi.core.web_recipes import WebRecipes
     from themi.core.web_search import WebSearch
     from themi.core.which_list import WhichList
     from themi.core.which_task import TaskNamer
@@ -128,6 +134,9 @@ EventHandler = Callable[[InboundEvent], Awaitable[None]]
 CommandHandler = Callable[[Member, str], Awaitable[None]]  # (member, text after the command)
 # For commands that need the whole message, such as what it replies to.
 EventCommandHandler = Callable[[InboundEvent, str], Awaitable[None]]
+# RC3a: a typed message a feature takes before the model sees it ("next" while cooking).
+# (event, member, text) -> True when it was taken.
+TextHandler = Callable[[InboundEvent, Member, str], Awaitable[bool]]
 
 
 @dataclass
@@ -186,6 +195,16 @@ class Services:
     burnout: Burnout | None = None  # everything held, no demands (F22d)
     web_search: WebSearch | None = None  # looking things up online (F30d)
     guides: Guides | None = None  # the family's own guides (F29ha)
+    recipes: Recipes | None = None  # the family cookbook, from its Google Doc (RC1a)
+    # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
+    recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
+    recipe_groceries: RecipeGroceries | None = None  # what a recipe needs, to the list (RC2a)
+    cooking: Cooking | None = None  # cooking a recipe with Themi (RC3a)
+    text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
+    web_recipes: WebRecipes | None = None  # recipes from a link or a search (RC4a, RC4b)
+    cookbook_save: CookbookSave | None = None  # a liked recipe into the cookbook doc (RC5)
+    recipe_ideas: RecipeIdeas | None = None  # cookbook recipes the pantry covers (RC7)
+    cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)

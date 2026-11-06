@@ -45,6 +45,7 @@ CAN_BE_AUTOMATIC = {
     "vacuum_done",
     "routine_item_add",
     "server_control",  # D3a: asked for on the website, so it runs at once
+    "cookbook_add",  # RC5: writes the shared cookbook doc; spends nothing
 }
 
 

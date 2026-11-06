@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ recipe.name }} · Themi{% endblock %}
+{% block content %}
+<p><a href="/recipes">← Recipes</a></p>
+<h1>{{ recipe.name }}</h1>
+<p class="muted">{% if recipe.source == "web" %}From {{ recipe.source_text or "the web" }}{% else %}{{ recipe.section }}{% if recipe.subsection %} · {{ recipe.subsection }}{% endif %}{% endif %}{% if link %} · <a href="{{ link }}" rel="noopener">{% if recipe.source == "web" %}the page{% else %}in the doc{% endif %}</a>{% endif %}</p>
+
+{% if chart %}
+<div class="table-wrap"><table class="chart">
+  <thead><tr>{% for cell in chart[0] %}<th>{{ cell }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for row in chart[1:] %}<tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+{% else %}
+<form method="get" action="/recipes/{{ recipe.id }}" class="scale">
+  <span>Amount:</span>
+  {% for label, value in scales %}<button name="scale" value="{{ value }}"{% if value == scale %} class="primary"{% endif %}>{{ label }}</button>{% endfor %}
+  <label>for <input name="scale" class="short" inputmode="numeric" placeholder="6" pattern="(for )?[0-9]+"></label>
+</form>
+{% if problem %}<p class="alert">{{ problem }}</p>{% endif %}
+{% if batch %}<p><strong>{{ batch | capitalize }}</strong></p>{% endif %}
+
+<h2>Ingredients</h2>
+<ul class="ingredients">
+{% set ns = namespace(group="") %}
+{% for group, line in lines %}
+  {% if group and group != ns.group %}<li class="group">{{ group }}</li>{% set ns.group = group %}{% endif %}
+  <li>{{ line }}</li>
+{% endfor %}
+</ul>
+{% for note in notes %}<p class="muted">{{ note }}</p>{% endfor %}
+
+<h2>Steps</h2>
+<ol class="steps">{% for step in recipe.steps %}<li>{% if step.group %}<strong>{{ step.group }}:</strong> {% endif %}{{ step.text }}</li>{% endfor %}</ol>
+{% for note in recipe.notes %}<p>{{ note }}</p>{% endfor %}
+{% if recipe.source_text %}<p class="muted">Source: {{ recipe.source_text }}</p>{% endif %}
+
+<div class="actions">
+  <form method="post" action="/recipes/{{ recipe.id }}/groceries">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="scale" value="{{ scale }}">
+    <button>Add to grocery list</button>
+  </form>
+  <form method="post" action="/recipes/{{ recipe.id }}/cook">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="scale" value="{{ scale }}">
+    <button class="primary">Cook in the kitchen view</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

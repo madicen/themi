@@ -33,6 +33,7 @@ from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.recipe_page import PageReader
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.search import SearchBackend
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
@@ -50,6 +51,9 @@ from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
 from themi.core.conversation_mode import ConversationMode
+from themi.core.cookbook_save import CookbookSave
+from themi.core.cooking import Cooking
+from themi.core.cooking_timers import CookingTimers
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -79,6 +83,9 @@ from themi.core.memory import Memory
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
+from themi.core.recipe_groceries import RecipeGroceries
+from themi.core.recipe_ideas import RecipeIdeas
+from themi.core.recipes import Recipes
 from themi.core.reminders import Reminders
 from themi.core.routines import Routines
 from themi.core.routines_wall import RoutinesWall
@@ -96,6 +103,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
+from themi.core.web_recipes import WebRecipes
 from themi.core.web_search import WebSearch
 from themi.core.which_list import WhichList
 from themi.core.which_task import TaskNamer
@@ -149,6 +157,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     search: SearchBackend | None = None,
+    recipe_pages: PageReader | None = None,  # RC4a: tests and `make dev` point it at fakes
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
@@ -225,6 +234,15 @@ def build_app(
     Focus(services, tasks, day_summary).install()
     Taking(services, tasks).install()
     Guides(services).install()
+    recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
+    recipes.install()
+    services.cookbook_save = CookbookSave(services, recipes)  # RC5
+    services.cookbook_save.install()
+    recipe_groceries = RecipeGroceries(services, recipes)  # RC2a
+    recipe_groceries.install()
+    RecipeIdeas(services, recipes, recipe_groceries).install()  # RC7
+    cooking = Cooking(services, recipes, recipe_groceries)  # RC3a
+    cooking.install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()
@@ -233,6 +251,7 @@ def build_app(
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
+    CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:
@@ -246,6 +265,8 @@ def build_app(
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     WebSearch(services, search).install()  # F30d: says how to set it up without a key
+    web_recipes = WebRecipes(services, recipes, recipe_pages)  # RC4a: recipes from links
+    web_recipes.install()
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
@@ -286,6 +307,9 @@ def build_app(
         PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
         PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
+        PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
+        PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
+        PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
     ]
     server = ServerControl(services, control_dir)
     server.install()

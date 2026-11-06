@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Kitchen · Themi{% endblock %}
+{% block content %}
+<p><a href="/recipes">← Recipes</a></p>
+{% include "_kitchen.html" %}
+<script src="{{ asset('kitchen.js') }}"></script>
+{% endblock %}
