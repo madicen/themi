@@ -883,6 +883,15 @@ def _found_payload(found: Found) -> dict[str, Any]:
     }
 
 
+def _located(ctx: ToolContext, location: str) -> str:
+    """A place they named that Themi has an address for ("my parent's house") is written
+    as that address, so drive times and heads-ups find it (F29e). Otherwise as they said."""
+    travel = ctx.services.travel
+    if not location or travel is None:
+        return location
+    return travel.address_for(ctx.member, location) or location
+
+
 def _events(ctx: ToolContext) -> Events:
     events = ctx.services.events
     if events is None:
@@ -936,7 +945,7 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     if meal and not start.strip():
         start, end = MEALS[meal.group(1)], ""
     when = parse_when(args["date"], start, end, events._today(), events._tz())
-    location = " ".join(str(args["location"]).split())[:200]
+    location = _located(ctx, " ".join(str(args["location"]).split())[:200])
     calendar = str(args["calendar"])
     where = "the family calendar" if calendar == "family" else "your calendar"
     tz = events._tz()
@@ -1003,7 +1012,7 @@ async def change_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Propo
     tz = events._tz()
     when = _new_when(found.when, args, events._today(), tz)
     title = " ".join(str(args.get("title") or "").split())[:MAX_TITLE]
-    location = " ".join(str(args.get("location") or "").split())[:200]
+    location = _located(ctx, " ".join(str(args.get("location") or "").split())[:200])
     notes = str(args.get("notes") or "").strip()[:MAX_NOTES]
     changes: list[str] = []
     if when != found.when:
