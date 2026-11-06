@@ -203,7 +203,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
 | F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
 | F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
-| F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [ ] |
+| F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [x] 2026-11-06 |
 | F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [ ] |
 | F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [ ] |
 | F30d | Idea: Themi looks things up online | Feedback | [ ] |
@@ -10119,7 +10119,7 @@ high-pressure and natural-release times), so F29ha covers it. This prompt waits 
 guide comes as a photo or a PDF.
 
 ### F30a · Feedback (2026-11-05): a refused task change changes nothing, and "the task you just made" is that one
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: F6a, F24a, P8a
 Read first: F6a's notes (steps); F24a's notes (asked for again); P8a's notes (the naming
 check). From Erin's idea #163 (2026-11-05, 8:36 pm, "review this whole dentist
@@ -10169,6 +10169,26 @@ Data (Michael decides): restore task 60's title to "Mimi pill - 1 tab" and its s
 the last backup before 2026-11-06 04:33 UTC (the steps before that are unknown here).
 Cancel task 78 or 79, whichever Michael isn't using; 79 has the full steps. Mark #163
 reviewed once live (with F30b).
+
+Notes (2026-11-06):
+- `update_task` reads the task, checks it can be changed, that it isn't closed, which
+  task they mean, and the assignee (with a chore's people) before `TaskBoard.update`
+  writes anything. `reschedule_task` and `set_task_schedule` were checked by eye: they
+  validate before writing already.
+- "The task you just made": `tasks.recent_tasks` gives open tasks this person made in
+  the last 30 minutes, plus this turn's. `update_task` on another task whose title
+  shares no word with their message (and two with message plus new title) is refused,
+  naming the newest recent one and when it was made. It's counted as P8a's
+  `not_named`, and `update_task` joins `naming.CHECKED`. No check when nothing is recent.
+- `create_task`, when their message says update, change, edit, fix, instead or rather
+  and a recent task of the same kind and assignee exists, is refused, pointing to
+  `update_task` on it.
+- `ToolContext.calls` records (tool, outcome, result) for each call. The agent's
+  `_not_updated` replaces a reply saying "updated"/"changed"/"edited", when
+  `update_task` failed and `create_task` made a task in the same turn, with "Made a new
+  task for X: <title>."
+- Tests were written alongside the code, not run failing first against the old code.
+- Setup: restart `themi run`. No migration.
 
 ### F30b · Feedback (2026-11-05): a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know
 Status: [ ]
