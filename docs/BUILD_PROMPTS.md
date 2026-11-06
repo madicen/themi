@@ -198,7 +198,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [x] 2026-11-05 |
 | F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [x] 2026-11-05 |
 | F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [x] 2026-11-05 |
-| F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [ ] |
+| F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [x] 2026-11-05 |
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [ ] |
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [ ] |
 | F29h | Idea: the family's own guides, such as the Instant Pot grain chart | Feedback | [ ] |
@@ -9835,7 +9835,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run`. No migration.
 
 ### F29e · Feedback (2026-11-05): drive time to a place they've named, and a private calendar isn't an empty one
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: K1, K4b, F22a
 Read first: "Calendars" (K1's privacy, K4b's notes); F22a's notes (asking about your partner). From
 Erin's bug #154 (2026-11-05, 2:11 pm, "then gave a bad answer to the travel time, then gave
@@ -9881,6 +9881,30 @@ Scenario: bug #154, "when should we leave for tutoring?" with the event's locati
 "Parent's house": leave at 2:50 pm, the first time.
 
 Setup after deploying: the migration. Mark #154 reviewed with F29a once both are live.
+
+Notes (2026-11-05):
+- `themi.core.places.named_place`: a phrase with no digits that names kin ("parent",
+  "mom", "grandma"...), "in-laws", "work", "school", or "home". It's looked up in the
+  facts they can see: one with a street address that talks about the same kin, and
+  names the right person (theirs, or for "in-laws" the partner's). A fact naming no
+  one counts if nothing better is found. "home" is the family's home address.
+- `drive_time`, the travel heads-up and event locations (add and change) use it. A
+  named place with no address known isn't sent to the map: the tool says "Not sure
+  where 'X' is" and asks the model to ask once and `remember_fact` it.
+- A phrase with no street number and no comma, found more than 100 km from home
+  (`FAR_KM`), is checked with them first ("...km from home, which may be a different
+  place of that name"). The heads-up skips it. The town isn't named: the geocoder gives
+  only a position. That's a deviation.
+- Migration 0113 deletes cached map answers for keys with no digit (both "parent's
+  house" rows, and some harmless ones that will be looked up again).
+- The plan ("Security and privacy" → Calendars) says a person's event details reach
+  only their own conversations unless they share them. So the fallback in this prompt was
+  used: no drive time from a partner's private event. `drive_time` with no match says
+  the partner's calendar is private and isn't searched. `day_summary` for a private
+  partner tells the model "there may be some. Never say X has no events", and the sent
+  summary ends "(Erin's calendar is private: events aren't shown here.)".
+- Not done: an eval line for the "no events" wording.
+- Setup: restart `themi run` (migration 0113).
 
 ### F29f · Feedback (2026-11-05): "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine
 Status: [ ]
