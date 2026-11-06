@@ -240,7 +240,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
-| RC2b | Recipes: scaling (half, double, for 6) | Recipes | [ ] |
+| RC2b | Recipes: scaling (half, double, for 6) | Recipes | [x] 2026-11-06 |
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [ ] |
 | RC3b | Cooking: one step at a time | Recipes | [ ] |
 | RC3c | Cooking: step timers | Recipes | [ ] |
@@ -12011,7 +12011,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0121).
 
 ### RC2b · Recipes: scaling (half, double, for 6)
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC2a
 - `themi.core.quantities`: parse quantities as written ("1½", "½", "1 1/2", "¼ –½",
   "1.5 Cups (355mL)", "1 11oz package", "3-4") into numbers, and write them back nicely
@@ -12026,6 +12026,25 @@ Depends on: RC2a
   powder among the items) also get "Pan size and times may need changing."
 Tests: unit tests for parsing every quantity form in the fixture, rounding, the yield
 question asked once; scenario: "double the snickerdoodles" puts doubled amounts on the card.
+
+Notes (2026-11-06):
+- `themi.core.quantities`: `number`, `fraction` (to the nearest eighth or third), `write`,
+  `scale_line` and `leading_amount`, `scale_for` ("half", "double", "x3", "for 6") and
+  `describe`. Only the leading amount is scaled, with a weight or volume in brackets right
+  after it or at the end of the line ("1 Cup cashews, soaked ... (130g)" -> "2 Cups ...
+  (260g)"); a size inside the line ("1 11oz package") and times in notes stay as written.
+  Whole things round up with the exact amount alongside ("2 cans (1½ needed)"). Hypothesis
+  checks the fraction round trip.
+- `add_recipe_to_grocery_list` gained `scale`. A scaled card says the batch in its first
+  line ("For a double batch of Pancakes", "For Chana Masala for 6"), shows each item's scaled
+  amount, the "amounts in the steps are for the original" line, and "Pan size and times may
+  need changing." for desserts and recipes with yeast, baking powder or soda.
+- "For 6" with no yield: the tool declines and tells the model to ask once; the answer goes
+  through a new tool, `set_recipe_yield`, onto `recipes.yield_said` (the doc isn't changed),
+  so it isn't asked again. Migration 0122 adds `recipe_cards.scale_said`.
+- The scenario doubles the Pancakes rather than the snickerdoodles, which aren't in the
+  fixture; it shows the baking line too. RC3's cooking sessions use the same scale.
+- Setup: restart `themi run` (migration 0122).
 
 ### RC3a · Cooking: getting ready (gather and prep)
 Status: [ ]
