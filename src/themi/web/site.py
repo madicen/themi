@@ -391,6 +391,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 morning_summary_empty=form.get("morning_summary_empty") == "on",
                 getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
                 leave_heads_up=form.get("leave_heads_up") == "on",
+                setup_note=form.get("setup_note") == "on",
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},

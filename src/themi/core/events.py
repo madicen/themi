@@ -34,7 +34,7 @@ from themi import clock
 from themi.accounts import LinkedAccount, Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
-from themi.connectors.gcal import CalendarError, event_id
+from themi.connectors.gcal import CalendarError, CalendarNotFound, event_id
 from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core.lists import name_key
@@ -70,6 +70,9 @@ MAKE_TIME = re.compile(
 MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
 REPLACED_TEXT = "Replaced by the newer card."
 MOVED_SINCE_TEXT = "Not needed now: that event has been changed since."
+MAX_NOTES = 500
+# F29a (idea #150): an event started earlier for set-up time says when it really starts.
+SETUP_LINE = re.compile(r"^Starts at ([^.\n]+)\. The time before it is set-up time\.$", re.M)
 # "...plenty of time before tutoring": an event named as the time to fit around (bug #73).
 ANCHOR = re.compile(r"\b(?:before|after|until|till|ahead of|around|than)\s+(?:the\s+|my\s+)?$")
 
@@ -97,6 +100,11 @@ def parse_when(day: str, start: str, end: str, today: date, tz: ZoneInfo) -> Whe
     if ends <= begins:
         raise ToolFailed(f"The end ({end}) comes before the start ({start}). {EXAMPLE}")
     return When(begins, ends, False)
+
+
+def _clock(moment: datetime) -> str:
+    """ "4:00 pm": the set-up line's start, read back by _time."""
+    return f"{moment.hour % 12 or 12}:{moment.minute:02d} {'am' if moment.hour < 12 else 'pm'}"
 
 
 def _at(day: date, at: time, tz: ZoneInfo) -> datetime:
@@ -266,7 +274,7 @@ class Events:
         for name, executor in ((ADD, self._execute_add), (MOVE, self._execute_move)):
             s.autonomy.executors.register(name)(executor)
         s.autonomy.executors.register(DELETE)(self._execute_delete)
-        for t in (add_calendar_event, move_calendar_event, delete_calendar_event):
+        for t in (add_calendar_event, change_calendar_event, delete_calendar_event):
             s.tools.register(t)
         if s.triage is not None:
             s.triage.verdict_listeners.append(self.on_email)
@@ -293,8 +301,11 @@ class Events:
 
     # ----- finding their events -----------------------------------------------------------
 
-    def find(self, member: Member, words: str, on: str) -> Found:
-        """The one event of theirs they mean, by its title's words (and day, if given)."""
+    def find(self, member: Member, words: str, on: str, calendar: str = "") -> list[Found]:
+        """The event of theirs they mean, by its title's words (and day, and calendar, if
+        given). The same event on their calendar and the family's (one copied from the
+        other: same title and times) comes back as both copies, to change together (F29a,
+        bug #154: every change failed with "more than one matches")."""
         tz = self._tz()
         day = date.fromisoformat(on) if on.strip() else None
         start = _at(day or self._today(), time(0), tz)
@@ -313,15 +324,44 @@ class Events:
             if row["event_id"] not in found:
                 found[row["event_id"]] = self._found(row, None)
         matches = [f for f in found.values() if title_matches(words, f.title)]
-        if len(matches) == 1:
-            return matches[0]
-        listed = "; ".join(f"{f.title} ({when_words(f.when, tz)})" for f in matches[:6])
+        if calendar in ("mine", "family"):
+            matches = [f for f in matches if self.on_family(f) == (calendar == "family")]
+        if len(matches) == 1 or (matches and self._copies(matches)):
+            return matches
+        listed = "; ".join(
+            f"{f.title} ({when_words(f.when, tz)}, {self.calendar_words(f)})" for f in matches[:6]
+        )
         if matches:
             raise ToolFailed(
                 f'More than one event matches "{words}": {listed}. Ask which, or give its date.'
             )
         raise ToolFailed(
             f'No event of theirs matches "{words}"{f" on {day:%a %d %b}" if day else ""}.'
+        )
+
+    def family_calendars(self) -> set[str]:
+        """The family calendar's ids: the one Themi writes to for the wall (prompt 26)."""
+        rows = self.db.query(
+            "SELECT calendar_id FROM calendars UNION "
+            "SELECT calendar_id FROM themi_events WHERE calendar_id != 'primary'"
+        )
+        return {r["calendar_id"] for r in rows}
+
+    def on_family(self, found: Found) -> bool:
+        return found.calendar_id in self.family_calendars()
+
+    def calendar_words(self, found: Found) -> str:
+        return "the family calendar" if self.on_family(found) else "their calendar"
+
+    def _copies(self, matches: list[Found]) -> bool:
+        """One event on two calendars: the same title and times, one copy per calendar."""
+        first = matches[0]
+        return (
+            len({f.calendar_id for f in matches}) == len(matches)
+            and all(
+                name_key(f.title) == name_key(first.title) and f.when == first.when for f in matches
+            )
+            and any(self.on_family(f) for f in matches)
         )
 
     @staticmethod
@@ -432,43 +472,109 @@ class Events:
         return themi_id, f"On {where}: {describe(title, when, location, tz)}."
 
     async def _execute_move(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
-        found = self._payload_found(payload)
+        """A change to one event, on each copy of it (F29a): its times, and any new title,
+        location or notes the payload carries (a payload from before F29a has only times)."""
         when = When(
             datetime.fromisoformat(payload["starts"]),
             datetime.fromisoformat(payload["ends"]),
             bool(payload["all_day"]),
         )
-        if found.themi_id is not None:
-            await self._write(found.account_id, found.calendar_id, found.event_id, found.title,
-                              found.location, when, found.themi_id)  # fmt: skip
-            self.db.execute(
-                "UPDATE themi_events SET starts_at = ?, ends_at = ?, all_day = ? WHERE id = ?",
-                (to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day), found.themi_id),
-            )
-        else:  # someone else's event: everything else on it stays as it is
-            client = self._client(found.account_id)
+        title, location = payload.get("new_title"), payload.get("new_location")
+        copies = [payload, *payload.get("also", [])]
+        for each in copies:
+            found = self._payload_found(each)
+            await self._change(found, when, title, location, payload)
+            await self.withdraw_changes(found.event_id, keep=ctx.action_id)
+        first = self._payload_found(payload)
+        shown = describe(title or first.title, when,
+                         first.location if location is None else location, self._tz())  # fmt: skip
+        both = " (on both calendars)" if len(copies) > 1 else ""
+        only_times = title is None and location is None and not payload.get("notes")
+        return f"{'Moved' if only_times else 'Changed'}: {shown}{both}."
+
+    async def _change(
+        self, found: Found, when: When, title: str | None, location: str | None,
+        payload: dict[str, Any],
+    ) -> None:  # fmt: skip
+        """Everything else on the event stays as it is: it's read, changed and written back
+        (a description is read only here, to add to it, and never kept: the plan's privacy)."""
+        new_title = found.title if title is None else title
+        new_location = found.location if location is None else location
+        client = self._client(found.account_id)
+        try:
             event = await client.get_event(found.calendar_id, found.event_id)
+        except CalendarNotFound:
+            if found.themi_id is None:
+                raise
+            event = None  # Themi's own, gone from Google: written again whole
+        if event is None:
+            await self._write(found.account_id, found.calendar_id, found.event_id, new_title,
+                              new_location, when, found.themi_id or 0)  # fmt: skip
+        else:
             event.update(_times(when, self._tz()))
+            event["summary"], event["location"] = new_title, new_location
+            event["description"] = self._notes(
+                str(event.get("description") or ""), found, when, payload
+            )
             await client.update_event(found.calendar_id, found.event_id, event)
+        if found.themi_id is not None:
+            self.db.execute(
+                "UPDATE themi_events SET title = ?, location = ?, starts_at = ?, ends_at = ?, "
+                "all_day = ? WHERE id = ?",
+                (new_title, new_location, to_utc_iso(when.starts), to_utc_iso(when.ends),
+                 int(when.all_day), found.themi_id),
+            )  # fmt: skip
         self.db.execute(
-            "UPDATE calendar_entries SET starts_at = ?, ends_at = ?, all_day = ? "
-            "WHERE event_id = ?",
-            (to_utc_iso(when.starts), to_utc_iso(when.ends), int(when.all_day), found.event_id),
-        )
-        await self.withdraw_changes(found.event_id, keep=ctx.action_id)
-        return f"Moved: {describe(found.title, when, found.location, self._tz())}."
+            "UPDATE calendar_entries SET title = ?, location = ?, starts_at = ?, ends_at = ?, "
+            "all_day = ? WHERE event_id = ?",
+            (new_title, new_location, to_utc_iso(when.starts), to_utc_iso(when.ends),
+             int(when.all_day), found.event_id),
+        )  # fmt: skip
+
+    def _notes(self, description: str, found: Found, when: When, payload: dict[str, Any]) -> str:
+        notes = payload.get("notes") or {}
+        text = str(notes.get("text") or "").strip()
+        if text:
+            description = (
+                text
+                if notes.get("mode") == "replace"
+                else (f"{description.rstrip()}\n{text}" if description.strip() else text)
+            )
+        if not payload.get("setup_note") or when.all_day:
+            return description
+        tz = self._tz()
+        line = SETUP_LINE.search(description)
+        if line is not None:  # moved before: its real start is the one already noted
+            try:
+                real = _at(when.starts.astimezone(tz).date(), _time(line.group(1)), tz)
+            except ToolFailed:
+                return description
+        elif payload.get("earlier"):  # started earlier, the same end: set-up time
+            real = found.when.starts.astimezone(tz)
+        else:
+            return description
+        description = SETUP_LINE.sub("", description).strip()
+        if when.starts < real < when.ends:
+            setup = f"Starts at {_clock(real)}. The time before it is set-up time."
+            description = f"{setup}\n{description}".strip()
+        return description
 
     async def _execute_delete(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        copies = [payload, *payload.get("also", [])]
+        for each in copies:
+            found = self._payload_found(each)
+            await self._client(found.account_id).delete_event(found.calendar_id, found.event_id)
+            if found.themi_id is not None:
+                self.db.execute(
+                    "UPDATE themi_events SET deleted_at = ? WHERE id = ?",
+                    (to_utc_iso(clock.now()), found.themi_id),
+                )
+            self.db.execute("DELETE FROM calendar_entries WHERE event_id = ?", (found.event_id,))
+            await self.withdraw_changes(found.event_id, keep=ctx.action_id)
         found = self._payload_found(payload)
-        await self._client(found.account_id).delete_event(found.calendar_id, found.event_id)
-        if found.themi_id is not None:
-            self.db.execute(
-                "UPDATE themi_events SET deleted_at = ? WHERE id = ?",
-                (to_utc_iso(clock.now()), found.themi_id),
-            )
-        self.db.execute("DELETE FROM calendar_entries WHERE event_id = ?", (found.event_id,))
-        await self.withdraw_changes(found.event_id, keep=ctx.action_id)
-        return f"Deleted from the calendar: {describe(found.title, found.when, '', self._tz())}."
+        both = " (both calendars)" if len(copies) > 1 else ""
+        shown = describe(found.title, found.when, "", self._tz())
+        return f"Deleted from the calendar{both}: {shown}."
 
     async def _write(
         self, account_id: int, calendar_id: str, eid: str, title: str, location: str,
@@ -656,8 +762,8 @@ def _times(when: When, tz: ZoneInfo) -> dict[str, Any]:
             "end": {"date": when.ends.astimezone(tz).date().isoformat()},
         }
     return {
-        "start": {"dateTime": when.starts.isoformat(), "timeZone": str(tz)},
-        "end": {"dateTime": when.ends.isoformat(), "timeZone": str(tz)},
+        "start": {"dateTime": when.starts.astimezone(tz).isoformat(), "timeZone": str(tz)},
+        "end": {"dateTime": when.ends.astimezone(tz).isoformat(), "timeZone": str(tz)},
     }
 
 
@@ -719,7 +825,7 @@ def _not_for_tasks(ctx: ToolContext) -> None:
     "HH:MM, 24-hour (end empty for an hour; both empty for all day; a meal with no time "
     "gets its usual one). location: as they said it, or ''. Asked for in their own words, "
     "it's made at once; otherwise they get a card. A correction to a card still waiting "
-    "replaces it; to change an event already made, use move_calendar_event.",
+    "replaces it; to change an event already made, use change_calendar_event.",
     {
         "title": {"type": "string"},
         "date": {"type": "string"},
@@ -755,7 +861,7 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     if same is not None:
         raise ToolFailed(
             f"{same.title} is already on {where} ({when_words(same.when, tz)}). To change "
-            "its time, use move_calendar_event."
+            "its time, use change_calendar_event."
         )
     payload = _add_payload(title, location, when, calendar, "chat")
     await events.replace_waiting(ctx.member, payload)
@@ -769,59 +875,128 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     return replace(proposal, requested=asked_for(title, ctx.request_text), expires=when.ends)
 
 
+CALENDAR_ARG = {"type": "string", "enum": ["", "mine", "family"]}
+
+
 @staged_tool(
-    "move_calendar_event",
-    "Move one of their calendar events to a new date or time. event: words from the title of "
-    "the event to move, never one named as the time to fit around ('before tutoring'); a "
-    "task (a run, a chore) is reschedule_task, even with a time of day. on: its current date "
-    "(YYYY-MM-DD) if there could be more than one, else ''. date, start, end as for "
-    "add_calendar_event. Events Themi made move at once; others need their yes.",
+    "change_calendar_event",
+    "Change one of their calendar events: its date or time, location, title or notes (the "
+    "event's description). event: words from the title of the event to change, never one "
+    "named as the time to fit around ('before tutoring'); a task (a run, a chore) is "
+    "reschedule_task, even with a time of day. on: its current date (YYYY-MM-DD) if there "
+    "could be more than one, else ''. calendar: 'mine' or 'family' to pick one copy, '' for "
+    "whichever has it (the same event on both changes on both). date, start, end as for "
+    "add_calendar_event, all three '' to keep its time; location, title: the new one, or '' "
+    "to keep it. notes: text for its description, or ''; notes_mode 'add' (after what's "
+    "there) or 'replace'. Events Themi made change at once; others need their yes.",
     {
         "event": {"type": "string"},
         "on": {"type": "string"},
+        "calendar": CALENDAR_ARG,
         "date": {"type": "string"},
         "start": {"type": "string"},
         "end": {"type": "string"},
+        "location": {"type": "string"},
+        "title": {"type": "string"},
+        "notes": {"type": "string"},
+        "notes_mode": {"type": "string", "enum": ["", "add", "replace"]},
     },
 )
-async def move_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+async def change_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     events = _events(ctx)
-    found = events.find(ctx.member, args["event"], args["on"])
+    copies = events.find(ctx.member, args["event"], args["on"], str(args.get("calendar") or ""))
+    found = copies[0]
     if named_as_anchor(found.title, ctx.request_text):
         raise ToolFailed(
             f"They named {found.title} as the time to fit around, not as the one to move. "
             "If they meant a task (a run, a chore), reschedule_task changes its time; "
             "otherwise ask which one."
         )
-    when = parse_when(args["date"], args["start"], args["end"], events._today(), events._tz())
-    await events.withdraw_changes(found.event_id)
+    tz = events._tz()
+    when = _new_when(found.when, args, events._today(), tz)
+    title = " ".join(str(args.get("title") or "").split())[:MAX_TITLE]
+    location = " ".join(str(args.get("location") or "").split())[:200]
+    notes = str(args.get("notes") or "").strip()[:MAX_NOTES]
+    changes: list[str] = []
+    if when != found.when:
+        changes.append(f"to {when_words(when, tz)}")
+    new_title = title if title and title != found.title else None
+    if new_title:
+        changes.append(f'title to "{new_title}"')
+    new_location = location if location and location != found.location else None
+    if new_location:
+        changes.append(f"location to {new_location}")
+    if notes:
+        changes.append(f'notes: "{notes}"')
+    if not changes:  # reply 258: "moved" to the time it had, then "updated the description"
+        raise ToolDeclined(
+            f"{describe(found.title, found.when, found.location, tz)} is like that already. "
+            "Nothing changed."
+        )
+    for each in copies:
+        await events.withdraw_changes(each.event_id)
+    earlier = when.starts < found.when.starts and when.ends == found.when.ends
     payload = {
         **_found_payload(found),
+        "also": [_found_payload(each) for each in copies[1:]],
         "starts": when.starts.isoformat(),
         "ends": when.ends.isoformat(),
         "all_day": when.all_day,
+        "new_title": new_title,
+        "new_location": new_location,
+        "notes": {"text": notes, "mode": args.get("notes_mode") or "add"} if notes else None,
+        # The member's setting (idea #150): an earlier start is set-up time, and a later
+        # change keeps the line true.
+        "setup_note": ctx.member.setup_note and when != found.when,
+        "earlier": earlier,
     }
-    summary = f"Moving {found.title} to {when_words(when, events._tz())}"
-    proposal = Proposal(OWN if found.themi_id else CHANGE, summary, MOVE, payload)
+    both = " (on both calendars)" if len(copies) > 1 else ""
+    if changes == [f"to {when_words(when, tz)}"]:
+        summary = f"Moving {found.title} to {when_words(when, tz)}{both}"
+    else:
+        summary = f"{found.title}, {when_words(found.when, tz)}: {', '.join(changes)}{both}"
+    themi_made = all(each.themi_id is not None for each in copies)
+    proposal = Proposal(OWN if themi_made else CHANGE, summary, MOVE, payload)
     # No use once the time it moves to has come (bug #90: it came back at 1:33 for 12).
-    return replace(proposal, requested=found.themi_id is not None, expires=when.starts)
+    return replace(
+        proposal, requested=themi_made, expires=when.starts if when != found.when else when.ends
+    )
+
+
+def _new_when(was: When, args: dict[str, Any], today: date, tz: ZoneInfo) -> When:
+    """The new times: all three '' keeps them; a date alone keeps the times of day; a
+    time alone keeps the day (F29a)."""
+    day, start, end = (str(args.get(k) or "").strip() for k in ("date", "start", "end"))
+    if not (day or start or end):
+        return was
+    local_start, local_end = was.starts.astimezone(tz), was.ends.astimezone(tz)
+    if not day:
+        day = local_start.date().isoformat()
+    if not start and not end and not was.all_day:
+        start, end = local_start.strftime("%H:%M"), local_end.strftime("%H:%M")
+    return parse_when(day, start, end, today, tz)
 
 
 @staged_tool(
     "delete_calendar_event",
     "Take one of their events off the calendar. event: words from its title; on: its date "
-    "(YYYY-MM-DD) if there could be more than one, else ''. Events Themi made go at once; "
-    "others need their yes.",
-    {"event": {"type": "string"}, "on": {"type": "string"}},
+    "(YYYY-MM-DD) if there could be more than one, else ''. calendar: 'mine' or 'family' for "
+    "one copy, '' for whichever has it (the same event on both goes from both). Events "
+    "Themi made go at once; others need their yes.",
+    {"event": {"type": "string"}, "on": {"type": "string"}, "calendar": CALENDAR_ARG},
 )
 async def delete_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     events = _events(ctx)
-    found = events.find(ctx.member, args["event"], args["on"])
-    await events.withdraw_changes(found.event_id)
+    copies = events.find(ctx.member, args["event"], args["on"], str(args.get("calendar") or ""))
+    found = copies[0]
+    for each in copies:
+        await events.withdraw_changes(each.event_id)
+    both = "both calendars" if len(copies) > 1 else "the calendar"
+    themi_made = all(each.themi_id is not None for each in copies)
     proposal = Proposal(
-        OWN if found.themi_id else CHANGE,
-        f"Deleting {found.title} ({when_words(found.when, events._tz())}) from the calendar",
+        OWN if themi_made else CHANGE,
+        f"Deleting {found.title} ({when_words(found.when, events._tz())}) from {both}",
         DELETE,
-        _found_payload(found),
+        {**_found_payload(found), "also": [_found_payload(each) for each in copies[1:]]},
     )
-    return replace(proposal, requested=found.themi_id is not None)
+    return replace(proposal, requested=themi_made)

@@ -76,11 +76,14 @@ NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already w
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
     r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
-    r"rescheduled|changed|filled|marked|ticked|completed)\b"
+    r"rescheduled|changed|updated|filled|marked|ticked|completed)\b"
     r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled|filled|"
-    r"marked|ticked|completed)\b"
+    r"marked|ticked|completed|updated|changed)\b"
+    # F29a, replies 258 and 276: "Location updated to your parent's house", "set to 4"
+    r"|^\w+(?:\s+\w+)?\s+(?:updated|changed)\b|\bset\s+to\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
     r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed|filled|marked|"
+    r"updated|changed|"
     r"ticked off|completed?)\b"
     # "Safeway cart filled with the 11 items" (2026-10-31): a cart is filled, no verb before it
     r"|\bcart\s+filled\b",

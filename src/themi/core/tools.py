@@ -398,7 +398,7 @@ TOOL_GROUPS: dict[str, str] = {
     **dict.fromkeys(
         (
             "add_calendar_event",
-            "move_calendar_event",
+            "change_calendar_event",
             "delete_calendar_event",
             "day_summary",
             "drive_time",
@@ -548,6 +548,11 @@ def choose_groups(texts: Sequence[str]) -> set[str]:
     return {name for name, pattern in _GROUP_WORDS.items() if pattern.search(joined)}
 
 
+# Old tool names still answered for one release (a model or a saved turn may use them):
+# the call goes to the new tool, its new fields empty (F29a).
+ALIASES = {"move_calendar_event": "change_calendar_event"}
+
+
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None) -> None:
         self._tools: dict[str, Tool] = {}
@@ -589,6 +594,9 @@ class ToolRegistry:
 
     async def run(self, call: ToolCall, ctx: ToolContext) -> ToolResult:
         t = self._tools.get(call.name)
+        if t is None and call.name in ALIASES and (t := self._tools.get(ALIASES[call.name])):
+            empty = dict.fromkeys(t.spec.input_schema["properties"], "")
+            call = replace(call, arguments={**empty, **call.arguments})
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
         result, outcome = await self._run(t, call, ctx)

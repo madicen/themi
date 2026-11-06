@@ -87,6 +87,7 @@ class Member:
     morning_summary_empty: bool = False  # sent on days with nothing on, too
     getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)
     leave_heads_up: bool = True  # "time to get ready" for events with a place
+    setup_note: bool = True  # F29a: an earlier start is noted as set-up time on the event
     noise_emails: str = "daily"  # when noise emails are offered for archiving, together (F16b)
     # The website's menu bar, in order (F28c): paths, at most MENU_BAR_MAX; None: the usual.
     menu_bar: tuple[str, ...] | None = None
