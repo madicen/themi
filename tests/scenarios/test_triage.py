@@ -350,3 +350,55 @@ async def test_the_email_is_read_as_its_reader_sees_it(
     prompt = scenario.primary.requests[-1].prompt
     assert "Preview: We'll process your payment automatically.\n" in prompt
     assert "You've cancelled" not in prompt
+
+
+NEXTDOOR = "Pavan near Alvarado Historic District <reply@ss.email.nextdoor.com>"
+
+
+async def nextdoor_post(scenario: Scenario, inbox: FakeGmail) -> None:
+    (post,) = await arrive(
+        scenario,
+        inbox,
+        {
+            "sender": NEXTDOOR,
+            "subject": "URGENT REQUEST",
+            "text": "Dear Mr. Sam Lee, If you happen to see this post on Nextdoor, I "
+            "respectfully request that you contact me about Creekside Village Apartments.",
+        },
+    )
+    scenario.primary.queue_structured(
+        {
+            "results": [
+                verdict(
+                    post, "urgent", "An urgent Nextdoor request about Creekside Village",
+                    urgent_kind="tenant", severe=True,
+                )
+            ]
+        }
+    )  # fmt: skip
+    await scenario.run_periodic("email.triage")
+
+
+async def test_bug_164_a_nextdoor_post_isnt_a_tenant_emergency(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """Bug #164: a neighbour's post to a stranger came as an urgent tenant alert at once."""
+    await nextdoor_post(scenario, inbox)
+    assert not [t for t in scenario.inbox("Erin") if t.startswith("An email that looks urgent")]
+    row = scenario.app.db.one("SELECT category, urgent_kind FROM emails")
+    assert row is not None and (row["category"], row["urgent_kind"]) == ("urgent", "other")
+    from themi.core.triage import SYSTEM
+
+    assert "never urgent" in SYSTEM  # the model is told, too
+
+
+async def test_a_nextdoor_sender_on_the_urgent_list_still_alerts(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    account = scenario.app.store.linked_account_by_address("gmail", ERIN)
+    assert account is not None
+    scenario.app.store.update_linked_account(
+        scenario.member("Erin"), account.id, urgent_senders=["@ss.email.nextdoor.com"]
+    )
+    await nextdoor_post(scenario, inbox)
+    assert [t for t in scenario.inbox("Erin") if t.startswith("An email that looks urgent")]
