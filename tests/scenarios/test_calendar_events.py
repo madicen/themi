@@ -468,3 +468,92 @@ async def test_a_move_made_takes_back_other_cards_for_that_event(
         "SELECT status FROM pending_actions WHERE id = ?", (first["id"],)
     )
     assert status == "declined"
+
+
+ICS = (("invite.ics", "text/calendar", 2204), ("invite.ics", "application/ics", 2204))
+SAMUEL = "Samuel | Craig, Gina, and 2 more people"
+
+
+async def invitation(scenario: Scenario, fake_gmail: FakeGmail, to: str) -> None:
+    (email,) = await arrive(
+        scenario,
+        fake_gmail,
+        {
+            "sender": "Samuel Carrijo <scarrijo@meta.com>",
+            "subject": f"Invitation: {SAMUEL} @ Mon Oct 26, 2026 12pm - 2:30pm (PDT) ({to})",
+            "text": "You have been invited",
+            "attachments": ICS,
+            "to": to,
+        },
+    )
+    event = {"title": SAMUEL, "date": "2026-10-26", "start": "12:00", "end": "14:30",
+             "location": "1 Hacker Way"}  # fmt: skip
+    scenario.primary.queue_structured(
+        {"results": [verdict(email, "confirmation", "An invitation", event=event)]}
+    )
+    await scenario.run_periodic("email.triage")
+
+
+def calendar_cards(scenario: Scenario) -> list[str]:
+    return [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
+
+
+async def test_an_invitation_to_the_account_itself_gets_no_add_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Bug #159: Google puts an invitation to that account on its calendar itself."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, ERIN)
+    assert calendar_cards(scenario) == []
+
+
+async def test_an_invitation_to_another_address_says_so_and_isnt_added_twice(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Bug #159: the card was tapped three hours later, when the invitation's own event was
+    on his calendar already, and Themi added a second copy."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    assert calendar_cards(scenario) == [
+        f"From an email: {SAMUEL}, Mon 26 Oct, 12-2:30 pm (at 1 Hacker Way), for your "
+        "calendar (an invitation sent to erin@madicen.com)\nGo ahead, or not now?"
+    ]
+    linked.add_event(ERIN, local(12, day=26), local(14, 30, day=26), summary=SAMUEL)  # accepted
+    (row,) = scenario.app.db.query(
+        "SELECT id FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    await scenario.app.services.autonomy.resolve(
+        row["id"], Decision.APPROVE, by=scenario.member("Erin")
+    )
+    assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]  # one, not two
+    result = scenario.app.db.scalar("SELECT result FROM pending_actions WHERE id = ?", (row["id"],))
+    assert result == "Already on your calendar, from the invitation. Nothing new was added."
+
+
+async def test_an_invitation_not_on_the_calendar_is_added(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Erin's half of bug #159: sent to erin@madicen.com, it wasn't on her calendar."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    (row,) = scenario.app.db.query(
+        "SELECT id FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    await scenario.app.services.autonomy.resolve(
+        row["id"], Decision.APPROVE, by=scenario.member("Erin")
+    )
+    assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]
+
+
+async def test_an_email_event_with_the_same_start_and_title_gets_no_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    linked.add_event(ERIN, local(12, day=26), local(13, day=26), summary=SAMUEL)  # another end
+    await scenario.run_periodic("calendar.busy")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    assert calendar_cards(scenario) == []
