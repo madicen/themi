@@ -10,6 +10,7 @@ scripts, so it gets its own, wider Content-Security-Policy.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -31,6 +32,12 @@ SCALES = [
 ]  # half, 1x, 2x, 3x
 
 PICKER_HEADER = "X-Themi-Page"  # read and removed by the site's security headers
+
+
+def _origin(url: str) -> str:
+    """The scheme and host the browser's Google sign-in sees ("https://themi.example")."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}" if parts.scheme and parts.netloc else ""
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -70,6 +77,7 @@ def routes(kit: Kit) -> APIRouter:
             picker_key=config.picker_api_key,
             project_number=config.project_number,
             looks=[r for r in book.all(include_charts=True) if r.needs_look],
+            origin=_origin(app.services.site_url) or str(request.base_url).rstrip("/"),
         )
         response.headers[PICKER_HEADER] = "picker"
         return response

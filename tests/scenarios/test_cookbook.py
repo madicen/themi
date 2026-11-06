@@ -173,10 +173,17 @@ async def test_an_account_linked_before_rc1a_is_asked_to_link_again(
 async def test_the_picker_page_alone_may_load_googles_scripts(
     scenario: Scenario, linked: FakeGdocs, site: httpx.AsyncClient
 ) -> None:
+    from dataclasses import replace
+
+    recipes = scenario.app.services.recipes
+    assert recipes is not None and recipes.config is not None
+    recipes.config = replace(recipes.config, picker_api_key="AIza-test", project_number="123")
     await sign_in(scenario, site, "Erin")
     page = await site.get(f"/accounts/{account_id(scenario)}/cookbook")
+    assert 'data-key="AIza-test"' in page.text and 'data-app="123"' in page.text
     assert "https://apis.google.com" in page.headers["content-security-policy"]
     assert "x-themi-page" not in page.headers
+    assert "<code>http://themi.test</code> under Authorized JavaScript origins" in page.text
     accounts = await site.get("/accounts")
     assert "apis.google.com" not in accounts.headers["content-security-policy"]
     assert "Choose the family cookbook" in accounts.text
