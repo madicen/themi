@@ -215,7 +215,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
-| F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [ ] |
+| F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
 | F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -10875,7 +10875,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F33c · Feedback (2026-11-06): "no such routine item" says what's there, and a near name is found
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: R1a, F24a
 Read first: R1a's notes (`Routines.find_item`); F24a's notes (`events.near_twin`). From
 the same audit (reply 237).
@@ -10907,6 +10907,17 @@ Scenario: reply 237, two model rounds, the item removed, the reply names "Refill
 feeders".
 
 Data: none.
+
+Notes (2026-11-06):
+- `Routines.find_item` is unchanged (only the two chat tools used it). `Routines.near_items`
+  lists the `events.near_twin` matches. `routines._item_for` (used by `remove_routine_item`
+  and `tick_routine_item`) takes the exact match, else the one near twin, else fails with
+  what's there: "More than one is close: A, B. Ask which one.", or the routine's items
+  closest first (`words_in_common`, at most 12, "It has: ..."), or with no routine named,
+  each routine's ("Morning: ... Evening: ...").
+- A near match isn't "asked" (F33a), whatever words they used, so the model's next round
+  says which item it was.
+- Setup: restart `themi run`. No migration.
 
 ### F33d · Feedback (2026-11-06): asked to remove an item, Themi doesn't offer to add it
 Status: [ ]
