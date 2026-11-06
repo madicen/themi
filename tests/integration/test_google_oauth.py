@@ -62,6 +62,7 @@ def test_the_authorize_url_asks_for_the_right_things(
         GMAIL_SCOPE,
         *CALENDAR_SCOPES,
         "https://www.googleapis.com/auth/tasks",  # GT1a
+        "https://www.googleapis.com/auth/drive.file",  # RC1a: only files picked or made
     ]
     assert GMAIL_SCOPE == "https://www.googleapis.com/auth/gmail.modify"
     assert CALENDAR_SCOPE == "https://www.googleapis.com/auth/calendar.events"

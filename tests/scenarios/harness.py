@@ -28,6 +28,7 @@ import pytest
 from tests.fakes.catgenie import FakeCatGenie
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
+from tests.fakes.gdocs_api import FakeGdocs
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.gtasks_api import FakeGtasks
@@ -102,6 +103,7 @@ class Scenario:
         keep: FakeKeep | None = None,
         runner: FakeRunner | None = None,
         search: FakeSearch | None = None,
+        gdocs: FakeGdocs | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -139,6 +141,7 @@ class Scenario:
                 gmail=gmail,
                 gcal=gcal,
                 gtasks=gtasks,
+                gdocs=gdocs,
                 ourgroceries=ourgroceries,
                 cozyla=cozyla,
                 travel=travel,
@@ -417,6 +420,7 @@ async def scenario(
         keep=optional("fake_keep"),
         runner=optional("fake_runner"),
         search=optional("fake_search"),
+        gdocs=optional("fake_gdocs"),
     )
     await s.start()
     yield s

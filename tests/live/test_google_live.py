@@ -62,3 +62,29 @@ async def test_calendar_list(token: Secret) -> None:
     calendars = await calendar.calendars()
     assert calendars, "a Google account always has at least its primary calendar"
     assert all("id" in c and "accessRole" in c for c in calendars)
+
+
+@pytest.mark.skipif(
+    not os.environ.get("THEMI_LIVE_COOKBOOK_DOC"),
+    reason="set THEMI_LIVE_COOKBOOK_DOC (the cookbook's doc id, picked by the test account)",
+)
+async def test_the_real_cookbook_reads(token: Secret) -> None:
+    """RC1a: the family's real cookbook parses with the counts read on 2026-11-06 (132
+    entries). The test account must have picked the doc in Google's file picker."""
+    from themi.connectors.gdocs import DocsClient
+    from themi.core import cookbook as book
+
+    async def source() -> Secret:
+        return token
+
+    docs = DocsClient(
+        "https://docs.googleapis.com", "https://www.googleapis.com", source, lambda: None
+    )
+    doc_id = os.environ["THEMI_LIVE_COOKBOOK_DOC"]
+    record = await docs.file(doc_id)
+    assert record["mimeType"] == "application/vnd.google-apps.document"
+    parsed = book.parse(await docs.get(doc_id))
+    assert len(parsed.recipes) >= 132
+    assert {"Breakfast", "Entrees", "Desserts", "References"} <= {s for s, _ in parsed.sections}
+    biryani = next(r for r in parsed.recipes if r.name == "Biryani")
+    assert biryani.steps and "two Ingredients headings" in biryani.needs_look
