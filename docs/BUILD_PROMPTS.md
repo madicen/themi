@@ -213,7 +213,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
 | F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
-| F33a | Feedback: a direct change made as asked ends the turn | Feedback | [ ] |
+| F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [ ] |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [ ] |
 | F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [ ] |
@@ -10772,7 +10772,7 @@ it, comes back later and it's still grouped that way. Erin's page is still by du
 Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
 
 ### F33a · Feedback (2026-11-06): a direct change made as asked ends the turn
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: P2b, R1a
 Read first: P2b's notes (`ToolContext.asked`, and when the turn doesn't end early); R1a's
 notes (the routine tools). From a slow-reply audit of 2026-11-06 (reply 237, 166 s, Wed 4
@@ -10811,6 +10811,24 @@ Scenario: Michael removes an evening routine item in chat and gets one line back
 single model call in the reply's timing.
 
 Data: after a week live, compare the share of 2-round replies on the Pi with 145 of 219.
+
+Notes (2026-11-06):
+- `tools.Done(said, asked)`: a direct tool's result. The model reads `said` either way;
+  when `asked`, it also goes into `ctx.replies` and `ctx.asked`, so P2b's check ends the
+  turn. Not asked: as before, the model's next round says it.
+- `tools.in_their_words(ctx, title)`: every word of the title over two letters is in what
+  they wrote (a title of only short words, like "TV", is matched whole).
+  `add_routine_item`'s own check now uses it.
+- Converted: `remove_routine_item` ('Removed "X" from your Evening routine.'),
+  `tick_routine_item` ('Ticked "X" for today.') and `remove_maintenance` ('Removed "X" from
+  the maintenance list.'). Titles are quoted, as list adds are.
+- Left as they are: `remove_from_list` (several items or the ticked ones at once, and its
+  result lists what's left for the model), calendar deletes (they can match several
+  events, and "both" calendars), spending removal and list moves (descriptions the model
+  reshapes). Worth a look once the Pi shows how often they cost a round.
+- Matching is by word inside what they wrote, as before, so "Take Meds" isn't asked by "I
+  took my meds": that still takes two rounds.
+- Setup: restart `themi run`. No migration.
 
 ### F33b · Feedback (2026-11-06): more_tools offers only what isn't here yet
 Status: [ ]
