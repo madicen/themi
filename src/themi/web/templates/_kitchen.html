@@ -1,0 +1,29 @@
+<div id="kitchen" class="kitchen" hx-get="/recipes/kitchen/state" hx-trigger="every 5s" hx-swap="outerHTML">
+{% if not cooking %}
+  <p class="muted">Nothing cooking right now. Pick a recipe and tap Cook, or ask Themi in chat.</p>
+{% else %}
+  <h1>{{ heading }}</h1>
+  {% if cooking.phase == "ready" %}
+    <p class="kitchen-step">Before anything else: {% for a in ahead %}{{ a.text }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>
+    {% set moves = [("next", "Done")] %}
+  {% elif cooking.phase == "gather" %}
+    <ul class="kitchen-list">{% for line in lines %}<li>{{ line }}</li>{% endfor %}</ul>
+    {% set moves = [("next", "All here")] %}
+  {% elif cooking.phase == "prep" %}
+    <ul class="kitchen-list">{% for job in prep %}<li>{{ job.text }}</li>{% endfor %}</ul>
+    {% set moves = [("skip", "Skip prep"), ("next", "Prep done")] %}
+  {% else %}
+    <p class="muted">Step {{ step.label }} of {{ steps }}</p>
+    <p class="kitchen-step">{{ step.text }}</p>
+    {% set moves = ([] if first else [("back", "Back")]) + [("next", "All done" if last else "Next")] %}
+  {% endif %}
+  <div class="kitchen-moves">
+  {% for action, label in moves %}
+    <form method="post" action="/recipes/kitchen/{{ cooking.id }}/{{ action }}" hx-post="/recipes/kitchen/{{ cooking.id }}/{{ action }}" hx-target="#kitchen" hx-swap="outerHTML">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button class="{% if action == 'next' %}primary{% endif %} big">{{ label }}</button>
+    </form>
+  {% endfor %}
+  </div>
+  <form method="post" action="/recipes/kitchen/{{ cooking.id }}/stop"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Stop cooking</button></form>
+{% endif %}
+</div>

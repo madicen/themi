@@ -482,6 +482,7 @@ def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
     household = [
         ("/knowledge", "Rules & memory", "What Themi keeps to and remembers"),
         ("/guides", "Guides", "Your own cooking charts and how-tos"),
+        ("/recipes", "Recipes", "The family cookbook, and cooking with Themi"),
         ("/tiers", "What Themi does alone", "What asks first and what's automatic"),
         ("/maintenance", "Maintenance", "Filters, gutters and other upkeep"),
         ("/spending", "Spending", "Takeout and business expenses"),
