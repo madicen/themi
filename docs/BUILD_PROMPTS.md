@@ -209,7 +209,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F30d | Idea: Themi looks things up online | Feedback | [x] 2026-11-06 |
 | F31a | Feedback: an untick on the wall stays unticked | Feedback | [x] 2026-11-06 |
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
-| F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [ ] |
+| F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -10551,7 +10551,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F31c · Idea (2026-11-06): web searches near home, and a different place isn't the one asked for
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: F30d, F29e
 Read first: F30d's notes (the search tools, the privacy check); F29e's notes (places
 they've named); `Travel.home()` (`family_home`). From Michael's idea #165 (2026-11-06, 12:18
@@ -10619,6 +10619,35 @@ lands on the right step.
 Data (Michael decides): task 79's first step has Contemporary Dental's number on the Dr.
 Scheinbach step. Remove "(number: 650-557-2636)" from it, or tell Themi in chat. Mark #165
 reviewed once live.
+
+Notes (2026-11-06):
+- `web_search.home_area` reads the city, state and ZIP from `family_home.address` (after
+  the last street word such as "Ave" or "Ter", or after the last comma), with the ZIP
+  alone as a fallback. No migration. The Pi's three stored addresses parse.
+- `search_web` gains `near_home` and `name`, both defaulted, so older calls still work.
+  The home area is added when `near_home` is true, or when the query or their message says
+  near me/us/home/our house, nearby, closest, nearest or local. It isn't added when the
+  query names a place (a ZIP, a state code such as "San Mateo CA", or "in <Place>"). "Near
+  home" in a query becomes "near Mountain View, CA 94043"; otherwise the area goes at the
+  end. The result starts "Searched near home (...)". With no home set, the tool says to ask
+  where.
+- The privacy check lets the home's ZIP through. A street number from memory is still
+  refused.
+- `name`: a hit counts as that place when it has the name and the city searched near
+  (other than the state), so the Texas "Contemporary Dental, PC" isn't the San Mateo one.
+  With no hit, one deeper search runs (`SearchBackend.search(deep=True)`: Tavily
+  `search_depth: advanced`, Firecrawl 10 results), counted as two lookups. Hits are marked
+  "[names X]", and with none, "None of these results is 'X'..." comes first.
+- Phone numbers on task steps (`create_task`, `update_task`, `tasks._numbers_where_found`
+  calling `WebSearch.misplaced_number`): a number that this person's results in the last
+  30 minutes have next to other names (within 200 characters), and not next to the step's
+  own names, is refused. The owner is named from another step when one matches.
+  Deviation: a number that isn't in any recent result isn't refused (it may come from an
+  email, a guide or their own words a while back). Numbers made up from nothing are F30b's
+  job.
+- `tests/fakes/search.py`: `result(..., deep=True)` for hits only a deep search finds, and
+  `queries()`.
+- Setup: restart `themi run`. No migration.
 
 ### F31d · Idea (2026-11-06): forwarding an email
 Status: [ ]

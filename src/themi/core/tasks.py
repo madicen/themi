@@ -1915,6 +1915,7 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         chosen, both = _assignee(ctx, args["assign_to"])
     except ValueError as exc:
         return f"Not created: {exc}."
+    _numbers_where_found(ctx, [args["title"], *(args.get("steps") or [])], "", "Not created")
     whose = [chosen] if chosen is not None else ctx.services.store.list_members()
     same = next(
         (
@@ -2030,6 +2031,17 @@ def _twin_words(ctx: ToolContext, task: Task) -> str:
     return f"task {task.id} ({', '.join(parts)})"
 
 
+def _numbers_where_found(ctx: ToolContext, texts: list[str], had: str, refused: str) -> None:
+    """F31c (reply 306): a phone number from the web goes on the step for its place."""
+    web = ctx.services.web_search
+    if web is None:
+        return
+    known = f"{ctx.request_text} {ctx.previous_text} {had}"
+    problem = web.misplaced_number(ctx.member.id, [t for t in texts if t], known)
+    if problem is not None:
+        raise ToolFailed(problem.replace("Not changed", refused, 1))
+
+
 @tool(
     "update_task",
     "Rename a task, replace its steps (the full new list, in their words), e.g. when someone "
@@ -2058,6 +2070,9 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
                 f"Task {task.id} ({task.title}) is closed. To do something new, create a task."
             )
         _not_the_recent_one(ctx, board, task, title)
+        _numbers_where_found(
+            ctx, [title, *(steps or [])], " ".join([task.title, *task.steps]), "Not changed"
+        )
         chosen, both = None, False
         if args["assign_to"].strip():
             if task.repeats:

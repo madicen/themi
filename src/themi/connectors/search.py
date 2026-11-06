@@ -43,7 +43,9 @@ class SearchResult:
 class SearchBackend(Protocol):
     name: str
 
-    async def search(self, query: str, count: int = 5) -> list[SearchResult]: ...
+    async def search(
+        self, query: str, count: int = 5, *, deep: bool = False
+    ) -> list[SearchResult]: ...
 
     async def read(self, url: str) -> str: ...
 
@@ -86,9 +88,15 @@ class TavilySearch(_Http):
     ) -> None:  # fmt: skip
         super().__init__(key, base_url, transport)
 
-    async def search(self, query: str, count: int = 5) -> list[SearchResult]:
+    async def search(self, query: str, count: int = 5, *, deep: bool = False) -> list[SearchResult]:
+        """`deep`: Tavily's advanced depth (2 credits), when a basic search missed (F31c)."""
         body = await self._post(
-            "/search", {"query": query, "max_results": count, "search_depth": "basic"}
+            "/search",
+            {
+                "query": query,
+                "max_results": count,
+                "search_depth": "advanced" if deep else "basic",
+            },
         )
         return [
             SearchResult(str(r.get("title", "")), str(r.get("url", "")), str(r.get("content", "")))
@@ -114,8 +122,10 @@ class FirecrawlSearch(_Http):
     ) -> None:  # fmt: skip
         super().__init__(key, base_url, transport)
 
-    async def search(self, query: str, count: int = 5) -> list[SearchResult]:
-        body = await self._post("/v2/search", {"query": query, "limit": count})
+    async def search(self, query: str, count: int = 5, *, deep: bool = False) -> list[SearchResult]:
+        """`deep`: ten results instead (2 credits), when a first search missed (F31c)."""
+        limit = max(count, 10) if deep else count
+        body = await self._post("/v2/search", {"query": query, "limit": limit})
         data = body.get("data")
         items = data.get("web", []) if isinstance(data, dict) else data or []  # v2, or v1
         return [
@@ -124,7 +134,7 @@ class FirecrawlSearch(_Http):
             )
             for r in items
             if isinstance(r, dict) and r.get("url")
-        ][:count]
+        ][:limit]
 
     async def read(self, url: str) -> str:
         body = await self._post("/v2/scrape", {"url": url, "formats": ["markdown"]})
