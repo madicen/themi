@@ -196,6 +196,8 @@ class Scenario:
         before = len(self.telegram.sent_texts(chat))
         act(chat)
         await self.app.channel.poll_once()
+        if self.app.services.conversation is not None:  # CM1b's passes, after the reply
+            await self.app.services.conversation.sidecar.drain()
         return self.telegram.sent_texts(chat)[before:]
 
     async def say(self, name: str, text: str, reply_to_text: str | None = None) -> list[str]:

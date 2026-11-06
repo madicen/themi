@@ -99,3 +99,21 @@ It embeds with `GEMINI_TEST_API_KEY` and keeps the vectors in
 `results/embeddings.db`, so only new or changed texts are embedded again. The
 free tier counts each text as a request (100 a minute), so a first run waits
 out the limit once or twice.
+
+## Conversation mode's sidecar (CM1c)
+
+`sidecar_cases.json` holds turns in conversation mode: a message, the chat reply Themi
+gave, and any open tasks. Each case runs one sidecar pass (no chat call) in a fresh
+household and checks what went through: every tool in `expect` is called, with its
+`words` in the arguments (or the named open `task`), and nothing else. Most cases expect
+nothing: venting, "someday", hypotheticals, someone else's job, a pasted scam, a partner's
+burnout.
+
+```sh
+make evals EVAL_ARGS='-k sidecar'
+```
+
+The end of the run prints precision (nothing made that wasn't meant) and recall (nothing
+meant that was missed) for each kind of item, and saves them to `results/sidecar-*.json`.
+Precision is the one to watch: a wrong task is worse than a missed one. The scoring itself
+is unit-tested without a model (`tests/unit/test_sidecar_scoring.py`).

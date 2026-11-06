@@ -193,6 +193,7 @@ BUSY_TEXT = (
 )
 DECLINED_TEXT = "That one's outside what I can help with, sorry."
 TANGLED_TEXT = "I got a bit tangled up working on that, so I've stopped there."
+FAILURE_TEXTS = frozenset({SETUP_NEEDED_TEXT, BUSY_TEXT, DECLINED_TEXT})  # no sidecar pass
 # Bug #110: after the last step, one more call to say what was done.
 LAST_WORD = (
     "You've used every step for this message. Don't call any more tools: in a line or two, "
@@ -277,16 +278,34 @@ class Agent:
         energy_mark = self.services.store.db.scalar(
             "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
         )
+        conversation = self.services.conversation
+        if (
+            conversation is not None
+            and conversation.is_on(member)
+            and not event.in_group
+            and conversation.sidecar.wants_undo(text)
+        ):  # CM1c: "that wasn't a task" takes the sidecar's latest back
+            await self._reply(member, await conversation.sidecar.undo(member))
+            return
+        chatting = conversation is not None and conversation.takes(
+            member, text, in_group=event.in_group
+        )
+        history = self._history(member, event) if chatting else []
         timer.start()
         try:
             async with channel.typing(member), self._slow_notice(member, event, timer):
-                reply = await self._converse(member, text, event, timer)
+                if chatting:  # CM1a: a plain chat reply, no tools
+                    reply = await self._chat(member, text, history)
+                else:
+                    reply = await self._converse(member, text, event, timer)
             self._catch_energy(member, text, energy_mark)
             if reply:  # empty when a tool's message was the whole answer
                 async with timer.outbox():
                     await self._reply(member, reply)
         finally:
             timer.finish()
+        if chatting and conversation is not None and reply not in FAILURE_TEXTS:
+            conversation.after_reply(member, text, reply, event.message_id, history)  # CM1b
 
     async def take_in(self, member: Member, text: str, kind: str) -> bool:
         """Something a person said somewhere else (a task added by voice, GT1a), handled as if
@@ -541,6 +560,17 @@ class Agent:
         finally:
             timer.added(ctx.groups - offered)
         return _done_first(ctx.done, TANGLED_TEXT)
+
+    async def _chat(self, member: Member, text: str, history: list) -> str:
+        """Conversation mode's reply (CM1a): one model call with no tools."""
+        assert self.services.conversation is not None
+        try:
+            return await self.services.conversation.reply(member, text, history)
+        except RefusalError:
+            return DECLINED_TEXT
+        except AllProvidersFailed as exc:
+            log.warning("No AI backend answered member %s: %s", member.id, exc)
+            return SETUP_NEEDED_TEXT if exc.needs_setup else BUSY_TEXT
 
     def _signals(self, member: Member, text: str) -> list[str]:
         """What the message, or the mode they're in, asks of this turn: its size, and

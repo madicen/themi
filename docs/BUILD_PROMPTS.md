@@ -194,6 +194,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
+| CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
+| CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
+| CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
 
 ## Fixed technical choices
 
@@ -9572,3 +9575,207 @@ Notes (2026-11-05):
   Lists, Spending, More) and the More page, and 1280px for the top bar. Tab labels can't
   wrap, and are cut short if a long one ever doesn't fit.
 - Setup: restart (migration 0108 runs at start).
+
+## Conversation mode
+
+From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
+2026-11-05; a PDF, not in the repo). Its idea: in conversation mode a person talks to a
+plain, warm chat model with no tools, while a quiet background pass (the sidecar) reads
+each turn and picks out tasks, calendar events and mode changes. The spec's extraction
+schema has `tasks_to_add`, `tasks_to_update`, `calendar_events`, `state_updates` and
+`mode_toggles`.
+
+Agreed changes to the spec (2026-11-05), because the plan's rules win:
+- The sidecar never writes state itself. Each extracted item becomes a call to an existing
+  tool, run through `ToolRegistry.run`, so trust tiers, approval cards, duplicate checks
+  (F24a) and name checks (P8a) all still apply.
+- No token streaming. The outbox shields whole messages (PDA), and Telegram is the only
+  chat surface. The speed comes from one model call with no tools.
+- The spec's `SIDE_EFFECT_LOGGED` UI toast becomes an internal event plus a ✍️ reaction
+  on the person's own message. Tier 1 items still send their usual approval card.
+- The chat reply can't know whether anything was done, so it never says it was.
+- A plain request ("add milk to the list", "remind me tomorrow at 9") goes to the tool
+  agent as today, not to the sidecar, so the instant "Added" stays.
+- Opt-in for one person first. It goes wider only after CM1c's evals.
+
+### CM1a · Conversation mode: the setting and the chat branch
+Status: [x] 2026-11-05
+Depends on: 06, 09, F5, F22e
+Read first: the plan's AI backend section (routing per task) and Module behaviour A
+(Communication: PDA shielding, plain phrasing). This section's intro.
+- A per-member setting, off by default: `/chat on`, `/chat off` (and `/chat` saying which
+  is on), and a switch under My settings. Only the member sets their own. While the
+  sidecar (CM1b) isn't built, the switch is visible only on the dev server.
+- Two new AI tasks, each with its own route on the AI page: `chat` (the reply) and
+  `sidecar` (the background pass, CM1b). New members' routes default to the same Gemini
+  backend as `conversation`.
+- In `Agent._handle`, with the mode on and not in the family group: button taps, commands,
+  the yes/no fast path and voice transcription work as today. A plain request goes to
+  `_converse` as today: a small check over the message's start (add, put, remind, schedule,
+  book, mark, tick, done, cancel, delete, move, order, "can you ...", a list name and a
+  colon...), kept in one place and unit tested. Everything else goes to a new `_chat`.
+- `_chat`: one `chat` call with no tools. The system prompt is short: who they are, their
+  local date and time, any active modes (burnout, a pause), their phrasing choice and notes
+  (plain or gentle), recent history, and their open items' titles so the reply can refer to
+  them. No energy scores, no tool instructions, no JSON. It's told it can't change anything
+  itself, and not to say anything was added or done. The reply still goes through
+  `_honest`, `listening.trimmed`, the reply timer and the outbox.
+- Failures say the same as today (BUSY_TEXT, SETUP_NEEDED_TEXT).
+
+Tests: the mode switch and who may set it; routing (a request goes to the tool loop, a
+remark to `_chat`, a button and a bare "yes" as before, the group always to the tool loop);
+the chat prompt has no energy score and no tools; a chat reply that claims "I've added it"
+is replaced; the new routes on the AI page. A scenario: with the mode on, "long day, the
+kids were a lot" gets a warm reply from one model call and no tool is offered.
+
+Notes (2026-11-05):
+- `themi.core.conversation_mode`: `ConversationMode` (installed in `build_app`, on
+  `Services.conversation`) has the switch, `/chat`, `takes(member, text, in_group=)` and
+  `reply`. `is_request(text, list_names)` is the one place that sends a message to the tool
+  agent: a verb of doing at its start (after "please", "can you", "Themi,"...), "remind
+  me", "we're out of", "put X on the...", a question about the household's own state (the
+  list, a chore, the laundry, the calendar, dinner, "what do I have tomorrow"), or a list
+  name and a full stop or colon (F21a). "ugh, I need to call the vet Thursday" is chat: the
+  sidecar's to pick out.
+- `Agent._handle` picks the branch after the fast path; `Agent._chat` says failures as
+  `_converse` does. `take_in` (things said elsewhere, GT1a) keeps the tool agent.
+- The chat call: `CHAT_SYSTEM` (fixed, so it caches) and `build_chat_turn`: who, local
+  time, phrasing and notes, modes (burnout, active pauses), listening signals (F22e; none
+  in burnout), open items' summaries, notes from memory, recent conversation. No energy
+  label at all, and no tools. `honest` drops each sentence the agent's `CLAIMS_DONE`
+  matches, leaving "Got it." if nothing's left; `listening.trimmed` runs first.
+- Migration 0109: `members.conversation_mode`, and `ai_routes` rebuilt for the `chat` and
+  `sidecar` tasks. Existing members' `chat` chain is a copy of their `conversation` chain,
+  and `sidecar` a copy of `structured_misc`.
+- Deviation: instead of "only on the dev server until CM1b", a rollout setting,
+  `THEMI_CONVERSATION_MODE` (`Settings.conversation_mode`, `Services.conversation_rollout`):
+  `trial` (the default) lets `/chat on` work for whoever sends it, keeps `/chat` off the
+  command menu, and shows the website's switch only to someone who has it on. `on` puts
+  `/chat` on the menu and the switch on everyone's settings. `off` turns it off for all.
+  CM1a–c were built together, so there was no gap to cover.
+- Setup: restart (migration 0109 runs at start). Then whoever is trying it sends `/chat on`.
+
+### CM1b · Conversation mode: the sidecar
+Status: [x] 2026-11-05
+Depends on: CM1a, 11, 12, 14, F24a
+Read first: the plan's Trust tiers section and Security (outside text is data). CM1a's
+notes.
+- After a `_chat` reply has gone out, the sidecar runs in the background: one `structured`
+  call (`sidecar` route, `CallKind.BACKGROUND`) over the person's message, the reply sent,
+  the last few turns and their open items with ids. The message, reply and history go in
+  delimited blocks as data. Something pasted in (an email, a web page) is only acted on
+  when the person's own words ask for it.
+- The schema is the spec's, narrowed to things Themi has tools for. Each item maps to a
+  tool call run with a `ToolContext` for that member:
+  - `tasks_to_add` → `create_task` (the title, a due date, and priority as urgent or
+    important, T1)
+  - `tasks_to_update` → `complete_task` or `cancel_task`, only for an id among the open
+    items it was shown; any other id is dropped and logged
+  - `calendar_events` → `add_calendar_event`
+  - `mode_toggles` → an allowlist: burnout (start only from their own words, as F22d
+    says), `pause_messages`, `focus_now`
+  - `state_updates` → `remember_fact` only. Energy remarks are left to `_catch_energy`.
+  Each item also says why (the words it came from), stored with the event for CM1c.
+- Calls are not `requested` (F5) unless the item quotes their words as a direct ask, so
+  anything risky waits for a yes on a card, as today.
+- One sidecar at a time per member, in order: a second message's pass waits for the
+  first's, so two quick messages can't add the same task twice. A failure is logged and
+  never said to the person. The pass is started through a hook that tests can await, with
+  time from `themi.clock` and no sleeps.
+- When something went through or is waiting on a card: a `side_effect_logged` event row
+  (member, turn, items, outcomes, the words each came from), and a ✍️ reaction on their
+  message through the channel. No reaction when nothing was extracted.
+- The website's chat history (or the dev page) lists what the sidecar logged per turn, so
+  a wrong one can be found and undone.
+
+Tests: each mapping, with the fake provider's structured output; an unknown task id
+dropped; burnout from a partner's words refused; a pasted email's "add a task" ignored;
+two quick turns give one task, not two; a Tier 1 item sends its card and claims nothing; the
+reaction only when something was logged; a sidecar failure says nothing. Scenarios: "ugh, I
+need to call the vet Thursday" gets a warm reply, then the task appears with a ✍️; "I
+should really clean the garage someday" makes nothing.
+
+Notes (2026-11-05):
+- `themi.core.sidecar.Sidecar`, on `ConversationMode.sidecar`. `Agent._handle` calls
+  `conversation.after_reply(...)` once a chat reply has gone (not after BUSY, SETUP or
+  DECLINED texts), with the history the reply was given. `schedule` chains each member's
+  passes in order; `drain()` awaits them (the scenario harness drains after each message).
+- Deviation: function calling rather than a JSON schema of its own (the spec allows "Strict
+  Structured JSON Schema / Function Calling"). The pass is one `chat` call on the
+  `sidecar` route (`CallKind.BACKGROUND`) offered only `SIDECAR_TOOLS`, with their own
+  schemas, and their calls run once (no second round). Building `create_task`'s ten
+  required arguments by hand from the spec's `{title, due_date, priority}` would have been
+  fragile. Mapping: `create_task`; `complete_task`/`cancel_task` (a `task_id` not in the
+  "Task N" open items it was shown is dropped and logged); `add_calendar_event` (Google
+  only); `remember_fact`; `start_burnout`, `end_burnout`, `pause_messages`,
+  `resume_messages`. Not `focus_now`: it sends a list, which out of the blue would be a
+  demand. Burnout's own few words still go to them (`SAYS_ITSELF`); other tools'
+  confirmations don't, as the ✍ says it.
+- "Requested" (F5) comes from the tools themselves, which check the person's words
+  (`ToolContext.request_text` is their message): a passing mention of the plumber is a
+  card, "put the dentist on my calendar" would be done at once (but that's a request, so
+  it goes to the tool agent anyway).
+- The turn: local time and the open items outside, then `<data>` with the last six
+  messages and this turn's message and reply. The system prompt says what counts and what
+  never does, and "when in doubt, record nothing".
+- Migration 0110: `sidecar_log` (member, their message's Telegram id, items as JSON with
+  each tool, arguments, outcome, result and touched task ids, the pass's own note,
+  `status`). A row only when something went through. `log.info("SIDE_EFFECT_LOGGED ...")`
+  too. No other event bus: Telegram has no toasts, and nothing else listens yet.
+- `Outbox.react(member, message_id, emoji)`: the ✍ (`✍` without a variation selector,
+  as Telegram's reaction list has it) goes through the outbox, using the sender's `react`
+  if it has one. Not shielded, held or counted: it isn't a message.
+- My settings, under the switch: "Picked out lately", the last ten passes in words ("New
+  task: Call the vet"), from `Sidecar.recent`. There's no chat history page to put it on.
+- Setup: restart (migration 0110).
+
+### CM1c · Conversation mode: sidecar evals and wider rollout
+Status: [x] 2026-11-05
+Depends on: CM1b, 28
+Read first: the plan's Testing section (evals). CM1b's notes and the `side_effect_logged`
+rows from the person who opted in.
+- An eval set in `tests/evals` of turns in conversation mode: venting, hypotheticals
+  ("someday", "I should really"), someone else's job, plain tasks said in passing, dates
+  said loosely, a task already open. Each case says what should and shouldn't come out.
+  Real turns are used only with their owner's say-so, with names and details changed.
+- Report precision (nothing made that wasn't meant) and recall (nothing missed) per item
+  kind. Precision matters more: a wrong task is worse than a missed one.
+- A `/bug` or "that wasn't a task" after a sidecar item undoes it and records the turn as
+  a miss (F1, F20a's way of catching wrong replies).
+- Open the switch to everyone only once precision meets the target the family sets. Until
+  then it stays off for everyone but the person who opted in.
+
+Tests: the eval set runs under `make evals` with recorded provider responses; undoing a
+sidecar item from chat; the switch's visibility follows the rollout flag.
+
+Notes (2026-11-05):
+- `tests/evals/sidecar_cases.json`: 19 made-up turns, 10 that should make nothing
+  (venting, "someday", a wish, a hypothetical, already done, someone else's job, a pasted
+  scam, a line only Themi said, a task already open, a partner's burnout) and 9 that should
+  make one thing (3 tasks, a done and a cancelled task, a dinner for the calendar, a fact,
+  their own burnout mode). No real turns yet: none had been shared.
+- `tests/evals/test_sidecar_evals.py` (opt-in, `make evals EVAL_ARGS='-k sidecar'`) runs one
+  `Sidecar.run` per case with the case's chat reply (no chat call), and
+  `tests/evals/sidecar.py` scores it. The summary prints precision and recall per kind and
+  saves `results/sidecar-<provider>-<time>.json`.
+- First run, 2026-11-05, Gemini `gemini-3.5-flash-lite` on the test key: 19/19 right,
+  precision and recall 1.0 for every kind. Small and made-up, so it says the prompt and
+  plumbing work, not that real turns will go as well.
+- Deviation: "recorded provider responses" became unit tests of the scoring
+  (`tests/unit/test_sidecar_scoring.py`, in `make test`). The evals' real point is a real
+  model, and recordings would only replay the plumbing the scenarios already cover.
+- Undo: "that wasn't a task", "undo that", "take that off", "don't add that" (`UNDO`), with
+  conversation mode on and outside the group, is answered without a model by
+  `Sidecar.undo`. It takes back the latest pass within the hour: made tasks are cancelled,
+  a one-off ticked done is opened again (`TaskBoard.reopen`, which nudges as usual), and the
+  rest (a cancelled task, a fact, a card, a mode) is said to be kept, since there's no undo
+  for those here. The row becomes `missed`.
+- Deviation: `/bug` soon after a pass marks it `missed` (and the report's snapshot carries
+  `sidecar`, the last three passes) but undoes nothing: a bug report can be about
+  anything.
+- Wider rollout is `THEMI_CONVERSATION_MODE=on` (CM1a's setting): the switch on everyone's
+  settings, and `/chat` on the command menu. Until then it stays `trial`. Before switching
+  it on, the family should set a precision target and check the `sidecar_log` rows marked
+  `missed` from the trial (with real turns, with the owner's say-so, as eval cases).
+- The undo and `/bug` code went into CM1b's commits (`sidecar.py`, the agent's hook,
+  `feedback.py`), since the two prompts were built and tested together.

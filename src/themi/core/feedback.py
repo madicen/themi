@@ -205,6 +205,8 @@ class FeedbackChat:
             await self.services.outbox.send(member, HOW_TO[kind], priority=Priority.REPLY)
             return
         item_id = self.record(member, kind, argument, f"/{kind}", event.reply_to_message_id)
+        if kind == "bug" and self.services.conversation is not None:  # CM1c: a miss to look at
+            self.services.conversation.sidecar.mark_missed(member)
         await self.services.outbox.send(
             member, THANKS[kind].format(id=item_id), priority=Priority.REPLY
         )
@@ -249,6 +251,9 @@ class FeedbackChat:
             "reply": self._reply(member, reply_to_message_id),
             "conversation": conversation,
             "open_items": [item.summary for item in s.open_items(member)],
+            "sidecar": (  # CM1c: what conversation mode's sidecar picked out lately
+                s.conversation.sidecar.recent(member, 3) if s.conversation is not None else []
+            ),
             "settings": self._settings(member, timezone),
             "ai": self._ai(member),
             "log": recent_logs.tail(LOG_LINES),

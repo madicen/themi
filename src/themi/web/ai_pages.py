@@ -26,6 +26,8 @@ TASK_LABELS = {
     AITask.STRUCTURED_MISC: "Other quick jobs (meal ideas, call scripts)",
     AITask.TRANSCRIPTION: "Voice notes",
     AITask.EMBEDDING: "Choosing which tools a message needs (embeddings, Gemini only)",
+    AITask.CHAT: "Conversation mode: the chat reply",
+    AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
 }
 KIND_LABELS = {
     "gemini": "Gemini",

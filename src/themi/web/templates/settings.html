@@ -66,6 +66,9 @@
     <label class="check"><input type="checkbox" name="checkin_reviews" {% if member.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>
     <label class="check"><input type="checkbox" name="done_praise" {% if member.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>
     <label class="check"><input type="checkbox" name="listen_first" {% if member.listen_first %}checked{% endif %}> When I share how I feel, listen first, and ask before suggesting fixes</label>
+    {% if conversation_offered %}<label class="check"><input type="checkbox" name="conversation_mode" {% if member.conversation_mode %}checked{% endif %}> Conversation mode: just chat with me, and pick out anything to do in the background <span class="muted">(asking me to add or check something works as usual)</span></label>
+    {% if picked_out %}<p class="muted">Picked out lately (say "that wasn't a task" in chat to take the latest back):</p>
+    <ul class="muted">{% for turn in picked_out %}<li>{{ turn.when }}: {{ turn.lines | join("; ") }}{% if turn.status == "missed" %} (taken back or reported){% endif %}</li>{% endfor %}</ul>{% endif %}{% endif %}
     <label>When it's too much, just <input type="number" name="focus_count" min="1" max="10" value="{{ member.focus_count }}"> things for now</label>
     <label>When it's too much and the rest is spread out, at most <input type="number" name="day_budget" min="0" max="20" value="{{ member.day_budget }}"> things on a day <span class="muted">(0: what I usually get done)</span></label>
     <label>Your own notes on phrasing
