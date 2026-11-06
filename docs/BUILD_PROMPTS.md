@@ -188,7 +188,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W4 | Website redesign: My settings in sections, Lists for the shop | Website redesign | [x] 2026-11-03 |
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [x] 2026-11-03 |
 | F26a | Feedback: a one-off routine item already gone stopped the wall's routine sync | Feedback | [x] 2026-11-04 |
-| F26b | Idea: approvals from one email thread in one message | Feedback | [ ] |
+| F26b | Idea: approvals from one email thread in one message | Feedback | [x] 2026-11-06 |
 | F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
@@ -9377,7 +9377,7 @@ Notes (2026-11-04):
 - Setup: restart `themi run`. No migration.
 
 ### F26b · Idea (2026-11-03): approvals from one email thread in one message
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 12, 23, F16b
 Read first: "Gmail triage"; "Trust tiers" → Approvals in Telegram; PDA shield (fewer
 messages). From Erin's idea #137 (2026-11-03, 6:45 pm, "since they're all tutoring session
@@ -9400,6 +9400,30 @@ Tests: idea #137's five cards come as one message. "Go ahead with all" runs each
 once. "One by one" sends the cards. Approvals from two different senders stay apart. A
 later email in the thread edits the waiting message; an important one comes on its own.
 Scenario: Erin's 3:24 pm burst.
+
+Notes (2026-11-06):
+- `themi.core.approval_groups`, wired into `ApprovalsUI`. Approvals triage stages
+  (`email_mark_read`, `email_reply`, `calendar_from_email`) go into a group per member:
+  the same Gmail thread while its message still waits, or the same sender within 10
+  minutes of the last one that joined. The first one sends; each later one edits that
+  message. Migration 0119 (`approval_groups`, `approval_group_items`).
+- A group with one line looks and answers like today's single card (Go ahead / Not now).
+  So a lone invitation is now one card, not an add plus a "mark as read".
+- The "mark as read" folds into any email event from the same email, booking or
+  invitation, not only invitations. It's done once its event is done, and declined or
+  snoozed with it.
+- "Important": a sender the person said is important (E2b `importance` > 0), or mail
+  triage rated urgent. Such an email's approvals group only with each other. Urgent mail
+  is an alert, never a card, so in practice that means E2b.
+- Not now snoozes every line, and they come back as one message. A bare "yes", "no" or
+  "later", and ✅ or 💤 on the message, answer every line.
+- Beyond the prompt: a reply's line keeps its quoted draft under it, since "Go ahead with
+  all" sends it as her.
+- Changed test: `test_a_booking_already_on_the_calendar_gets_no_card` checks the grouped
+  message now (five emails from one sender, 3 minutes apart).
+- Not done: F29b's one card for both partners. The groups are per member.
+- Tests were written together with the code, not run failing first.
+- Setup: restart `themi run` (migration 0119). Mark idea #137 reviewed once it's live.
 
 ### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
 Status: [ ]
@@ -9756,7 +9780,8 @@ Notes (2026-11-05):
 - Staging also skips an email event when the last calendar read has the same start and a
   matching title, whatever the end.
 - Not done: one card for both partners. It belongs with F26b's grouping, which isn't
-  built. With the check above, each partner gets at most one copy on their own calendar.
+  built. (F26b is built now, per member; this is still open.) With the check above,
+  each partner gets at most one copy on their own calendar.
 - The fake Gmail's `deliver` takes `to`.
 - Setup: restart `themi run`. Data: delete `themif0764a22a9e13` from Michael's calendar.
 

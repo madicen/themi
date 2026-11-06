@@ -16,11 +16,15 @@ sent).
 A category in `held` gets no card of its own: another module asks about them
 together (F16b: noise emails, in one message at the person's chosen time). They
 still show in /pending, and a bare "yes" never answers one unseen.
+
+Approvals triage stages from one email thread (or one sender, a few minutes apart) share
+one message instead (F26b): see `themi.core.approval_groups`.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Literal
 
@@ -30,6 +34,7 @@ from themi.accounts.store import Actor
 from themi.autonomy import Action, Autonomy, Decision, InvalidTransition
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
+from themi.core.approval_groups import ApprovalGroups
 from themi.core.services import AwaitingItem, Services
 from themi.localtime import to_utc_iso
 
@@ -76,9 +81,13 @@ class ApprovalsUI:
         self.db = autonomy.db
         self.ttl = ttl
         self.held: set[str] = set()  # categories asked about elsewhere, together
+        self.services: Services | None = None
+        self.groups = ApprovalGroups(self)
 
     def install(self, services: Services) -> None:
         """Wire approvals into the agent: listeners, buttons, reactions, fast path, /pending."""
+        self.services = services
+        self.groups.install()
         self.autonomy.pending_listeners.append(self.on_pending)
         self.autonomy.withdrawn_listeners.append(self.on_withdrawn)
         services.button_handlers["approval"] = self.on_button
@@ -91,6 +100,8 @@ class ApprovalsUI:
     async def on_pending(self, action: Action, interactive: bool) -> None:
         if action.category in self.held:
             return
+        if not interactive and await self.groups.take(action, Priority.NORMAL):
+            return  # F26b: in its email's message
         await self.ask(action, priority=Priority.REPLY if interactive else Priority.NORMAL)
 
     async def ask(self, action: Action, *, priority: Priority) -> None:
@@ -125,13 +136,16 @@ class ApprovalsUI:
             return ALREADY_TEXT
         except (PermissionDenied, NotFound):
             return "That one isn't yours to answer."
+        await self.groups.follow(outcome.action, Decision(decision))
         await self._show_result(outcome.action, outcome.message)
         return outcome.message
 
     async def on_withdrawn(self, action: Action, reason: str) -> None:
         await self._edit_cards(action, f"{action.summary}\n{reason}")
+        await self.groups.changed(action, reason)
 
     async def _show_result(self, action: Action, message: str) -> None:
+        await self.groups.changed(action)  # its email's message, if it's in one (F26b)
         template = RESULT_TEXT.get(action.status)
         if template is None:
             return
@@ -166,6 +180,8 @@ class ApprovalsUI:
             decision = Decision.SNOOZE
         else:
             return
+        if await self.groups.on_reaction(event.member, event.reaction.message_id, decision):
+            return
         action_id = self._action_for_message(event.member.id, event.reaction.message_id)
         if action_id is not None:
             await self.resolve(action_id, decision, event.member)
@@ -178,19 +194,25 @@ class ApprovalsUI:
         )
         return row["action_id"] if row else None
 
+    def chat_resolver(
+        self, action_id: int, member: Member
+    ) -> Callable[[ChatDecision], Awaitable[str]]:
+        async def resolve(decision: ChatDecision) -> str:
+            return await self.resolve(action_id, _CHAT_DECISIONS[decision], member)
+
+        return resolve
+
     def awaiting_items(self, member: Member) -> list[AwaitingItem]:
-        def resolver(action_id: int):
-            async def resolve(decision: ChatDecision) -> str:
-                return await self.resolve(action_id, _CHAT_DECISIONS[decision], member)
-
-            return resolve
-
-        return [
+        grouped, covered = self.groups.awaiting(member)
+        return grouped + [
             AwaitingItem(
-                f"action:{a.id}", a.summary, resolver(a.id), self._asked_in(a.id, member.id)
+                f"action:{a.id}",
+                a.summary,
+                self.chat_resolver(a.id, member),
+                self._asked_in(a.id, member.id),
             )
             for a in self.autonomy.awaiting(member)
-            if a.category not in self.held
+            if a.category not in self.held and a.id not in covered
         ]
 
     def _asked_in(self, action_id: int, member_id: int) -> tuple[int, ...]:
@@ -229,7 +251,9 @@ class ApprovalsUI:
         their own message)."""
         actions = self.autonomy.resurface_snoozed()
         for action in actions:
-            if action.category not in self.held:
+            if action.category not in self.held and not await self.groups.take(
+                action, Priority.NORMAL
+            ):
                 await self.ask(action, priority=Priority.NORMAL)
         return len(actions)
 
