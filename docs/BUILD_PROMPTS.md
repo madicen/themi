@@ -210,6 +210,16 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
+| BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [ ] |
+| BD1b | Body double: Guided Step-Through in chat | Body double | [ ] |
+| BD2 | Body double: choosing the mode, and learning from sessions | Body double | [ ] |
+| BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
+| BD3b | Body double: Themi the chameleon | Body double | [ ] |
+| BD4a | AI layer: image generation | Body double | [ ] |
+| BD4b | Body double: a picture for each step | Body double | [ ] |
+| BD5a | Body double: built-in music | Body double | [ ] |
+| BD5b | Spotify: playing their own music | Body double | [ ] |
+| BD5c | Body double: music that suits the task | Body double | [ ] |
 
 ## Fixed technical choices
 
@@ -10595,3 +10605,272 @@ Notes (2026-11-05):
   `missed` from the trial (with real turns, with the owner's say-so, as eval cases).
 - The undo and `/bug` code went into CM1b's commits (`sidecar.py`, the agent's hook,
   `feedback.py`), since the two prompts were built and tested together.
+
+## Body double mode
+
+From Erin's spec "Body Double Mode Suite & Chameleon UI Engine" (shared 2026-11-06; pasted
+in chat, not in the repo), the spec that idea #34 (F14a) waited for. Its idea: Themi keeps
+someone company while they work, in one of three modes, picks the mode it thinks suits the
+task and learns from how sessions go, shows a small cartoon chameleon whose scene changes
+with the mode, makes a picture for each step of a guided task, and plays music.
+
+The three modes:
+- **Silent Anchor**: quiet company for deep work. No messages while it runs, a subtle
+  elapsed timer, a cozy scene (the chameleon reading or working at a desk or windowsill).
+- **Sprint Partner**: work and break blocks (25/5 by default, the person's own lengths
+  otherwise). A big timer with the chameleon perched on top: sweeping it during chores,
+  dozing, painting, stretching or doodling on a break. Chat on a break fills most of the
+  page, with the countdown kept in a corner.
+- **Guided Step-Through**: one step at a time, each with its own picture in a large bubble,
+  the chameleon on a branch in the corner. Pictures are made in the background when the
+  session starts; the person can ask for any one to be redone ("show a top-down view").
+
+Agreed changes to the spec (2026-11-06), because the plan's rules win:
+- Telegram can't animate, so the chameleon lives on one new page, the **session page**, on
+  the website and opened from chat as a Telegram Mini App (the site is already HTTPS through
+  Tailscale Funnel). Everything a session does also works in chat alone; the page adds the
+  picture.
+- The spec's `ShadowCalendarLog` isn't a new log. The Shadow Calendar already exists
+  (`themi.energy`). Each session row keeps the hour of the week, the energy level at the
+  start (internal only, never shown) and how it ended; learning reads those rows.
+- The learning isn't a stub. A small counting model (BD2) suggests a mode; it never switches
+  modes on its own. A suggestion is a choice with buttons, never a demand (PDA).
+- "Zero interruptions" is B1's pause machinery: task nudges, check-ins and summaries wait in
+  the outbox; replies, approvals and urgent alerts still come.
+- Image generation goes through `themi.ai.router` like every model call, with a daily cap.
+  Pictures are files under `data/`, served only to their owner.
+- Music playback is a side effect, so Spotify actions go through trust tiers. YouTube Music
+  is left out: it has no official API. "Intelligent conversational radio" is left out for
+  now; BD5c's suggestions cover the predictive part.
+- The scene is original art (hand-drawn SVG and CSS), cozy and lofi-flavoured, never a copy
+  of Lofi Girl's scene or anyone else's character.
+- The spec's "154 BPM focus beats" is read as a typo; the built-in loops are slow (about
+  60-90 BPM) lofi and ambient tracks with free licences (CC0 or similar).
+- Words, never scores: no energy, no completion rates, no "you usually fail at this".
+
+Open decisions (defaults used until Michael or Erin say otherwise):
+- Spotify playback control needs Premium. BD5b checks the account; without Premium, Themi
+  sends the playlist as a link instead of playing it.
+- The image provider and the daily cap are chosen in BD4a (default: the person's Gemini key,
+  12 pictures a day each).
+
+### BD1a · Body double: sessions in chat (Silent Anchor and Sprint Partner)
+Status: [ ]
+Depends on: B1, 20, F6a, 11
+Read first: the plan's Module behaviour A (Communication: PDA shielding, plain phrasing) and
+B (Energy: inputs, matching); this section's intro; B1's notes (the "break" pause topic).
+Start by adding a short "Body double" part to the plan's Module behaviour, from this
+section's intro (Michael checks the wording before it's written to the doc).
+- `themi.core.body_double`: `BodyDouble` (installed like `Breaks`) with `start`, `switch`,
+  `end` and `current`. One session at a time per person; a new one ends the old.
+- Migration: `body_double_sessions` (member, task id or NULL, category (BD2 fills it; NULL
+  until then), mode, started_at, planned_minutes or NULL, work_minutes, break_minutes,
+  blocks_done, hour_of_week, energy_level at the start, ended_at, outcome: `finished`,
+  `stopped`, `left` (no answer at the end), `switched`) and `members.sprint_work_minutes`
+  (5-90, default 25), `members.sprint_break_minutes` (1-30, default 5), on My settings.
+- Starting: "sit with me while I do X", "body double the taxes", "pomodoro the laundry",
+  `/bodydouble` (with an optional mode and minutes), or a [Body double] button on a task's
+  nudge. A session can have a task or just their words ("my writing"). With no mode said,
+  Silent Anchor until BD2.
+- Silent Anchor: a pause on a new "body_double" topic (B1's topics), one line to start
+  ("I'm here. Going quiet until 3:40." or "...going quiet until you say you're done."), at
+  the planned end: "That's the hour. How did it go?" [Done] [Not finished] [A bit longer].
+  Open-ended sessions end after four hours with the same question.
+- Sprint Partner: the same pause, with scheduler jobs at each block's end (time from
+  `themi.clock` only). End of a work block: "That's 25 minutes. Break for 5?" [Break]
+  [Keep going] [Stop here]. End of a break: "Break's done whenever you are." [Carry on]
+  [A bit longer] [Stop here]. No answer within ten minutes: the session waits, still
+  paused, for up to an hour, then ends as `left`, quietly.
+- [Done] on a session with a task marks the task done, as `mark_done` would (its praise
+  line too, F19b). The task's own nudges are held during the session.
+- Tools: `start_body_double`, `switch_body_double_mode`, `end_body_double`. "I'm done",
+  "stop", "I'm back" end it, as for breaks.
+- Burnout mode (F22d) or a break wins: starting either ends the session as `stopped`.
+Tests: unit tests for the timers with a frozen clock, the topic holding nudges, outcomes;
+scenarios: a Silent Anchor hour ending with Done (task closed), a sprint of two blocks
+with a break, a sprint left unanswered, a nudge held then delivered after. Evals: starting
+phrases, "stop" mid-sprint, "pomodoro" not mistaken for a task title.
+
+### BD1b · Body double: Guided Step-Through in chat
+Status: [ ]
+Depends on: BD1a
+Read first: F6a's and F26c's notes (steps on tasks); this section's intro.
+- Guided mode uses the task's own `steps`. A task without steps (or no task) gets proposed
+  steps from one structured call (a new AI task `body_double_steps`, its own route on the AI
+  page): at most 12 short steps in the person's register. They're shown first: "Here's how
+  I'd break it up:" [Go] [Change them] [No steps]; "Change them" takes their words. The
+  steps are saved on the task only when they say so ([Keep these steps]).
+- One message per session, edited in place (`Outbox.edit`): "Step 2 of 6: Clear the
+  counter." [Back] [Next] [Done], and on the last step [All done]. "Next" also works typed.
+- Steps tagged optional (F6a's "(Optional/Bonus)") show the tag and a [Skip] button.
+- All done: the task is marked done (as BD1a's Done), outcome `finished`.
+- Nudges are held as in BD1a. Twenty minutes on one step with no tap: one gentle line,
+  "Still with you. Next step whenever you're ready." Never more than one, and never on an
+  optional step.
+- `switch_body_double_mode` into Guided keeps the elapsed time and starts at step 1.
+Tests: unit tests for step navigation, skip, edit-in-place; scenarios: a six-step chore
+with Back and Skip, a task with no steps getting proposed ones then kept. Evals: proposed
+steps are short, concrete, in order, with no "you should".
+
+### BD2 · Body double: choosing the mode, and learning from sessions
+Status: [ ]
+Depends on: BD1b, 19
+Read first: the plan's Module behaviour B (Model, Learning); `themi.energy.outcomes` (the
+same smoothing); this section's intro.
+- Categories: `deep_work` (writing, coding, study, design), `admin` (paperwork, bills,
+  forms, calls), `chores` (one household job), `tidy` (batch cleaning, organising,
+  decluttering), `other`. A task's category is set by keywords first, then by a cheap
+  structured call when the words don't settle it, and kept on the task (migration:
+  `tasks.category`). The person can correct it ("that's admin"), which sticks.
+- The starting table: deep_work → Silent Anchor, admin and chores → Guided, tidy → Sprint,
+  other → Silent Anchor.
+- Per-person defaults (migration: `task_mode_preferences`, member × category → mode):
+  "always use pomodoro for tidying", and a row per category on My settings. A default always
+  wins over the learned choice.
+- Learning: for each person × category × part of the day (morning, afternoon, evening) ×
+  mode, a smoothed rate of `finished` sessions (outcome `switched` counts against the first
+  mode and for the second), with the person's energy at the start as a second split (low or
+  not) once there are enough sessions. A learned mode beats the table only after at least
+  three sessions in that cell and a clear lead. Kept in `themi.core.body_double_modes`,
+  pure functions over the session rows, so it's easy to replace later.
+- How it's used: with no mode said, the session starts in the chosen mode and says it once,
+  as an offer: "Starting a sprint for this one." [Quiet instead] [Step by step instead].
+  Never a reason that mentions energy or past failures.
+- Mode chips on the nudge: a task nudge with [Body double] starts in the chosen mode.
+Tests: unit tests for the classifier's keyword path, the table, the learning thresholds,
+defaults winning; a scenario where three good sprints for tidying in the evening change the
+suggestion from the table's. Evals: category picks for 30 real task titles from the Pi
+(with the owner's say-so), no energy words in the offer.
+
+### BD3a · Body double: the session page and the Telegram Mini App
+Status: [ ]
+Depends on: BD1a, W1
+Read first: the plan's "The management site" and "Reaching the site" (Funnel); W1's notes
+(the shell and kit); this section's intro.
+- `/session` on the website: one full-screen page per person, their own current session
+  only. Signs in as the site does, or, opened from Telegram, by the Mini App's `initData`
+  (HMAC-checked with the bot token, under a minute old, mapped to the member by their
+  Telegram id; anything else is 403).
+- Each session start message (BD1a, BD1b) gains an [Open] `web_app` button to `/session`.
+- The page: mode, task title, the timer (counts down in the browser from the server's end
+  time and the server's now; the server is the truth), step text in Guided, and the same
+  buttons as chat (Break, Keep going, Next, Done...), which post to the same `BodyDouble`
+  methods. State comes from a small JSON endpoint polled every 5 seconds (htmx), so a tap in
+  chat shows on the page and the reverse.
+- Phone first: no horizontal scroll at 360 px, readable in light and dark, works with the
+  screen kept on (`navigator.wakeLock` where offered). No scene yet: a plain layout BD3b
+  dresses.
+- Nothing about energy on the page.
+Tests: unit tests for `initData` checking (good, stale, forged, unknown user), the state
+endpoint per mode; integration tests for page access (someone else's session is 404); a
+scenario where Next on the page edits the chat message.
+
+### BD3b · Body double: Themi the chameleon
+Status: [ ]
+Depends on: BD3a
+Read first: this section's intro (the modes' scenes, original art only).
+- `themi/web/static/chameleon/`: one SVG character, original, drawn as named parts (body,
+  eyes, tail, hands, props) so CSS can animate them. Props: book, mug, broom, easel and
+  brush, pencil, blanket.
+- Scenes per mode: Silent Anchor (a desk by a window, rain or dusk outside, the chameleon
+  reading, a slow breathing pulse by the timer); Sprint (perched on the timer); Guided (on a
+  branch in the corner beside the big step bubble). Colours from the site's tokens.
+- Animation states come from the server as flags in the state endpoint (`idle`, `sweeping`,
+  `dozing`, `painting`, `stretching`, `doodling`, `cheering`), picked in Python from mode,
+  category and phase: during a chores or tidy work block, a sweep every few minutes; on a
+  break with no chat, one of the relaxed states, changing every minute or two; `cheering`
+  for a moment at a finished block or step. Picked in code, tested, never random in tests.
+- Break chat on the page: in Sprint's break, a [Chat] button opens a bubble over most of the
+  page, the countdown kept in a corner. Messages go to the agent as that member's chat
+  (the same path as Telegram) and replies are copied to the page as they go out through the
+  outbox, so chat and page show the same conversation.
+- `prefers-reduced-motion`: the scenes stay still, only the timer moves.
+Tests: unit tests for the state picker (mode × category × phase); a page test that every
+flag has a CSS state; a scenario of break chat on the page reaching Telegram too. Michael
+and Erin look at the scenes on their phones before it's marked done.
+
+### BD4a · AI layer: image generation
+Status: [ ]
+Depends on: 06, F30d
+Read first: the plan's AI backend (providers, routing per task, retries); F30d's notes (the
+daily cap).
+- `Provider.image(prompt, size) -> ImageResult` (bytes, mime type), and `router.image(...)`
+  with per-member keys, retries, the breaker, fallback and the `ai_calls` record like
+  `chat`. A new AI task `step_image` with its own route on the AI page.
+- Adapters where the provider offers it: Gemini's image model and OpenAI's images API;
+  Claude and local backends say they can't (the router falls back or reports it).
+  Check the current models and prices first and write them in the notes.
+- A daily cap per person (setting on the AI page, default 12), counted in `ai_calls`;
+  over it, `router.image` refuses with a clear error and nothing is called.
+- Prompts built in code from data: the step's text inside a delimited block, plus a fixed
+  style line (a simple, friendly illustration, no text in the picture, no people's faces).
+- `tests/fakes`: a scripted image provider that returns a small fixed PNG.
+Tests: unit tests for routing, fallback, the cap, the prompt's delimiting; live smoke test
+(opt-in, `tests/live`) for each adapter.
+
+### BD4b · Body double: a picture for each step
+Status: [ ]
+Depends on: BD1b, BD3a, BD4a
+Read first: this section's intro (Guided Step-Through).
+- When a guided session starts, a background job makes each step's picture in order
+  (the current step first), under the daily cap. Files under `data/step_images/` (never
+  committed), a `step_images` table (session, step index, prompt, file, status, made_at).
+  Pictures for a task's saved steps are kept and reused next time.
+- The page shows the step's picture in the big bubble, a soft placeholder while it's made,
+  the text alone if it fails or the cap is reached (said once: "No more pictures today; the
+  steps are all here.").
+- Redoing one: "make step 3 cleaner", "show it from above", on the page (a text box under
+  the picture) or in chat. One call makes a new picture from the step, the old prompt and
+  their words (as data). The new one replaces the old for that step.
+- Chat shows pictures only when asked ("send me the picture"), as a photo; the chat message
+  stays text.
+- Images are served by an authenticated route, only to the session's owner.
+Tests: unit tests for the job order, reuse, cap and failure fallbacks; a scenario of a
+guided session where step 2's picture is redone. Evals: redo requests read as instructions
+for the picture, never acted on as anything else.
+
+### BD5a · Body double: built-in music
+Status: [ ]
+Depends on: BD3a
+Read first: this section's intro (music).
+- A few built-in loops (lofi, rain, soft piano, brown noise) under `web/static/audio/`,
+  each with a free licence (CC0 or similar) written in `static/audio/LICENCES.md`. Small
+  files (Opus or AAC, under 5 MB each).
+- On the session page: a music control (play or pause, which loop, volume), kept per
+  person (migration: `members.body_double_sound`, `members.body_double_volume`).
+  Silent Anchor and Sprint default to the person's choice; nothing plays until tapped the
+  first time (browsers block it anyway).
+- In chat: "play rain" sets the choice for the page.
+Tests: unit tests for the setting; a page test that every listed loop exists and has a
+licence line.
+
+### BD5b · Spotify: playing their own music
+Status: [ ]
+Depends on: BD5a, 21, 11
+Read first: the plan's Integrations and Trust tiers; this section's intro (Premium).
+- `themi.connectors.spotify`: OAuth (authorization code with PKCE) from Accounts, tokens
+  encrypted at rest, refresh handled. A Spotify developer app is setup the user does
+  (client id in `.env`, the Funnel callback URL registered), documented in DEPLOY.md.
+- Calls: search (playlists, albums, tracks), the account's devices, start or resume a
+  playlist or album, pause, next, volume. Premium is checked at link time; without it,
+  "play X" sends the item's link instead.
+- Tools: `play_music` and `pause_music`, a new action category "music" in the trust tiers
+  (Tier 2 to start: done, then told). "Play my focus playlist" works in or out of a session.
+- With no active Spotify device: one line saying to open Spotify on the phone or speaker,
+  then try again; no retries in a loop.
+- A session can carry its music: what played is kept on the session row (for BD5c).
+- `tests/fakes`: a fake Spotify API with devices, a Premium and a free account.
+Tests: unit tests for OAuth, refresh, the Premium check, no device; scenarios: "put on lofi
+while I work" in a session, a free account getting a link. Live smoke test opt-in.
+
+### BD5c · Body double: music that suits the task
+Status: [ ]
+Depends on: BD2, BD5b
+Read first: BD2's notes (the learning model); this section's intro.
+- For each person × category × part of the day, what played in their `finished` sessions
+  (built-in loops and Spotify items). The best one is offered at a session's start, once:
+  "Rain again, like last time?" [Play] [Not now]. With nothing learned yet: the category's
+  default (lofi for deep work, an upbeat built-in for tidying).
+- Never started on its own; never mentions how sessions went.
+Tests: unit tests for the pick and thresholds; a scenario where the offer follows three
+finished sessions with the same playlist.
