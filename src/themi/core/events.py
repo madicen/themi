@@ -69,6 +69,10 @@ MAKE_TIME = re.compile(
 )
 MEAL = re.compile(rf"\b({'|'.join(MEALS)})\b")
 REPLACED_TEXT = "Replaced by the newer card."
+ALREADY_TEXT = "Already on your calendar{why}. Nothing new was added."
+# F29b (bug #159): a Google Calendar invitation carries an .ics part.
+ICS_TYPES = {"text/calendar", "application/ics"}
+INVITED = re.compile(r"\(([^()\s]+@[^()\s]+)\)\s*$")
 MOVED_SINCE_TEXT = "Not needed now: that event has been changed since."
 MAX_NOTES = 500
 # F29a (idea #150): an event started earlier for set-up time says when it really starts.
@@ -433,10 +437,45 @@ class Events:
     # ----- doing it -----------------------------------------------------------------------
 
     async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        from_email = str(payload["source"]).startswith("email:")
+        if (
+            from_email
+            and payload["calendar"] == "mine"
+            and await self._there_now(ctx.member, payload)
+        ):
+            # Bug #159: the card waited three hours, and the invitation was on his calendar
+            # by then (accepted in Gmail, or Google's own invitations setting).
+            why = ", from the invitation" if payload.get("invitation") else ""
+            return ALREADY_TEXT.format(why=why)
         _, text = await self.make(ctx.member, payload, ctx.idempotency_key)
-        if str(payload["source"]).startswith("email:"):
+        if from_email:
             await self._after_email_event(ctx, text)
         return text
+
+    async def _there_now(self, member: Member, payload: dict[str, Any]) -> bool:
+        """Is something with this start and a matching title on their calendar now, read
+        from Google rather than the last calendar read (F29b)?"""
+        starts = datetime.fromisoformat(payload["starts"])
+        ends = datetime.fromisoformat(payload["ends"])
+        try:
+            account = self.own_account(member)
+            items = await self._client(account.id).list_events(
+                "primary", to_utc_iso(starts), to_utc_iso(ends)
+            )
+        except (ToolFailed, CalendarError) as exc:
+            log.info("Couldn't check the calendar before adding an email's event: %s", exc)
+            return False
+        for item in items:
+            if (item.get("extendedProperties") or {}).get("private", {}).get("themi"):
+                continue  # Themi's own: made_that_day and the card's own key cover those
+            when = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
+            try:
+                same_start = when and datetime.fromisoformat(str(when)) == starts
+            except ValueError:
+                same_start = False
+            if same_start and _same_title(str(payload["title"]), str(item.get("summary", ""))):
+                return True
+        return False
 
     async def make(self, member: Member, payload: dict[str, Any], key: str) -> tuple[int, str]:
         """Put an event on the calendar from an add payload; returns its `themi_events` id
@@ -651,14 +690,22 @@ class Events:
             return
         title = event["title"][:MAX_TITLE]
         payload = _add_payload(title, event["location"], when, "mine", source)
+        invited = _invitation(row)
+        if invited and invited.lower() == account.address.lower():
+            # Sent to the account whose calendar Themi reads: Google puts invitations there
+            # itself, so adding it would make a second copy (bug #159).
+            log.info("Email %s is an invitation to %s, on its calendar already", row["id"], invited)
+            return
         if self._already(member, payload):
             log.info("Email %s's booking is on the calendar, or waiting, already", row["id"])
             return
+        to = f" (an invitation sent to {invited})" if invited else ""
+        payload["invitation"] = invited is not None
         await self.services.autonomy.stage(
             FROM_EMAIL,
             member,
             f"From an email: {describe(title, when, event['location'], self._tz())}, for your "
-            "calendar",
+            f"calendar{to}",
             payload,
             ADD,
             expires=when.ends,  # a card about a delivery that's been and gone: no use (F15b)
@@ -677,6 +724,14 @@ class Events:
             "UNION ALL SELECT 1 FROM themi_events WHERE deleted_at IS NULL "
             "AND (member_id = ? OR calendar_id != 'primary') AND starts_at = ? AND ends_at = ?",
             (member.id, *span, member.id, *span),
+        ):
+            return True
+        if any(  # F29b: the same start and title, whatever its end
+            _same_title(str(payload["title"]), r["title"])
+            for r in self.db.query(
+                "SELECT title FROM calendar_entries WHERE member_id = ? AND starts_at = ?",
+                (member.id, span[0]),
+            )
         ):
             return True
         return any(
@@ -765,6 +820,23 @@ def _times(when: When, tz: ZoneInfo) -> dict[str, Any]:
         "start": {"dateTime": when.starts.astimezone(tz).isoformat(), "timeZone": str(tz)},
         "end": {"dateTime": when.ends.astimezone(tz).isoformat(), "timeZone": str(tz)},
     }
+
+
+def _same_title(a: str, b: str) -> bool:
+    return name_key(a) == name_key(b) or title_matches(a, b) or title_matches(b, a)
+
+
+def _invitation(row: dict[str, Any]) -> str | None:
+    """The address a Google Calendar invitation was sent to (its subject ends with it), or
+    "" when it's an invitation that doesn't say; None when the email isn't one."""
+    try:
+        parts = json.loads(row.get("attachments") or "[]")
+    except ValueError:
+        parts = []
+    if not any(str(p.get("mime_type", "")).lower() in ICS_TYPES for p in parts):
+        return None
+    named = INVITED.search(str(row.get("subject") or ""))
+    return named.group(1) if named else ""
 
 
 def _add_payload(
