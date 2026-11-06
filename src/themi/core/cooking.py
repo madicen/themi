@@ -55,6 +55,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 KIND = "cooking"
+PAUSE_TOPIC = "cooking"  # RC3b: nudges and check-ins wait while cooking
 LEFT_AFTER = timedelta(hours=3)
 MAX_GATHER = 30
 MAX_PREP = 12
@@ -172,6 +173,41 @@ def _names_line(text: str, line: str) -> bool:
     return bool(words & {stem(w) for w in name_key(line).split()})
 
 
+# ----- the steps (RC3b) ----------------------------------------------------------------------
+
+LONG_STEP = 400  # characters: a longer step is split at sentence ends, words unchanged
+SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9(])")
+GO_TO = re.compile(r"^(?:go (?:back )?to |jump to |back to )?step (\d{1,2})$")
+PAUSE_HOURS = 6  # nudges wait at most this long; the pause ends with the session
+
+
+@dataclass(frozen=True)
+class Part:
+    label: str  # "2", or "2a" and "2b" for a long step split up
+    text: str
+    group: str = ""
+
+
+def step_parts(recipe: Recipe) -> list[Part]:
+    parts: list[Part] = []
+    for n, step in enumerate(recipe.steps, start=1):
+        if len(step.text) <= LONG_STEP:
+            parts.append(Part(str(n), step.text, step.group))
+            continue
+        chunks: list[str] = []
+        for sentence in SENTENCE.split(step.text):
+            if chunks and len(chunks[-1]) + len(sentence) + 1 <= LONG_STEP:
+                chunks[-1] = f"{chunks[-1]} {sentence}"
+            else:
+                chunks.append(sentence)
+        if len(chunks) == 1:
+            parts.append(Part(str(n), step.text, step.group))
+            continue
+        for k, chunk in enumerate(chunks):
+            parts.append(Part(f"{n}{chr(ord('a') + k)}", chunk, step.group))
+    return parts
+
+
 # ----- sessions ------------------------------------------------------------------------------
 
 
@@ -216,6 +252,10 @@ TYPED = {
     "next": "next", "done": "next", "all here": "next", "got it": "next", "ready": "next",
     "ok next": "next", "next step": "next", "prep done": "next", "all done": "next",
     "skip": "skip", "skip it": "skip", "skip prep": "skip",
+    "back": "back", "go back": "back", "previous": "back", "previous step": "back",
+    "repeat": "repeat", "again": "repeat", "repeat that": "repeat", "say that again": "repeat",
+    "what's after this": "peek", "what's next": "peek", "what comes next": "peek",
+    "what's after this one": "peek",
     "stop": "stop", "stop cooking": "stop", "cancel cooking": "stop", "end cooking": "stop",
     "i'm done cooking": "stop", "we're done cooking": "stop",
 }  # fmt: skip
@@ -282,6 +322,9 @@ class Cooking:
             "WHERE id = ? AND ended_at IS NULL",
             (to_utc_iso(clock.now()), outcome, session.id),
         )
+        member = self._owner(session)
+        if self.current(member) is None and self.services.outbox.pauses.resume(member, PAUSE_TOPIC):
+            self.services.outbox.release_held(member)  # what waited goes at the next flush
         for listener in self.end_listeners:
             listener(session, outcome)
 
@@ -321,6 +364,9 @@ class Cooking:
         )  # fmt: skip
         session = self.get(session_id)
         assert session is not None
+        self.services.outbox.pauses.pause(
+            member, PAUSE_TOPIC, clock.now() + timedelta(hours=PAUSE_HOURS)
+        )
         await self.show(session)
         return session
 
@@ -389,11 +435,50 @@ class Cooking:
             ]
         return await self.render_more(session, recipe, head)
 
+    def named_recipes(self, recipe: Recipe, text: str) -> list[Recipe]:
+        """Other cookbook recipes a step names ("Alfredo Sauce", "Simple Parmesan")."""
+        said = name_key(text)
+        out = []
+        for other in self.recipes.all():
+            name = name_key(other.name)
+            if (
+                other.id != recipe.id
+                and len(name.split()) >= 2
+                and re.search(rf"\b{re.escape(name)}\b", said)
+            ):
+                out.append(other)
+        return out[:2]
+
     async def render_more(
         self, session: Session, recipe: Recipe, head: str
     ) -> tuple[str, list[Button]]:
-        """What the card shows after the prep (RC3b's steps)."""
-        return f"That's the prep done for {head}. Enjoy the cooking.", []
+        """The steps (RC3b): "Step 2 of 6" and the step as written."""
+        parts = step_parts(recipe)
+        if not parts:
+            return f"{head} has no steps written down. That's the prep done.", []
+        n = min(session.step, len(parts) - 1)
+        part = parts[n]
+        last = len(recipe.steps)
+        group = f" ({part.group})" if part.group else ""
+        text = f"{head}: step {part.label} of {last}{group}\n> {part.text}"
+        tap = {"session": session.id}
+        buttons = []
+        if n > 0:
+            buttons.append(Button("Back", "cooking", {**tap, "action": "back"}))
+        if n < len(parts) - 1:
+            buttons.append(Button("Next", "cooking", {**tap, "action": "next"}))
+        else:
+            buttons.append(Button("All done", "cooking", {**tap, "action": "finish"}))
+        for other in self.named_recipes(recipe, part.text):
+            buttons.append(
+                Button(f"Show {other.name}"[:60], "recipe", {"action": "show", "id": other.id})
+            )
+        buttons.extend(self.step_buttons(session, recipe, part))
+        return text, buttons
+
+    def step_buttons(self, session: Session, recipe: Recipe, part: Part) -> list[Button]:
+        """More buttons for a step (RC3c's timers)."""
+        return []
 
     async def show(self, session: Session, *, fresh: bool = False) -> None:
         text, buttons = await self.render(session)
@@ -471,12 +556,50 @@ class Cooking:
         await self.show(session, fresh=fresh)
 
     async def after_prep(self, session: Session) -> None:
-        """Prep done or skipped (RC3b goes on to the steps)."""
+        """Prep done or skipped: on to step 1."""
         session.phase = "cook"
+        session.step = 0
 
     async def advance_more(self, session: Session, action: str) -> None:
-        """Moving on in RC3b's phases."""
-        return None
+        """Moving through the steps."""
+        recipe = self.recipes.get(session.recipe_id)
+        assert recipe is not None
+        last = len(step_parts(recipe)) - 1
+        if action == "back":
+            session.step = max(0, session.step - 1)
+        elif action in ("next", "skip"):
+            if session.step >= last:
+                await self.finish(session)
+                return
+            session.step += 1
+        elif action.startswith("goto:"):
+            wanted = action.split(":", 1)[1]
+            labels = [p.label for p in step_parts(recipe)]
+            if wanted in labels:
+                session.step = labels.index(wanted)
+            elif f"{wanted}a" in labels:
+                session.step = labels.index(f"{wanted}a")
+        elif action == "finish":
+            await self.finish(session)
+
+    async def finish(self, session: Session) -> None:
+        recipe = self.recipes.get(session.recipe_id)
+        assert recipe is not None
+        self.end(session, "finished")
+        buttons = []
+        if recipe.source == "web" and "save" in self.services.recipe_buttons:
+            buttons = [
+                Button("Save to cookbook", "recipe", {"action": "save", "id": recipe.id}),
+                Button("Not now", "recipe", {"action": "save_no", "id": recipe.id}),
+            ]
+        text = f"{recipe.name}, all done. Enjoy it!"
+        if buttons:
+            text += "\nKeep this one in the cookbook?"
+        await self.card.show(
+            self._owner(session), text, buttons, message_id=session.message_id,
+            in_group=session.in_group,
+        )  # fmt: skip
+        session.phase = "done"
 
     async def remind_tomorrow(self, session: Session) -> None:
         recipe = self.recipes.get(session.recipe_id)
@@ -556,11 +679,19 @@ class Cooking:
         session = self.current(member, in_group=event.in_group)
         if session is None:
             return False
-        said = " ".join(text.lower().strip().rstrip("!. ").replace("\u2019", "'").split())
+        said = " ".join(text.lower().strip().rstrip("!?. ").replace("\u2019", "'").split())
         action = self.typed(said)
         if action is None:
             return False
-        if action == "skip" and session.phase == "prep":
+        if action in ("repeat", "peek", "back") and session.phase != "cook":
+            if action != "repeat":
+                return False  # "back" or "what's next" before the steps: the model answers
+            await self.show(session, fresh=True)
+        elif action == "repeat":
+            await self.show(session, fresh=True)
+        elif action == "peek":
+            await self.peek(session)
+        elif action == "skip" and session.phase == "prep":
             await self.after_prep(session)
             await self.show(session, fresh=True)
         elif action == "skip" and session.phase != "cook":
@@ -570,7 +701,22 @@ class Cooking:
         return True
 
     def typed(self, said: str) -> str | None:
+        if found := GO_TO.match(said):
+            return f"goto:{int(found.group(1))}"
         return TYPED.get(said)
+
+    async def peek(self, session: Session) -> None:
+        """ "What's after this?": the next step, said once, without moving the card."""
+        recipe = self.recipes.get(session.recipe_id)
+        assert recipe is not None
+        parts = step_parts(recipe)
+        member = self._owner(session)
+        if session.step + 1 < len(parts):
+            nxt = parts[session.step + 1]
+            text = f"After this, step {nxt.label}:\n> {nxt.text}"
+        else:
+            text = "That's the last step."
+        await self.services.outbox.send(member, text, priority=Priority.REPLY, kind=KIND)
 
     async def on_cook_button(self, event: InboundEvent) -> None:
         assert event.button is not None
@@ -592,6 +738,9 @@ class Cooking:
             self.end(_session(row), "left")
         return len(rows)
 
+    def _where(self, session: Session, recipe: Recipe) -> str:
+        return f"on step {_label(session, recipe)} of {len(recipe.steps)}"
+
     def open_items(self, member: Member) -> list[OpenItem]:
         session = self.current(member)
         if session is None:
@@ -600,7 +749,7 @@ class Cooking:
         if recipe is None:
             return []
         where = {"ready": "getting ready", "gather": "gathering", "prep": "prepping"}.get(
-            session.phase, f"step {session.step + 1} of {len(recipe.steps)}"
+            session.phase, self._where(session, recipe)
         )
         recipe_text = "Ingredients:\n" + "\n".join(self.lines(session, recipe))
         recipe_text += "\nSteps:\n" + "\n".join(
@@ -613,6 +762,11 @@ class Cooking:
                 "from the recipe:\n" + as_data(f"recipe {recipe.name}", recipe_text)
             )
         ]
+
+
+def _label(session: Session, recipe: Recipe) -> str:
+    parts = step_parts(recipe)
+    return parts[min(session.step, len(parts) - 1)].label if parts else "1"
 
 
 def and_words(parts: list[str]) -> str:

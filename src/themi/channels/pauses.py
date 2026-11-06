@@ -33,6 +33,9 @@ TOPICS: dict[str, frozenset[str]] = {
     # notes passed on from your partner, and questions for you both (34b)
     "notes": frozenset({"relay", "alignment"}),
     "break": frozenset({"task", "task_summary", "habit", "routine", "review"}),  # B1
+    # RC3b: while cooking with Themi, nudges and check-ins wait; replies, approvals, urgent
+    # alerts and their own timers still come.
+    "cooking": frozenset({"task", "task_summary", "habit", "routine", "review"}),
     # F22d: whatever asks something of them; replies, alerts, their own reminders, meals
     # and travel heads-ups still come.
     "burnout": frozenset(
