@@ -211,6 +211,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
+| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10718,6 +10719,52 @@ Notes (2026-11-06):
 - The routing eval is a unit test (`test_forwarding_an_email_reaches_the_email_tools`);
   `tests/evals` wasn't changed.
 - Setup: restart `themi run` (migration 0118). No new Google scope.
+
+### F32a · Idea (2026-11-06): tasks on the website, grouped by due date and other ways
+Status: [ ]
+Depends on: W2, T1
+Read first: W1's principles (collapsed rows, phone first, no new JS); W2's notes
+(`task_pages.task_rows`, `_task_row.html`); T1's `themi.core.priority` (urgent and
+important, in words). From Michael's idea #170 (2026-11-06, 10:07 am, "give the option to
+group tasks on the website by due date or other reasonable groupings").
+
+What the Pi shows: `/tasks` is one list, "On your list", sorted overdue first, then by due
+date, undated last (`task_pages._order`). Michael has about a dozen open tasks and Erin
+about twenty, so on a phone the due dates are only in each row's second line.
+
+Build:
+- `task_pages.group_tasks(tasks, by, today) -> list[(heading, tasks)]`, pure and in order,
+  with empty groups left out. Within a group, tasks keep today's `_order`.
+  - `due` (the default): Overdue, Today, Tomorrow, This week (to Sunday), Next week, Later,
+    No due date. On a Saturday, "Tomorrow" is Sunday and "This week" is empty.
+  - `urgency`: T1's words, "Urgent and important", "Urgent", "Important", "Neither", from
+    `priority.is_urgent` / `is_important`. Words only, never a score.
+  - `kind`: "Calls" (call), "Errands" (errand), "Around the house" (physical), "Messages
+    and online" (text).
+  - `repeats`: "One-offs", "Repeating chores", "Check-ins" (`check_in`).
+  - `none`: one list, as now.
+- `/tasks`: a "Group by" line under the heading: Due date · Urgency · Kind · Repeats · None.
+  Each is a small CSRF-checked POST form button styled as a chip (no JS), with the current
+  one marked (`aria-current`). Each group is a `<h2>` with its count, then the rows from
+  `_task_row.html`. "You added for someone else" stays one collapsed group at the end,
+  ungrouped.
+- Remembered per person: migration `members.task_grouping` (TEXT, default `due`),
+  `POST /tasks/grouping` saves it and redirects to `/tasks`. An unknown value is read as
+  `due`. `?group=` in the URL shows that grouping once, without saving it (for a shared
+  link).
+- Home's "On your list" stays as it is: the first five, ungrouped.
+- My settings: nothing new. The page itself is where it's chosen.
+
+Tests: unit tests for `group_tasks` with a frozen clock: the week edges (a Saturday and a
+Sunday), overdue, undated last, empty groups left out, each grouping's headings and order.
+Page tests: each grouping renders its headings and counts. The choice is kept across
+visits, and each person's is their own. A bad value falls back to due date. `?group=`
+doesn't save. The CSRF check holds. The page has no number scores (the energy check the
+site tests already run).
+Scenario: Michael chooses "Urgency" on Tasks, sees "Urgent" with today's dentist call in
+it, comes back later and it's still grouped that way. Erin's page is still by due date.
+
+Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
 
 ## Conversation mode
 
