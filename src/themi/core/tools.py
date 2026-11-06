@@ -93,6 +93,26 @@ class Proposal:
     said: str | None = None  # the reply when it's done straight away (ToolContext.replies)
 
 
+@dataclass(frozen=True)
+class Done:
+    """F33a: what a tool changed inside Themi, said as it is to them (and to the model).
+    `asked`: what it changed was in their own words (`in_their_words`), so the line is the
+    whole answer, and the turn can end without another model round (P2b, reply 237)."""
+
+    said: str
+    asked: bool = False
+
+
+def in_their_words(ctx: ToolContext, title: str) -> bool:
+    """Every word of the title (over two letters) is in what they wrote this turn: the
+    tool did what they named, not what the model took them to mean."""
+    from themi.core.lists import name_key  # lists builds its tools from this module
+
+    said = name_key(ctx.request_text)
+    words = [w for w in name_key(title).split() if len(w) > 2] or [name_key(title)]
+    return all(w and w in said for w in words)
+
+
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
 
 
@@ -613,7 +633,14 @@ class ToolRegistry:
         for twins in TWINS:  # P6: a twin set goes whole
             if chosen & set(twins.tools):
                 chosen |= set(twins.tools) & self._tools.keys()
-        return [self._tools[name].spec for name in sorted(chosen)]
+        specs = [self._tools[name].spec for name in sorted(chosen)]
+        if groups is None:
+            return specs
+        offer = more_tools_for(groups)  # F33b: only what this turn doesn't have
+        rest = [spec for spec in specs if spec.name != more_tools.spec.name]
+        if offer is None or len(rest) == len(specs):
+            return rest
+        return sorted([*rest, offer], key=lambda spec: spec.name)
 
     def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
         """The tools one model call gets. P5's "all" is every tool but more_tools, which
@@ -660,6 +687,11 @@ class ToolRegistry:
             output = await t.handler(ctx, call.arguments)
             if t.proposes:
                 output = await self._stage(output, ctx)
+            elif isinstance(output, Done):
+                if output.asked:  # otherwise the model says it, as before F33a
+                    ctx.replies.append(output.said)
+                    ctx.asked.append(output.said)
+                output = output.said
             elif not isinstance(output, str):
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
         except ToolDeclined as exc:
@@ -739,17 +771,42 @@ def dumps(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
-@tool(
-    "more_tools",
-    "Bring in more of Themi's tools for this conversation, when what they ask needs ones "
-    "you don't have yet. groups: "
-    + "; ".join(f"'{name}' ({what})" for name, (what, _) in GROUPS.items())
-    + ".",
-    {"groups": {"type": "array", "items": {"type": "string", "enum": list(GROUPS)}}},
-)
+def _more_tools_text(groups: Sequence[str]) -> str:
+    return (
+        "Bring in more of Themi's tools for this conversation, when what they ask needs ones "
+        "you don't have yet. groups: "
+        + "; ".join(f"'{name}' ({GROUPS[name][0]})" for name in groups)
+        + "."
+    )
+
+
+def _more_tools_args(groups: Sequence[str]) -> dict[str, Any]:
+    return {"groups": {"type": "array", "items": {"type": "string", "enum": list(groups)}}}
+
+
+@tool("more_tools", _more_tools_text(list(GROUPS)), _more_tools_args(list(GROUPS)))
 async def more_tools(ctx: ToolContext, args: dict[str, Any]) -> str:
     added = [g for g in args["groups"] if g in GROUPS and g not in ctx.groups]
     ctx.groups.update(added)
-    if not added:
+    if added:
+        return f"Added the {', '.join(added)} tools; use them now."
+    # F33b: only groups not sent are offered, so this is an old list or a muddle; say
+    # what's here instead of a bare "here already" (reply 237 wandered for three rounds).
+    here = [g for g in dict.fromkeys(args["groups"]) if g in GROUPS]
+    names = sorted(n for n, g in TOOL_GROUPS.items() if g in here and ctx.services.tools.get(n))
+    if not names:
         return "Those tools are here already."
-    return f"Added the {', '.join(added)} tools; use them now."
+    return (
+        f"The {' and '.join(here)} tools are here already: {', '.join(names)}. Use one of them now."
+    )
+
+
+def more_tools_for(groups: set[str]) -> ToolSpec | None:
+    """F33b: more_tools as one turn gets it, offering only the groups it doesn't have yet
+    (29 of 41 calls in a week asked for ones already sent). None when every group is in."""
+    missing = [g for g in GROUPS if g not in groups]
+    if not missing:
+        return None
+    return ToolSpec(
+        more_tools.spec.name, _more_tools_text(missing), schema(_more_tools_args(missing))
+    )

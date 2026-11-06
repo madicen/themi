@@ -211,6 +211,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
+| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
+| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
+| F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
+| F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
+| F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
+| F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -10718,6 +10724,310 @@ Notes (2026-11-06):
 - The routing eval is a unit test (`test_forwarding_an_email_reaches_the_email_tools`);
   `tests/evals` wasn't changed.
 - Setup: restart `themi run` (migration 0118). No new Google scope.
+
+### F32a · Idea (2026-11-06): tasks on the website, grouped by due date and other ways
+Status: [ ]
+Depends on: W2, T1
+Read first: W1's principles (collapsed rows, phone first, no new JS); W2's notes
+(`task_pages.task_rows`, `_task_row.html`); T1's `themi.core.priority` (urgent and
+important, in words). From Michael's idea #170 (2026-11-06, 10:07 am, "give the option to
+group tasks on the website by due date or other reasonable groupings").
+
+What the Pi shows: `/tasks` is one list, "On your list", sorted overdue first, then by due
+date, undated last (`task_pages._order`). Michael has about a dozen open tasks and Erin
+about twenty, so on a phone the due dates are only in each row's second line.
+
+Build:
+- `task_pages.group_tasks(tasks, by, today) -> list[(heading, tasks)]`, pure and in order,
+  with empty groups left out. Within a group, tasks keep today's `_order`.
+  - `due` (the default): Overdue, Today, Tomorrow, This week (to Sunday), Next week, Later,
+    No due date. On a Saturday, "Tomorrow" is Sunday and "This week" is empty.
+  - `urgency`: T1's words, "Urgent and important", "Urgent", "Important", "Neither", from
+    `priority.is_urgent` / `is_important`. Words only, never a score.
+  - `kind`: "Calls" (call), "Errands" (errand), "Around the house" (physical), "Messages
+    and online" (text).
+  - `repeats`: "One-offs", "Repeating chores", "Check-ins" (`check_in`).
+  - `none`: one list, as now.
+- `/tasks`: a "Group by" line under the heading: Due date · Urgency · Kind · Repeats · None.
+  Each is a small CSRF-checked POST form button styled as a chip (no JS), with the current
+  one marked (`aria-current`). Each group is a `<h2>` with its count, then the rows from
+  `_task_row.html`. "You added for someone else" stays one collapsed group at the end,
+  ungrouped.
+- Remembered per person: migration `members.task_grouping` (TEXT, default `due`),
+  `POST /tasks/grouping` saves it and redirects to `/tasks`. An unknown value is read as
+  `due`. `?group=` in the URL shows that grouping once, without saving it (for a shared
+  link).
+- Home's "On your list" stays as it is: the first five, ungrouped.
+- My settings: nothing new. The page itself is where it's chosen.
+
+Tests: unit tests for `group_tasks` with a frozen clock: the week edges (a Saturday and a
+Sunday), overdue, undated last, empty groups left out, each grouping's headings and order.
+Page tests: each grouping renders its headings and counts. The choice is kept across
+visits, and each person's is their own. A bad value falls back to due date. `?group=`
+doesn't save. The CSRF check holds. The page has no number scores (the energy check the
+site tests already run).
+Scenario: Michael chooses "Urgency" on Tasks, sees "Urgent" with today's dentist call in
+it, comes back later and it's still grouped that way. Erin's page is still by due date.
+
+Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
+
+### F33a · Feedback (2026-11-06): a direct change made as asked ends the turn
+Status: [x] 2026-11-06
+Depends on: P2b, R1a
+Read first: P2b's notes (`ToolContext.asked`, and when the turn doesn't end early); R1a's
+notes (the routine tools). From a slow-reply audit of 2026-11-06 (reply 237, 166 s, Wed 4
+Nov 8:25 am).
+
+What the Pi shows: in the week to 2026-11-06, 145 of 219 replies took two model rounds,
+most of them a tool and then a round that only says it back. Reply 237's last round (16.8 s
+that day, about 2.5 s on a normal one) wrote "Removed." after `remove_routine_item` had
+returned "Removed Refill cat feeders." P2b ends the turn only on `ToolContext.asked`, which
+only a staged `Proposal` with `requested` and `said` fills. Tools that change things
+directly and return a done line (`remove_routine_item`, `tick_routine_item` and others like
+them) never fill it, so they always cost the extra round.
+
+Build:
+- A way for a direct tool to say "done as they asked": return a small `Done(said, asked)`
+  (or set `ctx.replies`/`ctx.asked` through one helper) instead of a bare string. The model
+  still gets the result text.
+- `asked` uses the same test as `add_routine_item`: the person is the one acting, and every
+  word of the item's title (over two letters) is in what they wrote (`name_key`). A match
+  the tool had to guess (F33c's near match, a different title) isn't asked.
+- Use it in `remove_routine_item` and `tick_routine_item` first. Go through the other
+  direct tools that end with a plain done line (list removes, task done/snooze if they
+  don't already, calendar removes) and convert the ones where it's clearly safe. List what
+  was converted, and what was left and why, in the Notes.
+- P2b's conditions stay: not after a failed call in the turn, not when the round also ran
+  a tool that didn't leave an `asked` reply, and `more_tools` doesn't count either way.
+- The reply sent is the tool's own line, e.g. "Removed Refill cat feeders from your evening
+  routine." (title in quotes if `_titles_quoted` would quote it). PDA phrasing rules still
+  apply to it.
+
+Tests: each a failing test first. "Remove the refill cat feeders from my evening routine":
+one model round, the reply is the tool's line. A removal where the model's title isn't in
+their words: two rounds, as now. A round with a removal and a failed call: two rounds. A
+tick from chat ("I took my meds"): one round.
+Scenario: Michael removes an evening routine item in chat and gets one line back, with a
+single model call in the reply's timing.
+
+Data: after a week live, compare the share of 2-round replies on the Pi with 145 of 219.
+
+Notes (2026-11-06):
+- `tools.Done(said, asked)`: a direct tool's result. The model reads `said` either way;
+  when `asked`, it also goes into `ctx.replies` and `ctx.asked`, so P2b's check ends the
+  turn. Not asked: as before, the model's next round says it.
+- `tools.in_their_words(ctx, title)`: every word of the title over two letters is in what
+  they wrote (a title of only short words, like "TV", is matched whole).
+  `add_routine_item`'s own check now uses it.
+- Converted: `remove_routine_item` ('Removed "X" from your Evening routine.'),
+  `tick_routine_item` ('Ticked "X" for today.') and `remove_maintenance` ('Removed "X" from
+  the maintenance list.'). Titles are quoted, as list adds are.
+- Left as they are: `remove_from_list` (several items or the ticked ones at once, and its
+  result lists what's left for the model), calendar deletes (they can match several
+  events, and "both" calendars), spending removal and list moves (descriptions the model
+  reshapes). Worth a look once the Pi shows how often they cost a round.
+- Matching is by word inside what they wrote, as before, so "Take Meds" isn't asked by "I
+  took my meds": that still takes two rounds.
+- Setup: restart `themi run`. No migration.
+
+### F33b · Feedback (2026-11-06): more_tools offers only what isn't here yet
+Status: [x] 2026-11-06
+Depends on: P1, P7b
+Read first: P1's notes (`more_tools`, `ToolContext.groups`); P7b's notes (groups added by
+meaning). From the same audit (reply 237).
+
+What the Pi shows: reply 237's second round (80.7 s, two 504s) was `more_tools(["wall"])`,
+and the wall tools were already loaded ("Those tools are here already."). Of 41
+`more_tools` calls on the Pi in the week to 2026-11-06, 29 asked only for groups the turn
+already had. Each one is a whole wasted model round. `more_tools`'s `groups` enum
+(`tools.py`) lists every group whatever was sent.
+
+Build:
+- `ToolRegistry.specs_for` (called again each round) builds `more_tools`'s spec for the turn:
+  the enum and description list only groups not in `ctx.groups`. When every group is in,
+  `more_tools` isn't sent (as "all" routing does now).
+- If a model still asks for a group that's here (an old spec, a stale call), the result
+  says which of the tools it already has fit, e.g. "The wall tools are already here:
+  show_routine, remove_routine_item, ... Use one of them now.", not just "here already".
+- P6 near-twin text and the timing's `tools_sent` count still see the right list.
+
+Tests: each a failing test first. With groups {core, calendar, schedules, wall}, the
+`more_tools` spec offers neither "wall" nor "calendar"; with every group, it's absent. A
+round that adds "pantry" offers one group fewer next round. A call for a loaded group
+names that group's tools.
+Scenario: none (nobody sees it beyond speed). Covered by the unit tests and the routing
+eval.
+
+Data: after a week live, the Pi's no-op `more_tools` count (result "Those tools are here
+already" or the new line) should be near zero.
+
+Notes (2026-11-06):
+- `tools.more_tools_for(groups)`: `more_tools`'s spec for one turn, with only the groups
+  it doesn't have in its enum and description. `ToolRegistry.specs(groups)` swaps it in
+  (and leaves it out when every group is in), so `specs_for`, P6's twin text and the
+  timing's `tools_sent` all see the same list. `specs()` with no groups (evals, admin) still
+  offers every group. Caching is unaffected: the spec follows the groups, which already
+  decide the tool list.
+- The registered spec still has every group, so a stale call passes the schema check.
+  Its result now names the tools of the group asked for: "The wall tools are here
+  already: remove_routine_item, show_routines, .... Use one of them now."
+- A router sending every group now sends one tool fewer (`test_router_eval` changed).
+- Setup: restart `themi run`. No migration.
+
+### F33c · Feedback (2026-11-06): "no such routine item" says what's there, and a near name is found
+Status: [x] 2026-11-06
+Depends on: R1a, F24a
+Read first: R1a's notes (`Routines.find_item`); F24a's notes (`events.near_twin`). From
+the same audit (reply 237).
+
+What the Pi shows: Michael wrote "Remove the regular cat feeders from my evening routine".
+The item is "Refill cat feeders". `find_item` uses `title_matches` (every word they used),
+so "regular" missed, and the result was only "No item like regular cat feeders on their
+routines." Without a list, the model asked for tools it had (round 2), then called
+`show_routine` (round 3), then staged an add of the very item (round 4, F33d), and only
+removed it in round 5. `near_twin("regular cat feeders", "Refill cat feeders")` is True
+(two words shared, all but one of the longer title's).
+
+Build:
+- `Routines.find_item`: if nothing matches by `title_matches`, and exactly one item in the
+  routine (or across their routines, when none was named) is a `near_twin`, that's the item.
+  Two or more near twins: no match, and the miss names them.
+- A miss (`remove_routine_item`, `tick_routine_item`) lists what's there: "No item like
+  regular cat feeders on Michael's Evening routine. It has: Cycle Dishwasher, Take Meds,
+  Cover the birdcage, Refill the vacuum's clean water, Refill cat feeders." Closest first
+  (`words_in_common`), at most 12. With no routine named, each routine's items, grouped.
+- An item found by a near match is not "asked" for F33a, so the model's next round still
+  says what was removed ("Removed Refill cat feeders.") and the person sees the real name.
+- Same for any other routine tool that looks items up by title.
+
+Tests: each a failing test first. Reply 237: "regular cat feeders" on Evening removes
+"Refill cat feeders". Two near twins: no removal, both named in the miss. A miss with no
+near twin lists the routine's items, closest first. A near match isn't "asked".
+Scenario: reply 237, two model rounds, the item removed, the reply names "Refill cat
+feeders".
+
+Data: none.
+
+Notes (2026-11-06):
+- `Routines.find_item` is unchanged (only the two chat tools used it). `Routines.near_items`
+  lists the `events.near_twin` matches. `routines._item_for` (used by `remove_routine_item`
+  and `tick_routine_item`) takes the exact match, else the one near twin, else fails with
+  what's there: "More than one is close: A, B. Ask which one.", or the routine's items
+  closest first (`words_in_common`, at most 12, "It has: ..."), or with no routine named,
+  each routine's ("Morning: ... Evening: ...").
+- A near match isn't "asked" (F33a), whatever words they used, so the model's next round
+  says which item it was.
+- Setup: restart `themi run`. No migration.
+
+### F33d · Feedback (2026-11-06): asked to remove an item, Themi doesn't offer to add it
+Status: [x] 2026-11-06
+Depends on: F11, F33c
+Read first: F11's notes (`add_to_wall_routine`); F33c. From the same audit (reply 237).
+
+What the Pi shows: in reply 237's fourth round, after `show_routine` listed "Refill cat
+feeders", the model called `add_to_wall_routine("Refill cat feeders")`. It staged action
+448, and Michael got "Refill cat feeders for the evening routine, every day. Go ahead, or
+not now?" in the middle of asking to remove it. He tapped Not now. The trust tiers caught
+it, but the card shouldn't have been made.
+
+Build:
+- `add_to_wall_routine` and `add_routine_item` decline (`ToolDeclined`, nothing staged)
+  when the message is a removal ("remove", "take off", "delete", "drop", "get rid of" in
+  `ctx.request_text`, as a word) and the item is already on that routine. The result says
+  so: "Refill cat feeders is already on the Evening routine, and they asked to remove
+  something. Use remove_routine_item."
+- An add in a message that also asks to add ("swap X for Y", "remove X and add Y") still
+  goes: only decline when there's no add word.
+
+Tests: each a failing test first. Reply 237's round 4: declined, no card. "Swap the cat
+feeders for the vacuum water": the add still stages. An add of an item not on the routine,
+in a removal message, still stages (it may be the other half of a swap).
+Scenario: none beyond F33c's: with F33c, reply 237 doesn't reach this round. This is the
+backstop.
+
+Data: none.
+
+Notes (2026-11-06):
+- `cozyla_routines.asked_to_remove(text)`: "remove", "delete", "drop", "get rid of" or
+  "take ... off", and none of "add", "put", "swap", "switch", "replace", "instead",
+  "move", "new". `already_there` declines (`ToolDeclined`, nothing staged) when the title
+  matches an item on that routine, and says "... Use remove_routine_item."
+- `add_to_wall_routine` checks the wall's items for that part today
+  (`WallRoutines.titles_on`, [] if the wall can't be read) and Themi's routine of the same
+  name. `add_routine_item` checks the routine it was given.
+- An add of something that isn't on the routine still stages, as does any add in a
+  message with an add word ("remove X and add Y").
+- Setup: restart `themi run`. No migration.
+
+### F32b · Feedback (2026-11-06): "my chores" is the chore chart, and a routine item moves there in one go
+Status: [ ]
+Depends on: C2b, R1a, F23e, F29d
+Read first: C2b's notes (the chore chart, `put_task_on_chore_chart`); R1a's and R1b's notes
+(routine items, just-for-today ones); F23e's notes (a task moved into a routine becomes
+the item); F29d's notes (a corrected card replaces its card). From Michael's bug #171
+(2026-11-06, 10:45 am, "That exchange took way too many attempts").
+
+What the Pi shows:
+- 10:44 am (reply 314): "Move the vacuum water item to my chore chart please" became
+  `add_to_wall_routine` ("replace vacuum water", Evening, just today), card 512. The
+  evening routine already had "Refill the vacuum's clean water", the item made at 7:28 am.
+  Michael tapped Not now.
+- 10:45 am (reply 315): "Move the 'replace vacuum water' routing item to the chore list on
+  the wall calendar": the same call, card 513, Not now again. Cards 512 and 513 are
+  `snoozed`, so both will come back.
+- 10:45 am (reply 316): "...routine item to the chore list..." worked in three calls:
+  `remove_routine_item`, then `create_task` (task 81), then `put_task_on_chore_chart`. Task
+  81 is open, on the chart, undated.
+- No tool moves a routine item to the chore chart, so the model reached for
+  `add_to_wall_routine`. That tool takes "move" as moving a task into a routine (bug #133's
+  `MOVED`), and doesn't check that they said chore chart or chores, not routine. Its
+  `ROUTINE_WORDS` guard only covers "what tasks could I take". It doesn't notice the item is
+  on that routine already ("vacuum water" in both titles).
+- The same mix-up was behind this morning's #166 thread. "I'll handle the vacuum's water.
+  Can you move it to my chores?" put Erin's task 80 on Michael's *evening routine* (card
+  508). "My chores" is his column on the chore chart, which is where the routine item was
+  then asked to go.
+- (The "To do: Refill the vacuum's clean water. Done already, or later?" under reply 316
+  in the report is task 81's first nudge, queued for 8 am Saturday, not sent then.)
+
+Build:
+- `put_task_on_chore_chart` gains `routine_item` (a title on one of their routines, or
+  ''), with `task_id` 0. It takes the item off the routine (`Routines.remove_item`, the
+  wall following at its sync), makes the task assigned to the routine's owner, and puts it
+  on the chart:
+  - A just-for-today item (`only_on`): a one-off due that day, on the chart.
+  - A repeating item: a repeating chore with the item's days (every day if it has none), on
+    the chart as repeating chores are. The reply says so ("Cycle Dishwasher is a chore now,
+    every day, on your column of the chart").
+  - One call, one line back: "Moved Refill the vacuum's clean water from your evening
+    routine to the chore chart, for today." It runs without a card, as the chart move does
+    now.
+- `add_to_wall_routine` is refused when their message names the chore chart, the chore list
+  or their chores ("chart", "chores?", "chore list") and no routine word: "They asked for
+  the chore chart, not a routine. A task goes there with put_task_on_chore_chart (task_id);
+  a routine item with put_task_on_chore_chart (routine_item)." Bug #166's "move it to my
+  chores" with a task of Erin's becomes: assign it to him, then put it on the chart. Check
+  the tool descriptions say so, and add routing examples.
+- `add_to_wall_routine` refuses an item like one already on that routine for that day
+  (`title_matches`, or two shared words of three letters or more, such as "vacuum water"),
+  naming it: "Refill the vacuum's clean water is on the evening routine already."
+- A card staged while an identical one (same category and payload) waits, pending or
+  snoozed, for the same person, replaces it: the old card is edited to "Replaced by the
+  newer card." and declined by `system`. That's F29d's calendar rule, for every category.
+
+Tests: each a failing test first. Reply 314's call is refused (chore chart, not routine), and
+"Move the vacuum water item to my chore chart" with `routine_item` moves it in one call. The
+routine loses it, task 81's double is on the chart for today, and the wall's routine drops it
+at the next sync. A repeating item becomes a repeating chore with its days. Bug #166's "move
+it to my chores" is refused for the routine. The duplicate "replace vacuum water" is refused,
+naming the item. A second identical card replaces the first, snoozed or not. "Add replace
+vacuum water to my evening routine tonight" (bug #22's case) still works.
+Scenario: bug #171, Michael's first message, one call, one line, the item on the chart and
+off the routine. No card, nothing snoozed.
+
+Data (Michael decides): decline actions 512 and 513 on the Pi (snoozed cards that would
+add "replace vacuum water" to the evening routine), or they'll come back. Task 81 is right
+as it is. Mark #171 reviewed once live.
 
 ## Conversation mode
 

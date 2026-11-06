@@ -543,3 +543,48 @@ async def test_bug_166_a_card_after_a_retried_call_is_the_whole_answer(
     assert len(replies) == 1, replies
     assert "Refill the vacuum's clean water" in replies[0]
     assert f"task {task.id}" not in replies[0].lower()
+
+
+# ----- F33d (reply 237): asked to remove an item, no card to add it ---------------------------
+
+
+def cards(scenario: Scenario) -> list[str]:
+    return [r["summary"] for r in scenario.app.db.query("SELECT summary FROM pending_actions")]
+
+
+async def on_the_wall(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    fake_cozyla.add_routine("m-erin", "Refill cat feeders", "Evening")
+    fake_cozyla.add_routine("m-erin", "Take Meds", "Evening")
+    await at(scenario, WED, 9, 30)
+
+
+async def test_reply_237_an_add_in_a_removal_is_declined(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    await on_the_wall(scenario, fake_cozyla)
+    await add(scenario, "Remove the regular cat feeders from my evening routine", {
+        "title": "Refill cat feeders", "part": "Evening", "repeat": "",
+    })  # fmt: skip
+    assert cards(scenario) == []
+    result = str(scenario.primary.requests[-1].messages[-1])
+    assert "Refill cat feeders is already on the Evening routine" in result
+    assert "Use remove_routine_item" in result
+
+
+async def test_a_swap_still_adds(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    await on_the_wall(scenario, fake_cozyla)
+    await add(scenario, "Remove take meds and add refill cat feeders to my evening routine", {
+        "title": "Refill cat feeders", "part": "Evening", "repeat": "",
+    })  # fmt: skip
+    assert len(cards(scenario)) == 1
+
+
+async def test_a_new_item_in_a_removal_message_still_stages(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    # it may be the other half of a swap the words don't show
+    await on_the_wall(scenario, fake_cozyla)
+    await add(scenario, "Take meds off my evening routine, it should be brush teeth", {
+        "title": "Brush teeth", "part": "Evening", "repeat": "",
+    })  # fmt: skip
+    assert len(cards(scenario)) == 1

@@ -46,7 +46,7 @@ from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clean_steps, day_arg
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import Done, ToolContext, ToolFailed, in_their_words, tool
 from themi.energy.matching import Assignment
 from themi.energy.model import SOURCE_INPUT
 from themi.energy.windows import RECEPTIVE, Projection
@@ -764,10 +764,11 @@ async def set_maintenance(ctx: ToolContext, args: dict[str, Any]) -> str:
     "Remove a maintenance item, with its history and its calendar event.",
     {"name": ITEM_ARG},
 )
-async def remove_maintenance(ctx: ToolContext, args: dict[str, Any]) -> str:
+async def remove_maintenance(ctx: ToolContext, args: dict[str, Any]) -> Done:
     item = _found(ctx, str(args["name"]))
     await _maintenance(ctx).remove(item, ctx.member)
-    return f"Removed {item.name} from the maintenance list."
+    said = f'Removed "{item.name}" from the maintenance list.'
+    return Done(said, asked=in_their_words(ctx, item.name))  # F33a
 
 
 @tool(

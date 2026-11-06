@@ -42,7 +42,8 @@ async def test_a_router_that_sends_everything_offers_every_case(
     routed = route_cases(scenario.app.services.tools, lambda _: set(GROUPS), CASES)
     t = totals(routed)
     assert (t.needing, t.offered) == (3, 3)
-    assert t.tools_sent == len(scenario.app.services.tools.specs())
+    # F33b: every group is in, so more_tools has nothing to offer and isn't sent
+    assert t.tools_sent == len(scenario.app.services.tools.specs()) - 1
 
 
 async def test_a_router_that_misses_a_group_is_scored_down(scenario: Scenario) -> None:

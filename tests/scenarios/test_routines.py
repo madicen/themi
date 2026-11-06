@@ -180,14 +180,15 @@ async def test_a_custom_routine_from_chat(scenario: Scenario) -> None:
 async def test_ticking_and_removing_from_chat(scenario: Scenario) -> None:
     add(scenario, "Erin", "Morning", "Vitamins")
     scenario.primary.queue_tool_call("tick_routine_item", {"title": "vitamins"})
-    scenario.primary.queue_text("Nice.")
-    await scenario.say("Erin", "took my vitamins")
+    # F33a: done as they said it, the tool's line is the reply, with no second round
+    assert await scenario.say("Erin", "took my vitamins") == ['Ticked "Vitamins" for today.']
     await at(scenario, WED, 12)
     assert checks(scenario, "Erin") == []
 
     scenario.primary.queue_tool_call("remove_routine_item", {"title": "vitamins", "routine": ""})
-    scenario.primary.queue_text("Gone.")
-    await scenario.say("Erin", "take vitamins off my routine")
+    assert await scenario.say("Erin", "take vitamins off my routine") == [
+        'Removed "Vitamins" from your Morning routine.'
+    ]
     erin = scenario.member("Erin")
     morning = routines(scenario).find(erin, "Morning")
     assert morning is not None and routines(scenario).items(morning) == []
@@ -259,3 +260,94 @@ async def test_an_item_for_someone_elses_routine_asks_first(scenario: Scenario) 
     assert evening is not None and routines(scenario).items(evening) == []
     await scenario.tap("Erin", "Go ahead")
     assert [i.title for i in routines(scenario).items(evening)] == ["Feed the birds"]
+
+
+# ----- F33c (reply 237): a near name is found, and a miss says what's there --------------
+
+
+def tool_results(scenario: Scenario, name: str) -> list[str]:
+    rows = scenario.app.db.query(
+        "SELECT result FROM reply_tools WHERE name = ? ORDER BY id", (name,)
+    )
+    return [r["result"] for r in rows]
+
+
+def evening_items(scenario: Scenario, name: str = "Erin") -> list[str]:
+    evening = routines(scenario).find(scenario.member(name), "Evening")
+    assert evening is not None
+    return [i.title for i in routines(scenario).items(evening)]
+
+
+async def test_reply_237_a_near_name_is_removed(scenario: Scenario) -> None:
+    for title in ("Cycle Dishwasher", "Take Meds", "Cover the birdcage", "Refill cat feeders"):
+        add(scenario, "Erin", "Evening", title)
+    scenario.primary.queue_tool_call(
+        "remove_routine_item", {"title": "regular cat feeders", "routine": "Evening"}
+    )
+    scenario.primary.queue_text("Removed Refill cat feeders.")
+    replies = await scenario.say("Erin", "Remove the regular cat feeders from my evening routine")
+    assert evening_items(scenario) == ["Cycle Dishwasher", "Take Meds", "Cover the birdcage"]
+    # a near match isn't in her words (F33a), so the model's round names the real item
+    assert scenario.primary.pending() == 0
+    assert replies == ["Removed Refill cat feeders."]
+    assert tool_results(scenario, "remove_routine_item") == [
+        'Removed "Refill cat feeders" from your Evening routine.'
+    ]
+
+
+async def test_two_near_names_remove_neither_and_are_named(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    add(scenario, "Erin", "Evening", "Clean cat feeders")
+    scenario.primary.queue_tool_call(
+        "remove_routine_item", {"title": "wash cat feeders", "routine": "Evening"}
+    )
+    scenario.primary.queue_text("Which one?")
+    await scenario.say("Erin", "Remove wash cat feeders from my evening routine")
+    assert evening_items(scenario) == ["Refill cat feeders", "Clean cat feeders"]
+    (result,) = tool_results(scenario, "remove_routine_item")
+    assert result.startswith("No item like wash cat feeders on Erin's Evening routine.")
+    assert "More than one is close: Refill cat feeders, Clean cat feeders." in result
+
+
+async def test_a_miss_lists_the_routine_closest_first(scenario: Scenario) -> None:
+    for title in ("Cycle Dishwasher", "Take Meds", "Refill the vacuum's clean water"):
+        add(scenario, "Erin", "Evening", title)
+    scenario.primary.queue_tool_call(
+        "remove_routine_item", {"title": "empty the vacuum", "routine": "Evening"}
+    )
+    scenario.primary.queue_text("I couldn't find that one.")
+    await scenario.say("Erin", "Take empty the vacuum off my evening routine")
+    (result,) = tool_results(scenario, "remove_routine_item")
+    assert result == (
+        "No item like empty the vacuum on Erin's Evening routine. It has: Refill the "
+        "vacuum's clean water, Cycle Dishwasher, Take Meds. Nothing was changed."
+    )
+
+
+async def test_a_miss_with_no_routine_named_lists_each(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Morning", "Vitamins")
+    add(scenario, "Erin", "Evening", "Take Meds")
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "stretches"})
+    scenario.primary.queue_text("That isn't on your routines.")
+    await scenario.say("Erin", "did my stretches")
+    (result,) = tool_results(scenario, "tick_routine_item")
+    assert result == (
+        "No item like stretches on Erin's routines. Morning: Vitamins. Evening: Take Meds. "
+        "Nothing was changed."
+    )
+
+
+async def test_an_add_in_a_removal_message_is_declined(scenario: Scenario) -> None:
+    # F33d (reply 237): asked to remove it, the model staged adding it
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    scenario.primary.queue_tool_call(
+        "add_routine_item",
+        {"title": "Refill cat feeders", "routine": "Evening", "days": [], "person": "",
+         "just_today": False},
+    )  # fmt: skip
+    scenario.primary.queue_text("Which one did you mean?")
+    await scenario.say("Erin", "Remove the regular cat feeders from my evening routine")
+    assert scenario.app.db.query("SELECT * FROM pending_actions") == []
+    assert evening_items(scenario) == ["Refill cat feeders"]
+    (result,) = tool_results(scenario, "add_routine_item")
+    assert result.startswith("Refill cat feeders is already on the Evening routine")

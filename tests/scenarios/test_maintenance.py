@@ -307,6 +307,16 @@ async def test_removed_in_chat(scenario: Scenario) -> None:
     scenario.primary.queue_text("Removed.")
     await scenario.say("Erin", "Take the furnace filter off the maintenance list")
     assert maintenance(scenario).items() == []
+    assert scenario.primary.pending() == 0  # "Change the..." wasn't her words: the model says it
+
+
+async def test_removed_in_her_words_ends_the_turn(scenario: Scenario) -> None:
+    # F33a: the tool's line is the reply, with no second round
+    await add(scenario)
+    scenario.primary.queue_tool_call("remove_maintenance", {"name": "furnace filter"})
+    replies = await scenario.say("Erin", "No more change the furnace filter, please remove it")
+    assert maintenance(scenario).items() == []
+    assert replies == ['Removed "Change the furnace filter" from the maintenance list.']
 
 
 # ----- the family calendar -------------------------------------------------------------

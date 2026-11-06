@@ -49,7 +49,14 @@ from themi.core.lists import name_key
 from themi.core.repeat import RepeatError, parse, read_back
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard
-from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
+from themi.core.tools import (
+    Proposal,
+    ToolContext,
+    ToolDeclined,
+    ToolFailed,
+    staged_tool,
+    tool,
+)
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -449,13 +456,10 @@ class CozylaRoutines:
 
     # ----- asked about (bugs #76 and #78) ---------------------------------------------------
 
-    async def describe(self, member: Member, part: str) -> str:
-        """Their routine on the wall today, for one part of the day or all three."""
-        try:
-            members = await self.client.members()
-            records = await self.client.routine_records(self._today())
-        except CozylaError as exc:
-            raise ToolFailed(f"The wall couldn't be reached ({exc}); say so.") from exc
+    async def _today_of(self, member: Member) -> tuple[str | None, list[RoutineRecord]]:
+        """Their uid on the wall (None: not a member there) and today's routine records."""
+        members = await self.client.members()
+        records = await self.client.routine_records(self._today())
         uid = next(
             (
                 u
@@ -464,6 +468,22 @@ class CozylaRoutines:
             ),
             None,
         )
+        return uid, records
+
+    async def titles_on(self, member: Member, part: str) -> list[str]:
+        """Today's items on one part of their routine on the wall ([] if it can't be read)."""
+        try:
+            uid, records = await self._today_of(member)
+        except CozylaError:
+            return []
+        return [r.title for r in records if uid is not None and r.member == uid and r.part == part]
+
+    async def describe(self, member: Member, part: str) -> str:
+        """Their routine on the wall today, for one part of the day or all three."""
+        try:
+            uid, records = await self._today_of(member)
+        except CozylaError as exc:
+            raise ToolFailed(f"The wall couldn't be reached ({exc}); say so.") from exc
         if uid is None:
             return f"{member.name} isn't a member on the wall, so they have no routines there."
         lines = []
@@ -554,6 +574,27 @@ class CozylaRoutines:
 ROUTINE_WORDS = re.compile(
     r"\b(?:routines?|morning|afternoon|evening|tonight|every ?day|daily|bedtime)\b"
 )
+# F33d (reply 237): a message asking to take something off, and nothing on (a swap)
+REMOVING = re.compile(r"\b(?:remove|delete|drop|get rid of|take\b.*\boff)\b")
+ADDING = re.compile(r"\b(?:add|put|swap|switch|replace|instead|move|new)\b")
+
+
+def asked_to_remove(said: str) -> bool:
+    """They asked to take an item off, and nothing on: an add of an item that's there
+    already is the model's muddle, not what they want (reply 237 made a card for one)."""
+    return bool(REMOVING.search(name_key(said))) and not ADDING.search(name_key(said))
+
+
+def already_there(title: str, routine: str, titles: list[str]) -> None:
+    """F33d: decline an add, in a message asking to remove, of an item already on it."""
+    for each in titles:
+        if name_key(each) == name_key(title) or title_matches(title, each):
+            raise ToolDeclined(
+                f"{each} is already on the {routine} routine, and they asked to remove "
+                "something. Use remove_routine_item."
+            )
+
+
 TAKE_TASKS = re.compile(r"\b(?:take|do|help with|pick up)\b.*\b(?:tasks?|chores?|jobs?)\b")
 PERSONS_TASKS = re.compile(r"\b\w+'?s\s+(?:tasks|chores|jobs|to-?dos?)\b", re.IGNORECASE)
 
@@ -607,6 +648,14 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             "They didn't ask about a routine. If they want a partner's tasks to take on, "
             "use tasks_i_could_take; otherwise answer with the tasks."
         )
+    if asked_to_remove(ctx.request_text):  # F33d
+        part = str(args["part"])
+        titles = await ctx.services.wall_routines.titles_on(ctx.member, part)
+        routines = ctx.services.routines
+        ours = routines.find(ctx.member, part) if routines is not None else None
+        if routines is not None and ours is not None:
+            titles += [i.title for i in routines.items(ours)]
+        already_there(title, part, titles)
     moved = _moved_task(ctx, int(args.get("task_id") or 0), title, said)
     words = [w for w in name_key(title).split() if len(w) > 2]
     asked = "routine" in said and (

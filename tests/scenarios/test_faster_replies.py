@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_lists import gift_list, items, packing_list
+from tests.scenarios.test_routines import add, routines
 from themi.ai.router import HEDGE_AFTER
 from themi.core.lists import ADD_CATEGORY
 from themi.core.timing import SLOW_AFTER, week_of_replies
@@ -79,3 +80,56 @@ async def test_a_stuck_call_is_sent_again_before_a_word_is_needed(scenario: Scen
     (reply,) = week_of_replies(scenario.app.db)
     assert reply.seconds < SLOW_AFTER
     assert "sent again, the second answered" in reply.steps[0].detail
+
+
+# F33a (reply 237, 2026-11-04): a direct change made as asked has its own line, so the
+# model's next round, which only said "Removed.", isn't made.
+
+
+async def test_a_routine_item_removed_as_asked_ends_the_turn(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    before = chats(scenario)
+    scenario.primary.queue_tool_call(
+        "remove_routine_item", {"title": "Refill cat feeders", "routine": "Evening"}
+    )
+    replies = await scenario.say("Erin", "Remove the refill cat feeders from my evening routine")
+    assert replies == ['Removed "Refill cat feeders" from your Evening routine.']
+    assert chats(scenario) - before == 1
+    evening = routines(scenario).find(scenario.member("Erin"), "Evening")
+    assert evening is not None and routines(scenario).items(evening) == []
+
+
+async def test_a_removal_not_in_their_words_still_gets_the_next_round(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    scenario.primary.queue_tool_call(
+        "remove_routine_item", {"title": "Refill cat feeders", "routine": "Evening"}
+    )
+    scenario.primary.queue_text("Removed Refill cat feeders.")
+    replies = await scenario.say("Erin", "Take the kitty food thing off tonight's list")
+    assert replies == ["Removed Refill cat feeders."]
+    assert scenario.primary.pending() == 0
+
+
+async def test_a_removal_and_a_failed_call_still_get_the_next_round(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Evening", "Refill cat feeders")
+    scenario.primary.queue_tool_calls(
+        [
+            ("remove_routine_item", {"title": "Refill cat feeders", "routine": "Evening"}, None),
+            ("remove_routine_item", {"title": "Walk the dog", "routine": "Evening"}, None),
+        ]
+    )
+    scenario.primary.queue_text("Cat feeders are off. There's no dog walk on it.")
+    replies = await scenario.say(
+        "Erin", "Remove refill cat feeders and walk the dog from my evening routine"
+    )
+    assert replies == ["Cat feeders are off. There's no dog walk on it."]
+    assert scenario.primary.pending() == 0
+
+
+async def test_a_tick_in_their_words_ends_the_turn(scenario: Scenario) -> None:
+    add(scenario, "Erin", "Morning", "Vitamins")
+    before = chats(scenario)
+    scenario.primary.queue_tool_call("tick_routine_item", {"title": "vitamins"})
+    replies = await scenario.say("Erin", "took my vitamins")
+    assert replies == ['Ticked "Vitamins" for today.']
+    assert chats(scenario) - before == 1
