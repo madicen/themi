@@ -890,6 +890,14 @@
    "tools": [
     "add_recipe_to_grocery_list"
    ]
+  },
+  {
+   "id": "recipe-cook",
+   "kind": "plain",
+   "message": "Walk me through making the pancakes",
+   "tools": [
+    "start_cooking"
+   ]
   }
  ]
 }
