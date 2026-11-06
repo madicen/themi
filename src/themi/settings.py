@@ -78,6 +78,10 @@ class Settings(BaseModel):
     cozyla_chores: bool = False
     # K4: TomTom's routing with live traffic; without it, a free geocoder and an estimate.
     tomtom_api_key: Secret | None = None
+    # F30d: web search for lookups. Tavily by default, or Firecrawl; free plans, no card.
+    tavily_api_key: Secret | None = None
+    firecrawl_api_key: Secret | None = None
+    search_backend: str = ""  # "tavily", "firecrawl", or "" for whichever has a key
     # H1: the dishwasher, through Home Connect's API (a developer app's client id and secret).
     home_connect_client_id: str = ""
     home_connect_client_secret: Secret | None = None
@@ -231,6 +235,8 @@ class Settings(BaseModel):
         grocery_password = get("OURGROCERIES_PASSWORD")
         cozyla_password = get("COZYLA_PASSWORD")
         tomtom_key = get("TOMTOM_API_KEY")
+        tavily_key = get("TAVILY_API_KEY")
+        firecrawl_key = get("FIRECRAWL_API_KEY")
         home_connect_secret = get("HOME_CONNECT_CLIENT_SECRET")
         endpoints = {
             field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
@@ -259,6 +265,9 @@ class Settings(BaseModel):
             cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
             cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
             tomtom_api_key=Secret(tomtom_key) if tomtom_key else None,
+            tavily_api_key=Secret(tavily_key) if tavily_key else None,
+            firecrawl_api_key=Secret(firecrawl_key) if firecrawl_key else None,
+            search_backend=get("THEMI_SEARCH_BACKEND").lower(),
             home_connect_client_id=get("HOME_CONNECT_CLIENT_ID"),
             home_connect_client_secret=(
                 Secret(home_connect_secret) if home_connect_secret else None

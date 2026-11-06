@@ -24,6 +24,9 @@ PATTERNS = [
     re.compile(r"\bsk-[A-Za-z0-9_-]{20,}"),
     # Google API keys (Gemini)
     re.compile(r"\bAIza[0-9A-Za-z_-]{35}"),
+    # F30d: Tavily and Firecrawl search keys
+    re.compile(r"\btvly-[A-Za-z0-9_-]{16,}"),
+    re.compile(r"\bfc-[A-Za-z0-9]{24,}"),
     # Google OAuth access and refresh tokens
     re.compile(r"\bya29\.[0-9A-Za-z_.-]{20,}"),
     re.compile(r"\b1//[0-9A-Za-z_-]{20,}"),

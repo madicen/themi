@@ -134,6 +134,7 @@ def build_runtime(
     from themi.connectors.homeconnect import HomeConnectClient
     from themi.connectors.ourgroceries import OurGroceriesClient
     from themi.connectors.roborock import library as roborock_library
+    from themi.connectors.search import choose as choose_search
     from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
     from themi.connectors.tuya import TuyaConfig
@@ -154,6 +155,9 @@ def build_runtime(
         ),
         "cozyla": CozylaClient(wall) if (wall := settings.cozyla()) else None,
         "travel": TravelClient(settings.tomtom_api_key),
+        "search": choose_search(
+            settings.search_backend, settings.tavily_api_key, settings.firecrawl_api_key
+        ),
         "home_connect": HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
         "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
         "roborock": roborock_library.available(),
