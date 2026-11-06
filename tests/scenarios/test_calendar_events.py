@@ -174,7 +174,10 @@ async def test_themis_own_events_change_at_once_others_ask_first(
     assert sync["start"]["dateTime"] == local(15) and sync["description"] == "Agenda inside"
 
     await say(
-        scenario, "Cancel the dentist", "delete_calendar_event", {"event": "dentist", "on": ""}
+        scenario,
+        "Cancel the dentist",
+        "delete_calendar_event",
+        {"event": "dentist", "on": "", "calendar": ""},
     )
     assert "Dentist" not in on_primary(linked)
 
@@ -338,7 +341,7 @@ async def test_an_event_already_on_the_calendar_isnt_added_again(
         party | {"start": "16:00"},
     )
     assert "already on your calendar (Sat 24 Oct, 2-3 pm)" in tool_result(scenario)
-    assert "move_calendar_event" in tool_result(scenario)
+    assert "change_calendar_event" in tool_result(scenario)
     assert len(on_primary(linked)) == 1
     assert not scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'")
 
