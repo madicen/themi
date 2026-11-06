@@ -43,7 +43,7 @@ from themi.core.cozyla_routines import (
     ROUTINE_SIGNAL,
     SKIPPED_TEXT,
 )
-from themi.core.events import title_matches
+from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.services import Services
@@ -242,6 +242,12 @@ class Routines:
         row = self.db.one("SELECT * FROM routine_items WHERE id = ?", (item_id,))
         assert row is not None
         return _item(row)
+
+    def near_items(self, member: Member, title: str, routine: Routine | None = None) -> list[Item]:
+        """Items that are most likely the one meant under other words (F33c, reply 237:
+        "regular cat feeders" for "Refill cat feeders"), in this routine or all of theirs."""
+        each = [routine] if routine else self.of(member)
+        return [i for r in each for i in self.items(r) if near_twin(title, i.title)]
 
     def find_item(self, member: Member, title: str, routine: Routine | None = None) -> Item | None:
         for each in [routine] if routine else self.of(member):
@@ -653,6 +659,42 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     )
 
 
+MISS_LISTED = 12  # items named in a miss, closest first
+
+
+def _item_for(ctx: ToolContext, title: str, routine: Routine | None = None) -> tuple[Item, bool]:
+    """The item they mean, and whether it was found only by a near name (F33c). None found,
+    or more than one near: the miss says what's there, so the model's next round can pick
+    the right one instead of looking (reply 237 took three rounds)."""
+    routines = _routines(ctx)
+    item = routines.find_item(ctx.member, title, routine)
+    if item is not None:
+        return item, False
+    near = routines.near_items(ctx.member, title, routine)
+    if len(near) == 1:
+        return near[0], True
+    each = [routine] if routine else routines.of(ctx.member)
+    where = (
+        f"{ctx.member.name}'s {routine.name} routine"
+        if routine
+        else f"{ctx.member.name}'s routines"
+    )
+    miss = f"No item like {title} on {where}."
+    if near:
+        names = ", ".join(i.title for i in near)
+        raise ToolFailed(f"{miss} More than one is close: {names}. Ask which one.")
+    if routine:
+        items = sorted(routines.items(routine), key=lambda i: -words_in_common(title, i.title))
+        listed = ", ".join(i.title for i in items[:MISS_LISTED])
+        raise ToolFailed(f"{miss} It has: {listed}." if listed else f"{miss} It's empty.")
+    parts = []
+    for r in each:
+        items = sorted(routines.items(r), key=lambda i: -words_in_common(title, i.title))
+        if items:
+            parts.append(f"{r.name}: {', '.join(i.title for i in items[:MISS_LISTED])}.")
+    raise ToolFailed(" ".join([miss, *parts]))
+
+
 @tool(
     "remove_routine_item",
     "Remove an item from one of this person's routines in Themi. routine: '' to look in all.",
@@ -661,13 +703,11 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
 async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     routines = _routines(ctx)
     routine = routines.find(ctx.member, str(args["routine"])) if args.get("routine") else None
-    item = routines.find_item(ctx.member, str(args["title"]), routine)
-    if item is None:
-        raise ToolFailed(f"No item like {args['title']} on their routines.")
+    item, near = _item_for(ctx, str(args["title"]), routine)
     routines.remove_item(item)
     name = routines.get(item.routine_id).name
     said = f'Removed "{item.title}" from your {name} routine.'
-    return Done(said, asked=in_their_words(ctx, item.title))  # F33a
+    return Done(said, asked=not near and in_their_words(ctx, item.title))  # F33a, F33c
 
 
 @tool(
@@ -678,10 +718,9 @@ async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
 )
 async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     routines = _routines(ctx)
-    item = routines.find_item(ctx.member, str(args["title"]))
-    if item is None:
-        raise ToolFailed(f"No item like {args['title']} on their routines.")
+    item, near = _item_for(ctx, str(args["title"]))
     today = routines.today()
     await routines.tick_now(item, today)
     await routines.show_tick(item, today)
-    return Done(f'Ticked "{item.title}" for today.', asked=in_their_words(ctx, item.title))
+    said = f'Ticked "{item.title}" for today.'
+    return Done(said, asked=not near and in_their_words(ctx, item.title))  # F33a, F33c
