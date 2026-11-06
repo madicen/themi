@@ -113,15 +113,19 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
                 )
             )
     if strength >= 2:
-        for sentence in _SENTENCE.findall(text):
-            command = _opening_command(sentence)
-            if command:
-                flags.append(Flag("imperative", 2, command))
+        for line in text.splitlines():
+            if _BULLET.match(line):
+                continue  # a list's line names an item (#19); "1.1. go upstairs" too (F29g)
+            for sentence in _SENTENCE.findall(line):
+                command = _opening_command(sentence)
+                if command:
+                    flags.append(Flag("imperative", 2, command))
     return flags
 
 
 _LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
-_BULLET = re.compile(r"^\s*[-•*]\s")
+# "- x", "-- x" (a sub-item, F29g), "• x", "1. x", "1.1. x"
+_BULLET = re.compile(r"^\s*(?:-+|[•*]|\d+(?:\.\d+)*[.)])\s")
 _FIRST = re.compile(r"^\s*([A-Za-z']+(?:-[A-Za-z']+)*)")
 _VERB_THEN_TITLE = re.compile(r"^\s*(?:please\s+)?[A-Za-z']+\s+[\"“]", re.IGNORECASE)
 
@@ -188,10 +192,21 @@ def soften(text: str, *, plain: bool = False) -> str:
     rather than "If you're up for it, you could ..."."""
     for pattern, replacement in _SOFTENERS:
         text = pattern.sub(replacement, text)
-    text = "".join(_soften_sentence(s, plain) for s in re.split(r"(?<=[.!?\n])", text))
+    text = "".join(
+        line
+        if _BULLET.match(line)  # a list's line, numbered ones too (F29g: "Up next: -- go...")
+        else "".join(_soften_sentence(s, plain) for s in re.split(r"(?<=[.!?])", line))
+        for line in text.splitlines(keepends=True)
+    )
     text = re.sub(r"!+", ".", text)
-    # Substitutions can leave a sentence starting in lower case.
-    return re.sub(r"(^|[.?]\s+|\n)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+    # Substitutions can leave a sentence starting in lower case; a list's lines stay as
+    # they are ("1. cats", F29g).
+    return "".join(
+        line
+        if _BULLET.match(line)
+        else re.sub(r"(^|[.?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), line)
+        for line in text.splitlines(keepends=True)
+    )
 
 
 def _soften_sentence(sentence: str, plain: bool = False) -> str:

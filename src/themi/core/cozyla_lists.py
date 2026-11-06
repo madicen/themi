@@ -159,7 +159,10 @@ class WallLists:
     # ----- items ------------------------------------------------------------------------
 
     async def _items(self, list_id: int, wall_id: str, todos: list[Todo], *, first: bool) -> None:
-        rows = self.db.query("SELECT * FROM list_items WHERE list_id = ? ORDER BY id", (list_id,))
+        rows = self.db.query(  # sub-items stay off the wall, whose lists are flat (F29g)
+            "SELECT * FROM list_items WHERE list_id = ? AND parent_id IS NULL ORDER BY id",
+            (list_id,),
+        )
         by_todo = {r["cozyla_todo_id"]: r for r in rows if r["cozyla_todo_id"]}
         unsent = [r for r in rows if not r["cozyla_todo_id"]]
         for todo in todos:

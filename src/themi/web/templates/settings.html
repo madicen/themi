@@ -41,6 +41,13 @@
     <label class="check"><input type="checkbox" name="morning_summary_empty" {% if member.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>
     <label class="check"><input type="checkbox" name="leave_heads_up" {% if member.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>
     <label class="check"><input type="checkbox" name="setup_note" {% if member.setup_note %}checked{% endif %}> When Themi starts an event earlier to give me set-up time, note the real start in its description</label>
+    <label>Lists with sub-items show their levels as
+      <select name="list_style">
+        <option value="dashes" {% if member.list_style == "dashes" %}selected{% endif %}>Dashes (- , -- )</option>
+        <option value="bullets" {% if member.list_style == "bullets" %}selected{% endif %}>Indented bullets</option>
+        <option value="numbers" {% if member.list_style == "numbers" %}selected{% endif %}>Numbers (1., 1.1.)</option>
+      </select>
+    </label>
     <label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ member.getting_ready_minutes }}"> minutes</label>
     <p class="muted">Themi reads the calendars you choose on <a href="/accounts">Accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
   {% endif %}{% endcall %}

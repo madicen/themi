@@ -619,6 +619,11 @@ class ToolRegistry:
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
         call = replace(call, arguments=_as_typed(call.arguments, t.spec.input_schema))
+        defaults = {  # F29g: a field added later, with its default, when a call leaves it out
+            k: p["default"] for k, p in t.spec.input_schema["properties"].items() if "default" in p
+        }
+        if defaults.keys() - call.arguments.keys():
+            call = replace(call, arguments={**defaults, **call.arguments})
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:

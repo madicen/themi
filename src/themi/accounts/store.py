@@ -159,6 +159,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         getting_ready_minutes=row["getting_ready_minutes"],
         leave_heads_up=bool(row["leave_heads_up"]),
         setup_note=bool(row["setup_note"]),
+        list_style=row["list_style"],
         menu_bar=tuple(json.loads(row["menu_bar"])) if row["menu_bar"] else None,
         conversation_mode=bool(row["conversation_mode"]),
     )
@@ -409,6 +410,7 @@ class AccountStore:
         getting_ready_minutes: int | None = None,
         leave_heads_up: bool | None = None,
         setup_note: bool | None = None,
+        list_style: str | None = None,  # F29g: "dashes", "bullets" or "numbers"
         break_extend_minutes: int | None = None,
         noise_emails: str | None = None,  # one of NOISE_EMAILS
         conversation_mode: bool | None = None,  # CM1a
@@ -485,6 +487,10 @@ class AccountStore:
             changes["leave_heads_up"] = int(leave_heads_up)
         if setup_note is not None:
             changes["setup_note"] = int(setup_note)
+        if list_style is not None:
+            if list_style not in ("dashes", "bullets", "numbers"):
+                raise InvalidValue("a list style is dashes, bullets or numbers")
+            changes["list_style"] = list_style
         if done_praise is not None:
             changes["done_praise"] = int(done_praise)
         if listen_first is not None:
