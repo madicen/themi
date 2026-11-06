@@ -205,7 +205,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"what (?:we|i) (?:would |will |'d |'ll )?need for|shop(?:ping)? for|"
         r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d|"
         r"walk (?:me|us) through|let'?s make|step by step|cooking|"
-        r"https?://\S*(?:recipe|food|kitchen|cook|bak|eat|vegan)",
+        r"https?://\S*(?:recipe|food|kitchen|cook|bak|eat|vegan)|"
+        r"what (?:can|could) (?:i|we) make|with what (?:we|i) have",
     ),
     "lists": (
         "named lists, the wall's lists, usual stores",
@@ -465,6 +466,7 @@ TOOL_GROUPS: dict[str, str] = {
             "recipe_from_link",
             "find_web_recipe",
             "save_recipe_to_cookbook",
+            "cookbook_recipes_we_can_make",
         ),
         "recipes",
     ),  # RC1b, RC2a, RC2b, RC3a

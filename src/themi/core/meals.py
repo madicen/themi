@@ -140,18 +140,21 @@ class Meals:
             "INSERT INTO meal_suggestions (member_id, options, created_at) VALUES (?, ?, ?)",
             (member.id, json.dumps(options), to_utc_iso(clock.now())),
         )
+        text = OFFER_TEXT.format(
+            first=f"{options[0]['title']} ({options[0]['minutes']} min)",
+            second=f"{options[1]['title']} ({options[1]['minutes']} min)",
+        )
+        buttons = [
+            Button(o["title"], "meal", {"suggestion": suggestion_id, "choice": n})
+            for n, o in enumerate(options)
+        ]
+        ideas = self.services.recipe_ideas  # RC7: a cookbook recipe the pantry covers
+        cookbook = ideas.offer(member) if ideas is not None else None
+        if cookbook is not None:
+            text = f"{text}\n{cookbook[0]}"
+            buttons += cookbook[1]
         await self.services.outbox.send(
-            member,
-            OFFER_TEXT.format(
-                first=f"{options[0]['title']} ({options[0]['minutes']} min)",
-                second=f"{options[1]['title']} ({options[1]['minutes']} min)",
-            ),
-            priority=Priority.REPLY,
-            kind="meal",
-            buttons=[
-                Button(o["title"], "meal", {"suggestion": suggestion_id, "choice": n})
-                for n, o in enumerate(options)
-            ],
+            member, text, priority=Priority.REPLY, kind="meal", buttons=buttons
         )
         return options
 

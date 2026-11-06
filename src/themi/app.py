@@ -84,6 +84,7 @@ from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
 from themi.core.recipe_groceries import RecipeGroceries
+from themi.core.recipe_ideas import RecipeIdeas
 from themi.core.recipes import Recipes
 from themi.core.reminders import Reminders
 from themi.core.routines import Routines
@@ -239,6 +240,7 @@ def build_app(
     services.cookbook_save.install()
     recipe_groceries = RecipeGroceries(services, recipes)  # RC2a
     recipe_groceries.install()
+    RecipeIdeas(services, recipes, recipe_groceries).install()  # RC7
     cooking = Cooking(services, recipes, recipe_groceries)  # RC3a
     cooking.install()
     burnout = Burnout(services, tasks)
