@@ -69,6 +69,7 @@ if TYPE_CHECKING:
     from themi.core.safeway import SafewayCart
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
+    from themi.core.taking import Taking
     from themi.core.task_blocks import TaskBlocks
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
@@ -181,6 +182,7 @@ class Services:
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
+    taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)

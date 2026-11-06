@@ -49,6 +49,26 @@ def _clean(raw: str, limit: int, what: str) -> str:
     return text
 
 
+# Bug #151: "Add body double, move from room to room to service dog tasks" added "Add body
+# double...". Their own verb, at the start of their message and of the item, isn't the item.
+ITEM_VERB = re.compile(r"^(add|put)\s+(.+)$", re.IGNORECASE)
+LEADING_VERB = re.compile(
+    r"^\s*(?:(?:please|can you|could you|would you|themi)[\s,]+)*(add|put)\b", re.IGNORECASE
+)
+
+
+def without_verb(name: str, request_text: str) -> str:
+    item, lead = ITEM_VERB.match(name), LEADING_VERB.match(request_text)
+    if (
+        item is not None
+        and lead is not None
+        and item.group(1).lower() == lead.group(1).lower()
+        and name_key(item.group(2)) in name_key(request_text[lead.end() :])
+    ):
+        return item.group(2)
+    return name
+
+
 def item_limit(nl: NamedList) -> int:
     return MAX_WALL_ITEM if nl.wall_id else MAX_ITEM
 
@@ -410,7 +430,7 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     names, skipped = [], []
     for raw in args["items"]:
         try:
-            name = _clean(raw, item_limit(nl), "list item")
+            name = without_verb(_clean(raw, item_limit(nl), "list item"), ctx.request_text)
         except InvalidValue as exc:
             long = " ".join(str(raw).split()).strip(" ,.;:")
             reply = too_long(nl) if long else None

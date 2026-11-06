@@ -86,6 +86,7 @@ from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.taking import Taking
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
@@ -216,6 +217,7 @@ def build_app(
     day_summary = DaySummary(services, tasks)
     day_summary.install()
     Focus(services, tasks, day_summary).install()
+    Taking(services, tasks).install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()
