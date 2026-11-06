@@ -34,8 +34,9 @@ from themi.channels.outbox import Priority
 from themi.core.groceries import CATEGORY, EXECUTOR, and_list, item_name, list_summary
 from themi.core.lists import name_key
 from themi.core.prompts import as_data
+from themi.core.quantities import NeedsYield, describe, scale_for, scale_line
 from themi.core.recipes import Recipe, Recipes, clear_match, stem
-from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -92,6 +93,9 @@ SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+SCALED_TEXT = "Amounts in the steps are for the original; the scaled ones are here."
+BAKING_TEXT = "Pan size and times may need changing."
+BAKING = re.compile(r"\b(?:yeast|baking powder|baking soda)\b", re.IGNORECASE)
 UNITS = (
     r"cups?|c\.|tbsps?\.?|tablespoons?|tsps?\.?|teaspoons?|oz\.?|ounces?|lbs?\.?|pounds?|"
     r"g|grams?|kg|ml|mls|millilit(?:er|re)s?|l|lit(?:er|re)s?|cans?|tins?|packages?|packs?|"
@@ -199,6 +203,7 @@ class Row:
     why: str = ""  # why it starts unticked: "the pantry has plenty", "a staple", "optional"
     recipes: list[str] = field(default_factory=list)
     lines: list[str] = field(default_factory=list)
+    amounts: list[str] = field(default_factory=list)  # RC2b: scaled amounts, when scaled
 
 
 @dataclass
@@ -210,6 +215,7 @@ class Card:
     offers: list[int]  # cookbook recipes an ingredient names, not added yet
     scale: float = 1.0
     status: str = "open"
+    scale_said: str = ""  # RC2b: "double", "for 6", as they said it
 
 
 def _card(row: dict[str, Any]) -> Card:
@@ -221,6 +227,7 @@ def _card(row: dict[str, Any]) -> Card:
         offers=json.loads(row["offers"]),
         scale=row["scale"],
         status=row["status"],
+        scale_said=row["scale_said"] or "",
     )
 
 
@@ -239,6 +246,7 @@ class RecipeGroceries:
         buttons["card_no"] = self.on_not_now
         buttons["card_sub"] = self.on_sub_recipe
         self.services.tools.register(add_recipe_to_grocery_list)
+        self.services.tools.register(set_recipe_yield)  # RC2b
 
     # ----- ingredient lines ------------------------------------------------------------------
 
@@ -310,7 +318,9 @@ class RecipeGroceries:
                 return recipe
         return None
 
-    async def build(self, member: Member, recipes: list[Recipe], scale: float = 1.0) -> Card:
+    async def build(
+        self, member: Member, recipes: list[Recipe], scale: float = 1.0, scale_said: str = ""
+    ) -> Card:
         plenty = self._pantry_plenty()
         rows: dict[str, Row] = {}
         offers: list[int] = []
@@ -336,16 +346,19 @@ class RecipeGroceries:
                 if recipe.name not in row.recipes:
                     row.recipes.append(recipe.name)
                 row.lines.append(ingredient.line)
+                if scale != 1 and (amount := scale_line(ingredient.line, scale).amount):
+                    row.amounts.append(amount)
         card_rows = list(rows.values())[:MAX_ITEMS]
         card_id = self.db.execute(
-            "INSERT INTO recipe_cards (member_id, recipe_ids, rows, offers, scale, status, "
-            "created_at) VALUES (?, ?, ?, ?, ?, 'open', ?)",
+            "INSERT INTO recipe_cards (member_id, recipe_ids, rows, offers, scale, scale_said, "
+            "status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?)",
             (
                 member.id,
                 json.dumps([r.id for r in recipes]),
                 json.dumps([asdict(r) for r in card_rows]),
                 json.dumps(offers),
                 scale,
+                scale_said,
                 to_utc_iso(clock.now()),
             ),
         )
@@ -370,21 +383,34 @@ class RecipeGroceries:
         )
 
     def text(self, card: Card) -> str:
-        names = [r.name for r in (self.recipes.get(i) for i in card.recipe_ids) if r]
+        recipes = [r for r in (self.recipes.get(i) for i in card.recipe_ids) if r]
+        names = [r.name for r in recipes]
         several = len(names) > 1
         ticked = [r for r in card.rows if r.ticked]
-        lines = [f"For {and_list(names)}, the grocery list would get {len(ticked)}:"]
+        scaled = card.scale != 1
+        what = and_list(names)
+        if scaled:
+            batch = describe(card.scale_said, card.scale)
+            what = f"{what} {batch}" if batch.startswith("for ") else f"{batch} {what}"
+        lines = [f"For {what}, the grocery list would get {len(ticked)}:"]
         for row in card.rows:
             mark = "✓" if row.ticked else "·"
             extra = [row.why] if row.why and not row.ticked else []
             if several and len(row.recipes) > 1:
                 extra.append("for both" if len(row.recipes) == 2 else "for all of them")
+            amount = f": {' + '.join(row.amounts)}" if scaled and row.amounts else ""
             # quoted: item names are the recipe's words, not Themi's ("water" isn't an order)
-            lines.append(f"> {mark} {row.name}" + (f" ({', '.join(extra)})" if extra else ""))
+            lines.append(
+                f"> {mark} {row.name}{amount}" + (f" ({', '.join(extra)})" if extra else "")
+            )
         for sub_id in card.offers:
             sub = self.recipes.get(sub_id)
             if sub is not None:
                 lines.append(f"{sub.name} is in the cookbook too.")
+        if scaled:
+            lines.append(SCALED_TEXT)
+            if any(is_baking(r) for r in recipes):
+                lines.append(BAKING_TEXT)
         lines.append("Tap an item to add it or leave it off.")
         return "\n".join(lines)
 
@@ -527,6 +553,31 @@ class RecipeGroceries:
         await self._refresh(event, card, " ".join(lines) or "Nothing was ticked.")
 
 
+def is_baking(recipe: Recipe) -> bool:
+    """A dessert, or anything with yeast or baking powder: scaling changes pans and times."""
+    return recipe.section.lower() == "desserts" or any(
+        BAKING.search(i.text) for i in recipe.ingredients
+    )
+
+
+def factor_for(recipes: list[Recipe], said: str) -> float:
+    """The factor for what they said ("double", "for 6"). "For 6" needs every recipe's yield;
+    with one missing, the model is told to ask (and set_recipe_yield keeps the answer)."""
+    try:
+        factors = {scale_for(said, r.makes) for r in recipes}
+    except NeedsYield:
+        missing = next(r for r in recipes if not r.makes)
+        raise ToolDeclined(
+            f'"{missing.name}" doesn\'t say how many it makes. Ask them how many it makes as '
+            "written (one short question); with their answer, set_recipe_yield, then this again."
+        ) from None
+    except ValueError as exc:
+        raise ToolFailed(f"{exc}. Use '', 'half', 'double', 'x3' or 'for 6'.") from exc
+    if len(factors) > 1:
+        raise ToolFailed("Those recipes make different amounts: scale them one at a time.")
+    return factors.pop()
+
+
 def _groceries(ctx: ToolContext) -> RecipeGroceries:
     found = ctx.services.recipe_groceries
     if found is None:
@@ -559,7 +610,13 @@ def resolve(recipes: Recipes, names: list[str]) -> list[Recipe]:
     "grocery list', 'get what we need for tacos and chana masala'): sends one card listing "
     "what those recipes need, with buttons to choose and add them. recipes: the names they "
     "said. Never list the ingredients yourself or add them with add_to_grocery_list.",
-    {"recipes": {"type": "array", "items": {"type": "string"}}},
+    {
+        "recipes": {"type": "array", "items": {"type": "string"}},
+        "scale": {
+            "type": "string",
+            "description": "'' as written, or what they said: 'half', 'double', 'x3', 'for 6'.",
+        },
+    },
 )
 async def add_recipe_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> str:
     groceries = _groceries(ctx)
@@ -567,7 +624,26 @@ async def add_recipe_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> 
     if not names:
         raise ToolFailed("Which recipe? Ask them.")
     chosen = resolve(groceries.recipes, names)
-    card = await groceries.build(ctx.member, chosen)
+    said = str(args.get("scale") or "").strip()
+    factor = factor_for(chosen, said)
+    card = await groceries.build(ctx.member, chosen, factor, said)
     text = await groceries.send(ctx.member, card)
     ctx.cards.append(text)
     return f"Sent them a card to choose from, with an Add button: {text}"
+
+
+@tool(
+    "set_recipe_yield",
+    "Keep how many a cookbook recipe makes as written, when they say so after being asked "
+    "('it makes about 4'): recipe, its name; makes, the number. Themi's own note: the doc "
+    "isn't changed.",
+    {"recipe": {"type": "string"}, "makes": {"type": "integer"}},
+)
+async def set_recipe_yield(ctx: ToolContext, args: dict[str, Any]) -> str:
+    groceries = _groceries(ctx)
+    makes = int(args["makes"])
+    if not 1 <= makes <= 200:
+        raise ToolFailed("How many it makes has to be between 1 and 200.")
+    (recipe,) = resolve(groceries.recipes, [str(args["recipe"])])
+    groceries.db.execute("UPDATE recipes SET yield_said = ? WHERE id = ?", (makes, recipe.id))
+    return f"Kept: {recipe.name} makes {makes}. Now carry on with what they asked."
