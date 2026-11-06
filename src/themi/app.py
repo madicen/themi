@@ -51,6 +51,7 @@ from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
 from themi.core.conversation_mode import ConversationMode
 from themi.core.cooking import Cooking
+from themi.core.cooking_timers import CookingTimers
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -242,6 +243,7 @@ def build_app(
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
+    CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:

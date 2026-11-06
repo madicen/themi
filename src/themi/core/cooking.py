@@ -49,6 +49,7 @@ from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
 
 if TYPE_CHECKING:
+    from themi.core.cooking_timers import CookingTimers
     from themi.core.recipe_groceries import RecipeGroceries
     from themi.core.services import Services
 
@@ -268,6 +269,7 @@ class Cooking:
         self.groceries = groceries
         self.db = services.store.db
         self.card = StepCard(services.outbox, KIND)
+        self.timers: CookingTimers | None = None  # RC3c, once the scheduler exists
 
     def install(self) -> None:
         s = self.services
@@ -477,8 +479,8 @@ class Cooking:
         return text, buttons
 
     def step_buttons(self, session: Session, recipe: Recipe, part: Part) -> list[Button]:
-        """More buttons for a step (RC3c's timers)."""
-        return []
+        """More buttons for a step: RC3c's timers."""
+        return self.timers.buttons(session, part) if self.timers is not None else []
 
     async def show(self, session: Session, *, fresh: bool = False) -> None:
         text, buttons = await self.render(session)
@@ -539,6 +541,8 @@ class Cooking:
                 self._owner(session), f"Stopped cooking {recipe.name}.", (),
                 message_id=session.message_id, in_group=session.in_group, fresh=fresh,
             )  # fmt: skip
+            if self.timers is not None:
+                await self.timers.ask_on_end(self._owner(session))
             return
         if session.phase == "ready":
             session.phase = "gather"
@@ -600,6 +604,8 @@ class Cooking:
             in_group=session.in_group,
         )  # fmt: skip
         session.phase = "done"
+        if self.timers is not None:
+            await self.timers.ask_on_end(self._owner(session))
 
     async def remind_tomorrow(self, session: Session) -> None:
         recipe = self.recipes.get(session.recipe_id)
