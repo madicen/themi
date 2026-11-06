@@ -34,6 +34,7 @@ from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
+from themi.connectors.search import SearchBackend
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
@@ -63,6 +64,7 @@ from themi.core.follow_ups import FollowUps
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
+from themi.core.guides import Guides
 from themi.core.habits import HabitReserve
 from themi.core.journal import Journal
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
@@ -86,12 +88,14 @@ from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.taking import Taking
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
+from themi.core.web_search import WebSearch
 from themi.core.which_list import WhichList
 from themi.core.which_task import TaskNamer
 from themi.core.wrong_replies import WrongReplies
@@ -143,6 +147,7 @@ def build_app(
     grocery_list: GroceryListClient | None = None,
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
+    search: SearchBackend | None = None,
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
@@ -216,6 +221,8 @@ def build_app(
     day_summary = DaySummary(services, tasks)
     day_summary.install()
     Focus(services, tasks, day_summary).install()
+    Taking(services, tasks).install()
+    Guides(services).install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()
@@ -236,6 +243,7 @@ def build_app(
         Events(services).install()
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
+    WebSearch(services, search).install()  # F30d: says how to set it up without a key
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)

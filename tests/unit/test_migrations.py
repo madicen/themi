@@ -254,3 +254,44 @@ def test_chat_and_sidecar_routes_start_from_what_members_use_now() -> None:
     assert db.query(route, ("chat",)) == db.query(route, ("conversation",))
     assert db.query(route, ("sidecar",)) == [{"position": 0, "backend_id": 2, "model": None}]
     assert db.scalar("SELECT conversation_mode FROM members WHERE id = 1") == 0
+
+
+def test_0113_drops_map_answers_for_phrases_with_no_street_number() -> None:
+    """F29e (bug #154): "parent's house" was cached as a place near Oroville."""
+    db = Database(":memory:")
+    every = discover()
+    apply(db, [m for m in every if m.version < 113])
+    for key in ("parent s house", "parents house", "790 la para ave palo alto ca 94306 usa"):
+        db.execute(
+            "INSERT INTO geocodes (query_key, lat, lon, found, fetched_at) "
+            "VALUES (?, 1, 1, 1, '2026-11-05T00:00:00+00:00')",
+            (key,),
+        )
+    apply(db, every)
+    rows = db.query("SELECT query_key FROM geocodes")
+    assert [r["query_key"] for r in rows] == ["790 la para ave palo alto ca 94306 usa"]
+
+
+def test_0114_items_start_at_the_top_level() -> None:
+    """F29g: existing list items have no parent; members see dashes."""
+    db = Database(":memory:")
+    every = discover()
+    apply(db, [m for m in every if m.version < 114])
+    db.execute("INSERT INTO lists (name, created_at) VALUES ('Pets', '2026-11-05T00:00:00+00:00')")
+    db.execute(
+        "INSERT INTO list_items (list_id, name, added_at) "
+        "VALUES (1, 'cats', '2026-11-05T00:00:00+00:00')"
+    )
+    apply(db, every)
+    assert db.scalar("SELECT parent_id FROM list_items") is None
+
+
+def test_the_test_template_matches_a_fresh_migration() -> None:
+    """Fixtures copy one migrated template (tests/fixtures/db.py); it must be the real schema."""
+    from tests.fixtures.db import migrated_db
+
+    schema = "SELECT type, name, sql FROM sqlite_master ORDER BY type, name"
+    copied, fresh = migrated_db(), open_database(":memory:")
+    assert copied.query(schema) == fresh.query(schema)
+    assert copied.scalar("SELECT MAX(version) FROM schema_version") == migrations.latest_version()
+    assert copied.scalar("PRAGMA foreign_keys") == 1

@@ -160,3 +160,23 @@ async def test_busy_times_are_in_the_snapshot(scenario: Scenario) -> None:
     await scenario.say("Erin", "/bug test")
     (item,) = book(scenario).items()
     assert item.context["settings"]["busy times"] == "Sat, Sun 10:00-12:00"
+
+
+async def test_bug_161_a_heading_for_three_suggestions_isnt_sent(scenario: Scenario) -> None:
+    """F30b: reply 292. The rewrite turned three places to look into a heading; it's
+    refused, the softened reply keeps them, and a report shows both versions."""
+    said = (
+        "Check old bank statements or credit card charges for payments to a dental office. "
+        "Insurance provider portal logs show past claims and provider names. Email searches "
+        "for 'dental', 'dentist', or 'appointment' pull up old confirmations."
+    )
+    scenario.primary.queue_text(said)
+    scenario.primary.queue_structured(
+        {"text": "Options for finding past dental payments.", "options": []}
+    )
+    replies = await scenario.say("Erin", "How can I find the dentist's name myself?")
+    assert "bank statements" in replies[-1] and "'dentist'" in replies[-1]
+    await scenario.say("Erin", "/bug check that answer")
+    item = book(scenario).items()[-1]
+    report = book(scenario).report([item])
+    assert "Gentle phrasing changed" in report and "Check old bank statements" in report

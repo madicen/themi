@@ -6,16 +6,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+WORKDIR /app
+COPY pyproject.toml ./
+# The dependencies first, from pyproject.toml alone, so a change to the code reuses this
+# layer (the slowest step by far for the Pi's arm64 image, built under emulation). With
+# them the optional connectors: OurGroceries, ThinQ's pushes, the Roborock vacuum. (Not
+# Google Keep, the most fragile; add `keep` to EXTRAS to use it.)
+ARG EXTRAS="ourgroceries thinq roborock"
+RUN python -c "import sys, tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; \
+print('\n'.join(p['dependencies'] + [d for e in sys.argv[1:] for d in p['optional-dependencies'][e]]))" \
+        $EXTRAS > /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+COPY README.md ./
+COPY src ./src
+RUN pip install --no-deps .
+
 # Which release this is (the tag, from the release workflow); `themi --version` says it.
+# After the installs, since it changes every release and would otherwise rebuild them.
 ARG THEMI_BUILD_VERSION=dev
 ENV THEMI_BUILD_VERSION=$THEMI_BUILD_VERSION
-
-WORKDIR /app
-COPY pyproject.toml README.md ./
-COPY src ./src
-# The optional connectors: OurGroceries, ThinQ's pushes, the Roborock vacuum. (Not Google
-# Keep, the most fragile; add `keep` here to use it.)
-RUN pip install '.[ourgroceries,thinq,roborock]'
 
 # Run as an unprivileged user; the database lives on the /data volume.
 RUN useradd --create-home --uid 10001 themi \

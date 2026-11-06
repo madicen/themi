@@ -250,11 +250,17 @@ async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
     if whose == "partner" and other is not None:
         person = other
         if other.calendar_details != "partner":
-            hidden = f"\n{other.name} keeps calendar details private: only what's due is shown."
+            # F29e (#155's thread): "Erin has no calendar events today" from a private one
+            hidden = (
+                f"\n{other.name} keeps calendar details private, so their events aren't "
+                f"shown; there may be some. Never say {other.name} has no events."
+            )
     text = summary.text(person, day, partner=whose == "both", viewer=ctx.member)
     if text is None:
         empty = "nothing due" if hidden else "nothing on the calendar, nothing due"
         text = f"{summary.heading(person, day, ctx.member)}: {empty}."
+    if hidden:
+        text += f"\n({person.name}'s calendar is private: events aren't shown here.)"
     # Sent as it is (Erin's idea #19: the model had reworded it), so the list keeps its shape.
     await ctx.services.outbox.send(ctx.member, text, priority=Priority.REPLY, kind="summary")
     ctx.answered.append("day_summary")

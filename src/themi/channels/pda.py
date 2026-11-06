@@ -113,15 +113,19 @@ def find_demands(text: str, strength: int = 2) -> list[Flag]:
                 )
             )
     if strength >= 2:
-        for sentence in _SENTENCE.findall(text):
-            command = _opening_command(sentence)
-            if command:
-                flags.append(Flag("imperative", 2, command))
+        for line in text.splitlines():
+            if _BULLET.match(line):
+                continue  # a list's line names an item (#19); "1.1. go upstairs" too (F29g)
+            for sentence in _SENTENCE.findall(line):
+                command = _opening_command(sentence)
+                if command:
+                    flags.append(Flag("imperative", 2, command))
     return flags
 
 
 _LABEL = re.compile(r"^\s*[\w'-]+(?:\s+[\w'-]+){0,2}:")
-_BULLET = re.compile(r"^\s*[-•*]\s")
+# "- x", "-- x" (a sub-item, F29g), "• x", "1. x", "1.1. x"
+_BULLET = re.compile(r"^\s*(?:-+|[•*]|\d+(?:\.\d+)*[.)])\s")
 _FIRST = re.compile(r"^\s*([A-Za-z']+(?:-[A-Za-z']+)*)")
 _VERB_THEN_TITLE = re.compile(r"^\s*(?:please\s+)?[A-Za-z']+\s+[\"“]", re.IGNORECASE)
 
@@ -188,10 +192,21 @@ def soften(text: str, *, plain: bool = False) -> str:
     rather than "If you're up for it, you could ..."."""
     for pattern, replacement in _SOFTENERS:
         text = pattern.sub(replacement, text)
-    text = "".join(_soften_sentence(s, plain) for s in re.split(r"(?<=[.!?\n])", text))
+    text = "".join(
+        line
+        if _BULLET.match(line)  # a list's line, numbered ones too (F29g: "Up next: -- go...")
+        else "".join(_soften_sentence(s, plain) for s in re.split(r"(?<=[.!?])", line))
+        for line in text.splitlines(keepends=True)
+    )
     text = re.sub(r"!+", ".", text)
-    # Substitutions can leave a sentence starting in lower case.
-    return re.sub(r"(^|[.?]\s+|\n)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
+    # Substitutions can leave a sentence starting in lower case; a list's lines stay as
+    # they are ("1. cats", F29g).
+    return "".join(
+        line
+        if _BULLET.match(line)
+        else re.sub(r"(^|[.?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), line)
+        for line in text.splitlines(keepends=True)
+    )
 
 
 def _soften_sentence(sentence: str, plain: bool = False) -> str:
@@ -282,13 +297,54 @@ class PdaShield:
             except Exception as exc:  # the AI being down must never block a message
                 log.info("PDA rewrite unavailable (%s); softening instead", type(exc).__name__)
             else:
-                if rewrite.text.strip() and not find_demands(rewrite.text, strength):
+                why = unfaithful(part, rewrite.text)
+                demand = find_demands(rewrite.text, strength)
+                if rewrite.text.strip() and not demand and not why:
                     return rewrite.text, "rewritten", rewrite.options
-                log.info("PDA rewrite still read as a demand; softening instead")
+                log.info("PDA rewrite %s; softening instead", why or "still read as a demand")
         softened = soften(part, plain=member.phrasing != "gentle")
         if find_demands(softened, strength):  # pragma: no cover - soften() guarantees this
             log.warning("softener left a demand in place: %s", find_demands(softened, strength))
         return softened, "softened", ()
+
+
+# F30b (#161): "Check old bank statements... Insurance provider portal logs... Email
+# searches for 'dental'..." came back as "Options for finding past dental payments."
+_CONTENT = re.compile(r"[a-z0-9']+")
+_NUMBER = re.compile(r"\d[\d\-().: ]*\d|\d")
+_NAME = re.compile(r"(?<![.!?]\s)(?<!^)\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*")
+_LINK = re.compile(r"https?://\S+|\S+@\S+\.\w+")
+_SMALL = {"the", "a", "an", "and", "or", "to", "of", "for", "in", "on", "at", "is", "are",
+          "it", "you", "your", "with", "be", "that", "this", "if", "can", "could"}  # fmt: skip
+LONG_ENOUGH = 120  # characters: below this, a rewrite may reword it all
+
+
+def _content(text: str) -> set[str]:
+    return {w for w in _CONTENT.findall(text.lower()) if w not in _SMALL and len(w) > 2}
+
+
+def unfaithful(original: str, rewrite: str) -> str | None:
+    """Why a rewrite can't stand in for the original, or None: it added a number, a name, a
+    link or an address the original didn't have, dropped most of what it said, or a list
+    line's item (F30b)."""
+    if not rewrite.strip():
+        return "was empty"
+    numbers = {re.sub(r"\D", "", n) for n in _NUMBER.findall(original)}
+    if any(re.sub(r"\D", "", n) not in numbers for n in _NUMBER.findall(rewrite)):
+        return "added a number"
+    if any(link not in original for link in _LINK.findall(rewrite)):
+        return "added a link or an address"
+    said = original.lower()
+    if any(name.lower() not in said for name in _NAME.findall(rewrite)):
+        return "added a name"
+    if len(original.strip()) < LONG_ENOUGH:
+        return None  # a line or two is reworded freely ("the washer's done")
+    words = _content(original)
+    if words and len(words & _content(rewrite)) < len(words) / 3:
+        return "dropped most of what it said"
+    if len(rewrite.strip()) < len(original.strip()) * 0.4:
+        return "was much shorter"
+    return None
 
 
 def _flagged_runs(lines: Sequence[str], strength: int) -> list[tuple[int, int]]:
@@ -360,7 +416,10 @@ Rewrite the message so it carries the same information with no commands,
 deadlines or pressure, in the way this person likes things said (below). When
 the message implies a decision, you may offer
 exactly two short options instead of an instruction. Keep facts, names,
-numbers and times exactly as given. Add nothing new. Keep it as short as the
+numbers and times exactly as given. Add nothing new. Don't answer the message
+or add information of your own: no names, numbers, places or sources it doesn't
+have. A list of suggestions stays a list, every suggestion kept, each said as an
+option ("One place to look: old emails from the dentist"). Keep it as short as the
 original or shorter. Keep placeholders such as ⟦quote 1⟧ exactly as they are, on
 their own line. Never use "you need to", "you must", "you should",
 "don't forget", "remember to", "make sure", "right now" or a sentence that

@@ -349,8 +349,8 @@ async def test_items_the_model_inferred_still_ask(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call("add_to_grocery_list", {"items": ["taco shells"]})
     scenario.primary.queue_text("Added taco shells to the grocery list.")  # not true yet
     replies = await scenario.say("Husband", "we're having tacos tonight")
-    assert replies[0] == "Taco shells for the grocery list\nGo ahead, or not now?"
-    assert replies[1] == WAITING_TEXT.format(summary="Taco shells for the grocery list")
+    # F29d: the card is the whole answer; the false claim isn't sent at all
+    assert replies == ["Taco shells for the grocery list\nGo ahead, or not now?"]
     assert on_list(scenario) == []
 
 

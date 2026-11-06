@@ -132,6 +132,7 @@ async def test_bug_reports_name_their_reply(scenario: Scenario) -> None:
         ],
         "groups": [g for g in groups.split(",") if g],
         "groups_added": [],
+        "shaped": [],  # F30b: nothing the gentle phrasing changed
     }
     feedback = scenario.app.services.feedback
     assert feedback is not None

@@ -3,16 +3,16 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from tests.fixtures.db import migrated_db
 from themi import clock
 from themi.ai.router import Deferred
 from themi.scheduler import FAILURE_BACKOFF, MAX_ATTEMPTS, Scheduler
-from themi.storage import open_database
 from themi.storage.db import Database
 
 
 @pytest.fixture
 def db() -> Database:
-    return open_database(":memory:")
+    return migrated_db()
 
 
 @pytest.fixture

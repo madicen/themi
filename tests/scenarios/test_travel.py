@@ -254,3 +254,69 @@ async def test_words_match_loosely(
     assert "Tutor Gabriel (Illems), Thu 29 Oct, 4-5 pm" in await ask(
         scenario, "Erin", "tutoring appointment", ""
     )
+
+
+PARENTS = "790 La Para Ave, Palo Alto, CA 94306"
+
+
+def remember(scenario: Scenario, fact: str) -> None:
+    now = clock.now().isoformat()
+    scenario.app.db.execute(
+        "INSERT INTO facts (scope, member_id, subject, fact, created_at, updated_at) "
+        "VALUES ('family', NULL, 'places', ?, ?, ?)",
+        (fact, now, now),
+    )
+
+
+async def test_bug_154_parents_house_is_the_remembered_address(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """Bug #154: "parent's house" went to the map, which found a place near Oroville."""
+    fake_travel.place(PARENTS, 37.75, -122.45)
+    fake_travel.place("parent's house", 39.437, -121.593)  # the wrong one, 230 km away
+    remember(scenario, f"Erin's parents' address is {PARENTS}.")
+    result = await ask(scenario, "Erin", "", "parent's house")
+    assert result == (
+        f"To parent's house ({PARENTS}): about 35 min from home with traffic, leaving now."
+    )
+    looked_up = "SELECT COUNT(*) FROM geocodes WHERE query_key LIKE '%parent%'"
+    assert scenario.app.db.scalar(looked_up) == 0  # never sent to the map
+
+
+async def test_a_named_place_with_no_address_asks_and_isnt_guessed(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.place("parent's house", 39.437, -121.593)
+    result = await ask(scenario, "Erin", "", "parent's house")
+    assert result.startswith("Not sure where 'parent's house' is")
+    looked_up = "SELECT COUNT(*) FROM geocodes WHERE query_key LIKE '%parent%'"
+    assert scenario.app.db.scalar(looked_up) == 0  # never sent to the map
+
+
+async def test_a_vague_place_found_far_away_is_checked(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.place("The Big Barn", 39.437, -121.593)
+    result = await ask(scenario, "Erin", "", "The Big Barn")
+    assert "km from home, which may be a different place of that name" in result
+
+
+async def test_an_event_at_parents_house_times_the_drive_from_the_fact(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """Bug #154: the event's location was "Parent's house"; leave at 2:50, the first time."""
+    fake_travel.place(PARENTS, 37.75, -122.45)
+    remember(scenario, f"Erin's parents' address is {PARENTS}.")
+    ready.add_event(ERIN, local(15, 30), local(16, 55), summary="Tutor Gabriel (Illems)",
+                    location="Parent's house")  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    result = await ask(scenario, "Erin", "tutor gabriel", "")
+    assert "leave around 2:55 pm" in result
+
+
+async def test_a_private_partner_calendar_is_said_so(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """#155's thread: Michael asked about tutoring "on Erin's calendar"."""
+    result = await ask(scenario, "Husband", "tutoring", "")
+    assert "Erin keeps calendar details private, so those events aren't searched" in result

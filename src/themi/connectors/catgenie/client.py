@@ -41,6 +41,7 @@ from cryptography.hazmat.primitives.ciphers import algorithms, modes
 
 from themi import clock
 from themi.accounts import Member
+from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
@@ -151,7 +152,7 @@ class HttpxWire:
     """A wire over an httpx transport: the fake's, for tests and `make dev`."""
 
     def __init__(self, transport: httpx.AsyncBaseTransport) -> None:
-        self._http = httpx.AsyncClient(transport=transport, timeout=TIMEOUT)
+        self._http = httpx.AsyncClient(verify=tls(), transport=transport, timeout=TIMEOUT)
 
     async def request(
         self,

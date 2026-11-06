@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from themi.core.follow_ups import FollowUps
     from themi.core.google_tasks import GoogleTasksInbox
     from themi.core.groceries import GroceryList
+    from themi.core.guides import Guides
     from themi.core.habits import HabitReserve
     from themi.core.journal import Journal
     from themi.core.laundry import Laundry
@@ -69,11 +70,13 @@ if TYPE_CHECKING:
     from themi.core.safeway import SafewayCart
     from themi.core.senders import SenderSuggestions
     from themi.core.spending import Spending
+    from themi.core.taking import Taking
     from themi.core.task_blocks import TaskBlocks
     from themi.core.tasks import TaskBoard
     from themi.core.travel import TravelHeadsUps
     from themi.core.triage import EmailTriage
     from themi.core.vacuum import Vacuum
+    from themi.core.web_search import WebSearch
     from themi.core.which_list import WhichList
     from themi.core.which_task import TaskNamer
     from themi.energy.outcomes import OutcomeTracker
@@ -181,6 +184,9 @@ class Services:
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
+    web_search: WebSearch | None = None  # looking things up online (F30d)
+    guides: Guides | None = None  # the family's own guides (F29ha)
+    taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)
     which_list: WhichList | None = None  # which list, as a card (F17b)

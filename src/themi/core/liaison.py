@@ -28,7 +28,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -39,7 +39,7 @@ from themi.channels.outbox import OutboxResult, Priority
 from themi.core.prompts import OpenItem
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
-from themi.localtime import start_of_local_day, to_local, to_utc_iso
+from themi.localtime import in_quiet_hours, start_of_local_day, to_local, to_utc_iso
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -48,6 +48,11 @@ log = logging.getLogger(__name__)
 
 KIND = "relay"  # the outbox kind; the "notes" pause topic holds it
 URGENCIES = ("urgent", "today", "whenever")
+RANK = {"whenever": 0, "today": 1, "urgent": 2}
+SEND_NOW = "relay_now"  # the button kind: a held note sent now (idea #156)
+SEND_NOW_LABEL = "Send now"
+HURRIED_TEXT = "Sent it to {name} now."
+GONE_TEXT = "Passed on to {name}."
 EARLY_EVENING = time(18, 0)  # a "today" note goes by then at the latest
 SAME_NOTE = timedelta(minutes=30)  # the same note asked for again this soon: already done
 MAX_BODY = 1000
@@ -92,6 +97,7 @@ class Relay:
     outbox_id: int | None
     created_at: datetime
     delivered_at: datetime | None
+    hurried: bool = False  # F29c: a note waiting to go, sent now when asked again sooner
 
 
 def _relay(row: dict[str, Any]) -> Relay:
@@ -135,6 +141,8 @@ class Liaison:
         self.services.tools.register(relay_to_partner)
         self.services.tools.register(flag_expectation_conflict)
         self.services.button_handlers[ALIGNMENT] = self.on_alignment_button
+        self.services.button_handlers[SEND_NOW] = self.on_send_now
+        self.outbox.after_sent.append(self.after_sent)
         self.services.add_command(
             "/familygroup", self.on_family_group_command, "Set up the family group"
         )
@@ -199,7 +207,12 @@ class Liaison:
                 f"Not passed on: {recipient.name} isn't connected to Themi on Telegram yet."
             )
         if (same := self._same_note(sender, recipient, body)) is not None:
-            state = "already went" if same.delivered_at else "is already waiting to go"
+            if same.delivered_at is None and RANK[urgency] > RANK[same.urgency]:
+                # Bug #155: "Tell her urgently" after it was held for the morning
+                hurried = await self.hurry(same, sender, recipient, urgency)
+                if hurried is not None:
+                    return hurried
+            state = "already went" if self.get(same.id).delivered_at else "is already waiting to go"
             raise ToolDeclined(f"That note to {recipient.name} {state}; it wasn't sent twice.")
         now = clock.now()
         relay_id = self.db.execute(
@@ -231,9 +244,105 @@ class Liaison:
         )
         return self.get(relay_id), result
 
+    async def hurry(
+        self, relay: Relay, sender: Member, recipient: Member, urgency: str
+    ) -> tuple[Relay, OutboxResult] | None:
+        """A note still waiting goes sooner: its queued message is taken back and sent
+        again at the new urgency (F29c). None if it went meanwhile."""
+        if relay.outbox_id is not None and not self.outbox.cancel(relay.outbox_id):
+            self._delivered(relay.id)
+            return None
+        self.db.execute("UPDATE liaison_items SET urgency = ? WHERE id = ?", (urgency, relay.id))
+        priority, deadline = timing(urgency, clock.now(), self.timezone)
+        result = await self.outbox.send(
+            recipient,
+            delivery_text(sender, relay.body, urgency),
+            priority=priority,
+            kind=KIND,
+            deadline=deadline,
+            dedupe_key=f"relay:{relay.id}",
+        )
+        self.db.execute(
+            "UPDATE liaison_items SET outbox_id = ? WHERE id = ?", (result.outbox_id, relay.id)
+        )
+        if result.status == "sent":
+            self._delivered(relay.id)
+        log.info("Relay %s sent sooner (%s): %s", relay.id, urgency, result.status)
+        return replace(self.get(relay.id), hurried=True), result
+
+    def held_because(self, recipient: Member) -> str | None:
+        """Why a note for them waits, in a few words, when it's plain (F29c)."""
+        now = clock.now()
+        name = recipient.name
+        if in_quiet_hours(recipient, now, self.timezone):
+            return f"{name}'s in quiet hours until {clock_words(recipient.quiet_end)}"
+        if self.outbox.sent_today(recipient.id, now) >= recipient.daily_limit:
+            return f"{name} has had today's messages already"
+        blocks = self.outbox.calendar_blocks
+        if blocks is not None and blocks(recipient, now, now + timedelta(minutes=1)):
+            return f"{name}'s busy right now"
+        return None
+
+    def can_send_now(self, recipient: Member) -> bool:
+        """The button isn't offered in burnout mode, whose holds still apply (F22d)."""
+        burnout = self.services.burnout
+        return burnout is None or burnout.current(recipient) is None
+
+    async def offer_send_now(self, sender: Member, relay: Relay, said: str) -> str:
+        """The confirmation of a held note, with a "Send now" button (idea #156)."""
+        result = await self.outbox.send(
+            sender,
+            said,
+            priority=Priority.REPLY,
+            buttons=[Button(SEND_NOW_LABEL, SEND_NOW, {"relay": relay.id})],
+        )
+        self.db.execute(
+            "UPDATE liaison_items SET card_outbox_id = ? WHERE id = ?", (result.outbox_id, relay.id)
+        )
+        return said
+
+    async def on_send_now(self, event: InboundEvent) -> None:
+        assert event.button is not None
+        row = self.db.one(
+            "SELECT * FROM liaison_items WHERE id = ? AND kind = 'relay' AND from_member_id = ?",
+            (int(event.button.payload.get("relay", 0)), event.member.id),
+        )
+        if row is None:
+            return
+        relay = _relay(row)
+        recipient = self.store.get_member(relay.to_member_id)
+        text = GONE_TEXT.format(name=recipient.name)
+        if relay.delivered_at is None:
+            hurried = await self.hurry(relay, event.member, recipient, "urgent")
+            if hurried is not None:
+                text = HURRIED_TEXT.format(name=recipient.name)
+        if event.button.message_id is not None:
+            await self.outbox.edit(event.member, event.button.message_id, text)
+
+    async def after_sent(self, row: dict[str, Any]) -> None:
+        """A held note went: its confirmation loses the button."""
+        if row["kind"] != KIND:
+            return
+        relay = self.db.one(
+            "SELECT * FROM liaison_items WHERE outbox_id = ? AND card_outbox_id IS NOT NULL",
+            (row["id"],),
+        )
+        if relay is None:
+            return
+        message_id = self.outbox.message_id(relay["card_outbox_id"])
+        if message_id is not None:
+            sender = self.store.get_member(relay["from_member_id"])
+            recipient = self.store.get_member(relay["to_member_id"])
+            await self.outbox.edit(sender, message_id, GONE_TEXT.format(name=recipient.name))
+        self.db.execute(
+            "UPDATE liaison_items SET card_outbox_id = NULL WHERE id = ?", (relay["id"],)
+        )
+
     def said_back(self, recipient: Member, relay: Relay, result: OutboxResult) -> str:
         """What to tell whoever asked: when it goes, in plain words."""
         name = recipient.name
+        if relay.hurried and result.status == "sent":
+            return HURRIED_TEXT.format(name=name)
         if result.status == "sent":
             return f"Passed on to {name}."
         if result.status != "queued" or result.send_after is None or relay.urgency == "urgent":
@@ -246,6 +355,9 @@ class Liaison:
                     f"I'll pass that on to {name} at a good moment today, by "
                     f"{clock_words(EARLY_EVENING)} at the latest."
                 )
+        why = self.held_because(recipient)
+        if why is not None:  # F29c: said once, why it waits
+            return f"I'll pass that on to {name} when I can: {why} (likely {when})."
         return f"I'll pass that on to {name} at a good moment for them (likely {when})."
 
     def _when(self, moment: datetime) -> str:
@@ -543,6 +655,9 @@ async def relay_to_partner(ctx: ToolContext, args: dict[str, Any]) -> str:
     recipient = liaison.recipient(ctx.member, args["to"])
     relay, result = await liaison.relay(ctx.member, recipient, args["message"], args["urgency"])
     said = liaison.said_back(recipient, relay, result)
+    if result.status == "queued" and relay.urgency != "urgent" and liaison.can_send_now(recipient):
+        ctx.cards.append(await liaison.offer_send_now(ctx.member, relay, said))
+        return f"{said} They have a Send now button on that message. (note {relay.id})"
     ctx.replies.append(said)
     return f"{said} (note {relay.id})"
 

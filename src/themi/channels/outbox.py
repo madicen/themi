@@ -172,6 +172,8 @@ class Outbox:
         self.pauses = pauses or PauseBook(store.db)
         # Called after each successful delivery with (outbox row, telegram message id).
         self.sent_listeners: list[Callable[[dict[str, Any], int | None], None]] = []
+        # The same, for listeners that send or edit messages themselves (F29c).
+        self.after_sent: list[Callable[[dict[str, Any]], Awaitable[None]]] = []
         # Busy events from someone's calendar (S2), which hold messages like busy times:
         # (member, start, end) -> [(starts, ends)]. None without Google.
         self.calendar_blocks: BlockSource | None = None
@@ -424,6 +426,11 @@ class Outbox:
                 listener(row, message_id)
             except Exception:
                 log.exception("An outbox sent-listener failed for message %s", row["id"])
+        for after in self.after_sent:
+            try:
+                await after(row)
+            except Exception:
+                log.exception("An outbox after-sent listener failed for message %s", row["id"])
         return OutboxResult("sent", row["id"], message_id)
 
     async def edit(

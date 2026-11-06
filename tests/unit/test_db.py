@@ -81,3 +81,12 @@ def test_foreign_keys_are_enforced(db: Database) -> None:
     db.execute("CREATE TABLE notes (item_id INTEGER NOT NULL REFERENCES items(id))")
     with pytest.raises(Exception, match="FOREIGN KEY"):
         db.execute("INSERT INTO notes VALUES (42)")
+
+
+def test_copy_from_gives_an_independent_copy(db: Database) -> None:
+    db.execute("INSERT INTO items (name) VALUES ('soap')")
+    copy = Database(":memory:")
+    copy.copy_from(db)
+    copy.execute("INSERT INTO items (name) VALUES ('oil')")
+    assert copy.query("SELECT name FROM items ORDER BY id") == [{"name": "soap"}, {"name": "oil"}]
+    assert db.scalar("SELECT COUNT(*) FROM items") == 1

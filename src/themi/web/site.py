@@ -90,6 +90,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         dev_pages,
         email_pages,
         google_pages,
+        guide_pages,
         knowledge_pages,
         list_pages,
         maintenance_pages,
@@ -151,6 +152,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(admin_pages.routes(kit))
     web.include_router(connection_pages.routes(kit))
     web.include_router(knowledge_pages.routes(kit))
+    web.include_router(guide_pages.routes(kit))
     web.include_router(task_pages.routes(kit))
     web.include_router(list_pages.routes(kit))
     web.include_router(week_pages.routes(kit))
@@ -391,6 +393,8 @@ def core_routes(kit: Kit) -> APIRouter:
                 morning_summary_empty=form.get("morning_summary_empty") == "on",
                 getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
                 leave_heads_up=form.get("leave_heads_up") == "on",
+                setup_note=form.get("setup_note") == "on",
+                list_style=str(form.get("list_style", "")) or None,
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
@@ -455,6 +459,7 @@ def more_groups(member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
         )
     household = [
         ("/knowledge", "Rules & memory", "What Themi keeps to and remembers"),
+        ("/guides", "Guides", "Your own cooking charts and how-tos"),
         ("/tiers", "What Themi does alone", "What asks first and what's automatic"),
         ("/maintenance", "Maintenance", "Filters, gutters and other upkeep"),
         ("/spending", "Spending", "Takeout and business expenses"),

@@ -106,6 +106,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Layers from the last release: unless the dependencies changed, the slow arm64
+          # pip install under emulation is reused rather than run again.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: GitHub release, with notes from the merged pull requests
         env:
           GH_TOKEN: ${{ github.token }}

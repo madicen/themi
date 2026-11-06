@@ -131,6 +131,7 @@ class FakeGmail(Snapshots):
         age: timedelta = timedelta(0),
         thread_id: str | None = None,
         snippet: str | None = None,
+        to: str | None = None,
     ) -> str:
         """Mail arrives in `address`'s mailbox. Returns its Gmail id. `snippet`: Gmail's own,
         when it isn't the start of the text (it's made from what's shown, bug #134)."""
@@ -140,7 +141,7 @@ class FakeGmail(Snapshots):
             gid = f"m{number:05d}"
             headers = [
                 {"name": "From", "value": sender},
-                {"name": "To", "value": address},
+                {"name": "To", "value": to or address},
                 {"name": "Subject", "value": subject},
                 {"name": "Message-ID", "value": f"<{gid}@mail.example>"},
             ]

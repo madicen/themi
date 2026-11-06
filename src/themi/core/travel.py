@@ -38,6 +38,7 @@ from themi.connectors.travel import (
 )
 from themi.core.events import When, title_matches, when_words
 from themi.core.lists import name_key
+from themi.core.places import NOT_SURE_TEXT, named_place
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -49,6 +50,7 @@ log = logging.getLogger(__name__)
 
 LOOK_AHEAD = timedelta(hours=24)
 AT_HOME_KM = 0.5  # closer than this is home: nothing to drive to
+FAR_KM = 100  # a place named with no street or town found further away is checked first
 MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look early
 SLACK = timedelta(minutes=3)  # the job runs every 5 minutes: send a little early, not late
 RETRY_NOT_FOUND = timedelta(days=1)
@@ -110,8 +112,11 @@ class TravelHeadsUps:
         if self._sent(member, entry):
             return False
         ready = timedelta(minutes=member.getting_ready_minutes)
-        place = await self._place(entry.location)
+        address = self.address_for(member, entry.location)
+        place = await self._place(address) if address else None
         if place is None or distance_km(home, place) < AT_HOME_KM:
+            return False
+        if self._too_far(address or "", home, place) is not None:
             return False
         rough = timedelta(minutes=estimate(home, place).minutes)
         if now < entry.starts_at - rough - ready - MARGIN:
@@ -187,9 +192,14 @@ class TravelHeadsUps:
             return as_data("calendars", line) + "\nThat one is a video call: no drive."
         if not entry.location:
             return as_data("calendars", line) + "\nThat event has no address on the calendar."
-        place = await self._place(entry.location)
+        address = self.address_for(owner, entry.location)
+        if address is None:
+            return as_data("calendars", line) + "\n" + NOT_SURE_TEXT.format(phrase=entry.location)
+        place = await self._place(address)
         if place is None:
             return as_data("calendars", line) + "\nIts address wasn't found on the map."
+        if (far := self._too_far(address, found[1], place)) is not None:
+            return as_data("calendars", line) + "\n" + far
         route = await self._route(found[1], place, entry.starts_at)
         leave_by = entry.starts_at - timedelta(minutes=route.minutes)
         ready = leave_by - timedelta(minutes=viewer.getting_ready_minutes)
@@ -224,16 +234,59 @@ class TravelHeadsUps:
             f"about {when}."
         )
 
-    async def drive_to_address(self, address: str) -> str:
+    async def drive_to_address(self, address: str, member: Member | None = None) -> str:
         found = self.home()
         if found is None:
             raise TravelError("there's no home address yet (the Family page on the website)")
+        said = address
+        if member is not None:
+            known = self.address_for(member, address)
+            if known is None:
+                raise ToolFailed(NOT_SURE_TEXT.format(phrase=address))
+            address = known
         place = await self._place(address)
         if place is None:
             return f"{address} wasn't found on the map. Adding the city might help."
+        if (far := self._too_far(address, found[1], place)) is not None:
+            return far
         route = await self._route(found[1], place, clock.now())
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
-        return f"To {address}: about {_duration(route.minutes)} from home {how}, leaving now."
+        where = address if said == address else f"{said} ({address})"
+        return f"To {where}: about {_duration(route.minutes)} from home {how}, leaving now."
+
+    def private_partners(self, viewer: Member) -> list[str]:
+        """The others whose event details this person can't see (K1's setting)."""
+        return [
+            m.name
+            for m in self.services.store.list_members()
+            if m.id != viewer.id and m.calendar_details != "partner"
+        ]
+
+    def address_for(self, member: Member, location: str) -> str | None:
+        """The address to look up for a place they named ("my parent's house": from what
+        they told Themi, F29e), the location itself when it's an address, or None for a
+        named place no address is known for."""
+        home = self.home()
+        named = named_place(
+            self.db, member, self.services.store.list_members(), location,
+            home[0] if home else None,
+        )  # fmt: skip
+        if named is None:
+            return location
+        return named.address
+
+    def _too_far(self, address: str, home: Place, place: Place) -> str | None:
+        """A phrase with no street number or town found far away is likely another place of
+        that name (bug #154: "parent's house" near Oroville)."""
+        if any(c.isdigit() for c in address) or "," in address:
+            return None
+        km = distance_km(home, place)
+        if km <= FAR_KM:
+            return None
+        return (
+            f"'{address}' was found on the map {round(km)} km from home, which may be a "
+            "different place of that name. Check the address with them first."
+        )
 
     async def _route(self, home: Place, place: Place, arrive_at: datetime) -> Route:
         try:
@@ -318,12 +371,19 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
         if words:
             found = travel.next_event(ctx.member, words)
             if found is None:
+                private = travel.private_partners(ctx.member)
+                hidden = (
+                    f" {' and '.join(private)} keeps calendar details private, so those events "
+                    "aren't searched: they can ask, or share the event to the family calendar."
+                    if private
+                    else ""
+                )
                 raise ToolFailed(
-                    f'No upcoming event of theirs matches "{words}" in the next two weeks.'
+                    f'No upcoming event of theirs matches "{words}" in the next two weeks.' + hidden
                 )
             return await travel.drive_to_event(ctx.member, *found)
         if address:
-            return await travel.drive_to_address(address)
+            return await travel.drive_to_address(address, ctx.member)
     except TravelError as exc:
         raise ToolFailed(f"No drive time: {exc}.") from exc
     raise ToolFailed("Which event, or which address?")

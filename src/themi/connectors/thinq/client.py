@@ -29,6 +29,7 @@ import httpx
 
 from themi import clock
 from themi.accounts import Member
+from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
@@ -116,7 +117,9 @@ class ThinqClient:
         self.client_id = client_id
         self._token = token
         base = config.base_url.rstrip("/") or region_url(country)
-        self._http = httpx.AsyncClient(base_url=base, transport=config.transport, timeout=TIMEOUT)
+        self._http = httpx.AsyncClient(
+            verify=tls(), base_url=base, transport=config.transport, timeout=TIMEOUT
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

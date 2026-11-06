@@ -1,6 +1,9 @@
 # Uses .venv if present, otherwise the python on PATH (as in CI).
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 PYTEST := $(PYTHON) -m pytest
+# Tests run in parallel, one worker per CPU (pytest-xdist), each file kept on one worker.
+# PARALLEL= runs them in one process, e.g. to debug with pdb.
+PARALLEL ?= -n auto --dist loadfile
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
@@ -23,10 +26,10 @@ lint:
 	$(PYTHON) tools/check_clock.py
 
 test:
-	$(PYTEST) tests/unit
+	$(PYTEST) $(PARALLEL) tests/unit
 
 test-all:
-	$(PYTEST) tests/unit tests/integration tests/scenarios
+	$(PYTEST) $(PARALLEL) tests/unit tests/integration tests/scenarios
 	@if command -v node >/dev/null 2>&1; then \
 		node --test extension/safeway/tests/*.test.js; \
 	else \
@@ -51,7 +54,9 @@ naming-eval:
 	$(PYTHON) -c 'from tests.evals.naming import *; print(format_naming(score(load_naming_cases(), word_check)))'
 
 cov:
-	$(PYTHON) -m coverage run -m pytest tests/unit tests/integration tests/scenarios
+	$(PYTHON) -m coverage erase
+	$(PYTHON) -m coverage run -m pytest $(PARALLEL) tests/unit tests/integration tests/scenarios
+	$(PYTHON) -m coverage combine -q
 	$(PYTHON) -m coverage report
 	$(PYTHON) tools/check_coverage.py
 

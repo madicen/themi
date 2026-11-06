@@ -43,6 +43,11 @@ class Database:
         finally:
             target.close()
 
+    def copy_from(self, source: Database) -> None:
+        """Replace this database's contents with a consistent copy of `source`."""
+        with source._lock, self._lock:
+            source._conn.backup(self._conn)
+
     def execute(self, sql: str, params: Params = ()) -> int:
         """Run one write statement; returns the last inserted row id (0 if none)."""
         with self._lock:

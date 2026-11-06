@@ -174,7 +174,10 @@ async def test_themis_own_events_change_at_once_others_ask_first(
     assert sync["start"]["dateTime"] == local(15) and sync["description"] == "Agenda inside"
 
     await say(
-        scenario, "Cancel the dentist", "delete_calendar_event", {"event": "dentist", "on": ""}
+        scenario,
+        "Cancel the dentist",
+        "delete_calendar_event",
+        {"event": "dentist", "on": "", "calendar": ""},
     )
     assert "Dentist" not in on_primary(linked)
 
@@ -338,7 +341,7 @@ async def test_an_event_already_on_the_calendar_isnt_added_again(
         party | {"start": "16:00"},
     )
     assert "already on your calendar (Sat 24 Oct, 2-3 pm)" in tool_result(scenario)
-    assert "move_calendar_event" in tool_result(scenario)
+    assert "change_calendar_event" in tool_result(scenario)
     assert len(on_primary(linked)) == 1
     assert not scenario.app.db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'")
 
@@ -402,10 +405,10 @@ async def test_a_move_said_as_done_while_its_card_waits_is_corrected(
     scenario.primary.queue_tool_call("move_calendar_event", move())
     scenario.primary.queue_text("Tutor Gabriel is moved to Wednesday at 12:00 PM.")
     replies = await scenario.say("Erin", "Move tutoring to 12")
-    assert replies[-1] == (
-        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 12-1 pm: that's waiting for a yes on "
-        "the card above."
-    )
+    # F29d: the card is the whole answer, so the claim isn't sent at all
+    assert replies == [
+        "Moving Tutor Gabriel (Illems) to Wed 21 Oct, 12-1 pm\nGo ahead, or not now?"
+    ]
 
 
 async def test_a_move_put_off_gives_way_to_a_newer_one(
@@ -465,3 +468,153 @@ async def test_a_move_made_takes_back_other_cards_for_that_event(
         "SELECT status FROM pending_actions WHERE id = ?", (first["id"],)
     )
     assert status == "declined"
+
+
+ICS = (("invite.ics", "text/calendar", 2204), ("invite.ics", "application/ics", 2204))
+SAMUEL = "Samuel | Craig, Gina, and 2 more people"
+
+
+async def invitation(scenario: Scenario, fake_gmail: FakeGmail, to: str) -> None:
+    (email,) = await arrive(
+        scenario,
+        fake_gmail,
+        {
+            "sender": "Samuel Carrijo <scarrijo@meta.com>",
+            "subject": f"Invitation: {SAMUEL} @ Mon Oct 26, 2026 12pm - 2:30pm (PDT) ({to})",
+            "text": "You have been invited",
+            "attachments": ICS,
+            "to": to,
+        },
+    )
+    event = {"title": SAMUEL, "date": "2026-10-26", "start": "12:00", "end": "14:30",
+             "location": "1 Hacker Way"}  # fmt: skip
+    scenario.primary.queue_structured(
+        {"results": [verdict(email, "confirmation", "An invitation", event=event)]}
+    )
+    await scenario.run_periodic("email.triage")
+
+
+def calendar_cards(scenario: Scenario) -> list[str]:
+    return [t for t in scenario.inbox("Erin") if t.startswith("From an email:")]
+
+
+async def test_an_invitation_to_the_account_itself_gets_no_add_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Bug #159: Google puts an invitation to that account on its calendar itself."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, ERIN)
+    assert calendar_cards(scenario) == []
+
+
+async def test_an_invitation_to_another_address_says_so_and_isnt_added_twice(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Bug #159: the card was tapped three hours later, when the invitation's own event was
+    on his calendar already, and Themi added a second copy."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    assert calendar_cards(scenario) == [
+        f"From an email: {SAMUEL}, Mon 26 Oct, 12-2:30 pm (at 1 Hacker Way), for your "
+        "calendar (an invitation sent to erin@madicen.com)\nGo ahead, or not now?"
+    ]
+    linked.add_event(ERIN, local(12, day=26), local(14, 30, day=26), summary=SAMUEL)  # accepted
+    (row,) = scenario.app.db.query(
+        "SELECT id FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    await scenario.app.services.autonomy.resolve(
+        row["id"], Decision.APPROVE, by=scenario.member("Erin")
+    )
+    assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]  # one, not two
+    result = scenario.app.db.scalar("SELECT result FROM pending_actions WHERE id = ?", (row["id"],))
+    assert result == "Already on your calendar, from the invitation. Nothing new was added."
+
+
+async def test_an_invitation_not_on_the_calendar_is_added(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    """Erin's half of bug #159: sent to erin@madicen.com, it wasn't on her calendar."""
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    (row,) = scenario.app.db.query(
+        "SELECT id FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    await scenario.app.services.autonomy.resolve(
+        row["id"], Decision.APPROVE, by=scenario.member("Erin")
+    )
+    assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]
+
+
+async def test_an_email_event_with_the_same_start_and_title_gets_no_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+    linked.add_event(ERIN, local(12, day=26), local(13, day=26), summary=SAMUEL)  # another end
+    await scenario.run_periodic("calendar.busy")
+    await invitation(scenario, fake_gmail, "erin@madicen.com")
+    assert calendar_cards(scenario) == []
+
+
+def gabriel(**changes: str) -> dict[str, str]:
+    return dentist(
+        title="Tutor Gabriel", date="2026-10-29", start="16:00", end="17:00",
+        location="Parent's house",
+    ) | changes  # fmt: skip
+
+
+async def test_bug_157_the_card_is_the_whole_answer(scenario: Scenario, linked: FakeGcal) -> None:
+    """Bug #157: the card, then the model's "Staged for your calendar: ... Go ahead, or not
+    now?" under it, word for word but its dashes and brackets."""
+    scenario.primary.queue_tool_call("add_calendar_event", gabriel())
+    scenario.primary.queue_text(
+        "Staged for your calendar: Tutor Gabriel, Thu 29 Oct, 4–5 pm at Parent's house. "  # noqa: RUF001
+        "Go ahead, or not now?"
+    )
+    replies = await scenario.say(
+        "Erin", "Can you add another tutoring session with Gabriel next Thurs at 4pm?"
+    )
+    assert replies == [
+        "Tutor Gabriel, Thu 29 Oct, 4-5 pm (at Parent's house), for your calendar\n"
+        "Go ahead, or not now?"
+    ]
+
+
+async def test_a_question_the_card_doesnt_ask_is_kept(scenario: Scenario, linked: FakeGcal) -> None:
+    scenario.primary.queue_tool_call("add_calendar_event", gabriel())
+    scenario.primary.queue_text("Should it go on the family calendar too?")
+    replies = await scenario.say("Erin", "Tutoring with Gabriel next Thursday at 4")
+    assert replies[-1] == "Should it go on the family calendar too?"
+
+
+async def test_bug_157_a_corrected_card_replaces_the_first(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """Bug #157: "the session length is 55 minutes ... the parent's name in parentheses"
+    made a second card, and the first (4-5 pm, "Tutor Gabriel") still waited."""
+    await say(scenario, "Tutoring with Gabriel next Thursday at 4", "add_calendar_event", gabriel())
+    await say(
+        scenario,
+        "That's close but the session length is 55 minutes, and (Illems) after his name",
+        "add_calendar_event",
+        gabriel(title="Tutor Gabriel (Illems)", end="16:55"),
+    )
+    rows = scenario.app.db.query("SELECT summary, status, resolved_by FROM pending_actions")
+    assert [(r["status"], r["resolved_by"]) for r in rows] == [("declined", "system"),
+                                                               ("pending", None)]  # fmt: skip
+    assert scenario.edits("Erin")[-1]["text"].endswith("Replaced by the newer card.")
+
+
+async def test_two_different_events_the_same_evening_are_both_kept(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await say(scenario, "Tutoring with Gabriel next Thursday at 4", "add_calendar_event", gabriel())
+    await say(
+        scenario, "And dinner with Sam at 7 that day", "add_calendar_event",
+        gabriel(title="Dinner with Sam", start="19:00", end="", location=""),
+    )  # fmt: skip
+    statuses = scenario.app.db.query("SELECT status FROM pending_actions")
+    assert [r["status"] for r in statuses] == ["pending", "pending"]

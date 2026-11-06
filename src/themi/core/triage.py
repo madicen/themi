@@ -39,7 +39,7 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from html import unescape
 from typing import Any
@@ -66,6 +66,16 @@ BODY_CHARS = 4000  # per email, in the prompt
 MAX_ATTEMPTS = 3  # an email the model keeps leaving out is filed as routine
 CATEGORIES = ("urgent", "confirmation", "receipt", "needs_reply", "routine", "noise")
 EVENT_FIELDS = ("title", "date", "start", "end", "location")
+# F30c (#164): community sites' posts are never more than time-sensitive for the family,
+# unless the person put the sender on their urgent list.
+COMMUNITY_DOMAINS = ("nextdoor.com",)
+
+
+def _community(address: str) -> bool:
+    domain = address.rsplit("@", 1)[-1].lower()
+    return any(domain == d or domain.endswith(f".{d}") for d in COMMUNITY_DOMAINS)
+
+
 URGENT_KINDS = ("tenant", "financial", "property", "family", "security", "other")
 KIND_WORDS = {
     "tenant": "a tenant",
@@ -90,6 +100,12 @@ one category:
 - needs_reply: a real person is waiting on an answer from the family.
 - routine: worth keeping, nothing to do.
 - noise: newsletters, promotions, notifications nobody reads.
+
+Urgent is about this family's own affairs. "Tenant" means a tenant of theirs, about a
+property they own or rent out. A post, digest or alert from a community site (Nextdoor,
+neighbourhood groups, school-wide lists), or a message to someone else, is never urgent
+for them because of its own words ("URGENT REQUEST"): it's noise or routine, unless it
+names them or their address.
 
 Give every email a one-line summary in plain words (who, what, any amount or
 date). For urgent mail, say which kind and whether it's severe (something is
@@ -414,6 +430,13 @@ class EmailTriage:
                     )
                     continue
                 verdict = Verdict(row["id"], "routine", None, False, row["subject"], "")
+            if (
+                verdict.category == "urgent"
+                and verdict.severe
+                and _community(row["from_address"])
+                and not account.is_urgent_sender(row["from_address"])
+            ):  # F30c (#164): a neighbour's "URGENT REQUEST" to a stranger, at 9:13 pm
+                verdict = replace(verdict, severe=False, urgent_kind="other")
             if account.is_urgent_sender(row["from_address"]) and verdict.category != "urgent":
                 verdict = Verdict(
                     row["id"],

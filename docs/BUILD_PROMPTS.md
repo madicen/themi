@@ -194,6 +194,19 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
+| F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [x] 2026-11-05 |
+| F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [x] 2026-11-05 |
+| F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [x] 2026-11-05 |
+| F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [x] 2026-11-05 |
+| F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [x] 2026-11-05 |
+| F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [x] 2026-11-05 |
+| F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
+| F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
+| F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
+| F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [x] 2026-11-06 |
+| F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
+| F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
+| F30d | Idea: Themi looks things up online | Feedback | [x] 2026-11-06 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -9352,11 +9365,13 @@ followed at 4:21 pm.
 - A "mark as read" that only goes with an invitation also being added to the calendar
   isn't a line of its own. It's done when the event is.
 - Events weeks away say so in the line ("Mon 16 Nov"), with no extra urgency.
-- Ask Erin first: should a later email in the thread (4:21 pm) join the waiting message
-  (edited), or get a message of its own?
+- A later email in the thread (4:21 pm) joins the waiting message, which is edited to add
+  its line. If triage rates that email important or urgent, it gets a message of its own
+  instead (decided by Erin, 2026-11-05).
 
 Tests: idea #137's five cards come as one message. "Go ahead with all" runs each action
-once. "One by one" sends the cards. Approvals from two different senders stay apart.
+once. "One by one" sends the cards. Approvals from two different senders stay apart. A
+later email in the thread edits the waiting message; an important one comes on its own.
 Scenario: Erin's 3:24 pm burst.
 
 ### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
@@ -9370,9 +9385,8 @@ at least do part of it"). For example task 10, Split Merlin's cat box, has three
 - A `split_task` tool: chosen steps (or all) become tasks of their own, each with an
   assignee ('me', the partner, either) and a due date if one is said. The model calls it
   for "split X up", "I'll do the first part", "give her the last step".
-- Ask Michael first which way the original goes: (a) it stays as a parent and is done when
-  its parts are, shown as "2 of 3 parts done" (recommended), or (b) it's replaced by the
-  parts.
+- The original task stays as a parent and is checked off automatically when its last
+  part is done, shown meanwhile as "2 of 3 parts done" (decided by Michael, 2026-11-05).
 - Each part counts as a task in its own right for capacity, nudges, the wall and "too much
   today" (O1a), so a low-energy day can offer just one part.
 - A repeating chore's steps aren't split (its schedule is its own); refused, saying so.
@@ -9575,6 +9589,808 @@ Notes (2026-11-05):
   Lists, Spending, More) and the More page, and 1280px for the top bar. Tab labels can't
   wrap, and are cut short if a long one ever doesn't fit.
 - Setup: restart (migration 0108 runs at start).
+
+### F29a · Feedback (2026-11-05): an event's place, title and notes can be changed, on the copy they mean
+Status: [x] 2026-11-05
+Depends on: K3, F23c
+Read first: "Calendar" (the calendar tools and which calendars Themi writes to); the agent's
+`_honest` check (bugs #3, #5). From Michael's bug #158 (2026-11-05, 4:30 pm, "should be able
+to just edit the location of the event") and Erin's #154 (2:11 pm, "it crapped out on me at
+first"), #149 (11:26 am, "confirm that this exchange worked as expected") and idea #150
+(11:27 am, "make this setting (noting the actual event start time) the default").
+
+What the Pi shows:
+- No tool changes an event's location, title or description. `move_calendar_event` takes
+  only `event`, `on`, `date`, `start`, `end`, and its schema refuses anything else. Reply
+  275 (Erin, "set the location on the tutoring events to my parent's house", 28 s, "I got a
+  bit tangled up") tried `move_calendar_event` with `location`, then `add_calendar_event`
+  twice, `delete_calendar_event` twice, and gave up. Reply 285 (Michael, "set the location
+  ... to my in law's house") staged a delete of the family calendar's copy (action 497, his
+  account) and an add to his own calendar with a new title, "Tutor Gabriel" without
+  "(Illems)" (action 498). He said no to both.
+- Two copies with the same title and time (Erin's own, `themif0764a22a9e6`, and the family
+  calendar's, `...e10`, copied at 2:07 pm, action 490) made every later call fail with "More
+  than one event matches", and `on` can't tell them apart.
+- Two replies said it was done when nothing had changed. Reply 276, "Location updated to
+  your parent's house on the tutoring events", after all six calls failed or changed nothing.
+  Reply 258, "Updated the event description ... to note that the session starts at 4:00 PM",
+  after only a `move_calendar_event` to the same time it had already. `CLAIMS_DONE` has
+  no "updated" or "set", so `_honest` let both through.
+- Erin's rule 26 ("Note actual start time in description when adjusting calendar event
+  times") can't be kept: there's no description to write to.
+
+Build:
+- `move_calendar_event` becomes `change_calendar_event` (keep the old name as an alias for
+  one release, as other renames did): any of `date`, `start`, `end`, `location`, `title`,
+  `notes` (the description: `add` text or `replace` it), each '' for "leave it". Same
+  tiers as today: events Themi made change at once, others need a yes. The card says only
+  what changes ("Tutor Gabriel (Illems), Thu 5 Nov: location to 790 La Para Ave").
+- `calendar`: 'mine', 'family' or '' when there's only one match. When the same event
+  is on their calendar and the family calendar (same title and time), a change with
+  `calendar` '' goes to both, in one card, and says so. Themi copied one from the other,
+  so they're one event to the family. The same applies to `delete_calendar_event`.
+  "More than one" is left for real duplicates on one calendar, and names their calendars.
+- A copy Themi made (`calendar_write` with `source` "chat" from an existing event) remembers
+  the event it came from, so a later change finds both.
+- Set-up time is written down (idea #150, made the default): when a change moves an
+  event's start earlier and leaves its end, the description gets "Starts at 4:00 pm. The
+  time before it is set-up time." (one line, replaced if moved again). Per member setting,
+  on by default, on the website's calendar settings. Once this is live, rule 26 says what
+  Themi does anyway: say so in the Notes, and ask Erin before setting it aside.
+- `CLAIMS_DONE` gets "updated", "set to", "changed" in the "X updated" and "I've updated"
+  forms, so a claim with every call failed or declined is replaced as before. Test it on
+  replies 258 and 276 word for word.
+- A location that names a place they've told Themi about ("my parent's house", "my in-laws'")
+  is written as that address (F29e's place lookup). Otherwise as they said it.
+
+Tests: each a failing test first. A location change to a Themi-made event is done at once,
+and to another event staged, with the card naming only the change. A change with copies on
+their calendar and the family's changes both. Notes added and replaced. An earlier start
+writes the set-up line, and the setting off doesn't. Replies 258 and 276 are replaced by
+the plain "nothing has changed" text. The old tool name still works.
+Scenario: bug #158. An event on Erin's calendar and its family copy; Michael asks to set
+the location to the in-laws' house. One card, both copies changed, title kept.
+
+Setup after deploying: none. Data (Michael decides): action 497 is snoozed and still
+deletes the family copy if it's ever tapped; decline it. The 5 Nov event's location was
+never set (it's past now). Mark #149, #150, #154 (with F29e) and #158 reviewed once live.
+
+Notes (2026-11-05):
+- The plan ("Security and privacy" → Calendars) says Themi keeps titles, places and times,
+  never descriptions. So notes are written, not kept: the executor reads the event from
+  Google, adds to or replaces its description, and writes it back. Nothing stores it.
+- `change_calendar_event` replaces `move_calendar_event`. `tools.ALIASES` still answers
+  the old name for one release, with the new fields left empty. Executors keep their
+  names (`calendar.move_event`), and payloads from before still run.
+- Every change now reads the event, changes it and writes it back, Themi's own events
+  too. Before, Themi's own were written whole (a PUT), which would have wiped a
+  description. Event times are now sent in local time (same instant as before).
+- Copies: `Events.find` returns a list. The same title and times on their calendar and a
+  family calendar (`calendars` table) count as one event, changed or deleted together, in
+  one card. Deviation: no link to the event a copy came from is stored. Same title and
+  times was enough for the Pi's case, and needs no migration.
+- A change that changes nothing is declined ("is like that already"), so reply 258's
+  claim becomes `NOTHING_CHANGED_TEXT`. `CLAIMS_DONE` now has "updated", "changed", "X
+  updated" and "set to".
+- Set-up time: the member setting `setup_note` (migration 0111, on by default, Settings →
+  calendar). Only an earlier start with the same end adds the line. A later change keeps
+  the first real start, and drops the line once the start isn't before it.
+- Not done here: a location naming a place ("my parent's house") is resolved in F29e.
+- Tests were written together with the code, not run failing first against the old code.
+- Setup: restart `themi run` (migration 0111). Data: decline action 497 on the Pi.
+
+### F29b · Feedback (2026-11-05): an emailed invitation already on the calendar isn't added again
+Status: [x] 2026-11-05
+Depends on: 23, K3
+Read first: "Gmail triage" (events from emails); F26b (an email thread's approvals). From
+Michael's bug #159 (2026-11-05, 5:10 pm, "this created duplicate events on the calendar").
+
+What the Pi shows: a Google Calendar invitation for Mon 9 Nov, 12-2:30 pm ("Samuel | Craig,
+Gina, and 2 more people") went to both michael@madicen.com and erin@madicen.com. Each email
+(984, 987) has an `invite.ics` attachment (`text/calendar`). Triage made a
+`calendar_from_email` card for each of them. Erin tapped Go ahead at 4:23 pm; Michael at
+4:55 pm. Michael's calendar now has the invitation's own event (`nnu27n4oq4noqi61747s4hoge4`)
+and Themi's copy (`themif0764a22a9e13`), same title and time. Erin's has only Themi's copy,
+since the invite was sent to her madicen.com address, not the Google account Themi reads.
+
+Build:
+- Before staging a `calendar_from_email` card, and again when it runs (the card can wait
+  hours, and accepting the invite in Gmail adds the event), look for an event on that
+  member's calendars with the same start and a title that matches (the
+  `add_calendar_event` "Already on your calendar" check). If one is found, there's no card,
+  or the tapped card says "Already on your calendar, from the invitation. Nothing new was
+  added." and does nothing.
+- An email with a `text/calendar` part sent to an address whose calendar Themi reads is
+  an invitation Google has already added. Its card offers only "mark as read", not an add.
+  Sent to an address Themi can't see the calendar of (Erin's madicen.com), the add stays,
+  and the card says the invitation was sent to that address.
+- Both partners invited to the same event (same `.ics` UID, or same title and start) get
+  one card between them: "Both of you are invited", with the add going to the family
+  calendar if either says yes. This follows F26b's grouping if F26b is done by then.
+
+Tests: each a failing test first. An invitation already on their calendar gives no add
+card. A card tapped after the event appeared adds nothing and says so. An invitation to an
+unread address keeps the add. The same invitation to both partners gives one card.
+Scenario: bug #159, both invitation emails, each partner's taps, one event each in the end.
+
+Data (Michael decides): delete Themi's copy `themif0764a22a9e13` from his calendar, or ask
+Themi to once F29a is live. Mark #159 reviewed once live.
+
+Notes (2026-11-05):
+- An email with a `text/calendar` or `application/ics` part is an invitation. The address
+  it was sent to comes from the end of Google's subject ("... (erin@madicen.com)").
+  Sent to the linked account's own address: no add card (Google adds it there).
+  Otherwise the card says "(an invitation sent to <address>)".
+- On the Pi both invitations went to madicen.com addresses. Michael's was on his calendar
+  by the time he tapped and Erin's wasn't, so the address alone couldn't tell. The fix that
+  matters: an email's add checks Google itself when tapped (`Events._there_now`: an event
+  that isn't Themi's, same start, matching title) and says "Already on your calendar, from
+  the invitation. Nothing new was added." A failed check adds as before.
+- Staging also skips an email event when the last calendar read has the same start and a
+  matching title, whatever the end.
+- Not done: one card for both partners. It belongs with F26b's grouping, which isn't
+  built. With the check above, each partner gets at most one copy on their own calendar.
+- The fake Gmail's `deliver` takes `to`.
+- Setup: restart `themi run`. Data: delete `themif0764a22a9e13` from Michael's calendar.
+
+### F29c · Feedback (2026-11-05): "tell her urgently" sends a waiting note now, and a held note offers to
+Status: [x] 2026-11-05
+Depends on: 34a, F22d
+Read first: "Liaison"; prompt 34a's notes (relays and urgency). From Michael's bug #155
+(2026-11-05, 2:58 pm, "telling urgently should get a different sort of response") and idea
+#156 (4:10 pm, "if a note won't be delivered because of quiet or busy time, add an option
+to the confirmation message to send urgently").
+
+What the Pi shows: reply 280 relayed "You're amazing and I'm really glad to be married to
+you" as `whenever` (note 2, "likely tomorrow around 8 am"). "Tell her urgently" (reply
+281) called `relay_to_partner` again with `urgent` and the same text. `_same_note` found
+note 2 waiting and declined ("it wasn't sent twice"), and the reply became
+`NOTHING_CHANGED_TEXT`. Note 2 is still waiting. At 3:57 pm he sent a new one as urgent,
+which went at once.
+
+Build:
+- The same note, still waiting, sent again with a more urgent urgency changes the waiting
+  one: its urgency and timing are raised, and the outbox row is resent at the new time (now,
+  for urgent). The reply says "Sent it to Erin now." Not a second note. A less urgent one
+  changes nothing, as today.
+- "Urgently", "now", "right away" after a note held for later, with no new text, mean
+  that note (the agent sees the last held note in the tool's result, so the model can
+  call it with the same text).
+- Idea #156: the confirmation of a note held for quiet hours, busy time or the daily limit
+  gets one button, "Send now", which does the same. Urgent bypasses still follow the
+  outbox's rules for urgent (burnout mode's holds, F22d, still apply, and the button isn't
+  there then). The button goes once the note has gone.
+- The reply text says why it's held, once ("Erin's in quiet hours until 8 am").
+
+Tests: each a failing test first. The same note sent again as urgent goes now, with one row in
+`liaison_items`. Less urgent changes nothing. The button sends it, and is gone after.
+No button in burnout mode. The text names the reason.
+Scenario: bug #155, the note at 2:58 pm, "Tell her urgently", Erin gets it at once.
+
+Data: note 2 to Erin may still be waiting; leave it. Mark #155 and #156 reviewed once live.
+
+Notes (2026-11-05):
+- `Liaison.hurry`: the same note asked for again at a higher urgency (whenever < today <
+  urgent) takes its queued outbox row back (`Outbox.cancel`) and sends it again. One row
+  in `liaison_items` (its urgency raised), and "Sent it to Erin now." If it went in the
+  meantime, it's "already went" as before. Lower or the same urgency changes nothing.
+- A held note's confirmation is a message the tool sends itself, with a "Send now"
+  button (kind `relay_now`). `ToolContext.cards` counts it as that call's answer, so the
+  turn ends there with no model words, as P2b's `asked` does. Migration 0112 adds
+  `liaison_items.card_outbox_id`. `Outbox.after_sent` (async listeners) lets the button
+  go once the note has gone: the confirmation becomes "Passed on to Erin."
+- No button in burnout mode (`Burnout.current(recipient)`). There a note waits for the
+  burnout hold as before.
+- The reason, said once: quiet hours ("Erin's in quiet hours until 8 am"), the daily
+  limit, or a busy time. A plain good-window wait reads as before.
+- In tests, a held note's turn has no model round: don't queue reply text after it.
+- Setup: restart `themi run` (migration 0112).
+
+### F29d · Feedback (2026-11-05): a card is the whole answer, and a corrected request replaces its card
+Status: [x] 2026-11-05
+Depends on: F21a, F21b
+Read first: F21a's and F21b's notes (Themi's own confirmation ends the turn; a reply that
+repeats the card). From Erin's bug #157 (2026-11-05, 4:25 pm, "there is no need for two
+separate confirmation messages").
+
+What the Pi shows: "add another tutoring session with Gabriel next Thurs at 4pm" (reply
+283) sent the approval card "Tutor Gabriel, Thu 12 Nov, 4-5 pm (at Parent's house), for
+your calendar / Go ahead, or not now?" and then the model's "Staged for your calendar:
+Tutor Gabriel, Thu 12 Nov, 4–5 pm at Parent's house. Go ahead, or not now?" `_repeats_card`
+missed it: the "Staged for your calendar:" prefix, the en dash and the missing parentheses.
+Same again at 4:25 pm (reply 284). Also, the corrected card (action 496, 4-4:55, with
+"(Illems)") didn't replace the first (action 495, 4-5 pm, still `pending` on the Pi).
+`replace_waiting` didn't match it because the title changed.
+
+Build:
+- A tool round where every call staged a card, and nothing else ran, ends the turn with
+  no model text, as F21a's done adds do. Not when the model's text asks a question the
+  card doesn't ("Which calendar?") or a call failed.
+- `_repeats_card` compares words only: punctuation and dashes dropped, "staged",
+  "staged for", "waiting for a yes" and the card's question dropped, before comparing.
+- A new add staged in the same conversation within 10 minutes, on the same date with an
+  overlapping time, replaces the card it corrects: the old card is edited to "Replaced by
+  the one below." and its action is declined by `system`. That holds for a changed title or
+  length too, not only the exact payload `replace_waiting` matches today.
+
+Tests: each a failing test first. Reply 283's text is dropped, word for word. A card with a
+question the card doesn't ask keeps it. The corrected add declines the first and edits its
+card. Two different events the same evening are both kept.
+Scenario: bug #157, the request, the correction, one card left, one message each time.
+
+Data: decline action 495 on the Pi (it's for an event that's now on the calendar as 496), or
+let it expire on the 12th. Mark #157 reviewed once live.
+
+Notes (2026-11-05):
+- Deviation: the model's round still runs; its words are dropped afterwards. Every call
+  this turn made a card (`ToolContext.staged`), so the reply is empty unless the
+  model's text asks a question of its own (a "?" beyond the card's own question). Ending
+  before the round, as F21a does, would lose that question. A held note's card (F29c)
+  does end the turn early, through `ToolContext.cards`.
+- This takes over `_honest`'s "that's waiting for a yes on the card above" when cards
+  were all the turn did. A false "done" claim under a card isn't sent at all now. Five
+  tests that expected the model's line under a card were changed (approvals, staging,
+  pantry, Safeway, calendar events).
+- `_repeats_card` compares sorted words, without "staged", "waiting for a yes", "for
+  approval" and the card's question. That covers reply 283 word for word.
+- `Events.replace_waiting`: a chat add staged in the last 10 minutes
+  (`CORRECTION_WINDOW`), on the same calendar and day with overlapping times, is
+  withdrawn by the new one ("Replaced by the newer card.", declined by `system`), whatever
+  its title or length. Cards from emails aren't corrections.
+- Setup: restart `themi run`. No migration.
+
+### F29e · Feedback (2026-11-05): drive time to a place they've named, and a private calendar isn't an empty one
+Status: [x] 2026-11-05
+Depends on: K1, K4b, F22a
+Read first: "Calendars" (K1's privacy, K4b's notes); F22a's notes (asking about your partner). From
+Erin's bug #154 (2026-11-05, 2:11 pm, "then gave a bad answer to the travel time, then gave
+the right one"), and what Michael heard at 1:14 pm in #155's thread.
+
+What the Pi shows:
+- "When should we leave the house ... for tutoring?" (reply 277) found the event without a
+  location, remembered "Parent's house is the location for tutoring events" (fact 4), then
+  called `drive_time` with address "parent's house". The geocoder found a place called
+  that near Oroville (39.437, -121.593, cached in `geocodes` as "parent's house" and
+  "parents house"): 3 hr 20 min, "Leave at 12:10 PM". Fact 3 says "Erin's parents' address
+  is 790 La Para Ave, Palo Alto", and the 29 Oct tutoring event has that address.
+- Michael asked "How long will it take to get to our tutoring appointment today? ... It's on
+  Erin's calendar". `drive_time` found nothing of his. `day_summary` for Erin listed only
+  tasks, because she keeps calendar details private, and the model said "Erin has no
+  calendar events today." She had the tutoring session.
+
+Build:
+- `drive_time` and event locations resolve a named place before geocoding: "my parents'",
+  "my parent's house", "the in-laws'", "grandma's", "home", "work" are looked up in facts
+  (an address in a fact about that place, either spelling, either partner's wording: Erin's
+  parents are Michael's in-laws). Found: that address, and the result names it. Not found: no
+  geocode. The tool says "Not sure where 'parent's house' is; ask for the address once, and
+  remember_fact it."
+- The geocoder's answer for a phrase with no street number or town is used only if it's
+  within 100 km of home. Further than that, the tool asks to check the address first,
+  naming the town it found.
+- Delete the two cached "parent's house" rows on deploy (a migration that removes
+  `geocodes` rows for phrases with no digit and no comma).
+- A partner's private calendar: `day_summary` for them says "Erin keeps her calendar
+  private, so her events aren't shown; she may have some", and never "no events".
+  `drive_time` for "our"/"her" event can use the partner's event for timing and place
+  without showing its title, when that partner's calendar details are private: "For
+  Erin's 3:30 pm event: leave at 2:50 pm." (only its time and drive, the same as busy
+  times show today). Check the plan's privacy section allows the time; if not, say "It's
+  on Erin's calendar; she can ask, or share it to the family calendar."
+
+Tests: each a failing test first. "parent's house" with fact 3 gives the Palo Alto drive, and
+without it, the question and no geocode. A far geocode is checked. The migration drops the
+two rows. The private partner summary's line, and the model's "no events" isn't possible
+from it (an eval line). The partner's event for timing, if the plan allows it.
+Scenario: bug #154, "when should we leave for tutoring?" with the event's location as
+"Parent's house": leave at 2:50 pm, the first time.
+
+Setup after deploying: the migration. Mark #154 reviewed with F29a once both are live.
+
+Notes (2026-11-05):
+- `themi.core.places.named_place`: a phrase with no digits that names kin ("parent",
+  "mom", "grandma"...), "in-laws", "work", "school", or "home". It's looked up in the
+  facts they can see: one with a street address that talks about the same kin, and
+  names the right person (theirs, or for "in-laws" the partner's). A fact naming no
+  one counts if nothing better is found. "home" is the family's home address.
+- `drive_time`, the travel heads-up and event locations (add and change) use it. A
+  named place with no address known isn't sent to the map: the tool says "Not sure
+  where 'X' is" and asks the model to ask once and `remember_fact` it.
+- A phrase with no street number and no comma, found more than 100 km from home
+  (`FAR_KM`), is checked with them first ("...km from home, which may be a different
+  place of that name"). The heads-up skips it. The town isn't named: the geocoder gives
+  only a position. That's a deviation.
+- Migration 0113 deletes cached map answers for keys with no digit (both "parent's
+  house" rows, and some harmless ones that will be looked up again).
+- The plan ("Security and privacy" → Calendars) says a person's event details reach
+  only their own conversations unless they share them. So the fallback in this prompt was
+  used: no drive time from a partner's private event. `drive_time` with no match says
+  the partner's calendar is private and isn't searched. `day_summary` for a private
+  partner tells the model "there may be some. Never say X has no events", and the sent
+  summary ends "(Erin's calendar is private: events aren't shown here.)".
+- Not done: an eval line for the "no events" wording.
+- Setup: restart `themi run` (migration 0113).
+
+### F29f · Feedback (2026-11-05): "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine
+Status: [x] 2026-11-05
+Depends on: F21a, F22a, C3
+Read first: F21a's notes (list adds); F22a's notes (asking for your partner); "Routines" on the
+wall. From Erin's bug #151 (2026-11-05, 11:35 am, "'add' was not meant to go on the list,
+it was a direction for Themi") and Michael's #147 (8:55 am, "created a routine when that has
+nothing to do with what I asked").
+
+What the Pi shows:
+- "Add body double, move from room to room to service dog tasks" (reply 264): `add_to_list`
+  with items `["Add body double, move from room to room"]` (action 483). The model kept
+  the verb.
+- "What tasks from Erin could I take to make her day easier?" (reply 249, groups core,
+  calendar, email, schedules): the model asked for the wall tools and staged
+  `add_to_wall_routine` "Erin's tasks", Morning, every day, `task_id` 0 (action 473), then a
+  day summary for Erin. He wanted her open tasks he could do, and a way to take one.
+
+Build:
+- `add_to_list`: an item that starts with "add"/"put" when their message starts with that
+  same word, followed by the item, loses the word ("Add milk to groceries" → "milk"). The
+  same check as F21a's "as they asked" words: only when the item is in their message.
+- `add_to_wall_routine` refuses when their message has none of "routine", "morning",
+  "afternoon", "evening", "tonight", "every day", or when `task_id` is 0 and the title
+  names a person ("Erin's tasks"). The refusal tells the model to answer with tasks
+  instead (the MAKE_TIME pattern, F23c).
+- "Tasks of Erin's I could take / do for her / help with" is F22a's partner question with
+  a hand-over. The answer lists her open tasks that aren't private and can be moved (not
+  ones only she can do, by the task's own settings), with a "Take it" button on each, at
+  most five. A tap reassigns the task to him through `update_task` (its tier as today) and
+  tells Erin once, gently, at a good time ("Michael took Put the laundry away"). Add this
+  to the routing words so the core or schedules group is enough, not the wall's.
+
+Tests: each a failing test first. Reply 264's request adds "body double, move from room to
+room". "Add Add-ons to the list" style edge: an item whose own text starts with "add" and
+isn't a verb in their message is kept. `add_to_wall_routine` refused for reply 249's call.
+The take-a-task answer and its buttons, a tap reassigning and Erin's notice.
+Scenario: bug #147, Michael asks, taps "Take it" on the laundry, Erin hears at 8 am.
+
+Data: none (action 473 was declined; Erin fixed the list by hand). Mark #147 and #151
+reviewed once live.
+
+Notes (2026-11-05):
+- `lists.without_verb`: an item starting with "add"/"put" loses the word only when their
+  message starts with the same verb (after "please", "can you"...) followed by the rest
+  of the item. 'Put "Add salt" on the cooking list' keeps "Add salt".
+- Deviation: `add_to_wall_routine` doesn't refuse every message without routine words.
+  A routine Themi suggests unasked ("I keep forgetting the vacuum") is meant to be a card.
+  It refuses a new item titled with someone's tasks ("Erin's tasks"), or a message about
+  taking or doing tasks with no routine words. The refusal points to `tasks_i_could_take`.
+- `themi.core.taking`: `tasks_i_could_take` (core group, no routing needed) sends the
+  partner's open one-off tasks, at most five, each with a "Take: <title>" button. Not
+  offered: repeating chores, medicine, check-ins, plans, shared or either-of-you tasks.
+  The message is the turn's answer (`ToolContext.cards`). A tap reassigns the task
+  (`TaskBoard.reassign`, as `update_task`'s `assign_to` does, no card) and tells the owner
+  once, at low priority ("Husband took Put the laundry away off your list.", kind
+  `task_taken`). A task that's no longer theirs says so.
+- Not done: a routing eval with Michael's wording. The tool is in the core group, so
+  every message gets it.
+- Setup: restart `themi run`. No migration.
+
+### F29g · Idea (2026-11-05): list items with sub-items, at any depth
+Status: [x] 2026-11-05
+Depends on: L1a, L1b, F21a
+Read first: "Lists" (the plan's list model and the wall's lists); L1a's and L1b's notes (Themi's lists and the
+wall's). From Erin's bug #152 (2026-11-05, 11:44 am) and idea #153 (11:54 am), both quoted
+in full in `themi feedback`.
+
+What the Pi shows: Erin wanted "Service dog tasks / - body doubling / -- go upstairs / --
+go downstairs". The model tried `update_task` with steps (no such task), then stored one
+item, "body doubling: go upstairs, go downstairs". She locked in rules 27 and 28 ("Format
+tasks with indented subtasks using double dashes") to get the look. Those rules only
+change the model's words, so the next reply (271) was garbled ("- body doubling / Up
+next:"). Lists are flat, and the model has no way to nest.
+
+Erin's spec (#153): any depth; shown with one dash per level by default, and the marks
+customizable; "add a sub item under cat food" finds "cat food" wherever it is and adds one
+level below it, even when "cat food" is already a sub-item. Themi keeps lists and tasks
+apart inside, but what people call them varies ("items" and "tasks" both), so the context
+decides which one they mean, not the word.
+
+Build:
+- `list_items.parent_id` (nullable, same list, on delete cascade) and `position`. A
+  migration, existing items at the top level.
+- `add_to_list` takes `under` (words from an existing item). The item goes one level below
+  that one, at the end. Ambiguous `under` asks which, naming each one's parent. Several
+  levels in one go: items written with leading dashes in their message ("- body doubling /
+  -- go upstairs") keep that shape.
+- `show_lists` renders the tree: one dash per level by default ("- ", "-- ", "--- "), from
+  a per-member setting (dashes, indented bullets, numbers) on the website's list page. The
+  reply is Themi's own text, as F21a's list replies are, so the model can't reformat it.
+- Ticking or removing an item does its sub-items too, and says how many. Moving an item
+  ("put go upstairs under body doubling") is `move_list_item`.
+- The wall (Cozyla) and OurGroceries have flat lists. A nested list pushed there is
+  flattened as "body doubling: go upstairs" lines, or kept off the wall: check the L1b
+  sync and choose the one that doesn't break the two-way sync, and say which in the Notes.
+- Items or tasks: tool descriptions for `add_to_list`, `add_task` and `update_task` say
+  "people call list items tasks and tasks items; a named list means a list item, a due
+  date or a person means a task". When a named list exists, "add a task to <list>" is a
+  list item. A routing eval with Erin's wordings from 5 Nov.
+- Once live, rules 27 and 28 say what Themi now does. Ask Erin before setting them aside.
+
+Tests: the migration; add under at each depth; "a sub item under cat food" where cat food is
+a sub-item makes a third level; an ambiguous `under`; rendering in each style; ticking a
+parent; the wall's flattening (or exclusion); the routing eval.
+Scenario: Erin builds the service dog list from bug #152's messages and sees it in her
+format.
+
+Setup after deploying: the migration. Mark #152 and #153 reviewed once live.
+
+Notes (2026-11-05):
+- Found while building: reply 271's "Up next:" wasn't the model. The gentle-phrasing
+  softener (`pda.soften`, plain phrasing) read "-- go upstairs" as a command, since only
+  "- " counted as a list line. `_BULLET` now covers "-", "--", "•", "1." and "1.1.", and
+  `find_demands` and `soften` go line by line, leaving list lines (and their case) alone.
+- Migration 0114: `list_items.parent_id` (ON DELETE CASCADE) and `members.list_style`
+  ("dashes", "bullets", "numbers"; dashes by default). Deviation: no `position` column.
+  Items keep the order they were added in, and a moved item goes to the end of its new
+  level.
+- `add_to_list` takes `under` (with a schema `default`; `ToolRegistry` now fills in a
+  field with a default when a call leaves it out, so older calls still run). Items
+  written with leading dashes keep their shape. Each level dedupes on its own. An
+  ambiguous `under` (or item) names each match with its parent: "food (under cats)".
+- `show_lists` for a list with sub-items sends Themi's own rendering (`lists.render`) as
+  the reply, in the reader's style. Flat lists read as before. `words` (what the model
+  sees) puts sub-items in brackets.
+- Ticking or removing an item does its sub-items too, and the result says how many.
+  `move_list_item` moves an item under another, or back to the top. It can't go under
+  itself or its own sub-items.
+- The wall: sub-items stay off it. The wall sync only sends and matches top-level items,
+  and an item moved under another is taken off the wall. Flattening ("parent: child")
+  would read as a rename on the wall's next pull and break the two-way sync.
+- The style setting is on Settings, next to the calendar options, not on the Lists page.
+- Tool descriptions say list items and tasks get called by each other's names, and how
+  to tell them apart. Not done: a routing eval with Erin's 5 Nov wordings.
+- Data: once live, rules 27 and 28 say what Themi does anyway. Ask Erin before setting
+  them aside. Her "Service dog tasks" list holds one item, "body doubling: go upstairs,
+  go downstairs", which she may want to re-add as sub-items.
+- Setup: restart `themi run` (migration 0114).
+
+### F29ha · Idea (2026-11-05): the family's own guides, given as text, and looked up
+Status: [x] 2026-11-05
+Depends on: 14, 27
+Read first: "Memory" (facts and their search); prompt 27's notes (meal suggestions); "Security
+and privacy" (outside text is data). From Erin's idea #148 (2026-11-05, 9:25 am, "Themi
+should have access to our instant pot grain cooking guide").
+
+Split from F29h on 2026-11-05: Themi can't read photos or documents yet (Telegram's photos
+are dropped, and the router has no vision call), which is a prompt of its own (F29hb).
+This one takes a guide as text.
+
+Build:
+- A guide is a named piece of text the family gives Themi: pasted in chat with "save
+  this as our <name> guide", or added on a new website page, Guides (on More). The same
+  name again replaces its text.
+- `save_guide`: the text must be what they sent, word for word, never the model's own.
+- `look_up_guide` (core group, a lookup): finds the guide by name or topic and returns
+  the relevant part inside a `<data source="guide ...">` block. Answers cite it ("From
+  your Instant Pot guide: brown rice, 22 min high pressure, 10 min natural release").
+- Guides are the household's by default; one can be marked just for its owner.
+
+Tests: saving from chat; text the model made up is refused; the lookup by topic; a
+guide's text containing instructions is data, not followed; a private guide not found by
+the partner; the Guides page adds and deletes.
+Scenario: Erin pastes the grain chart, then Michael asks "how long for quinoa?".
+
+Notes (2026-11-05):
+- `themi.core.guides`: migration 0115's `guides` table (name, body, owner or NULL for
+  the household). Not encrypted: it's family reference text, not a secret. Say so if
+  that should change.
+- `save_guide` keeps the text only if it's in their message (or the one before), word for
+  word, so the model can't invent a guide. It ends the turn with "Saved ..." (P2b's
+  `asked`).
+- `look_up_guide` picks the guide whose name and text best match the topic. It returns
+  the whole guide when short (2,000 characters), else its first line and the matching
+  lines, inside a `<data source="guide ...">` block. With no match it declines and says
+  not to answer from memory. The context lists the guides they can see.
+- The Guides page (More → Household) lists, adds (name, text, "just for me") and deletes.
+- Setup: restart `themi run` (migration 0115). Then Erin can paste the grain chart in
+  chat or on the Guides page. If it's a photo or PDF, that's F29hb.
+
+### F29hb · Idea (2026-11-05): a guide from a photo or a PDF
+Status: [ ]
+Depends on: F29ha, 05
+Read first: F29ha's notes; prompt 05 (the adapters); "Security and privacy". Idea #148
+again: Erin's guide may be a photo, a PDF or a printed sheet. Ask Erin which it is before
+building, and build only the path it needs.
+
+Build:
+- Telegram: a photo or a document (PDF) sent with "save this as our <name> guide", or
+  with the caption, is downloaded (size capped) and kept, encrypted at rest.
+- The router gets an image/PDF-to-text call (per-member keys, retries and fallback as
+  every model call has), with adapters for the backends that can read images, and a
+  scripted fake. A PDF with a text layer is read without the model.
+- The text it reads becomes the guide's text (F29ha), with the original kept beside it,
+  and the reply reads back the first lines so they can check it.
+- Meal suggestions (prompt 27) may use a guide's cooking times when one fits.
+
+Tests: a photo with a fake vision answer becomes a guide; a PDF's text layer; a failed
+read says so and keeps nothing; the size cap; the guide's text is data.
+Scenario: Erin sends a photo of the grain chart, then asks "how long for quinoa?"
+
+Mark #148 reviewed once F29ha or F29hb is live, whichever fits Erin's guide.
+
+Update (2026-11-06): the grain guide is text (Michael pasted it: six grains with ratio,
+high-pressure and natural-release times), so F29ha covers it. This prompt waits until a
+guide comes as a photo or a PDF.
+
+### F30a · Feedback (2026-11-05): a refused task change changes nothing, and "the task you just made" is that one
+Status: [x] 2026-11-06
+Depends on: F6a, F24a, P8a
+Read first: F6a's notes (steps); F24a's notes (asked for again); P8a's notes (the naming
+check). From Erin's idea #163 (2026-11-05, 8:36 pm, "review this whole dentist
+conversation to ensure everything is working as expected and doesn't have any hidden
+bugs").
+
+What the Pi shows:
+- 8:31 pm (reply 296): "maybe I should just have Michael call his office" made task 78,
+  "Call Contemporary Dental", for Michael.
+- 8:33 pm (reply 297): "Can you update the task you just made...". The model called
+  `update_task` on task 60, not 78. Task 60 is Erin's "Mimi pill - 1 tab", a medicine
+  chore that ended on 30 Oct (status done). `TaskBoard.update` saved the new title and
+  steps first. Then the `assign_to` check refused ("a chore's people are its schedule's")
+  and the result said "Nothing was changed". Task 60 is now titled "Call dentist office
+  to check Dr. Scheinbach and schedule appointments", with the dentist steps.
+- The model then made task 79, "Call dentist office" (the same job as 78), and tried
+  `cancel_task` 60 ("already settled"). The reply said "I've updated the task for Michael".
+  Michael has 78 and 79 open, for one job.
+
+Build:
+- `update_task` checks everything before it writes: the assignee, a repeating chore's
+  people, the title. Nothing is saved when any part is refused, so "Nothing was changed"
+  is true. The same goes for the other tools that change a task in steps (check
+  `reschedule_task`, `set_task_schedule`).
+- A task that's done or cancelled can't be renamed or given new steps: "Task 60 (Mimi pill
+  - 1 tab) is closed. To do something new, create a task."
+- "The task you just made" / "that task" / "it": when this conversation made or changed a
+  task in the last few turns (`ToolContext.tasks` from earlier turns, kept per member for
+  30 minutes), `update_task` on a different task that shares no words with their message
+  or that task's title is refused, naming the recent one: "They likely mean task 78 (Call
+  Contemporary Dental), made at 8:31 pm." This is P8a's naming check, counted the same way.
+- `create_task` for an assignee who has an open task made in the last 30 minutes whose job
+  the new one replaces (same kind and assignee, and their words say update, change or
+  instead) is refused, pointing to `update_task` on that task.
+- The reply says what happened: when an `update_task` failed and a `create_task` made a
+  new task in the same turn, a reply saying "updated" is replaced with "Made a new task
+  for Michael: Call dentist office." (the `_honest` family, by tool).
+
+Tests: each a failing test first. Reply 297's three calls, in order: task 60 keeps its
+title and steps, the refusal is true, and the update names task 78. A closed task can't
+be renamed. "Update the task you just made" with the right id works. The duplicate create
+is refused. The reply after a failed update and a create says what was made.
+Scenario: Erin's 8:31 and 8:33 messages; Michael ends up with one task, with the five
+steps.
+
+Data (Michael decides): restore task 60's title to "Mimi pill - 1 tab" and its steps from
+the last backup before 2026-11-06 04:33 UTC (the steps before that are unknown here).
+Cancel task 78 or 79, whichever Michael isn't using; 79 has the full steps. Mark #163
+reviewed once live (with F30b).
+
+Notes (2026-11-06):
+- `update_task` reads the task, checks it can be changed, that it isn't closed, which
+  task they mean, and the assignee (with a chore's people) before `TaskBoard.update`
+  writes anything. `reschedule_task` and `set_task_schedule` were checked by eye: they
+  validate before writing already.
+- "The task you just made": `tasks.recent_tasks` gives open tasks this person made in
+  the last 30 minutes, plus this turn's. `update_task` on another task whose title
+  shares no word with their message (and two with message plus new title) is refused,
+  naming the newest recent one and when it was made. It's counted as P8a's
+  `not_named`, and `update_task` joins `naming.CHECKED`. No check when nothing is recent.
+- `create_task`, when their message says update, change, edit, fix, instead or rather
+  and a recent task of the same kind and assignee exists, is refused, pointing to
+  `update_task` on it.
+- `ToolContext.calls` records (tool, outcome, result) for each call. The agent's
+  `_not_updated` replaces a reply saying "updated"/"changed"/"edited", when
+  `update_task` failed and `create_task` made a task in the same turn, with "Made a new
+  task for X: <title>."
+- Tests were written alongside the code, not run failing first against the old code.
+- Setup: restart `themi run`. No migration.
+
+### F30b · Feedback (2026-11-05): a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know
+Status: [x] 2026-11-06
+Depends on: 08, F20c, CM1a
+Read first: prompt 08 (the PDA shield); F20c's notes (rewrites that drop facts); CM1a's notes
+(the chat prompt). From Erin's bug #160 (2026-11-05, 8:20 pm, "it just hallucinated a dentist
+name and phone number, as well as how it got that name and number. If it doesn't know a
+thing, it should say that. And suggest ways for me to find the information") and #161 (8:21
+pm, "it failed to answer my question. Should have suggested things like looking through
+old emails for receipts").
+
+What the Pi shows (conversation mode, Erin, Gemini free tier):
+- Reply 290, to "I don't remember the dentist's name": "The Redwood City dentist is Dr.
+  Evans, and their office number is 650-555-0144." Nothing Themi knows says that. It
+  went through the AI rewrite (`ai_calls` 1472, `pda_rewrite`) after the chat call.
+- Reply 291, "How did you find that?": "It's in the contact records on your phone." Themi
+  has no access to her phone. This one wasn't rewritten: the chat model made up a
+  source for the earlier answer.
+- Reply 292, to "How can I find the name myself? Like what records should I look for?":
+  "Options for finding past dental payments." That's all of it. It also went through the
+  rewrite (1477). Suggestions ("look through...", "check...") read as commands, and the
+  rewrite replaced them with a heading.
+- The text before the rewrite isn't kept anywhere, so which step made "Dr. Evans" up can't
+  be told now. Replies 289 and 291, not rewritten, were sound.
+
+Build:
+- The shield keeps a rewrite only when it's faithful (`pda.faithful(original, rewrite)`):
+  no number, phone number, email address, link or capitalised name that isn't in the
+  original; at least two thirds of the original's content words kept; not under 40% of
+  its length, and every list line's item still there. Otherwise the deterministic
+  softener is used, as when the rewrite fails. Log the reason at info level, with no text.
+- The rewrite prompt: "Don't answer the message, add information or invent anything:
+  names, numbers, places, sources. A list of suggestions stays a list, every suggestion
+  kept, each said as an option ('One place to look: old emails from the dentist')."
+- Keep what the shield changed: the outbox row gets `original_text` (the text before the
+  shield) when it changed. `themi feedback` shows both for the replies in a report, so
+  the next report like this can be traced. Migration.
+- The chat prompt: "Never make up names, phone numbers, addresses, prices or where you
+  learned something. You can't see their phone, contacts, accounts or the web. If you
+  don't know, say so plainly, then offer two or three places they could look (old
+  emails, card or bank statements, an insurance portal, asking someone, a web search),
+  or offer to check their email if it's linked." Plus an eval set of five "I don't
+  remember X" messages that must not produce a made-up name or number.
+- Asked about her own records ("what records should I look for?"), the turn may go to the
+  tool agent, which can search her linked email (`search_email`, if it exists; else say
+  so in the Notes).
+
+Tests: each a failing test first. A rewrite adding "Dr. Evans" and a phone number is
+refused and softened instead. A rewrite that turns three suggestions into a heading is
+refused. A faithful rewrite is kept. `original_text` is stored and shown in `themi
+feedback`. The chat prompt's line is present, and the eval set runs (not in the default
+test run).
+Scenario: in conversation mode, "I don't remember the dentist's name" with the scripted
+chat model answering "I don't know it; you could look through old emails or card
+statements" reaches Erin with both places to look.
+
+Mark #160 and #161 reviewed once live.
+
+Notes (2026-11-06):
+- The text before the shield was on the Pi after all: `outbox.text` is what was asked to
+  be sent, `sent_text` what went. Reply 290 (outbox 1317): the chat model wrote "The
+  Redwood City dentist is Dr. Evans, and their office number is 650-555-0144", and the
+  rewrite only dropped its first sentence. So the invention was the chat model's. Reply
+  292 (outbox 1320): the chat model listed bank and card statements, the insurance portal
+  and searching email for "dental", "dentist" or "appointment". The rewrite made it
+  "Options for finding past dental payments." So each half of this prompt fixes one bug.
+- No `original_text` column (a deviation): `outbox.text` already holds it. A report's
+  reply snapshot gets `shaped` (before and after, where they differ), and `themi
+  feedback` prints 'Gentle phrasing changed "..." to "..."'. Only reports made after this
+  is live have it.
+- `pda.unfaithful(original, rewrite)`: refuses a rewrite that adds a number, a link or
+  email address, or a capitalised name the original doesn't have. For originals of 120
+  characters or more (`LONG_ENOUGH`), it also refuses one that keeps under a third of the
+  content words or is under 40% of the length. Short lines are reworded freely, as
+  before. A refused rewrite is softened deterministically, and the reason (no text) is
+  logged at info level. Two older PDA tests had fake rewrites adding "Michael". They
+  were changed to rewrites that don't add a name.
+- The rewrite prompt and the chat prompt (`CHAT_SYSTEM`) got the lines from the prompt.
+  Not done: the eval set of "I don't remember X" messages. A unit test checks the line.
+- Not done: the turn going to the tool agent to search her email. There's no
+  `search_email` tool; the chat prompt offers to check email if she asks.
+- Setup: restart `themi run`. No migration.
+
+### F30c · Feedback (2026-11-05): a stranger's Nextdoor post isn't a tenant emergency
+Status: [x] 2026-11-06
+Depends on: 23, F16c
+Read first: "Gmail triage"; F16c's notes (time-sensitive and urgent). From Michael's bug #164
+(2026-11-05, 9:17 pm, "the email has nothing to do with a tenant").
+
+What the Pi shows: email 1002, from "Pavan near Alvarado Historic District"
+<reply@ss.email.nextdoor.com>, subject "URGENT REQUEST", a neighbour's post to a stranger
+("Dear Mr. Ferdows Wahab, If you happen to see this post on Nextdoor...") about Creekside
+Village Apartments. Triage made it urgent, kind tenant, and the alert went at once at
+9:13 pm. The same post in the digest (email 827) was noise. Nextdoor mail so far: 22
+noise, 2 routine, and three urgent (family, property, tenant). On the snippets, all
+three look wrong.
+
+Build:
+- The triage prompt: "Urgent is about this family's own affairs. 'Tenant' means a tenant
+  of theirs, about a property they own or rent out. A post, digest or alert from a
+  community site (Nextdoor, neighbourhood groups, school-wide lists), or a message to
+  someone else, is never urgent for them because of its own words ('URGENT REQUEST'):
+  it's noise or routine, unless it names them or their address."
+- In code: senders from community platforms (a short list: nextdoor.com, and any domain
+  the family marks on the email settings page) are capped at time-sensitive, never
+  urgent, unless the sender is on the person's urgent-senders list. The alert says
+  where it came from.
+- Look on the Pi (read-only) at the three urgent Nextdoor emails, and in the Notes say
+  whether any was real.
+
+Tests: each a failing test first. A scripted urgent/tenant verdict for a Nextdoor post is
+capped, and no urgent alert goes. A Nextdoor sender on the urgent list still alerts. The
+prompt line is present. An eval case with email 1002's subject and snippet (with names
+changed), not in the default run.
+
+Mark #164 reviewed once live.
+
+Notes (2026-11-06):
+- The three urgent Nextdoor emails on the Pi were all community posts, none of them the
+  family's: 397 (family) an ICE-activity alert at Mission and Tamarack; 926 (property)
+  "Your package came to my doorstep!", a neighbour with someone's package; 1002 (tenant)
+  this one. The ICE alert may be worth a heads-up, which time-sensitive still gives.
+- The triage prompt has the paragraph from the prompt. In code, an urgent, severe verdict
+  from a `COMMUNITY_DOMAINS` sender (nextdoor.com and its subdomains) becomes
+  time-sensitive, kind "other", unless the sender is on that account's urgent list.
+  Time-sensitive waits for quiet hours and the daily limit, so no alert at 9:13 pm.
+- Deviation: the community list is a constant, not a setting on the email page. Adding
+  one is a small follow-up if another site needs it.
+- Not done: the eval case (not in the default run).
+- Setup: restart `themi run`. No migration.
+
+### F30d · Idea (2026-11-05): Themi looks things up online
+Status: [x] 2026-11-06
+Depends on: 06, F29ha
+Read first: "AI layer" (the router); "Security and privacy" (web pages are data, never
+instructions); F29ha's notes (a lookup answered from data). From Erin's idea #162
+(2026-11-05, 8:28 pm, "themi should be able to look things up online"). She'd asked "Can you
+tell me if [Dr. Scheinbach]'s still practicing?", and Themi could only point her to the
+dental board's site.
+
+Decided with Michael (2026-11-06): no card on file. Tavily is the default (1,000 free
+credits a month, a basic search is 1 credit, no card), and Firecrawl can be used instead
+(1,000 free credits a month, 2 credits per 10 results, no card). Brave needs a card;
+Google's Custom Search is closed to new users; Gemini's free search grounding is only on
+the 2.5 models and writes the answer itself. So: one search interface, two backends.
+
+- `themi.connectors.search`: a `SearchBackend` protocol (`search(query, count)` -> results
+  with title, link and snippet; `read(url)` -> the page's text), `TavilySearch` and
+  `FirecrawlSearch` over `httpx`, and `SearchError`.
+- `.env`: `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, and `THEMI_SEARCH_BACKEND` (`tavily` or
+  `firecrawl`; empty picks whichever has a key, Tavily first). Documented in DEPLOY.md.
+
+Build:
+- `search_web` (a lookup, a new `web` group called for by "look up", "search", "online",
+  "find out", "is ... still", "what's the number for"): the query, the top five results'
+  titles, links and snippets, inside a `<data source="web">` block. Fetching one page is
+  `read_web_page` (a link from those results only, text extracted and capped, as data).
+- Answers name their source with its link, and say when the results don't settle it
+  ("The dental board lists a Dr. Scheinbach in San Mateo with an active licence (link);
+  the office would know if he still sees patients").
+- No personal details go into a query unless they said them in this message (no
+  addresses, emails or names from Themi's memory).
+- A daily cap per family (default 50 searches) and a timeout. Off without a key, and the
+  tool says how to set it up. The default test run uses a fake search service in
+  `tests/fakes`.
+- Conversation mode: "can you look up..." is a request (CM1a's `is_request`), so it goes
+  to the tool agent.
+
+Tests: a search with the fake returns results as data with links; a page's text with
+instructions in it isn't followed; the daily cap; no key, the setup line; a query with a
+remembered address left out; the routing words.
+Scenario: "Can you tell me if Dr. Scheinbach in San Mateo is still practicing?" answered
+from the fake's results, with the link.
+
+Setup: the search API key in `.env` (named in the Notes). Mark #162 reviewed once live.
+
+Notes (2026-11-06):
+- `themi.connectors.search`: `SearchBackend` (`search(query, count)`, `read(url)`),
+  `TavilySearch` (POST /search with basic depth; POST /extract for a page) and
+  `FirecrawlSearch` (POST /v2/search, which also reads v1's list answer; POST /v2/scrape
+  for markdown). Both send the key as a Bearer header. `choose()` picks: the named
+  backend, or Tavily, then Firecrawl, by which key is set. The request and answer shapes
+  follow each service's docs; check them on the first real search, since only the fakes
+  have run them.
+- Settings: `TAVILY_API_KEY`, `FIRECRAWL_API_KEY`, `THEMI_SEARCH_BACKEND`, documented in
+  `.env.example` (DEPLOY.md doesn't list optional keys). Both keys are redacted from logs
+  (`tvly-...`, `fc-...`).
+- `themi.core.web_search`: `search_web` and `read_web_page`, in a new `web` tool group
+  (routing words, 12 examples, three routing cases). Results go in a `<data
+  source="web">` block with their links. Only links from this member's results can be
+  read (kept in memory, so a restart forgets them). Without a key, the tools say how to
+  set one up.
+- Cap: 50 lookups a day for the family (`DAILY_CAP`), counted in migration 0116's
+  `web_lookups`, which keeps only who, what kind and when (no queries), for 31 days. That's
+  well inside either free plan.
+- Privacy: a query with an email address, a phone number or a street number (3+ digits,
+  years allowed) that isn't in their message or the one before is refused.
+- Conversation mode: "search" and "google" are request words now ("look up" and "tell"
+  were already).
+- Setup: a free Tavily key (tavily.com, no card) as `TAVILY_API_KEY` in the Pi's `.env`,
+  then restart `themi run` (migration 0116). For Firecrawl instead: `FIRECRAWL_API_KEY`,
+  and `THEMI_SEARCH_BACKEND=firecrawl` if both are set.
 
 ## Conversation mode
 

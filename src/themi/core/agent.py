@@ -76,11 +76,14 @@ NOTHING_CHANGED_TEXT = "Nothing changed there: that's already done, or already w
 CLAIMS_DONE = re.compile(
     r"\b(?:i've|i have|i)\s+(?:just\s+)?(?:added|put|archived|booked|sent|ordered|scheduled|"
     r"created|removed|deleted|set up|made|cleared|cancell?ed|set aside|discarded|moved|"
-    r"rescheduled|changed|filled|marked|ticked|completed)\b"
+    r"rescheduled|changed|updated|filled|marked|ticked|completed)\b"
     r"|^(?:added|done|archived|booked|sent|ordered|scheduled|moved|rescheduled|filled|"
-    r"marked|ticked|completed)\b"
+    r"marked|ticked|completed|updated|changed)\b"
+    # F29a, replies 258 and 276: "Location updated to your parent's house", "set to 4"
+    r"|^\w+(?:\s+\w+)?\s+(?:updated|changed)\b|\bset\s+to\b"
     r"|\b(?:is|are|has been|have been|was|were)\s+(?:now\s+)?(?:added|done|archived|booked|"
     r"sent|ordered|scheduled|on the list|moved|rescheduled|deleted|cancell?ed|filled|marked|"
+    r"updated|changed|"
     r"ticked off|completed?)\b"
     # "Safeway cart filled with the 11 items" (2026-10-31): a cart is filled, no verb before it
     r"|\bcart\s+filled\b",
@@ -101,16 +104,40 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+MADE_TASK = re.compile(r"Task (\d+) created")
+UPDATED = re.compile(r"\b(?:updated|changed|edited)\b", re.IGNORECASE)
+
+
 # F21b (#115, 5:19 am): the reply was the approval card's own text again, under the card.
 CARD_WORDS = re.compile(r"[^\w]+")
 ASK_QUESTION = ASK_TEXT.partition("\n")[2]
 
 
+# F29d (#157): "Staged for your calendar: Tutor Gabriel, Thu 12 Nov, 4-5 pm at Parent's
+# house. Go ahead, or not now?" (with an en dash) under the card. Words about the card itself
+# don't count.
+CARD_TALK = re.compile(
+    r"\b(?:staged|waiting for (?:a|your) yes|for approval|needs? your (?:ok|okay|yes))\b",
+    re.IGNORECASE,
+)
+
+
+def _card_words(text: str) -> list[str]:
+    text = CARD_TALK.sub(" ", text.lower().replace(ASK_QUESTION.lower(), " "))
+    return sorted(CARD_WORDS.sub(" ", text).split())
+
+
 def _repeats_card(reply: str, waiting: list[str]) -> bool:
     """Is the reply only the text of a card sent this turn (its summary, with or without
-    the card's question)?"""
-    said = CARD_WORDS.sub(" ", reply.lower().replace(ASK_QUESTION.lower(), "")).strip()
-    return bool(said) and any(said == CARD_WORDS.sub(" ", s.lower()).strip() for s in waiting)
+    the card's question), in any order and punctuation?"""
+    said = _card_words(reply)
+    return bool(said) and any(said == _card_words(s) for s in waiting)
+
+
+def _asks_its_own(reply: str) -> bool:
+    """A question the card doesn't ask ("Which calendar?")."""
+    rest = reply.replace(ASK_QUESTION, "").replace(ASK_QUESTION.lower(), "")
+    return "?" in rest
 
 
 # Bug #97: "I've put it on Michael's list" for a task on both lists, and "I've assigned it
@@ -430,6 +457,29 @@ class Agent:
                 member, remark.source, remark.value, f"said: {remark.words}"
             )
 
+    def _not_updated(self, reply: str, ctx: ToolContext) -> str:
+        """F30a (#163): "I've updated the task" when the update failed and a new task was
+        made instead. The reply says what was made."""
+        failed = any(n == "update_task" and o == "failed" for n, o, _ in ctx.calls)
+        made = [
+            int(m.group(1))
+            for n, o, r in ctx.calls
+            if n == "create_task" and o == "ok" and (m := MADE_TASK.match(r))
+        ]
+        board = self.services.taskboard
+        if not (failed and made and UPDATED.search(reply)) or board is None:
+            return reply
+        lines = []
+        for task_id in made:
+            task = board.get(task_id)
+            whose = (
+                f" for {self.services.store.get_member(task.assignee).name}"
+                if task.assignee and task.assignee != ctx.member.id
+                else ""
+            )
+            lines.append(f"Made a new task{whose}: {task.title}.")
+        return "\n".join(lines)
+
     def _waiting_since(self, member: Member, mark: int) -> list[str]:
         """Approvals created for this member after `mark` that are still waiting on a yes."""
         rows = self.services.store.db.query(
@@ -535,7 +585,14 @@ class Agent:
                     waiting = self._waiting_since(member, mark)
                     if _repeats_card(reply, waiting):
                         return _done_first(ctx.done, "")
+                    if (
+                        ctx.staged
+                        and len(ctx.staged) == len(ctx.outcomes)
+                        and not _asks_its_own(reply)
+                    ):  # F29d (#157): every call made a card, and the cards say it
+                        return _done_first(ctx.done, "")
                     reply = _honest(reply, waiting, ctx.outcomes)
+                    reply = self._not_updated(reply, ctx)
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break
@@ -548,9 +605,12 @@ class Agent:
                         note.said(call.arguments, result.content)
                         results.append(result)
                 messages.append(Message.tool_results(*results))
-                if ctx.asked and len(ctx.asked) == len(ctx.outcomes):
+                if (ctx.asked or ctx.cards) and len(ctx.asked) + len(ctx.cards) == len(
+                    ctx.outcomes
+                ):
                     # P2b: all done as they asked, and said: the next round's words would
                     # be dropped (bug #118), so it isn't made (a list add took 2.5 s more).
+                    # F29c, F29d: a message a tool sent with its buttons is said already.
                     return "\n".join(dict.fromkeys(ctx.asked))
         except RefusalError:
             return DECLINED_TEXT

@@ -68,6 +68,14 @@ class ToolContext:
     # Open tasks create_task named as maybe the same job (bug #132): asked again this turn,
     # it's a different job, and it's made.
     named_twins: set[int] = field(default_factory=set)
+    # Messages a tool sent them itself, with its own buttons (a held note's "Send now",
+    # F29c; an approval card, F29d): that call's answer, so no model words follow it.
+    cards: list[str] = field(default_factory=list)
+    # Approval cards staged this turn (F29d): when every call only staged one, the cards
+    # are the answer, and the model's words go only if they ask something of their own.
+    staged: list[str] = field(default_factory=list)
+    # Each call this turn: (tool, outcome, result text), for replies checked by tool (F30a).
+    calls: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -164,6 +172,12 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
         r"block|time for|find (?:me )?time|summary",
     ),
+    "web": (  # F30d: looking things up online
+        "searching the web, reading a web page",
+        r"look (?:it |that |this )?up|search|google|online|on the web|internet|website|"
+        r"find out|still (?:open|practi[cs]ing|in business|working)|phone number|"
+        r"opening hours|reviews?",
+    ),
     "lists": (
         "named lists, the wall's lists, usual stores",
         r"list|packing|ideas|tick|cross|check off|clear|things to cook|store|amazon|"
@@ -245,6 +259,20 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Find me a free hour this week for the taxes",
         "Set aside Sunday afternoon for meal prep",
         "What's coming up next week?",
+    ),
+    "web": (  # F30d
+        "Can you look up whether Dr. Scheinbach is still practicing?",
+        "Search online for the vet's opening hours",
+        "What's the phone number for Contemporary Dental in San Mateo?",
+        "Find out if the farmers market is open on Sundays",
+        "Google the reviews for that plumber",
+        "Is the Thai place on El Camino still in business?",
+        "Look up how long to cook farro",
+        "Check the website for the library's holiday hours",
+        "Search for kid-friendly hikes near Mountain View",
+        "Can you find the recall notice for our car seat online?",
+        "What does the internet say about rosemary for cats?",
+        "Look it up: when does daylight saving end this year?",
     ),
     "lists": (
         "Make a list for the camping trip",
@@ -380,6 +408,7 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
     ),
 }
 TOOL_GROUPS: dict[str, str] = {
+    **dict.fromkeys(("search_web", "read_web_page"), "web"),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
@@ -398,7 +427,7 @@ TOOL_GROUPS: dict[str, str] = {
     **dict.fromkeys(
         (
             "add_calendar_event",
-            "move_calendar_event",
+            "change_calendar_event",
             "delete_calendar_event",
             "day_summary",
             "drive_time",
@@ -548,6 +577,11 @@ def choose_groups(texts: Sequence[str]) -> set[str]:
     return {name for name, pattern in _GROUP_WORDS.items() if pattern.search(joined)}
 
 
+# Old tool names still answered for one release (a model or a saved turn may use them):
+# the call goes to the new tool, its new fields empty (F29a).
+ALIASES = {"move_calendar_event": "change_calendar_event"}
+
+
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None) -> None:
         self._tools: dict[str, Tool] = {}
@@ -589,10 +623,14 @@ class ToolRegistry:
 
     async def run(self, call: ToolCall, ctx: ToolContext) -> ToolResult:
         t = self._tools.get(call.name)
+        if t is None and call.name in ALIASES and (t := self._tools.get(ALIASES[call.name])):
+            empty = dict.fromkeys(t.spec.input_schema["properties"], "")
+            call = replace(call, arguments={**empty, **call.arguments})
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
+        ctx.calls.append((call.name, outcome, result.content))
         task_id = call.arguments.get("task_id")
         if outcome == "ok" and isinstance(task_id, int) and task_id > 0:  # 0 is none (F23e)
             ctx.tasks.append(task_id)
@@ -605,6 +643,11 @@ class ToolRegistry:
 
     async def _run(self, t: Tool, call: ToolCall, ctx: ToolContext) -> tuple[ToolResult, str]:
         call = replace(call, arguments=_as_typed(call.arguments, t.spec.input_schema))
+        defaults = {  # F29g: a field added later, with its default, when a call leaves it out
+            k: p["default"] for k, p in t.spec.input_schema["properties"].items() if "default" in p
+        }
+        if defaults.keys() - call.arguments.keys():
+            call = replace(call, arguments={**defaults, **call.arguments})
         try:
             jsonschema.validate(call.arguments, t.spec.input_schema)
         except jsonschema.ValidationError as exc:
@@ -648,6 +691,7 @@ class ToolRegistry:
         )
         action = outcome.action
         if action.status == "pending":
+            ctx.staged.append(proposal.summary)
             return (
                 f"Staged for approval (action {action.id}): {proposal.summary}. Nothing happens "
                 "until they say yes; don't describe it as done."

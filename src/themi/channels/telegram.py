@@ -66,6 +66,7 @@ from themi.channels.events import (
     VoiceNote,
 )
 from themi.channels.family_group import FamilyGroup, replies_to_group
+from themi.http import tls
 from themi.logs import quiet_chatty_libraries
 from themi.storage.secrets import Secret
 
@@ -172,9 +173,11 @@ class TelegramChannel:
             options["base_file_url"] = base_file_url
         bot = telegram.Bot(
             token.reveal(),
-            request=HTTPXRequest(read_timeout=20),
+            request=HTTPXRequest(read_timeout=20, httpx_kwargs={"verify": tls()}),
             # Long polls hold the connection open for up to poll_timeout seconds.
-            get_updates_request=HTTPXRequest(read_timeout=poll_timeout + 10),
+            get_updates_request=HTTPXRequest(
+                read_timeout=poll_timeout + 10, httpx_kwargs={"verify": tls()}
+            ),
             **options,
         )
         return cls(bot, store, handler, poll_timeout=poll_timeout, **kwargs)

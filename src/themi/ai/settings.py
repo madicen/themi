@@ -27,9 +27,9 @@ from themi.accounts.store import (
     SystemActor,
 )
 from themi.ai.adapters import AdapterConfig, AdapterKind
-from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
-from themi.ai.adapters.gemini import DEFAULT_MODEL as GEMINI_CHAT_MODEL
-from themi.ai.adapters.gemini import DEFAULT_TRANSCRIPTION_MODEL as GEMINI_AUDIO_MODEL
+from themi.ai.adapters.defaults import GEMINI_DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
+from themi.ai.adapters.defaults import GEMINI_DEFAULT_MODEL as GEMINI_CHAT_MODEL
+from themi.ai.adapters.defaults import GEMINI_DEFAULT_TRANSCRIPTION_MODEL as GEMINI_AUDIO_MODEL
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
 

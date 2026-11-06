@@ -22,6 +22,7 @@ from typing import Any
 import anthropic
 
 from themi.ai.adapters._common import parse_json_object
+from themi.ai.adapters.defaults import ANTHROPIC_DEFAULT_EFFORT, ANTHROPIC_DEFAULT_MODEL
 from themi.ai.errors import (
     CapabilityError,
     MalformedOutputError,
@@ -47,8 +48,8 @@ from themi.ai.types import (
 )
 from themi.storage.secrets import Secret
 
-DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_EFFORT = "medium"
+DEFAULT_MODEL = ANTHROPIC_DEFAULT_MODEL
+DEFAULT_EFFORT = ANTHROPIC_DEFAULT_EFFORT
 SERVER_FALLBACK_BETA = "server-side-fallback-2026-07-01"
 # Models that accept `fallbacks: "default"` on the Claude API.
 SERVER_FALLBACK_MODELS = frozenset(

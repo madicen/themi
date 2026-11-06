@@ -1925,6 +1925,20 @@ async def create_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         ),
         None,
     )
+    if same is None and CHANGE_IT.search(said):  # F30a (#163): "update the task you made"
+        same = next(
+            (
+                r
+                for r in recent_tasks(ctx, _board(ctx))
+                if r.kind == args["kind"] and (chosen is None or r.assignee == chosen.id)
+            ),
+            None,
+        )
+        if same is not None:
+            return (
+                f"Not created: they asked to change task {same.id} ({same.title}), made just "
+                "now. Use update_task on it, with the new title and all the steps."
+            )
     if same is not None:  # bug #56: a second "Mimi pill" to change the first one's time
         return (  # bug #88: the model asked instead, and couldn't make it both of theirs
             f"Not created: task {same.id} ({same.title}) is already open. Change that one "
@@ -2033,10 +2047,18 @@ def _twin_words(ctx: ToolContext, task: Task) -> str:
 async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = _board(ctx)
     steps = [] if args["clear_steps"] else (args["steps"] or None)
+    title = str(args["title"] or "").strip()
     try:
-        task = await board.update(
-            args["task_id"], ctx.member, title=args["title"], steps=steps, interactive=True
-        )
+        # F30a (#163): everything is checked before anything is saved, so a refusal is true
+        task = board.get(args["task_id"])
+        if not board.can_edit(task, ctx.member):
+            raise PermissionDenied("not theirs")
+        if task.status in ("done", "cancelled") and (title or steps is not None):
+            raise ToolFailed(
+                f"Task {task.id} ({task.title}) is closed. To do something new, create a task."
+            )
+        _not_the_recent_one(ctx, board, task, title)
+        chosen, both = None, False
         if args["assign_to"].strip():
             if task.repeats:
                 raise ValueError(
@@ -2044,8 +2066,11 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
                     "assign it when it's made"
                 )
             chosen, both = _assignee(ctx, args["assign_to"])
-            if chosen is not None or both:
-                task = await board.reassign(task.id, chosen, shared=both)
+        task = await board.update(
+            task.id, ctx.member, title=title or None, steps=steps, interactive=True
+        )
+        if chosen is not None or both:
+            task = await board.reassign(task.id, chosen, shared=both)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
     except PermissionDenied as exc:
@@ -2058,6 +2083,53 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     else:
         who = ctx.services.store.get_member(task.assignee).name if task.assignee else "nobody yet"
     return f"Task {task.id} is now: {task.title}. Steps: {steps_now}. Who: {who}."
+
+
+RECENT = timedelta(minutes=30)  # "the task you just made" (F30a)
+CHANGE_IT = re.compile(r"\b(?:update|change|edit|fix|instead|rather)\b")
+
+
+def recent_tasks(ctx: ToolContext, board: TaskBoard) -> list[Task]:
+    """Open tasks this person made in the last half hour, newest first, and this turn's."""
+    since = to_utc_iso(clock.now() - RECENT)
+    rows = board.db.query(
+        "SELECT id FROM tasks WHERE created_by = ? AND created_at >= ? "
+        "AND status IN ('open', 'snoozed') ORDER BY id DESC",
+        (ctx.member.id, since),
+    )
+    ids = [*dict.fromkeys([*reversed(ctx.tasks), *(r["id"] for r in rows)])]
+    return [board.get(i) for i in ids]
+
+
+def _not_the_recent_one(ctx: ToolContext, board: TaskBoard, task: Task, title: str) -> None:
+    """Bug #163: "update the task you just made" changed task 60, an old chore, not 78.
+    With a task made just now, another one that their message doesn't name is refused."""
+    recent = recent_tasks(ctx, board)
+    if not recent or task.id in {r.id for r in recent}:
+        return
+    said = f"{ctx.request_text} {title}"
+    if words_in_common(ctx.request_text, task.title) or (
+        title and words_in_common(said, task.title) >= 2
+    ):
+        return
+    newest = recent[0]
+    made = clock_words(_local(newest_created(board, newest.id), ctx))
+    raise ToolFailed(
+        f"Their message doesn't name task {task.id} ({task.title}). They likely mean task "
+        f"{newest.id} ({newest.title}), made at {made}.",
+        refused="not_named",
+    )
+
+
+def newest_created(board: TaskBoard, task_id: int) -> datetime:
+    return datetime.fromisoformat(
+        board.db.scalar("SELECT created_at FROM tasks WHERE id = ?", (task_id,))
+    )
+
+
+def _local(moment: datetime, ctx: ToolContext) -> datetime:
+    family = ctx.services.store.get_family()
+    return moment.astimezone(ZoneInfo(family.timezone if family else "UTC"))
 
 
 def _assignee(ctx: ToolContext, said: str) -> tuple[Member | None, bool]:

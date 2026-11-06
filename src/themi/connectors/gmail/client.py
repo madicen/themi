@@ -21,6 +21,7 @@ from typing import Any
 
 import httpx
 
+from themi.http import tls
 from themi.storage.secrets import Secret
 
 log = logging.getLogger(__name__)
@@ -158,7 +159,7 @@ class GmailClient:
         for attempt in (1, 2):
             token = await self.token()
             try:
-                async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                async with httpx.AsyncClient(verify=tls(), timeout=TIMEOUT) as client:
                     response = await client.request(
                         method,
                         f"{self.base}{path}",

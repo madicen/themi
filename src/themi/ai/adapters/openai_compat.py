@@ -22,6 +22,7 @@ from typing import Any, Literal
 import openai
 
 from themi.ai.adapters._common import parse_json_object
+from themi.ai.adapters.defaults import LM_STUDIO_URL, OLLAMA_URL
 from themi.ai.errors import (
     CapabilityError,
     MalformedOutputError,
@@ -46,9 +47,6 @@ from themi.ai.types import (
     Usage,
 )
 from themi.storage.secrets import Secret
-
-OLLAMA_URL = "http://localhost:11434/v1"
-LM_STUDIO_URL = "http://localhost:1234/v1"
 
 StructuredMode = Literal["json_schema", "json_object"]
 

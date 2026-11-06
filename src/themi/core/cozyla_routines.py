@@ -551,6 +551,13 @@ class CozylaRoutines:
         return next(m for m in self.store.list_members() if m.is_admin)
 
 
+ROUTINE_WORDS = re.compile(
+    r"\b(?:routines?|morning|afternoon|evening|tonight|every ?day|daily|bedtime)\b"
+)
+TAKE_TASKS = re.compile(r"\b(?:take|do|help with|pick up)\b.*\b(?:tasks?|chores?|jobs?)\b")
+PERSONS_TASKS = re.compile(r"\b\w+'?s\s+(?:tasks|chores|jobs|to-?dos?)\b", re.IGNORECASE)
+
+
 @staged_tool(
     "add_to_wall_routine",
     "Add an item to someone's morning, afternoon or evening routine on the Cozyla wall "
@@ -593,6 +600,13 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     position = " ".join(str(args.get("position") or "end").split()).lower() or "end"
     if position not in ("start", "end") and not position.startswith("after:"):
         raise ToolFailed("position: 'start', 'end' or 'after: <item>'.")
+    if (not int(args.get("task_id") or 0) and PERSONS_TASKS.search(title)) or (
+        not ROUTINE_WORDS.search(said) and TAKE_TASKS.search(said)
+    ):  # bug #147: "What tasks from Erin could I take?" became a routine called "Erin's tasks"
+        raise ToolFailed(
+            "They didn't ask about a routine. If they want a partner's tasks to take on, "
+            "use tasks_i_could_take; otherwise answer with the tasks."
+        )
     moved = _moved_task(ctx, int(args.get("task_id") or 0), title, said)
     words = [w for w in name_key(title).split() if len(w) > 2]
     asked = "routine" in said and (

@@ -35,6 +35,7 @@ import httpx
 
 from themi import clock
 from themi.accounts import Member
+from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
@@ -137,7 +138,9 @@ class TuyaClient:
         self.access_id = access_id
         self._secret = secret
         base = config.base_url.rstrip("/") or REGIONS[region][1]
-        self._http = httpx.AsyncClient(base_url=base, transport=config.transport, timeout=TIMEOUT)
+        self._http = httpx.AsyncClient(
+            verify=tls(), base_url=base, transport=config.transport, timeout=TIMEOUT
+        )
         self._token = ""
         self._refresh = ""
         self._token_until: datetime | None = None

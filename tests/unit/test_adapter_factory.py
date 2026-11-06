@@ -66,3 +66,18 @@ def test_timeouts_and_aiohttp_errors_count_as_transport_errors() -> None:
     except ImportError:
         return
     assert aiohttp.ClientError in errors
+
+
+def test_reading_ai_settings_doesnt_load_any_provider_sdk() -> None:
+    """The SDKs take seconds to import on the Pi; `themi feedback` and settings don't need them."""
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, themi.ai.settings, themi.core.feedback;"
+        "print(sorted(m for m in ('anthropic', 'openai', 'google.genai') if m in sys.modules))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == "[]"

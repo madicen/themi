@@ -35,6 +35,7 @@ from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
+from tests.fakes.search import FakeSearch
 from tests.fakes.server_runner import FakeRunner
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
@@ -99,6 +100,7 @@ class Scenario:
         gtasks: FakeGtasks | None = None,
         keep: FakeKeep | None = None,
         runner: FakeRunner | None = None,
+        search: FakeSearch | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -139,6 +141,7 @@ class Scenario:
                 ourgroceries=ourgroceries,
                 cozyla=cozyla,
                 travel=travel,
+                search=search,
                 home_connect=home_connect,
                 thinq=thinq,
                 roborock=roborock,
@@ -412,6 +415,7 @@ async def scenario(
         gtasks=optional("fake_gtasks"),
         keep=optional("fake_keep"),
         runner=optional("fake_runner"),
+        search=optional("fake_search"),
     )
     await s.start()
     yield s
