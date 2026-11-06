@@ -242,7 +242,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [x] 2026-11-06 |
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [x] 2026-11-06 |
-| RC3b | Cooking: one step at a time | Recipes | [ ] |
+| RC3b | Cooking: one step at a time | Recipes | [x] 2026-11-06 |
 | RC3c | Cooking: step timers | Recipes | [ ] |
 | RC4a | Recipes: a recipe from a link | Recipes | [ ] |
 | RC4b | Recipes: finding them on the web | Recipes | [ ] |
@@ -12101,7 +12101,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0123).
 
 ### RC3b · Cooking: one step at a time
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC3a
 - After prep, the same card shows "Step 2 of 6" and the step as written, with [Back]
   [Next] and, on the last, [All done]. A step over about 400 characters is split at
@@ -12118,6 +12118,22 @@ Depends on: RC3a
 Tests: unit tests for navigation, the split, the sub-recipe button, nudges held and let
 through; scenarios: Pancakes from step 1 to All done with one Back; a nudge held during the
 session and delivered after.
+
+Notes (2026-11-06):
+- After prep the card shows "Pancakes: step 2 of 5" and the step quoted as written, with
+  [Back] [Next], and [All done] on the last. A step over 400 characters is split at sentence
+  ends into 2a, 2b (`step_parts`), the words unchanged; the count stays the recipe's own.
+- Typed, without the model: "next"/"done"/"skip", "back", "repeat", "go to step 4", and
+  "what's after this?" (sends the next step once, without moving the card).
+- A step naming another cookbook recipe (two or more words of its name) gets
+  [Show <name>], which sends that recipe and leaves the session as it is.
+- A "cooking" pause topic (task nudges, summaries, habits, routines, reviews) is set for at
+  most 6 hours when a session starts and lifted when it ends, with what waited released.
+- [All done]: "Pancakes, all done. Enjoy it!", outcome `finished`. For a web recipe, once
+  RC5 is built, the same message asks "Keep this one in the cookbook?" [Save to cookbook]
+  [Not now].
+- Other messages during cooking go to the model with the recipe and the step in the
+  context (RC3a's open item, now "on step 2 of 5").
 
 ### RC3c · Cooking: step timers
 Status: [ ]
