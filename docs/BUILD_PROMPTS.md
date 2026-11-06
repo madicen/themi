@@ -194,7 +194,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
 | F28c | Idea: choosing which pages are on the website's menu bar | Feedback | [x] 2026-11-05 |
-| F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [ ] |
+| F29a | Feedback: an event's place, title and notes can be changed, on the copy they mean | Feedback | [x] 2026-11-05 |
 | F29b | Feedback: an emailed invitation already on the calendar isn't added again | Feedback | [ ] |
 | F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [ ] |
 | F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [ ] |
@@ -9360,11 +9360,13 @@ followed at 4:21 pm.
 - A "mark as read" that only goes with an invitation also being added to the calendar
   isn't a line of its own. It's done when the event is.
 - Events weeks away say so in the line ("Mon 16 Nov"), with no extra urgency.
-- Ask Erin first: should a later email in the thread (4:21 pm) join the waiting message
-  (edited), or get a message of its own?
+- A later email in the thread (4:21 pm) joins the waiting message, which is edited to add
+  its line. If triage rates that email important or urgent, it gets a message of its own
+  instead (decided by Erin, 2026-11-05).
 
 Tests: idea #137's five cards come as one message. "Go ahead with all" runs each action
-once. "One by one" sends the cards. Approvals from two different senders stay apart.
+once. "One by one" sends the cards. Approvals from two different senders stay apart. A
+later email in the thread edits the waiting message; an important one comes on its own.
 Scenario: Erin's 3:24 pm burst.
 
 ### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
@@ -9378,9 +9380,8 @@ at least do part of it"). For example task 10, Split Merlin's cat box, has three
 - A `split_task` tool: chosen steps (or all) become tasks of their own, each with an
   assignee ('me', the partner, either) and a due date if one is said. The model calls it
   for "split X up", "I'll do the first part", "give her the last step".
-- Ask Michael first which way the original goes: (a) it stays as a parent and is done when
-  its parts are, shown as "2 of 3 parts done" (recommended), or (b) it's replaced by the
-  parts.
+- The original task stays as a parent and is checked off automatically when its last
+  part is done, shown meanwhile as "2 of 3 parts done" (decided by Michael, 2026-11-05).
 - Each part counts as a task in its own right for capacity, nudges, the wall and "too much
   today" (O1a), so a low-energy day can offer just one part.
 - A repeating chore's steps aren't split (its schedule is its own); refused, saying so.
@@ -9585,7 +9586,7 @@ Notes (2026-11-05):
 - Setup: restart (migration 0108 runs at start).
 
 ### F29a · Feedback (2026-11-05): an event's place, title and notes can be changed, on the copy they mean
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: K3, F23c
 Read first: "Calendar" (the calendar tools and which calendars Themi writes to); the agent's
 `_honest` check (bugs #3, #5). From Michael's bug #158 (2026-11-05, 4:30 pm, "should be able
@@ -9648,6 +9649,30 @@ the location to the in-laws' house. One card, both copies changed, title kept.
 Setup after deploying: none. Data (Michael decides): action 497 is snoozed and still
 deletes the family copy if it's ever tapped; decline it. The 5 Nov event's location was
 never set (it's past now). Mark #149, #150, #154 (with F29e) and #158 reviewed once live.
+
+Notes (2026-11-05):
+- The plan ("Security and privacy" → Calendars) says Themi keeps titles, places and times,
+  never descriptions. So notes are written, not kept: the executor reads the event from
+  Google, adds to or replaces its description, and writes it back. Nothing stores it.
+- `change_calendar_event` replaces `move_calendar_event`. `tools.ALIASES` still answers
+  the old name for one release, with the new fields left empty. Executors keep their
+  names (`calendar.move_event`), and payloads from before still run.
+- Every change now reads the event, changes it and writes it back, Themi's own events
+  too. Before, Themi's own were written whole (a PUT), which would have wiped a
+  description. Event times are now sent in local time (same instant as before).
+- Copies: `Events.find` returns a list. The same title and times on their calendar and a
+  family calendar (`calendars` table) count as one event, changed or deleted together, in
+  one card. Deviation: no link to the event a copy came from is stored. Same title and
+  times was enough for the Pi's case, and needs no migration.
+- A change that changes nothing is declined ("is like that already"), so reply 258's
+  claim becomes `NOTHING_CHANGED_TEXT`. `CLAIMS_DONE` now has "updated", "changed", "X
+  updated" and "set to".
+- Set-up time: the member setting `setup_note` (migration 0111, on by default, Settings →
+  calendar). Only an earlier start with the same end adds the line. A later change keeps
+  the first real start, and drops the line once the start isn't before it.
+- Not done here: a location naming a place ("my parent's house") is resolved in F29e.
+- Tests were written together with the code, not run failing first against the old code.
+- Setup: restart `themi run` (migration 0111). Data: decline action 497 on the Pi.
 
 ### F29b · Feedback (2026-11-05): an emailed invitation already on the calendar isn't added again
 Status: [ ]
