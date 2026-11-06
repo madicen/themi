@@ -19,6 +19,7 @@ from urllib.parse import quote
 
 import httpx
 
+from themi.http import tls
 from themi.storage.secrets import Secret
 
 log = logging.getLogger(__name__)
@@ -127,7 +128,10 @@ class TravelClient:
     async def _get(self, url: str, params: dict[str, str]) -> object:
         try:
             async with httpx.AsyncClient(
-                timeout=TIMEOUT, transport=self._transport, headers={"User-Agent": USER_AGENT}
+                verify=tls(),
+                timeout=TIMEOUT,
+                transport=self._transport,
+                headers={"User-Agent": USER_AGENT},
             ) as client:
                 response = await client.get(url, params=params)
         except httpx.HTTPError as exc:

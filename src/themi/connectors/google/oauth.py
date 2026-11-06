@@ -28,6 +28,7 @@ import httpx
 
 from themi import clock
 from themi.accounts import Member
+from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
@@ -233,7 +234,7 @@ class GoogleOAuth:
 
     async def _userinfo(self, token: Secret) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(verify=tls(), timeout=TIMEOUT) as client:
                 response = await client.get(
                     self.config.userinfo_url,
                     headers={"Authorization": f"Bearer {token.reveal()}"},
@@ -248,7 +249,7 @@ class GoogleOAuth:
 
     async def _post(self, url: str, data: dict[str, str]) -> dict[str, Any]:
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(verify=tls(), timeout=TIMEOUT) as client:
                 response = await client.post(url, data=data)
         except httpx.HTTPError as exc:
             log.warning("Google OAuth request failed (%s)", type(exc).__name__)

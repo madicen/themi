@@ -39,6 +39,7 @@ from themi.connectors.cozyla.chores import (
     routine_from,
     routine_record_from,
 )
+from themi.http import tls
 from themi.storage.secrets import Secret
 
 BASE_URL = "https://api.cozylacal.com"
@@ -159,7 +160,9 @@ class CozylaClient:
         self.config = config
         self.timezone = timezone
         self._password_key = password_key
-        self._http = httpx.AsyncClient(base_url=base_url, transport=transport, timeout=20)
+        self._http = httpx.AsyncClient(
+            verify=tls(), base_url=base_url, transport=transport, timeout=20
+        )
         self._token: str | None = None
         self._device_uid = ""
         self._locked_until: datetime | None = None

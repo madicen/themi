@@ -30,6 +30,7 @@ import httpx
 
 from themi import clock
 from themi.accounts import Member
+from themi.http import tls
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
@@ -98,7 +99,7 @@ class HomeConnectClient:
     ) -> None:
         self.config = config
         self._http = httpx.AsyncClient(
-            base_url=config.base_url.rstrip("/"), transport=transport, timeout=TIMEOUT
+            verify=tls(), base_url=config.base_url.rstrip("/"), transport=transport, timeout=TIMEOUT
         )
 
     async def aclose(self) -> None:

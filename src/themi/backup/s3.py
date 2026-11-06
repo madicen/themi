@@ -18,6 +18,7 @@ from xml.etree import ElementTree
 import httpx
 
 from themi import clock
+from themi.http import tls
 from themi.storage.secrets import Secret
 
 TIMEOUT = 60.0
@@ -129,7 +130,7 @@ class S3Client:
             amz_date=amz_date,
         )
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            async with httpx.AsyncClient(verify=tls(), timeout=TIMEOUT) as client:
                 response = await client.request(method, url, content=body or None, headers=headers)
         except httpx.HTTPError as exc:
             raise S3Error(f"the backup storage couldn't be reached ({type(exc).__name__})") from exc
