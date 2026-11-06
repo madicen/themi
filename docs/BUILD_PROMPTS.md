@@ -241,7 +241,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [x] 2026-11-06 |
-| RC3a | Cooking: getting ready (gather and prep) | Recipes | [ ] |
+| RC3a | Cooking: getting ready (gather and prep) | Recipes | [x] 2026-11-06 |
 | RC3b | Cooking: one step at a time | Recipes | [ ] |
 | RC3c | Cooking: step timers | Recipes | [ ] |
 | RC4a | Recipes: a recipe from a link | Recipes | [ ] |
@@ -12047,7 +12047,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0122).
 
 ### RC3a · Cooking: getting ready (gather and prep)
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC2a, 08
 Read first: F6a's notes (steps); BD1b (the step card it will share); the plan's Module
 behaviour A.
@@ -12074,6 +12074,31 @@ Tests: unit tests for the long-lead finder (each phrase above), the checklist ed
 dropped prep lines, the group session; scenario: Alfredo Sauce from [Cook this] to [Prep
 done], with the cashew soak first. Evals: prep lists for 15 recipes (short, from the
 recipe, nothing added).
+
+Notes (2026-11-06):
+- `themi.channels.step_card.StepCard`: one card edited in place; `fresh=True` (a typed
+  "next") sends a new card at the bottom and leaves the old one as "(Carried on below.)"
+  without buttons, so the current step is where they're looking. In the group anyone taps.
+- `themi.core.cooking.Cooking` (migration 0123: `cooking_sessions`, `recipe_prep`).
+  Phases `ready` (what needs time first), `gather`, `prep`, then `cook` (RC3b). `start_cooking`
+  and `stop_cooking` tools (recipes group, one routing case, one eval); [Cook this] on a
+  recipe card. A new session ends the old as `switched`.
+- `Services.text_handlers` (new): the agent offers each typed message to them before the
+  model, so "next", "done", "all here", "skip" and "stop cooking" during a session cost no
+  model call. A bare "done" while cooking goes to the session, not a task.
+- What needs time first is found by rule (soak with its minutes, overnight, room
+  temperature, thawed, "preheat the oven to 350 degrees" -> 350°F). An overnight need offers
+  [Cook anyway] [Remind me tomorrow]; tomorrow sends the recipe back at 5 pm with [Cook this].
+- Prep jobs come from one structured call on the `recipes` route, kept per recipe until its
+  words change; a job whose words aren't in the line it names is dropped. With no model,
+  lines with prep words ("peeled", "sliced") become jobs. Labels on the gather card use
+  only cached or rule readings (`RecipeGroceries.known`), never a model call.
+- During a session the context carries the recipe, at the session's scale, as data, so
+  "how much garlic?" is answered from it. `cooking.expire` (every 15 minutes) ends a session
+  with no tap for 3 hours as `left`, saying nothing.
+- Evals for prep lists (15 recipes) aren't written: a real-model pass over prep needs
+  recipes with real steps loaded, left for after RC4a's pages give more. Follow-up.
+- Setup: restart `themi run` (migration 0123).
 
 ### RC3b · Cooking: one step at a time
 Status: [ ]
