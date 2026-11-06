@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001
 """RC3a: cooking a recipe with Themi, getting ready: what needs time first, gathering and
 prep. The clock starts Wednesday 21 October 2026, 9 am."""
 
@@ -39,6 +40,15 @@ def card(scenario: Scenario, name: str = "Erin") -> str:
     return scenario.edits(name)[-1]["text"]
 
 
+def card_buttons(scenario: Scenario, name: str = "Erin") -> list[str]:
+    import json
+
+    markup = scenario.edits(name)[-1].get("reply_markup") or {}
+    if isinstance(markup, str):
+        markup = json.loads(markup)
+    return [b["text"] for row in markup.get("inline_keyboard", []) for b in row]
+
+
 async def test_alfredo_from_cook_this_to_prep_done(cookbook: Scenario) -> None:
     await show_alfredo(cookbook)
     assert "Cook this" in cookbook.last_buttons("Erin")
@@ -68,7 +78,9 @@ async def test_alfredo_from_cook_this_to_prep_done(cookbook: Scenario) -> None:
     prompt = cookbook.primary.requests[-1].prompt
     assert prompt.startswith('<data source="recipe Alfredo Sauce">')
     await cookbook.tap("Erin", "Prep done")
-    assert card(cookbook) == "That's the prep done for Alfredo Sauce. Enjoy the cooking."
+    assert card(cookbook) == (
+        "Alfredo Sauce: step 1 of 3\n> Drain and discard water from soaked cashews."
+    )  # RC3b: on to the steps
 
 
 async def test_the_prep_is_read_once(cookbook: Scenario) -> None:
@@ -173,3 +185,83 @@ async def test_a_session_left_alone_ends_quietly(cookbook: Scenario) -> None:
     row = cookbook.app.db.one("SELECT outcome FROM cooking_sessions")
     assert row == {"outcome": "left"}
     assert len(cookbook.inbox("Erin")) == before  # nothing said about it
+
+
+# ----- RC3b: the steps -------------------------------------------------------------------
+
+PANCAKES = [
+    "white whole wheat flour", "all-purpose flour", "baking powder", "cinnamon", "kosher salt",
+    "almond milk", "applesauce", "vanilla extract",
+]  # fmt: skip
+
+
+async def to_the_steps(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "pancakes", "scale": ""})
+    scenario.primary.queue_structured(items(PANCAKES, staples=("kosher salt",)))
+    await scenario.say("Erin", "Let's make the pancakes")
+    await scenario.tap("Erin", "Done")  # preheat the oven (to keep them warm)
+    scenario.primary.queue_structured({"jobs": []})  # nothing to prep
+    await scenario.tap("Erin", "All here")
+
+
+async def test_pancakes_from_step_one_to_all_done(cookbook: Scenario) -> None:
+    await to_the_steps(cookbook)
+    assert card(cookbook) == (
+        "Pancakes: step 1 of 5\n> If you’d like to keep the pancakes warm between batches, "
+        "preheat the oven to 200 °F."
+    )
+    assert card_buttons(cookbook) == ["Next"]
+    await cookbook.tap("Erin", "Next")
+    await cookbook.tap("Erin", "Next")
+    assert card(cookbook).startswith("Pancakes: step 3 of 5\n> Make a well")
+    await cookbook.tap("Erin", "Back")
+    assert card(cookbook).startswith("Pancakes: step 2 of 5\n> In the bottom of a large")
+    assert card_buttons(cookbook) == ["Back", "Next"]
+    for _ in range(3):
+        await cookbook.tap("Erin", "Next")
+    assert card(cookbook).startswith("Pancakes: step 5 of 5")
+    assert card_buttons(cookbook) == ["Back", "All done"]
+    await cookbook.tap("Erin", "All done")
+    assert card(cookbook) == "Pancakes, all done. Enjoy it!"
+    row = cookbook.app.db.one("SELECT outcome FROM cooking_sessions")
+    assert row == {"outcome": "finished"}
+
+
+async def test_typed_steps(cookbook: Scenario) -> None:
+    await to_the_steps(cookbook)
+    calls = len(cookbook.primary.requests)
+    (two,) = await cookbook.say("Erin", "next")
+    assert two.startswith("Pancakes: step 2 of 5")
+    (four,) = await cookbook.say("Erin", "go to step 4")
+    assert four.startswith("Pancakes: step 4 of 5\n> Heat a large nonstick skillet")
+    (peek,) = await cookbook.say("Erin", "What's after this?")
+    assert peek.startswith("After this, step 5:\n> Drop the batter")
+    (again,) = await cookbook.say("Erin", "repeat")
+    assert again.startswith("Pancakes: step 4 of 5")
+    assert len(cookbook.primary.requests) == calls  # all without the model
+
+
+async def test_a_nudge_waits_while_cooking(cookbook: Scenario) -> None:
+    from themi.channels.outbox import Priority
+
+    await to_the_steps(cookbook)
+    erin = cookbook.member("Erin")
+    result = await cookbook.app.outbox.send(
+        erin, "The recycling goes out tonight.", priority=Priority.NORMAL, kind="task"
+    )
+    assert result.status == "queued"
+    await cookbook.app.outbox.flush()
+    assert "The recycling goes out tonight." not in cookbook.inbox("Erin")
+    (_,) = await cookbook.say("Erin", "stop cooking")
+    await cookbook.app.outbox.flush()
+    assert "The recycling goes out tonight." in cookbook.inbox("Erin")
+
+
+async def test_a_step_naming_another_recipe_offers_it(cookbook: Scenario) -> None:
+    cooking = cookbook.app.services.cooking
+    recipes = cookbook.app.services.recipes
+    assert cooking is not None and recipes is not None
+    lasagna = next(r for r in recipes.all() if r.name == "Lasagna")
+    named = cooking.named_recipes(lasagna, "Top with the Bechamel Sauce and bake.")
+    assert [r.name for r in named] == ["Bechamel Sauce"]
+    assert cooking.named_recipes(lasagna, "Top with sauce.") == []

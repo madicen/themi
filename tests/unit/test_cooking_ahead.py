@@ -67,3 +67,14 @@ def test_prep_jobs_by_rule_and_the_line_check() -> None:
     ]
     assert _names_line("Garlic: peel, keep whole", "2 garlic cloves, peeled and left whole")
     assert not _names_line("Tofu: press it", "1 Cup cashews, soaked")
+
+
+def test_a_long_step_splits_at_sentence_ends() -> None:
+    from themi.core.cooking import step_parts
+
+    long = "Stir the pot slowly. " * 30
+    made, _ = recipe([], ["Short.", long.strip()])
+    parts = step_parts(made)
+    assert [p.label for p in parts][:3] == ["1", "2a", "2b"]
+    assert all(len(p.text) <= 400 for p in parts)
+    assert " ".join(p.text for p in parts[1:]) == long.strip()  # the words unchanged
