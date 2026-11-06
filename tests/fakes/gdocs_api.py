@@ -80,6 +80,7 @@ class FakeGdocs:
         self.docs: dict[str, _Doc] = {}
         self.failures: dict[str, list[int]] = {}
         self.calls: list[tuple[str, str]] = []  # (endpoint, doc id)
+        self.edits_before_write = 0  # someone edits just before each of the next N writes
         self.app = FastAPI()
         self.app.add_api_route("/v1/documents/{doc_id}", self._get, methods=["GET"])
         self.app.add_api_route(
@@ -104,6 +105,7 @@ class FakeGdocs:
     def reset(self) -> None:
         with self._lock:
             self.docs, self.failures, self.calls = {}, {}, []
+            self.edits_before_write = 0
 
     # ----- scripting ----------------------------------------------------------
 
@@ -251,6 +253,9 @@ class FakeGdocs:
         if doc is None:
             return error
         body = await request.json()
+        if self.edits_before_write:
+            self.edits_before_write -= 1
+            doc.revision += 1  # a person typed in the doc between Themi's read and write
         wanted = body.get("writeControl", {}).get("requiredRevisionId")
         if wanted is not None and wanted != f"rev{doc.revision}":
             return JSONResponse(
