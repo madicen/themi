@@ -199,7 +199,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29c | Feedback: "tell her urgently" sends a waiting note now, and a held note offers to | Feedback | [x] 2026-11-05 |
 | F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [x] 2026-11-05 |
 | F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [x] 2026-11-05 |
-| F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [ ] |
+| F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [x] 2026-11-05 |
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [ ] |
 | F29h | Idea: the family's own guides, such as the Instant Pot grain chart | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -9907,7 +9907,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run` (migration 0113).
 
 ### F29f · Feedback (2026-11-05): "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: F21a, F22a, C3
 Read first: F21a's notes (list adds); F22a's notes (asking for your partner); "Routines" on the
 wall. From Erin's bug #151 (2026-11-05, 11:35 am, "'add' was not meant to go on the list,
@@ -9946,6 +9946,25 @@ Scenario: bug #147, Michael asks, taps "Take it" on the laundry, Erin hears at 8
 
 Data: none (action 473 was declined; Erin fixed the list by hand). Mark #147 and #151
 reviewed once live.
+
+Notes (2026-11-05):
+- `lists.without_verb`: an item starting with "add"/"put" loses the word only when their
+  message starts with the same verb (after "please", "can you"...) followed by the rest
+  of the item. 'Put "Add salt" on the cooking list' keeps "Add salt".
+- Deviation: `add_to_wall_routine` doesn't refuse every message without routine words.
+  A routine Themi suggests unasked ("I keep forgetting the vacuum") is meant to be a card.
+  It refuses a new item titled with someone's tasks ("Erin's tasks"), or a message about
+  taking or doing tasks with no routine words. The refusal points to `tasks_i_could_take`.
+- `themi.core.taking`: `tasks_i_could_take` (core group, no routing needed) sends the
+  partner's open one-off tasks, at most five, each with a "Take: <title>" button. Not
+  offered: repeating chores, medicine, check-ins, plans, shared or either-of-you tasks.
+  The message is the turn's answer (`ToolContext.cards`). A tap reassigns the task
+  (`TaskBoard.reassign`, as `update_task`'s `assign_to` does, no card) and tells the owner
+  once, at low priority ("Husband took Put the laundry away off your list.", kind
+  `task_taken`). A task that's no longer theirs says so.
+- Not done: a routing eval with Michael's wording. The tool is in the core group, so
+  every message gets it.
+- Setup: restart `themi run`. No migration.
 
 ### F29g · Idea (2026-11-05): list items with sub-items, at any depth
 Status: [ ]
