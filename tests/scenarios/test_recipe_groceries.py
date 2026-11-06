@@ -42,7 +42,9 @@ def on_list(scenario: Scenario) -> list[str]:
 async def test_michael_adds_biryani_without_the_cardamom(
     cookbook: Scenario, fake_ourgroceries: FakeOurGroceries
 ) -> None:
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     cookbook.primary.queue_structured(items(BIRYANI))
     (card,) = await cookbook.say("Husband", "Add the biryani to the grocery list")
     assert card.splitlines()[0] == "For Biryani, the grocery list would get 7:"
@@ -64,11 +66,15 @@ async def test_michael_adds_biryani_without_the_cardamom(
 
 
 async def test_lines_read_once_are_kept(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     cookbook.primary.queue_structured(items(BIRYANI))
     await cookbook.say("Husband", "Add the biryani to the grocery list")
     calls = len(cookbook.primary.requests)
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     await cookbook.say("Erin", "Put what we need for biryani on the list")
     assert len(cookbook.primary.requests) == calls + 1  # the tool round only, no reading
 
@@ -76,7 +82,9 @@ async def test_lines_read_once_are_kept(cookbook: Scenario) -> None:
 async def test_no_model_reads_by_rule(cookbook: Scenario) -> None:
     from themi.ai.errors import PermanentError
 
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["alfredo sauce"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["alfredo sauce"], "scale": ""}
+    )
     cookbook.primary.queue_error(PermanentError("no key"), op="structured")
     cookbook.fallback.queue_error(PermanentError("no key"), op="structured")
     (card,) = await cookbook.say("Erin", "Add the alfredo sauce to the grocery list")
@@ -88,7 +96,9 @@ async def test_the_pantry_has_plenty(cookbook: Scenario) -> None:
     pantry = cookbook.app.services.pantry
     assert pantry is not None
     pantry.set_status("garlic", "plenty", source="said")
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     cookbook.primary.queue_structured(items(BIRYANI))
     (card,) = await cookbook.say("Husband", "Add the biryani to the grocery list")
     assert "> · garlic (the pantry has plenty)" in card
@@ -96,7 +106,7 @@ async def test_the_pantry_has_plenty(cookbook: Scenario) -> None:
 
 async def test_two_recipes_one_card(cookbook: Scenario) -> None:
     cookbook.primary.queue_tool_call(
-        "add_recipe_to_grocery_list", {"recipes": ["biryani", "chana masala"]}
+        "add_recipe_to_grocery_list", {"recipes": ["biryani", "chana masala"], "scale": ""}
     )
     cookbook.primary.queue_structured(items(BIRYANI))
     cookbook.primary.queue_structured(
@@ -109,7 +119,9 @@ async def test_two_recipes_one_card(cookbook: Scenario) -> None:
 
 
 async def test_a_base_recipe_in_the_cookbook_is_offered(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["lasagna"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["lasagna"], "scale": ""}
+    )
     cookbook.primary.queue_structured(
         items([("bechamel sauce", False), ("olive oil", False), ("onion", False),
                ("peeled tomatoes", False), ("lasagna sheets", False), ("parsley", False)])
@@ -133,7 +145,9 @@ async def test_already_on_the_list(cookbook: Scenario) -> None:
     cookbook.primary.queue_tool_call("add_to_grocery_list", {"items": ["garlic"]})
     cookbook.primary.queue_text("Added.")
     await cookbook.say("Erin", "Add garlic to the list")
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     cookbook.primary.queue_structured(items(BIRYANI))
     await cookbook.say("Husband", "Add the biryani to the grocery list")
     await cookbook.tap("Husband", "Add 7")
@@ -142,7 +156,9 @@ async def test_already_on_the_list(cookbook: Scenario) -> None:
 
 
 async def test_not_now_leaves_the_list(cookbook: Scenario) -> None:
-    cookbook.primary.queue_tool_call("add_recipe_to_grocery_list", {"recipes": ["biryani"]})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["biryani"], "scale": ""}
+    )
     cookbook.primary.queue_structured(items(BIRYANI))
     await cookbook.say("Husband", "Add the biryani to the grocery list")
     await cookbook.tap("Husband", "Not now")
@@ -167,7 +183,7 @@ async def test_from_the_recipe_card(cookbook: Scenario) -> None:
 
 async def test_an_unclear_name_asks(cookbook: Scenario) -> None:
     cookbook.primary.queue_tool_call(
-        "add_recipe_to_grocery_list", {"recipes": ["chocolate peanut butter bars"]}
+        "add_recipe_to_grocery_list", {"recipes": ["chocolate peanut butter bars"], "scale": ""}
     )
     cookbook.primary.queue_text("There are two: which one?")
     await cookbook.say("Erin", "Add the chocolate peanut butter bars to the list")
@@ -178,3 +194,55 @@ async def test_an_unclear_name_asks(cookbook: Scenario) -> None:
         if isinstance(b, ToolResult)
     ]
     assert any("could be: Chocolate Peanut Butter Bars" in r for r in result)
+
+
+# ----- RC2b: scaling --------------------------------------------------------------------
+
+PANCAKES = [
+    ("white whole wheat flour", False), ("all-purpose flour", False), ("baking powder", False),
+    ("cinnamon", False), ("kosher salt", True), ("almond milk", False), ("applesauce", False),
+    ("vanilla extract", False),
+]  # fmt: skip
+
+
+async def test_double_the_pancakes(cookbook: Scenario) -> None:
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["pancakes"], "scale": "double"}
+    )
+    cookbook.primary.queue_structured(items(PANCAKES))
+    (card,) = await cookbook.say("Erin", "Double the pancakes and put them on the grocery list")
+    lines = card.splitlines()
+    assert lines[0] == "For a double batch of Pancakes, the grocery list would get 6:"
+    assert "> ✓ white whole wheat flour: 3 Cups (360 grams)" in lines
+    assert "> ✓ baking powder: 2 Tbsp + 2 tsp (40g)" in lines
+    assert "> ✓ almond milk: 4 Cups" in lines
+    assert "Amounts in the steps are for the original; the scaled ones are here." in lines
+    assert "Pan size and times may need changing." in lines  # baking powder
+
+
+async def test_for_six_asks_how_many_it_makes_once(cookbook: Scenario) -> None:
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["chana masala"], "scale": "for 6"}
+    )
+    cookbook.primary.queue_text("How many does the chana masala make as written?")
+    replies = await cookbook.say("Erin", "Add the chana masala for 6 to the grocery list")
+    assert replies == ["How many does the chana masala make as written?"]
+    result = [
+        b.content
+        for m in cookbook.primary.last_request.messages
+        for b in m.content
+        if isinstance(b, ToolResult)
+    ][-1]
+    assert "doesn't say how many it makes" in result and "set_recipe_yield" in result
+    cookbook.primary.queue_tool_call("set_recipe_yield", {"recipe": "chana masala", "makes": 4})
+    cookbook.primary.queue_tool_call(
+        "add_recipe_to_grocery_list", {"recipes": ["chana masala"], "scale": "for 6"}
+    )
+    cookbook.primary.queue_structured(
+        items([("dried chickpeas", False), ("water", True), ("oil", False), ("onion", False)])
+    )
+    (card,) = await cookbook.say("Erin", "It makes 4")
+    assert card.startswith("For Chana Masala for 6, the grocery list would get")
+    assert "> ✓ dried chickpeas: 3 Cups" in card
+    chana = cookbook.app.db.one("SELECT yield_said FROM recipes WHERE name = 'Chana Masala'")
+    assert chana == {"yield_said": 4}  # kept: not asked again
