@@ -354,3 +354,13 @@ def _p(text: str, style: str, heading_id: str = "") -> dict[str, Any]:
     if heading_id:
         paragraph_style["headingId"] = heading_id
     return {"elements": [{"textRun": {"content": f"{text}\n"}}], "paragraphStyle": paragraph_style}
+
+
+def load(services: Any, blocks: list[Block] | None = None) -> None:
+    """Put the fixture cookbook in Themi's copy, as a sync would (no Google needed)."""
+    from themi.core import cookbook as book
+
+    services.recipes.store_doc(book.parse(document(blocks)).recipes)
+    services.store.db.execute(
+        "UPDATE cookbook SET doc_id = ?, title = ? WHERE id = 1", (COOKBOOK_ID, TITLE)
+    )

@@ -849,6 +849,39 @@
    "tools": [
     "search_web"
    ]
+  },
+  {
+   "id": "recipe-name",
+   "kind": "plain",
+   "message": "Can you show me the recipe for the mushroom stuffing?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-ingredient",
+   "kind": "plain",
+   "message": "Is there anything in the cookbook with lentils?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-chart",
+   "kind": "paraphrase",
+   "message": "How long does broccoli roast for again?",
+   "tools": [
+    "find_recipe"
+   ]
+  },
+  {
+   "id": "recipe-follow",
+   "kind": "follow-up",
+   "message": "Can you find our recipe for it?",
+   "before": "Erin wants mac and cheese tonight",
+   "tools": [
+    "find_recipe"
+   ]
   }
  ]
 }
