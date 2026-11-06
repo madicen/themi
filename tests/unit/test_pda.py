@@ -134,14 +134,14 @@ async def test_rewrite_options_become_reply_buttons(family: SeededFamily) -> Non
 async def test_a_message_that_asks_nothing_gets_no_choices(family: SeededFamily) -> None:
     """Bug #111: a report of what was done became a choice; its buttons ran the request
     again."""
-    rewriter = FakeRewriter(Rewrite("The sheets are next, for Michael.", ("Add", "Skip")))
+    rewriter = FakeRewriter(Rewrite("The laundry is next.", ("Add", "Skip")))
     result = await PdaShield(rewriter).apply("Move the laundry.", family.erin)
     assert result.method == "rewritten" and result.buttons == ()
 
 
 async def test_only_the_flagged_lines_are_rewritten(family: SeededFamily) -> None:
     """Bug #112: the rewrite got the whole reply and dropped both "Marked done" lines."""
-    rewriter = FakeRewriter(Rewrite("Up next for Michael: the sheets, tonight."))
+    rewriter = FakeRewriter(Rewrite("Up next: the sheets, back tonight."))
     text = (
         'Marked done: "Vacuum upstairs bedroom". Nice work.\n'
         'Marked done: "Change sheets". Lovely.\n\nMove the sheets back tonight.'
@@ -149,7 +149,7 @@ async def test_only_the_flagged_lines_are_rewritten(family: SeededFamily) -> Non
     result = await PdaShield(rewriter).apply(text, family.erin)
     assert result.text == (
         'Marked done: "Vacuum upstairs bedroom". Nice work.\n'
-        'Marked done: "Change sheets". Lovely.\n\nUp next for Michael: the sheets, tonight.'
+        'Marked done: "Change sheets". Lovely.\n\nUp next: the sheets, back tonight.'
     )
     assert [call[0] for call in rewriter.calls] == ["Move the sheets back tonight."]
 
@@ -271,3 +271,30 @@ def test_sub_items_and_numbered_lines_arent_commands() -> None:
         assert not [f for f in find_demands(text) if f.rule == "imperative"]
         assert soften(text, plain=True) == text
     assert soften("Go upstairs.", plain=True) == "Up next: go upstairs."  # a sentence still is
+
+
+async def test_bug_161_a_rewrite_that_drops_the_suggestions_is_refused(
+    family: SeededFamily,
+) -> None:
+    """Reply 292, word for word: three places to look became a heading."""
+    original = (
+        "Check old bank statements or credit card charges for payments to a dental office. "
+        "Insurance provider portal logs show past claims and provider names. Email searches "
+        "for 'dental', 'dentist', or 'appointment' pull up old confirmations."
+    )
+    rewriter = FakeRewriter(Rewrite("Options for finding past dental payments."))
+    result = await PdaShield(rewriter).apply(original, family.erin)
+    assert result.method == "softened"
+    for kept in ("bank statements", "Insurance provider portal", "'dentist'"):
+        assert kept in result.text
+
+
+async def test_bug_160_a_rewrite_that_adds_a_name_or_number_is_refused(
+    family: SeededFamily,
+) -> None:
+    from themi.channels.pda import unfaithful
+
+    original = "I don't know their name. You could check old emails from the office."
+    assert unfaithful(original, "It's Dr. Evans, at 650-555-0144.") == "added a number"
+    assert unfaithful(original, "Maybe Dr. Evans knows; old emails might say.") == "added a name"
+    assert unfaithful(original, "I don't know their name; old emails from the office may.") is None

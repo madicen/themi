@@ -88,3 +88,11 @@ def test_the_chat_turn_has_no_energy_and_no_tools() -> None:
     assert "- Waiting on you: Archive 3 emails" in turn
     assert turn.endswith(f"{member.name} says:\nlong day")
     assert "tool" not in CHAT_SYSTEM.lower() and "json" in CHAT_SYSTEM.lower()  # told: no JSON
+
+
+def test_chat_says_when_it_doesnt_know() -> None:
+    """F30b (#160): "The Redwood City dentist is Dr. Evans, 650-555-0144" was made up."""
+    from themi.core.conversation_mode import CHAT_SYSTEM
+
+    assert "Never make up names, phone numbers, addresses" in CHAT_SYSTEM
+    assert "say so" in CHAT_SYSTEM and "places they could look" in CHAT_SYSTEM
