@@ -33,6 +33,7 @@ from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
+from themi.connectors.recipe_page import PageReader
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.search import SearchBackend
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
@@ -100,6 +101,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
+from themi.core.web_recipes import WebRecipes
 from themi.core.web_search import WebSearch
 from themi.core.which_list import WhichList
 from themi.core.which_task import TaskNamer
@@ -153,6 +155,7 @@ def build_app(
     cozyla: CozylaClient | None = None,
     travel: TravelClient | None = None,
     search: SearchBackend | None = None,
+    recipe_pages: PageReader | None = None,  # RC4a: tests and `make dev` point it at fakes
     home_connect: HomeConnectClient | None = None,
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
@@ -257,6 +260,7 @@ def build_app(
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     WebSearch(services, search).install()  # F30d: says how to set it up without a key
+    WebRecipes(services, recipes, recipe_pages).install()  # RC4a: recipes from links
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)

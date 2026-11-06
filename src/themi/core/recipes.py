@@ -432,16 +432,24 @@ class Recipes:
             buttons.append(
                 Button("Add to grocery list", "recipe", {"action": "groceries", "id": recipe.id})
             )
+        if recipe.source == "web" and "save" in self.button_actions:  # RC5
+            buttons.append(
+                Button("Save to cookbook", "recipe", {"action": "save", "id": recipe.id})
+            )
         return buttons
 
-    async def send(self, member: Member, recipe: Recipe) -> str:
-        """Send the recipe as written; returns its first line."""
+    async def send(self, member: Member, recipe: Recipe, *, note: str = "") -> str:
+        """Send the recipe as written, with Themi's `note` under its name (RC4a's vegan
+        check); returns its first line."""
         outbox = self.services.outbox
         if recipe.is_chart:
             text = chart_lines(recipe)
             await outbox.send(member, text, priority=Priority.REPLY, kind=KIND)
             return text.splitlines()[0]
         first, second = recipe_lines(recipe, self.link(recipe))
+        if note:
+            head, _, rest = first.partition("\n")
+            first = f"{head}\n{note}\n{rest}"
         buttons = self.card_buttons(recipe)
         if len(first) + len(second) + 2 <= MAX_MESSAGE:
             await outbox.send(

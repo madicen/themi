@@ -204,7 +204,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"roast|instant pot|dressing|sauce|desserts?|soup|pancakes?|lasagna|masala|"
         r"what (?:we|i) (?:would |will |'d |'ll )?need for|shop(?:ping)? for|"
         r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d|"
-        r"walk (?:me|us) through|let'?s make|step by step|cooking",
+        r"walk (?:me|us) through|let'?s make|step by step|cooking|"
+        r"https?://\S*(?:recipe|food|kitchen|cook|bak|eat|vegan)",
     ),
     "lists": (
         "named lists, the wall's lists, usual stores",
@@ -461,6 +462,7 @@ TOOL_GROUPS: dict[str, str] = {
             "set_recipe_yield",
             "start_cooking",
             "stop_cooking",
+            "recipe_from_link",
         ),
         "recipes",
     ),  # RC1b, RC2a, RC2b, RC3a
