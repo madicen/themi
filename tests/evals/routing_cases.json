@@ -906,6 +906,14 @@
    "tools": [
     "recipe_from_link"
    ]
+  },
+  {
+   "id": "recipe-web",
+   "kind": "plain",
+   "message": "Can you find me a vegan recipe for mushroom stroganoff online?",
+   "tools": [
+    "find_web_recipe"
+   ]
   }
  ]
 }

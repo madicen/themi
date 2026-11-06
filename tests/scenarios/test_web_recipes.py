@@ -154,3 +154,75 @@ async def test_a_private_link_they_sent_is_refused(
     await scenario.say("Erin", "Read http://192.168.1.1/admin")
     assert "private address" in tool_result(scenario)
     assert site.fetched == []
+
+
+# ----- RC4b: finding them on the web --------------------------------------------------------
+
+PAD_SEE_EW = {
+    "name": "Vegan Pad See Ew",
+    "recipeIngredient": ["8 oz wide rice noodles", "2 cups gai lan", "3 tbsp soy sauce"],
+    "recipeInstructions": ["Soak the noodles.", "Stir-fry everything for 5 minutes."],
+}
+
+
+@pytest.fixture
+def searching(scenario: Scenario, site: FakeRecipeSite, fake_search) -> FakeRecipeSite:
+    scenario.app.services.web_search.backend = fake_search.client()  # type: ignore[union-attr]
+    fake_search.result("pad see ew", "Vegan Pad See Ew", "https://plants.example/pad-see-ew", "Ok")
+    fake_search.result("pad see ew", "Pad see ew story", "https://blog.example/pse", "A story")
+    fake_search.result("pad see ew", "Pad see ew", "https://picky.example/pse", "Blocked")
+    site.page("https://plants.example/pad-see-ew", recipe_page(PAD_SEE_EW))
+    site.page("https://blog.example/pse", plain_page("PSE", ["noodles"], ["Cook."]))
+    site.page("https://picky.example/pse", status=403)
+    return site
+
+
+async def test_find_a_vegan_pad_see_ew_then_cook_it(scenario: Scenario, searching) -> None:
+    scenario.primary.queue_tool_call("find_web_recipe", {"what": "pad see ew"})
+    (offer,) = await scenario.say("Erin", "Find a vegan pad see ew recipe online")
+    assert offer == "From the web:"
+    assert scenario.last_buttons("Erin") == [
+        "Vegan Pad See Ew (plants.example), 3 ingredients"
+    ]  # the blog without recipe data and the refusing site are left out
+    (card,) = await scenario.tap("Erin", "Vegan Pad See Ew (plants.example), 3 ingredients")
+    assert card.startswith("Vegan Pad See Ew (plants.example)")
+    assert "Cook this" in scenario.last_buttons("Erin")
+
+
+async def test_the_search_asks_for_vegan(scenario: Scenario, searching, fake_search) -> None:
+    web = scenario.app.services.web_recipes
+    assert web is not None
+    assert web.query("pad see ew", "find pad see ew") == "vegan pad see ew recipe"
+    assert web.query("chicken pad see ew", "") == "chicken pad see ew recipe"
+    assert web.query("pad see ew", "not vegan please") == "pad see ew recipe"
+    assert web.query("vegan chili recipe", "") == "vegan chili recipe"
+    assert web.query("chicken seitan wings", "") == "vegan chicken seitan wings recipe"
+
+
+async def test_the_cookbook_comes_first(scenario: Scenario, searching, fake_search) -> None:
+    fake_search.result("chana masala", "Chana masala", "https://plants.example/chana", "Ok")
+    scenario.primary.queue_tool_call("find_web_recipe", {"what": "chana masala"})
+    (offer,) = await scenario.say("Erin", "Look online for a chana masala recipe")
+    assert offer.startswith("Your cookbook has Chana Masala.")
+    assert scenario.last_buttons("Erin")[0] == "Chana Masala (cookbook)"
+
+
+async def test_nothing_readable(scenario: Scenario, searching) -> None:
+    scenario.primary.queue_tool_call("find_web_recipe", {"what": "dragon fruit soufflé"})
+    scenario.primary.queue_text("Nothing readable turned up.")
+    await scenario.say("Erin", "Find a dragon fruit soufflé recipe online")
+    assert "No readable recipe" in tool_result(scenario)
+
+
+async def test_old_web_recipes_are_forgotten(scenario: Scenario, searching) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    scenario.primary.queue_tool_call("find_web_recipe", {"what": "pad see ew"})
+    await scenario.say("Erin", "Find a vegan pad see ew recipe online")
+    clock.advance(timedelta(days=29))
+    assert await scenario.run_periodic("recipes.forget_web") == 0
+    clock.advance(timedelta(days=2))
+    assert await scenario.run_periodic("recipes.forget_web") == 1
+    assert scenario.app.db.scalar("SELECT COUNT(*) FROM recipes WHERE source = 'web'") == 0
