@@ -44,6 +44,21 @@ async def test_more_tools_brings_a_group_mid_turn(scenario: Scenario) -> None:
     assert "suggest_meals" in sent(scenario, -1)  # the next step has it
 
 
+def offered(scenario: Scenario, index: int) -> list[str]:
+    chats = [r for r in scenario.primary.requests if r.op == "chat"]
+    (spec,) = [t for t in chats[index].tools if t.name == "more_tools"]
+    return spec.input_schema["properties"]["groups"]["items"]["enum"]
+
+
+async def test_more_tools_offers_only_what_isnt_here(scenario: Scenario) -> None:
+    # F33b (reply 237): 29 of 41 calls that week asked for groups already sent
+    scenario.primary.queue_tool_call("more_tools", {"groups": ["pantry"]})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "Hmm, what should we do about that")
+    assert "pantry" in offered(scenario, -2)
+    assert offered(scenario, -1) == [g for g in offered(scenario, -2) if g != "pantry"]
+
+
 def test_every_group_is_known_and_has_words() -> None:
     assert set(TOOL_GROUPS.values()) <= set(GROUPS)
     assert all(words for _, words in GROUPS.values())
