@@ -243,7 +243,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC2b | Recipes: scaling (half, double, for 6) | Recipes | [x] 2026-11-06 |
 | RC3a | Cooking: getting ready (gather and prep) | Recipes | [x] 2026-11-06 |
 | RC3b | Cooking: one step at a time | Recipes | [x] 2026-11-06 |
-| RC3c | Cooking: step timers | Recipes | [ ] |
+| RC3c | Cooking: step timers | Recipes | [x] 2026-11-06 |
 | RC4a | Recipes: a recipe from a link | Recipes | [ ] |
 | RC4b | Recipes: finding them on the web | Recipes | [ ] |
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [ ] |
@@ -12136,7 +12136,7 @@ Notes (2026-11-06):
   context (RC3a's open item, now "on step 2 of 5").
 
 ### RC3c · Cooking: step timers
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: RC3b, 10
 - A step with a time ("cook for 10 minutes", "simmer until reduced by half, about 20
   min", "1-2 minutes", "for 2 hours") gets [Timer 10 min]. A range offers the low end and
@@ -12150,6 +12150,24 @@ Depends on: RC3b, 10
 Tests: unit tests for the duration finder over every step in the fixture, the range rule,
 restart survival, quiet hours; scenario: two timers running at once in Pad Thai, both firing
 in order with a frozen clock.
+
+Notes (2026-11-06):
+- `themi.core.cooking_timers`: `durations` finds digits with a unit ("10 minutes", "about
+  2 to 3 minutes", "1 hour"); a range offers its low end ("Timer 2 min (2-3)"); at most two
+  a step. Times written in words ("four hours") aren't found. "Overnight", and anything of
+  8 hours or more, offer [Remind me tomorrow] or [Remind me in 24 hrs] instead.
+- Migration 0124 (`cooking_timers`); each timer is also a `cooking.timer` scheduler job, so
+  it outlives a restart. It fires as an urgent message to the person's own chat ("Time's up:
+  2 min for step 5 of Pancakes."), quiet hours or not. A group session's timers go to the
+  person who started it, since a group message waits until everyone is free.
+- Typed while a timer runs: "how long left?", "add 2 minutes" (the job finds the new end
+  and waits again), "cancel the timer". Ending a session with one running asks [Keep
+  timers] [Cancel them].
+- A keyboard takes one tap in Telegram (the channel closes its other buttons), so tapping a
+  timer redraws the card with fresh buttons.
+- The two-timer scenario uses the Pancakes' last step (two ranges in one step), not Pad
+  Thai, which isn't in the fixture.
+- Setup: restart `themi run` (migration 0124).
 
 ### RC4a · Recipes: a recipe from a link
 Status: [ ]
