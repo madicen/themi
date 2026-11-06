@@ -47,7 +47,15 @@ from themi.core.events import title_matches
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.services import Services
-from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool, tool
+from themi.core.tools import (
+    Done,
+    Proposal,
+    ToolContext,
+    ToolFailed,
+    in_their_words,
+    staged_tool,
+    tool,
+)
 from themi.localtime import to_utc_iso
 
 log = logging.getLogger(__name__)
@@ -623,10 +631,7 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
         raise ToolFailed("An item needs a name.")
     days = _days(list(args.get("days") or []))
     only_on = routines.today() if args.get("just_today") else None
-    said = name_key(ctx.request_text)
-    asked = member.id == ctx.member.id and all(
-        w in said for w in name_key(title).split() if len(w) > 2
-    )
+    asked = member.id == ctx.member.id and in_their_words(ctx, title)
     when = (
         "just today"
         if only_on
@@ -653,14 +658,16 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     "Remove an item from one of this person's routines in Themi. routine: '' to look in all.",
     {"title": {"type": "string"}, "routine": {"type": "string"}},
 )
-async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
+async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     routines = _routines(ctx)
     routine = routines.find(ctx.member, str(args["routine"])) if args.get("routine") else None
     item = routines.find_item(ctx.member, str(args["title"]), routine)
     if item is None:
         raise ToolFailed(f"No item like {args['title']} on their routines.")
     routines.remove_item(item)
-    return f"Removed {item.title}."
+    name = routines.get(item.routine_id).name
+    said = f'Removed "{item.title}" from your {name} routine.'
+    return Done(said, asked=in_their_words(ctx, item.title))  # F33a
 
 
 @tool(
@@ -669,7 +676,7 @@ async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     "('I walked the dog', 'took my vitamins').",
     {"title": {"type": "string"}},
 )
-async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
+async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     routines = _routines(ctx)
     item = routines.find_item(ctx.member, str(args["title"]))
     if item is None:
@@ -677,4 +684,4 @@ async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     today = routines.today()
     await routines.tick_now(item, today)
     await routines.show_tick(item, today)
-    return f"Ticked {item.title} for today."
+    return Done(f'Ticked "{item.title}" for today.', asked=in_their_words(ctx, item.title))

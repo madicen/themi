@@ -93,6 +93,26 @@ class Proposal:
     said: str | None = None  # the reply when it's done straight away (ToolContext.replies)
 
 
+@dataclass(frozen=True)
+class Done:
+    """F33a: what a tool changed inside Themi, said as it is to them (and to the model).
+    `asked`: what it changed was in their own words (`in_their_words`), so the line is the
+    whole answer, and the turn can end without another model round (P2b, reply 237)."""
+
+    said: str
+    asked: bool = False
+
+
+def in_their_words(ctx: ToolContext, title: str) -> bool:
+    """Every word of the title (over two letters) is in what they wrote this turn: the
+    tool did what they named, not what the model took them to mean."""
+    from themi.core.lists import name_key  # lists builds its tools from this module
+
+    said = name_key(ctx.request_text)
+    words = [w for w in name_key(title).split() if len(w) > 2] or [name_key(title)]
+    return all(w and w in said for w in words)
+
+
 Handler = Callable[[ToolContext, dict[str, Any]], Awaitable[Any]]
 
 
@@ -660,6 +680,11 @@ class ToolRegistry:
             output = await t.handler(ctx, call.arguments)
             if t.proposes:
                 output = await self._stage(output, ctx)
+            elif isinstance(output, Done):
+                if output.asked:  # otherwise the model says it, as before F33a
+                    ctx.replies.append(output.said)
+                    ctx.asked.append(output.said)
+                output = output.said
             elif not isinstance(output, str):
                 raise TypeError(f"tool {call.name} returned {type(output).__name__}, not text")
         except ToolDeclined as exc:

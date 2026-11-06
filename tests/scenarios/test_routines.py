@@ -180,14 +180,15 @@ async def test_a_custom_routine_from_chat(scenario: Scenario) -> None:
 async def test_ticking_and_removing_from_chat(scenario: Scenario) -> None:
     add(scenario, "Erin", "Morning", "Vitamins")
     scenario.primary.queue_tool_call("tick_routine_item", {"title": "vitamins"})
-    scenario.primary.queue_text("Nice.")
-    await scenario.say("Erin", "took my vitamins")
+    # F33a: done as they said it, the tool's line is the reply, with no second round
+    assert await scenario.say("Erin", "took my vitamins") == ['Ticked "Vitamins" for today.']
     await at(scenario, WED, 12)
     assert checks(scenario, "Erin") == []
 
     scenario.primary.queue_tool_call("remove_routine_item", {"title": "vitamins", "routine": ""})
-    scenario.primary.queue_text("Gone.")
-    await scenario.say("Erin", "take vitamins off my routine")
+    assert await scenario.say("Erin", "take vitamins off my routine") == [
+        'Removed "Vitamins" from your Morning routine.'
+    ]
     erin = scenario.member("Erin")
     morning = routines(scenario).find(erin, "Morning")
     assert morning is not None and routines(scenario).items(morning) == []
