@@ -259,6 +259,12 @@ class RecipeGroceries:
             cached.update(await self._read(member, missing[start : start + BATCH_LINES]))
         return [cached.get(line_key(line)) or read_line(line) for line in lines]
 
+    def known(self, recipe: Recipe) -> list[Ingredient]:
+        """Each line as already read (cached), or by rule: never a model call (for labels)."""
+        lines = [i.text for i in recipe.ingredients]
+        cached = self._cached(lines)
+        return [cached.get(line_key(line)) or read_line(line) for line in lines]
+
     def _cached(self, lines: list[str]) -> dict[str, Ingredient]:
         keys = [line_key(line) for line in lines]
         if not keys:

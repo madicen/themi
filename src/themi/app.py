@@ -50,6 +50,7 @@ from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
 from themi.core.conversation_mode import ConversationMode
+from themi.core.cooking import Cooking
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -229,7 +230,10 @@ def build_app(
     Guides(services).install()
     recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
     recipes.install()
-    RecipeGroceries(services, recipes).install()  # RC2a
+    recipe_groceries = RecipeGroceries(services, recipes)  # RC2a
+    recipe_groceries.install()
+    cooking = Cooking(services, recipes, recipe_groceries)  # RC3a
+    cooking.install()
     burnout = Burnout(services, tasks)
     burnout.install()
     ConversationMode(services).install()
@@ -292,6 +296,7 @@ def build_app(
         PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
         PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
         PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
+        PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
     ]
     server = ServerControl(services, control_dir)
     server.install()

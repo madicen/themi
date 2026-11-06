@@ -203,7 +203,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"recipes?|cookbook|cook|bak(?:e|ing)|ingredients?|how (?:do|to) (?:i |we |you )?make|"
         r"roast|instant pot|dressing|sauce|desserts?|soup|pancakes?|lasagna|masala|"
         r"what (?:we|i) (?:would |will |'d |'ll )?need for|shop(?:ping)? for|"
-        r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d",
+        r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d|"
+        r"walk (?:me|us) through|let'?s make|step by step|cooking",
     ),
     "lists": (
         "named lists, the wall's lists, usual stores",
@@ -453,9 +454,16 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
 }
 TOOL_GROUPS: dict[str, str] = {
     **dict.fromkeys(
-        ("find_recipe", "show_recipe", "add_recipe_to_grocery_list", "set_recipe_yield"),
+        (
+            "find_recipe",
+            "show_recipe",
+            "add_recipe_to_grocery_list",
+            "set_recipe_yield",
+            "start_cooking",
+            "stop_cooking",
+        ),
         "recipes",
-    ),  # RC1b, RC2a, RC2b
+    ),  # RC1b, RC2a, RC2b, RC3a
     **dict.fromkeys(("search_web", "read_web_page"), "web"),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(

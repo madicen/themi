@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from themi.accounts import AccountStore, Member
 from themi.ai.router import AIRouter
@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.conversation_mode import ConversationMode
+    from themi.core.cooking import Cooking
     from themi.core.cozyla_routines import CozylaRoutines
     from themi.core.cozyla_todos import CozylaTodos
     from themi.core.day_summary import DaySummary
@@ -130,6 +131,9 @@ EventHandler = Callable[[InboundEvent], Awaitable[None]]
 CommandHandler = Callable[[Member, str], Awaitable[None]]  # (member, text after the command)
 # For commands that need the whole message, such as what it replies to.
 EventCommandHandler = Callable[[InboundEvent, str], Awaitable[None]]
+# RC3a: a typed message a feature takes before the model sees it ("next" while cooking).
+# (event, member, text) -> True when it was taken.
+TextHandler = Callable[[InboundEvent, Member, str], Awaitable[bool]]
 
 
 @dataclass
@@ -192,6 +196,9 @@ class Services:
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
     recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
     recipe_groceries: RecipeGroceries | None = None  # what a recipe needs, to the list (RC2a)
+    cooking: Cooking | None = None  # cooking a recipe with Themi (RC3a)
+    text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
+    cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
     conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
     focus: Focus | None = None  # a few things for now, when it's too much (O1)

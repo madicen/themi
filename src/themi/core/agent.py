@@ -316,6 +316,9 @@ class Agent:
             if handler is not None:
                 await handler(member, argument.strip())
                 return
+        for take in self.services.text_handlers:  # RC3a: "next" while cooking
+            if await take(event, member, text):
+                return
         self.services.calibrator.observe_text(member, text)
         self.services.energy.observe_inbound(member)
         if await self._fast_path(member, text):
