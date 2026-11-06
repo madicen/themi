@@ -220,7 +220,7 @@ async def test_pancakes_from_step_one_to_all_done(cookbook: Scenario) -> None:
     for _ in range(3):
         await cookbook.tap("Erin", "Next")
     assert card(cookbook).startswith("Pancakes: step 5 of 5")
-    assert card_buttons(cookbook) == ["Back", "All done"]
+    assert card_buttons(cookbook) == ["Back", "All done", "Timer 2 min (2-3)", "Timer 1 min (1-2)"]
     await cookbook.tap("Erin", "All done")
     assert card(cookbook) == "Pancakes, all done. Enjoy it!"
     row = cookbook.app.db.one("SELECT outcome FROM cooking_sessions")
@@ -265,3 +265,78 @@ async def test_a_step_naming_another_recipe_offers_it(cookbook: Scenario) -> Non
     named = cooking.named_recipes(lasagna, "Top with the Bechamel Sauce and bake.")
     assert [r.name for r in named] == ["Bechamel Sauce"]
     assert cooking.named_recipes(lasagna, "Top with sauce.") == []
+
+
+# ----- RC3c: timers ----------------------------------------------------------------------
+
+
+async def to_step_five(scenario: Scenario) -> None:
+    await to_the_steps(scenario)
+    for _ in range(4):
+        await scenario.tap("Erin", "Next")
+
+
+async def test_two_timers_fire_in_order(cookbook: Scenario) -> None:
+    await to_step_five(cookbook)
+    assert card_buttons(cookbook) == ["Back", "All done", "Timer 2 min (2-3)", "Timer 1 min (1-2)"]
+    (set_one,) = await cookbook.tap("Erin", "Timer 2 min (2-3)")
+    assert set_one == "Timer set: 2 min for step 5, done at 9:02 am."
+    await cookbook.tap("Erin", "Timer 1 min (1-2)")
+    from themi import clock
+
+    clock.advance(__import__("datetime").timedelta(minutes=1, seconds=5))
+    await cookbook.run_jobs()
+    assert cookbook.inbox("Erin")[-1] == "Time's up: 1 min for step 5 of Pancakes."
+    clock.advance(__import__("datetime").timedelta(minutes=1))
+    await cookbook.run_jobs()
+    assert cookbook.inbox("Erin")[-1] == "Time's up: 2 min for step 5 of Pancakes."
+
+
+async def test_a_timer_rings_in_quiet_hours(cookbook: Scenario) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    clock.advance(timedelta(hours=13, minutes=55))  # 10:55 pm: quiet hours
+    await to_step_five(cookbook)
+    await cookbook.tap("Erin", "Timer 2 min (2-3)")
+    clock.advance(timedelta(minutes=3))
+    await cookbook.run_jobs()
+    assert cookbook.inbox("Erin")[-1] == "Time's up: 2 min for step 5 of Pancakes."
+
+
+async def test_a_timer_is_a_stored_job(cookbook: Scenario) -> None:
+    await to_step_five(cookbook)
+    await cookbook.tap("Erin", "Timer 2 min (2-3)")
+    jobs = cookbook.app.db.query("SELECT kind, status FROM job_queue WHERE kind = 'cooking.timer'")
+    assert jobs == [{"kind": "cooking.timer", "status": "queued"}]  # kept across a restart
+
+
+async def test_how_long_left_more_time_and_cancel(cookbook: Scenario) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    await to_step_five(cookbook)
+    await cookbook.tap("Erin", "Timer 2 min (2-3)")
+    clock.advance(timedelta(seconds=30))
+    assert await cookbook.say("Erin", "How long left?") == ["2 min left on step 5."]
+    assert await cookbook.say("Erin", "add 2 minutes") == [
+        "Added 2 min: step 5 is done at 9:04 am."
+    ]
+    clock.advance(timedelta(minutes=2))
+    await cookbook.run_jobs()  # the old end: moved, so nothing yet
+    assert not cookbook.inbox("Erin")[-1].startswith("Time's up")
+    assert await cookbook.say("Erin", "cancel the timer") == ["Timer cancelled."]
+    clock.advance(timedelta(minutes=5))
+    await cookbook.run_jobs()
+    assert not any(t.startswith("Time's up") for t in cookbook.inbox("Erin"))
+
+
+async def test_ending_with_a_timer_running_asks(cookbook: Scenario) -> None:
+    await to_step_five(cookbook)
+    await cookbook.tap("Erin", "Timer 2 min (2-3)")
+    await cookbook.tap("Erin", "All done")
+    assert cookbook.inbox("Erin")[-1] == "There's a timer still running. Keep it going?"
+    await cookbook.tap("Erin", "Cancel them")
+    assert card(cookbook) == "Timers cancelled."
