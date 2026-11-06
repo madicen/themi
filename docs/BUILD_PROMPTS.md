@@ -200,8 +200,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29d | Feedback: a card is the whole answer, and a corrected request replaces its card | Feedback | [x] 2026-11-05 |
 | F29e | Feedback: drive time to a place they've named, and a private calendar isn't an empty one | Feedback | [x] 2026-11-05 |
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [x] 2026-11-05 |
-| F29g | Idea: list items with sub-items, at any depth | Feedback | [ ] |
-| F29h | Idea: the family's own guides, such as the Instant Pot grain chart | Feedback | [ ] |
+| F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
+| F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [~] |
+| F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -9967,7 +9968,7 @@ Notes (2026-11-05):
 - Setup: restart `themi run`. No migration.
 
 ### F29g · Idea (2026-11-05): list items with sub-items, at any depth
-Status: [ ]
+Status: [x] 2026-11-05
 Depends on: L1a, L1b, F21a
 Read first: "Lists" (the plan's list model and the wall's lists); L1a's and L1b's notes (Themi's lists and the
 wall's). From Erin's bug #152 (2026-11-05, 11:44 am) and idea #153 (11:54 am), both quoted
@@ -10015,33 +10016,84 @@ format.
 
 Setup after deploying: the migration. Mark #152 and #153 reviewed once live.
 
-### F29h · Idea (2026-11-05): the family's own guides, such as the Instant Pot grain chart
-Status: [ ]
+Notes (2026-11-05):
+- Found while building: reply 271's "Up next:" wasn't the model. The gentle-phrasing
+  softener (`pda.soften`, plain phrasing) read "-- go upstairs" as a command, since only
+  "- " counted as a list line. `_BULLET` now covers "-", "--", "•", "1." and "1.1.", and
+  `find_demands` and `soften` go line by line, leaving list lines (and their case) alone.
+- Migration 0114: `list_items.parent_id` (ON DELETE CASCADE) and `members.list_style`
+  ("dashes", "bullets", "numbers"; dashes by default). Deviation: no `position` column.
+  Items keep the order they were added in, and a moved item goes to the end of its new
+  level.
+- `add_to_list` takes `under` (with a schema `default`; `ToolRegistry` now fills in a
+  field with a default when a call leaves it out, so older calls still run). Items
+  written with leading dashes keep their shape. Each level dedupes on its own. An
+  ambiguous `under` (or item) names each match with its parent: "food (under cats)".
+- `show_lists` for a list with sub-items sends Themi's own rendering (`lists.render`) as
+  the reply, in the reader's style. Flat lists read as before. `words` (what the model
+  sees) puts sub-items in brackets.
+- Ticking or removing an item does its sub-items too, and the result says how many.
+  `move_list_item` moves an item under another, or back to the top. It can't go under
+  itself or its own sub-items.
+- The wall: sub-items stay off it. The wall sync only sends and matches top-level items,
+  and an item moved under another is taken off the wall. Flattening ("parent: child")
+  would read as a rename on the wall's next pull and break the two-way sync.
+- The style setting is on Settings, next to the calendar options, not on the Lists page.
+- Tool descriptions say list items and tasks get called by each other's names, and how
+  to tell them apart. Not done: a routing eval with Erin's 5 Nov wordings.
+- Data: once live, rules 27 and 28 say what Themi does anyway. Ask Erin before setting
+  them aside. Her "Service dog tasks" list holds one item, "body doubling: go upstairs,
+  go downstairs", which she may want to re-add as sub-items.
+- Setup: restart `themi run` (migration 0114).
+
+### F29ha · Idea (2026-11-05): the family's own guides, given as text, and looked up
+Status: [~]
 Depends on: 14, 27
 Read first: "Memory" (facts and their search); prompt 27's notes (meal suggestions); "Security
 and privacy" (outside text is data). From Erin's idea #148 (2026-11-05, 9:25 am, "Themi
 should have access to our instant pot grain cooking guide").
 
-Not known yet: where the guide lives (a photo, a PDF, a printed sheet, a web page). Ask
-Erin before building: the build below takes any of them.
+Split from F29h on 2026-11-05: Themi can't read photos or documents yet (Telegram's photos
+are dropped, and the router has no vision call), which is a prompt of its own (F29hb).
+This one takes a guide as text.
 
 Build:
-- A guide is a named document the family gives Themi: a photo or PDF sent in chat with
-  "save this as our <name> guide", or a file uploaded on a new website page, Guides.
-  Photos and PDFs are read once into text (the router's vision path); the text and the
-  original are kept, encrypted at rest like other files.
-- `look_up_guide` (core group, a lookup): finds the guide by name or topic and returns the
-  relevant part inside a `<data source="guide: ...">` block. Answers cite it ("From your
-  Instant Pot guide: brown rice, 22 min high pressure, 10 min natural release").
-- Guides are family-wide by default; one can be marked just for its owner.
+- A guide is a named piece of text the family gives Themi: pasted in chat with "save
+  this as our <name> guide", or added on a new website page, Guides (on More). The same
+  name again replaces its text.
+- `save_guide`: the text must be what they sent, word for word, never the model's own.
+- `look_up_guide` (core group, a lookup): finds the guide by name or topic and returns
+  the relevant part inside a `<data source="guide ...">` block. Answers cite it ("From
+  your Instant Pot guide: brown rice, 22 min high pressure, 10 min natural release").
+- Guides are the household's by default; one can be marked just for its owner.
+
+Tests: saving from chat; text the model made up is refused; the lookup by topic; a
+guide's text containing instructions is data, not followed; a private guide not found by
+the partner; the Guides page adds and deletes.
+Scenario: Erin pastes the grain chart, then Michael asks "how long for quinoa?".
+
+### F29hb · Idea (2026-11-05): a guide from a photo or a PDF
+Status: [ ]
+Depends on: F29ha, 05
+Read first: F29ha's notes; prompt 05 (the adapters); "Security and privacy". Idea #148
+again: Erin's guide may be a photo, a PDF or a printed sheet. Ask Erin which it is before
+building, and build only the path it needs.
+
+Build:
+- Telegram: a photo or a document (PDF) sent with "save this as our <name> guide", or
+  with the caption, is downloaded (size capped) and kept, encrypted at rest.
+- The router gets an image/PDF-to-text call (per-member keys, retries and fallback as
+  every model call has), with adapters for the backends that can read images, and a
+  scripted fake. A PDF with a text layer is read without the model.
+- The text it reads becomes the guide's text (F29ha), with the original kept beside it,
+  and the reply reads back the first lines so they can check it.
 - Meal suggestions (prompt 27) may use a guide's cooking times when one fits.
 
-Tests: saving from a photo (a fake vision answer) and from a PDF; the lookup by topic; the
-answer citing it; a guide's text containing instructions is data, not followed; a private
-guide not found by the partner.
+Tests: a photo with a fake vision answer becomes a guide; a PDF's text layer; a failed
+read says so and keeps nothing; the size cap; the guide's text is data.
 Scenario: Erin sends a photo of the grain chart, then asks "how long for quinoa?"
 
-Mark #148 reviewed once live.
+Mark #148 reviewed once F29ha or F29hb is live, whichever fits Erin's guide.
 
 ## Conversation mode
 
