@@ -69,12 +69,12 @@ async def test_the_state_per_mode(scenario: Scenario, site: httpx.AsyncClient) -
     await bd(scenario).start(erin, mode=SILENT, minutes=60, label="my writing")
     state = (await site.get("/session/state")).json()
     assert (state["mode"], state["label"], state["phase"]) == ("silent", "my writing", "work")
-    assert state["timer"] == {"kind": "up", "from": "2026-10-21T16:00:00+00:00"}
+    assert state["timer"] == {"kind": "up", "from": "2026-10-21T16:00:00+00:00", "text": "0:00"}
     assert state["line"] == "Quiet until 10 am."
     assert [b["label"] for b in state["buttons"]] == ["Done", "Not finished"]
     await bd(scenario).start(erin, mode=SPRINT, label="the inbox")
     state = (await site.get("/session/state")).json()
-    assert state["timer"] == {"kind": "down", "to": "2026-10-21T16:25:00+00:00"}
+    assert state["timer"] == {"kind": "down", "to": "2026-10-21T16:25:00+00:00", "text": "25:00"}
     assert [b["label"] for b in state["buttons"]] == ["Break", "Stop here"]
     board = scenario.app.services.taskboard
     assert board is not None

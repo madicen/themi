@@ -360,3 +360,42 @@ async def test_no_open_button_without_https(scenario: Scenario) -> None:
         "I'm here. Going quiet until 9:30 am."
     ]
     assert not scenario.telegram.calls("sendMessage")[-1].get("reply_markup")
+
+
+# ----- BD3b: break chat on the page -----------------------------------------------------------
+
+
+async def test_break_chat_on_the_page_reaches_telegram_too(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await scenario.say("Erin", "/bodydouble sprint")
+    await scenario.advance(minutes=25)
+    await scenario.run_jobs()
+    await scenario.tap("Erin", "Break")
+    csrf = await sign_in(scenario, site, "Erin")
+    state = (await site.get("/session/state")).json()
+    assert (state["phase"], state["scene"]) == ("break", "cheering")  # a block done
+    await scenario.advance(minutes=1)
+    assert (await site.get("/session/state")).json()["scene"] == "dozing"
+    assert 'class="session-chat-open"' in (await site.get("/session")).text
+
+    scenario.primary.queue_text("Leftover soup, then the pasta tomorrow.")
+    after = await site.post("/session/chat", headers={"X-Requested-With": "fetch"},
+                            data={"csrf": csrf, "text": "what's for dinner?"})  # fmt: skip
+    assert scenario.inbox("Erin")[-1] == "Leftover soup, then the pasta tomorrow."  # Telegram
+    chat = after.json()["chat"]
+    assert chat[-2:] == [
+        {"who": "you", "text": "what's for dinner?"},
+        {"who": "themi", "text": "Leftover soup, then the pasta tomorrow."},
+    ]
+    assert after.json()["scene"] == "idle"  # listening while they chat
+
+
+async def test_page_chat_outside_a_break_does_nothing(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await scenario.say("Erin", "/bodydouble sprint")
+    csrf = await sign_in(scenario, site, "Erin")
+    before = len(scenario.primary.requests)
+    await site.post("/session/chat", data={"csrf": csrf, "text": "hello"})
+    assert len(scenario.primary.requests) == before

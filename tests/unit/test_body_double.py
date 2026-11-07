@@ -11,6 +11,7 @@ import pytest
 from themi.channels.mini_app import check_init_data, sign_init_data
 from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble, parse_command, span_words
 from themi.core.body_double_guided import is_optional, proposed_steps
+from themi.core.body_double_scene import FLAGS, pick_state
 from themi.core.tasks import Task
 
 
@@ -117,3 +118,51 @@ def test_forged_init_data_is_refused() -> None:
     assert check_init_data("not a query", TOKEN, NOW) is None
     unsigned = urlencode({"auth_date": str(int(NOW.timestamp())), "user": '{"id": 1}'})
     assert check_init_data(unsigned, TOKEN, NOW) is None
+
+
+# ----- BD3b: the chameleon's animation state -----------------------------------------------
+
+T0 = datetime(2026, 10, 21, 16, 0, tzinfo=UTC)
+
+
+def state(mode: str = "sprint", category: str | None = "chores", phase: str = "work",
+          minutes: float = 0, **more: object) -> str:  # fmt: skip
+    return pick_state(mode=mode, category=category, phase=phase,
+                      now=T0 + timedelta(minutes=minutes), phase_started=T0, **more)  # type: ignore[arg-type]  # fmt: skip
+
+
+def test_a_sweep_one_minute_in_four_on_chores_and_tidying() -> None:
+    assert [state(minutes=m) for m in range(8)] == [
+        "idle", "idle", "idle", "sweeping", "idle", "idle", "idle", "sweeping",
+    ]  # fmt: skip
+    assert state(category="tidy", minutes=3) == "sweeping"
+    assert state(mode="silent", category="chores", minutes=3) == "sweeping"
+    assert state(category="deep_work", minutes=3) == "idle"
+    assert state(category="admin", minutes=3) == "idle"
+    assert state(category=None, minutes=3) == "idle"
+
+
+def test_a_break_rests_in_turn_and_listens_while_they_chat() -> None:
+    assert [state(phase="break", minutes=m) for m in (0, 1, 2, 4, 6, 8)] == [
+        "dozing", "dozing", "painting", "stretching", "doodling", "dozing",
+    ]  # fmt: skip
+    chatting = T0 + timedelta(minutes=3)
+    assert state(phase="break", minutes=4, chat_at=chatting) == "idle"
+    assert state(phase="break", minutes=6, chat_at=chatting) == "doodling"  # quiet again
+
+
+def test_a_moments_cheer_then_back_to_the_usual() -> None:
+    until = T0 + timedelta(seconds=20)
+    assert state(phase="asking", cheer_until=until) == "cheering"
+    assert state(phase="asking", minutes=1, cheer_until=until) == "idle"
+    assert state(mode="guided", category="chores", phase="work", minutes=0.2,
+                 cheer_until=until) == "cheering"  # fmt: skip
+    assert state(mode="guided", phase="asking", category=None) == "idle"
+
+
+def test_every_mode_category_and_phase_gives_a_known_flag() -> None:
+    for mode in ("silent", "sprint", "guided"):
+        for category in ("deep_work", "admin", "chores", "tidy", "other", None):
+            for phase in ("work", "break", "asking", "proposing"):
+                for m in range(10):
+                    assert state(mode, category, phase, m) in FLAGS
