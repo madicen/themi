@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from datetime import date
 
+import httpx
+
+from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
 from themi.core.tasks import Task, TaskBoard
@@ -323,3 +326,37 @@ async def test_three_good_evening_sprints_change_the_pick_for_chores(scenario: S
     await scenario.tap("Erin", "Quiet instead")
     assert card(scenario) == "Quiet company instead: going quiet until you say you're done."
     assert session_row(scenario)["mode"] == "silent"
+
+
+# ----- BD3a: the session page -----------------------------------------------------------------
+
+
+async def test_next_on_the_page_moves_the_chat_card_and_back(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    scenario.app.services.site_url = "https://themi.example.ts.net"
+    task = await kitchen(scenario)
+    replies = await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    assert replies == ["Step 1 of 6:\n> Clear the counter"]
+    assert scenario.last_buttons("Erin") == ["Next", "Done", "Open"]
+    markup = scenario.telegram.last_keyboard(scenario.member("Erin").telegram_user_id or 0)
+    assert markup[-1]["web_app"] == {"url": "https://themi.example.ts.net/session"}
+
+    csrf = await sign_in(scenario, site, "Erin")
+    state = (await site.get("/session/state")).json()
+    moved = await site.post(f"/session/{state['id']}/act", headers={"X-Requested-With": "fetch"},
+                            data={"csrf": csrf, "action": "next", "seq": state["seq"]})  # fmt: skip
+    assert moved.json()["line"] == "Load the dishwasher"
+    assert card(scenario) == "Step 2 of 6:\n> Load the dishwasher"  # the chat card moved too
+    assert card_buttons(scenario) == ["Back", "Next", "Done"]
+
+    await scenario.tap("Erin", "Next")  # and a tap in chat shows on the page
+    assert (await site.get("/session/state")).json()["step"] == 3
+
+
+async def test_no_open_button_without_https(scenario: Scenario) -> None:
+    scenario.app.services.site_url = "http://127.0.0.1:8080"
+    assert await scenario.say("Erin", "/bodydouble quiet 30") == [
+        "I'm here. Going quiet until 9:30 am."
+    ]
+    assert not scenario.telegram.calls("sendMessage")[-1].get("reply_markup")

@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
+
 import pytest
 
+from themi.channels.mini_app import check_init_data, sign_init_data
 from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble, parse_command, span_words
 from themi.core.body_double_guided import is_optional, proposed_steps
 from themi.core.tasks import Task
@@ -81,3 +86,34 @@ def test_the_eval_checks() -> None:
     assert problems(["You should wash the clothes"], ()) == [
         "advice: 'You should wash the clothes'"
     ]
+
+
+# ----- BD3a: the Mini App's initData ---------------------------------------------------------
+
+TOKEN = "123:abc"
+NOW = datetime(2026, 10, 21, 16, 0, tzinfo=UTC)
+
+
+def init_data(user_id: int = 42, at: datetime = NOW, token: str = TOKEN, **more: str) -> str:
+    fields = {"auth_date": str(int(at.timestamp())), "query_id": "AAE",
+              "user": json.dumps({"id": user_id, "first_name": "Erin"}), **more}  # fmt: skip
+    fields["hash"] = sign_init_data(fields, token)
+    return urlencode(fields)
+
+
+def test_good_init_data_names_its_user() -> None:
+    assert check_init_data(init_data(), TOKEN, NOW + timedelta(seconds=20)) == 42
+
+
+def test_stale_init_data_is_refused() -> None:
+    assert check_init_data(init_data(), TOKEN, NOW + timedelta(seconds=61)) is None
+
+
+def test_forged_init_data_is_refused() -> None:
+    assert check_init_data(init_data(token="999:other"), TOKEN, NOW) is None
+    tampered = init_data().replace("%22id%22%3A+42", "%22id%22%3A+7")
+    assert "7" in tampered and check_init_data(tampered, TOKEN, NOW) is None
+    assert check_init_data("", TOKEN, NOW) is None
+    assert check_init_data("not a query", TOKEN, NOW) is None
+    unsigned = urlencode({"auth_date": str(int(NOW.timestamp())), "user": '{"id": 1}'})
+    assert check_init_data(unsigned, TOKEN, NOW) is None
