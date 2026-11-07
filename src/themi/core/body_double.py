@@ -854,9 +854,14 @@ class BodyDouble:
         False when it's not theirs, over, or out of date."""
         session = self.get(session_id)
         if session is None or session.member_id != member.id or session.ended_at is not None:
+            log.info("Session page tap %r on session %s refused: not theirs or over",
+                     action, session_id)  # fmt: skip
             return False
         if seq != session.seq:
+            log.info("Session page tap %r on session %s refused: seq %s, now %s",
+                     action, session_id, seq, session.seq)  # fmt: skip
             return False
+        log.info("Session page tap %r on session %s", action, session_id)
         target = session.row["card_message_id"]
         if session.phase == "asking" and session.ask_outbox_id is not None:
             target = self.services.outbox.message_id(session.ask_outbox_id) or target

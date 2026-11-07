@@ -13,6 +13,20 @@
   } catch (e) { /* storage off: the cookie or the ticket carries it */ }
   if (location.search.indexOf("ticket=") !== -1) history.replaceState(null, "", "/session" + location.hash);
 
+  // Problems in the page itself go to the server's log (Telegram's browser shows nothing).
+  var reported = 0;
+  function report(what) {
+    if (reported++ > 20) return;
+    try {
+      fetch("/session/report", { method: "POST", credentials: "same-origin", body: String(what).slice(0, 500),
+        headers: auth({ "Content-Type": "text/plain" }) }).then(function () {}, function () {});
+    } catch (e) { /* nothing more to do */ }
+  }
+  window.addEventListener("error", function (e) {
+    report("error: " + e.message + " at " + (e.filename || "").split("/").pop() + ":" + e.lineno);
+  });
+  window.addEventListener("unhandledrejection", function (e) { report("rejection: " + e.reason); });
+
   function auth(headers) {
     headers = headers || {};
     if (session) headers["X-Themi-Session"] = session;
@@ -206,8 +220,10 @@
       body: new URLSearchParams(new FormData(form)).toString(),
       headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }),
       credentials: "same-origin"
-    }).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (s) { if (s) redraw(s); }, function () {});
+    }).then(function (r) {
+      if (!r.ok) report("tap " + form.action.split("/").slice(-2).join("/") + " answered " + r.status);
+      return r.ok ? r.json() : null;
+    }).then(function (s) { if (s) redraw(s); }, function (e) { report("tap failed: " + e); });
   }
 
   // BD5a: the built-in loop; nothing plays until they tap Play (browsers insist anyway)

@@ -11,6 +11,8 @@ Nothing about energy is ever on it.
 
 from __future__ import annotations
 
+import contextlib
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -19,6 +21,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from themi.accounts.store import InvalidValue
 from themi.web.auth import COOKIE_NAME, SESSION_TTL
 from themi.web.kit import Kit, NotSignedIn
+
+log = logging.getLogger(__name__)
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -70,6 +74,18 @@ def routes(kit: Kit) -> APIRouter:
         # address, not a cookie: Telegram's in-app browser may drop cookies (bug 2026-11-07).
         ticket = kit.auth.create_link_token(member)
         return JSONResponse({"ticket": ticket}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/session/report")
+    async def page_report(request: Request) -> Response:
+        """What went wrong on the page itself (a script error, a refused request), so a
+        problem in Telegram's in-app browser shows in the server's log. Short text only."""
+        body = (await request.body())[:500].decode("utf-8", "replace")
+        who = "signed out"
+        with contextlib.suppress(NotSignedIn):
+            who = f"member {kit.current(request).member.id}"
+        log.warning("Session page (%s, %s): %s", who,
+                    request.headers.get("user-agent", "")[:80], " ".join(body.split()))  # fmt: skip
+        return Response(status_code=204)
 
     @router.post("/session/ticket")
     async def fresh_ticket(request: Request) -> JSONResponse:

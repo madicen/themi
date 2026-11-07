@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlencode
 
 import httpx
+import pytest
 
 from tests.fakes.telegram_api import BOT_TOKEN
 from tests.fixtures.web import csrf_of, sign_in
@@ -177,3 +178,25 @@ async def test_the_mini_app_works_when_the_webview_drops_cookies(scenario: Scena
         assert state.status_code == 200 and state.json()["active"] is True
         again = await site.get(f"/session?ticket={ticket}")  # a ticket works once
         assert "Opening your session" in again.text
+
+
+async def test_the_page_reports_its_own_problems_to_the_log(
+    scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    answer = await site.post("/session/report", content=b"tap 3/act answered 403" + b"x" * 900)
+    assert answer.status_code == 204
+    (record,) = [r for r in caplog.records if r.name == "themi.web.session_pages"]
+    assert "member 1" in record.getMessage() and "tap 3/act answered 403" in record.getMessage()
+    assert len(record.getMessage()) < 700  # short text only
+
+
+async def test_a_refused_page_tap_says_why_in_the_log(
+    scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="themi.core.body_double")
+    csrf = await sign_in(scenario, site, "Erin")
+    session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SPRINT)
+    await site.post(f"/session/{session.id}/act",
+                    data={"csrf": csrf, "action": "stop", "seq": session.seq + 5})  # fmt: skip
+    assert any("refused: seq" in r.getMessage() for r in caplog.records)
