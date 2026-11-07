@@ -106,3 +106,21 @@ def test_a_cloudflare_backend_can_lead_the_step_picture_route(family: SeededFami
     assert entry.config.kind == "cloudflare"
     assert entry.config.resolved_model == "@cf/black-forest-labs/flux-1-schnell"
     assert isinstance(build_provider(entry.config), CloudflareProvider)
+
+
+async def test_a_display_name_for_the_model_still_reaches_flux() -> None:
+    """Bug (2026-11-07, the Pi): the backend's model was saved as "FLUX.1 schnell", which
+    Cloudflare answers with 400 "No route for that URI". Anything that isn't a Workers AI
+    model ID (`@cf/...`, `@hf/...`) runs the default model."""
+    SEEN.clear()
+    named = CloudflareProvider(
+        Secret("cf-token"), "acct123", "FLUX.1 schnell",
+        transport=httpx.MockTransport(lambda request: SEEN.append(request) or ok(JPEG)),
+    )  # fmt: skip
+    assert named.model == "@cf/black-forest-labs/flux-1-schnell"
+    await named.image("x")
+    assert SEEN[-1].url.path.endswith("/ai/run/@cf/black-forest-labs/flux-1-schnell")
+    other = CloudflareProvider(
+        Secret("t"), "acct123", "@cf/stabilityai/stable-diffusion-xl-base-1.0"
+    )
+    assert other.model == "@cf/stabilityai/stable-diffusion-xl-base-1.0"  # a real ID is kept
