@@ -122,6 +122,8 @@ class Services(Registry):
     preference_models: list[type[Preferences]] = field(default_factory=list)
     # CR7c: each loaded module's household settings, for the family and accounts pages.
     household_models: list[type[HouseholdSettings]] = field(default_factory=list)
+    # CR7d: the settings form's sections from modules, as (order, template).
+    settings_sections: list[tuple[int, str]] = field(default_factory=list)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)

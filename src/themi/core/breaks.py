@@ -68,6 +68,7 @@ class BreaksModule(Module):
     preferences = BreaksPreferences
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/breaks.html", 30)
         ctx.provide(Breaks(ctx.services)).install()
 
 

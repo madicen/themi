@@ -232,6 +232,7 @@ class CozylaChoresModule(Module):
         return cls(wall) if wall and wall.config.chores else None
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/chart.html", 50)
         _wall_in_family_time(ctx, self.client)
         s, tasks = ctx.services, ctx.get(TaskBoard)
         chart = ctx.provide(CozylaChores(s, tasks, self.client))

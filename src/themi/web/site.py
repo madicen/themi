@@ -382,6 +382,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 else []
             ),
             "job_modes": job_modes(member),  # BD2
+            "sections": settings_sections(app.services),  # CR7d: core's and modules', in order
             "prefs": {  # CR7a: each loaded module's preferences, by module
                 model.module: app.store.preferences(member.id, model)
                 for model in app.services.preference_models
@@ -618,6 +619,22 @@ class Menu:
             }
         )
         return items
+
+
+# CR7d: the settings form's own sections, as (order, template). Modules add theirs between
+# (breaks 30, body double 40, the chore chart 50, email 70).
+CORE_SETTINGS = (
+    (10, "settings/quiet.html"),
+    (20, "settings/limit.html"),
+    (60, "settings/calendars.html"),
+    (80, "settings/phrasing.html"),
+    (90, "settings/gentle.html"),
+    (100, "settings/tracking.html"),
+)
+
+
+def settings_sections(services: Any) -> list[str]:
+    return [template for _, template in sorted([*CORE_SETTINGS, *services.settings_sections])]
 
 
 def from_form(model: type[Preferences], form: Any, shown: set[str] | None = None) -> dict[str, Any]:

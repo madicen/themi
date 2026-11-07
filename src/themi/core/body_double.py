@@ -1212,6 +1212,7 @@ class BodyDoubleModule(Module):
     preferences = BodyDoublePreferences
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/body_double.html", 40)
         from themi.web import session_pages
 
         ctx.web(session_pages.routes)

@@ -69,3 +69,34 @@ async def test_saving_the_form_saves_the_preferences(
     assert (bd.sprint_work_minutes, bd.sprint_break_minutes) == (45, 10)
     bad = await site.post("/settings", data={**form, "sprint_work_minutes": "200"})
     assert bad.status_code == 400 and "a sprint&#39;s work block is between" in bad.text
+
+
+async def section_ids(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
+    await sign_in(scenario, site, "Erin")
+    page = (await site.get("/settings")).text
+    form = page[page.index('<form method="post" action="/settings"') :]
+    form = form[: form.index("</form>")]
+    return re.findall(r'<details[^>]* id="([a-z-]+)"', form) or re.findall(
+        r'class="row[^"]*" id="([a-z-]+)"', form
+    )
+
+
+# CR7d: the sections, in the order the page had before they came from modules.
+SECTIONS = [
+    "quiet", "limit", "breaks", "body-double", "chart", "calendars", "email", "phrasing",
+    "pda", "tracking",
+]  # fmt: skip
+
+
+@pytest.mark.usefixtures(*CONNECTORS)
+async def test_the_family_sections_keep_their_order(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    assert await section_ids(scenario, site) == SECTIONS
+
+
+async def test_a_module_left_out_takes_its_section_with_it(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    found = await section_ids(scenario, site)  # no Cozyla, no Gmail
+    assert found == [s for s in SECTIONS if s not in ("chart", "email")]

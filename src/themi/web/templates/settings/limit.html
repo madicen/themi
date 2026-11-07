@@ -1,0 +1,6 @@
+{# CR7d: a section of the settings form, the core's. #}
+{% from "_row.html" import row %}
+  {% call(part) row("How often Themi starts a conversation", meta="At most " ~ member.daily_limit ~ " a day", id="limit") %}{% if part == "body" %}
+    <label>At most <input type="number" name="daily_limit" min="0" max="50" value="{{ member.daily_limit }}" required> messages a day</label>
+    <p class="muted">Replies to you and urgent alerts don't count.</p>
+  {% endif %}{% endcall %}

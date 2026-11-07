@@ -121,6 +121,7 @@ themi = [
     "storage/schema/*.sql",
     "templates/*.toml",
     "web/templates/*.html",
+    "web/templates/*/*.html",
     "web/static/*",
     "web/static/*/*",
 ]

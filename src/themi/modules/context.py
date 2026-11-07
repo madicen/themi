@@ -140,6 +140,11 @@ class ModuleContext:
         """CR7a: a member's preferences for a module (the store holds them)."""
         return self.services.store.preferences(member.id, model)
 
+    def settings_section(self, template: str, order: int) -> None:
+        """CR7d: a section of the settings form (a template under the site's templates),
+        placed among the core's by `order` (quiet hours 10 ... what Themi notices 100)."""
+        self.services.settings_sections.append((order, template))
+
     def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
         """CR4: the module's website pages, and where they go in the menu."""
         self.services.web_pages.append(WebPages(routes, menu))

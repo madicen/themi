@@ -64,6 +64,7 @@ class GmailModule(Module):
     requires = ("google",)
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/email.html", 70)
         s = ctx.services
         gmail = GmailSync(s.store, ctx.get(GoogleAccounts), s.outbox)
         ctx.provide(gmail)

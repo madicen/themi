@@ -286,10 +286,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR5b | Core refactor: a settings model per module | Core refactor | [x] 2026-11-07 |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [x] 2026-11-07 |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [x] 2026-11-07 |
-| CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | split |
+| CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | split, [x] 2026-11-07 |
 | CR7b1 | Core refactor: the other per-member feature settings as preferences | Core refactor | [x] 2026-11-07 |
 | CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [x] 2026-11-07 |
-| CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [ ] |
+| CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [x] 2026-11-07 |
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
 | CR10 | Core refactor: workspace packages | Core refactor | [ ] |
@@ -14452,7 +14452,7 @@ Notes:
   tests build their old family without the seeded settings.
 
 ### CR7d · Core refactor: the settings page in sections from the modules
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR7c
 - Each module with preferences contributes its section of the settings page (a template
   fragment and its form handling) through `ModuleContext`; the page assembles them in
@@ -14461,6 +14461,20 @@ Depends on: CR7c
 - The core sections (quiet hours, messages, phrasing and the rest) stay in the page.
 Tests: the family's form fields and section order as before; a module left out takes its
 section with it.
+
+Notes:
+- The settings form is one partial per section in `web/templates/settings/`. The page
+  includes them in order: the core's (`CORE_SETTINGS` in `site.py`: quiet hours 10,
+  message limit 20, calendars 60, phrasing 80, gentle phrasing 90, what Themi notices 100)
+  and the modules' through `ctx.settings_section(template, order)`: breaks 30, body double
+  40, the chore chart 50 (cozyla_chores), email 70 (gmail).
+- Saving was already generic (CR7a's `from_form` over each loaded module's model).
+- The calendars and phrasing sections stay core: each mixes several modules' inputs (the
+  calendar's, the day summary's, travel's and lists'; check-in reviews', praise's, focus's,
+  conversation mode's), each guarded by its module. Splitting them would change the page;
+  a later pack that wants its own section adds one with `settings_section`.
+- Templates still live in the site's folder; CR10 gives packs their own template folders.
+- Tests: the full family's sections keep their order; a module left out takes its section.
 
 ### CR8 · Core refactor: the prompt and tool groups from parts
 Status: [ ]
