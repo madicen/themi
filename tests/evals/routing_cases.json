@@ -914,6 +914,47 @@
    "tools": [
     "find_web_recipe"
    ]
+  },
+  {
+   "id": "bd-sit",
+   "kind": "plain",
+   "message": "Sit with me while I do the taxes",
+   "tools": [
+    "start_body_double"
+   ]
+  },
+  {
+   "id": "bd-name",
+   "kind": "plain",
+   "message": "Can you body double me for the dishes?",
+   "tools": [
+    "start_body_double"
+   ]
+  },
+  {
+   "id": "bd-pomodoro",
+   "kind": "plain",
+   "message": "Pomodoro the laundry",
+   "tools": [
+    "start_body_double"
+   ]
+  },
+  {
+   "id": "bd-company",
+   "kind": "paraphrase",
+   "message": "I could use some company while I tackle the inbox",
+   "tools": [
+    "start_body_double"
+   ]
+  },
+  {
+   "id": "bd-switch",
+   "kind": "follow-up",
+   "message": "Actually, let's do sprints",
+   "before": "Keep me company while I write",
+   "tools": [
+    "switch_body_double_mode"
+   ]
   }
  ]
 }

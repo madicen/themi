@@ -17,6 +17,7 @@ from themi.accounts import Member
 from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
 from themi.ai.settings import AITask, RouteEntry
 from themi.connectors.google.oauth import LINK_SCOPES
+from themi.core.body_double import MODE_WORDS
 from themi.core.groceries import list_summary
 from themi.storage.secrets import Secret
 
@@ -67,6 +68,10 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
             services.lists.create(member, step["list"], personal=False)
         elif "noise" in step:
             await _noise(scenario, member, step["noise"])
+        elif "body_double" in step:  # BD1a: a session going on, {"body_double": "sprint"}
+            assert services.body_double is not None
+            mode = MODE_WORDS[step["body_double"]]
+            await services.body_double.start(member, mode=mode, label="my work")
         elif "routine" in step:
             assert scenario.cozyla is not None, "a routine case needs the fake wall"
             uid = f"m-{case.speaker.lower()}"

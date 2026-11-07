@@ -97,7 +97,7 @@ async def test_the_routing_cases_load_and_name_built_tools(
     fake_travel: FakeTravel,
 ) -> None:
     cases = load_routing_cases()
-    assert 80 <= len(cases) <= 110
+    assert 80 <= len(cases) <= 130
     assert len({c.id for c in cases}) == len(cases)
     assert {c.category for c in cases} == set(KINDS)
     built = {s.name for s in scenario.app.services.tools.specs()}
