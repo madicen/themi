@@ -50,6 +50,7 @@ from themi.core.body_double_modes import ModeChooser
 from themi.core.body_double_music import MusicOffers
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
+from themi.core.business_hours import BusinessHours
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
 from themi.core.calendar_copies import CalendarCopies
@@ -239,6 +240,8 @@ def build_app(
         EmailAudit(services, tasks).install()
     reminders = Reminders(services, tasks)
     reminders.install()
+    business_hours = BusinessHours(services, tasks)  # F34k
+    business_hours.install()
     day_summary = DaySummary(services, tasks)
     day_summary.install()
     Focus(services, tasks, day_summary).install()
@@ -319,6 +322,7 @@ def build_app(
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
+        PeriodicTask("tasks.closing", timedelta(minutes=15), business_hours.check),  # F34k
         PeriodicTask("calendar.morning", timedelta(minutes=5), day_summary.morning),
         PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
         PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),

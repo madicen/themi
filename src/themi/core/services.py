@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from themi.core.body_double import BodyDouble
     from themi.core.breaks import Breaks
     from themi.core.burnout import Burnout
+    from themi.core.business_hours import BusinessHours
     from themi.core.buying import ThingsToBuy
     from themi.core.calendar_copies import CalendarCopies
     from themi.core.calls import VendorCalls
@@ -202,6 +203,7 @@ class Services:
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
     web_search: WebSearch | None = None  # looking things up online (F30d)
+    business_hours: BusinessHours | None = None  # F34k: a call before the business closes
     guides: Guides | None = None  # the family's own guides (F29ha)
     recipes: Recipes | None = None  # the family cookbook, from its Google Doc (RC1a)
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
