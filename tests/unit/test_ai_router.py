@@ -447,3 +447,20 @@ async def test_hedging_can_be_turned_off(
     claude.take(30).queue_text("Hi")
     await router.client_for(family.erin.id, AITask.CONVERSATION).chat("s", hello())
     assert len(claude.requests) == 1
+
+
+async def test_a_structured_call_with_a_picture_skips_backends_that_cant_see_one(
+    family: SeededFamily, ai: AISettingsStore, factory: Factory, router: AIRouter
+) -> None:
+    """F34m: a recipe copied from a picture goes to a backend that sees pictures."""
+    two_step_chain(family, ai)
+    blind = factory.provider(ERIN_CLAUDE, capabilities=Capabilities(images=False))
+    seeing = factory.provider(ERIN_GEMINI, capabilities=Capabilities(images=True))
+    seeing.queue_structured({"name": "Soup"})
+    picture = ImageBlock(b"jpeg", "image/jpeg")
+    client = router.client_for(family.erin.id, AITask.RECIPES)
+    result = await client.structured("s", "copy it", {"type": "object"}, images=[picture])
+    assert result.data == {"name": "Soup"} and blind.requests == []
+    assert seeing.requests[-1].images == (picture,)
+    blind.queue_structured({"name": "Words"})
+    assert (await client.structured("s", "p", {"type": "object"})).data == {"name": "Words"}

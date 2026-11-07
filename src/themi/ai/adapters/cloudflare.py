@@ -35,6 +35,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StructuredResponse,
@@ -135,6 +136,7 @@ class CloudflareProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         raise CapabilityError("this Cloudflare backend only makes pictures")
 

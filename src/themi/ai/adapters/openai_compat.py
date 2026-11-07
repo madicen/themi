@@ -37,6 +37,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StopReason,
@@ -139,6 +140,7 @@ class OpenAICompatProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         if not self.capabilities.structured:
             raise CapabilityError(f"{self.name}:{self.model} is configured without JSON output")
@@ -155,7 +157,7 @@ class OpenAICompatProvider:
         completion = await self._call(
             self._client.chat.completions.create(
                 model=self.model,
-                messages=_messages(system, [Message.user(prompt)]),
+                messages=_messages(system, [Message("user", (TextBlock(prompt), *images))]),
                 max_tokens=max_tokens,
                 response_format=response_format,  # type: ignore[arg-type]
             )

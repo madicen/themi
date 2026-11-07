@@ -134,11 +134,19 @@ class AnthropicProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         params: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [_block_param(b) for b in (TextBlock(prompt), *images)]
+                    if images
+                    else prompt,
+                }
+            ],
             "output_config": {
                 "effort": self.effort,
                 "format": {"type": "json_schema", "schema": schema},

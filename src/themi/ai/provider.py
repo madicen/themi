@@ -21,6 +21,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StructuredResponse,
@@ -69,6 +70,7 @@ class Provider(Protocol):
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse: ...
 
     async def transcribe(

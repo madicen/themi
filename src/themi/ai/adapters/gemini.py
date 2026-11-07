@@ -129,6 +129,7 @@ class GeminiProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         config = types.GenerateContentConfig(
             system_instruction=system or None,
@@ -137,7 +138,7 @@ class GeminiProvider:
             response_json_schema=schema,
         )
         response = await self._generate(
-            [types.Content(role="user", parts=[types.Part(text=prompt)])], config
+            [types.Content(role="user", parts=_parts([TextBlock(prompt), *images]))], config
         )
         if _finish_name(_first_candidate(response)) == "MAX_TOKENS":
             raise MalformedOutputError("gemini structured output was cut off at max_tokens")
