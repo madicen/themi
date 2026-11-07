@@ -123,6 +123,10 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
             line = "document.querySelector('.session-line') && " \
                    "document.querySelector('.session-line').textContent"  # fmt: skip
             assert (await until(lambda: tab.value(line))).startswith("Here's how I'd break it up")
+            # The line is in the server's HTML, but session.js is deferred: a tap before it ran
+            # was a plain form post that left the page (flaky on a busy CI runner, 2026-11-07).
+            # "complete" comes after deferred scripts have run.
+            assert await until(lambda: tab.value("document.readyState === 'complete'"))
             await tab.value("document.querySelector('.session-moves button').click()")
             moved = await until(
                 lambda: tab.value(f"({line}) === 'Spray the shower' ? 'moved' : ''")
