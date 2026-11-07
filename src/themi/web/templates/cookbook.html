@@ -21,6 +21,9 @@ can open only the doc you pick here.</p>
 <div id="picker" data-client="{{ client_id }}" data-key="{{ picker_key }}" data-app="{{ project_number }}" data-address="{{ account.address }}">
   <button id="pick" class="primary" type="button">{% if cookbook.doc_id %}Choose a different doc{% else %}Choose the cookbook doc{% endif %}</button>
   <p class="alert problem" hidden>Google's file picker didn't load. Try again, or paste the doc's link below.</p>
+  <p class="muted">If Google says <em>invalid_client</em> or <em>origin_mismatch</em>, the OAuth client
+  needs <code>{{ origin }}</code> under Authorized JavaScript origins (Google Cloud console,
+  Clients, the Web client Themi uses), then a few minutes to take effect.</p>
 </div>
 {% endif %}
 <form id="picked" method="post" action="/accounts/{{ account.id }}/cookbook" class="stack">
