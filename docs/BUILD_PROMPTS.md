@@ -223,7 +223,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [x] 2026-11-06 |
 | BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
-| BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
+| BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
 | BD3b | Body double: Themi the chameleon | Body double | [ ] |
 | BD4a | AI layer: image generation | Body double | [ ] |
 | BD4b | Body double: a picture for each step | Body double | [ ] |
@@ -11502,7 +11502,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0128).
 
 ### BD3a · Body double: the session page and the Telegram Mini App
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1a, W1
 Read first: the plan's "The management site" and "Reaching the site" (Funnel); W1's notes
 (the shell and kit); this section's intro.
@@ -11523,6 +11523,34 @@ Read first: the plan's "The management site" and "Reaching the site" (Funnel); W
 Tests: unit tests for `initData` checking (good, stale, forged, unknown user), the state
 endpoint per mode; integration tests for page access (someone else's session is 404); a
 scenario where Next on the page edits the chat message.
+
+Notes (2026-11-06):
+- `themi.web.session_pages`: `GET /session` (a page of its own, no menu bar), `GET
+  /session/state` (JSON), `POST /session/{id}/act` (CSRF-checked; someone else's is 404; an
+  old `seq` does nothing) and `POST /session/telegram`.
+- Mini App sign-in: Telegram puts `tgWebAppData` in the page's URL fragment, so the page's
+  own script posts it to `/session/telegram` (no Telegram script is loaded; the CSP stays
+  same-origin). `themi.channels.mini_app.check_init_data` checks the HMAC with the bot's
+  token, `auth_date` under a minute old, and the user's Telegram id against the family;
+  anything else is 403. Good data starts an ordinary site session (the same cookie).
+- The session page alone may be framed by `https://web.telegram.org` (Telegram's web app
+  shows Mini Apps in a frame), so it has no `X-Frame-Options` and its own
+  `frame-ancestors`; every other page is unchanged.
+- [Open] is a `web_app` button (`Button.web_app`, kept through the outbox), added to every
+  session's first message by a start decorator, only when `site_url` is https (Telegram
+  refuses others, so local runs have none). No BotFather setup is needed for inline
+  Mini App buttons.
+- Deviation: the page polls the JSON with its own small script (`static/session.js`)
+  rather than htmx, since it draws the timer from the same data. Taps post with fetch and
+  redraw from the JSON reply; without the script they're plain forms. `navigator.wakeLock`
+  keeps the screen on where offered.
+- The state: mode, label, phase, a line (the question, the step, "Quiet until 10 am."),
+  the timer (`down` to the block's end in a sprint, `up` from the start otherwise), the
+  step count in Guided, and the same buttons as chat for that moment. Never the energy
+  level. A page tap goes through `BodyDouble.act_from_page`, which also edits the chat
+  message showing the session (the question, or the guided card).
+- Checked by eye at 360px in light and dark with headless Chrome: no sideways scroll; the
+  scene is a plain panel until BD3b.
 
 ### BD3b · Body double: Themi the chameleon
 Status: [ ]
