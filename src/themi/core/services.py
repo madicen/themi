@@ -18,6 +18,7 @@ from themi.autonomy import Autonomy
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Outbox
+from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
@@ -213,6 +214,8 @@ class Services:
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
     web_recipes: WebRecipes | None = None  # recipes from a link or a search (RC4a, RC4b)
     cookbook_save: CookbookSave | None = None  # a liked recipe into the cookbook doc (RC5)
+    # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
+    kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     recipe_ideas: RecipeIdeas | None = None  # cookbook recipes the pantry covers (RC7)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)

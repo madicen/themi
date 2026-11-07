@@ -25,8 +25,6 @@ import random
 import re
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager, suppress
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from themi import clock
@@ -279,17 +277,7 @@ PICTURE_OPEN = (
 )
 PICTURE_NOW = "with this message"
 PICTURE_BEFORE = "a moment ago (not with this message: it's the one their words may mean)"
-# F34l: their latest picture is kept in memory, for a follow-up ("yes", "make it 4 pm").
-PICTURE_KEPT_FOR = timedelta(minutes=30)
-PICTURE_KEPT_TURNS = 2
 PICTURE_COMMANDS = frozenset({"/bug", "/idea"})  # a caption that's a command (F34o)
-
-
-@dataclass
-class _KeptPicture:
-    picture: Picture
-    at: datetime
-    left: int = PICTURE_KEPT_TURNS
 
 
 PICTURE_CLOSE = "</data>"
@@ -318,7 +306,6 @@ class Agent:
         self.max_steps = max_steps
         self.history = history
         self._rng = rng or random.Random()
-        self._pictures: dict[int, _KeptPicture] = {}  # F34l: never on disk
 
     async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
         """Something said in the family group (34b) is answered there: the outbox sends
@@ -363,7 +350,7 @@ class Agent:
             if self._pictures_today(member) > self._picture_cap(member):
                 await self._reply(member, PICTURE_CAP_TEXT)
                 return
-            self._pictures[member.id] = _KeptPicture(event.picture, clock.now())
+            self.services.kept_pictures.keep(member.id, event.picture)  # F34l
             text = event.text
         else:
             text = event.text
@@ -596,16 +583,8 @@ class Agent:
         return any(r["telegram_message_id"] not in cards for r in rows)
 
     def _earlier_picture(self, member: Member) -> Picture | None:
-        """F34l: their latest picture, for the next two messages within half an hour. Each
-        use counts one; then it's forgotten."""
-        kept = self._pictures.get(member.id)
-        if kept is None:
-            return None
-        if kept.left <= 0 or clock.now() - kept.at > PICTURE_KEPT_FOR:
-            del self._pictures[member.id]
-            return None
-        kept.left -= 1
-        return kept.picture
+        """F34l: their latest picture, for the next two messages within half an hour."""
+        return self.services.kept_pictures.use(member.id)
 
     async def _converse(
         self,

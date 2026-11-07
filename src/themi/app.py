@@ -305,7 +305,8 @@ def build_app(
     Reactions(services).install()
     WrongReplies(services).install()
     Commands(services).install()
-    FeedbackChat(services).install()
+    feedback = FeedbackChat(services)
+    feedback.install()
     agent = Agent(services)
     channel.handler = agent
     if services.google is not None and google is not None:
@@ -336,6 +337,10 @@ def build_app(
         PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
         PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
         PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
+        # F34o: a report's screenshots go after 60 days, reviewed or not
+        PeriodicTask(
+            "feedback.forget_pictures", timedelta(days=1), _async(feedback.book.forget_pictures)
+        ),
     ]
     server = ServerControl(services, control_dir)
     server.install()
