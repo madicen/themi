@@ -11771,6 +11771,11 @@ Notes (2026-11-06):
   picture model has no tools or instructions to take over and draws whatever it's sent. Six
   test pictures (sink, mop, towels) came out text-free, with Themi doing each chore. A redo
   is the step plus their words; the old prompt isn't stacked on.
+- Fix (2026-11-07, Michael: the picture's space showed but stayed empty). The pictures were
+  made (session 9's all on the Pi), but the page fetches each with its session header and
+  shows it from a `blob:` address, which the CSP's `img-src 'self' data:` refused. The
+  session page alone now allows `blob:` images. The headless-Chrome test now also runs the
+  picture job and checks the step's picture actually loads on the page.
 
 ### BD5a · Body double: built-in music
 Status: [x] 2026-11-06

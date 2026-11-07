@@ -127,6 +127,14 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
                 lambda: tab.value(f"({line}) === 'Spray the shower' ? 'moved' : ''")
             )
             assert moved == "moved"
+            # BD4b, bug 2026-11-07: the picture was made but never showed. The page loads it
+            # with its session header into a blob: address, which the CSP refused.
+            await scenario.run_jobs()  # the step pictures (the scripted model's PNG)
+            shown = await until(lambda: tab.value(
+                "(() => { const i = document.querySelector('.session-picture img');"
+                " return !!i && !i.hidden && i.complete && i.naturalWidth > 0; })()"
+            ))  # fmt: skip
+            assert shown, "the step's picture never loaded on the page"
         row = scenario.app.db.one("SELECT phase, step FROM body_double_sessions ORDER BY id DESC")
         assert row is not None and (row["phase"], row["step"]) == ("work", 0)
     finally:
