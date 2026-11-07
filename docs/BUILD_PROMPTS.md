@@ -220,7 +220,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34a | Feedback: in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools | Feedback | [x] 2026-11-07 |
 | F34b | Feedback: the chat reply's ideas fit the question, and a cut reply isn't a fragment | Feedback | [x] 2026-11-07 |
 | F34ca | Feedback: a round moved off its days shows on the wall, and skip_round | Feedback | [x] 2026-11-07 |
-| F34cb | Feedback: a distance that isn't the plan's, and Sunday after a Saturday run | Feedback | [ ] |
+| F34cb | Feedback: a distance that isn't the plan's, and Sunday after a Saturday run | Feedback | [x] 2026-11-07 |
 | F34da | Feedback: merging two events, "mine" on the family calendar, a failure said | Feedback | [x] 2026-11-07 |
 | F34db | Feedback: an event just added is read again first | Feedback | [x] 2026-11-07 |
 | F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
@@ -11280,11 +11280,28 @@ Notes (2026-11-07):
 - Setup: restart `themi run`. No migration.
 
 ### F34cb · Feedback (2026-11-07): a distance that isn't the plan's, and Sunday after a Saturday run
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34ca, F9c
 - From F34c's Build: the one-choice question when they say a distance that isn't this
   week's ("Keep 1.3 this week, or keep the plan?"), and F9a's other wall gap (after a
   Saturday run, Sunday still shows unticked).
+
+Notes (2026-11-07):
+- `Progression.weeks`: one week's own amount, by that week's step day, in the stored JSON
+  ("weeks"). `amount_on` uses it; `planned_on` is the plan without it; the next week goes
+  back to the plan as stored (1.3 this week, 1.75 next Tuesday).
+- `amount_said(text, unit)` finds "1.3 miles", "2 mi", "a 5k", "25 minutes" in what they
+  said. `TaskBoard.ask_week_amount` asks "This week's plan says 1.5 miles. Keep 1.3 this
+  week, or keep the plan?" with "1.3 this week" / "Keep the plan" buttons, for the round's
+  week. It's asked from `skip_round` and `snooze_task` when their words have an amount in
+  the plan's unit that isn't this week's; then `skip_round`'s line doesn't end the turn.
+  There's no tool of its own: a plain "I'll only do 1.3 this week" with no move isn't
+  caught yet.
+- The wall: `CozylaRoutines._rest_of_round` ticks the rest of an either-day round on each
+  of its later days, on that day (Sunday is ticked at Sunday's first sync, so the wall is
+  never asked to tick a day still to come), and marks the tick seen so it isn't read back
+  as another run. A Saturday tick made on the wall works the same way.
+- Setup: restart `themi run`. No migration.
 
 ### F34d · Feedback (2026-11-07): merging two events into one, and a change that failed is said
 Status: split into F34da [x] and F34db [x] (2026-11-07)
