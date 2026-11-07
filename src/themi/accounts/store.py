@@ -153,6 +153,8 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         break_extend_minutes=row["break_extend_minutes"],
         sprint_work_minutes=row["sprint_work_minutes"],
         sprint_break_minutes=row["sprint_break_minutes"],
+        body_double_sound=row["body_double_sound"],
+        body_double_volume=row["body_double_volume"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
         calendar_details=row["calendar_details"],
         morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
@@ -416,6 +418,8 @@ class AccountStore:
         break_extend_minutes: int | None = None,
         sprint_work_minutes: int | None = None,  # BD1a
         sprint_break_minutes: int | None = None,
+        body_double_sound: str | None = None,  # BD5a
+        body_double_volume: int | None = None,
         noise_emails: str | None = None,  # one of NOISE_EMAILS
         conversation_mode: bool | None = None,  # CM1a
     ) -> Member:
@@ -479,6 +483,16 @@ class AccountStore:
             if not 1 <= sprint_break_minutes <= 30:
                 raise InvalidValue("a sprint's break is between 1 and 30 minutes")
             changes["sprint_break_minutes"] = sprint_break_minutes
+        if body_double_sound is not None:
+            from themi.core.body_double_music import LOOPS
+
+            if body_double_sound not in LOOPS:
+                raise InvalidValue(f"the sounds are {', '.join(LOOPS)}")
+            changes["body_double_sound"] = body_double_sound
+        if body_double_volume is not None:
+            if not 0 <= body_double_volume <= 100:
+                raise InvalidValue("the volume is between 0 and 100")
+            changes["body_double_volume"] = body_double_volume
         if chart_counts_shared is not None:
             changes["chart_counts_shared"] = int(chart_counts_shared)
         if calendar_details is not None:

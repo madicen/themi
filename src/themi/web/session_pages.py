@@ -16,6 +16,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
+from themi.accounts.store import InvalidValue
 from themi.web.auth import COOKIE_NAME, SESSION_TTL
 from themi.web.kit import Kit, NotSignedIn
 
@@ -68,6 +69,20 @@ def routes(kit: Kit) -> APIRouter:
         bd = body_double()
         state = bd.state(signed.member) if bd is not None else {"active": False}
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
+    @router.post("/session/music")
+    async def session_music(request: Request) -> Response:
+        """BD5a: their loop and volume, kept for next time."""
+        signed, form = await kit.checked(request)
+        from themi.core.body_double_music import set_sound
+
+        sound = str(form.get("sound", "")) or None
+        try:
+            volume = int(str(form["volume"])) if form.get("volume") not in (None, "") else None
+            set_sound(app.store, signed.member, sound, volume)
+        except (ValueError, InvalidValue):
+            return Response(status_code=400)
+        return Response(status_code=204)
 
     @router.post("/session/chat")
     async def session_chat(request: Request) -> Response:

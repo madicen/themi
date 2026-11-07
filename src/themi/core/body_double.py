@@ -223,6 +223,9 @@ class BodyDouble:
         s.group_sources.append(lambda m: {"body_double"} if self.current(m) else set())
         for t in (start_body_double, switch_body_double_mode, end_body_double):
             s.tools.register(t)
+        from themi.core.body_double_music import choose_session_sound
+
+        s.tools.register(choose_session_sound)  # BD5a
         self.start_decorators.append(self._open_button)
 
     async def _open_button(
@@ -744,12 +747,26 @@ class BodyDouble:
             "now": to_utc_iso(now),
             **steps,
             **(self.pictures.page_state(session) if self.pictures is not None else {}),
+            "music": self.music_state(member),
             "buttons": [
                 {"label": b.label, "action": b.payload.get("action", ""),
                  "mode": b.payload.get("mode", "")}
                 for b in self.page_buttons(session)
             ],
         }  # fmt: skip
+
+    def music_state(self, member: Member) -> dict[str, Any]:
+        """The page's built-in loop and volume (BD5a); it plays only when they tap play."""
+        from themi.core.body_double_music import LOOPS
+
+        member = self.store.get_member(member.id)
+        loop = LOOPS.get(member.body_double_sound) or LOOPS["lofi"]
+        return {
+            "sound": loop.key,
+            "volume": member.body_double_volume,
+            "file": loop.file,
+            "loops": [{"key": k.key, "name": k.name, "file": k.file} for k in LOOPS.values()],
+        }
 
     def scene(self, session: Session) -> str:
         """The chameleon's animation state now (BD3b)."""

@@ -255,7 +255,8 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         "body double sessions: quiet company, sprints, step by step",
         r"body.?doubl|sit with me|keep me company|company while|pomodoro|sprints?\b|"
         r"work (?:alongside|with me)|stay with me while|focus session|while i (?:work|do)|"
-        r"quiet instead|step by step instead|always use (?:pomodoro|sprints|quiet)",
+        r"quiet instead|step by step instead|always use (?:pomodoro|sprints|quiet)|"
+        r"\blofi\b|lo-fi|brown noise|play (?:some )?(?:rain|piano)",
     ),
     "settings": (
         "pausing messages, breaks, phrasing, quiet hours",
@@ -500,6 +501,7 @@ TOOL_GROUPS: dict[str, str] = {
             "set_job_category",
             "redo_step_picture",  # BD4b
             "send_step_picture",
+            "choose_session_sound",  # BD5a
         ),
         "body_double",
     ),

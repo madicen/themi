@@ -51,6 +51,14 @@
     </form>
   {% endfor %}
   </div>
+  <section class="session-music" aria-label="Music">
+    <button class="session-play" type="button" aria-pressed="false">Play</button>
+    <select name="sound" aria-label="Which sound">
+      {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
+    </select>
+    <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
+    <audio loop preload="none" src="{{ asset('audio/' ~ state.music.file) }}"></audio>
+  </section>
   <button class="session-chat-open" type="button" {% if state.phase != "break" %}hidden{% endif %}>Chat</button>
   <section class="session-chat" aria-label="Chat with Themi" hidden>
     <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>

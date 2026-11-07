@@ -369,3 +369,9 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 .session-redo input[type="text"] { flex: 1; min-width: 0; min-height: var(--tap); }
 .session-note:empty { display: none; }
 @media (prefers-reduced-motion: reduce) { .session-picture-wait { animation: none !important; } }
+
+/* BD5a: the built-in loop's controls */
+.session-music { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.session-music select { flex: 1 1 8rem; min-height: var(--tap); }
+.session-music input[type="range"] { flex: 1 1 6rem; min-width: 0; }
+.session-play { min-height: var(--tap); min-width: 5rem; }
