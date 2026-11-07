@@ -542,3 +542,46 @@ async def test_not_now_leaves_the_music_alone(scenario: Scenario) -> None:
     assert scenario.member("Erin").body_double_sound == "rain"
     await scenario.say("Erin", "/bodydouble quiet 30")  # no words, no kind of job: no offer
     assert "while you work" not in scenario.inbox("Erin")[-1]
+
+
+async def test_proposed_steps_still_answer_after_twenty_minutes(scenario: Scenario) -> None:
+    """Bug (2026-11-07, Michael on the Pi): 20 minutes after steps were proposed, the
+    step-check job bumped the session's seq though nothing changed, so [Go], [Change them]
+    and [No steps] on the chat card did nothing at all."""
+    scenario.primary.queue_tool_call(
+        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom"}
+    )
+    scenario.primary.queue_structured(
+        {"steps": [{"text": "Spray the shower", "optional": False},
+                   {"text": "Mop the floor", "optional": False}]}
+    )  # fmt: skip
+    await scenario.say("Erin", "walk me through cleaning the bathroom")
+    await scenario.advance(minutes=21)
+    await scenario.run_jobs()
+    await scenario.tap("Erin", "Go")
+    assert card(scenario) == "Step 1 of 2:\n> Spray the shower"
+
+
+async def test_an_old_card_tapped_shows_where_the_session_is(scenario: Scenario) -> None:
+    """A button from an earlier moment never does nothing: the card shows the session as it
+    is now, with buttons that work."""
+    task = await kitchen(scenario)
+    await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    replies = await scenario.say("Erin", "next")  # a fresh card; the first one is old now
+    assert replies == ["Step 2 of 6:\n> Load the dishwasher"]
+    old = scenario.app.db.scalar(
+        "SELECT telegram_message_id FROM message_log WHERE text = ? ORDER BY id LIMIT 1",
+        ("Step 1 of 6:\n> Clear the counter",),
+    )
+    token = next(
+        b["callback_data"]
+        for method, p in scenario.telegram.calls_in_order("sendMessage")
+        if p.get("text") == "Step 1 of 6:\n> Clear the counter"
+        for row in p["reply_markup"]["inline_keyboard"] for b in row if b["text"] == "Next"
+    )  # fmt: skip
+    chat = scenario.member("Erin").telegram_user_id
+    assert chat is not None
+    scenario.telegram.tap(chat, token, old)
+    await scenario.app.channel.poll_once()
+    assert session_row(scenario)["step"] == 1  # nothing moved
+    assert scenario.edits("Erin")[-1]["text"] == "Step 2 of 6:\n> Load the dishwasher"
