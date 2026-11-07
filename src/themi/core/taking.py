@@ -16,7 +16,9 @@ from typing import TYPE_CHECKING, Any
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -121,3 +123,13 @@ async def tasks_i_could_take(ctx: ToolContext, args: dict[str, Any]) -> str:
     text = await taking.offer(ctx.member, others[0])
     ctx.cards.append(text)
     return f"Sent them this, with a Take button on each task: {text}"
+
+
+class TakingModule(Module):
+    """Taking a task on, from the other person or the chart."""
+
+    name = "taking"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Taking(ctx.services, ctx.get(TaskBoard))).install()

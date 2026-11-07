@@ -34,6 +34,7 @@ from themi.core.tools import ToolContext, tool
 from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
+from themi.modules import Module, ModuleContext, as_job
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 
@@ -493,3 +494,17 @@ async def log_feedback(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 __all__ = ["FeedbackBook", "FeedbackChat", "FeedbackItem", "log_feedback"]
+
+
+class FeedbackModule(Module):
+    """Bug reports and ideas from chat (/bug, /idea)."""
+
+    name = "feedback"
+
+    def install(self, ctx: ModuleContext) -> None:
+        feedback = ctx.provide(FeedbackChat(ctx.services))
+        feedback.install()
+        # F34o: a report's screenshots go after 60 days, reviewed or not
+        ctx.periodic(
+            "feedback.forget_pictures", timedelta(days=1), as_job(feedback.book.forget_pictures)
+        )

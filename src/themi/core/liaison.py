@@ -40,6 +40,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import in_quiet_hours, start_of_local_day, to_local, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -694,3 +695,12 @@ async def flag_expectation_conflict(ctx: ToolContext, args: dict[str, Any]) -> s
     said = liaison.alignment_said_back(result)
     ctx.replies.append(said)
     return f"{said} (question {item_id})"
+
+
+class LiaisonModule(Module):
+    """Passing notes between partners."""
+
+    name = "liaison"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Liaison(ctx.services)).install()

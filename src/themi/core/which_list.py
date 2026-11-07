@@ -23,6 +23,7 @@ from themi.core import buying, groceries
 from themi.core.groceries import item_name
 from themi.core.lists import ADD_CATEGORY, ADD_EXECUTOR, THINGS_TO_BUY, list_key, name_key
 from themi.core.tools import Proposal, ToolContext, ToolFailed, tool
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.accounts import Member
@@ -162,3 +163,13 @@ async def ask_which_list(ctx: ToolContext, args: dict[str, Any]) -> str:
     await which.ask(ctx.member, item, targets[:MAX_LISTS])
     names = ", ".join(label for _, label in targets[:MAX_LISTS])
     return f"Asked which list ({names}, or not now) on a card with buttons; nothing is added yet."
+
+
+class WhichListModule(Module):
+    """Which list an item goes on, asked when unclear."""
+
+    name = "which_list"
+    optional = ("lists",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(WhichList(ctx.services)).install()

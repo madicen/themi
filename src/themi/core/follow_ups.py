@@ -21,8 +21,10 @@ from themi.channels.outbox import Priority
 from themi.core import naming
 from themi.core.memory import terms
 from themi.core.prompts import OpenItem
+from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -202,3 +204,13 @@ async def remove_follow_up(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not follow_ups.remove(after.id):
         raise ToolFailed(f'"{after.title}" has no follow-up.')
     return REMOVED_TEXT.format(after=after.title)
+
+
+class FollowUpsModule(Module):
+    """F18: following up on what someone is waiting for."""
+
+    name = "follow_ups"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(FollowUps(ctx.services, ctx.get(TaskBoard))).install()

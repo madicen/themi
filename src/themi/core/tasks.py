@@ -45,8 +45,10 @@ from themi.core.sun import sunset
 from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
+from themi.energy import EnergyModel
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import member_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -2690,3 +2692,17 @@ async def set_task_medicine(ctx: ToolContext, args: dict[str, Any]) -> str:
         "UPDATE tasks SET medicine = ? WHERE id = ?", (int(bool(args["medicine"])), task.id)
     )
     return f"{task.title}: {'a medicine' if args['medicine'] else 'not a medicine'}."
+
+
+class TasksModule(Module):
+    """The task board: tasks, chores, schedules and check-ins."""
+
+    name = "tasks"
+
+    def install(self, ctx: ModuleContext) -> None:
+        board = ctx.provide(
+            TaskBoard(ctx.services, Matcher(ctx.services.store, ctx.get(EnergyModel)))
+        )
+        board.install()
+        ctx.periodic("tasks.resurface", timedelta(minutes=15), board.resurface)
+        ctx.periodic("tasks.schedules", timedelta(hours=1), board.check_schedules)

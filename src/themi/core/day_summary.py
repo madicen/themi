@@ -31,6 +31,7 @@ from themi.core.prompts import as_data
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -276,3 +277,15 @@ async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
         + hidden
         + "\nDon't repeat it: a short line at most, or nothing."
     )
+
+
+class DaySummaryModule(Module):
+    """K2: what's on someone's day, and the morning summary."""
+
+    name = "day_summary"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        summary = ctx.provide(DaySummary(ctx.services, ctx.get(TaskBoard)))
+        summary.install()
+        ctx.periodic("calendar.morning", timedelta(minutes=5), summary.morning)

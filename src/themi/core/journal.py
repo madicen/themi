@@ -32,6 +32,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day, to_utc_iso
 from themi.logs import redact
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -216,3 +217,14 @@ async def search_journal(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not found:
         return "Nothing in their journal about that. Say so; don't guess."
     return "From their journal (their own record):\n" + "\n".join(f"- {e.words()}" for e in found)
+
+
+class JournalModule(Module):
+    """Themi's journal of each day, written hourly."""
+
+    name = "journal"
+
+    def install(self, ctx: ModuleContext) -> None:
+        journal = ctx.provide(Journal(ctx.services))
+        journal.install()
+        ctx.periodic("memory.journal", timedelta(hours=1), journal.write)

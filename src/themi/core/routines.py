@@ -59,6 +59,7 @@ from themi.core.tools import (
     tool,
 )
 from themi.localtime import member_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -734,3 +735,14 @@ async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     await routines.show_tick(item, today)
     said = f'Ticked "{item.title}" for today.'
     return Done(said, asked=not near and in_their_words(ctx, item.title))  # F33a, F33c
+
+
+class RoutinesModule(Module):
+    """Routines: morning, evening and the rest."""
+
+    name = "routines"
+
+    def install(self, ctx: ModuleContext) -> None:
+        routines = ctx.provide(Routines(ctx.services))
+        routines.install()
+        ctx.periodic("routines.check", timedelta(minutes=15), routines.check)

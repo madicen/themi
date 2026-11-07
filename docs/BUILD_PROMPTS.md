@@ -276,7 +276,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
-| CR2a | Core refactor: standard modules onto the contract | Core refactor | [ ] |
+| CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [ ] |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
 | CR3 | Core refactor: a typed service registry | Core refactor | [ ] |
@@ -14002,7 +14002,7 @@ Notes:
   deploy scripts use GNU `sed -i` (they target the Pi). Pre-existing, not touched here.
 
 ### CR2a · Core refactor: standard modules onto the contract
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR1
 Read first: the refactor doc's Target architecture; CR1's notes; `src/themi/app.py`.
 - Turn each always-on, non-household feature in `build_app` into a module with `requires`
@@ -14018,6 +14018,24 @@ Read first: the refactor doc's Target architecture; CR1's notes; `src/themi/app.
   stay below the loader call until CR2b.
 Tests: golden files identical; one unit test per module that it installs alone with fakes
 for what it requires; full suite green.
+
+Notes:
+- 21 modules, each class at the end of its feature's file: tasks, follow_ups, reminders,
+  business_hours, day_summary, focus, taking, guides, lists, which_list, burnout,
+  conversation_mode, checkin_reviews, habits, routines, journal, memory, feedback,
+  commands, liaison, web_search. Each provides its main object and adds its own jobs.
+- `build_app` provides the energy model and the rulebook to the context (`ctx.provide`):
+  they're core until a later prompt makes energy a module.
+- Load calls sit at the features' old positions, so EmailAudit (gmail, CR2c) still
+  installs between follow_ups and reminders; that's why tasks loads in two calls.
+- `which_list` lists `lists` as optional (it reads `services.lists` when there).
+- `focus` and `memory` import DaySummary and Rulebook inside `install`: at the top of
+  the file they'd be import cycles.
+- The home features still wired by hand get what they need with `ctx.get(TaskBoard)`,
+  `ctx.get(Lists)` and `ctx.get(Routines)`.
+- `as_job` (in `themi.modules`) wraps a quick synchronous job; `build_app`'s `_async`
+  stays until CR2c.
+- `tests/unit/test_standard_modules.py` installs each module alone on `bare_services`.
 
 ### CR2b · Core refactor: home features onto the contract
 Status: [ ]

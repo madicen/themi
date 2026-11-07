@@ -28,6 +28,7 @@ from themi.connectors.search import SearchBackend, SearchError, SearchResult
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import start_of_local_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -418,3 +419,16 @@ async def read_web_page(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not LINK.fullmatch(url):
         raise ToolFailed("That isn't a link from the results.")
     return await _web(ctx).read(ctx.member.id, url)
+
+
+class WebSearchModule(Module):
+    """F30d: searching the web and reading a page. Without a backend it says how to set
+    one up."""
+
+    name = "web_search"
+
+    def __init__(self, backend: SearchBackend | None) -> None:
+        self.backend = backend
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(WebSearch(ctx.services, self.backend)).install()

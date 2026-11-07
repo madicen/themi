@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 from themi import clock
@@ -26,6 +27,7 @@ from themi.channels.outbox import Priority
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -249,3 +251,14 @@ async def set_check_in_reviews(ctx: ToolContext, args: dict[str, Any]) -> str:
     if args["stop_asking"]:
         return f"No more asking about the {matches[0].name} check-in."
     return f"Themi asks about the {matches[0].name} check-in after {every} check-ins."
+
+
+class CheckinReviewsModule(Module):
+    """Now and then, asking whether a check-in is helping."""
+
+    name = "checkin_reviews"
+
+    def install(self, ctx: ModuleContext) -> None:
+        reviews = ctx.provide(CheckinReviews(ctx.services))
+        reviews.install()
+        ctx.periodic("checkins.reviews", timedelta(minutes=15), reviews.run)

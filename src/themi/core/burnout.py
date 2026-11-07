@@ -43,6 +43,7 @@ from themi.core.habits import EXECUTOR as HABIT_EXECUTOR
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -348,3 +349,15 @@ async def set_burnout_check_in(ctx: ToolContext, args: dict[str, Any]) -> str:
         return "A card asks them for a yes; it starts once they say it. Add nothing."
     ctx.replies.append(text)
     return text
+
+
+class BurnoutModule(Module):
+    """Burnout: handing tasks over when someone's running low."""
+
+    name = "burnout"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        burnout = ctx.provide(Burnout(ctx.services, ctx.get(TaskBoard)))
+        burnout.install()
+        ctx.periodic("burnout.hand_over", timedelta(hours=1), burnout.hand_over)

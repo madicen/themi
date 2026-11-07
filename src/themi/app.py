@@ -49,45 +49,45 @@ from themi.core.body_double_guided import GuidedSteps
 from themi.core.body_double_modes import ModeChooser
 from themi.core.body_double_music import MusicOffers
 from themi.core.breaks import BreaksModule
-from themi.core.burnout import Burnout
-from themi.core.business_hours import BusinessHours
+from themi.core.burnout import BurnoutModule
+from themi.core.business_hours import BusinessHoursModule
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
 from themi.core.calendar_copies import CalendarCopies
 from themi.core.calendar_twins import CalendarTwins
 from themi.core.calls import VendorCalls
-from themi.core.checkin_reviews import CheckinReviews
-from themi.core.commands import Commands
-from themi.core.conversation_mode import ConversationMode
+from themi.core.checkin_reviews import CheckinReviewsModule
+from themi.core.commands import CommandsModule
+from themi.core.conversation_mode import ConversationModeModule
 from themi.core.cookbook_save import CookbookSave
 from themi.core.cooking import Cooking
 from themi.core.cooking_timers import CookingTimers
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
-from themi.core.day_summary import DaySummary
+from themi.core.day_summary import DaySummaryModule
 from themi.core.dishwasher import Dishwasher
 from themi.core.email_audit import EmailAudit
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
-from themi.core.feedback import FeedbackChat
+from themi.core.feedback import FeedbackModule
 from themi.core.feeders import Feeders
-from themi.core.focus import Focus
-from themi.core.follow_ups import FollowUps
+from themi.core.focus import FocusModule
+from themi.core.follow_ups import FollowUpsModule
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
-from themi.core.guides import Guides
-from themi.core.habits import HabitReserve
-from themi.core.journal import Journal
+from themi.core.guides import GuidesModule
+from themi.core.habits import HabitsModule
+from themi.core.journal import JournalModule
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry
-from themi.core.liaison import Liaison
-from themi.core.lists import Lists
+from themi.core.liaison import LiaisonModule
+from themi.core.lists import Lists, ListsModule
 from themi.core.litter_box import LitterBox
 from themi.core.maintenance import Maintenance
 from themi.core.meals import Meals
-from themi.core.memory import Memory
+from themi.core.memory import MemoryModule
 from themi.core.music import Music
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
@@ -95,8 +95,8 @@ from themi.core.reactions import ReactionsModule
 from themi.core.recipe_groceries import RecipeGroceries
 from themi.core.recipe_ideas import RecipeIdeas
 from themi.core.recipes import Recipes
-from themi.core.reminders import Reminders
-from themi.core.routines import Routines
+from themi.core.reminders import RemindersModule
+from themi.core.routines import Routines, RoutinesModule
 from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
@@ -106,20 +106,19 @@ from themi.core.services import Services
 from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.step_images import StepPictures
-from themi.core.taking import Taking
+from themi.core.taking import TakingModule
 from themi.core.task_blocks import TaskBlocks
-from themi.core.tasks import TaskBoard
+from themi.core.tasks import TaskBoard, TasksModule
 from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
 from themi.core.web_recipes import WebRecipes
-from themi.core.web_search import WebSearch
-from themi.core.which_list import WhichList
+from themi.core.web_search import WebSearchModule
+from themi.core.which_list import WhichListModule
 from themi.core.which_task import TaskNamer
 from themi.core.wrong_replies import WrongRepliesModule
 from themi.energy import EnergyModel
-from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
 from themi.modules import ModuleContext, PeriodicTask
@@ -204,9 +203,9 @@ def build_app(
     approvals.install(services)
     rulebook = Rulebook(services.autonomy, outbox)
     rulebook.install(services)
-    services.memory = Memory(db, rulebook)
-    journal = Journal(services)
-    journal.install()
+    ctx.provide(energy)  # core, until the energy model becomes a module
+    ctx.provide(rulebook)
+    ctx.load(MemoryModule(), JournalModule())
     if google is not None:
         services.google = GoogleAccounts(store, GoogleOAuth(db, store.cipher, google))
         services.gmail = GmailSync(store, services.google, outbox)
@@ -220,29 +219,26 @@ def build_app(
     groceries.install()
     safeway = SafewayCart(services, groceries)
     safeway.install()
-    lists = Lists(services)
-    lists.install()
-    ThingsToBuy(services, lists).install()
-    WhichList(services).install()
+    ctx.load(ListsModule())
+    ThingsToBuy(services, ctx.get(Lists)).install()
+    ctx.load(WhichListModule())
     Spending(services).install()
-    Liaison(services).install()
+    ctx.load(LiaisonModule())
     ctx.load(BreaksModule())
     pantry = Pantry(services, groceries)
     pantry.install()
-    tasks = TaskBoard(services, Matcher(store, energy))
-    tasks.install()
-    FollowUps(services, tasks).install()
+    ctx.load(TasksModule(), FollowUpsModule())
+    tasks = ctx.get(TaskBoard)
     if services.gmail is not None:
         EmailAudit(services, tasks).install()
-    reminders = Reminders(services, tasks)
-    reminders.install()
-    business_hours = BusinessHours(services, tasks)  # F34k
-    business_hours.install()
-    day_summary = DaySummary(services, tasks)
-    day_summary.install()
-    Focus(services, tasks, day_summary).install()
-    Taking(services, tasks).install()
-    Guides(services).install()
+    ctx.load(
+        RemindersModule(),
+        BusinessHoursModule(),
+        DaySummaryModule(),
+        FocusModule(),
+        TakingModule(),
+        GuidesModule(),
+    )
     recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
     recipes.install()
     services.cookbook_save = CookbookSave(services, recipes)  # RC5
@@ -252,11 +248,7 @@ def build_app(
     RecipeIdeas(services, recipes, recipe_groceries).install()  # RC7
     cooking = Cooking(services, recipes, recipe_groceries)  # RC3a
     cooking.install()
-    burnout = Burnout(services, tasks)
-    burnout.install()
-    ConversationMode(services).install()
-    reviews = CheckinReviews(services)
-    reviews.install()
+    ctx.load(BurnoutModule(), ConversationModeModule(), CheckinReviewsModule())
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
     CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
@@ -284,7 +276,7 @@ def build_app(
         CalendarCopies(services).install()  # F34f: a calendar shown on the family calendar
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
-    WebSearch(services, search).install()  # F30d: says how to set it up without a key
+    ctx.load(WebSearchModule(search))  # F30d: says how to set it up without a key
     web_recipes = WebRecipes(services, recipes, recipe_pages)  # RC4a: recipes from links
     web_recipes.install()
     travel_heads_ups: TravelHeadsUps | None = None
@@ -293,14 +285,15 @@ def build_app(
         travel_heads_ups.install()
     maintenance = Maintenance(services, tasks, services.calendar, scheduler)
     maintenance.install()
-    routines = Routines(services)
-    routines.install()
-    habits = HabitReserve(services)
-    habits.install()
-    ctx.load(ReactionsModule(), WrongRepliesModule())
-    Commands(services).install()
-    feedback = FeedbackChat(services)
-    feedback.install()
+    ctx.load(
+        RoutinesModule(),
+        HabitsModule(),
+        ReactionsModule(),
+        WrongRepliesModule(),
+        CommandsModule(),
+        FeedbackModule(),
+    )
+    routines = ctx.get(Routines)
     agent = Agent(services)
     channel.handler = agent
     if services.google is not None and google is not None:
@@ -312,29 +305,13 @@ def build_app(
         PeriodicTask("approvals.resurface", timedelta(minutes=5), approvals.resurface),
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
-        PeriodicTask("burnout.hand_over", timedelta(hours=1), burnout.hand_over),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
-        PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
-        PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
-        PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
-        PeriodicTask("tasks.closing", timedelta(minutes=15), business_hours.check),  # F34k
-        PeriodicTask("calendar.morning", timedelta(minutes=5), day_summary.morning),
-        PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
-        PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),
-        PeriodicTask("habits.offer", timedelta(hours=6), habits.offer_due),
-        PeriodicTask("habits.send", timedelta(hours=1), habits.send_due),
         PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
         PeriodicTask("safeway.expire", timedelta(minutes=5), safeway.expire_stale),
-        PeriodicTask("memory.journal", timedelta(hours=1), journal.write),
-        PeriodicTask("routines.check", timedelta(minutes=15), routines.check),
         PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
         PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
         PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
         PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
-        # F34o: a report's screenshots go after 60 days, reviewed or not
-        PeriodicTask(
-            "feedback.forget_pictures", timedelta(days=1), _async(feedback.book.forget_pictures)
-        ),
     ]
     periodic.extend(ctx.jobs)
     server = ServerControl(services, control_dir)

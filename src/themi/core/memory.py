@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.rules import Rulebook
@@ -278,3 +279,14 @@ class Memory:
 def _subject_of(text: str) -> str:
     words = terms(text)
     return " ".join(words[:3]) or "general"
+
+
+class MemoryModule(Module):
+    """Facts Themi was told, recalled when they matter."""
+
+    name = "memory"
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.rules import Rulebook  # at install: importing it at the top is a cycle
+
+        ctx.services.memory = ctx.provide(Memory(ctx.services.store.db, ctx.get(Rulebook)))

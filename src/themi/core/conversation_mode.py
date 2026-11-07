@@ -44,6 +44,7 @@ from themi.core.prompts import PHRASING_WORDS, day_note
 from themi.core.sidecar import Sidecar
 from themi.localtime import to_local
 from themi.logs import redact
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -358,3 +359,12 @@ class ConversationMode:
         client = s.router.client_for(member.id, AITask.CHAT)
         response = await client.chat(CHAT_SYSTEM, [Message.user(turn)])
         return honest(listening.trimmed(response.text.strip(), text))
+
+
+class ConversationModeModule(Module):
+    """CM1: conversation mode, its setting and its sidecar."""
+
+    name = "conversation_mode"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(ConversationMode(ctx.services)).install()

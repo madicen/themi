@@ -23,6 +23,7 @@ from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -195,3 +196,12 @@ async def look_up_guide(ctx: ToolContext, args: dict[str, Any]) -> str:
         + as_data(f"guide {guide.name}", part)
         + f"\nAnswer from it, saying it's from their {guide.name} guide."
     )
+
+
+class GuidesModule(Module):
+    """F29ha: guides kept for later."""
+
+    name = "guides"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Guides(ctx.services)).install()

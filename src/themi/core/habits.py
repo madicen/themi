@@ -31,6 +31,7 @@ from themi.channels.outbox import Priority
 from themi.core.services import Services
 from themi.energy.outcomes import OutcomeTracker
 from themi.localtime import member_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -221,3 +222,15 @@ def _check_in_words(habit: dict[str, Any], member: Member) -> str:
         return str(habit["prompt"])
     idea = str(habit["idea"])
     return f"{idea[:1].upper()}{idea[1:]}."
+
+
+class HabitsModule(Module):
+    """The habit reserve: small habits offered when there is room."""
+
+    name = "habits"
+
+    def install(self, ctx: ModuleContext) -> None:
+        habits = ctx.provide(HabitReserve(ctx.services))
+        habits.install()
+        ctx.periodic("habits.offer", timedelta(hours=6), habits.offer_due)
+        ctx.periodic("habits.send", timedelta(hours=1), habits.send_due)

@@ -25,6 +25,7 @@ from themi.channels.pauses import (
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local
+from themi.modules import Module, ModuleContext
 from themi.web.auth import WebAuth
 
 TRACKING_WORDS = {
@@ -236,3 +237,12 @@ async def resume_messages(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 
 __all__ = ["Commands", "PauseBook", "pause_messages", "resume_messages", "tracking_message"]
+
+
+class CommandsModule(Module):
+    """Themi's own commands (/help, /pause and the rest)."""
+
+    name = "commands"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Commands(ctx.services)).install()

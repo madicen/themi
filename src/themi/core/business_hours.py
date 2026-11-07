@@ -34,6 +34,7 @@ from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -473,3 +474,15 @@ async def set_business_hours(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed("There's no task with that number.") from exc
     except ValueError as exc:
         raise ToolFailed(f"Not kept: {exc}.") from exc
+
+
+class BusinessHoursModule(Module):
+    """F34k: errands that need a place to be open."""
+
+    name = "business_hours"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        hours = ctx.provide(BusinessHours(ctx.services, ctx.get(TaskBoard)))
+        hours.install()
+        ctx.periodic("tasks.closing", timedelta(minutes=15), hours.check)

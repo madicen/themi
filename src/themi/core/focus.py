@@ -43,6 +43,7 @@ from themi.core.repeat import next_occurrences
 from themi.core.tasks import Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.day_summary import DaySummary
@@ -327,3 +328,17 @@ async def focus_now(ctx: ToolContext, args: dict[str, Any]) -> str:
         f"{text}\n"
         "Don't repeat it: a short kind line at most, or nothing."
     )
+
+
+class FocusModule(Module):
+    """O1a: a few things for now when it's too much."""
+
+    name = "focus"
+    requires = ("tasks", "day_summary")
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.day_summary import (
+            DaySummary,
+        )  # at install: importing it at the top is a cycle
+
+        ctx.provide(Focus(ctx.services, ctx.get(TaskBoard), ctx.get(DaySummary))).install()

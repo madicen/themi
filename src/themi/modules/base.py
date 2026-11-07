@@ -35,6 +35,15 @@ class SetupStep:
     help_url: str = ""  # where to get it (a key page, a console)
 
 
+def as_job(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
+    """Wrap a quick synchronous job so the scheduler can await it."""
+
+    async def run() -> object:
+        return fn()
+
+    return run
+
+
 class Module:
     """Subclass and set `name`; override `install`. The class attributes are the module's
     declaration, read before anything is installed."""

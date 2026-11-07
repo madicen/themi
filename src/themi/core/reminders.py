@@ -34,6 +34,7 @@ from themi.core.services import Services
 from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import member_day, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -366,3 +367,16 @@ async def add_reminder(ctx: ToolContext, args: dict[str, Any]) -> str:
         f'Reminder set for {when}: "{text}". It\'s a message then, not a task: nothing to '
         "tick off. Tell them the day and time."
     )
+
+
+class RemindersModule(Module):
+    """Reminders: a day's end and overdue tasks."""
+
+    name = "reminders"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        reminders = ctx.provide(Reminders(ctx.services, ctx.get(TaskBoard)))
+        reminders.install()
+        ctx.periodic("tasks.day_end", timedelta(minutes=15), reminders.end_of_day)
+        ctx.periodic("tasks.overdue", timedelta(hours=1), reminders.overdue)

@@ -25,6 +25,7 @@ from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, ref
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -715,3 +716,12 @@ async def move_list_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     assert fresh is not None
     where = f"under {parent.name}" if parent else "at the top level"
     return f"Moved {item.name} {where}. Now: {words(fresh)}"
+
+
+class ListsModule(Module):
+    """L1a: named lists Themi keeps."""
+
+    name = "lists"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Lists(ctx.services)).install()
