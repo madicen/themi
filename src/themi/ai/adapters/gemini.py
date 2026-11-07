@@ -35,11 +35,12 @@ from themi.ai.errors import (
     error_for_status,
     parse_retry_after,
 )
-from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
+from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StopReason,
     StructuredResponse,
@@ -185,6 +186,24 @@ class GeminiProvider:
                 f"gemini returned {len(vectors)} embeddings for {len(texts)} texts"
             )
         return Embeddings(vectors, self.name, self.model)
+
+    async def image(
+        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+    ) -> ImageResult:
+        """A picture from Gemini's image model (the route's model; one at a time)."""
+        config = types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            image_config=types.ImageConfig(aspect_ratio="1:1"),
+        )
+        response = await self._generate(
+            [types.Content(role="user", parts=[types.Part(text=prompt)])], config
+        )
+        content = _first_candidate(response).content
+        for part in (content.parts if content else None) or []:
+            blob = part.inline_data
+            if blob is not None and blob.data:
+                return ImageResult(blob.data, blob.mime_type or "image/png", self.name, self.model)
+        raise MalformedOutputError("gemini sent no picture")
 
     # ----- internals ----------------------------------------------------------
 

@@ -30,6 +30,7 @@ TASK_LABELS = {
     AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
     AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",
     AITask.BODY_DOUBLE_STEPS: "Body double: steps for a guided session",
+    AITask.STEP_IMAGE: "Pictures for guided steps (Gemini or OpenAI image models)",
 }
 KIND_LABELS = {
     "gemini": "Gemini",
@@ -38,6 +39,9 @@ KIND_LABELS = {
     "lm_studio": "LM Studio (local)",
     "openai_compat": "Other OpenAI-compatible server",
 }
+
+
+MAX_IMAGE_CAP = 100
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -60,6 +64,7 @@ def routes(kit: Kit) -> APIRouter:
             "task_labels": TASK_LABELS,
             "kinds": [(k, KIND_LABELS[k]) for k in ADAPTER_KINDS],
             "kind_labels": KIND_LABELS,
+            "image_cap": app.services.router.image_cap(member.id),  # BD4a
             **extra,
         }
 
@@ -145,6 +150,21 @@ def routes(kit: Kit) -> APIRouter:
         except (PermissionDenied, NotFound):
             return kit.redirect("/ai", "That backend isn't one of yours.")
         return kit.redirect("/ai", "Removed.")
+
+    @router.post("/ai/image-cap")
+    async def save_image_cap(request: Request) -> Response:
+        """BD4a: their own cap on pictures a day (only their own: the session's member)."""
+        session, form = await kit.checked(request)
+        try:
+            cap = int(str(form.get("image_daily_cap", "")))
+            if not 0 <= cap <= MAX_IMAGE_CAP:
+                raise ValueError(cap)
+        except ValueError:
+            return kit.redirect("/ai", f"Pictures a day is a number from 0 to {MAX_IMAGE_CAP}.")
+        app.db.execute(
+            "UPDATE members SET image_daily_cap = ? WHERE id = ?", (cap, session.member.id)
+        )
+        return kit.redirect("/ai", f"At most {cap} pictures a day.")
 
     @router.post("/ai/chains/{task}")
     async def save_chain(request: Request, task: str) -> Response:

@@ -28,6 +28,7 @@ from themi.accounts.store import (
 )
 from themi.ai.adapters import AdapterConfig, AdapterKind
 from themi.ai.adapters.defaults import GEMINI_DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
+from themi.ai.adapters.defaults import GEMINI_DEFAULT_IMAGE_MODEL as GEMINI_IMAGE_MODEL
 from themi.ai.adapters.defaults import GEMINI_DEFAULT_MODEL as GEMINI_CHAT_MODEL
 from themi.ai.adapters.defaults import GEMINI_DEFAULT_TRANSCRIPTION_MODEL as GEMINI_AUDIO_MODEL
 from themi.storage.db import Database
@@ -45,6 +46,7 @@ class AITask(StrEnum):
     SIDECAR = "sidecar"  # CM1b: the background pass that picks out tasks and events
     RECIPES = "recipes"  # RC2a-RC4a: reading ingredients, prep and recipes from pages
     BODY_DOUBLE_STEPS = "body_double_steps"  # BD1b: proposed steps for a guided session
+    STEP_IMAGE = "step_image"  # BD4a: a picture for each step of a guided session
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)
@@ -298,6 +300,7 @@ class AISettingsStore:
             models = {
                 AITask.TRANSCRIPTION: GEMINI_AUDIO_MODEL,
                 AITask.EMBEDDING: GEMINI_EMBEDDING_MODEL,
+                AITask.STEP_IMAGE: GEMINI_IMAGE_MODEL,
             }
             for task in AITask:
                 model = models.get(task)

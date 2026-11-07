@@ -119,6 +119,16 @@ class StructuredResponse:
 
 
 @dataclass(frozen=True)
+class ImageResult:
+    """A picture a model made (BD4a): the file's bytes and its type."""
+
+    data: bytes = field(repr=False)
+    mime_type: str
+    provider: str
+    model: str
+
+
+@dataclass(frozen=True)
 class Transcription:
     text: str
     provider: str
