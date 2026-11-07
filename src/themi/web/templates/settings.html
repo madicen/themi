@@ -53,6 +53,13 @@
         <option value="partner" {% if member.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
       </select>
     </label>
+    <label>The same event on two of my calendars
+      <select name="calendar_twins">
+        <option value="ask" {% if member.calendar_twins == "ask" %}selected{% endif %}>Ask me which to keep</option>
+        <option value="guess" {% if member.calendar_twins == "guess" %}selected{% endif %}>Merge it where Themi thinks best (with an undo)</option>
+        <option value="keep" {% if member.calendar_twins == "keep" %}selected{% endif %}>Keep both</option>
+      </select>
+    </label>
     <label>A summary of my day at <input type="time" name="morning_summary" value="{{ member.morning_summary.strftime('%H:%M') if member.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
     <label class="check"><input type="checkbox" name="morning_summary_empty" {% if member.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>
     <label class="check"><input type="checkbox" name="leave_heads_up" {% if member.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>

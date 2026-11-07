@@ -160,6 +160,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         body_double_volume=row["body_double_volume"],
         chart_counts_shared=bool(row["chart_counts_shared"]),
         calendar_details=row["calendar_details"],
+        calendar_twins=row["calendar_twins"],
         morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
         morning_summary_empty=bool(row["morning_summary_empty"]),
         noise_emails=row["noise_emails"],
@@ -419,6 +420,7 @@ class AccountStore:
         chart_limit: int | None = None,
         chart_counts_shared: bool | None = None,
         calendar_details: str | None = None,
+        calendar_twins: str | None = None,  # F34e: "ask", "guess" or "keep"
         morning_summary: str | None = None,  # "HH:MM", or "" for off
         morning_summary_empty: bool | None = None,
         getting_ready_minutes: int | None = None,
@@ -509,6 +511,10 @@ class AccountStore:
             if calendar_details not in ("me", "partner"):
                 raise InvalidValue("calendar details are for 'me' or 'partner'")
             changes["calendar_details"] = calendar_details
+        if calendar_twins is not None:
+            if calendar_twins not in ("ask", "guess", "keep"):
+                raise InvalidValue("the same event on two calendars is ask, guess or keep")
+            changes["calendar_twins"] = calendar_twins
         if morning_summary is not None:
             changes["morning_summary"] = (
                 _parse_hhmm(morning_summary).strftime("%H:%M") if morning_summary else None

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -97,6 +98,11 @@ def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
         and event.get("transparency") != "transparent"
         and not str(source or "").startswith(TASK_BLOCK),
         "source": str(source) if source else None,
+        # F34e: other people on it (a meeting), and whether it's one of a series.
+        "guests": sum(
+            1 for a in event.get("attendees", []) if not a.get("self") and not a.get("resource")
+        ),
+        "recurring": bool(event.get("recurringEventId") or event.get("recurrence")),
     }
 
 
@@ -105,6 +111,8 @@ class CalendarBusy:
         self.store = store
         self.db = store.db
         self.sync = sync
+        # F34e: told after a person's calendars are read (the same event twice, F34f's copies)
+        self.listeners: list[Callable[[Member], Awaitable[object]]] = []
 
     # ----- reading Google ---------------------------------------------------------------
 
@@ -116,6 +124,7 @@ class CalendarBusy:
         tz = self._tz()
         local = now.astimezone(tz)
         since = datetime(local.year, local.month, local.day, tzinfo=tz) - LOOK_BACK
+        done: list[Member] = []
         for member in self.store.list_members():
             if only is not None and member.id != only.id:
                 continue
@@ -143,6 +152,13 @@ class CalendarBusy:
                     continue
                 self._keep(member, account.id, found, now)
                 read += 1
+                done.append(member)
+        for member in {m.id: m for m in done}.values():
+            for listener in self.listeners:
+                try:
+                    await listener(member)
+                except Exception:
+                    log.exception("A calendar listener failed for member %s", member.id)
         return read
 
     def _keep(
@@ -165,11 +181,13 @@ class CalendarBusy:
                 self.db.execute(
                     "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, "
                     "title, location, starts_at, ends_at, all_day, video, busy, source, "
-                    "fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "fetched_at, guests, recurring) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         member.id, account_id, calendar_id, e["event_id"], e["title"],
                         e["location"], to_utc_iso(e["starts_at"]), to_utc_iso(e["ends_at"]),
                         int(e["all_day"]), int(e["video"]), int(e["busy"]), e["source"], stamp,
+                        e["guests"], int(e["recurring"]),
                     ),
                 )  # fmt: skip
                 if e["busy"]:

@@ -361,8 +361,11 @@ class Events:
     def on_family(self, found: Found) -> bool:
         return found.calendar_id in self.family_calendars()
 
-    def calendar_words(self, found: Found) -> str:
-        return "the family calendar" if self.on_family(found) else "their calendar"
+    def calendar_words(self, found: Found, *, to_them: bool = False) -> str:
+        """For the model ("their calendar"), or `to_them`, for the person ("your calendar")."""
+        if self.on_family(found):
+            return "the family calendar"
+        return "your calendar" if to_them else "their calendar"
 
     def _copies(self, matches: list[Found]) -> bool:
         """One event on two calendars: the same title and times, one copy per calendar."""
@@ -658,8 +661,36 @@ class Events:
             await self._execute_delete(payload["other"], ctx)
         await self.withdraw_changes(other.event_id, keep=ctx.action_id)
         shown = describe(title, when, location, self._tz())
-        where = "both calendars" if payload.get("both") else self.calendar_words(keep)
+        where = "both calendars" if payload.get("both") else self.calendar_words(keep, to_them=True)
         return f"Merged into one event on {where}: {shown}."
+
+    def merge_payload(self, a: Found, b: Found, keep_on: str) -> tuple[dict[str, Any], str]:
+        """A merge of two events (F34d, and F34e's twins): the fuller one's title, place and
+        times; kept on the fuller one's calendar unless `keep_on` says 'mine', 'family' or
+        'both'. Returns the payload and the card's summary."""
+        detailed, placeholder = _fuller(a, b)
+        keep, other = detailed, placeholder
+        if keep_on in ("mine", "family") and self.on_family(a) != self.on_family(b):
+            wanted = keep_on == "family"
+            keep, other = (a, b) if self.on_family(a) == wanted else (b, a)
+        when = detailed.when
+        location = detailed.location or placeholder.location
+        payload = {
+            "keep": _found_payload(keep),
+            "other": _found_payload(other),
+            "title": detailed.title,
+            "location": location,
+            "starts": when.starts.isoformat(),
+            "ends": when.ends.isoformat(),
+            "all_day": when.all_day,
+            "both": keep_on == "both",
+        }
+        where = "both calendars" if keep_on == "both" else self.calendar_words(keep, to_them=True)
+        summary = (
+            f"Merging {placeholder.title} into {detailed.title}, {when_words(when, self._tz())}"
+            f"{f', at {location}' if location else ''}: one event on {where}"
+        )
+        return payload, summary
 
     async def _description(self, found: Found) -> str:
         """An event's description, read to merge it and never kept (the plan's privacy)."""
@@ -1142,7 +1173,6 @@ async def merge_calendar_events(ctx: ToolContext, args: dict[str, Any]) -> Propo
     b = events.find(ctx.member, args["second"], args["on"])[0]
     if a.event_id == b.event_id:
         raise ToolFailed(f'"{args["first"]}" and "{args["second"]}" are the same event.')
-    tz = events._tz()
     detailed, placeholder = _fuller(a, b)
     keep_on = str(args.get("keep_on") or "")
     apart = events.on_family(a) != events.on_family(b)
@@ -1153,29 +1183,11 @@ async def merge_calendar_events(ctx: ToolContext, args: dict[str, Any]) -> Propo
             "keep it on (keep_on 'mine' or 'family'), on both ('both'), or Themi's call "
             "('auto'), in one short question."
         )
-    keep, other = detailed, placeholder
-    if keep_on in ("mine", "family") and apart:
-        wanted = keep_on == "family"
-        keep, other = (a, b) if events.on_family(a) == wanted else (b, a)
-    when = detailed.when
     for each in (a, b):
         await events.withdraw_changes(each.event_id)
-    payload = {
-        "keep": _found_payload(keep),
-        "other": _found_payload(other),
-        "title": detailed.title,
-        "location": detailed.location or placeholder.location,
-        "starts": when.starts.isoformat(),
-        "ends": when.ends.isoformat(),
-        "all_day": when.all_day,
-        "both": keep_on == "both",
-    }
-    where = "both calendars" if keep_on == "both" else events.calendar_words(keep)
-    summary = (
-        f"Merging {placeholder.title} into {detailed.title}, {when_words(when, tz)}"
-        f"{f', at {payload["location"]}' if payload['location'] else ''}: one event on {where}"
-    )
+    payload, summary = events.merge_payload(a, b, keep_on)
     themi_made = all(each.themi_id is not None for each in (a, b))
+    when = detailed.when
     return Proposal(OWN if themi_made else CHANGE, summary, MERGE, payload, expires=when.ends)
 
 

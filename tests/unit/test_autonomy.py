@@ -30,6 +30,7 @@ CAPPED = {
 }
 CAN_BE_AUTOMATIC = {
     "music",  # BD5b: their own Spotify, automatic from the start (done, then told)
+    "calendar_twins",  # F34e: the same event twice, merged on its own (done, then told)
     "email_mark_read",
     "email_archive_noise",
     "grocery_list_add",
@@ -86,7 +87,7 @@ def events(autonomy: Autonomy, action_id: int) -> list[str]:
 def test_every_category_starts_supervised_with_the_plans_caps(autonomy: Autonomy) -> None:
     categories = {c.name: c for c in autonomy.categories()}
     assert set(categories) == CAPPED | CAN_BE_AUTOMATIC
-    started_automatic = {"music"}  # BD5b asked for it; every other category asks first
+    started_automatic = {"music", "calendar_twins"}  # BD5b and F34e asked; the rest ask first
     assert {n for n, c in categories.items() if c.tier is Tier.AUTOMATIC} == started_automatic
     assert {n for n, c in categories.items() if c.capped} == CAPPED
     assert categories["grocery_list_add"].scope == "family"

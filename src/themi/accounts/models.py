@@ -87,6 +87,7 @@ class Member:
     body_double_volume: int = 50  # 0-100
     chart_counts_shared: bool = True  # chores for either of you count toward that limit
     calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
+    calendar_twins: str = "ask"  # F34e: the same event on two calendars: ask, guess or keep
     morning_summary: time | None = None  # a summary of the day at this time; None: off (K2)
     morning_summary_empty: bool = False  # sent on days with nothing on, too
     getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)

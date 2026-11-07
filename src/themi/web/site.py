@@ -440,6 +440,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 chart_limit=as_int(form.get("chart_limit")),
                 chart_counts_shared=form.get("chart_counts_shared") == "on",
                 calendar_details=str(form.get("calendar_details", "")) or None,
+                calendar_twins=str(form.get("calendar_twins", "")) or None,
                 morning_summary=str(form.get("morning_summary", "")),
                 morning_summary_empty=form.get("morning_summary_empty") == "on",
                 getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
