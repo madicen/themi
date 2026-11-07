@@ -223,7 +223,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34cb | Feedback: a distance that isn't the plan's, and Sunday after a Saturday run | Feedback | [x] 2026-11-07 |
 | F34da | Feedback: merging two events, "mine" on the family calendar, a failure said | Feedback | [x] 2026-11-07 |
 | F34db | Feedback: an event just added is read again first | Feedback | [x] 2026-11-07 |
-| F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
+| F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [x] 2026-11-07 |
 | F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
 | F34ga | Idea: a picture with its words reaches the tool agent | Feedback | [x] 2026-11-07 |
 | F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [x] 2026-11-07 |
@@ -11397,7 +11397,7 @@ Notes (2026-11-07):
   calendar/appointment/event/from the app"). A failure is logged and the turn goes on.
 
 ### F34e · Idea (2026-11-07): Themi spots the same event twice and offers to merge it
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34d, F29b
 Read first: F34d's notes (`merge_calendar_events`); F29b's notes (an emailed invitation
 already on the calendar). From Erin's idea #175 (2026-11-06, 12:27 pm), first part: "Themi
@@ -11427,6 +11427,33 @@ Scenario: Erin adds a detailed appointment over her placeholder; the next fetch 
 merge once.
 
 Data: mark #175 reviewed once this and F34f are live.
+
+Notes (2026-11-07):
+- `themi.core.calendar_twins.CalendarTwins`, told by `CalendarBusy.listeners` after each
+  person's calendars are read. Pairs: their events in the next two weeks, overlapping on
+  the same day, whose titles match (`title_matches` either way, or the same words) or are
+  both appointment-like (a word list: appt, visit, MD, ND, psych, dentist, clinic, ...; so
+  "ND psych in person" over "Return Patient Visit with ... MD" is a pair). Left alone: other
+  guests (`calendar_entries.guests`), a series (`recurring`), Themi's time blocks and
+  copies, and the same title and times when one of them is an event Themi made (a copy
+  someone asked for, F29a).
+- Migration 0139: those two columns, `members.calendar_twins` ('ask', 'guess', 'keep'),
+  the `calendar_twins` category (member, Tier 2 from the start, like BD5b's music: the
+  prompt asks for it; the autonomy test lists it), and the `calendar_twins` table: one row
+  per pair by its two event ids, so nothing is asked twice, whatever the answer.
+- Identical on one calendar (title, times, place): merged through F34d's executor, and one
+  line: "Dentist was on your calendar twice on Tue 27 Oct, so it's one event now."
+- A card: "These look like the same thing, on Wed 28 Oct:" with each one's time and
+  calendar. Two calendars: Keep on mine / Keep on family / Keep on both / Your call / Not the
+  same; one calendar: Merge them / Not the same. The tap is the yes (`requested`); the card
+  shows the merge's line. An event gone or changed since: "Not needed now".
+- "Merge it where Themi thinks best": the fuller one's calendar, said in one line with Undo
+  for a day. Undo puts the kept one's title, place and times back and the other event back
+  (by its own id, so Google restores it); the merged notes stay on the kept one.
+- `Events.merge_payload` is shared with `merge_calendar_events`. The merge's line to them
+  now says "your calendar", not "their calendar" (F34da's slip).
+- Setup: restart `themi run` (migration 0139). Erin's setting is on My settings, under My
+  calendars ("The same event on two of my calendars").
 
 ### F34f · Idea (2026-11-07): how much of an event another calendar shows
 Status: [ ]
