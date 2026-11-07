@@ -281,7 +281,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [x] 2026-11-07 |
 | CR3 | Core refactor: a typed service registry | Core refactor | [x] 2026-11-07 |
 | CR4 | Core refactor: website pages from modules | Core refactor | [x] 2026-11-07 |
-| CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | [ ] |
+| CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | split |
+| CR5a | Core refactor: themi.toml, templates, and modules found and built from settings | Core refactor | [x] 2026-11-07 |
+| CR5b | Core refactor: a settings model per module | Core refactor | [ ] |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
 | CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
@@ -14183,7 +14185,7 @@ Notes:
   module left out takes its page (404) and menu entry with it.
 
 ### CR5 · Core refactor: themi.toml, templates and module settings
-Status: [ ]
+Status: split into CR5a [~] and CR5b [ ] (2026-11-07)
 Depends on: CR4
 Read first: the refactor doc's Configuration section; `src/themi/settings.py`; CR4's notes.
 - Discovery: modules are found through the `themi.modules` entry point group in
@@ -14204,6 +14206,65 @@ Read first: the refactor doc's Configuration section; `src/themi/settings.py`; C
 Tests: no file gives today's family build (golden files identical); a file that removes a
 module; an unknown module named in the file stops startup with a plain message; a
 module's env alias; secrets never read from TOML.
+
+### CR5a · Core refactor: themi.toml, templates, and modules found and built from settings
+Status: [x] 2026-11-07
+Depends on: CR4
+Read first: CR5 above; the refactor doc's Configuration section; `build_runtime` in
+`src/themi/cli.py`.
+- Discovery through the `themi.modules` entry point group (one entry per module class).
+- `themi.config`: reads `themi.toml` (`THEMI_CONFIG`, else `/data/themi.toml`, else
+  `./themi.toml`); no file means the family template. `template`, `modules` (`+name` /
+  `-name`), `[workspace]` (kept for CR9), `[module.<name>]` sections (kept for CR5b).
+- Templates as package data: `themi/templates/family.toml`, its module list in install
+  order, the same as `family_modules()` with every connector.
+- Each module builds itself from the app's `Settings` (`Module.build`), or says it isn't
+  set up (None). A template's module that isn't set up is left out, with whatever requires
+  it; one named in `themi.toml` that isn't set up, or isn't known, stops startup with a
+  plain message.
+- `build_runtime` resolves the modules from the config (unless `make dev` passes fakes).
+  With no file the module list is the one today's `build_runtime` options give.
+- `themi config show`: the template, the resolved modules, and the module sections.
+Tests: no file gives today's module list for several environments; removing and adding a
+module; an unknown module; a module named but not set up; the template matches
+`family_modules()`.
+
+Notes:
+- `themi.config`: `config_path`, `load_config`/`parse_config`, `load_template`,
+  `available_modules` (the `themi.modules` entry points in pyproject.toml, 61 of them) and
+  `resolve_modules(config, settings)`.
+- Deviation from the plan's example: a module's settings section is `[module.<name>]`,
+  not `[modules.<name>]`: TOML can't make `modules` both the `+name`/`-name` list and a
+  table. The refactor doc's example is corrected.
+- `Module.build(setup)` (a classmethod) builds a module from a `ModuleSetup` (the app's
+  `Settings`, its section, and objects shared between modules: both Cozyla modules get one
+  client, as before), or returns None when it isn't set up.
+- Resolving: a template module not set up is dropped quietly, with what requires it; one
+  the file adds (`+name`) must be known, set up and have its requirements; a module the
+  file removes mustn't be required by another (the error names who needs it).
+- `build_runtime` resolves modules from the config; `make dev` still passes its fakes as
+  `build_app` options (the family list). With no themi.toml the list is exactly what
+  `build_runtime` gave before, checked for six environments in `tests/unit/test_config.py`.
+- `themi/templates/family.toml` must stay equal to `family_modules()` with every connector
+  (tested); `family_modules()` remains for the scenario harness.
+- `themi config show` prints the config's path, the template, the modules that load, the
+  ones left out, and each `[module.*]` section.
+- Setup the user may need: after pulling, run `make install` again so the entry points
+  are registered (an editable install reads them from its metadata).
+
+### CR5b · Core refactor: a settings model per module
+Status: [ ]
+Depends on: CR5a
+Read first: CR5 above; CR5a's notes.
+- Each module's `settings` is a pydantic model read from `[module.<name>]` and from env
+  variables (today's names kept as aliases); secret fields only from env. Move every
+  connector's fields out of the flat `Settings` into its module, with its validation
+  messages ("set both or neither").
+- `Settings` keeps only core fields. Its connector imports go, and with them the layer
+  check's last KNOWN entries.
+- `themi config show` adds each module's non-secret settings.
+Tests: today's env variables still configure each connector; secrets never read from TOML;
+each validation message; golden files identical.
 
 ### CR6 · Core refactor: migration tracks per module
 Status: [ ]

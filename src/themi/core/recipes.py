@@ -34,7 +34,7 @@ from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
-from themi.modules import Module, ModuleContext
+from themi.modules import Module, ModuleContext, ModuleSetup
 
 if TYPE_CHECKING:
     from themi.connectors.google import GoogleConfig
@@ -753,6 +753,10 @@ class RecipesModule(Module):
 
     def __init__(self, config: GoogleConfig | None = None) -> None:
         self.config = config
+
+    @classmethod
+    def build(cls, setup: ModuleSetup) -> Module | None:
+        return cls(setup.settings.google())
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry

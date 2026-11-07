@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
+    config = commands.add_parser("config", help="what this Themi is made of (themi.toml)")
+    config_commands = config.add_subparsers(dest="config_command", required=True)
+    config_commands.add_parser(
+        "show", help="the template, the modules that will load, and their settings sections"
+    )
     login = commands.add_parser(
         "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
     )
@@ -172,8 +177,13 @@ def build_runtime(
         "catgenie": CatGenieConfig(),
         "keep": GKeepAccount,
     }
-    if connectors is not None:
+    modules = None
+    if connectors is not None:  # `make dev`: the fakes, as the family's connectors
         options.update(connectors)
+    else:  # CR5a: the modules themi.toml (or the family template) names
+        from themi.config import config_path, load_config, resolve_modules
+
+        modules = resolve_modules(load_config(config_path()), settings)
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
@@ -188,6 +198,7 @@ def build_runtime(
         tool_routing=settings.tool_routing,
         conversation_mode=settings.conversation_mode,
         control_dir=settings.control_dir,
+        modules=modules,
         **options,
     )
     return Runtime(
@@ -198,6 +209,31 @@ def build_runtime(
         public_url=settings.public_url,
         **runtime_options,
     )
+
+
+def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
+    """`themi config show`: where the config came from, the template, and each module."""
+    from themi.config import config_path, load_config, load_template, resolve_modules
+
+    path = config_path(env)
+    config = load_config(path)
+    modules = resolve_modules(config, settings)
+    template = load_template(config.template)
+    loaded = {m.name for m in modules}
+    lines = [
+        f"Config: {path if path else 'none (the family template, from the environment)'}",
+        f"Template: {template.name}",
+        f"Modules ({len(modules)}):",
+        *(f"  {m.name}" for m in modules),
+    ]
+    left_out = [n for n in (*template.modules, *config.added) if n not in loaded]
+    if left_out:
+        lines.append("Left out (not set up, or removed):")
+        lines += [f"  {n}" for n in dict.fromkeys(left_out)]
+    for name, section in sorted(config.sections.items()):
+        lines.append(f"[module.{name}]")
+        lines += [f"  {key} = {value!r}" for key, value in sorted(section.items())]
+    return "\n".join(lines)
 
 
 def _run() -> None:
@@ -509,7 +545,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from themi.accounts import AccountsError, Role
     from themi.accounts.setup import pairing_instructions, run_init, run_invite
     from themi.backup import BackupError, S3Error
-    from themi.settings import SettingsError
+    from themi.settings import Settings, SettingsError
     from themi.storage.secrets import DecryptionError
 
     parser = build_parser()
@@ -525,6 +561,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(pairing_instructions(member, code, _bot_username()))
         elif args.command == "run":
             _run()
+        elif args.command == "config":
+            print(config_report(Settings.load()))
         elif args.command == "login-link":
             print(_login_link(args.name))
         elif args.command == "feedback":

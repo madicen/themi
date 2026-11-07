@@ -17,7 +17,14 @@ Core never imports a module (`tools/check_layers.py`).
 
 from __future__ import annotations
 
-from themi.modules.base import Module, ModuleError, PeriodicTask, SetupStep, as_job
+from themi.modules.base import (
+    Module,
+    ModuleError,
+    ModuleSetup,
+    PeriodicTask,
+    SetupStep,
+    as_job,
+)
 from themi.modules.context import ModuleContext
 from themi.modules.loader import load, order
 
@@ -25,6 +32,7 @@ __all__ = [
     "Module",
     "ModuleContext",
     "ModuleError",
+    "ModuleSetup",
     "PeriodicTask",
     "SetupStep",
     "as_job",

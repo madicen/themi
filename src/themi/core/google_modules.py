@@ -28,7 +28,7 @@ from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
 from themi.core.triage import EmailTriage
 from themi.energy import EnergyModel
-from themi.modules import Module, ModuleContext, as_job
+from themi.modules import Module, ModuleContext, ModuleSetup, as_job
 
 
 class GoogleModule(Module):
@@ -38,6 +38,11 @@ class GoogleModule(Module):
 
     def __init__(self, config: GoogleConfig) -> None:
         self.config = config
+
+    @classmethod
+    def build(cls, setup: ModuleSetup) -> Module | None:
+        google = setup.settings.google()
+        return cls(google) if google else None
 
     def install(self, ctx: ModuleContext) -> None:
         store = ctx.services.store

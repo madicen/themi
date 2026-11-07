@@ -45,6 +45,70 @@ dev = [
 [project.scripts]
 themi = "themi.cli:main"
 
+[project.entry-points."themi.modules"]
+# CR5a: every module, by its name, for themi.toml and the templates.
+appliances = "themi.core.appliances:AppliancesModule"
+body_double = "themi.core.body_double:BodyDoubleModule"
+breaks = "themi.core.breaks:BreaksModule"
+burnout = "themi.core.burnout:BurnoutModule"
+business_hours = "themi.core.business_hours:BusinessHoursModule"
+buying = "themi.core.buying:BuyingModule"
+calendar = "themi.core.google_modules:CalendarModule"
+calls = "themi.core.calls:CallsModule"
+catgenie = "themi.core.connector_modules:CatGenieModule"
+checkin_reviews = "themi.core.checkin_reviews:CheckinReviewsModule"
+commands = "themi.core.commands:CommandsModule"
+conversation_mode = "themi.core.conversation_mode:ConversationModeModule"
+cookbook_save = "themi.core.cookbook_save:CookbookSaveModule"
+cooking = "themi.core.cooking:CookingModule"
+cooking_timers = "themi.core.cooking_timers:CookingTimersModule"
+cozyla_chores = "themi.core.connector_modules:CozylaChoresModule"
+cozyla_todos = "themi.core.connector_modules:CozylaTodosModule"
+day_summary = "themi.core.day_summary:DaySummaryModule"
+email_audit = "themi.core.connector_modules:EmailAuditModule"
+feedback = "themi.core.feedback:FeedbackModule"
+focus = "themi.core.focus:FocusModule"
+follow_ups = "themi.core.follow_ups:FollowUpsModule"
+gmail = "themi.core.google_modules:GmailModule"
+google = "themi.core.google_modules:GoogleModule"
+google_tasks = "themi.core.connector_modules:GoogleTasksModule"
+groceries = "themi.core.groceries:GroceriesModule"
+guided_steps = "themi.core.body_double_guided:GuidedStepsModule"
+guides = "themi.core.guides:GuidesModule"
+habits = "themi.core.habits:HabitsModule"
+home_connect = "themi.core.connector_modules:HomeConnectModule"
+journal = "themi.core.journal:JournalModule"
+keep = "themi.core.connector_modules:KeepModule"
+liaison = "themi.core.liaison:LiaisonModule"
+lists = "themi.core.lists:ListsModule"
+maintenance = "themi.core.maintenance:MaintenanceModule"
+meals = "themi.core.meals:MealsModule"
+memory = "themi.core.memory:MemoryModule"
+mode_chooser = "themi.core.body_double_modes:ModeChooserModule"
+music_offers = "themi.core.body_double_music:MusicOffersModule"
+ourgroceries = "themi.core.connector_modules:OurGroceriesModule"
+pantry = "themi.core.pantry:PantryModule"
+reactions = "themi.core.reactions:ReactionsModule"
+recipe_groceries = "themi.core.recipe_groceries:RecipeGroceriesModule"
+recipe_ideas = "themi.core.recipe_ideas:RecipeIdeasModule"
+recipes = "themi.core.recipes:RecipesModule"
+reminders = "themi.core.reminders:RemindersModule"
+roborock = "themi.core.connector_modules:RoborockModule"
+routines = "themi.core.routines:RoutinesModule"
+safeway = "themi.core.safeway:SafewayModule"
+spending = "themi.core.spending:SpendingModule"
+spotify = "themi.core.connector_modules:SpotifyModule"
+step_pictures = "themi.core.step_images:StepPicturesModule"
+taking = "themi.core.taking:TakingModule"
+tasks = "themi.core.tasks:TasksModule"
+thinq = "themi.core.connector_modules:ThinqModule"
+travel = "themi.core.connector_modules:TravelModule"
+tuya = "themi.core.connector_modules:TuyaModule"
+web_recipes = "themi.core.web_recipes:WebRecipesModule"
+web_search = "themi.core.web_search:WebSearchModule"
+which_list = "themi.core.which_list:WhichListModule"
+wrong_replies = "themi.core.wrong_replies:WrongRepliesModule"
+
 [build-system]
 requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
@@ -53,7 +117,13 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-themi = ["storage/schema/*.sql", "web/templates/*.html", "web/static/*", "web/static/*/*"]
+themi = [
+    "storage/schema/*.sql",
+    "templates/*.toml",
+    "web/templates/*.html",
+    "web/static/*",
+    "web/static/*/*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
