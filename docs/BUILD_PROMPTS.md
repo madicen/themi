@@ -217,14 +217,17 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
 | F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [x] 2026-11-06 |
-| F34a | Feedback: in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools | Feedback | [ ] |
-| F34b | Feedback: the chat reply's ideas fit the question, and a cut reply isn't a fragment | Feedback | [ ] |
-| F34c | Feedback: a moved run shows on the wall, and "no run today" skips it | Feedback | [ ] |
-| F34d | Feedback: merging two events into one, and a change that failed is said | Feedback | [ ] |
+| F34a | Feedback: in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools | Feedback | [x] 2026-11-07 |
+| F34b | Feedback: the chat reply's ideas fit the question, and a cut reply isn't a fragment | Feedback | [x] 2026-11-07 |
+| F34ca | Feedback: a round moved off its days shows on the wall, and skip_round | Feedback | [x] 2026-11-07 |
+| F34cb | Feedback: a distance that isn't the plan's, and Sunday after a Saturday run | Feedback | [ ] |
+| F34da | Feedback: merging two events, "mine" on the family calendar, a failure said | Feedback | [x] 2026-11-07 |
+| F34db | Feedback: an event just added is read again first | Feedback | [x] 2026-11-07 |
 | F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
 | F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
 | F34g | Idea: Themi sees pictures sent in chat | Feedback | [ ] |
-| F34h | Feedback: body doubling uses the task's own steps, routines and several tasks in a row | Feedback | [ ] |
+| F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
+| F34hb | Feedback: body doubling through several tasks in a row | Feedback | [ ] |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
 | F34j | Idea: when someone's day rolls over | Feedback | [ ] |
 | F34k | Idea: a call before the business closes | Feedback | [ ] |
@@ -11078,7 +11081,7 @@ add "replace vacuum water" to the evening routine), or they'll come back. Task 8
 as it is. Mark #171 reviewed once live.
 
 ### F34a · Feedback (2026-11-07): in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CM1a, CM1b, BD1a
 Read first: CM1a's notes (`is_request`, the one place a message is sent to the tool agent);
 CM1b's notes (`SIDECAR_TOOLS`, what the sidecar can and can't do). From Erin's bugs #178
@@ -11133,8 +11136,23 @@ Sunday": the run isn't on that evening's end-of-day list, and comes back Saturda
 
 Data: mark #178 and #179 reviewed once live (with F34c and F34h).
 
+Notes (2026-11-07):
+- `is_request(text, list_names, open_titles)`: also `TOGETHER` ("can we", "let's" before
+  a verb of doing), `BODY_DOUBLE` (body double, sit with me, keep me company, pomodoro,
+  step by step, do it with me), `ABILITY` ("can you see/read/open...", "are you able
+  to"), `RULE` ("from now on", "future emails", "emails like that", "mail from") and
+  `names_open_task`: a change word (today, tomorrow, not, no, skip, instead, plan to, a
+  weekday...) plus a word of an open task's or routine item's title, minus fillers like
+  "go", "for", "clean" ("run" in "No run today"; a word's ending may differ by up to
+  three letters). `ConversationMode._open_titles` gives their open tasks and routine
+  items.
+- The sidecar has `snooze_task` too, only for a task it was shown (`NEEDS_SHOWN_TASK`),
+  labelled "Put off". Taking it back isn't offered (the undo says it's kept, as for a
+  cancel).
+- Setup: restart `themi run`. No migration.
+
 ### F34b · Feedback (2026-11-07): the chat reply's ideas fit the question, and a cut reply isn't a fragment
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CM1a, F30b
 Read first: CM1a's notes (`CHAT_SYSTEM`, `honest`); F30b's notes (chat says when it
 doesn't know). From Erin's bug #180 (2026-11-06, 10:47 pm, "why would shows to watch be in
@@ -11174,8 +11192,23 @@ Scenario: none beyond the unit tests (the model's words vary); covered by a chat
 
 Data: mark #180 reviewed once live.
 
+Notes (2026-11-07):
+- The fragment wasn't `honest`. Outbox 1482 on the Pi: reply 351 was queued as "Step 1.
+  Remove everything from the top tray." (the tool agent, not chat), and the gentle
+  rewrite (Erin's strength 2) sent "The top tray empty." Short lines skip `unfaithful`'s
+  "dropped most of it" check. Fixed there: a rewrite that drops a number the original had
+  ("dropped a number") isn't used, and the softener's "Up next: ..." goes instead. A check
+  for a dropped verb was tried and dropped: the rewriter is meant to turn "Move the laundry
+  now" into "The washer's done".
+- `CHAT_SYSTEM`: the places to look are for a lost fact (a number, an address, a booking,
+  a price) and must fit it; for ideas (what to watch, cook, do) it offers two or three
+  that suit them, or one light question, "Not a list of places to look."
+- `honest` logs the reply it cut (redacted). No chat eval case was added: the model's words
+  vary, and the prompt test covers the wording.
+- Setup: restart `themi run`.
+
 ### F34c · Feedback (2026-11-07): a moved run shows on the wall, and "no run today" skips it
-Status: [ ]
+Status: split into F34ca [x] and F34cb [ ] (2026-11-07)
 Depends on: F9a, F9c, C2b, C2d, F21c
 Read first: F9a's notes, especially its known gaps ("a round moved to a day that isn't on
 the wall's schedule doesn't show there"; "after a Saturday run, Sunday still shows
@@ -11222,8 +11255,34 @@ tomorrow or Sunday" moves it (wall too), and the 9:15 pm list doesn't have it.
 
 Data: mark #172 and #178 reviewed once live. Erin's run needs nothing changed in the DB.
 
-### F34d · Feedback (2026-11-07): merging two events into one, and a change that failed is said
+### F34ca · Feedback (2026-11-07): a round moved off its days shows on the wall, and skip_round
+Status: [x] 2026-11-07
+Depends on: F34c (its text above)
+- The wall and `skip_round`, from F34c's Build.
+
+Notes (2026-11-07):
+- The run is a Cozyla routine (C3), not a chore. `schedule.with_round_days`: a weekly
+  routine's `repeatsIn` also has the weekdays of its current round's days (from today on),
+  so Friday shows while the round is Friday's, and goes at the next sync once it moves on.
+  It shows on every Friday while it's there, which is only until the round moves.
+- `TaskBoard.skip_round(task_id, by, day)` and the core tool `skip_round(task_id, day)`:
+  the round moves to the day after today (or the day named), rest rule kept, through
+  `reschedule`, so nothing is recorded as missed and the end-of-day list leaves today
+  alone. A day past the next round just moves there (that round is skipped). The line is
+  '"Go for a run" moved to Sat 24 Oct (or Sun 25 Oct).', the title quoted so the shield
+  doesn't take it for an order, and it ends the turn when a word of the title is in their
+  message. `snooze_task`'s description points to it.
+- Setup: restart `themi run`. No migration.
+
+### F34cb · Feedback (2026-11-07): a distance that isn't the plan's, and Sunday after a Saturday run
 Status: [ ]
+Depends on: F34ca, F9c
+- From F34c's Build: the one-choice question when they say a distance that isn't this
+  week's ("Keep 1.3 this week, or keep the plan?"), and F9a's other wall gap (after a
+  Saturday run, Sunday still shows unticked).
+
+### F34d · Feedback (2026-11-07): merging two events into one, and a change that failed is said
+Status: split into F34da [x] and F34db [x] (2026-11-07)
 Depends on: K1, K3, F29a, F29e, F14a
 Read first: K3's notes (changing events); F29a's notes (an event's place, title and notes,
 on the copy they mean); F29e's notes (whose calendar, private calendars); K1's notes (the
@@ -11281,6 +11340,39 @@ one event, 1-1:30 pm, Return Patient Visit at 401 Quarry Rd.
 
 Data: Erin's two events of Wed 11 Nov are still both there; offer the merge again once
 live. Mark #174 reviewed once live.
+
+### F34da · Feedback (2026-11-07): merging two events, "mine" on the family calendar, a failure said
+Status: [x] 2026-11-07
+Depends on: F34d (its text above)
+
+Notes (2026-11-07):
+- `merge_calendar_events(first, second, on, keep_on)` (calendar group), executor
+  `calendar.merge_events`. The fuller event (a place first, then the longer title) gives the
+  title, place and times; both descriptions are joined (read only to merge, never kept).
+  The other is deleted, or with `keep_on: "both"` given the same details. On two calendars
+  with no `keep_on`, the tool asks the model to ask: "mine", "family", "both" or "auto"
+  (Themi's call: the fuller one's calendar). Deviation: no buttons of its own; the question
+  is one line from the model, and the usual approval card follows ("Merging ND psych in
+  person into Return Patient Visit ..., at 401 Quarry Rd ...: one event on their
+  calendar"). Different times aren't asked about: the fuller one's are used, and the card
+  shows them.
+- `Events.find`: a calendar ("mine" or "family") only picks between copies; when it leaves
+  nothing, every match stands. On the Pi, Madicen Family is in `calendars` (the family
+  calendar), which is why "mine" missed it.
+- `Agent._unsaid_failure`: when a summary (or another tool's message) would end the turn
+  with nothing said, a failed call other than the summary's own gets FAILED_TEXT.
+- The day summary names a shared calendar as "(on the Madicen Family calendar)", and
+  `change_calendar_event` says a calendar's name is never a location.
+- Setup: restart `themi run`. No migration. Then Erin can ask to merge Wednesday's two.
+
+### F34db · Feedback (2026-11-07): an event just added is read again first
+Status: [x] 2026-11-07
+Depends on: F34da
+
+Notes (2026-11-07):
+- `CalendarBusy.refresh(only=member)`; `Agent._converse` calls it first when the message
+  says they've just added something (`JUST_ADDED`: "I (just) added/put/made/booked ...
+  calendar/appointment/event/from the app"). A failure is logged and the turn goes on.
 
 ### F34e · Idea (2026-11-07): Themi spots the same event twice and offers to merge it
 Status: [ ]
@@ -11389,7 +11481,7 @@ Buy.
 Data: mark #173 reviewed once live.
 
 ### F34h · Feedback (2026-11-07): body doubling uses the task's own steps, routines and several tasks in a row
-Status: [ ]
+Status: split into F34ha [x] and F34hb [ ] (2026-11-07)
 Depends on: BD1b, BD2, R1a, F33c
 Read first: BD1b's notes (Guided Step-Through, `proposed_steps`, a task's steps); R1a's
 notes (routines and their items); F33c's notes (a near name is found). From Michael's bug
@@ -11434,6 +11526,28 @@ Scenario: Michael says "Can you body double my evening routine?" and goes throug
 routine's items, each ticked on the wall as he goes.
 
 Data: mark #181 reviewed once live (and #179 with F34a).
+
+### F34ha · Feedback (2026-11-07): body doubling finds the task by name, and goes through a routine
+Status: [x] 2026-11-07
+Depends on: F34h (its text above)
+
+Notes (2026-11-07):
+- `start_body_double` with `task_id` 0 looks at `what` first: `BodyDouble.find_routine`
+  ("my evening routine", "the morning one") and then `find_task` (`title_matches` either
+  way, their own open tasks first, then anyone's, so Michael doing Erin's bird cage gets
+  task 7's ten steps; finishing closes it, as `complete_task` would).
+- A routine: migration 0135 `body_double_sessions.routine_id`. Guided by default; its
+  category is "chores" (no model call). The steps are today's open items (all of today's if
+  every one is ticked). Next and All done tick the item through `Routines.tick_now`, so the
+  wall follows. Skip doesn't tick.
+- The "Keep these steps" offer for a task without steps was already there (BD1b).
+- Setup: restart `themi run` (migration 0135).
+
+### F34hb · Feedback (2026-11-07): body doubling through several tasks in a row
+Status: [ ]
+Depends on: F34ha
+- From F34h's Build: `task_ids` and a routine then tasks in one session, "Next up" between
+  them, each closed as it's finished, and the session page's "which of how many".
 
 ### F34i · Idea (2026-11-07): their own Spotify playlists in a session's music choices
 Status: [ ]
