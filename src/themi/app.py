@@ -45,6 +45,7 @@ from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
 from themi.core.body_double import BodyDouble
 from themi.core.body_double_guided import GuidedSteps
+from themi.core.body_double_modes import ModeChooser
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
@@ -257,6 +258,7 @@ def build_app(
     body_double = BodyDouble(services, scheduler)  # BD1a: block ends are scheduler jobs
     body_double.install()
     GuidedSteps(services, body_double).install()  # BD1b
+    ModeChooser(services, body_double).install()  # BD2
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:

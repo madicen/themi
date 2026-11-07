@@ -179,9 +179,6 @@ def parse_command(argument: str) -> tuple[str, int]:
     return MODE_WORDS[said], minutes
 
 
-# Something that starts a session may want to change how (BD2: the mode it picks, and the
-# offer to switch). (member, task, label) -> the mode to use, when none was said.
-ModeChooser = Callable[[Member, Task | None, str], str]
 # What else a start says or offers (BD2's offer, BD3a's [Open], BD5c's music):
 # (session, text, buttons) -> (text, buttons).
 StartDecorator = Callable[[Session, str, list[Button]], Awaitable[tuple[str, list[Button]]]]
@@ -195,7 +192,7 @@ class BodyDouble:
         self.db = services.store.db
         self.jobs = jobs
         self.pauses = services.outbox.pauses
-        self.choose_mode: ModeChooser = lambda member, task, label: SILENT
+        self.modes: Any = None  # BD2's ModeChooser: the job's category and the mode to use
         self.start_decorators: list[StartDecorator] = []
         self.end_listeners: list[EndListener] = []
         self.guided: Any = None  # BD1b's GuidedSteps, once installed
@@ -307,31 +304,55 @@ class BodyDouble:
         if not 0 <= minutes <= MAX_MINUTES:
             raise ValueError(f"a session is up to {MAX_MINUTES // 60} hours")
         label = (task.title if task is not None else label.strip()) or "this"
-        if not mode:
-            mode = self.choose_mode(member, task, label)
+        now = clock.now()
+        energy = self.services.energy.suggested_level(member)
+        category = None
+        chosen = False  # Themi picked the mode: the start says so, as an offer (BD2)
+        if self.modes is not None:
+            category = await self.modes.category(member, task, label)
+        if not mode and self.modes is not None and category is not None:
+            mode = self.modes.default_for(member, category) or ""
+            if not mode:
+                mode = self.modes.choose(member, category, self.hour_of_week(now), energy)
+                chosen = True
+        mode = mode or SILENT
         await self.stop_for_other(member)  # one at a time: a new one ends the old
         if self.services.breaks is not None and self.services.breaks.current(member):
             self.services.breaks.end(member)  # back from a break, to work
         member = self.store.get_member(member.id)
-        now = clock.now()
         pause = self.pauses.pause(member, TOPIC, now + OPEN_ENDED + LEFT_AFTER)
         session_id = self.db.execute(
-            "INSERT INTO body_double_sessions (member_id, task_id, label, mode, started_at, "
-            "planned_minutes, work_minutes, break_minutes, hour_of_week, energy_level, phase, "
-            "pause_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?)",
+            "INSERT INTO body_double_sessions (member_id, task_id, label, category, mode, "
+            "mode_chosen, started_at, planned_minutes, work_minutes, break_minutes, "
+            "hour_of_week, energy_level, phase, pause_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?)",
             (
-                member.id, task.id if task is not None else None, label, mode, to_utc_iso(now),
-                minutes or None, member.sprint_work_minutes, member.sprint_break_minutes,
-                self.hour_of_week(now), self.services.energy.suggested_level(member), pause.id,
+                member.id, task.id if task is not None else None, label, category, mode,
+                int(chosen), to_utc_iso(now), minutes or None, member.sprint_work_minutes,
+                member.sprint_break_minutes, self.hour_of_week(now), energy, pause.id,
             ),
         )  # fmt: skip
         session = self.get(session_id)
         assert session is not None
         log.info("Body double %s started for member %s (%s)", mode, member.id, session_id)
         session, text, buttons = await self._begin(session)
+        if chosen and session.mode == mode:  # once, as an offer (BD2)
+            text, buttons = self.offer(session, text, buttons)
         for decorate in self.start_decorators:
             text, buttons = await decorate(session, text, buttons)
         return session, text, buttons
+
+    def offer(self, session: Session, text: str, buttons: list[Button]) -> tuple[str, list[Button]]:
+        """The mode Themi picked, said once with the other two as buttons: never a reason."""
+        from themi.core.body_double_modes import OFFER_BUTTONS, OFFER_TEXT
+
+        others = [
+            Button(OFFER_BUTTONS[m], "body_double", {"session": session.id, "action": "switch",
+                                                     "mode": m, "seq": session.seq})
+            for m in MODES
+            if m != session.mode and (m != GUIDED or self.guided is not None)
+        ]  # fmt: skip
+        return f"{OFFER_TEXT[session.mode]}\n{text}", [*buttons, *others]
 
     async def _begin(self, session: Session) -> tuple[Session, str, list[Button]]:
         """The first block of a session in its mode, and what to say."""
@@ -458,6 +479,10 @@ class BodyDouble:
         if int(payload.get("seq", -1)) != session.seq:
             return  # an old question: the session moved on
         self.remember_message(session, event.button.message_id)
+        if payload.get("action") == "switch":  # BD2's offer: another mode instead
+            _, text, buttons = await self.switch(member, str(payload.get("mode")))
+            await self._reply(event, member, text, buttons)
+            return
         text, buttons = await self.act(session, str(payload.get("action", "")))
         await self._reply(event, member, text, buttons)
 

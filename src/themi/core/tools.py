@@ -255,7 +255,7 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         "body double sessions: quiet company, sprints, step by step",
         r"body.?doubl|sit with me|keep me company|company while|pomodoro|sprints?\b|"
         r"work (?:alongside|with me)|stay with me while|focus session|while i (?:work|do)|"
-        r"quiet instead|step by step instead",
+        r"quiet instead|step by step instead|always use (?:pomodoro|sprints|quiet)",
     ),
     "settings": (
         "pausing messages, breaks, phrasing, quiet hours",
@@ -492,7 +492,14 @@ TOOL_GROUPS: dict[str, str] = {
     ),  # RC1b, RC2a, RC2b, RC3a
     **dict.fromkeys(("search_web", "read_web_page"), "web"),
     **dict.fromkeys(
-        ("start_body_double", "switch_body_double_mode", "end_body_double"), "body_double"
+        (
+            "start_body_double",
+            "switch_body_double_mode",
+            "end_body_double",
+            "set_body_double_default",
+            "set_job_category",
+        ),
+        "body_double",
     ),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(

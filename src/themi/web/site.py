@@ -33,6 +33,7 @@ from themi.accounts.models import DAY_NAMES
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import conversation_mode
+from themi.core.body_double import MODES
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
 from themi.web.task_pages import task_rows
@@ -380,8 +381,19 @@ def core_routes(kit: Kit) -> APIRouter:
                 and conversation_mode.offered(app.services, member)
                 else []
             ),
+            "job_modes": job_modes(member),  # BD2
             **extra,
         }
+
+    def job_modes(member: Member) -> list[tuple[str, str, str]]:
+        """(category, its words, their own mode or "") for each kind of job (BD2)."""
+        from themi.core.body_double_modes import CATEGORIES, CATEGORY_WORDS
+
+        body_double = app.services.body_double
+        if body_double is None or body_double.modes is None:
+            return []
+        own = body_double.modes.defaults(member)
+        return [(c, CATEGORY_WORDS[c], own.get(c, "")) for c in CATEGORIES]
 
     @router.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
@@ -437,6 +449,14 @@ def core_routes(kit: Kit) -> APIRouter:
                 csrf=session.csrf_token,
                 **settings_values(member, error=str(exc)),
             )
+        body_double = app.services.body_double
+        if body_double is not None and body_double.modes is not None:  # BD2: their own modes
+            for category, _, _ in job_modes(member):
+                if f"job_mode_{category}" in form:
+                    chosen = str(form.get(f"job_mode_{category}", ""))
+                    body_double.modes.set_default(
+                        member, category, chosen if chosen in MODES else None
+                    )
         return kit.redirect("/settings", "Saved.")
 
     @router.post("/settings/busy")
