@@ -275,7 +275,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
-| CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [~] |
+| CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [ ] |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [ ] |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
@@ -13942,7 +13942,7 @@ Golden files (made in CR1, under `tests/golden/`) guard what the scenario suite 
 what changes, and the commit says so. Otherwise a diff in them is a bug in the prompt.
 
 ### CR1 · Core refactor: the module contract, loader and golden files
-Status: [~]
+Status: [x] 2026-11-07
 Depends on: none
 Read first: the refactor doc, all of it; `src/themi/app.py`; `src/themi/core/services.py`;
 `src/themi/core/tools.py` (the registry and `TOOL_GROUPS`).
@@ -13974,6 +13974,32 @@ Read first: the refactor doc, all of it; `src/themi/app.py`; `src/themi/core/ser
 Tests: loader ordering, missing requirement, cycle, duplicate, optional absent; the three
 moved modules; the layer check catches a planted import (a fixture tree, not the real code);
 golden files unchanged.
+
+Notes:
+- Golden files live in `tests/golden/`, checked by `tests/scenarios/test_golden.py` (a
+  scenario test, not a unit test: it needs every connector's fake fixture). `make golden`
+  rewrites them. Besides the four in the plan there's `handlers.json`: the Telegram command
+  menu in order, button prefixes, executors, and every hook list (reactions, text
+  handlers, awaiting and open-item sources) by handler name in run order, because their
+  order changes what people see and what the model's context lists.
+- `system_prompt.txt` is `build_system()` with no rules or facts, which is all the prompt
+  is today. CR8 must switch the golden test to the composed prompt and keep the file.
+- `Module` is a base class with class attributes (not a Protocol), in `themi.modules`.
+  `PeriodicTask` moved there too; `themi.app` re-exports it.
+- `ModuleContext.load(...)` can be called more than once, and a later call may require
+  modules installed earlier. `build_app` calls it at each moved feature's old position, so
+  the install order (and so the menu and hook order) stays exactly as before. CR2c ends
+  with a single call over the whole list; the loader's stable ordering keeps the order.
+- `ModuleContext` already has `provide`/`get`/`maybe` (needed by CR2's modules to hand
+  each other objects). CR3 still moves the feature slots off `Services`.
+- The scheduler is now created before the core's approvals, so modules can have it.
+- `tools/check_layers.py` runs in `make lint`. KNOWN breaches: the account store's
+  `body_double_music` import (CR3) and `settings.py`'s connector configs (CR5). A KNOWN
+  entry that disappears fails the check, so the list only shrinks.
+- `tests/fakes/modules.py` has `bare_services(store)`: the core services alone, for
+  installing one module in a unit test.
+- Baseline on macOS: 8 tests in `tests/integration/test_deploy_scripts.py` fail because the
+  deploy scripts use GNU `sed -i` (they target the Pi). Pre-existing, not touched here.
 
 ### CR2a · Core refactor: standard modules onto the contract
 Status: [ ]

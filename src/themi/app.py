@@ -48,7 +48,7 @@ from themi.core.body_double import BodyDouble
 from themi.core.body_double_guided import GuidedSteps
 from themi.core.body_double_modes import ModeChooser
 from themi.core.body_double_music import MusicOffers
-from themi.core.breaks import Breaks
+from themi.core.breaks import BreaksModule
 from themi.core.burnout import Burnout
 from themi.core.business_hours import BusinessHours
 from themi.core.buying import ThingsToBuy
@@ -91,7 +91,7 @@ from themi.core.memory import Memory
 from themi.core.music import Music
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
-from themi.core.reactions import Reactions
+from themi.core.reactions import ReactionsModule
 from themi.core.recipe_groceries import RecipeGroceries
 from themi.core.recipe_ideas import RecipeIdeas
 from themi.core.recipes import Recipes
@@ -117,24 +117,18 @@ from themi.core.web_recipes import WebRecipes
 from themi.core.web_search import WebSearch
 from themi.core.which_list import WhichList
 from themi.core.which_task import TaskNamer
-from themi.core.wrong_replies import WrongReplies
+from themi.core.wrong_replies import WrongRepliesModule
 from themi.energy import EnergyModel
 from themi.energy.matching import Matcher
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
+from themi.modules import ModuleContext, PeriodicTask
 from themi.scheduler import Scheduler
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 from themi.updates import ServerControl
 
 ChannelFactory = Callable[[AccountStore], TelegramChannel]
-
-
-@dataclass(frozen=True)
-class PeriodicTask:
-    name: str
-    every: timedelta
-    run: Callable[[], Awaitable[object]]
 
 
 @dataclass
@@ -204,6 +198,8 @@ def build_app(
         energy=energy,
         outcomes=outcomes,
     )
+    scheduler = Scheduler(db)
+    ctx = ModuleContext(services, scheduler=scheduler)  # CR1: modules install through it
     approvals = ApprovalsUI(services.autonomy, outbox)
     approvals.install(services)
     rulebook = Rulebook(services.autonomy, outbox)
@@ -230,7 +226,7 @@ def build_app(
     WhichList(services).install()
     Spending(services).install()
     Liaison(services).install()
-    Breaks(services).install()
+    ctx.load(BreaksModule())
     pantry = Pantry(services, groceries)
     pantry.install()
     tasks = TaskBoard(services, Matcher(store, energy))
@@ -263,7 +259,6 @@ def build_app(
     reviews.install()
     Meals(services, pantry).install()
     VendorCalls(services, tasks).install()
-    scheduler = Scheduler(db)
     CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
     body_double = BodyDouble(services, scheduler)  # BD1a: block ends are scheduler jobs
     body_double.install()
@@ -302,8 +297,7 @@ def build_app(
     routines.install()
     habits = HabitReserve(services)
     habits.install()
-    Reactions(services).install()
-    WrongReplies(services).install()
+    ctx.load(ReactionsModule(), WrongRepliesModule())
     Commands(services).install()
     feedback = FeedbackChat(services)
     feedback.install()
@@ -342,6 +336,7 @@ def build_app(
             "feedback.forget_pictures", timedelta(days=1), _async(feedback.book.forget_pictures)
         ),
     ]
+    periodic.extend(ctx.jobs)
     server = ServerControl(services, control_dir)
     server.install()
     if control_dir is not None:

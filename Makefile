@@ -24,6 +24,7 @@ lint:
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m pyright --pythonpath "$$($(PYTHON) -c 'import sys; print(sys.executable)')"
 	$(PYTHON) tools/check_clock.py
+	$(PYTHON) tools/check_layers.py
 
 test:
 	$(PYTEST) $(PARALLEL) tests/unit

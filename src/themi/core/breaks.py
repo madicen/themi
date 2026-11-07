@@ -25,6 +25,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -40,6 +41,15 @@ UP_TEXT = "Break's up. Ready to carry on, or a little longer?"
 ENDED_TEXT = "Welcome back."
 EXTENDED_TEXT = "Longer it is: no task nudges or check-ins until {until}."
 NO_BREAK_TEXT = "There's no break going on."
+
+
+class BreaksModule(Module):
+    """B1: a rest mode that ends with a question."""
+
+    name = "breaks"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Breaks(ctx.services)).install()
 
 
 class Breaks:

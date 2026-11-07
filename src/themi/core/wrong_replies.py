@@ -34,6 +34,7 @@ from themi.core.reactions import CARDS
 from themi.core.services import Services
 from themi.core.tools import TOOL_GROUPS, TWINS
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 from themi.storage.db import Database
 
 WRONG = "👎"
@@ -62,6 +63,15 @@ def reply_for_message(db: Database, member_id: int, telegram_message_id: int) ->
     if row is None or row["reply_id"] is None or row["kind"] in CARDS:
         return None
     return int(row["reply_id"])
+
+
+class WrongRepliesModule(Module):
+    """A reply marked wrong with a reaction, kept for review."""
+
+    name = "wrong_replies"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(WrongReplies(ctx.services)).install()
 
 
 class WrongReplies:

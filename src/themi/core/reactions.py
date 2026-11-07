@@ -23,6 +23,7 @@ from themi.channels.events import InboundEvent
 from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 GOOD = frozenset({"👍", "❤", "❤️", "🙏"})
 NOT_GOOD = frozenset({"👎", "😕"})
@@ -59,6 +60,15 @@ def verdict(emoji: tuple[str, ...]) -> int:
         if e in NOT_GOOD:
             return -1
     return 0
+
+
+class ReactionsModule(Module):
+    """What lands with each person, read from their emoji reactions."""
+
+    name = "reactions"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Reactions(ctx.services)).install()
 
 
 class Reactions:
