@@ -229,7 +229,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
-| BD5c | Body double: music that suits the task | Body double | [ ] |
+| BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
@@ -11777,7 +11777,7 @@ Notes (2026-11-06):
   Accounts. Restart `themi run` (migration 0133).
 
 ### BD5c · Body double: music that suits the task
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD2, BD5b
 Read first: BD2's notes (the learning model); this section's intro.
 - For each person × category × part of the day, what played in their `finished` sessions
@@ -11787,6 +11787,21 @@ Read first: BD2's notes (the learning model); this section's intro.
 - Never started on its own; never mentions how sessions went.
 Tests: unit tests for the pick and thresholds; a scenario where the offer follows three
 finished sessions with the same playlist.
+
+Notes (2026-11-06):
+- `themi.core.body_double_music.pick` (pure, over the session rows): for the session's
+  kind of job and part of the day, the music that played most in their `finished`
+  sessions, once it has played in at least two (the latest breaks a tie). Else the kind's
+  default: lofi for deep work, and lofi for tidying too, since none of the built-ins is
+  fast (they're kept at 60-90 BPM; an upbeat loop is a follow-up if wanted). Admin, chores
+  and other have no default, so nothing is offered until something is learned.
+- `MusicOffers`, a start decorator: one line on the session's first message ("Rain again,
+  like last time?" or "Some lofi while you work?") with [Play] [Not now]. [Play] on a
+  built-in sets it on the session page (browsers won't start sound by themselves; it says
+  to tap play there); on Spotify it goes through the music tier like `play_music`, by the
+  item's uri. [Not now] removes the line. Never started on its own; the words never say
+  how sessions went.
+- Spotify items need BD5b set up; when it isn't, a learned Spotify pick isn't offered.
 
 ## Expense sheets
 
