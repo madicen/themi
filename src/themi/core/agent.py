@@ -560,6 +560,8 @@ class Agent:
         routing = services.tool_routing
         recent = [text, *(m.text for m in history[-4:])]
         groups = set(GROUPS) if routing == "all" else choose_groups(recent)
+        for source in services.group_sources:  # BD1a: a session going on brings its tools
+            groups |= source(member)
         if routing == "embeddings" and services.group_router is not None:
             # P7b: by meaning too, over this message and the person's last two; and the
             # groups used lately, which short follow-ups lean on.

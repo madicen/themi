@@ -24,6 +24,12 @@
     <p class="muted">Say "I'm taking a break" (or /break 30) and task nudges and check-ins wait until it's over.</p>
   {% endif %}{% endcall %}
 
+  {% call(part) row("Body double", meta=member.sprint_work_minutes ~ " on, " ~ member.sprint_break_minutes ~ " off", id="body-double") %}{% if part == "body" %}
+    <p class="muted">Say "sit with me while I do the taxes" (or /bodydouble) and Themi keeps you company: quietly, in sprints with breaks, or a step at a time. Task nudges and check-ins wait until you're done.</p>
+    <label>A sprint works for <input type="number" name="sprint_work_minutes" min="5" max="90" value="{{ member.sprint_work_minutes }}" required> minutes</label>
+    <label>then breaks for <input type="number" name="sprint_break_minutes" min="1" max="30" value="{{ member.sprint_break_minutes }}" required> minutes</label>
+  {% endif %}{% endcall %}
+
   {% call(part) row("The wall's chore chart", meta=("All of my chores" if member.chart_limit == 0 else member.chart_limit ~ " of my chores at a time"), id="chart") %}{% if part == "body" %}
     <label>Show <input type="number" name="chart_limit" min="0" max="10" value="{{ member.chart_limit }}"> of my chores at a time</label>
     <label class="check"><input type="checkbox" name="chart_counts_shared" {% if member.chart_counts_shared %}checked{% endif %}> Chores either of us can do count toward that number</label>

@@ -295,6 +295,8 @@ class TaskBoard:
         # Called each time a task is done (a repeating one, each round): (task, by whom,
         # whether they're in the conversation). F17b's follow-ups.
         self.done_hooks: list[DoneHook] = []
+        # More buttons on a task's nudge, after Done and Later (BD1a's [Body double]).
+        self.nudge_buttons: list[Callable[[Task], list[Button]]] = []
         self._pending_prompts: list[int] = []
 
     @property
@@ -632,6 +634,7 @@ class TaskBoard:
                     else []
                 ),
                 Button("Later", "task", {"task": task.id, "action": "later"}),
+                *(b for more in self.nudge_buttons for b in more(task)),
             ],
             deadline=deadline,
             not_before=not_before,

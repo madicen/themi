@@ -89,9 +89,10 @@ IMMEDIATE = (Priority.REPLY, Priority.URGENT)
 BEFORE_QUIET = timedelta(minutes=30)
 PRAISE_KIND = "praise"  # a warm word for something done (F19b): goes when it's news
 SERVER_KIND = "server"  # how an update or restart they asked for went (F23a, bug #130)
+BODY_DOUBLE_KIND = "body_double"  # a session's own questions, at the times they set (BD1a)
 # Answers to what they did or asked for, not Themi starting a conversation: no quiet hours,
 # busy times or daily limit, and not counted. A pause they asked for still holds them.
-ANSWER_KINDS = (PRAISE_KIND, SERVER_KIND)
+ANSWER_KINDS = (PRAISE_KIND, SERVER_KIND, BODY_DOUBLE_KIND)
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
 
@@ -630,7 +631,7 @@ class Outbox:
         return self.store.db.scalar(  # a question to the family group counts for everyone
             "SELECT COUNT(*) FROM outbox WHERE (member_id = ? OR shared_buttons = 1) "
             "AND status = 'sent' AND priority IN ('urgent', 'normal', 'low') "
-            "AND kind NOT IN (?, ?) AND sent_at >= ?",
+            f"AND kind NOT IN ({', '.join('?' * len(ANSWER_KINDS))}) AND sent_at >= ?",
             (member_id, *ANSWER_KINDS, to_utc_iso(midnight)),
         )
 

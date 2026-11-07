@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from themi.connectors.thinq import ThinqWatcher
     from themi.connectors.tuya import TuyaWatcher
     from themi.core.appliances import Appliances
+    from themi.core.body_double import BodyDouble
     from themi.core.breaks import Breaks
     from themi.core.burnout import Burnout
     from themi.core.buying import ThingsToBuy
@@ -192,6 +193,9 @@ class Services:
     spending: Spending | None = None  # takeout, eating out, business expenses (X1)
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
+    body_double: BodyDouble | None = None  # company while they work (BD1a)
+    # BD1a: tool groups a member's state calls for, whatever the words (a session going on).
+    group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
     web_search: WebSearch | None = None  # looking things up online (F30d)
     guides: Guides | None = None  # the family's own guides (F29ha)

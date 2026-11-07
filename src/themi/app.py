@@ -43,6 +43,7 @@ from themi.core import email_forward
 from themi.core.agent import Agent
 from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
+from themi.core.body_double import BodyDouble
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
@@ -252,6 +253,7 @@ def build_app(
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
     CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
+    BodyDouble(services, scheduler).install()  # BD1a: block ends are scheduler jobs
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:

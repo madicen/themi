@@ -73,6 +73,8 @@ class Breaks:
 
     async def _begin(self, member: Member, minutes: int) -> datetime:
         self._finish(member)
+        if self.services.body_double is not None:  # BD1a: a break wins over a session
+            await self.services.body_double.stop_for_other(member)
         now = clock.now()
         until = now + timedelta(minutes=minutes)
         pause = self.pauses.pause(member, TOPIC, until + GRACE)

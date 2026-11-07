@@ -418,6 +418,8 @@ def core_routes(kit: Kit) -> APIRouter:
                 setup_note=form.get("setup_note") == "on",
                 list_style=str(form.get("list_style", "")) or None,
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
+                sprint_work_minutes=as_int(form.get("sprint_work_minutes")),
+                sprint_break_minutes=as_int(form.get("sprint_break_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
                 conversation_mode=(  # CM1a: only when the switch was on the page

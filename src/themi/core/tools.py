@@ -251,6 +251,12 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
         r"eating out|ate out|restaurant|receipt|cost",
     ),
+    "body_double": (  # BD1a: company while they work
+        "body double sessions: quiet company, sprints, step by step",
+        r"body.?doubl|sit with me|keep me company|company while|pomodoro|sprints?\b|"
+        r"work (?:alongside|with me)|stay with me while|focus session|while i (?:work|do)|"
+        r"quiet instead|step by step instead",
+    ),
     "settings": (
         "pausing messages, breaks, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
@@ -439,6 +445,20 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Lunch out with a client, $60",
         "Show me what we spent this week",
     ),
+    "body_double": (  # BD1a
+        "Can you sit with me while I sort the paperwork?",
+        "Body double me through the dishes",
+        "Pomodoro the garage clean-out",
+        "Keep me company while I write the report",
+        "I need some company while I study",
+        "Let's do sprints on the inbox",
+        "Stay with me while I fold the clothes",
+        "Work alongside me for an hour on the essay",
+        "Quiet company for 45 minutes please",
+        "Switch to sprints",
+        "Quiet instead",
+        "Start a focus session on the budget",
+    ),
     "settings": (
         "I'm going to rest for twenty minutes",
         "Taking five",
@@ -471,6 +491,9 @@ TOOL_GROUPS: dict[str, str] = {
         "recipes",
     ),  # RC1b, RC2a, RC2b, RC3a
     **dict.fromkeys(("search_web", "read_web_page"), "web"),
+    **dict.fromkeys(
+        ("start_body_double", "switch_body_double_mode", "end_body_double"), "body_double"
+    ),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
