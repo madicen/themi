@@ -101,7 +101,7 @@ nobody else (admins included) can see or change them. Keys are never shown again
         <select name="kind">{% for value, words in kinds %}<option value="{{ value }}">{{ words }}</option>{% endfor %}</select>
       </label>
       <label>Model <input name="model" placeholder="provider default"></label>
-      <label>Address (local or custom servers) <input name="base_url"></label>
+      <label>Address (local or custom servers; Cloudflare: the account ID) <input name="base_url"></label>
       <label>API key <input type="password" name="api_key" autocomplete="new-password"></label>
       <input type="hidden" name="supports_tools" value="on">
       <input type="hidden" name="supports_structured" value="on">

@@ -20,6 +20,8 @@ GEMINI_DEFAULT_EMBEDDING_MODEL = "gemini-embedding-2"
 GEMINI_DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-lite-image"
 # OpenAI's current image model, asked for its low quality (a few cents a picture).
 OPENAI_DEFAULT_IMAGE_MODEL = "gpt-image-2"
+# Cloudflare Workers AI's FLUX.1 [schnell]: free up to 10,000 neurons a day (about 170 pictures).
+CLOUDFLARE_DEFAULT_IMAGE_MODEL = "@cf/black-forest-labs/flux-1-schnell"
 
 OLLAMA_URL = "http://localhost:11434/v1"
 LM_STUDIO_URL = "http://localhost:1234/v1"

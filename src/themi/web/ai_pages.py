@@ -38,6 +38,7 @@ KIND_LABELS = {
     "ollama": "Ollama (local)",
     "lm_studio": "LM Studio (local)",
     "openai_compat": "Other OpenAI-compatible server",
+    "cloudflare": "Cloudflare Workers AI (pictures only)",
 }
 
 
