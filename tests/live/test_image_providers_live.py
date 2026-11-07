@@ -48,3 +48,25 @@ async def test_a_step_picture(make: Any) -> None:
     )
     assert picture.mime_type.startswith("image/")
     assert len(picture.data) > 1000
+
+
+@pytest.mark.skipif(
+    not (
+        os.environ.get("THEMI_LIVE_CLOUDFLARE_TOKEN")
+        and os.environ.get("THEMI_LIVE_CLOUDFLARE_ACCOUNT")
+    ),
+    reason="set THEMI_LIVE_CLOUDFLARE_TOKEN and THEMI_LIVE_CLOUDFLARE_ACCOUNT to run",
+)
+async def test_a_cloudflare_step_picture() -> None:
+    """Free within the daily allowance (about 58 neurons of 10,000)."""
+    provider = build_provider(
+        AdapterConfig(
+            "cloudflare",
+            api_key=Secret(os.environ["THEMI_LIVE_CLOUDFLARE_TOKEN"]),
+            base_url=os.environ["THEMI_LIVE_CLOUDFLARE_ACCOUNT"],
+        )
+    )
+    picture = await call_with_retry(
+        lambda: provider.image(image_prompt("Fold the towels into thirds")), CallKind.BACKGROUND
+    )
+    assert picture.mime_type.startswith("image/") and len(picture.data) > 1000
