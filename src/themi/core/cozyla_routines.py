@@ -40,7 +40,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
 from themi.connectors.cozyla.emoji import better_icon, routine_icon
-from themi.connectors.cozyla.schedule import to_wall, wall_can_say
+from themi.connectors.cozyla.schedule import to_wall, wall_can_say, with_round_days
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.events import title_matches
@@ -310,6 +310,7 @@ class CozylaRoutines:
                 continue
             title, part = task.title[:50], part_of_day(self.board.time_of(task))
             schedule = to_wall(task.repeat, task.due_on or today)
+            schedule = with_round_days(schedule, self.board.round_days(task), today)
             if routine is None:
                 made = await self.client.create_routine(member, title, part, schedule)
                 self.db.execute(

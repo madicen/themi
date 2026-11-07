@@ -42,6 +42,7 @@ from themi.core.repeat import (
 )
 from themi.core.services import Services
 from themi.core.sun import sunset
+from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.energy.matching import Assignment, Matcher
@@ -146,6 +147,7 @@ BOTH_MOVED_TEXT = " That's for both of you."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
+SKIPPED_TEXT = '"{title}" moved to {when}.'
 UNSCHEDULED_TEXT = "{title} no longer has a date."
 
 
@@ -312,6 +314,7 @@ class TaskBoard:
         s.tools.register(cancel_task)
         s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
+        s.tools.register(skip_round)
         s.tools.register(update_task)
         s.tools.register(set_task_schedule)
         s.tools.register(set_task_plan)
@@ -1576,6 +1579,29 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title) + both
         return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
+    async def skip_round(
+        self, task_id: int, by: Member, day: date | None = None, *, interactive: bool = False
+    ) -> str:
+        """F34c, bug #178: "no run today": the round moves to the next day it can be (the
+        rest rule kept), or to the day they named. Nothing is recorded as missed, so the
+        end-of-day list and overdue reminders leave today alone."""
+        task = self.get(task_id)
+        if task.status in ("done", "cancelled"):
+            return SETTLED_TEXT
+        if task.repeat is None:
+            raise ValueError("only a repeating chore has rounds; a one-off is rescheduled")
+        today = self._today()
+        target = self._after_rest(task, day or today + timedelta(days=1))
+        if target <= today:
+            raise ValueError("the new day has to be after today")
+        await self.reschedule(task_id, target, interactive=interactive)
+        moved = self.get(task_id)
+        end = self.round_end(moved)
+        when = target.strftime("%a %d %b")
+        if end is not None and end > target:
+            when += f" (or {end.strftime('%a %d %b')})"
+        return SKIPPED_TEXT.format(title=moved.title, when=when)
+
     async def due_for_block(self, task: Task, day: date) -> Task:
         """Time blocked for it on that day: it's due then, with no time of its own (idea
         #135: blocked for Saturday, it still said "Was due Thursday"). Not asked again, as
@@ -2480,7 +2506,8 @@ def _time_arg(value: Any) -> time | Keep | None:
     "for a few hours (both ''). With no day, the time is today's, or tomorrow's if that's "
     "passed. No nudge or reminder comes before then. Also for a nudge later today about a "
     "task they already have ('prompt me to run at 2pm': until 14:00): never a calendar "
-    "block. A new due date or time for it is reschedule_task.",
+    "block. A new due date or time for it is reschedule_task; a repeating chore's round "
+    "that won't be today ('no run today') is skip_round.",
     {"task_id": {"type": "integer"}, "until": {"type": "string"}, "day": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -2504,6 +2531,39 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         return board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+
+
+@tool(
+    "skip_round",
+    "A repeating chore's round won't happen today ('no run today', 'not today, maybe "
+    "tomorrow or Sunday', 'skip the run till Tuesday'): it moves to the next day it can be, "
+    "rest days kept, or to the day they named. Nothing counts as missed. day: YYYY-MM-DD "
+    "they named, or '' for the next day it can be. A one-off is reschedule_task; a nudge "
+    "later today is snooze_task.",
+    {"task_id": {"type": "integer"}, "day": {"type": "string"}},
+)
+async def skip_round(ctx: ToolContext, args: dict[str, Any]) -> DoneLine:
+    board = _board(ctx)
+    said = str(args.get("day") or "").strip()
+    try:
+        day = day_arg(said, board._today()) if said else None
+        text = await board.skip_round(int(args["task_id"]), ctx.member, day, interactive=True)
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except ValueError as exc:
+        raise ToolFailed(f"Not moved: {exc}.") from exc
+    ctx.tasks.append(int(args["task_id"]))
+    return DoneLine(text, asked=_named(ctx, board.get(int(args["task_id"])).title))
+
+
+def _named(ctx: ToolContext, title: str) -> bool:
+    """F34c: they named the round's task ("no run today" for "Go for a run"), so the move
+    is what they asked for, and its line is the reply."""
+    from themi.core.lists import name_key  # lists builds its tools from tools.py
+
+    said = name_key(ctx.request_text).split()
+    keys = [w for w in name_key(title).split() if len(w) > 2 and w not in {"for", "the", "and"}]
+    return any(s.startswith(k) for k in keys for s in said)
 
 
 @tool(

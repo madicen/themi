@@ -9,6 +9,8 @@ round's day, moved when the round moves.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import replace
 from datetime import date
 
 from themi.connectors.cozyla.chores import WallSchedule
@@ -44,6 +46,19 @@ def to_wall(rep: Repeat | None, due_on: date) -> WallSchedule:
         forever=rep.until is None,
         due_time=rep.at,
     )
+
+
+def with_round_days(schedule: WallSchedule, days: Iterable[date], today: date) -> WallSchedule:
+    """F34c, bug #172: a weekly routine also shows on the days its current round has moved
+    to (the rest rule, a miss, a skip), until the round moves on."""
+    if not schedule.repeats or schedule.every != "Weekly":
+        return schedule
+    shown = {d for d in schedule.days.split(",") if d}
+    extra = {DAY_NAMES[d.weekday()] for d in days if d >= today} - shown
+    if not extra:
+        return schedule
+    ordered = [n for n in DAY_NAMES if n in shown | extra]
+    return replace(schedule, days=",".join(ordered))
 
 
 def from_wall(schedule: WallSchedule, today: date) -> Repeat | None:

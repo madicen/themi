@@ -249,3 +249,58 @@ async def test_her_open_items_say_the_next_day_and_when_she_last_ran(scenario: S
     (line,) = [i.summary for i in board(scenario).open_items(scenario.member("Erin"))]
     assert line.startswith("Task ") and "due Sat 24 Oct" in line
     assert "Last done Thu 22 Oct." in line
+
+
+async def test_a_round_moved_off_its_days_shows_on_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F34c, bug #172: Wednesday's run moved Thursday's round to Friday, Themi nudged on
+    Friday, and the wall didn't show the run on Friday."""
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await board(scenario).set_schedule(run.id, erin, repeat=parse(RUNS, WED), missed="next_day")
+    await at(scenario, date(2026, 10, 23), 1)  # Thursday's missed: the round is Friday's
+    assert due(scenario, run) == date(2026, 10, 23)
+    await scenario.run_periodic("cozyla.routines")
+    routine = fake_cozyla.routine_named("Go for a run")
+    assert routine["repeatsIn"] == "Tuesday,Thursday,Friday,Saturday,Sunday"
+
+    await at(scenario, date(2026, 10, 23), 15)
+    await done(scenario, run)  # Friday: the weekend's round is Sunday, and Friday goes
+    assert due(scenario, run) == date(2026, 10, 25)
+    await scenario.run_periodic("cozyla.routines")
+    routine = fake_cozyla.routine_named("Go for a run")
+    assert routine["repeatsIn"] == "Tuesday,Thursday,Saturday,Sunday"
+
+
+async def test_no_run_today_moves_the_round_and_it_isnt_on_the_evening_list(
+    scenario: Scenario,
+) -> None:
+    """F34c, bug #178: "No run today. I plan to run ... tomorrow or Sunday" left Friday's
+    round where it was, and the 9:15 pm list still had it."""
+    run, _ = await runs(scenario)
+    await at(scenario, date(2026, 10, 23), 12)  # Thursday's missed: Friday's round
+    scenario.primary.queue_tool_call("skip_round", {"task_id": run.id, "day": ""})
+    replies = await scenario.say("Erin", "No run today. I plan to run tomorrow or Sunday")
+    assert due(scenario, run) == date(2026, 10, 24)
+    assert replies[-1] == '"Go for a run" moved to Sat 24 Oct (or Sun 25 Oct).'
+    await at(scenario, date(2026, 10, 23), 19, 30)
+    await scenario.run_periodic("tasks.day_end")
+    await scenario.app.outbox.flush()
+    assert not any(
+        t.startswith("Still open today:") and "Go for a run" in t for t in scenario.inbox("Erin")
+    )
+    assert not any(r.missed for r in board(scenario).runs(run.id))
+
+
+async def test_skipping_to_a_day_after_the_next_round_skips_this_round(
+    scenario: Scenario,
+) -> None:
+    run, _ = await runs(scenario)
+    await at(scenario, date(2026, 10, 23), 12)  # Thursday's missed: Friday's round
+    scenario.primary.queue_tool_call("skip_round", {"task_id": run.id, "day": "2026-10-27"})
+    replies = await scenario.say("Erin", "skip the run until Tuesday")
+    assert due(scenario, run) == date(2026, 10, 27)
+    assert replies[-1] == '"Go for a run" moved to Tue 27 Oct.'
