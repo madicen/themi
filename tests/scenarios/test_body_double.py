@@ -399,3 +399,44 @@ async def test_page_chat_outside_a_break_does_nothing(
     before = len(scenario.primary.requests)
     await site.post("/session/chat", data={"csrf": csrf, "text": "hello"})
     assert len(scenario.primary.requests) == before
+
+
+# ----- BD4b: a picture for each step ----------------------------------------------------------
+
+
+async def test_step_twos_picture_is_redone_and_sent_when_asked(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    task = await kitchen(scenario)
+    await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    csrf = await sign_in(scenario, site, "Erin")
+    assert (await site.get("/session/state")).json()["picture"] == {"status": "making"}
+    await scenario.run_jobs()
+    await scenario.tap("Erin", "Next")
+    state = (await site.get("/session/state")).json()
+    assert state["picture"]["status"] == "ready"
+    first_url = state["picture"]["url"]
+
+    scenario.primary.queue_tool_call(
+        "redo_step_picture", {"step": 2, "words": "show it from above"}
+    )
+    scenario.primary.queue_text("Making it again.")
+    await scenario.say("Erin", "can you show step 2 from above?")
+    await scenario.run_jobs()
+    prompt = [r.prompt for r in scenario.primary.requests if r.op == "image"][-1]
+    assert '<data source="the step">\nLoad the dishwasher\n</data>' in prompt
+    assert '<data source="their words">\nshow it from above\n</data>' in prompt
+    assert '<data source="the earlier pictures prompt">' in prompt
+    assert (await site.get("/session/state")).json()["picture"]["url"] != first_url
+
+    await site.post("/session/pictures/redo",
+                    data={"csrf": csrf, "step": "0", "words": "cleaner, fewer things"})  # fmt: skip
+    await scenario.run_jobs()
+    prompt = [r.prompt for r in scenario.primary.requests if r.op == "image"][-1]
+    assert "cleaner, fewer things" in prompt
+
+    scenario.primary.queue_tool_call("send_step_picture", {"step": 0})
+    await scenario.say("Erin", "send me the picture")
+    photo = scenario.telegram.calls("sendPhoto")[-1]
+    assert photo["caption"] == "Step 2 of 6" and photo["photo_bytes"] > 0
+    assert card(scenario).startswith("Step 2 of 6:")  # the chat card stays text

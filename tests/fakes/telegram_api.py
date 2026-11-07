@@ -249,7 +249,8 @@ class FakeTelegram:
         form = await request.form()
         params: dict[str, Any] = {}
         for key, value in form.items():
-            if not isinstance(value, str):
+            if not isinstance(value, str):  # an upload (BD4b's pictures): its size is kept
+                params[f"{key}_bytes"] = len(await value.read())
                 continue
             try:
                 params[key] = json.loads(value)
@@ -301,6 +302,15 @@ class FakeTelegram:
             if params.get("reply_markup"):
                 message["reply_markup"] = params["reply_markup"]
             return message
+        if method == "sendPhoto":
+            return {
+                "message_id": next(self._message_ids),
+                "date": next(self._dates),
+                "chat": self._chat(int(params["chat_id"]), "private"),
+                "from": BOT_USER,
+                "caption": params.get("caption", ""),
+                "photo": [{"file_id": "p1", "file_unique_id": "up1", "width": 1, "height": 1}],
+            }
         if method == "getFile":
             file_id = params["file_id"]
             return {

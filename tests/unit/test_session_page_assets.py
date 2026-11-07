@@ -38,5 +38,7 @@ def test_no_inline_styles_or_scripts_in_the_art() -> None:
 
 
 def test_still_scenes_for_reduced_motion() -> None:
-    reduced = CSS.split("@media (prefers-reduced-motion: reduce)")[-1]
-    assert ".session-scene *" in reduced and "animation: none" in reduced
+    blocks = CSS.split("@media (prefers-reduced-motion: reduce)")[1:]
+    assert any(".session-scene *" in b.split("}\n")[0] + b for b in blocks)
+    scene = next(b for b in blocks if b.lstrip(" {\n").startswith(".session-scene *"))
+    assert "animation: none" in scene.split("\n}")[0]
