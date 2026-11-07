@@ -108,15 +108,17 @@ class CalendarBusy:
 
     # ----- reading Google ---------------------------------------------------------------
 
-    async def refresh(self) -> int:
-        """Scheduler job: re-read everyone's last week and next two. Returns how many
-        accounts were read."""
+    async def refresh(self, only: Member | None = None) -> int:
+        """Scheduler job: re-read everyone's last week and next two (or one person's: F34d,
+        an event they've just added). Returns how many accounts were read."""
         read = 0
         now = clock.now()
         tz = self._tz()
         local = now.astimezone(tz)
         since = datetime(local.year, local.month, local.day, tzinfo=tz) - LOOK_BACK
         for member in self.store.list_members():
+            if only is not None and member.id != only.id:
+                continue
             if not member.tracks("calendar"):
                 self.db.execute("DELETE FROM calendar_busy WHERE member_id = ?", (member.id,))
                 self.db.execute("DELETE FROM calendar_entries WHERE member_id = ?", (member.id,))

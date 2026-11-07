@@ -757,3 +757,18 @@ async def test_your_call_keeps_the_detailed_ones_calendar(
     await scenario.tap("Erin", "Go ahead")
     assert linked.events(ERIN, "Madicen Family") == []
     assert "Return Patient Visit with Thuc Quyen Nguyen, MD" in on_primary(linked)
+
+
+async def test_an_event_just_added_is_read_before_looking(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F34d, bug #174: Erin had just added the visit from the clinic's app, and Themi looked
+    at a calendar read before then."""
+    await scenario.run_periodic("calendar.busy")
+    linked.add_event(ERIN, local(13, day=28), local(13, 30, day=28), summary="Eye exam")
+    args = {"event": "eye exam", "on": "2026-10-28", "calendar": "", "date": "", "start": "",
+            "end": "", "location": "Vision Center", "title": "", "notes": "",
+            "notes_mode": ""}  # fmt: skip
+    await say(scenario, "I just added an eye exam to my calendar from the app, put Vision "
+              "Center on it", "change_calendar_event", args)  # fmt: skip
+    assert "No event of theirs" not in tool_result(scenario)

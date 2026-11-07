@@ -104,6 +104,13 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+JUST_ADDED = re.compile(
+    r"\b(?:i|we)(?:'ve| have)?\s+(?:just\s+)?(?:added|put|made|created|booked|scheduled)\b"
+    r"[^.?!]{0,80}\b(?:calendar|appointment|appt|event|from the app)\b",
+    re.IGNORECASE,
+)
+
+
 def _unsaid_failure(ctx: ToolContext) -> str:
     """F34d, bug #174 (reply 321): a change failed, then a day summary said the day, and the
     reply was left out as said already. A failed change is always said."""
@@ -538,6 +545,11 @@ class Agent:
         self, member: Member, text: str, event: InboundEvent, timer: ReplyTimer
     ) -> str:
         services = self.services
+        if services.calendars is not None and JUST_ADDED.search(text):
+            try:  # F34d, bug #174: an event they've just added isn't read yet
+                await services.calendars.refresh(member)
+            except Exception:
+                log.warning("Couldn't read member %s's calendar again", member.id, exc_info=True)
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
         pinned, notes = services.facts_for(member, text)
