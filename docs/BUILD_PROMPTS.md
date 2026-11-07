@@ -11551,6 +11551,16 @@ Notes (2026-11-06):
   message showing the session (the question, or the guided card).
 - Checked by eye at 360px in light and dark with headless Chrome: no sideways scroll; the
   scene is a plain panel until BD3b.
+- Fix (2026-11-07, Michael on the Pi): opened from Telegram, the page stayed on "Opening
+  your session...". The sign-in worked (the Pi had made a website session for each try),
+  but Telegram's in-app browser never sent the cookie back, so the page reloaded signed out
+  and without Telegram's data. Now `/session/telegram` answers with a one-time ticket (a
+  sign-in link's token: once, 10 minutes), the page loads `/session?ticket=...`, and it
+  carries its session in an `X-Themi-Session` header on every request (`Kit.current` reads
+  the cookie or that header; a cross-site page can't set it, and POSTs still need the CSRF
+  token). Reloads fetch a fresh ticket (`POST /session/ticket`); step pictures load through
+  the same header. The cookie is still set for browsers that keep it. Also fixed: a page
+  showing "No session going on" reloaded itself every 5 seconds.
 
 ### BD3b · Body double: Themi the chameleon
 Status: [~] built 2026-11-06; waiting for Michael and Erin to look at the scenes on their phones
