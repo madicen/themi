@@ -224,7 +224,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34da | Feedback: merging two events, "mine" on the family calendar, a failure said | Feedback | [x] 2026-11-07 |
 | F34db | Feedback: an event just added is read again first | Feedback | [x] 2026-11-07 |
 | F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [x] 2026-11-07 |
-| F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
+| F34f | Idea: how much of an event another calendar shows | Feedback | [x] 2026-11-07 |
 | F34ga | Idea: a picture with its words reaches the tool agent | Feedback | [x] 2026-11-07 |
 | F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [x] 2026-11-07 |
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
@@ -11456,7 +11456,7 @@ Notes (2026-11-07):
   calendars ("The same event on two of my calendars").
 
 ### F34f · Idea (2026-11-07): how much of an event another calendar shows
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: K1, K3, F29e
 Read first: K1's and F29e's notes (each person's calendars, "calendar details seen by").
 From Erin's idea #175, second part: "an option to display custom levels of detail across
@@ -11488,6 +11488,34 @@ Tuesday standup shows there as "Michael work meeting", and Erin's day summary ha
 
 Setup: Michael picks the rule for his work calendar once live. Mark #175 reviewed once this
 and F34e are live.
+
+Notes (2026-11-07):
+- `themi.core.calendar_copies.CalendarCopies`. Migration 0140: `calendar_shown_on` (a rule
+  per calendar: full, title, label or busy; 'waiting' until its yes, then 'on'),
+  `calendar_copies` (each copy by its source event, with a hash of what was written), and
+  `members.calendar_labels`.
+- The Calendars page of an account (/accounts/N/calendars) has "Shown on the family
+  calendar": a level per calendar Themi reads (the family calendar itself isn't offered),
+  and the three labels, "Michael work meeting", "Michael focus block", "Michael busy" by
+  default. A new or changed rule is one `calendar_write` action, `requested`; its yes covers
+  keeping the copies in step after that, as maintenance's events do. "Not shown" takes the
+  coming copies away (past ones stay).
+- At each read (the `CalendarBusy.listeners` hook from F34e): every event on that calendar
+  gets a copy on the family calendar, written only when it changed; one deleted at the
+  source is deleted (if it's still to come). Full is the title and the place; the source's
+  description is never read for a copy, at any level (simpler, and nothing private goes by
+  mistake), so "Full details" is title and place only. Busy only is "Busy".
+- A label is picked from the event's own title and guests, here, with no model call: other
+  guests is a meeting; focus, hold, block, deep work, heads down, do not book is a focus
+  block; anything else is busy.
+- Each copy carries `copy:<source event id>` in its private extended properties and is
+  free time ("transparent"), so it never makes anyone look busy, is never copied again and
+  is never taken for a twin (F34e). `CalendarBusy.entries` leaves out a copy of the person's
+  own event, so Michael's day summary doesn't have his standup twice if he reads the family
+  calendar too.
+- Setup: restart `themi run` (migration 0140). Michael picks the level for his work
+  calendar on its Calendars page (My accounts, then Calendars). The work calendar must be
+  one Themi reads.
 
 ### F34g · Idea (2026-11-07): Themi sees pictures sent in chat
 Status: split into F34ga [x] and F34gb [x] (2026-11-07)
