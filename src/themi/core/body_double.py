@@ -503,7 +503,8 @@ class BodyDouble:
             await self._reply(event, member, ENDED_TEXT, [])
             return
         if int(payload.get("seq", -1)) != session.seq:
-            return  # an old question: the session moved on
+            await self._show_current(event, member, session)  # an older card: where it is now
+            return
         self.remember_message(session, event.button.message_id)
         if payload.get("action") == "switch":  # BD2's offer: another mode instead
             new, text, buttons = await self.switch(member, str(payload.get("mode")))
@@ -512,6 +513,18 @@ class BodyDouble:
             return
         text, buttons = await self.act(session, str(payload.get("action", "")))
         await self._reply(event, member, text, buttons)
+
+    async def _show_current(self, event: InboundEvent, member: Member, session: Session) -> None:
+        """A tap on a button from an earlier moment: never nothing. A guided card or an open
+        question is shown as it is now, with buttons that work; otherwise the old buttons go."""
+        if session.mode == GUIDED and self.guided is not None and session.phase != "asking":
+            text, buttons = self.guided.render(session)
+        elif session.phase == "asking":
+            text, buttons = self.question(session)
+        else:
+            text, buttons = self.page_line(session), self.page_buttons(session)
+        await self._reply(event, member, text, buttons)
+        self.remember_message(session, event.button.message_id if event.button else None)
 
     async def act(self, session: Session, action: str) -> tuple[str, list[Button]]:
         """What a tap does, from chat or the session page (BD3a). Returns what to show."""

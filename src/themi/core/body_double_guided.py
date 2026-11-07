@@ -262,9 +262,11 @@ class GuidedSteps:
                 self._owner(session), STUCK_TEXT, priority=Priority.NORMAL, kind=KIND,
                 deadline=clock.now() + timedelta(minutes=5),
             )  # fmt: skip
-            session = self._save(session, nudged=1)
-        else:
-            session = self._save(session)
+            # not `_save`: a timer moves nothing, so the card's buttons must stay good
+            # (bug 2026-11-07: a bumped seq made [Go] on proposed steps do nothing)
+            self.db.execute(
+                "UPDATE body_double_sessions SET nudged = 1 WHERE id = ?", (session.id,)
+            )
         self.bd._schedule(session, since + OPEN_ENDED)
 
     async def act(self, session: Session, action: str) -> tuple[str, list[Button]]:

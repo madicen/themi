@@ -11439,6 +11439,12 @@ Notes (2026-11-06):
 - Evals: `tests/evals/test_body_double_evals.py` (6 jobs, 5 to pass: at most 12 steps,
   eight words each, no advice words, in order where the job has one).
 - Setup: restart `themi run` (migration 0127).
+- Fix (2026-11-07, Michael on the Pi): [Go], [Change them] and [No steps] did nothing.
+  Twenty minutes after the steps were proposed, the step check (`GuidedSteps.on_job`)
+  bumped the session's `seq` though nothing had changed, so every button sent before it
+  was out of date, and an out-of-date tap was dropped silently. The job no longer bumps
+  `seq` (it only marks `nudged`), and an out-of-date tap now redraws that message as the
+  session stands, with buttons that work (`BodyDouble._show_current`), never nothing.
 
 ### BD2 · Body double: choosing the mode, and learning from sessions
 Status: [x] 2026-11-06
