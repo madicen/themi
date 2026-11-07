@@ -39,7 +39,15 @@ from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core.lists import name_key
 from themi.core.rules import RuleError
-from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
+from themi.core.tools import (
+    PICTURE_LOG,
+    Proposal,
+    ToolContext,
+    ToolDeclined,
+    ToolFailed,
+    answers_picture_question,
+    staged_tool,
+)
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -241,6 +249,32 @@ def asked_for(title: str, request_text: str) -> bool:
         return False
     words = [w for w in name_key(title).split() if len(w) > 2 and w not in STOPWORDS]
     return bool(words) and all(re.search(rf"\b{re.escape(w)}", said) for w in words)
+
+
+FROM_PICTURE = "From your picture: "  # F34n: a card for an event read off a picture
+UNREAD_TEXT = (
+    "The picture doesn't show {what}. Ask them in one line, saying what it does show (\"It "
+    'says Saturday the 14th. Is that this month?"), rather than guessing.'
+)
+
+
+def from_picture(ctx: ToolContext) -> bool:
+    """F34n: this event was read off their picture: one sent with this message, or the
+    one their yes to Themi's question was about."""
+    return ctx.picture or ctx.previous_text.startswith(PICTURE_LOG)
+
+
+def answers_event_question(ctx: ToolContext, title: str, when: When, tz: ZoneInfo) -> bool:
+    """F34n: a yes to Themi's question after a picture ("Jazz in the Park, Sat 14 Nov, 3 pm.
+    Put it on your calendar?") asks for the event, when the question named its title and
+    its day and asked about the calendar. They've seen what was read, so no card."""
+    words = [w for w in name_key(title).split() if len(w) > 2 and w not in STOPWORDS]
+    asked = name_key(ctx.said_before)
+    if not answers_picture_question(ctx, words) or not INTENT.search(asked):
+        return False
+    day = when.starts.astimezone(tz)
+    named = (day.strftime("%A").lower(), day.strftime("%a").lower(), rf"{day.day}(?:st|nd|rd|th)?")
+    return any(re.search(rf"\b{n}\b", asked) for n in named)
 
 
 def when_words(when: When, tz: ZoneInfo) -> str:
@@ -529,7 +563,10 @@ class Events:
             self.db.execute("UPDATE themi_events SET event_id = ? WHERE id = ?", (eid, themi_id))
         else:
             themi_id, eid = made["id"], made["event_id"]
-        await self._write(account_id, calendar_id, eid, title, location, when, themi_id)
+        await self._write(
+            account_id, calendar_id, eid, title, location, when, themi_id,
+            description=str(payload.get("details") or ""),
+        )  # fmt: skip
         if payload["calendar"] != "family":
             self._show(member, account_id, calendar_id, eid, title, location, when, themi_id)
         where = "the family calendar" if payload["calendar"] == "family" else "your calendar"
@@ -704,17 +741,19 @@ class Events:
 
     async def _write(
         self, account_id: int, calendar_id: str, eid: str, title: str, location: str,
-        when: When, themi_id: int,
+        when: When, themi_id: int, *, description: str = "",
     ) -> None:  # fmt: skip
         sync = self.services.calendar
         if sync is None:
             raise CalendarError("Google isn't set up")
-        body = {
+        body: dict[str, Any] = {
             "summary": title,
             "location": location,
             **_times(when, self._tz()),
             "extendedProperties": {"private": {"themi": self._marker(themi_id)}},
         }
+        if description:  # F34n: a ticket's booking number
+            body["description"] = description
         await sync.upsert(account_id, calendar_id, eid, body)
 
     def _marker(self, themi_id: int) -> str:
@@ -993,7 +1032,10 @@ def _not_for_tasks(ctx: ToolContext) -> None:
     "HH:MM, 24-hour (end empty for an hour; both empty for all day; a meal with no time "
     "gets its usual one). location: as they said it, or ''. Asked for in their own words, "
     "it's made at once; otherwise they get a card. A correction to a card still waiting "
-    "replaces it; to change an event already made, use change_calendar_event.",
+    "replaces it; to change an event already made, use change_calendar_event. From a "
+    "picture (a flyer, a ticket): unread names what it needs that the picture doesn't show "
+    "(the year, the start time), and details keeps a ticket's booking or confirmation "
+    "number as written.",
     {
         "title": {"type": "string"},
         "date": {"type": "string"},
@@ -1001,6 +1043,16 @@ def _not_for_tasks(ctx: ToolContext) -> None:
         "end": {"type": "string"},
         "location": {"type": "string"},
         "calendar": {"type": "string", "enum": ["mine", "family"]},
+        "unread": {  # F34n
+            "type": "string",
+            "default": "",
+            "description": "From a picture only: what it doesn't show, or ''. Never guessed.",
+        },
+        "details": {  # F34n
+            "type": "string",
+            "default": "",
+            "description": "A booking or confirmation number, as written, or ''.",
+        },
     },
 )
 async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
@@ -1008,6 +1060,9 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     title = " ".join(str(args["title"]).split())[:MAX_TITLE]
     if not title:
         raise ToolFailed("An event needs a title.")
+    unread = " ".join(str(args.get("unread") or "").split())
+    if unread:  # F34n: asked, not guessed
+        raise ToolFailed(UNREAD_TEXT.format(what=unread[:100]))
     if args["calendar"] == "mine":
         events.own_account(ctx.member)  # fails early, with what to do, if there's none
         _not_for_tasks(ctx)
@@ -1032,15 +1087,20 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
             "its time, use change_calendar_event."
         )
     payload = _add_payload(title, location, when, calendar, "chat")
+    details = " ".join(str(args.get("details") or "").split())[:200]
+    if details:
+        payload["details"] = details
     await events.replace_waiting(ctx.member, payload)
+    read = FROM_PICTURE if from_picture(ctx) else ""
     proposal = Proposal(
         FAMILY if calendar == "family" else OWN,
-        f"{describe(title, when, location, tz)}, for {where}",
+        f"{read}{describe(title, when, location, tz)}, for {where}",
         ADD,
         payload,
     )
+    asked = asked_for(title, ctx.request_text) or answers_event_question(ctx, title, when, tz)
     # Over by then, it's no use (bug #90's thread: Tuesday's card still waited on Thursday).
-    return replace(proposal, requested=asked_for(title, ctx.request_text), expires=when.ends)
+    return replace(proposal, requested=asked, expires=when.ends)
 
 
 CALENDAR_ARG = {"type": "string", "enum": ["", "mine", "family"]}
