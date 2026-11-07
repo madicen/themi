@@ -230,7 +230,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
 | F34hb | Feedback: body doubling through several tasks in a row | Feedback | [x] 2026-11-07 |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [x] 2026-11-07 |
-| F34j | Idea: when someone's day rolls over | Feedback | [ ] |
+| F34ja | Idea: when someone's day rolls over: the setting, tasks and routines | Feedback | [x] 2026-11-07 |
+| F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [ ] |
 | F34k | Idea: a call before the business closes | Feedback | [ ] |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [ ] |
 | F34m | Idea: a recipe from a photo | Feedback | [ ] |
@@ -11761,7 +11762,7 @@ Notes (2026-11-07):
   BD5b's scopes already.
 
 ### F34j · Idea (2026-11-07): when someone's day rolls over
-Status: [ ]
+Status: split into F34ja [x] and F34jb [ ] (2026-11-07)
 Depends on: 07, C3, F21c
 Read first: the plan's Module behaviour sections on routines and the chore chart; C3's notes
 (morning and evening routine checks). From Michael's idea #182 (2026-11-07, 1:31 am, "allow
@@ -11796,6 +11797,36 @@ Scenario: Michael, rollover 3 am, ticks "Clean the kitchen" at 1 am; Friday's ch
 and Saturday's morning routine check still comes in the morning.
 
 Data: mark #182 reviewed once live.
+
+### F34ja · Idea (2026-11-07): when someone's day rolls over: the setting, tasks and routines
+Status: [x] 2026-11-07
+Depends on: F34j (its text above)
+- The setting, the helper, and "today" for tasks and rounds, routines and their ticks, the
+  end-of-day list, day summaries and the daily message limit.
+
+Notes (2026-11-07):
+- `members.day_ends` (migration 0142, 0 to 4), on My settings under Quiet hours ("My day
+  ends at"). The helper is `themi.localtime.member_day(member, at, tz)` (beside the clock
+  helpers rather than in `themi.clock`, which only keeps time), with `member_day_start`.
+- `TaskBoard._today(member)` and `_doer_today(task)` (the assignee's day; the family's for
+  a shared task). A round done by them counts for their day (`_complete_round`), a round
+  isn't missed until the doer's day is over (`_settle_missed_round`), and overdue
+  reminders wait for it too. `done_day(..., by)` puts the wall's tick on their day (the
+  Cozyla client ticks a past day, so the wall follows).
+- `Routines.today(member)` (and `Routines.owner(item)`): `tick_routine_item`, "just today"
+  items, the routine checks, `describe`, and a guided session's routine steps.
+- The end-of-day list's day, `DaySummary.today(member)` (and the `day_summary` tool's
+  "today"), and `Outbox.sent_today` (counted from their day's start) use it.
+- Quiet hours are untouched. Setup: restart `themi run` (migration 0142); Michael sets 3 am.
+
+### F34jb · Idea (2026-11-07): when someone's day rolls over: the rest of core
+Status: [ ]
+Depends on: F34ja
+- The other modules' "today" for a person through `member_day` (habits, journal, focus,
+  spending, meals, cooking, the morning summary's "yesterday", Cozyla chores and to-dos),
+  shared things by the person acting; "tonight" said after midnight and before their
+  rollover means now; and the test that greps core for a person's "today" worked out
+  without the helper (`now().astimezone(...).date()`), as the clock rule's test does.
 
 ### F34k · Idea (2026-11-07): a call before the business closes
 Status: [ ]
