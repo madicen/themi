@@ -217,6 +217,17 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
 | F33d | Feedback: asked to remove an item, Themi doesn't offer to add it | Feedback | [x] 2026-11-06 |
+| F34a | Feedback: in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools | Feedback | [ ] |
+| F34b | Feedback: the chat reply's ideas fit the question, and a cut reply isn't a fragment | Feedback | [ ] |
+| F34c | Feedback: a moved run shows on the wall, and "no run today" skips it | Feedback | [ ] |
+| F34d | Feedback: merging two events into one, and a change that failed is said | Feedback | [ ] |
+| F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
+| F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
+| F34g | Idea: Themi sees pictures sent in chat | Feedback | [ ] |
+| F34h | Feedback: body doubling uses the task's own steps, routines and several tasks in a row | Feedback | [ ] |
+| F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
+| F34j | Idea: when someone's day rolls over | Feedback | [ ] |
+| F34k | Idea: a call before the business closes | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -11065,6 +11076,468 @@ off the routine. No card, nothing snoozed.
 Data (Michael decides): decline actions 512 and 513 on the Pi (snoozed cards that would
 add "replace vacuum water" to the evening routine), or they'll come back. Task 81 is right
 as it is. Mark #171 reviewed once live.
+
+### F34a · Feedback (2026-11-07): in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools
+Status: [ ]
+Depends on: CM1a, CM1b, BD1a
+Read first: CM1a's notes (`is_request`, the one place a message is sent to the tool agent);
+CM1b's notes (`SIDECAR_TOOLS`, what the sidecar can and can't do). From Erin's bugs #178
+(2026-11-06, 10:38 pm, "I told it no run today. Seriously Claude figure out why running is
+always so broken") and #179 (10:40 pm, "did not launch body double"), and the turn before
+idea #173.
+
+What the Pi shows: Erin has conversation mode on (member 1, `conversation_mode` 1). Every
+one of these replies has no tool groups recorded, so each went to `_chat`, which has no
+tools:
+- Reply 319, Fri 12:14 pm: "No run today. I plan to run 1.3 miles either tomorrow or
+  Sunday" got "Got it, no run today. Pushing it to tomorrow or Sunday works fine." Nothing
+  moved. The sidecar logged nothing (it has `complete_task` and `cancel_task`, no snooze or
+  skip), so task 8 stayed due Friday, and the 9:15 pm end-of-day list still had "Go for a
+  run". `is_request` didn't match: no verb of doing at the start.
+- Reply 351, Fri 10:39 pm: "Can we body double the bird cage?" got "The top tray empty."
+  (see F34b). No session started. `_POLITE` has "can you", not "can we", and "body double"
+  isn't in `DOING`.
+- Reply 320, Fri 12:18 pm: "Can you see the screenshot I sent?" went to chat ("see" isn't a
+  verb of doing). Telegram drops photos anyway (`telegram.py`: "stickers, photos and the
+  like aren't handled yet"); F34g is that part.
+- Reply 332, Fri 6:37 pm: "Future emails like that are mostly noise" became a
+  `remember_fact` from the sidecar, not the sender's email level, so the next one is still
+  sorted as before.
+
+Build:
+- `is_request` also sends to the tool agent:
+  - "can we", "could we", "let's", "shall we" before a verb of doing, and the body double
+    words anywhere: body double, sit with me, keep me company, pomodoro, step by step, do
+    it with me.
+  - A message that names one of their open tasks or routine items (`name_key`: every word
+    of the title over two letters, or the title's main noun, "run" for "Go for a run") with
+    a change word: today, tomorrow, tonight, later, skip, not, no, instead, moved, plan to,
+    this weekend, a weekday. "No run today" and "I'll do the laundry Sunday" are requests;
+    "the run was lovely" isn't. The open titles are already loaded for the chat turn.
+  - A question to Themi about what it can do or see ("can you see", "do you know", "are you
+    able to").
+  - "from now on", "in future", "emails like that", "mail from X": an email or settings
+    rule.
+- The sidecar gets `snooze_task` (an id among the open items it was shown, as
+  `complete_task` is), for a put-off said in passing that the routing still misses.
+- A test file of real turns: every message in this prompt, and CM1c's eval cases kept
+  passing (venting and "someday" stay chat).
+
+Tests: each a failing test first. Reply 319's message goes to the tool agent and, with the
+fake provider's `snooze_task` (or F34c's skip), task 8 isn't due Friday. Reply 351's message
+goes to the tool agent. "the run was lovely" and "long day, the kids were a lot" stay chat.
+"Future emails like that are mostly noise" goes to the tool agent. The sidecar can snooze an
+open task it was shown, and an unknown id is dropped.
+Scenario: Erin, conversation mode on, says "No run today. I plan to run tomorrow or
+Sunday": the run isn't on that evening's end-of-day list, and comes back Saturday.
+
+Data: mark #178 and #179 reviewed once live (with F34c and F34h).
+
+### F34b · Feedback (2026-11-07): the chat reply's ideas fit the question, and a cut reply isn't a fragment
+Status: [ ]
+Depends on: CM1a, F30b
+Read first: CM1a's notes (`CHAT_SYSTEM`, `honest`); F30b's notes (chat says when it
+doesn't know). From Erin's bug #180 (2026-11-06, 10:47 pm, "why would shows to watch be in
+old emails?") and reply 351.
+
+What the Pi shows:
+- Reply 352, Fri 10:46 pm: "Idk what to watch" got "One place to look: old emails.
+  Another place to look: your streaming account watch history, or a web search for what is
+  popular right now." "old emails" comes word for word from `CHAT_SYSTEM`'s list of places
+  to look ("old emails, card or bank statements, an insurance portal, asking someone, a web
+  search"), meant for a lost phone number or a booking. The next turn (reply 354, through
+  the tools) searched the web and did fine.
+- Reply 351: "Can we body double the bird cage?" got "The top tray empty." That reads like
+  what `honest` leaves after dropping a sentence, or part of one, that said something was
+  started or done. The original isn't logged, so it can't be checked.
+
+Build:
+- `CHAT_SYSTEM`: the places-to-look list is for facts they've lost (a number, an address,
+  a booking, a price), and the examples say so. For "what should I watch / cook / do", it
+  offers two or three ideas from what it knows of them (facts, recent conversation), or
+  asks one light question. No list of sources.
+- `honest`: when it drops anything, the reply's original goes to the log (`log.info`,
+  redacted). It keeps whole sentences only. If what's left is under four words, or doesn't
+  read as a sentence (no verb, or starts mid-clause with "The"/"a" and no verb), it sends
+  the fallback, and when the message asked for something ("can we...", a question), the
+  fallback says it can't do that from here and to ask it plainly ("I can't start that from
+  here. Say 'body double the bird cage' and I'll set it going."). With F34a, that should be
+  rare.
+
+Tests: each a failing test first. A recorded chat answer to "Idk what to watch" with "old
+emails" is no longer what the prompt asks for (a prompt test: the list is tied to lost
+facts). `honest("Sure! I've started a session for you: the top tray empty.")` doesn't send
+"The top tray empty."; the original is logged. A short whole sentence ("Sounds good.") is
+kept.
+Scenario: none beyond the unit tests (the model's words vary); covered by a chat eval case,
+"Idk what to watch", that mustn't mention email.
+
+Data: mark #180 reviewed once live.
+
+### F34c · Feedback (2026-11-07): a moved run shows on the wall, and "no run today" skips it
+Status: [ ]
+Depends on: F9a, F9c, C2b, C2d, F21c
+Read first: F9a's notes, especially its known gaps ("a round moved to a day that isn't on
+the wall's schedule doesn't show there"; "after a Saturday run, Sunday still shows
+unticked"); F9c's notes (the distance plan); C2b's and C2d's notes (the chore chart); F21c's
+notes ("I ran this morning"). From Erin's bug #172 (2026-11-06, 12:15 pm, "review cozyla
+running integration. It prompted me to run today, but cozyla did not show today as a
+running day") and #178.
+
+What the Pi shows: task 8 "Go for a run", weekdays Tue, Thu and Sat-or-Sun at 12 pm, `rest`
+on, `missed_next_day` 1, last done Wed 04 Nov. The rest rule moved Thursday's round to
+Friday, and Themi nudged at 12:14 pm Friday ("Check-in: Go for a run (1.5 miles this
+week)"). The wall's chore has only the schedule's own days, so Friday wasn't there. That's
+F9a's first known gap, met in real life. At 12:14 pm Erin said "No run today. I plan to run
+1.3 miles either tomorrow or Sunday": that went to chat (F34a), but the tool agent has no
+clear tool for it either. `snooze_task` only waits until a time, and the round stays
+Friday's. She also said 1.3 miles; this week's plan says 1.5.
+
+Build:
+- The wall follows the board: when a round's day isn't one of the chore's own days (moved
+  by the rest rule, a miss or a skip), the round shows on the wall that day. Use a one-off
+  chore for that day (or whatever C2b's client allows; say which in the Notes), taken off
+  when the round is done, skipped or moved again. When the round moves off one of the own
+  days, that day's tick or entry follows (F9a's Sunday gap: after a Saturday run, Sunday
+  shows done or not at all).
+- `skip_round` (tool, schedules group): "not today", "no run today, tomorrow or Sunday",
+  "skip this week's run". It moves the current round to the next allowed day (rest rule
+  kept; with a day they named, that day), or skips the round altogether ("skip this
+  week"), recorded as a skip, not a miss. The end-of-day list and overdue reminders leave
+  a skipped day alone. One line back: "Moved Go for a run to Saturday (or Sunday)."
+- A distance they say that isn't the plan's ("I plan to run 1.3 miles") is answered with
+  one choice, not a change: "This week's plan says 1.5 miles. Keep 1.3 this week, or keep
+  the plan?" Buttons; "1.3" sets this week's amount only (a one-week override on F9c's
+  progression), and the next step-up is from the plan as stored.
+- Read-backs: the run's description says where the moved round is ("this week's run is
+  Saturday or Sunday").
+
+Tests: each a failing test first, frozen clock: Wed run, Thursday's round on Friday, and the
+fake Cozyla shows Friday's chore; done Friday, it's ticked and gone; skipped Friday, it's
+gone and Saturday has it. A Saturday run leaves Sunday ticked or off the wall. `skip_round`
+with no day, with "Sunday", and "this week". A skipped day isn't on the end-of-day list. The
+1.3-miles choice, both buttons.
+Scenario: Erin's Friday: the 12 pm nudge, the run is on the wall's Friday, "No run today,
+tomorrow or Sunday" moves it (wall too), and the 9:15 pm list doesn't have it.
+
+Data: mark #172 and #178 reviewed once live. Erin's run needs nothing changed in the DB.
+
+### F34d · Feedback (2026-11-07): merging two events into one, and a change that failed is said
+Status: [ ]
+Depends on: K1, K3, F29a, F29e, F14a
+Read first: K3's notes (changing events); F29a's notes (an event's place, title and notes,
+on the copy they mean); F29e's notes (whose calendar, private calendars); K1's notes (the
+calendar cache and when it's fetched). From Erin's bug #174 (2026-11-06, 12:23 pm, "make
+this work") and the first half of idea #175.
+
+What the Pi shows: Fri 12:21 pm, Erin: "I added a doctor's appt to my calendar for next
+Wednesday, from the app. That event contains all the details of the appt. However, I had
+also created a placeholder calendar event ... Can you locate the two calendar events and
+merge them into one event with as many accurate details as possible?" Reply 321, five
+calls:
+- `day_summary` (Wed 11 Nov) showed only "1-2 pm: ND psych in person (Madicen Family)".
+  The detailed event, "Return Patient Visit with Thuc Quyen Nguyen, MD", 1-1:30 pm at 401
+  Quarry Rd, Palo Alto, on erinemast@gmail.com, wasn't in the cache yet. It's there now.
+  She'd just added it, and nothing fetched again before looking.
+- `change_calendar_event` with `location` "Madicen Family", `notes` "ND psych in person
+  (Madicen Family)" and `calendar` "mine": the calendar's name, in parentheses in the
+  summary, was taken for a place. It failed: "No event of theirs matches 'ND psych'". The
+  placeholder is on the shared Madicen Family calendar, which "mine" didn't search.
+- `delete_calendar_event` "doctor's appt": no match, nothing changed.
+- `day_summary` again, and then no words at all. Erin saw the same summary twice and
+  nothing about either failure. `day_summary`'s result ends "Don't repeat it: a short line
+  at most, or nothing", which won over the two failed calls.
+- There's no way to merge two events.
+
+Build:
+- `merge_calendar_events` (calendar group): two events (each found as `change_calendar_event`
+  finds one, on any calendar of theirs they can write to, the shared family calendar
+  included). The kept event gets the fuller title (the one that isn't a placeholder: longer,
+  with a name or place in it), the location, the times of the more detailed one (if they
+  differ, say so and ask), and both sets of notes. The other is deleted. Which calendar it
+  stays on: if both are theirs, one card with buttons, "On <calendar A>", "On <calendar
+  B>", "Keep on both" (both updated, nothing deleted), "Your call" (the more detailed
+  one's own calendar, unless the other is the family calendar and the event is something
+  the family should see; say why in one line). Staged through the trust tiers as a
+  calendar change.
+- Before looking for an event they say they've just added ("I added", "I just put", "from
+  the app"), fetch their calendars again (the K1 fetch for that member, once per turn).
+- `day_summary` writes the calendar as "(on the Madicen Family calendar)", and
+  `change_calendar_event`'s description says a calendar's name is never a location.
+- `calendar: "mine"` searches every calendar of theirs the summary shows, shared ones
+  included (F29e's rule for reading, now for finding).
+- A turn where a change, delete or merge failed always says so, whatever else said "say
+  nothing": the reply rule in the agent (after the last round, a failed `ToolFailed` or "No
+  event ... Nothing was changed." that the reply doesn't mention gets one plain line, e.g.
+  "I couldn't find the placeholder to merge, so nothing changed.").
+
+Tests: each a failing test first, with the fake calendar: Erin's two Wednesday events, one
+fetched only after the refetch, are merged into one with the Quarry Rd place and both
+titles' facts, on the calendar she picks; "Keep on both"; "Your call". "mine" finds an event
+on the family calendar. The summary's calendar label isn't used as a location. A turn whose
+change failed after a `day_summary` says so.
+Scenario: bug #174, Erin's message: one card, she taps "On my calendar", and Wednesday shows
+one event, 1-1:30 pm, Return Patient Visit at 401 Quarry Rd.
+
+Data: Erin's two events of Wed 11 Nov are still both there; offer the merge again once
+live. Mark #174 reviewed once live.
+
+### F34e · Idea (2026-11-07): Themi spots the same event twice and offers to merge it
+Status: [ ]
+Depends on: F34d, F29b
+Read first: F34d's notes (`merge_calendar_events`); F29b's notes (an emailed invitation
+already on the calendar). From Erin's idea #175 (2026-11-06, 12:27 pm), first part: "Themi
+automatically merges identical calendar events. If identical events are on two different
+calendars, Themi should confirm with the user which calendar the merged event should go
+to, or if it should stay on both ... The user should have the option to tell Themi to select
+a calendar option based on its best guess."
+
+Build:
+- After each calendar fetch, look for pairs of one person's events that are the same
+  thing: overlapping times on the same day and similar titles (`title_matches`, or one a
+  bare placeholder like "doctor", "appt", "ND psych" against a fuller one), or the same
+  title and times on two calendars. Events with other guests (meetings) and recurring
+  series are left alone in this first version.
+- Identical (same title, times, place) on the same calendar: merged without asking, as a
+  Tier 2 calendar change (done, then told in the next summary).
+- On two calendars, or only similar: one card per pair, F34d's buttons. Not repeated for a
+  pair they said "Keep on both" to (remembered by the two event ids).
+- A setting, "Same event on two calendars": Ask me (default), Your best guess, Keep both.
+  "Your best guess" merges and says where in one line, with an undo button for a day.
+- Not in quiet hours; through the outbox like every message, one card per pair.
+
+Tests: the fake calendar with a placeholder and a full event overlapping: one card; with
+identical twins on one calendar: merged, told once; a meeting with guests: nothing; "Keep on
+both" isn't asked again; the setting's three choices.
+Scenario: Erin adds a detailed appointment over her placeholder; the next fetch offers the
+merge once.
+
+Data: mark #175 reviewed once this and F34f are live.
+
+### F34f · Idea (2026-11-07): how much of an event another calendar shows
+Status: [ ]
+Depends on: K1, K3, F29e
+Read first: K1's and F29e's notes (each person's calendars, "calendar details seen by").
+From Erin's idea #175, second part: "an option to display custom levels of detail across
+different synced calendar events (eg. Michael's work calendar would show all the details on
+his private calendar, but on the family calendar the time would simply be blocked off using
+generic labels such as 'Michael work meeting' or 'Michael focus block')."
+
+Build:
+- A "shown on" rule per calendar of theirs, on their Calendars settings: which other
+  calendar shows its events (the family calendar, usually), and how: Full details, Title
+  only, A label ("Michael work meeting", "Michael focus block", chosen per event by its
+  kind: a meeting with guests, a focus or hold block, anything else "Michael busy"), or
+  Busy only.
+- Themi writes those copies to the other calendar and keeps them in step at each fetch:
+  moved, changed or deleted at the source, the copy follows; each copy carries the source
+  event's id in its private extended properties, so it's never copied back or merged by
+  F34e. A copy's text never includes the source's notes, place or guests unless the rule
+  is Full details.
+- The labels can be changed on the settings page; Themi's own suggestions ("your best
+  guess") pick the label from the title only, never sending the title anywhere outside.
+- Staged through the trust tiers as calendar writes; setting the rule up is the yes.
+
+Tests: the fake calendar: a work meeting becomes "Michael work meeting" on the family
+calendar, a "Focus time" block "Michael focus block"; moving and deleting the source move
+and delete the copy; a copy isn't copied back; Busy only shows no title. The work calendar's
+notes never appear in the copy's fields.
+Scenario: Michael sets his work calendar to show as labels on the family calendar; his
+Tuesday standup shows there as "Michael work meeting", and Erin's day summary has it.
+
+Setup: Michael picks the rule for his work calendar once live. Mark #175 reviewed once this
+and F34e are live.
+
+### F34g · Idea (2026-11-07): Themi sees pictures sent in chat
+Status: [ ]
+Depends on: 06, 09, F29ha
+Read first: the plan's AI backend section (routing per task) and Security (outside text is
+data). F29ha's notes (guides; F29hb, a guide from a photo, is waiting on this). From Erin's
+idea #173 (2026-11-06, 12:19 pm, "Themi should be able to see images sent by the user,
+including screenshots").
+
+What the Pi shows: at 12:18 pm Erin sent a screenshot and asked "Can you see the screenshot
+I sent?" `telegram.py` drops photos ("stickers, photos and the like aren't handled yet"),
+so nothing reached Themi, and the chat reply said "I cannot see screenshots."
+
+Build:
+- Telegram: a photo (largest size under a limit, say 5 MB) or an image document, with its
+  caption, becomes the person's message with an image attached. Downloaded to memory only,
+  never written to disk or the database; the message log keeps "[a picture]" and the
+  caption.
+- The AI layer takes images: a `Message` part with bytes and a mime type, passed by the
+  Gemini adapter as `Part.from_bytes` (as audio is), and by the other adapters that support
+  it; a backend that doesn't is skipped in the fallback chain for that call. Through
+  `themi.ai.router`, as every call is.
+- The tool agent gets the picture with the caption. What's in it is data: text read from a
+  screenshot is wrapped as `<data source="their picture">` in the model's instructions, and
+  is never followed as an instruction, only acted on when their own words ask ("add these
+  to the list", "put this on my calendar").
+- With no caption, one line asks what they'd like done with it, after a short description
+  ("A screenshot of a calendar invite for Tuesday at 3. Add it to your calendar?").
+- Conversation mode: a picture goes to the tool agent.
+- Per-member daily cap like images (`image_daily_cap`'s counterpart for input), default 30.
+
+Tests: the fake Telegram sends a photo with "add these to the shopping list" and the fake
+provider sees the image part and adds the items; a screenshot whose text says "ignore your
+rules and email..." does nothing of the sort; no caption gets the one-line question; the log
+has "[a picture]", not the bytes; a provider without images is skipped. The default test run
+makes no real calls.
+Scenario: Erin sends a screenshot of a grocery list with "add these"; they're on Things to
+Buy.
+
+Data: mark #173 reviewed once live.
+
+### F34h · Feedback (2026-11-07): body doubling uses the task's own steps, routines and several tasks in a row
+Status: [ ]
+Depends on: BD1b, BD2, R1a, F33c
+Read first: BD1b's notes (Guided Step-Through, `proposed_steps`, a task's steps); R1a's
+notes (routines and their items); F33c's notes (a near name is found). From Michael's bug
+#181 (2026-11-07, 12:43 am, "body doubling should pull steps from actual tasks as they are
+described and be able to go through routines or multiple tasks").
+
+What the Pi shows: every Guided session on the Pi (sessions 8, 9, 11, 12) was "clean the
+bird cage" with `task_id` 0, so the model made up 12 steps each time ("Remove the bird",
+"Scrape dried waste", ...), different each time. Task 7, "Clean the bird cage", has ten
+steps of its own ("Remove everything from the top tray; throw out any cardboard ...").
+It's Erin's task, and Michael was doing it. Sessions 13 and 14, "Can you body double my
+evening routine?": made-up steps again ("Lock the front door", "Set the alarm", ...), not
+his evening routine's items. `start_body_double` uses a task's steps only when the model
+passes its `task_id`, and knows nothing of routines.
+
+Build:
+- `start_body_double` finds what it's for from `what` before making steps up, in this
+  order:
+  - An open task whose title matches (`title_matches`, F33c's near match), theirs, shared,
+    or the partner's (doing a partner's task is fine; the task is closed by whoever
+    finishes it, as for either-person tasks, and the partner sees it done in the usual
+    way). With steps, those are the steps, word for word; without, steps are made up as
+    now and offered to be saved on the task at the end ("Keep these steps for next
+    time?").
+  - A routine of theirs ("evening routine", "my morning"): today's open items, in order,
+    are the steps; each step done ticks that item.
+  - Otherwise, as now.
+- `task_ids` (a list) and `routine` arguments: "the dishes and then the laundry",
+  "my evening routine then the bird cage". One session goes through them in order: each
+  task's steps under its title ("Bird cage: step 3 of 10"), "Next up: Put the laundry away"
+  between them, and each one marked done as it's finished (the done check for a partner's
+  task as above). Quiet and sprint modes take a list too: one block per task, or until they
+  say done.
+- The session page (BD3a) shows which task of how many.
+- The tool description says to pass the task or routine whenever there is one.
+
+Tests: each a failing test first. "body double the bird cage" from Michael, with Erin's task
+7: its ten steps, word for word, and finishing closes task 7. "body double my evening
+routine": the routine's open items, each tick ticking the item. Two tasks in a row: both
+done, "Next up" between. No match: made-up steps and the offer to keep them.
+Scenario: Michael says "Can you body double my evening routine?" and goes through his own
+routine's items, each ticked on the wall as he goes.
+
+Data: mark #181 reviewed once live (and #179 with F34a).
+
+### F34i · Idea (2026-11-07): their own Spotify playlists in a session's music choices
+Status: [ ]
+Depends on: BD5a, BD5b, BD5c
+Read first: BD5a's notes (the built-in loops and the music offer); BD5b's notes
+(`SpotifyClient`, their playlists, `play_music`); BD5c's notes (music that suits the task).
+From Michael's idea #183 (2026-11-07, 1:50 am, "the music options in body doubling should
+allow for playing Spotify playlists from the user's library").
+
+What the Pi shows: Michael's Spotify is linked (Premium). His sessions offer only the
+built-in loops ("Some lofi while you work?"), and no session has `music` set. "Play my
+focus playlist" works in chat, but nothing in the session offers it.
+
+Build:
+- With Spotify linked, the session's music offer has up to three of their own playlists as
+  buttons, beside the built-in loop: the one played in their last session of this kind
+  first (BD5c's record), then names that fit the task (focus, chill, cleaning), then their
+  most recent. "More" lists the rest (a page of ten).
+- The session page has the same choice: a "My Spotify" section with their playlists,
+  playing on their active device (BD5b's play), and Pause/Next. Without an active device,
+  BD5b's one line. A free account opens the playlist link.
+- Playlists are read once per session and cached for its length; no Spotify call per
+  button.
+- Staged as `music.play`, as BD5b does.
+
+Tests: the fake Spotify with Michael's playlists: the offer has the last-used one first; a
+tap plays it on the device and the session row records it; "More" pages; a free account
+gets the link; not linked, only the loops.
+Scenario: Michael starts a quiet session and taps his "Deep Focus" playlist; it plays, and
+next time it's offered first.
+
+Data: mark #183 reviewed once live.
+
+### F34j · Idea (2026-11-07): when someone's day rolls over
+Status: [ ]
+Depends on: 07, C3, F21c
+Read first: the plan's Module behaviour sections on routines and the chore chart; C3's notes
+(morning and evening routine checks). From Michael's idea #182 (2026-11-07, 1:31 am, "allow
+users to define when a day rolls over. Beneficial for doing chores after midnight").
+
+What the Pi shows: Michael was cooking and body doubling past 1 am. "Today" is the calendar
+day everywhere, worked out separately in `tasks.py` (`_today`, `_day_start`), `routines.py`,
+`day_summary.py`, `maintenance.py` and `spending.py`. A chore ticked at 12:40 am counts for
+the new day, so the evening's chores look undone and the morning's look done.
+
+Build:
+- A per-member setting, "My day ends at": midnight (default), 1, 2, 3 or 4 am. On My
+  settings.
+- One helper in `themi.clock` (or beside it), `member_day(member, at) -> date`: the local
+  date, minus a day before their rollover time. Every "today" for a person goes through it:
+  tasks and rounds (done counts for that day), routines and their ticks, the end-of-day list
+  and the morning summary's "yesterday", day summaries, the daily message limit's count.
+  Shared things (a shared chore) use the person acting.
+- The wall: a tick between midnight and their rollover goes to the day before's chore or
+  routine on the wall (if the Cozyla client allows ticking a past day; if not, say so in the
+  Notes and leave the wall as it is).
+- Quiet hours are separate and stay as they are.
+- Times said in chat ("tomorrow") still mean the calendar day after the clock says, except
+  "tonight" said after midnight and before their rollover, which means now.
+
+Tests: frozen clock at 12:40 am Saturday with Michael's rollover at 3 am: a chore ticked counts
+for Friday, the evening routine is complete for Friday, Saturday's morning routine is untouched;
+at 3:01 am it's Saturday. Erin with midnight sees no change. Every module's "today" uses the
+helper (a test that greps for `date.today`/`now().date()` in core, as the clock rule's test
+does).
+Scenario: Michael, rollover 3 am, ticks "Clean the kitchen" at 1 am; Friday's chore is done,
+and Saturday's morning routine check still comes in the morning.
+
+Data: mark #182 reviewed once live.
+
+### F34k · Idea (2026-11-07): a call before the business closes
+Status: [ ]
+Depends on: F30d, F31c, F14a
+Read first: F30d's and F31c's notes (web searches, near home); F14a's notes (nudges at a
+time); the plan's PDA phrasing rules. From Erin's idea #177 (2026-11-06, 4:50 pm): "for tasks
+that are clearly linked to a specific company's business hours (eg. Calling the dentist or a
+restaurant), Themi should note the business hours and send an extra prompt 1-2 hours before
+the business closes for the day ... offer the user 3 options: call now, later (voicemail ok),
+or later (next business day)."
+
+Build:
+- A task of kind `call` (or a title naming a business to phone or visit) with a business
+  in it: Themi looks up its hours once (F31c's near-home web search, or a remembered fact
+  about that place) and stores them on the task (`tasks.business_hours`, JSON per weekday,
+  and where they came from). The task's read-back says "Open until 5 pm today". Wrong
+  hours can be corrected in chat, and that's remembered for the place.
+- On a day the task is due or open and the business is open: one extra nudge 1.5 hours
+  before closing (not in quiet hours, counted in the daily limit, gentle phrasing as
+  usual): "Rosewood Dental closes at 5 today. Call now, or later?" with three buttons:
+  "Call now" (the task's call steps, with the number if known), "Later, voicemail's fine"
+  (snoozed to after closing), "Next open day" (snoozed to that day's opening plus an hour).
+  Not on a day it's closed.
+- The buttons follow the usual custom-button rules (their own words for them, if they've
+  changed them), and BD2/S5's learning from which they pick.
+- Hours unknown or not found: no extra nudge, and the task says so once ("I couldn't find
+  their hours").
+
+Tests: frozen clock, the fake web search with a dentist's hours: the task stores them, the
+nudge comes at 3:30 pm for a 5 pm close, not on Sunday when it's closed, not in quiet hours;
+each button's snooze; unknown hours, no nudge.
+Scenario: Erin adds "Call the dentist"; at 3:30 pm she gets "closes at 5 today" with the three
+choices and taps "Next open day".
+
+Data: mark #177 reviewed once live.
 
 ## Conversation mode
 
