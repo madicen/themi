@@ -955,6 +955,22 @@
    "tools": [
     "switch_body_double_mode"
    ]
+  },
+  {
+   "id": "music-play",
+   "kind": "plain",
+   "message": "Play my focus playlist",
+   "tools": [
+    "play_music"
+   ]
+  },
+  {
+   "id": "music-pause",
+   "kind": "plain",
+   "message": "Can you pause my music for a sec?",
+   "tools": [
+    "pause_music"
+   ]
   }
  ]
 }

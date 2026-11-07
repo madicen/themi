@@ -7,6 +7,7 @@ from datetime import date
 
 import httpx
 
+from tests.fakes.spotify import FakeSpotify
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
@@ -440,3 +441,56 @@ async def test_step_twos_picture_is_redone_and_sent_when_asked(
     photo = scenario.telegram.calls("sendPhoto")[-1]
     assert photo["caption"] == "Step 2 of 6" and photo["photo_bytes"] > 0
     assert card(scenario).startswith("Step 2 of 6:")  # the chat card stays text
+
+
+# ----- BD5b: their own music ------------------------------------------------------------------
+
+
+async def link_spotify(scenario: Scenario, site: httpx.AsyncClient, fake: FakeSpotify) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    started = await site.post("/accounts/spotify/link", data={"csrf": csrf})
+    state, code = fake.approve(started.headers["location"])
+    await site.get(f"/auth/spotify/callback?state={state}&code={code}")
+
+
+async def test_put_on_lofi_while_i_work(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await link_spotify(scenario, site, fake_spotify)
+    fake_spotify.add_device("Kitchen speaker")
+    fake_spotify.add("playlist", "Lofi Beats")
+    await scenario.say("Erin", "/bodydouble sprint")
+    scenario.primary.queue_tool_call("play_music", {"query": "lofi"})
+    replies = await scenario.say("Erin", "put on lofi while I work")
+    assert replies == ["Playing Lofi Beats on Kitchen speaker."]
+    assert fake_spotify.playing == {
+        "context_uri": "spotify:playlist:lofibeats",
+        "device_id": "dev-1",
+    }
+    row = session_row(scenario)
+    assert (row["music"], row["music_name"]) == ("spotify:playlist:lofibeats", "Lofi Beats")
+
+
+async def test_a_free_account_gets_a_link(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    fake_spotify.premium = False
+    await link_spotify(scenario, site, fake_spotify)
+    fake_spotify.add_mine("Focus")
+    scenario.primary.queue_tool_call("play_music", {"query": "my focus playlist"})
+    replies = await scenario.say("Erin", "play my focus playlist")
+    assert replies == ["Here it is on Spotify: https://open.spotify.com/playlist/focus"]
+    assert fake_spotify.calls.count("PUT /v1/me/player/play") == 0
+
+
+async def test_a_built_in_loop_played_is_kept_on_the_session(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    await scenario.say("Erin", "/bodydouble")
+    await site.post("/session/music", data={"csrf": csrf, "sound": "rain"})
+    assert session_row(scenario)["music"] is None  # chosen, not played
+    await site.post("/session/music", data={"csrf": csrf, "played": "1"})
+    assert (session_row(scenario)["music"], session_row(scenario)["music_name"]) == (
+        "builtin:rain", "Rain",
+    )  # fmt: skip

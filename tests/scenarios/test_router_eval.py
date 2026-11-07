@@ -15,6 +15,7 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.ourgroceries import FakeOurGroceries
+from tests.fakes.spotify import FakeSpotify
 from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
 from themi.core.tools import GROUP_EXAMPLES, GROUPS, TOOL_GROUPS
@@ -95,6 +96,7 @@ async def test_the_routing_cases_load_and_name_built_tools(
     fake_cozyla: FakeCozyla,
     fake_ourgroceries: FakeOurGroceries,
     fake_travel: FakeTravel,
+    fake_spotify: FakeSpotify,
 ) -> None:
     cases = load_routing_cases()
     assert 80 <= len(cases) <= 130
