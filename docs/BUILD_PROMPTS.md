@@ -222,7 +222,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
 | BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [x] 2026-11-06 |
 | BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
-| BD2 | Body double: choosing the mode, and learning from sessions | Body double | [ ] |
+| BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
 | BD3b | Body double: Themi the chameleon | Body double | [ ] |
 | BD4a | AI layer: image generation | Body double | [ ] |
@@ -11441,7 +11441,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0127).
 
 ### BD2 · Body double: choosing the mode, and learning from sessions
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1b, 19
 Read first: the plan's Module behaviour B (Model, Learning); `themi.energy.outcomes` (the
 same smoothing); this section's intro.
@@ -11469,6 +11469,37 @@ Tests: unit tests for the classifier's keyword path, the table, the learning thr
 defaults winning; a scenario where three good sprints for tidying in the evening change the
 suggestion from the table's. Evals: category picks for 30 real task titles from the Pi
 (with the owner's say-so), no energy words in the offer.
+
+Notes (2026-11-06):
+- `themi.core.body_double_modes`: pure functions (`by_words`, `settled`, `part_of_day`,
+  `observations`, `rate`, `learned`, `choose`) and `ModeChooser` (installed on
+  `BodyDouble.modes`). Migration 0128: `tasks.category`, `task_mode_preferences` and
+  `body_double_sessions.mode_chosen`.
+- The kind of job: keywords first (tidying's words beat a plain "clean"); when none or
+  several match, one structured call on the quick-jobs route (`structured_misc`), the job
+  in a delimited block; with no model, the first keyword match or `other`. Kept on the
+  task; a session with no words at all is `other` without a call. `set_job_category`
+  ("that's admin") corrects a task or the session going on, and sticks.
+- Learning: the same smoothing as `themi.energy.outcomes` from an even start (0.5, which
+  counts as one: steps 1/2, 1/3, ... never below 0.1). A cell is person × kind × part of
+  the day (morning 5-12, afternoon 12-17, evening otherwise) × mode; the low/not-low split
+  is used once it has three sessions. A mode beats the table with three sessions in its cell
+  and a lead of 0.2. A switched session counts against its mode and for the one switched to;
+  the new row's own outcome counts as well.
+- The table, as asked: tidy is already sprints, so the prompt's "three good sprints for
+  tidying change the suggestion" can't show a change. The scenario uses chores (the dishes:
+  guided by the table) in the evening instead.
+- Defaults: `set_body_double_default` ("always use pomodoro for tidying") and a select per
+  kind of job in My settings' "Body double" row ("Let Themi choose" clears it). A default
+  always wins and starts without an offer.
+- The offer: with no mode said and no default, the start opens with "Starting a sprint for
+  this one." / "Quiet company for this one." / "Taking this one step by step." and buttons
+  for the other two ([Quiet instead] [Sprints instead] [Step by step instead]), which
+  switch. Never a reason. A nudge's [Body double] starts in the picked mode the same way.
+- Evals: `test_body_double_categories` (30 titles written fresh, 26 to pass) and cases
+  `bd-default`, `bd-offer-no-energy`. Follow-up: swap in 30 real titles from the Pi once
+  their owner says yes.
+- Setup: restart `themi run` (migration 0128).
 
 ### BD3a · Body double: the session page and the Telegram Mini App
 Status: [ ]
