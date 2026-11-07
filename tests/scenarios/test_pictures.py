@@ -236,6 +236,7 @@ async def test_the_picture_is_forgotten_after_half_an_hour(scenario: Scenario) -
 async def test_a_new_picture_replaces_the_old(scenario: Scenario) -> None:
     scenario.primary.queue_text("A flyer.")
     await scenario.picture("Erin", FLYER, caption="what's this?")
+    await scenario.advance(minutes=2)  # F34mb: under a minute apart, they'd go together
     scenario.primary.queue_text("A list.")
     await scenario.picture("Erin", SHOPPING_LIST, caption="and this?")
     scenario.primary.queue_text("Milk, eggs and oranges.")

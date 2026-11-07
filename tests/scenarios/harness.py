@@ -232,12 +232,26 @@ class Scenario:
         )
 
     async def picture(
-        self, name: str, data: bytes = b"JPEG-picture", caption: str = ""
+        self, name: str, data: bytes = b"JPEG-picture", caption: str = "", album: str = ""
     ) -> list[str]:
-        """F34g: a photo sent in chat, with its caption."""
+        """F34g: a photo sent in chat, with its caption (F34mb: one of an album's)."""
         return await self._collect(
-            name, lambda chat: self.telegram.send_photo(chat, data, caption=caption)
+            name,
+            lambda chat: self.telegram.send_photo(chat, data, caption=caption, media_group=album),
         )
+
+    async def album(
+        self, name: str, *pictures: bytes, caption: str = "", caption_on: int = 0
+    ) -> list[str]:
+        """F34mb: an album of photos sent at once (one update each, fetched together), its
+        caption on picture `caption_on`."""
+
+        def send(chat: int) -> None:
+            for n, data in enumerate(pictures):
+                words = caption if n == caption_on else ""
+                self.telegram.send_photo(chat, data, caption=words, media_group="album-1")
+
+        return await self._collect(name, send)
 
     async def tap(self, name: str, label: str) -> list[str]:
         """Tap the most recent button labelled `label` in `name`'s chat (an edit's

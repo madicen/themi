@@ -164,10 +164,17 @@ class FakeTelegram:
         return self._push("message", message)
 
     def send_photo(
-        self, user_id: int, data: bytes, *, caption: str = "", too_large: bool = False
+        self,
+        user_id: int,
+        data: bytes,
+        *,
+        caption: str = "",
+        too_large: bool = False,
+        media_group: str = "",
     ) -> int:
         """F34g: a photo in Telegram's sizes, a thumbnail and the full one (`data`). With
-        `too_large`, a third, larger size is listed that the bot must not pick."""
+        `too_large`, a third, larger size is listed that the bot must not pick. F34mb: with
+        `media_group`, it's one picture of an album (Telegram sends one update for each)."""
         file_id = f"photo-{len(self.state.files) + 1}"
         with self._lock:
             self.state.files[file_id] = data
@@ -202,6 +209,8 @@ class FakeTelegram:
         message["photo"] = sizes
         if caption:
             message["caption"] = caption
+        if media_group:
+            message["media_group_id"] = media_group
         return self._push("message", message)
 
     def send_image_file(
