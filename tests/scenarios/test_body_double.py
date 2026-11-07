@@ -107,12 +107,15 @@ async def test_a_nudge_waits_for_the_session_then_comes(scenario: Scenario) -> N
 
 
 async def test_a_bigger_tasks_nudge_offers_a_body_double(scenario: Scenario) -> None:
-    task = await taxes(scenario)
+    task = await board(scenario).create(scenario.member("Erin"), "Write the essay", "text", 4)
     await board(scenario).prompt(task)
     await scenario.advance(minutes=1)
     assert scenario.last_buttons("Erin") == ["Done", "Later", "Body double"]
-    await scenario.tap("Erin", "Body double")
-    assert scenario.edits("Erin")[-1]["text"] == "I'm here. Going quiet until you say you're done."
+    await scenario.tap("Erin", "Body double")  # BD2: writing is deep work, quiet company
+    assert scenario.edits("Erin")[-1]["text"] == (
+        "Quiet company for this one.\nI'm here. Going quiet until you say you're done."
+    )
+    assert card_buttons(scenario) == ["Sprints instead", "Step by step instead"]
     assert session_row(scenario)["task_id"] == task.id
 
 
@@ -295,3 +298,28 @@ async def test_switching_into_steps_keeps_the_time(scenario: Scenario) -> None:
     assert replies == ["Step 1 of 6:\n> Clear the counter"]
     row = session_row(scenario)
     assert row["started_at"] == first["started_at"] and row["mode"] == "guided"
+
+
+# ----- BD2: choosing the mode -----------------------------------------------------------------
+
+
+async def test_three_good_evening_sprints_change_the_pick_for_chores(scenario: Scenario) -> None:
+    await scenario.advance(hours=10)  # 7 pm: the evening
+    for _ in range(3):
+        await start(scenario, "pomodoro the dishes", mode="sprint", minutes=25,
+                    what="the dishes")  # fmt: skip
+        await scenario.advance(minutes=25)
+        await scenario.run_jobs()
+        assert scenario.inbox("Erin")[-1] == "That's 25 minutes. How did it go?"
+        await scenario.tap("Erin", "Done")
+    rows = scenario.app.db.query("SELECT category, outcome FROM body_double_sessions")
+    assert [(r["category"], r["outcome"]) for r in rows] == [("chores", "finished")] * 3
+    replies = await start(scenario, "keep me company for the dishes", what="the dishes")
+    assert replies == [
+        "Starting a sprint for this one.\nSprint on: 25 minutes, then a 5-minute break. "
+        "I'll say when."
+    ]
+    assert scenario.last_buttons("Erin") == ["Quiet instead", "Step by step instead"]
+    await scenario.tap("Erin", "Quiet instead")
+    assert card(scenario) == "Quiet company instead: going quiet until you say you're done."
+    assert session_row(scenario)["mode"] == "silent"

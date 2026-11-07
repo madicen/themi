@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import httpx
+
+from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core.body_double import JOB, SILENT, SPRINT, BodyDouble
@@ -102,3 +105,58 @@ async def test_burnout_mode_ends_a_session(scenario: Scenario) -> None:
 async def test_the_hour_of_the_week_is_kept(scenario: Scenario) -> None:
     session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SILENT)
     assert session.row["hour_of_week"] == 2 * 24 + 9  # Wednesday, 9 am local
+
+
+# ----- BD2 ----------------------------------------------------------------------------------
+
+
+async def test_their_own_default_always_wins(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    modes = bd(scenario).modes
+    assert modes is not None
+    modes.set_default(erin, "tidy", "guided")
+    scenario.primary.queue_structured({"steps": [{"text": "Pick up toys", "optional": False}]})
+    session, text, buttons = await bd(scenario).start(erin, label="declutter the playroom")
+    assert (session.mode, session.category) == ("guided", "tidy")
+    assert not text.startswith("Taking this one")  # their choice: no offer
+    assert "Sprints instead" not in [b.label for b in buttons]
+
+
+async def test_a_tasks_category_is_kept_and_can_be_corrected(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Walk the dog", "physical", 3)
+    scenario.primary.queue_structured({"category": "chores"})
+    await bd(scenario).start(erin, task=task, mode=SILENT)
+    assert scenario.app.db.scalar("SELECT category FROM tasks WHERE id = ?", (task.id,)) == (
+        "chores"
+    )
+    assert '<data source="the job">\nWalk the dog\n</data>' in scenario.primary.requests[-1].prompt
+    scenario.primary.queue_tool_call("set_job_category", {"task_id": 0, "category": "other"})
+    scenario.primary.queue_text("Noted.")
+    await scenario.say("Erin", "that's not a chore, it's just a walk")
+    assert scenario.app.db.scalar("SELECT category FROM tasks WHERE id = ?", (task.id,)) == (
+        "other"
+    )
+    await bd(scenario).start(erin, task=task, mode=SILENT)  # kept: no call this time
+    row = scenario.app.db.one("SELECT category FROM body_double_sessions ORDER BY id DESC")
+    assert row is not None and row["category"] == "other"
+
+
+async def test_the_settings_page_has_a_row_per_kind_of_job(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    page = await site.get("/settings")
+    for category in ("deep_work", "admin", "chores", "tidy", "other"):
+        assert f'name="job_mode_{category}"' in page.text
+    form = {
+        "csrf": csrf, "quiet_start": "22:00", "quiet_end": "07:00", "daily_limit": "8",
+        "sprint_work_minutes": "25", "sprint_break_minutes": "5", "break_extend_minutes": "15",
+        "job_mode_tidy": "sprint", "job_mode_admin": "",
+    }  # fmt: skip
+    await site.post("/settings", data=form)
+    modes = bd(scenario).modes
+    assert modes is not None
+    assert modes.defaults(scenario.member("Erin")) == {"tidy": "sprint"}
