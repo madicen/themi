@@ -12,6 +12,12 @@
     <p class="muted">Nothing that can wait reaches you between these times.</p>
     <label>From <input type="time" name="quiet_start" value="{{ member.quiet_start.strftime('%H:%M') }}" required></label>
     <label>Until <input type="time" name="quiet_end" value="{{ member.quiet_end.strftime('%H:%M') }}" required></label>
+    <label>My day ends at
+      <select name="day_ends">
+        {% for hour, words in [(0, "Midnight"), (1, "1 am"), (2, "2 am"), (3, "3 am"), (4, "4 am")] %}<option value="{{ hour }}" {% if member.day_ends == hour %}selected{% endif %}>{{ words }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="muted">Chores and routines done after midnight and before then count for the day before. Quiet hours stay as they are.</p>
   {% endif %}{% endcall %}
 
   {% call(part) row("How often Themi starts a conversation", meta="At most " ~ member.daily_limit ~ " a day", id="limit") %}{% if part == "body" %}
@@ -51,6 +57,13 @@
       <select name="calendar_details">
         <option value="me" {% if member.calendar_details == "me" %}selected{% endif %}>Just me</option>
         <option value="partner" {% if member.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
+      </select>
+    </label>
+    <label>The same event on two of my calendars
+      <select name="calendar_twins">
+        <option value="ask" {% if member.calendar_twins == "ask" %}selected{% endif %}>Ask me which to keep</option>
+        <option value="guess" {% if member.calendar_twins == "guess" %}selected{% endif %}>Merge it where Themi thinks best (with an undo)</option>
+        <option value="keep" {% if member.calendar_twins == "keep" %}selected{% endif %}>Keep both</option>
       </select>
     </label>
     <label>A summary of my day at <input type="time" name="morning_summary" value="{{ member.morning_summary.strftime('%H:%M') if member.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>

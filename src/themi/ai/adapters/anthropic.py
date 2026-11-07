@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Sequence
 from typing import Any
 
@@ -33,16 +34,17 @@ from themi.ai.errors import (
 )
 from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
+    Block,
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StopReason,
     StructuredResponse,
     TextBlock,
     ToolCall,
-    ToolResult,
     ToolSpec,
     Transcription,
     Usage,
@@ -68,7 +70,7 @@ _STOP_REASONS = {
 
 class AnthropicProvider:
     name = "anthropic"
-    capabilities = Capabilities(tools=True, structured=True, audio=False)
+    capabilities = Capabilities(tools=True, structured=True, audio=False, images=True)
 
     def __init__(
         self,
@@ -132,11 +134,19 @@ class AnthropicProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         params: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [_block_param(b) for b in (TextBlock(prompt), *images)]
+                    if images
+                    else prompt,
+                }
+            ],
             "output_config": {
                 "effort": self.effort,
                 "format": {"type": "json_schema", "schema": schema},
@@ -215,9 +225,15 @@ def _tool(spec: ToolSpec) -> dict[str, Any]:
     return tool
 
 
-def _block_param(block: TextBlock | ToolCall | ToolResult) -> dict[str, Any]:
+def _block_param(block: Block) -> dict[str, Any]:
     if isinstance(block, TextBlock):
         return {"type": "text", "text": block.text}
+    if isinstance(block, ImageBlock):  # F34g
+        data = base64.b64encode(block.data).decode("ascii")
+        return {
+            "type": "image",
+            "source": {"type": "base64", "media_type": block.mime_type, "data": data},
+        }
     if isinstance(block, ToolCall):
         return {"type": "tool_use", "id": block.id, "name": block.name, "input": block.arguments}
     return {

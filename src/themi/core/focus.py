@@ -137,7 +137,7 @@ class Focus:
         then the lightest. `among`: only what was on the list they were looking at. Their own
         number of them, and fewer than there are; asked again (`times` 2), the lightest one;
         a third time, none. Medicines always."""
-        today = self.summary.today()
+        today = self.summary.today(member)
         now = clock.now()
 
         def order(task: Task) -> tuple[Any, ...]:
@@ -160,7 +160,7 @@ class Focus:
 
     def times(self, member: Member) -> int:
         """How many times it's been too much today, this one included."""
-        today = self.summary.today()
+        today = self.summary.today(member)
         start = datetime(today.year, today.month, today.day, tzinfo=self._tz())
         sent = self.services.store.db.scalar(
             "SELECT COUNT(*) FROM outbox WHERE member_id = ? AND kind = 'focus' "
@@ -173,7 +173,7 @@ class Focus:
         """The few, then `after` (what became of the rest), or that the rest are kept."""
         if not few:
             return NOTHING_TEXT if rest else CLEAR_TEXT
-        today = self.summary.today()
+        today = self.summary.today(member)
         lines = []
         for task in few:
             at = self.board.time_of(task, today)
@@ -234,7 +234,7 @@ class Focus:
         """At most this many on a day: their setting, else what they usually get done."""
         if member.day_budget:
             return member.day_budget
-        tz, today = self._tz(), self.summary.today()
+        tz, today = self._tz(), self.summary.today(member)
         midnight = datetime(today.year, today.month, today.day, tzinfo=tz)
         done = self.board.done_between(member, midnight - HISTORY, midnight)
         per_day = Counter(d.at.astimezone(tz).date() for d in done)
@@ -251,7 +251,7 @@ class Focus:
         if not rest:
             return self.text(member, few, rest)
         budget = self.budget(member)
-        today = self.summary.today()
+        today = self.summary.today(member)
         days = [today + timedelta(days=n) for n in range(1, LOOK_AHEAD + 1)]
         load = {d: len(self.summary.due(member, d)) for d in days}  # before anything moves
         placed: dict[date, list[str]] = {}

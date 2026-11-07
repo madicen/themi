@@ -31,6 +31,7 @@ from themi.ai.types import ToolCall, ToolResult, ToolSpec
 from themi.core import naming
 
 if TYPE_CHECKING:
+    from themi.channels.events import Picture
     from themi.core.services import Services
 
 log = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ class ToolContext:
     staged: list[str] = field(default_factory=list)
     # Each call this turn: (tool, outcome, result text), for replies checked by tool (F30a).
     calls: list[tuple[str, str, str]] = field(default_factory=list)
+    # F34g: they sent a picture this turn, with `request_text` as its caption.
+    picture: bool = False
+    # F34l: the picture this turn can see: its own, or theirs from a moment ago. In memory
+    # only; a tool that reads one (a recipe, F34m) uses this, never the model's retelling.
+    image: Picture | None = None
 
 
 @dataclass(frozen=True)
@@ -504,6 +510,7 @@ TOOL_GROUPS: dict[str, str] = {
             "start_cooking",
             "stop_cooking",
             "recipe_from_link",
+            "recipe_from_picture",
             "find_web_recipe",
             "save_recipe_to_cookbook",
             "cookbook_recipes_we_can_make",
@@ -545,6 +552,7 @@ TOOL_GROUPS: dict[str, str] = {
             "add_calendar_event",
             "change_calendar_event",
             "delete_calendar_event",
+            "merge_calendar_events",
             "day_summary",
             "drive_time",
             "block_time_for_task",
@@ -686,6 +694,37 @@ def twins_text(names: Iterable[str]) -> str:
 _GROUP_WORDS = {
     name: re.compile(rf"\b(?:{words})", re.IGNORECASE) for name, (_, words) in GROUPS.items()
 }
+
+
+# F34l: a picture turn gets the groups a picture usually starts (a list's items, an event, a
+# recipe), whatever its words; guides and bug reports are core already. Not every group:
+# that would double the prompt (about 28k characters to 56k), and `more_tools` is there.
+PICTURE_GROUPS = frozenset({"lists", "calendar", "recipes"})
+PICTURE_LOG = "[a picture]"  # how the message log keeps one (themi.channels.telegram)
+YES_TO_IT = re.compile(
+    r"^(?:yes|yep|yeah|yup|ok|okay|sure|please|go ahead|do it|sounds good|"
+    r"add (?:them|it|those|these|all|them all|all of them)|save (?:it|that|this)|"
+    r"put it (?:on|in)(?: (?:the|my|our))? (?:calendar|list))"
+    r"(?: (?:please|thanks|thank you|add (?:them|it|those|these)|do it|go ahead))*$"
+)
+
+
+def plain_words(text: str) -> str:
+    return " ".join(re.sub(r"[^\w\s&'/-]", " ", text).split()).lower()
+
+
+def answers_picture_question(ctx: ToolContext, words: Sequence[str]) -> bool:
+    """F34gb, F34l: they sent a picture, Themi asked about it ("Add milk and eggs to the
+    grocery list?"), and they said yes. The question was Themi's, it named every one of
+    `words` (list items, an event's title and day, a recipe's name), and the yes is
+    theirs. The caller checks the question asked for its kind of thing."""
+    if not words or not ctx.previous_text.startswith(PICTURE_LOG) or "?" not in ctx.said_before:
+        return False
+    answer = ctx.request_text.strip().lower().rstrip("!. ")
+    if answer not in ("👍", "✅") and not YES_TO_IT.match(plain_words(ctx.request_text)):
+        return False
+    asked = plain_words(ctx.said_before)
+    return all(re.search(rf"\b{re.escape(plain_words(w))}\b", asked) for w in words)
 
 
 def choose_groups(texts: Sequence[str]) -> set[str]:

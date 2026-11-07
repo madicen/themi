@@ -52,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
     feedback.add_argument(
         "--not-wrong", type=int, metavar="REPLY", help="clear a 👎 mark: the reply was right"
     )
+    feedback.add_argument(
+        "--pictures",
+        metavar="FOLDER",
+        help="write the listed reports' screenshots to this folder (decrypted)",
+    )
     backup = commands.add_parser(
         "backup", help="take an encrypted backup now (or --list the ones in storage)"
     )
@@ -310,14 +315,17 @@ def _feedback(
     done: list[int] | None,
     wrong_tool: list[str] | None = None,
     not_wrong: int | None = None,
+    pictures: str | None = None,
 ) -> int:
-    from themi.core.feedback import FeedbackBook
+    from pathlib import Path
+
+    from themi.core.feedback import FeedbackBook, picture_name
     from themi.core.naming import NamingRefusals
     from themi.core.naming import report as naming_report
     from themi.core.wrong_replies import LABEL_WORDS, ReplyReview, ReviewError, report, stub_text
 
     store = _store()
-    book = FeedbackBook(store.db)
+    book = FeedbackBook(store.db, store.cipher)
     review = ReplyReview(store.db)
     if done:
         marked = book.mark_reviewed(done)
@@ -340,7 +348,17 @@ def _feedback(
             print(stub_text(stub))
         return 0
     family = store.get_family()
-    print(book.report(book.items(include_reviewed)), end="")
+    items = book.items(include_reviewed)
+    if pictures:  # F34o: the screenshots, decrypted, only where they asked
+        folder = Path(pictures).expanduser()
+        folder.mkdir(parents=True, exist_ok=True)
+        written = 0
+        for item in items:
+            for n, kept in enumerate(book.pictures([item.id]), 1):
+                (folder / picture_name(item.id, kept, n)).write_bytes(kept.data)
+                written += 1
+        print(f"Wrote {written} screenshot(s) to {folder}.", file=sys.stderr)
+    print(book.report(items), end="")
     marked_report = report(review.unlabelled(), family.timezone if family else "UTC")
     if marked_report:
         print("\n" + marked_report, end="")
@@ -510,7 +528,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "login-link":
             print(_login_link(args.name))
         elif args.command == "feedback":
-            return _feedback(args.all, args.done, args.wrong_tool, args.not_wrong)
+            return _feedback(args.all, args.done, args.wrong_tool, args.not_wrong, args.pictures)
         elif args.command == "backup":
             _backup(args.list)
         elif args.command == "restore":

@@ -337,6 +337,11 @@ def unfaithful(original: str, rewrite: str) -> str | None:
     said = original.lower()
     if any(name.lower() not in said for name in _NAME.findall(rewrite)):
         return "added a name"
+    # F34b, reply 351: "Step 1. Remove everything from the top tray." became "The top tray
+    # empty.": a step number, a time or an amount is a fact, kept however it's reworded.
+    kept = {m.group() for m in re.finditer(r"\d+", rewrite)}
+    if any(re.match(r"\d+", n).group() not in kept for n in _NUMBER.findall(original)):  # type: ignore[union-attr]
+        return "dropped a number"
     if len(original.strip()) < LONG_ENOUGH:
         return None  # a line or two is reworded freely ("the washer's done")
     words = _content(original)

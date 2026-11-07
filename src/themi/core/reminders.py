@@ -33,7 +33,7 @@ from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
 from themi.core.tools import ToolContext, ToolFailed, tool
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class Reminders:
             quiet = self._quiet_starts(member, now)
             if not quiet - DAY_END_BEFORE_QUIET <= now < quiet:
                 continue
-            today = now.date()
+            today = member_day(member, now, tz)  # F34j: quiet at 12:30 am is still Friday's
             if self.db.one(
                 "SELECT 1 FROM day_end_sent WHERE member_id = ? AND day = ?",
                 (member.id, today.isoformat()),
@@ -193,7 +193,7 @@ class Reminders:
             task = self.board.get(row["id"])
             if task.due_on is None or self._moves_by_itself(task):
                 continue
-            if (self.board.round_end(task) or task.due_on) >= today:
+            if (self.board.round_end(task) or task.due_on) >= self.board._doer_today(task):
                 continue  # an either-day round's second day is still on time
             last = row["overdue_reminded_on"]
             if last and (today - date.fromisoformat(last)).days < CADENCE[task.importance]:

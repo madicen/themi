@@ -260,11 +260,11 @@ async def test_whose_events_are_whose(
         return (await scenario.say("Erin", said))[0]
 
     assert await ask("What else do I have today?") == (
-        "Wed 21 Oct:\n- all day: Take out Waste Bins (Madicen Family)"
+        "Wed 21 Oct:\n- all day: Take out Waste Bins (on the Madicen Family calendar)"
     )
     assert await ask("What are we doing today?") == (
         "Wed 21 Oct:\n"
-        "- all day: Take out Waste Bins (Madicen Family)\n"
+        "- all day: Take out Waste Bins (on the Madicen Family calendar)\n"
         "- 4:30-5 pm: Tea Time! (Husband)"
     )
 

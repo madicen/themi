@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
@@ -129,6 +131,16 @@ def routes(kit: Kit) -> APIRouter:
 
     # ----- which calendars Themi reads (K1) ------------------------------------------------
 
+    async def _family_calendar(app: Any) -> tuple[int, str] | None:
+        sync = app.services.calendar
+        if sync is None or sync.account() is None:
+            return None
+        try:
+            target = await sync.target()
+        except Exception:  # not set up yet, or Google didn't answer: no family calendar to show
+            return None
+        return target.account.id, target.calendar_id
+
     def own_account(member: Member, account_id: int) -> LinkedAccount | None:
         return next((a for a in app.store.linked_accounts(member.id) if a.id == account_id), None)
 
@@ -151,7 +163,53 @@ def routes(kit: Kit) -> APIRouter:
              str(c["id"]) in chosen or (c.get("primary") and chosen == {"primary"}))
             for c in listed
         ]  # fmt: skip
-        return kit.with_flash(request, "calendars.html", session, account=account, options=options)
+        copies = app.services.calendar_copies
+        shown = (
+            {r.calendar_id: r.level for r in copies.rules(session.member)
+             if r.account_id == account.id}
+            if copies is not None
+            else {}
+        )  # fmt: skip
+        family = await _family_calendar(app)
+        return kit.with_flash(
+            request, "calendars.html", session, account=account, options=options,
+            shown=shown, family=family if family and family[0] == account.id else None,
+            labels=copies.labels(session.member) if copies is not None else {},
+            copies=copies is not None,
+        )  # fmt: skip
+
+    @router.post("/accounts/{account_id}/calendars/shown")
+    async def show_calendars(request: Request, account_id: int) -> Response:
+        """F34f: how each calendar of theirs shows on the family calendar, and the labels."""
+        session, form = await kit.checked(request)
+        account = own_account(session.member, account_id)
+        copies = app.services.calendar_copies
+        if account is None or copies is None:
+            return kit.redirect("/accounts", "That account isn't one of yours.")
+        copies.set_labels(
+            session.member,
+            {k: str(form.get(f"label_{k}", "")) for k in ("meeting", "focus", "other")},
+        )
+        said = []
+        current = {r.calendar_id: r.level for r in copies.rules(session.member)
+                   if r.account_id == account.id}  # fmt: skip
+        for key in form:
+            if not key.startswith("level_"):
+                continue
+            calendar_id = key.removeprefix("level_")
+            level = str(form.get(key) or "off")
+            if level == current.get(calendar_id, "off"):
+                continue
+            name = str(form.get(f"name_{calendar_id}", calendar_id))
+            try:
+                said.append(
+                    await copies.set_rule(session.member, account.id, calendar_id, name, level)
+                )
+            except ValueError as exc:
+                said.append(f"{name}: {exc}.")
+        return kit.redirect(
+            f"/accounts/{account.id}/calendars", " ".join(said) or "Saved the labels."
+        )
 
     @router.post("/accounts/{account_id}/calendars")
     async def choose_calendars(request: Request, account_id: int) -> Response:

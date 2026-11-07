@@ -48,8 +48,9 @@ from themi.channels.pda import PdaShield
 from themi.localtime import (
     free_from,
     free_until,
+    member_day,
+    member_day_start,
     next_waking_start,
-    start_of_local_day,
     to_utc_iso,
 )
 
@@ -639,10 +640,12 @@ class Outbox:
         )
 
     def sent_today(self, member_id: int, now: datetime | None = None) -> int:
-        """Proactive messages already sent to the member since local midnight. A warm word
-        for a tick on the wall (F19b) or an update's result (F23a) is an answer to what they
-        did: it doesn't count."""
-        midnight = start_of_local_day(now or clock.now(), self._tz)
+        """Proactive messages already sent to the member since their day began (local
+        midnight, or their rollover: F34j). A warm word for a tick on the wall (F19b) or an
+        update's result (F23a) is an answer to what they did: it doesn't count."""
+        moment = now or clock.now()
+        member = self.store.get_member(member_id)
+        midnight = member_day_start(member, member_day(member, moment, self._tz), self._tz)
         return self.store.db.scalar(  # a question to the family group counts for everyone
             "SELECT COUNT(*) FROM outbox WHERE (member_id = ? OR shared_buttons = 1) "
             "AND status = 'sent' AND priority IN ('urgent', 'normal', 'low') "

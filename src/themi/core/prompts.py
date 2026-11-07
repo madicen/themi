@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from themi.accounts.models import LoggedMessage, Member
 from themi.logs import redact
@@ -179,6 +179,20 @@ def as_data(source: str, text: str) -> str:
     return f'<data source="{safe_source}">\n{safe_text}\n</data>'
 
 
+def day_note(member: Member, local_now: datetime) -> str:
+    """F34j: after midnight and before their day ends, it's still the day before for them."""
+    hours = int(getattr(member, "day_ends", 0) or 0)
+    if not hours or local_now.hour >= hours:
+        return ""
+    before = (local_now - timedelta(hours=hours)).strftime("%A")
+    ends = f"{hours} am"
+    return (
+        f" (For {member.name} it's still {before} until {ends}: their {before}'s chores and "
+        "routines are still today's, and 'tonight' means now. 'Tomorrow' is still the "
+        f"calendar day after {local_now:%A}.)"
+    )
+
+
 def build_turn(
     member: Member,
     message: str,
@@ -201,6 +215,7 @@ def build_turn(
         lines.append(f"{speaker}: {redact(logged.text)}")  # no live sign-in links to the model
     recent = "\n".join(lines) if lines else "(no earlier messages)"
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
+    when += day_note(member, local_now)
     remembered = "\n".join(f"- {n}" for n in notes) if notes else "none"
     phrasing = PHRASING_WORDS.get(member.phrasing, PHRASING_WORDS["plain"])
     if member.phrasing_notes:

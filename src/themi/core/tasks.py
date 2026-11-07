@@ -29,7 +29,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
-from themi.core.progression import Progression, parse_plan
+from themi.core.progression import Progression, amount_said, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
 from themi.core.repeat import (
@@ -42,10 +42,11 @@ from themi.core.repeat import (
 )
 from themi.core.services import Services
 from themi.core.sun import sunset
+from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.energy.matching import Assignment, Matcher
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -146,6 +147,11 @@ BOTH_MOVED_TEXT = " That's for both of you."
 SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
+SKIPPED_TEXT = '"{title}" moved to {when}.'
+# F34cb: an amount they said that isn't this week's plan is a question, not a change.
+WEEK_AMOUNT_TEXT = "This week's plan says {planned}. Keep {said} this week, or keep the plan?"
+WEEK_AMOUNT_SET = "{said} this week. Next week goes back to the plan."
+WEEK_AMOUNT_KEPT = "Keeping the plan: {planned} this week."
 UNSCHEDULED_TEXT = "{title} no longer has a date."
 
 
@@ -312,6 +318,7 @@ class TaskBoard:
         s.tools.register(cancel_task)
         s.tools.register(reschedule_task)
         s.tools.register(snooze_task)
+        s.tools.register(skip_round)
         s.tools.register(update_task)
         s.tools.register(set_task_schedule)
         s.tools.register(set_task_plan)
@@ -948,9 +955,20 @@ class TaskBoard:
 
     # ----- repeating chores (F6b) ------------------------------------------------
 
-    def _today(self) -> date:
+    def _today(self, member: Member | None = None) -> date:
+        """The family's date, or with `member`, the day it is for them (F34j: still the day
+        before until their day ends)."""
         family = self.store.get_family()
-        return clock.now().astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        tz = ZoneInfo(family.timezone if family else "UTC")
+        if member is not None:
+            return member_day(member, clock.now(), tz)
+        return clock.now().astimezone(tz).date()
+
+    def _doer_today(self, task: Task) -> date:
+        """The day it is for whoever does the task (the family's for a shared one)."""
+        if task.assignee is None or task.shared:
+            return self._today()
+        return self._today(self.store.get_member(task.assignee))
 
     def _day_start(self, day: date) -> datetime:
         family = self.store.get_family()
@@ -1155,10 +1173,13 @@ class TaskBoard:
             return []
         return [task.due_on + timedelta(days=n) for n in range((end - task.due_on).days + 1)]
 
-    def done_day(self, due_on: date, done_at: datetime, task: Task) -> date:
+    def done_day(
+        self, due_on: date, done_at: datetime, task: Task, by: Member | None = None
+    ) -> date:
         """Which day a round's tick goes on: the day it was done, when that was one of the
-        round's days (Sunday for a weekend run done Sunday), else its due date."""
-        day = done_at.astimezone(self._tz()).date()
+        round's days (Sunday for a weekend run done Sunday), else its due date. `by`: who
+        did it, whose day it was (F34j)."""
+        day = member_day(by, done_at, self._tz()) if by else done_at.astimezone(self._tz()).date()
         end = round_end(task.repeat, due_on) if task.repeat is not None else due_on
         return day if due_on <= day <= end else due_on
 
@@ -1287,7 +1308,7 @@ class TaskBoard:
         if missed is not None:
             return self._fill_missed(task, by, missed)
         self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
-        today = self._today()
+        today = self._today(by)  # F34j: after midnight and before their rollover, the day before
         day = min(on or today, today)
         end = self.round_end(task)
         on_time = end is None or day <= end
@@ -1361,7 +1382,7 @@ class TaskBoard:
         """An anchored round whose day has passed: roll on to the next date (recording a missed
         run), for catch-up chores leave it owed, or for next-day ones move it to tomorrow
         (F9a). Deadline chores follow their target."""
-        today = self._today()
+        today = self._doer_today(task)  # F34j: not missed until their day is over
         if task.due_before_task is not None:
             due = self._deadline_due(task)
             if (
@@ -1576,6 +1597,67 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title) + both
         return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
+    async def ask_week_amount(self, task: Task, member: Member, text: str) -> bool:
+        """F34cb, bug #178: "I plan to run 1.3 miles" when the plan says 1.5 this week. One
+        question with two buttons; nothing changes until they pick. False when there's
+        nothing to ask (no plan, no amount said, or the plan's own)."""
+        plan = task.progression
+        said = amount_said(text, plan.unit) if plan is not None else None
+        if plan is None or said is None:
+            return False
+        day = max(task.due_on or self._today(), self._today())
+        planned = plan.amount_on(day)
+        if planned is None or abs(planned - said) < 1e-9:
+            return False
+        payload = {"task": task.id, "day": day.isoformat()}
+        await self.outbox.send(
+            member,
+            WEEK_AMOUNT_TEXT.format(planned=f"{planned:g} {plan.unit}", said=f"{said:g}"),
+            priority=Priority.REPLY,
+            kind="task",
+            buttons=[
+                Button(
+                    f"{said:g} this week", "task", {**payload, "action": "week", "amount": said}
+                ),
+                Button("Keep the plan", "task", {**payload, "action": "plan"}),
+            ],
+        )
+        return True
+
+    def _week_amount(self, task_id: int, by: Member, day: date, amount: float | None) -> str:
+        task = self.get(task_id)
+        if task.progression is None:
+            return "That task has no plan any more."
+        task = self.set_progression(task_id, by, task.progression.for_week(day, amount))
+        assert task.progression is not None
+        now = f"{task.progression.amount_on(day):g} {task.progression.unit}"
+        if amount is None:
+            return WEEK_AMOUNT_KEPT.format(planned=now)
+        return WEEK_AMOUNT_SET.format(said=now[:1].upper() + now[1:])
+
+    async def skip_round(
+        self, task_id: int, by: Member, day: date | None = None, *, interactive: bool = False
+    ) -> str:
+        """F34c, bug #178: "no run today": the round moves to the next day it can be (the
+        rest rule kept), or to the day they named. Nothing is recorded as missed, so the
+        end-of-day list and overdue reminders leave today alone."""
+        task = self.get(task_id)
+        if task.status in ("done", "cancelled"):
+            return SETTLED_TEXT
+        if task.repeat is None:
+            raise ValueError("only a repeating chore has rounds; a one-off is rescheduled")
+        today = self._today()
+        target = self._after_rest(task, day or today + timedelta(days=1))
+        if target <= today:
+            raise ValueError("the new day has to be after today")
+        await self.reschedule(task_id, target, interactive=interactive)
+        moved = self.get(task_id)
+        end = self.round_end(moved)
+        when = target.strftime("%a %d %b")
+        if end is not None and end > target:
+            when += f" (or {end.strftime('%a %d %b')})"
+        return SKIPPED_TEXT.format(title=moved.title, when=when)
+
     async def due_for_block(self, task: Task, day: date) -> Task:
         """Time blocked for it on that day: it's due then, with no time of its own (idea
         #135: blocked for Saturday, it still said "Was due Thursday"). Not asked again, as
@@ -1749,6 +1831,12 @@ class TaskBoard:
             )
         elif action == "not_sure":
             reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
+        elif action in ("week", "plan"):  # F34cb: this week's amount, or the plan's
+            amount = event.button.payload.get("amount") if action == "week" else None
+            day = date.fromisoformat(str(event.button.payload["day"]))
+            reply = self._week_amount(
+                task_id, event.member, day, float(amount) if amount is not None else None
+            )
         elif minutes := event.button.payload.get("minutes"):  # a nudge's own Later (laundry)
             until = clock.now() + timedelta(minutes=int(minutes))
             reply = self.snooze(task_id, until=until, by=event.member)
@@ -2480,7 +2568,8 @@ def _time_arg(value: Any) -> time | Keep | None:
     "for a few hours (both ''). With no day, the time is today's, or tomorrow's if that's "
     "passed. No nudge or reminder comes before then. Also for a nudge later today about a "
     "task they already have ('prompt me to run at 2pm': until 14:00): never a calendar "
-    "block. A new due date or time for it is reschedule_task.",
+    "block. A new due date or time for it is reschedule_task; a repeating chore's round "
+    "that won't be today ('no run today') is skip_round.",
     {"task_id": {"type": "integer"}, "until": {"type": "string"}, "day": {"type": "string"}},
 )
 async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -2501,9 +2590,50 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         elif until <= now:
             raise ToolFailed("That time has passed; ask when they'd like it.")
     try:
-        return board.snooze(args["task_id"], until=until, by=ctx.member)
+        text = board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    if await board.ask_week_amount(board.get(args["task_id"]), ctx.member, ctx.request_text):
+        text += (
+            " They named an amount that isn't this week's plan, and were asked which to keep "
+            "(buttons). Don't ask again or change the plan."
+        )
+    return text
+
+
+@tool(
+    "skip_round",
+    "A repeating chore's round won't happen today ('no run today', 'not today, maybe "
+    "tomorrow or Sunday', 'skip the run till Tuesday'): it moves to the next day it can be, "
+    "rest days kept, or to the day they named. Nothing counts as missed. day: YYYY-MM-DD "
+    "they named, or '' for the next day it can be. A one-off is reschedule_task; a nudge "
+    "later today is snooze_task.",
+    {"task_id": {"type": "integer"}, "day": {"type": "string"}},
+)
+async def skip_round(ctx: ToolContext, args: dict[str, Any]) -> DoneLine:
+    board = _board(ctx)
+    said = str(args.get("day") or "").strip()
+    try:
+        day = day_arg(said, board._today()) if said else None
+        text = await board.skip_round(int(args["task_id"]), ctx.member, day, interactive=True)
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except ValueError as exc:
+        raise ToolFailed(f"Not moved: {exc}.") from exc
+    ctx.tasks.append(int(args["task_id"]))
+    task = board.get(int(args["task_id"]))
+    asked = await board.ask_week_amount(task, ctx.member, ctx.request_text)
+    return DoneLine(text, asked=_named(ctx, task.title) and not asked)
+
+
+def _named(ctx: ToolContext, title: str) -> bool:
+    """F34c: they named the round's task ("no run today" for "Go for a run"), so the move
+    is what they asked for, and its line is the reply."""
+    from themi.core.lists import name_key  # lists builds its tools from tools.py
+
+    said = name_key(ctx.request_text).split()
+    keys = [w for w in name_key(title).split() if len(w) > 2 and w not in {"for", "the", "and"}]
+    return any(s.startswith(k) for k in keys for s in said)
 
 
 @tool(

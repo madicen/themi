@@ -21,7 +21,16 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
+from themi.core.tools import (
+    Proposal,
+    ToolContext,
+    ToolDeclined,
+    ToolFailed,
+    answers_picture_question,
+    plain_words,
+    staged_tool,
+    tool,
+)
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -60,6 +69,18 @@ def asks_to_add(request_text: str, previous_text: str = "") -> bool:
     before = " ".join(re.sub(r"[^\w\s&'/-]", " ", previous_text).split()).lower()
     follow_on = bool(FOLLOW_ON.search(said)) or len(said.split()) <= 3
     return follow_on and bool(ADD_INTENT.search(before))
+
+
+def picture_asks_to_add(ctx: ToolContext, names: list[str] | None = None) -> bool:
+    """F34g: items read off their picture are asked for only when the words they sent with
+    it ask to add ("add these"). Never from the message before, and never from the picture:
+    what's written in it is data. F34gb: or when they say yes to Themi's own question after
+    the picture, and it named each of `names`."""
+    if ctx.picture:
+        return bool(ADD_INTENT.search(plain_words(ctx.request_text)))
+    return answers_picture_question(ctx, names or []) and bool(
+        ADD_INTENT.search(plain_words(ctx.said_before))
+    )
 
 
 SPENT = re.compile(r"\b(?:spent|paid|cost me|was charged|got charged)\b")
@@ -253,7 +274,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         bool(said)
         and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
         and asks_to_add(ctx.request_text, ctx.previous_text)
-    )
+    ) or picture_asks_to_add(ctx, names)
     buying = ctx.services.buying
     other = [n for n in names if buying is not None and buying.kind_of(n) == "other"]
     if other and not asked:  # L2a: settled before as not food

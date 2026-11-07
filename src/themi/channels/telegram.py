@@ -63,6 +63,7 @@ from themi.channels.events import (
     ButtonPress,
     InboundEvent,
     InboundHandler,
+    Picture,
     Reaction,
     VoiceNote,
 )
@@ -94,6 +95,8 @@ PAIRING_FAILURE_LIMIT = 5
 PAIRING_WINDOW = timedelta(hours=1)
 TYPING_REFRESH_SECONDS = 4.5  # Telegram shows "typing" for about 5 s per action
 MAX_VOICE_BYTES = 20 * 1024 * 1024  # bots can't download larger files anyway
+MAX_PICTURE_BYTES = 5 * 1024 * 1024  # F34g: the largest photo size under this
+PICTURE_LOG = "[a picture]"
 
 PAIRED_TEXT = "Hi {name}! This chat is now connected to Themi."
 ALREADY_PAIRED_TEXT = "You're already connected. Nothing more to set up here."
@@ -321,6 +324,23 @@ class TelegramChannel:
                 update_id,
                 voice=voice,
             )
+        elif (picture := await self._download_picture(message)) is not None:
+            caption = (message.caption or "").strip()
+            logged = f"{PICTURE_LOG} {caption}".strip()  # never the bytes
+            self.store.log_message(member.id, "in", logged, "picture", message.message_id)
+            event = InboundEvent(
+                "picture",
+                member,
+                message.chat.id,
+                message.message_id,
+                clock.now(),
+                update_id,
+                text=caption,
+                picture=picture,
+                reply_to_message_id=(
+                    message.reply_to_message.message_id if message.reply_to_message else None
+                ),
+            )
         elif text:
             self.store.log_message(member.id, "in", text, "chat", message.message_id)
             event = InboundEvent(
@@ -336,7 +356,7 @@ class TelegramChannel:
                 ),
             )
         else:
-            return  # stickers, photos and the like aren't handled yet
+            return  # stickers and the like aren't handled
         await self._dispatch(event)
 
     async def _on_group_message(self, update_id: int, message: Message) -> None:
@@ -474,6 +494,32 @@ class TelegramChannel:
         file = await self.bot.get_file(media.file_id)
         data = bytes(await file.download_as_bytearray())
         return VoiceNote(data, media.mime_type or "audio/ogg", int(_seconds(media.duration)))
+
+    async def _download_picture(self, message: Message) -> Picture | None:
+        """F34g: a photo (its largest size under the limit) or an image sent as a file,
+        downloaded to memory only."""
+        if message.photo:
+            sizes = [
+                p for p in message.photo if not p.file_size or p.file_size <= MAX_PICTURE_BYTES
+            ]
+            if not sizes:
+                log.info("Skipping a photo (every size is too large)")
+                return None
+            best = max(sizes, key=lambda p: p.width * p.height)
+            file_id, mime_type = best.file_id, "image/jpeg"  # Telegram's photos are JPEGs
+        elif message.document and (message.document.mime_type or "").startswith("image/"):
+            document = message.document
+            if document.file_size and document.file_size > MAX_PICTURE_BYTES:
+                log.info("Skipping a %d-byte image (too large)", document.file_size)
+                return None
+            file_id, mime_type = document.file_id, str(document.mime_type)
+        else:
+            return None
+        file = await self.bot.get_file(file_id)
+        data = bytes(await file.download_as_bytearray())
+        if len(data) > MAX_PICTURE_BYTES:
+            return None
+        return Picture(data, mime_type)
 
     async def _pair(self, telegram_user_id: int, chat_id: int, code: str) -> None:
         existing = self.store.member_by_telegram(telegram_user_id)

@@ -50,8 +50,11 @@ from themi.core.body_double_modes import ModeChooser
 from themi.core.body_double_music import MusicOffers
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
+from themi.core.business_hours import BusinessHours
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
+from themi.core.calendar_copies import CalendarCopies
+from themi.core.calendar_twins import CalendarTwins
 from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
 from themi.core.commands import Commands
@@ -237,6 +240,8 @@ def build_app(
         EmailAudit(services, tasks).install()
     reminders = Reminders(services, tasks)
     reminders.install()
+    business_hours = BusinessHours(services, tasks)  # F34k
+    business_hours.install()
     day_summary = DaySummary(services, tasks)
     day_summary.install()
     Focus(services, tasks, day_summary).install()
@@ -278,7 +283,10 @@ def build_app(
         services.calendars = calendar_busy
         outbox.calendar_blocks = calendar_busy.blocks
         energy.calendar_blocks = calendar_busy.blocks
-        Events(services).install()
+        events = Events(services)
+        events.install()
+        CalendarTwins(services, events).install()  # F34e: the same event twice
+        CalendarCopies(services).install()  # F34f: a calendar shown on the family calendar
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     WebSearch(services, search).install()  # F30d: says how to set it up without a key
@@ -297,7 +305,8 @@ def build_app(
     Reactions(services).install()
     WrongReplies(services).install()
     Commands(services).install()
-    FeedbackChat(services).install()
+    feedback = FeedbackChat(services)
+    feedback.install()
     agent = Agent(services)
     channel.handler = agent
     if services.google is not None and google is not None:
@@ -314,6 +323,7 @@ def build_app(
         PeriodicTask("tasks.resurface", timedelta(minutes=15), tasks.resurface),
         PeriodicTask("tasks.schedules", timedelta(hours=1), tasks.check_schedules),
         PeriodicTask("tasks.day_end", timedelta(minutes=15), reminders.end_of_day),
+        PeriodicTask("tasks.closing", timedelta(minutes=15), business_hours.check),  # F34k
         PeriodicTask("calendar.morning", timedelta(minutes=5), day_summary.morning),
         PeriodicTask("tasks.overdue", timedelta(hours=1), reminders.overdue),
         PeriodicTask("checkins.reviews", timedelta(minutes=15), reviews.run),
@@ -327,6 +337,10 @@ def build_app(
         PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
         PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
         PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
+        # F34o: a report's screenshots go after 60 days, reviewed or not
+        PeriodicTask(
+            "feedback.forget_pictures", timedelta(days=1), _async(feedback.book.forget_pictures)
+        ),
     ]
     server = ServerControl(services, control_dir)
     server.install()

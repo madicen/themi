@@ -30,6 +30,7 @@ from themi.core.partner import named
 from themi.core.prompts import as_data
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.localtime import member_day
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -72,7 +73,8 @@ class DaySummary:
                         continue  # one calendar both read (bug #43)
                     seen.add((e.calendar_id, e.event_id))
                     whose = (
-                        f" ({shared[e.calendar_id]})"
+                        # F34d, reply 321: "(Madicen Family)" was taken for a place
+                        f" (on the {shared[e.calendar_id]} calendar)"
                         if e.calendar_id in shared
                         else ""
                         if owner.id == member.id
@@ -88,10 +90,10 @@ class DaySummary:
                 else None
             )
             text = self._task_line(task, day, at)
-            if day < self.today():
+            if day < self.today(member):
                 text += " (still open)"
             lines.append(((1, when) if when else (2, start), text))
-        if day < self.today():  # bug #105: what happened that day, done things included
+        if day < self.today(member):  # bug #105: what happened that day, done things included
             names = {m.id: m.name for m in self.services.store.list_members()}
             for done in self.board.done_between(member, start, start + timedelta(days=1)):
                 by = f" by {names[done.by]}" if done.by not in (None, member.id) else ""
@@ -114,7 +116,7 @@ class DaySummary:
         """Tasks due that day (and, for today, ones still open from before). Chores waiting
         their turn for the chart are left out today; on a later day they'll be up. So is one
         put off past the day's end (bug #106: the tea snoozed to tomorrow was still on)."""
-        today = self.today()
+        today = self.today(member)
         tz = self._tz()
         ends = datetime(day.year, day.month, day.day, tzinfo=tz) + timedelta(days=1)
         found = []
@@ -196,7 +198,10 @@ class DaySummary:
             )
         )
 
-    def today(self) -> date:
+    def today(self, member: Member | None = None) -> date:
+        """The family's date, or the day it is for `member` (F34j: their rollover)."""
+        if member is not None:
+            return member_day(member, clock.now(), self._tz())
         return clock.now().astimezone(self._tz()).date()
 
     def _tz(self) -> ZoneInfo:
@@ -242,7 +247,7 @@ async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed("Day summaries aren't set up.")
     raw = str(args["date"]).strip()
     try:
-        day = date.fromisoformat(raw) if raw else summary.today()
+        day = date.fromisoformat(raw) if raw else summary.today(ctx.member)
     except ValueError as exc:
         raise ToolFailed(f"'{raw}' isn't a date like 2026-10-30.") from exc
     whose, other = _whose(ctx, str(args["whose"]))

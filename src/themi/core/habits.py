@@ -30,7 +30,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
 from themi.core.services import Services
 from themi.energy.outcomes import OutcomeTracker
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -80,9 +80,10 @@ class HabitReserve:
         self.services.habits = self
         self.services.autonomy.executors.register(EXECUTOR)(self._activate)
 
-    def _today(self) -> date:
+    def _today(self, member: Member | None = None) -> date:
         family = self.store.get_family()
-        return clock.now().astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        tz = ZoneInfo(family.timezone if family else "UTC")
+        return member_day(member, clock.now(), tz) if member else clock.now().astimezone(tz).date()
 
     # ----- the reserve --------------------------------------------------------
 
@@ -163,13 +164,13 @@ class HabitReserve:
 
     async def send_due(self) -> int:
         """Scheduler job: today's check-in for each active habit. Returns how many were queued."""
-        today = self._today().isoformat()
         sent = 0
         burnout = self.services.burnout
         for habit in self.db.query("SELECT * FROM habits WHERE status = 'active'"):
+            member = self.store.get_member(habit["member_id"])
+            today = self._today(member).isoformat()  # F34j: their own day
             if habit["last_sent_on"] == today:
                 continue
-            member = self.store.get_member(habit["member_id"])
             resting = burnout is not None and burnout.current(member) is not None
             if habit["burnout"] == ("held" if resting else "only"):
                 continue  # held in burnout mode, or one that comes only then

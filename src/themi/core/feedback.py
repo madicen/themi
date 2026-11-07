@@ -19,21 +19,23 @@ session, and `themi feedback --done <id>...` marks them reviewed.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
 from themi import __version__, clock
 from themi.accounts import Member
 from themi.ai.settings import AITask
-from themi.channels.events import InboundEvent
+from themi.channels.events import InboundEvent, Picture
 from themi.channels.outbox import Priority
 from themi.core.tools import ToolContext, tool
 from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
 from themi.storage.db import Database
+from themi.storage.secrets import Cipher
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -54,6 +56,26 @@ HOW_TO = {
     "weekly summary on Sundays.",
 }
 NAMES = {"bug": "Bug", "idea": "Idea"}
+# F34o: screenshots kept with a report, encrypted.
+MAX_PICTURES = 3
+MAX_PICTURE_BYTES = 5 * 1024 * 1024
+PICTURE_DAYS = 60
+WITH_PICTURE = {1: " Your screenshot is saved with it.", 2: " Your screenshots are saved with it."}
+# "that's a bug" after a picture means the picture (F34l keeps it in memory for a while).
+POINTS_AT = re.compile(
+    r"\b(?:that|this|it|these|those|the (?:picture|screenshot|photo|image))\b", re.IGNORECASE
+)
+EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif"}
+
+
+@dataclass(frozen=True)
+class KeptFile:
+    """A report's picture, decrypted, for the operator (`themi feedback --pictures`)."""
+
+    id: int
+    feedback_id: int
+    mime_type: str
+    data: bytes = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -70,8 +92,9 @@ class FeedbackItem:
 class FeedbackBook:
     """Storage and the Markdown report. Needs only the database, so the CLI can use it."""
 
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, cipher: Cipher | None = None) -> None:
         self.db = db
+        self.cipher = cipher  # F34o: for the pictures; none, and none are kept
 
     def record(self, member_id: int, kind: Kind, text: str, context: dict[str, Any]) -> int:
         return self.db.execute(
@@ -79,6 +102,55 @@ class FeedbackBook:
             "VALUES (?, ?, ?, ?, ?)",
             (member_id, kind, text.strip(), json.dumps(context), to_utc_iso(clock.now())),
         )
+
+    def attach(self, feedback_id: int, member_id: int, pictures: Sequence[Picture]) -> int:
+        """F34o: keep up to three pictures with the report, encrypted. Returns how many."""
+        if self.cipher is None:
+            return 0
+        kept = 0
+        for picture in pictures[:MAX_PICTURES]:
+            if len(picture.data) > MAX_PICTURE_BYTES:
+                continue
+            self.db.execute(
+                "INSERT INTO feedback_pictures (feedback_id, member_id, mime_type, data, "
+                "created_at) VALUES (?, ?, ?, ?, ?)",
+                (
+                    feedback_id,
+                    member_id,
+                    picture.mime_type,
+                    self.cipher.encrypt_bytes(picture.data),
+                    to_utc_iso(clock.now()),
+                ),
+            )
+            kept += 1
+        return kept
+
+    def picture_counts(self) -> dict[int, int]:
+        rows = self.db.query(
+            "SELECT feedback_id, COUNT(*) AS n FROM feedback_pictures GROUP BY feedback_id"
+        )
+        return {r["feedback_id"]: r["n"] for r in rows}
+
+    def pictures(self, feedback_ids: Sequence[int]) -> list[KeptFile]:
+        """The reports' pictures, decrypted (the CLI writes them to a folder)."""
+        if self.cipher is None or not feedback_ids:
+            return []
+        marks = ", ".join("?" for _ in feedback_ids)
+        rows = self.db.query(
+            f"SELECT * FROM feedback_pictures WHERE feedback_id IN ({marks}) ORDER BY id",
+            tuple(feedback_ids),
+        )
+        return [
+            KeptFile(
+                r["id"], r["feedback_id"], r["mime_type"], self.cipher.decrypt_bytes(r["data"])
+            )
+            for r in rows
+        ]
+
+    def forget_pictures(self, days: int = PICTURE_DAYS) -> int:
+        """F34o: pictures go after 60 days, reviewed or not."""
+        cutoff = to_utc_iso(clock.now() - timedelta(days=days))
+        return self.db.update("DELETE FROM feedback_pictures WHERE created_at < ?", (cutoff,))
 
     def items(self, include_reviewed: bool = False) -> list[FeedbackItem]:
         where = "" if include_reviewed else "WHERE status = 'new'"
@@ -100,11 +172,14 @@ class FeedbackBook:
         if not ids:
             return 0
         marks = ", ".join("?" for _ in ids)
-        return self.db.update(
+        marked = self.db.update(
             f"UPDATE feedback SET status = 'reviewed', reviewed_at = ? "
             f"WHERE status = 'new' AND id IN ({marks})",
             (to_utc_iso(clock.now()), *ids),
         )
+        # F34o: a reviewed report's pictures are deleted.
+        self.db.execute(f"DELETE FROM feedback_pictures WHERE feedback_id IN ({marks})", tuple(ids))
+        return marked
 
     def report(self, items: Sequence[FeedbackItem]) -> str:
         if not items:
@@ -117,12 +192,18 @@ class FeedbackBook:
             "from Telegram with /bug, /idea or in plain words, and carries a snapshot of the "
             "conversation and Themi's state when it was sent. Times are the family's local time.",
         ]
+        counts = self.picture_counts()
         for item in items:
-            lines += ["", *_item_lines(item)]
+            lines += ["", *_item_lines(item, counts.get(item.id, 0))]
         return "\n".join(lines) + "\n"
 
 
-def _item_lines(item: FeedbackItem) -> list[str]:
+def picture_name(item_id: int, kept: KeptFile, n: int) -> str:
+    """The file a report's picture is written to: "bug-182-1.png"."""
+    return f"report-{item_id}-{n}.{EXTENSIONS.get(kept.mime_type, 'img')}"
+
+
+def _item_lines(item: FeedbackItem, pictures: int = 0) -> list[str]:
     ctx = item.context
     who = ctx.get("member", {}).get("name", "someone")
     status = "" if item.status == "new" else f" ({item.status})"
@@ -133,6 +214,13 @@ def _item_lines(item: FeedbackItem) -> list[str]:
         "",
         f"Sent via {ctx.get('via', 'chat')}. Themi {ctx.get('version', '?')}.",
     ]
+    if pictures:  # F34o
+        files = ", ".join(f"report-{item.id}-{n}.*" for n in range(1, pictures + 1))
+        lines += [
+            "",
+            f"**Screenshots:** {pictures} sent with it ({files}); `themi feedback --pictures "
+            "<folder>` writes them there.",
+        ]
     replied = ctx.get("replied_to")
     if replied:
         lines += ["", f"**In reply to** this message ({replied['at']}, {replied['kind']}):"]
@@ -188,7 +276,7 @@ class FeedbackChat:
 
     def __init__(self, services: Services) -> None:
         self.services = services
-        self.book = FeedbackBook(services.store.db)
+        self.book = FeedbackBook(services.store.db, services.store.cipher)
 
     def install(self) -> None:
         s = self.services
@@ -208,12 +296,26 @@ class FeedbackChat:
         if not argument:
             await self.services.outbox.send(member, HOW_TO[kind], priority=Priority.REPLY)
             return
-        item_id = self.record(member, kind, argument, f"/{kind}", event.reply_to_message_id)
+        pictures = self.pictures_for(member, event.picture, argument)
+        item_id = self.record(
+            member, kind, argument, f"/{kind}", event.reply_to_message_id, pictures=pictures
+        )
         if kind == "bug" and self.services.conversation is not None:  # CM1c: a miss to look at
             self.services.conversation.sidecar.mark_missed(member)
-        await self.services.outbox.send(
-            member, THANKS[kind].format(id=item_id), priority=Priority.REPLY
-        )
+        thanks = THANKS[kind].format(id=item_id) + self._kept_words(item_id)
+        await self.services.outbox.send(member, thanks, priority=Priority.REPLY)
+
+    def pictures_for(self, member: Member, sent: Picture | None, words: str) -> list[Picture]:
+        """F34o: the picture sent with the report, or, when the report points at it ("that
+        got cut off"), the one they sent just before."""
+        if sent is not None:
+            return [sent]
+        before = self.services.kept_pictures.peek(member.id)
+        return [before] if before is not None and POINTS_AT.search(words) else []
+
+    def _kept_words(self, item_id: int) -> str:
+        count = self.book.picture_counts().get(item_id, 0)
+        return WITH_PICTURE[min(count, 2)] if count else ""
 
     def record(
         self,
@@ -222,9 +324,13 @@ class FeedbackChat:
         text: str,
         via: str,
         reply_to_message_id: int | None = None,
+        *,
+        pictures: Sequence[Picture] = (),
     ) -> int:
         context = self.snapshot(member, via, reply_to_message_id)
-        return self.book.record(member.id, kind, redact(text), context)
+        item_id = self.book.record(member.id, kind, redact(text), context)
+        self.book.attach(item_id, member.id, pictures)  # F34o
+        return item_id
 
     def snapshot(
         self, member: Member, via: str, reply_to_message_id: int | None = None
@@ -377,8 +483,13 @@ async def log_feedback(ctx: ToolContext, args: dict[str, Any]) -> str:
     chat = ctx.services.feedback
     if chat is None:
         return "Feedback isn't set up on this server."
-    item_id = chat.record(ctx.member, args["kind"], args["summary"], "plain words (log_feedback)")
-    return f"Saved as {NAMES[args['kind']].lower()} #{item_id}. Tell them it's noted."
+    sent = ctx.image if ctx.picture else None
+    pictures = chat.pictures_for(ctx.member, sent, ctx.request_text)
+    item_id = chat.record(
+        ctx.member, args["kind"], args["summary"], "plain words (log_feedback)", pictures=pictures
+    )
+    kept = " Their screenshot is saved with it; say so." if pictures else ""
+    return f"Saved as {NAMES[args['kind']].lower()} #{item_id}. Tell them it's noted.{kept}"
 
 
 __all__ = ["FeedbackBook", "FeedbackChat", "FeedbackItem", "log_feedback"]

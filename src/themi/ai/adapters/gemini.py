@@ -37,16 +37,17 @@ from themi.ai.errors import (
 )
 from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
+    Block,
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StopReason,
     StructuredResponse,
     TextBlock,
     ToolCall,
-    ToolResult,
     ToolSpec,
     Transcription,
     Usage,
@@ -78,7 +79,7 @@ class GeminiProvider:
         client: genai.Client | None = None,
     ) -> None:
         self.model = model
-        self.capabilities = Capabilities(tools=True, structured=True, audio=audio)
+        self.capabilities = Capabilities(tools=True, structured=True, audio=audio, images=True)
         self._ids = itertools.count(1)
         self._client = client or genai.Client(
             api_key=api_key.reveal(),
@@ -128,6 +129,7 @@ class GeminiProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         config = types.GenerateContentConfig(
             system_instruction=system or None,
@@ -136,7 +138,7 @@ class GeminiProvider:
             response_json_schema=schema,
         )
         response = await self._generate(
-            [types.Content(role="user", parts=[types.Part(text=prompt)])], config
+            [types.Content(role="user", parts=_parts([TextBlock(prompt), *images]))], config
         )
         if _finish_name(_first_candidate(response)) == "MAX_TOKENS":
             raise MalformedOutputError("gemini structured output was cut off at max_tokens")
@@ -269,13 +271,13 @@ def _declaration(spec: ToolSpec) -> types.FunctionDeclaration:
     )
 
 
-def _parts(
-    blocks: Sequence[TextBlock | ToolCall | ToolResult], names: dict[str, str] | None = None
-) -> list[types.Part]:
+def _parts(blocks: Sequence[Block], names: dict[str, str] | None = None) -> list[types.Part]:
     parts = []
     for block in blocks:
         if isinstance(block, TextBlock):
             parts.append(types.Part(text=block.text))
+        elif isinstance(block, ImageBlock):  # F34g, as audio is
+            parts.append(types.Part.from_bytes(data=block.data, mime_type=block.mime_type))
         elif isinstance(block, ToolCall):
             parts.append(
                 types.Part(

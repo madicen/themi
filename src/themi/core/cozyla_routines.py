@@ -40,13 +40,13 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
 from themi.connectors.cozyla.emoji import better_icon, routine_icon
-from themi.connectors.cozyla.schedule import to_wall, wall_can_say
+from themi.connectors.cozyla.schedule import to_wall, wall_can_say, with_round_days
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.events import title_matches
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
-from themi.core.repeat import RepeatError, parse, read_back
+from themi.core.repeat import RepeatError, parse, read_back, round_end
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import (
@@ -135,6 +135,7 @@ class CozylaRoutines:
             await self._expire_once(today, {r.id for r in routines})
             await self._ticks_from_wall(today, records)
             await self._ticks_to_wall()
+            await self._rest_of_round(today)
             await self._push({r.id: r for r in routines}, today)
             return await self._checks(today, records)
         except CozylaError as exc:
@@ -282,6 +283,7 @@ class CozylaRoutines:
                         date.fromisoformat(run["due_on"]),
                         datetime.fromisoformat(run["done_at"]),
                         self.board.get(link["task_id"]),
+                        self.store.get_member(run["done_by"]) if run["done_by"] else None,
                     )
                     await self.client.check_routine(link["routine_id"], day, True)
                     self._first_time(f"{link['routine_id']}_{day}")
@@ -289,6 +291,25 @@ class CozylaRoutines:
                     "UPDATE cozyla_routines SET last_run = ? WHERE task_id = ?",
                     (run["id"], link["task_id"]),
                 )
+
+    async def _rest_of_round(self, today: date) -> None:
+        """F9a's gap (F34cb): an either-day round done on Saturday leaves Sunday on the wall
+        too. Sunday is ticked on Sunday (a day at a time, so the wall is never asked to tick
+        a day still to come), and that tick isn't read back as another run."""
+        for link in self.db.query("SELECT * FROM cozyla_routines"):
+            task = self.board.get(link["task_id"])
+            run = self.db.one(
+                "SELECT * FROM task_runs WHERE task_id = ? AND missed = 0 AND due_on IS NOT NULL "
+                "ORDER BY id DESC LIMIT 1",
+                (task.id,),
+            )
+            if run is None or task.repeat is None:
+                continue
+            due_on = date.fromisoformat(run["due_on"])
+            done = self.board.done_day(due_on, datetime.fromisoformat(run["done_at"]), task)
+            end = round_end(task.repeat, due_on)
+            if done < today <= end and self._first_time(f"{link['routine_id']}_{today}"):
+                await self.client.check_routine(link["routine_id"], today, True)
 
     async def _push(self, routines: dict[int, Routine], today: date) -> None:
         rows = self.db.query(
@@ -310,6 +331,7 @@ class CozylaRoutines:
                 continue
             title, part = task.title[:50], part_of_day(self.board.time_of(task))
             schedule = to_wall(task.repeat, task.due_on or today)
+            schedule = with_round_days(schedule, self.board.round_days(task), today)
             if routine is None:
                 made = await self.client.create_routine(member, title, part, schedule)
                 self.db.execute(

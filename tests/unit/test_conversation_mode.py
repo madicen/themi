@@ -96,3 +96,50 @@ def test_chat_says_when_it_doesnt_know() -> None:
 
     assert "Never make up names, phone numbers, addresses" in CHAT_SYSTEM
     assert "say so" in CHAT_SYSTEM and "places they could look" in CHAT_SYSTEM
+
+
+def test_ideas_arent_places_to_look() -> None:
+    """F34b, bug #180: "Idk what to watch" got "One place to look: old emails." The list of
+    places to look is for a fact they've lost; ideas get ideas."""
+    assert "If they've lost a fact" in CHAT_SYSTEM
+    assert "When they want ideas (what to watch" in CHAT_SYSTEM
+    assert "Not a list of places to look." in CHAT_SYSTEM
+
+
+# F34a, bugs #178 and #179 (2026-11-06): these went to the tool-less chat, and nothing was
+# done. A word about an open task with a change in it, body doubling, a question about what
+# Themi can see, and an email rule all need the tools.
+ERIN_OPEN = ["Go for a run", "Clean the bird cage", "Put the laundry away", "Walk dog"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "No run today. I plan to run 1.3 miles either tomorrow or Sunday",
+        "Can we body double the bird cage?",
+        "sit with me while I do the taxes",
+        "let's do the dishes together",
+        "Can you see the screenshot I sent?",
+        "are you able to read pdfs",
+        "I found the email. Future emails like that are mostly noise",
+        "from now on mail from the HOA is important",
+        "I'll do the laundry Sunday instead",
+        "skipping the bird cage tonight",
+    ],
+)
+def test_an_open_task_body_doubling_or_a_rule_goes_to_the_tools(text: str) -> None:
+    assert is_request(text, ["Hardware"], ERIN_OPEN)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the run was lovely",
+        "long day, the kids were a lot",
+        "I should really clean the garage someday",
+        "do you ever think about how weird birds are?",
+        "Idk what to watch",
+    ],
+)
+def test_a_remark_about_a_task_is_still_chat(text: str) -> None:
+    assert not is_request(text, ["Hardware"], ERIN_OPEN)

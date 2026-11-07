@@ -166,6 +166,11 @@ class SpotifyClient:
                     found.append(_item(raw, kind))
         return found
 
+    async def playlists(self, access: Secret) -> list[Item]:
+        """Their own library's playlists, as Spotify lists them (most recent first)."""
+        body = await self._call("GET", "/me/playlists?limit=50", access)
+        return [_item(p, "playlist") for p in body.get("items") or [] if p]
+
     async def devices(self, access: Secret) -> list[Device]:
         body = await self._call("GET", "/me/player/devices", access)
         return [

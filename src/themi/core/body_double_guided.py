@@ -133,6 +133,16 @@ class GuidedSteps:
     async def begin(self, session: Session) -> tuple[Session, str, list[Button]]:
         """A guided session's first message: step 1, or proposed steps to look at first."""
         task = self._task(session)
+        items = self._routine_items(session)
+        if items:  # F34h: a routine's open items, in order
+            session = self._save(
+                session, steps=json.dumps([i.title for i in items]), step=0, phase="work",
+                step_since=clock.now(), steps_proposed=0,
+            )  # fmt: skip
+            self._watch(session)
+            self._ready(session)
+            text, buttons = self.render(session)
+            return session, text, buttons
         if task is not None and task.steps:
             session = self._save(
                 session, steps=json.dumps(list(task.steps)), step=0, phase="work",
@@ -173,6 +183,31 @@ class GuidedSteps:
             log.info("No proposed steps for session %s (%s)", session.id, type(exc).__name__)
             return []
 
+    def _routine_items(self, session: Session) -> list[Any]:
+        """F34h: the session's routine's items still open today (all of today's if every
+        one is ticked already)."""
+        routines = self.services.routines
+        routine_id = session.row.get("routine_id")
+        if routines is None or routine_id is None:
+            return []
+        routine = routines.get(routine_id)
+        today = routines.today(self._owner(session))
+        items = routines.today_items(routine, today)
+        return [i for i in items if not routines.ticked(i, today)] or items
+
+    async def _tick_step(self, session: Session, n: int) -> None:
+        """F34h: a routine's step done ticks its item (and the wall, through the listeners)."""
+        routines = self.services.routines
+        routine_id = session.row.get("routine_id")
+        steps = self.steps(session)
+        if routines is None or routine_id is None or not 0 <= n < len(steps):
+            return
+        today = routines.today(self._owner(session))
+        for item in routines.today_items(routines.get(routine_id), today):
+            if item.title == steps[n] and not routines.ticked(item, today):
+                await routines.tick_now(item, today)
+                return
+
     def _task(self, session: Session) -> Any:
         board = self.services.taskboard
         if session.task_id is None or board is None:
@@ -203,7 +238,11 @@ class GuidedSteps:
         n = min(session.row["step"], len(steps) - 1)
         step = steps[n]
         optional = " (optional)" if is_optional(step) else ""
-        text = f"Step {n + 1} of {len(steps)}{optional}:\n> {step}"
+        count = f"step {n + 1} of {len(steps)}{optional}"
+        if session.row.get("parts"):  # F34hb: a run of several, each under its title
+            text = f'"{session.label}", {count}:\n> {step}'
+        else:
+            text = f"{count[:1].upper()}{count[1:]}:\n> {step}"
         buttons = []
         if n > 0:
             buttons.append(button("Back", "back"))
@@ -287,6 +326,8 @@ class GuidedSteps:
             await self.bd.switch(member, SILENT)
             return NO_STEPS_TEXT, []
         elif action in ("next", "skip"):  # a step done: a moment's cheer on the page (BD3b)
+            if action == "next":
+                await self._tick_step(session, step)
             session = self._save(
                 session, step=min(step + 1, len(steps) - 1), step_since=clock.now(),
                 cheer_until=clock.now() + CHEER_FOR,
@@ -294,10 +335,11 @@ class GuidedSteps:
         elif action == "back":
             session = self._save(session, step=max(step - 1, 0), step_since=clock.now())
         elif action == "all_done":
-            said = await self.bd.finish(session)
+            await self._tick_step(session, step)
+            said, buttons = await self.bd.finish_or_next(session)
             if session.task_id is None:
                 said = said.replace("That's done.", "All done.", 1)
-            return said, []
+            return said, buttons
         else:
             return self.render(session)
         self._watch(session)
@@ -325,9 +367,12 @@ class GuidedSteps:
             action = "next"
         result, buttons = await self.act(session, action)
         if action == "all_done":
-            await self.services.outbox.send(
+            sent = await self.services.outbox.send(
                 member, result, priority=Priority.REPLY, kind=KIND, buttons=buttons
             )
+            if sent.outbox_id is not None:  # F34hb: the next part's card is this message
+                message_id = self.services.outbox.message_id(sent.outbox_id)
+                self.bd._carry_message(session, member, message_id)
             return True
         fresh = self.bd.get(session.id)
         assert fresh is not None

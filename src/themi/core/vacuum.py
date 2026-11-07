@@ -24,6 +24,8 @@ From the robot's events (Roborock, `themi.connectors.roborock`):
   items about it, as the dishwasher does (F25a): "Refill vacuum water" when the dock's water
   alert clears, whether or not the item started out as one of these tasks (F23e). Each goes
   through `vacuum_done`, to whoever's item it is: a card until a rule makes it automatic.
+  So does an open task about it that isn't the robot's own (one a person made after the
+  robot's went into a routine for the day): marked done through `vacuum_done` the same way.
 
 Asked how the vacuum is (`appliance_status`), each open chore is said with whose it is
 and whether they've been asked (F23d).
@@ -195,6 +197,7 @@ class Vacuum:
             if event.kind in HOME_AFTER:
                 await self._offer_home(event.device_id, member)
         await self._check_off(event)
+        await self._check_off_tasks(event)
 
     # ----- the wall's routine items about it (F25a) -------------------------------------
 
@@ -224,7 +227,41 @@ class Vacuum:
                 expires=until,
             )
 
+    async def _check_off_tasks(self, event: VacuumEvent) -> None:
+        """Gone: open tasks about it that aren't the robot's own (one a person made: "Refill
+        the vacuum's clean water", after the robot's went into a routine for the day) are
+        marked done too, a card each to whoever's it is, until a rule makes it automatic."""
+        device = self._device(event.device_id)
+        if device is None:
+            return
+        until = to_local(event.at, self._timezone()).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
+        for row in self.db.query(
+            "SELECT id, title, assignee FROM tasks WHERE status IN ('open', 'snoozed') "
+            "AND id NOT IN (SELECT task_id FROM vacuum_problems WHERE task_id IS NOT NULL) "
+            "ORDER BY id"
+        ):
+            if not about(event.kind, event.detail, row["title"], device.name):
+                continue
+            member = self.store.get_member(row["assignee"]) if row["assignee"] else None
+            await self.services.autonomy.stage(
+                DONE_CATEGORY,
+                member or self._admin(),
+                f"{_sorted(event.kind, event.detail)}: mark {row['title']} done",
+                {"task": row["id"]},
+                DONE_EXECUTOR,
+                expires=until,
+            )
+
     async def _execute_done(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        if "task" in payload:
+            task = self.board.get(int(payload["task"]))
+            if task.status not in ("open", "snoozed"):
+                return f"{task.title} was already settled, so nothing changed."
+            by = self.store.get_member(task.assignee) if task.assignee else self._admin()
+            await self.board.complete(task.id, by)
+            return f"Marked {task.title} done."
         wall = self.services.wall_routines
         if wall is None:
             return "The wall's routines aren't connected any more, so nothing was ticked."

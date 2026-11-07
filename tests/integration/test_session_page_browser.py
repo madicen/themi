@@ -70,7 +70,8 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     assert erin.telegram_user_id is not None
     scenario.primary.queue_tool_call(
-        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom"}
+        "start_body_double",
+        {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom", "then": []},
     )
     scenario.primary.queue_structured(
         {"steps": [{"text": "Spray the shower", "optional": False},
@@ -122,6 +123,10 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
             line = "document.querySelector('.session-line') && " \
                    "document.querySelector('.session-line').textContent"  # fmt: skip
             assert (await until(lambda: tab.value(line))).startswith("Here's how I'd break it up")
+            # The line is in the server's HTML, but session.js is deferred: a tap before it ran
+            # was a plain form post that left the page (flaky on a busy CI runner, 2026-11-07).
+            # "complete" comes after deferred scripts have run.
+            assert await until(lambda: tab.value("document.readyState === 'complete'"))
             await tab.value("document.querySelector('.session-moves button').click()")
             moved = await until(
                 lambda: tab.value(f"({line}) === 'Spray the shower' ? 'moved' : ''")

@@ -31,6 +31,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StopReason,
@@ -63,6 +64,7 @@ class RecordedRequest:
     mime_type: str = ""
     max_tokens: int = DEFAULT_MAX_TOKENS
     texts: tuple[str, ...] = ()
+    images: tuple[ImageBlock, ...] = ()  # F34m: pictures sent with a structured call
 
     @property
     def tool_names(self) -> list[str]:
@@ -73,7 +75,9 @@ class RecordedRequest:
 class ScriptedProvider:
     name: str = "scripted"
     model: str = "scripted-1"
-    capabilities: Capabilities = field(default_factory=lambda: Capabilities(audio=True))
+    capabilities: Capabilities = field(
+        default_factory=lambda: Capabilities(audio=True, images=True)
+    )
     requests: list[RecordedRequest] = field(default_factory=list)
     embed_with: Callable[[str], Sequence[float]] | None = None
 
@@ -195,6 +199,7 @@ class ScriptedProvider:
         *,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
         self.requests.append(
             RecordedRequest(
@@ -204,6 +209,7 @@ class ScriptedProvider:
                 prompt=prompt,
                 schema=schema,
                 max_tokens=max_tokens,
+                images=tuple(images),
             )
         )
         result = self._pop("structured")

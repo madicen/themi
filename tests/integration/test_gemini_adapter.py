@@ -12,6 +12,7 @@ from tests.fakes.http_ai import (
     gemini_text,
 )
 from themi.ai import (
+    ImageBlock,
     Message,
     PermanentError,
     RefusalError,
@@ -249,3 +250,17 @@ async def test_too_few_embeddings_is_malformed(fake_ai: FakeAIServer) -> None:
     fake_ai.queue({"embeddings": [{"values": [1.0]}]})
     with pytest.raises(MalformedOutputError):
         await provider(fake_ai, model="gemini-embedding-2").embed(["one", "two"])
+
+
+async def test_a_picture_goes_as_inline_data(fake_ai: FakeAIServer) -> None:
+    """F34g: a picture reaches Gemini as `Part.from_bytes`, as audio does."""
+    fake_ai.queue(gemini_text("Milk and eggs."))
+    picture = Message("user", (TextBlock("add these"), ImageBlock(b"\x89PNG-picture", "image/png")))
+    await provider(fake_ai).chat("Be warm.", [picture])
+
+    (request,) = fake_ai.requests
+    text, image = request.json["contents"][0]["parts"]
+    assert text == {"text": "add these"}
+    inline = field(image, "inlineData")
+    assert field(inline, "mimeType") == "image/png"
+    assert base64.b64decode(inline["data"]) == b"\x89PNG-picture"

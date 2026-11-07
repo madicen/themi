@@ -23,6 +23,7 @@
     {{ inline_svg("chameleon/chameleon.svg") }}
     <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">{{ state.timer.text }}</p>
   </div>
+  {% if state.part %}<p class="muted" data-field="part">{{ state.part }}</p>{% endif %}
   {% if state.of %}<p class="muted" data-field="steps">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
   {% if state.picture %}
   <figure class="session-picture" data-status="{{ state.picture.status }}">
@@ -59,6 +60,20 @@
     <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
     <audio loop preload="none" src="{{ asset('audio/' ~ state.music.file) }}"></audio>
   </section>
+  {% if state.spotify %}
+  <section class="session-spotify" aria-label="My Spotify">
+    <h2>My Spotify</h2>
+    <form method="post" action="/session/spotify">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <select name="uri" aria-label="Which playlist">
+        {% for p in state.spotify %}<option value="{{ p.uri }}">{{ p.name }}</option>{% endfor %}
+      </select>
+      <button name="action" value="play" class="primary">Play</button>
+      <button name="action" value="pause">Pause</button>
+      <button name="action" value="next">Next</button>
+    </form>
+  </section>
+  {% endif %}
   <button class="session-chat-open" type="button" {% if state.phase != "break" %}hidden{% endif %}>Chat</button>
   <section class="session-chat" aria-label="Chat with Themi" hidden>
     <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>

@@ -2,6 +2,7 @@ import pytest
 
 from tests.fixtures.family import SeededFamily
 from themi.accounts import SYSTEM, InvalidValue, PermissionDenied
+from themi.ai.adapters import build_provider
 from themi.ai.settings import (
     DEFAULT_BACKEND_LABEL,
     AISettingsStore,
@@ -154,3 +155,15 @@ def test_member_deletion_removes_ai_settings(family: SeededFamily, ai: AISetting
     family.store.delete_member(SYSTEM, family.husband.id)
     assert family.db.scalar("SELECT COUNT(*) FROM ai_backends") == 0
     assert family.db.scalar("SELECT COUNT(*) FROM ai_routes") == 0
+
+
+def test_a_backend_can_say_it_sees_pictures(family: SeededFamily, ai: AISettingsStore) -> None:
+    """F34gb: an OpenAI-compatible model that sees pictures, switched on and off."""
+    erin = family.erin
+    local = ai.add_backend(erin, erin.id, "Laptop", "ollama", model="llava")
+    assert not local.supports_images
+    assert ai.update_backend(erin, local.id, supports_images=True).supports_images
+    ai.set_chain(erin, erin.id, AITask.CONVERSATION, [RouteEntry(local.id)])
+    (entry,) = ai.resolve(erin.id, AITask.CONVERSATION)
+    assert entry.config.supports_images
+    assert build_provider(entry.config).capabilities.images

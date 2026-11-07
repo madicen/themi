@@ -380,3 +380,54 @@ async def test_with_the_rule_on_a_routine_item_is_ticked_without_asking(
     await seen(scenario, robot, "docked")  # sorted before anyone was asked
     assert fake_cozyla.routine_ticks == {(routine, clock.now().date().isoformat())}
     assert scenario.inbox("Husband") == []
+
+
+async def test_a_chore_made_by_hand_about_it_is_checked_off_when_its_sorted(
+    scenario: Scenario, robot: FakeRoborock, fake_cozyla: FakeCozyla
+) -> None:
+    """Michael, 2026-11-07: the robot's chore went into his routine for that day only, so
+    he made his own "Refill the vacuum's clean water" chore that evening. The next morning
+    the robot showed the tank refilled, but that chore stayed open: only the problem's own
+    task and today's routine items were checked off."""
+    husband = scenario.member("Husband")
+    tired(scenario)
+    await seen(scenario, robot, "clean_water_empty")
+    await scenario.advance(minutes=5)
+    board = scenario.app.services.taskboard
+    assert board is not None
+    robots = scenario.app.db.scalar("SELECT id FROM tasks")
+    await board.cancel(robots, husband)  # into his routine, just for today
+    own = await board.create(
+        husband, "Refill the vacuum's clean water", "physical", 1, assignee=husband, nudge=False
+    )
+    other = await board.create(
+        husband, "Vacuum upstairs bedroom", "physical", 2, assignee=husband, nudge=False
+    )
+    clock.advance(timedelta(hours=3))  # later that day
+    await seen(scenario, robot, "docked")  # refilled, and cleared in the app
+    assert scenario.inbox("Husband")[-1] == (
+        "The vacuum's dock has clean water again: mark Refill the vacuum's clean water done\n"
+        "Go ahead, or not now?"
+    )
+    await scenario.tap("Husband", "Go ahead")
+    assert board.get(own.id).status == "done"
+    assert board.get(other.id).status == "open"
+
+
+async def test_with_the_rule_on_a_chore_made_by_hand_is_done_without_asking(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    scenario.app.services.autonomy.grant_tier2(
+        DONE_CATEGORY, via_rule_id=1, by=scenario.member("Erin")
+    )
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    own = await board.create(
+        erin, "Empty the robot's dirty water", "physical", 1, assignee=erin, nudge=False
+    )
+    await seen(scenario, robot, "dirty_water_full")
+    await seen(scenario, robot, "docked")
+    assert board.get(own.id).status == "done"
+    robots = [t for t in tasks(scenario) if t[0] == "Empty the vacuum's dirty water"]
+    assert [t[1] for t in robots] == ["cancelled"]  # its own task, sorted before anyone was asked

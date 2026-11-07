@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 CATEGORY = "music"
 PLAY = "music.play"
 PAUSE = "music.pause"
+NEXT = "music.next"  # F34i: the session page's Next
 NO_DEVICE_TEXT = (
     "Spotify isn't open anywhere I can reach. Open it on your phone or speaker, then ask again."
 )
@@ -58,6 +59,7 @@ class Music:
         s.music = self
         s.autonomy.executors.register(PLAY)(self._execute_play)
         s.autonomy.executors.register(PAUSE)(self._execute_pause)
+        s.autonomy.executors.register(NEXT)(self._execute_next)
         for t in (play_music, pause_music):
             s.tools.register(t)
 
@@ -120,6 +122,28 @@ class Music:
         except LinkRevoked:
             return NOT_LINKED_TEXT
         return PAUSED_TEXT
+
+    async def playlists(self, member: Member) -> list[Item]:
+        """F34i: their own playlists, or [] when Spotify isn't linked or doesn't answer."""
+        if self.premium(member) is None:
+            return []
+        try:
+            found = await self.links.with_token(member, self.links.client.playlists)
+        except Exception as exc:  # no playlists then: the built-in loops are still there
+            log.info("No playlists for member %s (%s)", member.id, type(exc).__name__)
+            return []
+        return list(found)
+
+    async def _execute_next(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        try:
+            await self.links.with_token(ctx.member, self.links.client.next)
+        except NoDevice:
+            return "Nothing's playing on Spotify."
+        except NeedsPremium:
+            return "Skipping from here needs Spotify Premium."
+        except LinkRevoked:
+            return NOT_LINKED_TEXT
+        return "Next one."
 
     def note_session(self, member: Member, music: str, name: str) -> None:
         """What's playing, on the body double session going on (BD5c learns from it)."""

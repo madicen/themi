@@ -18,6 +18,7 @@ from themi.autonomy import Autonomy
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Outbox
+from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 
@@ -35,7 +36,9 @@ if TYPE_CHECKING:
     from themi.core.body_double import BodyDouble
     from themi.core.breaks import Breaks
     from themi.core.burnout import Burnout
+    from themi.core.business_hours import BusinessHours
     from themi.core.buying import ThingsToBuy
+    from themi.core.calendar_copies import CalendarCopies
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.conversation_mode import ConversationMode
@@ -172,6 +175,7 @@ class Services:
     gmail: GmailSync | None = None
     calendar: CalendarSync | None = None
     calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
+    calendar_copies: CalendarCopies | None = None  # F34f: a calendar shown on the family's
     day_summary: DaySummary | None = None  # what's on someone's day (K2)
     events: Events | None = None  # calendar events made and changed from chat (K3)
     travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
@@ -200,6 +204,7 @@ class Services:
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
     burnout: Burnout | None = None  # everything held, no demands (F22d)
     web_search: WebSearch | None = None  # looking things up online (F30d)
+    business_hours: BusinessHours | None = None  # F34k: a call before the business closes
     guides: Guides | None = None  # the family's own guides (F29ha)
     recipes: Recipes | None = None  # the family cookbook, from its Google Doc (RC1a)
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
@@ -209,6 +214,8 @@ class Services:
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
     web_recipes: WebRecipes | None = None  # recipes from a link or a search (RC4a, RC4b)
     cookbook_save: CookbookSave | None = None  # a liked recipe into the cookbook doc (RC5)
+    # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
+    kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     recipe_ideas: RecipeIdeas | None = None  # cookbook recipes the pantry covers (RC7)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
     taking: Taking | None = None  # a partner's tasks someone could take on (F29f)

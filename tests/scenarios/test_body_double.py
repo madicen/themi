@@ -30,7 +30,7 @@ async def taxes(scenario: Scenario) -> Task:
 
 
 async def start(scenario: Scenario, text: str, **args: object) -> list[str]:
-    call = {"mode": "", "minutes": 0, "task_id": 0, "what": "", **args}
+    call = {"mode": "", "minutes": 0, "task_id": 0, "what": "", "then": [], **args}
     scenario.primary.queue_tool_call("start_body_double", call)  # its message ends the turn
     return await scenario.say("Erin", text)
 
@@ -225,7 +225,8 @@ async def test_a_task_without_steps_gets_proposed_ones_then_keeps_them(
 ) -> None:
     task = await kitchen(scenario, steps=None)
     scenario.primary.queue_tool_call(
-        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": task.id, "what": ""}
+        "start_body_double",
+        {"mode": "steps", "minutes": 0, "task_id": task.id, "what": "", "then": []},
     )
     scenario.primary.queue_structured(
         {"steps": [{"text": "Clear the counter.", "optional": False},
@@ -255,7 +256,8 @@ async def test_proposed_steps_changed_in_their_words_arent_kept_unless_asked(
     assert replies[0].startswith("I couldn't break it up just now")  # no model: quiet instead
     task = await kitchen(scenario, steps=None)
     scenario.primary.queue_tool_call(
-        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": task.id, "what": ""}
+        "start_body_double",
+        {"mode": "steps", "minutes": 0, "task_id": task.id, "what": "", "then": []},
     )
     scenario.primary.queue_structured({"steps": [{"text": "Clear the counter", "optional": False}]})
     await scenario.say("Erin", "step by step for the kitchen please")
@@ -548,7 +550,8 @@ async def test_proposed_steps_still_answer_after_twenty_minutes(scenario: Scenar
     step-check job bumped the session's seq though nothing changed, so [Go], [Change them]
     and [No steps] on the chat card did nothing at all."""
     scenario.primary.queue_tool_call(
-        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom"}
+        "start_body_double",
+        {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom", "then": []},
     )
     scenario.primary.queue_structured(
         {"steps": [{"text": "Spray the shower", "optional": False},
@@ -584,3 +587,183 @@ async def test_an_old_card_tapped_shows_where_the_session_is(scenario: Scenario)
     await scenario.app.channel.poll_once()
     assert session_row(scenario)["step"] == 1  # nothing moved
     assert scenario.edits("Erin")[-1]["text"] == "Step 2 of 6:\n> Load the dishwasher"
+
+
+async def test_body_doubling_a_partners_task_by_name_uses_its_own_steps(
+    scenario: Scenario,
+) -> None:
+    """F34h, bug #181: "clean the bird cage" came with task_id 0 every time, so the model
+    made up 12 steps while Erin's task had its own ten. The task is found by its name, even
+    a partner's, and finishing closes it."""
+    task = await kitchen(scenario)  # Erin's, with six steps
+    call = {"mode": "steps", "minutes": 0, "task_id": 0, "what": "clean the kitchen", "then": []}
+    scenario.primary.queue_tool_call("start_body_double", call)
+    replies = await scenario.say("Husband", "Can you body double the kitchen with me?")
+    assert replies == ["Step 1 of 6:\n> Clear the counter"]
+    assert session_row(scenario)["task_id"] == task.id
+
+
+async def test_body_doubling_my_evening_routine_goes_through_its_items(
+    scenario: Scenario,
+) -> None:
+    """F34h, bug #181: "body double my evening routine" got made-up steps ("Lock the front
+    door", "Set the alarm"), not the routine's items. Each step done ticks its item."""
+    routines = scenario.app.services.routines
+    assert routines is not None
+    erin = scenario.member("Erin")
+    evening = routines.find(erin, "Evening")
+    assert evening is not None
+    teeth = routines.add_item(evening, "Brush teeth")
+    routines.add_item(evening, "Feed the cats")
+    replies = await start(scenario, "body double my evening routine", what="my evening routine")
+    assert replies[-1].startswith("Step 1 of 2:\n> Brush teeth")
+    await scenario.tap("Erin", "Next")
+    assert routines.ticked(teeth, date(2026, 10, 21))
+    assert card(scenario) == "Step 2 of 2:\n> Feed the cats"
+    await scenario.tap("Erin", "All done")
+    assert [routines.ticked(i, date(2026, 10, 21)) for i in routines.items(evening)] == [
+        True,
+        True,
+    ]
+
+
+async def laundry(scenario: Scenario) -> Task:
+    task = await board(scenario).create(scenario.member("Erin"), "Put the laundry away",
+                                        "physical", 2)  # fmt: skip
+    await board(scenario).update(task.id, scenario.member("Erin"), steps=["Fold", "Put away"])
+    return task
+
+
+async def test_two_tasks_in_a_row_step_by_step(scenario: Scenario) -> None:
+    """F34h, bug #181: "the kitchen and then the laundry" in one session. Each task's steps
+    under its title, "Next up" between them, and each one closed as it's finished."""
+    first, second = await kitchen(scenario), await laundry(scenario)
+    replies = await start(scenario, "body double the kitchen then the laundry", mode="steps",
+                          task_id=first.id, then=["the laundry"])  # fmt: skip
+    assert replies == ['"Clean the kitchen", step 1 of 6:\n> Clear the counter']
+    for _ in range(5):
+        await scenario.tap("Erin", "Next")
+    await scenario.tap("Erin", "All done")
+    assert board(scenario).get(first.id).status == "done"
+    shown = card(scenario)
+    assert shown.startswith("Marked done: Clean the kitchen.")
+    assert "Next up: Put the laundry away." in shown
+    assert shown.endswith('"Put the laundry away", step 1 of 2:\n> Fold')
+    assert card_buttons(scenario) == ["Next", "Done"]
+    row = session_row(scenario)
+    assert (row["task_id"], row["part"], row["parts"]) == (second.id, 2, 2)
+    bd = scenario.app.services.body_double
+    assert bd is not None
+    state = bd.state(scenario.member("Erin"))
+    assert state["part"] == "Part 2 of 2"
+    await scenario.tap("Erin", "Next")
+    await scenario.tap("Erin", "All done")
+    assert board(scenario).get(second.id).status == "done"
+    assert "Next up" not in card(scenario)
+    assert bd.current(scenario.member("Erin")) is None
+    outcomes = scenario.app.db.query("SELECT outcome FROM body_double_sessions ORDER BY id")
+    assert [r["outcome"] for r in outcomes] == ["finished", "finished"]
+
+
+async def test_my_evening_routine_then_a_task(scenario: Scenario) -> None:
+    routines = scenario.app.services.routines
+    assert routines is not None
+    evening = routines.find(scenario.member("Erin"), "Evening")
+    assert evening is not None
+    routines.add_item(evening, "Brush teeth")
+    task = await laundry(scenario)
+    replies = await start(scenario, "my evening routine then the laundry",
+                          what="my evening routine", then=["the laundry"])  # fmt: skip
+    assert replies[-1].startswith('"Evening routine", step 1 of 1:\n> Brush teeth')
+    await scenario.tap("Erin", "All done")
+    assert "Next up: Put the laundry away." in card(scenario)
+    assert session_row(scenario)["task_id"] == task.id
+
+
+async def test_quiet_company_through_two_tasks(scenario: Scenario) -> None:
+    first, second = await taxes(scenario), await laundry(scenario)
+    await start(scenario, "sit with me for the taxes then the laundry", mode="quiet",
+                task_id=first.id, then=[f"task {second.id}"])  # fmt: skip
+    scenario.primary.queue_tool_call("end_body_double", {"finished": True})
+    await scenario.say("Erin", "I'm done with the taxes")
+    assert board(scenario).get(first.id).status == "done"
+    assert session_row(scenario)["task_id"] == second.id
+    assert session_row(scenario)["mode"] == "silent"
+    assert scenario.inbox("Erin")[-1].endswith(
+        "Next up: Put the laundry away.\n\nI'm here. Going quiet until you say you're done."
+    )
+
+
+# ----- F34i: their own playlists ---------------------------------------------------------------
+
+
+async def own_playlists(scenario: Scenario, site: httpx.AsyncClient, fake: FakeSpotify) -> None:
+    """Michael's idea #183. Their library, most recent first, as Spotify lists it."""
+    await link_spotify(scenario, site, fake)
+    fake.add_device("Desk speaker", active=True)
+    for name in ("Road Trip", "Deep Focus", "Kitchen Dance", "Chill Mix", *(f"Mix {n}" for n in
+                 range(1, 12))):  # fmt: skip
+        fake.add_mine(name)
+
+
+async def test_their_playlists_are_offered_with_the_loop(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    replies = await start(scenario, "keep me company while I write", mode="quiet",
+                          what="writing the newsletter")  # fmt: skip
+    assert replies[0].endswith("\nSome lofi while you work, or one of yours?")
+    # one that fits the job first, then their most recent
+    assert scenario.last_buttons("Erin") == [
+        "Play", "Deep Focus", "Road Trip", "Kitchen Dance", "More", "Not now",
+    ]  # fmt: skip
+    reads = fake_spotify.calls.count("GET /v1/me/playlists")
+    await scenario.tap("Erin", "More")
+    assert card_buttons(scenario)[:3] == ["Chill Mix", "Mix 1", "Mix 2"]
+    assert card_buttons(scenario)[-2:] == ["More", "Not now"]
+    await scenario.tap("Erin", "More")
+    assert card_buttons(scenario) == ["Mix 10", "Mix 11", "Not now"]
+    assert fake_spotify.calls.count("GET /v1/me/playlists") == reads  # read once a session
+
+    await scenario.tap("Erin", "Mix 11")
+    assert fake_spotify.playing == {"context_uri": "spotify:playlist:mix11", "device_id": "dev-1"}
+    assert session_row(scenario)["music"] == "spotify:playlist:mix11"
+
+
+async def test_last_sessions_playlist_comes_first_next_time(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet", minutes=30,
+                what="writing the newsletter")  # fmt: skip
+    await scenario.tap("Erin", "Kitchen Dance")
+    await scenario.advance(minutes=30)
+    await scenario.run_jobs()
+    await scenario.tap("Erin", "Done")
+    await start(scenario, "sit with me while I write", mode="quiet", what="writing the newsletter")
+    assert scenario.last_buttons("Erin")[1:4] == ["Kitchen Dance", "Deep Focus", "Road Trip"]
+
+
+async def test_the_session_page_has_my_spotify(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    page = (await site.get("/session")).text
+    assert "My Spotify" in page and "Deep Focus" in page and "Mix 11" in page
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/session/spotify", data={"csrf": csrf, "action": "play",
+                                              "uri": "spotify:playlist:deepfocus",
+                                              "name": "Deep Focus"})  # fmt: skip
+    assert fake_spotify.playing == {"context_uri": "spotify:playlist:deepfocus",
+                                    "device_id": "dev-1"}  # fmt: skip
+    await site.post("/session/spotify", data={"csrf": csrf, "action": "pause"})
+    assert fake_spotify.paused
+
+
+async def test_not_linked_only_the_loop(scenario: Scenario) -> None:
+    await start(scenario, "keep me company while I write", mode="quiet", what="my essay")
+    assert scenario.last_buttons("Erin") == ["Play", "Not now"]
+    bd = scenario.app.services.body_double
+    assert bd is not None and bd.state(scenario.member("Erin"))["spotify"] == []

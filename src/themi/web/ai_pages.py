@@ -43,6 +43,7 @@ KIND_LABELS = {
 
 
 MAX_IMAGE_CAP = 100
+MAX_PICTURE_CAP = 500  # F34gb: pictures sent in chat
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -66,6 +67,7 @@ def routes(kit: Kit) -> APIRouter:
             "kinds": [(k, KIND_LABELS[k]) for k in ADAPTER_KINDS],
             "kind_labels": KIND_LABELS,
             "image_cap": app.services.router.image_cap(member.id),  # BD4a
+            "picture_cap": picture_cap(member.id),  # F34gb
             **extra,
         }
 
@@ -87,6 +89,7 @@ def routes(kit: Kit) -> APIRouter:
             "supports_tools": form.get("supports_tools") == "on",
             "supports_structured": form.get("supports_structured") == "on",
             "supports_audio": form.get("supports_audio") == "on",
+            "supports_images": form.get("supports_images") == "on",
             "effort": str(form.get("effort", "")) or None,
         }
 
@@ -166,6 +169,27 @@ def routes(kit: Kit) -> APIRouter:
             "UPDATE members SET image_daily_cap = ? WHERE id = ?", (cap, session.member.id)
         )
         return kit.redirect("/ai", f"At most {cap} pictures a day.")
+
+    def picture_cap(member_id: int) -> int:
+        row = app.db.one("SELECT picture_daily_cap FROM members WHERE id = ?", (member_id,))
+        return int(row["picture_daily_cap"]) if row else 0
+
+    @router.post("/ai/picture-cap")
+    async def save_picture_cap(request: Request) -> Response:
+        """F34gb: their own cap on pictures sent in chat that Themi looks at a day."""
+        session, form = await kit.checked(request)
+        try:
+            cap = int(str(form.get("picture_daily_cap", "")))
+            if not 0 <= cap <= MAX_PICTURE_CAP:
+                raise ValueError(cap)
+        except ValueError:
+            return kit.redirect(
+                "/ai", f"Pictures looked at a day is a number from 0 to {MAX_PICTURE_CAP}."
+            )
+        app.db.execute(
+            "UPDATE members SET picture_daily_cap = ? WHERE id = ?", (cap, session.member.id)
+        )
+        return kit.redirect("/ai", f"I'll look at up to {cap} of your pictures a day.")
 
     @router.post("/ai/chains/{task}")
     async def save_chain(request: Request, task: str) -> Response:

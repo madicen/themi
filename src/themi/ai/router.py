@@ -55,6 +55,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageBlock,
     ImageResult,
     Message,
     StructuredResponse,
@@ -375,7 +376,11 @@ class TaskClient:
         kind: CallKind = CallKind.INTERACTIVE,
         on_retry: OnRetry | None = None,
     ) -> ChatResponse:
+        pictures = any(m.images for m in messages)
+
         async def operation(provider: Provider) -> ChatResponse:
+            if pictures and not provider.capabilities.images:  # F34g: the next backend may
+                raise CapabilityError(f"{provider.name} can't see pictures")
             if tools and not provider.capabilities.tools:
                 if not provider.capabilities.structured:
                     raise CapabilityError(f"{provider.name} supports neither tools nor JSON")
@@ -416,12 +421,22 @@ class TaskClient:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         kind: CallKind = CallKind.BACKGROUND,
         on_retry: OnRetry | None = None,
+        images: Sequence[ImageBlock] = (),
     ) -> StructuredResponse:
+        """`images` (F34m): pictures it reads with the prompt; a backend that can't see
+        them is skipped for this call."""
+
         async def operation(provider: Provider) -> StructuredResponse:
             if not provider.capabilities.structured:
                 raise CapabilityError(f"{provider.name} can't return structured output")
+            if not images:
+                return await provider.structured(
+                    system, prompt, schema, max_tokens=max_tokens, kind=kind
+                )
+            if not provider.capabilities.images:
+                raise CapabilityError(f"{provider.name} can't see pictures")
             return await provider.structured(
-                system, prompt, schema, max_tokens=max_tokens, kind=kind
+                system, prompt, schema, max_tokens=max_tokens, kind=kind, images=images
             )
 
         return await self._router.run(self.member_id, self.task, kind, operation, on_retry)

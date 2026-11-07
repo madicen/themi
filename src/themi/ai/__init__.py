@@ -16,6 +16,7 @@ from themi.ai.retry import RetryPolicy, call_with_retry
 from themi.ai.types import (
     CallKind,
     ChatResponse,
+    ImageBlock,
     Message,
     StopReason,
     StructuredResponse,
@@ -33,6 +34,7 @@ __all__ = [
     "Capabilities",
     "CapabilityError",
     "ChatResponse",
+    "ImageBlock",
     "Message",
     "PermanentError",
     "Provider",

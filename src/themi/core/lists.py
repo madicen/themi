@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.groceries import and_list, asks_to_add, refuse_spending
+from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
@@ -577,10 +577,13 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
         {"list_id": nl.id, "items": shaped, "under": parent.id if parent else None},
         said=f"Added {said} to {nl.name}." if said else f"Added to {nl.name}.",
     )
-    asked = _said(names, ctx.request_text) and (
-        asks_to_add(ctx.request_text, ctx.previous_text)
-        or _opens_with(lists, ctx.member, nl, ctx.request_text)
-    )
+    asked = (
+        _said(names, ctx.request_text)
+        and (
+            asks_to_add(ctx.request_text, ctx.previous_text)
+            or _opens_with(lists, ctx.member, nl, ctx.request_text)
+        )
+    ) or picture_asks_to_add(ctx, names)
     return replace(proposal, requested=asked)
 
 

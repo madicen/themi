@@ -69,6 +69,7 @@ class Backend:
     supports_tools: bool
     supports_structured: bool
     supports_audio: bool
+    supports_images: bool  # F34gb: an OpenAI-compatible model that sees pictures
     effort: str | None
 
 
@@ -100,6 +101,7 @@ def _backend_from_row(row: dict[str, Any]) -> Backend:
         supports_tools=bool(row["supports_tools"]),
         supports_structured=bool(row["supports_structured"]),
         supports_audio=bool(row["supports_audio"]),
+        supports_images=bool(row["supports_images"]),
         effort=row["effort"],
     )
 
@@ -133,6 +135,7 @@ class AISettingsStore:
         supports_tools: bool = True,
         supports_structured: bool = True,
         supports_audio: bool = False,
+        supports_images: bool = False,
         effort: str | None = None,
     ) -> Backend:
         self._require_self(actor, member_id)
@@ -147,8 +150,8 @@ class AISettingsStore:
         now = clock.now().isoformat()
         backend_id = self.db.execute(
             "INSERT INTO ai_backends (member_id, label, kind, model, base_url, api_key, timeout, "
-            "supports_tools, supports_structured, supports_audio, effort, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "supports_tools, supports_structured, supports_audio, supports_images, effort, "
+            "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member_id,
                 label,
@@ -160,6 +163,7 @@ class AISettingsStore:
                 int(supports_tools),
                 int(supports_structured),
                 int(supports_audio),
+                int(supports_images),
                 effort,
                 now,
                 now,
@@ -192,6 +196,7 @@ class AISettingsStore:
             "supports_tools",
             "supports_structured",
             "supports_audio",
+            "supports_images",
             "effort",
             "kind",
         }
@@ -208,7 +213,12 @@ class AISettingsStore:
             if name == "api_key":
                 if value is not None:
                     columns["api_key"] = self._cipher.encrypt(value)
-            elif name in ("supports_tools", "supports_structured", "supports_audio"):
+            elif name in (
+                "supports_tools",
+                "supports_structured",
+                "supports_audio",
+                "supports_images",
+            ):
                 columns[name] = int(bool(value))
             elif name == "base_url":
                 columns[name] = (value or "").strip().rstrip("/") or None
@@ -326,6 +336,7 @@ class AISettingsStore:
                 supports_tools=bool(row["supports_tools"]),
                 supports_structured=bool(row["supports_structured"]),
                 supports_audio=bool(row["supports_audio"]),
+                supports_images=bool(row["supports_images"]),
                 effort=row["effort"],
             )
             resolved.append(ResolvedEntry(row["id"], row["label"], config))
