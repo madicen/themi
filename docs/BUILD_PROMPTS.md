@@ -221,7 +221,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
 | BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [x] 2026-11-06 |
-| BD1b | Body double: Guided Step-Through in chat | Body double | [ ] |
+| BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [ ] |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
 | BD3b | Body double: Themi the chameleon | Body double | [ ] |
@@ -11395,7 +11395,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0126).
 
 ### BD1b · Body double: Guided Step-Through in chat
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1a
 Read first: F6a's and F26c's notes (steps on tasks); this section's intro.
 - Guided mode uses the task's own `steps`. A task without steps (or no task) gets proposed
@@ -11414,6 +11414,31 @@ Read first: F6a's and F26c's notes (steps on tasks); this section's intro.
 Tests: unit tests for step navigation, skip, edit-in-place; scenarios: a six-step chore
 with Back and Skip, a task with no steps getting proposed ones then kept. Evals: proposed
 steps are short, concrete, in order, with no "you should".
+
+Notes (2026-11-06):
+- `themi.core.body_double_guided.GuidedSteps`, installed on `BodyDouble.guided`; taps go
+  through `BodyDouble.act` as in BD1a. Migration 0127: the session's own `steps`, `step`,
+  `step_since`, `steps_proposed`, `nudged` and `card_message_id` (the chat message that
+  shows a session, for every mode: BD3a edits it), and `ai_routes` rebuilt for the new AI
+  task `body_double_steps` (on the AI page; each person starts with their quick-jobs chain).
+- Deviation, the card's words: "Step 2 of 6:" and the step on its own quoted line
+  (`> Clear the counter`), as cooking does, so the PDA shield never rewords a step.
+  Optional steps say "(optional)" after the count, keep their tag, and get [Skip].
+- Proposed steps: one structured call with the job (and, when changing them, the earlier
+  steps and their words) in delimited blocks, their phrasing register, at most 12 (trimmed,
+  an optional one tagged "(Optional/Bonus)"). The card shows them numbered with [Go]
+  [Change them] [No steps], plus [Keep these steps] for a task (saves them on the task, then
+  goes). [Go] doesn't keep them. [Change them] asks "How would you change them?" and takes
+  their next message. With no model, or [No steps], the session becomes quiet company
+  (a switch, so the row says so).
+- [Done] mid-way and [All done] both finish (the task too). Typed "next", "back", "skip"
+  answer with a fresh card below and the old one says "(Carried on below.)"; "next" on the
+  last step is All done.
+- The gentle line comes at 20 minutes on a step, once a session at most, never on an
+  optional step. Four hours on one step with no tap ends the session as `left`, quietly.
+- Evals: `tests/evals/test_body_double_evals.py` (6 jobs, 5 to pass: at most 12 steps,
+  eight words each, no advice words, in order where the job has one).
+- Setup: restart `themi run` (migration 0127).
 
 ### BD2 · Body double: choosing the mode, and learning from sessions
 Status: [ ]
