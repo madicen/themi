@@ -87,10 +87,14 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
     )
     serving = asyncio.create_task(server.serve())
     debug = free_port()
+    errors = tempfile.TemporaryFile()  # noqa: SIM115 - closed in the finally below
+    # --no-sandbox: CI runners (Ubuntu 24.04) block the user namespaces Chrome's sandbox
+    # needs, so it exited at once there; this Chrome only ever loads our own local page.
     chrome = subprocess.Popen(
-        [CHROME, "--headless=new", "--disable-gpu", f"--remote-debugging-port={debug}",
-         f"--user-data-dir={tempfile.mkdtemp()}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+         f"--remote-debugging-port={debug}", f"--user-data-dir={tempfile.mkdtemp()}",
+         "about:blank"],
+        stdout=subprocess.DEVNULL, stderr=errors,
     )  # fmt: skip
     try:
         assert await until(lambda: asyncio.sleep(0, server.started))
@@ -107,8 +111,11 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
             except OSError:
                 return None
 
-        pages = await until(targets)
-        assert pages
+        pages = await until(targets, seconds=30)
+        if not pages:  # Chrome couldn't start here: that's the machine, not the page
+            errors.seek(0)
+            said = errors.read().decode(errors="replace").strip().splitlines()[-3:]
+            pytest.skip(f"Chrome didn't start (exit {chrome.poll()}): {' | '.join(said)}")
         async with websockets.connect(pages[0]["webSocketDebuggerUrl"], max_size=None) as ws:
             tab = Tab(ws)
             await tab.call("Page.navigate", url=f"http://127.0.0.1:{port}/session?ticket={ticket}")
@@ -124,5 +131,6 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
         assert row is not None and (row["phase"], row["step"]) == ("work", 0)
     finally:
         chrome.kill()
+        errors.close()
         server.should_exit = True
         await serving
