@@ -39,6 +39,7 @@ from tests.fakes.roborock import FakeRoborock
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.search import FakeSearch
 from tests.fakes.server_runner import FakeRunner
+from tests.fakes.spotify import FakeSpotify
 from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
@@ -95,6 +96,7 @@ class Scenario:
         travel: FakeTravel | None = None,
         *,
         home_connect: FakeHomeConnect | None = None,
+        spotify: FakeSpotify | None = None,
         thinq: FakeThinq | None = None,
         roborock: FakeRoborock | None = None,
         tuya: FakeTuya | None = None,
@@ -147,6 +149,7 @@ class Scenario:
                 travel=travel,
                 search=search,
                 home_connect=home_connect,
+                spotify=spotify,
                 thinq=thinq,
                 roborock=roborock,
                 tuya=tuya,
@@ -412,6 +415,7 @@ async def scenario(
         optional("fake_cozyla"),
         optional("fake_travel"),
         home_connect=optional("fake_home_connect"),
+        spotify=optional("fake_spotify"),
         thinq=optional("fake_thinq"),
         roborock=optional("fake_roborock"),
         tuya=optional("fake_tuya"),

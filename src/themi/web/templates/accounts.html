@@ -104,6 +104,34 @@ and it only sends after you say yes.</p>
   {% endif %}
 </div>
 
+{% if spotify %}
+<h2 id="music">My music</h2>
+<div class="rows">
+  {% set link = spotify.link %}
+  {% set chips = [("Linked" ~ ("" if link.premium else " · no Premium"), "good" if link.premium else "info")] if link else [("Not linked", "")] %}
+  {% call(part) row("Spotify", meta=link.display_name if link else "Your own account", chips=chips, id="spotify", open=opened == "spotify") %}
+  {% if part == "body" %}
+    <p class="muted">Themi plays your own playlists on your own Spotify when you ask ("play my
+    focus playlist"), and pauses it. Only yours: nobody else's music goes through it.
+    Playing from here needs Spotify Premium; without it, Themi sends a link instead.</p>
+    {% if link %}
+    <div class="danger-zone">
+      <form method="post" action="/accounts/spotify/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink Spotify</button>
+      </form>
+    </div>
+    {% else %}
+    <form method="post" action="/accounts/spotify/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary">Link Spotify</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% endcall %}
+</div>
+{% endif %}
+
 {% if household %}
 {% set family = household.family %}
 <h2 id="household">Household connections</h2>

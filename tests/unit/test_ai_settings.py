@@ -69,7 +69,10 @@ def test_defaults_are_gemini_free_tier(family: SeededFamily, ai: AISettingsStore
     assert backend.supports_audio and not backend.has_key
     for task in AITask:
         (entry,) = ai.resolve(family.erin.id, task)
-        wanted = "gemini-embedding-2" if task is AITask.EMBEDDING else "gemini-3.5-flash-lite"
+        wanted = {  # BD4a: pictures use Gemini's image model (it has no free tier)
+            AITask.EMBEDDING: "gemini-embedding-2",
+            AITask.STEP_IMAGE: "gemini-3.1-flash-lite-image",
+        }.get(task, "gemini-3.5-flash-lite")
         assert entry.config.resolved_model == wanted
     assert ai.backends(family.husband.id) == []
 

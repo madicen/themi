@@ -29,6 +29,7 @@ CAPPED = {
     "email_forward",  # F31d: sends as the person, so it always asks
 }
 CAN_BE_AUTOMATIC = {
+    "music",  # BD5b: their own Spotify, automatic from the start (done, then told)
     "email_mark_read",
     "email_archive_noise",
     "grocery_list_add",
@@ -85,7 +86,8 @@ def events(autonomy: Autonomy, action_id: int) -> list[str]:
 def test_every_category_starts_supervised_with_the_plans_caps(autonomy: Autonomy) -> None:
     categories = {c.name: c for c in autonomy.categories()}
     assert set(categories) == CAPPED | CAN_BE_AUTOMATIC
-    assert all(c.tier is Tier.SUPERVISED for c in categories.values())
+    started_automatic = {"music"}  # BD5b asked for it; every other category asks first
+    assert {n for n, c in categories.items() if c.tier is Tier.AUTOMATIC} == started_automatic
     assert {n for n, c in categories.items() if c.capped} == CAPPED
     assert categories["grocery_list_add"].scope == "family"
     assert categories["email_reply"].scope == "member"

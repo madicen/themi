@@ -15,6 +15,7 @@ the router switches to JSON action mode (prompt 06) instead of passing tools.
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Sequence
 from typing import Any, Literal
@@ -31,11 +32,12 @@ from themi.ai.errors import (
     error_for_status,
     parse_retry_after,
 )
-from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
+from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StopReason,
     StructuredResponse,
@@ -185,6 +187,27 @@ class OpenAICompatProvider:
         self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Embeddings:
         raise CapabilityError(f"{self.name}: embeddings aren't supported here yet")
+
+    async def image(
+        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+    ) -> ImageResult:
+        """OpenAI's images API (the route's model, at low quality). Local servers don't
+        offer one."""
+        if self.name in ("ollama", "lm_studio"):
+            raise CapabilityError(f"{self.name} doesn't make pictures; route them elsewhere")
+        result = await self._call(
+            self._client.images.generate(
+                model=self.model,
+                prompt=prompt,
+                size=size,
+                n=1,
+                quality="low",  # type: ignore[arg-type]
+            )
+        )
+        data = result.data[0].b64_json if result.data else None
+        if not data:
+            raise MalformedOutputError(f"{self.name} sent no picture")
+        return ImageResult(base64.b64decode(data), "image/png", self.name, self.model)
 
     async def _call(self, request: Any) -> Any:
         try:

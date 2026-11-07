@@ -36,6 +36,8 @@ TOPICS: dict[str, frozenset[str]] = {
     # RC3b: while cooking with Themi, nudges and check-ins wait; replies, approvals, urgent
     # alerts and their own timers still come.
     "cooking": frozenset({"task", "task_summary", "habit", "routine", "review"}),
+    # BD1a: while someone keeps them company on a job, the same wait as a break.
+    "body_double": frozenset({"task", "task_summary", "habit", "routine", "review"}),
     # F22d: whatever asks something of them; replies, alerts, their own reminders, meals
     # and travel heads-ups still come.
     "burnout": frozenset(
@@ -74,6 +76,7 @@ TOPIC_WORDS = {
     "approvals": "approval requests",
     "notes": "notes from your partner and questions for you both",
     "break": "task nudges and check-ins, for a break",
+    "body_double": "task nudges and check-ins, while I keep you company",
     "burnout": "everything that asks something of you, for burnout mode",
     EVERYTHING: "everything that can wait",
 }
@@ -176,6 +179,13 @@ class PauseBook:
             "UPDATE pauses SET ended_at = ? WHERE member_id = ? AND topic = ? "
             "AND ended_at IS NULL AND until > ?",
             (now, member.id, normalise_topic(topic), now),
+        )
+
+    def move(self, pause_id: int, until: datetime) -> None:
+        """Change when a pause still going on ends (a session that runs longer, BD1a)."""
+        self.db.execute(
+            "UPDATE pauses SET until = ? WHERE id = ? AND ended_at IS NULL",
+            (to_utc_iso(until), pause_id),
         )
 
     def active(self, member: Member) -> list[Pause]:

@@ -5,6 +5,7 @@ Four operations, all async:
 - `structured`: an answer that matches a JSON Schema.
 - `transcribe`: voice note to text.
 - `embed`: texts to vectors (P7b), or `CapabilityError` where there's no such API.
+- `image`: a picture from a prompt (BD4a), or `CapabilityError` where there's no such API.
 
 Adapters make exactly one request per call and never retry on their own;
 `themi.ai.retry` owns retries so attempts aren't multiplied.
@@ -20,6 +21,7 @@ from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StructuredResponse,
     ToolSpec,
@@ -27,6 +29,7 @@ from themi.ai.types import (
 )
 
 DEFAULT_MAX_TOKENS = 16_000
+IMAGE_SIZE = "1024x1024"  # square, the cheapest size each image API offers
 
 
 @dataclass(frozen=True)
@@ -74,3 +77,7 @@ class Provider(Protocol):
     async def embed(
         self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Embeddings: ...
+
+    async def image(
+        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+    ) -> ImageResult: ...

@@ -251,6 +251,18 @@ GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call 
         r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
         r"eating out|ate out|restaurant|receipt|cost",
     ),
+    "music": (  # BD5b: their own Spotify
+        "their own music on Spotify: playing and pausing",
+        r"spotify|playlist|\bsong|\balbum|\bmusic\b|play (?:some|my|the)\b|pause (?:the|my) "
+        r"(?:music|spotify|song)|put on (?:some|my)",
+    ),
+    "body_double": (  # BD1a: company while they work
+        "body double sessions: quiet company, sprints, step by step",
+        r"body.?doubl|sit with me|keep me company|company while|pomodoro|sprints?\b|"
+        r"work (?:alongside|with me)|stay with me while|focus session|while i (?:work|do)|"
+        r"quiet instead|step by step instead|always use (?:pomodoro|sprints|quiet)|"
+        r"\blofi\b|lo-fi|brown noise|play (?:some )?(?:rain|piano)",
+    ),
     "settings": (
         "pausing messages, breaks, phrasing, quiet hours",
         r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
@@ -439,6 +451,34 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Lunch out with a client, $60",
         "Show me what we spent this week",
     ),
+    "music": (  # BD5b
+        "Play my focus playlist on Spotify",
+        "Put on some jazz",
+        "Pause the music",
+        "Play the Abbey Road album",
+        "Can you play my running playlist?",
+        "Stop the song",
+        "Put on something calm on Spotify",
+        "Play some instrumental music",
+        "Start my morning playlist",
+        "Pause Spotify for a minute",
+        "Play that new Taylor Swift album",
+        "Music please, something upbeat",
+    ),
+    "body_double": (  # BD1a
+        "Can you sit with me while I sort the paperwork?",
+        "Body double me through the dishes",
+        "Pomodoro the garage clean-out",
+        "Keep me company while I write the report",
+        "I need some company while I study",
+        "Let's do sprints on the inbox",
+        "Stay with me while I fold the clothes",
+        "Work alongside me for an hour on the essay",
+        "Quiet company for 45 minutes please",
+        "Switch to sprints",
+        "Quiet instead",
+        "Start a focus session on the budget",
+    ),
     "settings": (
         "I'm going to rest for twenty minutes",
         "Taking five",
@@ -471,6 +511,20 @@ TOOL_GROUPS: dict[str, str] = {
         "recipes",
     ),  # RC1b, RC2a, RC2b, RC3a
     **dict.fromkeys(("search_web", "read_web_page"), "web"),
+    **dict.fromkeys(("play_music", "pause_music"), "music"),  # BD5b
+    **dict.fromkeys(
+        (
+            "start_body_double",
+            "switch_body_double_mode",
+            "end_body_double",
+            "set_body_double_default",
+            "set_job_category",
+            "redo_step_picture",  # BD4b
+            "send_step_picture",
+            "choose_session_sound",  # BD5a
+        ),
+        "body_double",
+    ),
     **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
     **dict.fromkeys(
         ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),

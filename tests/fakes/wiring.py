@@ -24,6 +24,7 @@ from tests.fakes.keep import FakeKeep
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import FakeRoborock
 from tests.fakes.search import FakeSearch
+from tests.fakes.spotify import FakeSpotify
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
@@ -47,6 +48,7 @@ def connector_options(
     travel: FakeTravel | None = None,
     search: FakeSearch | None = None,
     home_connect: FakeHomeConnect | None = None,
+    spotify: FakeSpotify | None = None,
     thinq: FakeThinq | None = None,
     roborock: FakeRoborock | None = None,
     tuya: FakeTuya | None = None,
@@ -61,6 +63,7 @@ def connector_options(
         "travel": travel.client() if travel else None,
         "search": search.client() if search else None,
         "home_connect": home_connect.client() if home_connect else None,
+        "spotify": spotify.client() if spotify else None,  # BD5b
         "thinq": thinq.config() if thinq else None,
         "roborock": roborock,
         "tuya": tuya.config() if tuya else None,

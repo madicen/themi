@@ -1,0 +1,150 @@
+"""BD3a: the session page: who may see it, the Mini App sign-in, and its state per mode.
+The clock starts Wednesday 21 October 2026, 9 am."""
+
+from __future__ import annotations
+
+import json
+from urllib.parse import urlencode
+
+import httpx
+
+from tests.fakes.telegram_api import BOT_TOKEN
+from tests.fixtures.web import csrf_of, sign_in
+from tests.scenarios.harness import Scenario
+from themi import clock
+from themi.channels.mini_app import sign_init_data
+from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble
+from themi.web.auth import COOKIE_NAME
+
+ENERGY_WORDS = ("energy", "capacity", "score", "low", "medium", "high")
+
+
+def bd(scenario: Scenario) -> BodyDouble:
+    assert scenario.app.services.body_double is not None
+    return scenario.app.services.body_double
+
+
+def init_data(user_id: int, *, token: str = BOT_TOKEN, ago: int = 0) -> str:
+    fields = {"auth_date": str(int(clock.now().timestamp()) - ago),
+              "user": json.dumps({"id": user_id, "first_name": "Erin"})}  # fmt: skip
+    fields["hash"] = sign_init_data(fields, token)
+    return urlencode(fields)
+
+
+async def test_signed_out_it_signs_in_with_the_mini_apps_init_data(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    page = await site.get("/session")
+    assert page.status_code == 200 and "Opening your session" in page.text
+    assert "frame-ancestors https://web.telegram.org" in page.headers["content-security-policy"]
+    assert "x-frame-options" not in page.headers
+    erin = scenario.member("Erin")
+    assert erin.telegram_user_id is not None
+    signed = await site.post(
+        "/session/telegram", data={"init_data": init_data(erin.telegram_user_id)}
+    )
+    assert signed.status_code == 204 and COOKIE_NAME in signed.cookies
+    page = await site.get("/session")
+    assert "No session going on" in page.text
+
+
+async def test_bad_init_data_is_403(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    erin = scenario.member("Erin")
+    assert erin.telegram_user_id is not None
+    for data in (
+        init_data(erin.telegram_user_id, ago=120),  # stale
+        init_data(erin.telegram_user_id, token="1:forged"),  # forged
+        init_data(987654321),  # nobody in the family
+        "",
+    ):
+        response = await site.post("/session/telegram", data={"init_data": data})
+        assert response.status_code == 403, data
+    assert (await site.get("/session/state")).status_code == 303  # still signed out
+
+
+async def test_the_state_per_mode(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    await sign_in(scenario, site, "Erin")
+    erin = scenario.member("Erin")
+    assert (await site.get("/session/state")).json()["active"] is False
+    await bd(scenario).start(erin, mode=SILENT, minutes=60, label="my writing")
+    state = (await site.get("/session/state")).json()
+    assert (state["mode"], state["label"], state["phase"]) == ("silent", "my writing", "work")
+    assert state["timer"] == {"kind": "up", "from": "2026-10-21T16:00:00+00:00", "text": "0:00"}
+    assert state["line"] == "Quiet until 10 am."
+    assert [b["label"] for b in state["buttons"]] == ["Done", "Not finished"]
+    await bd(scenario).start(erin, mode=SPRINT, label="the inbox")
+    state = (await site.get("/session/state")).json()
+    assert state["timer"] == {"kind": "down", "to": "2026-10-21T16:25:00+00:00", "text": "25:00"}
+    assert [b["label"] for b in state["buttons"]] == ["Break", "Stop here"]
+    board = scenario.app.services.taskboard
+    assert board is not None
+    task = await board.create(erin, "Clean the kitchen", "physical", 3)
+    await board.update(task.id, erin, steps=["Clear the counter", "Sweep"])
+    await bd(scenario).start(erin, mode=GUIDED, task=task)
+    state = (await site.get("/session/state")).json()
+    assert (state["step"], state["of"]) == (1, 2)
+    assert state["line"] == "Clear the counter"
+    assert [b["label"] for b in state["buttons"]] == ["Next", "Done"]
+    text = json.dumps(state).lower()
+    assert "energy_level" not in text and not any(f'"{w}"' in text for w in ENERGY_WORDS)
+
+
+async def test_someone_elses_session_is_404(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    session, _, _ = await bd(scenario).start(scenario.member("Husband"), mode=SILENT)
+    await sign_in(scenario, site, "Erin")
+    page = await site.get("/session")
+    assert "No session going on" in page.text  # only ever their own
+    csrf = csrf_of((await site.get("/settings")).text)
+    response = await site.post(
+        f"/session/{session.id}/act", data={"csrf": csrf, "action": "done", "seq": session.seq}
+    )
+    assert response.status_code == 404
+    assert bd(scenario).current(scenario.member("Husband")) is not None
+
+
+async def test_a_page_tap_with_an_old_seq_does_nothing(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SPRINT)
+    page = await site.get("/session")
+    csrf = csrf_of(page.text)
+    state = (
+        await site.post(
+            f"/session/{session.id}/act",
+            headers={"X-Requested-With": "fetch"},
+            data={"csrf": csrf, "action": "stop", "seq": session.seq - 1},
+        )
+    ).json()
+    assert state["active"] is True
+
+
+# ----- BD5a: built-in music -------------------------------------------------------------------
+
+
+async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    erin = scenario.member("Erin")
+    assert (erin.body_double_sound, erin.body_double_volume) == ("lofi", 50)
+    await bd(scenario).start(erin, mode=SILENT)
+    page = (await site.get("/session")).text
+    assert 'class="session-music"' in page and "autoplay" not in page
+    assert '<audio loop preload="none" src="/static/audio/lofi.m4a?v=' in page
+    saved = await site.post("/session/music", data={"csrf": csrf, "sound": "rain", "volume": "30"})
+    assert saved.status_code == 204
+    music = (await site.get("/session/state")).json()["music"]
+    assert (music["sound"], music["volume"], music["file"]) == ("rain", 30, "rain.m4a")
+    bad = await site.post("/session/music", data={"csrf": csrf, "sound": "loud", "volume": ""})
+    assert bad.status_code == 400
+    bad = await site.post("/session/music", data={"csrf": csrf, "sound": "", "volume": "101"})
+    assert bad.status_code == 400
+    assert scenario.member("Erin").body_double_sound == "rain"
+    audio = await site.get("/static/audio/rain.m4a")
+    assert audio.status_code == 200 and len(audio.content) > 10_000
+
+
+async def test_play_rain_in_chat_sets_the_page(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("choose_session_sound", {"sound": "rain"})
+    scenario.primary.queue_text("Rain it is; tap play on the session page.")
+    await scenario.say("Erin", "play rain")
+    assert scenario.member("Erin").body_double_sound == "rain"

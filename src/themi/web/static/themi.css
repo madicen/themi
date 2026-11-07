@@ -233,3 +233,145 @@ ul.items details.more[open] { flex-basis: 100%; order: 2; padding: 0 var(--space
 .kitchen-moves form { flex: 1; }
 .kitchen-moves button.big { width: 100%; font-size: 1.25rem; padding: var(--space-3); }
 @media (prefers-reduced-motion: reduce) { .kitchen * { transition: none; } }
+
+/* BD3a: the body double session page, full screen, phone first. BD3b dresses the scene. */
+body.session-page { min-height: 100vh; min-height: 100dvh; }
+.session { display: flex; flex-direction: column; gap: var(--space-2); min-height: 100vh;
+  min-height: 100dvh; padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-4), var(--safe-bottom)); overflow-x: hidden; }
+.session-mode { color: var(--muted); font-size: .95rem; margin: 0; }
+.session-label { font-size: 1.4rem; margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+.session-scene { flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 9rem; border-radius: var(--radius); background: var(--soft); }
+.session-timer { font-size: clamp(2.5rem, 16vw, 4.5rem); font-variant-numeric: tabular-nums;
+  margin: 0; letter-spacing: .02em; }
+.session-scene[data-mode="silent"] .session-timer,
+.session-scene[data-mode="guided"] .session-timer { font-size: 1.25rem; color: var(--muted); }
+.session-line { font-size: 1.3rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.session-moves { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.session-moves form { flex: 1 1 8rem; }
+.session-moves button.big { width: 100%; font-size: 1.1rem; padding: var(--space-3); min-height: var(--tap); }
+
+/* BD3b: Themi the chameleon and the scenes. Original art (static/chameleon/); colours from
+   the tokens above. The animation state comes from the server as data-state. */
+.session-scene { position: relative; overflow: hidden; }
+.scene-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.scene { display: none; }
+.session-scene[data-mode="silent"] .scene-silent,
+.session-scene[data-mode="sprint"] .scene-sprint,
+.session-scene[data-mode="guided"] .scene-guided { display: inline; }
+.scene-wall { fill: var(--soft); }
+.scene-window { fill: var(--info-bg); stroke: var(--line); stroke-width: 4; }
+.scene-frame, .scene-branch { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
+.scene-branch { stroke: var(--warn); stroke-width: 7; }
+.scene-leaf { fill: var(--good); opacity: .7; }
+.scene-rain path { stroke: var(--info); stroke-width: 2; stroke-linecap: round; opacity: .5; }
+.scene-desk, .scene-floor { fill: var(--line); }
+.scene-lamp { fill: var(--muted); }
+.scene-lampshade { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 2; }
+
+.cham { position: absolute; width: 62%; max-width: 17rem; left: 3%; bottom: 9%; overflow: visible; }
+.cham path, .cham rect, .cham circle { stroke-linecap: round; stroke-linejoin: round; }
+.cham-skin, .cham-tail path { fill: var(--accent); stroke: var(--fg); stroke-width: 1.6; }
+.cham-tail path { fill: none; stroke: var(--accent); stroke-width: 7; }
+.cham-belly, .cham-mouth, .cham-crest { fill: none; stroke: var(--fg); stroke-width: 1.6; opacity: .7; }
+.cham-spots { fill: var(--soft); opacity: .6; }
+.cham-foot path, .cham-hand path { fill: none; stroke: var(--accent); stroke-width: 5; }
+.cham-eyeball { fill: var(--card); stroke: var(--fg); stroke-width: 1.6; }
+.cham-pupil { fill: var(--fg); }
+.cham-lid { fill: var(--accent); opacity: 0; }
+.prop, .cham-zz { display: none; }
+.prop rect, .prop > path:not(.prop-line):not(.prop-paint) { fill: var(--warn-bg); stroke: var(--fg); stroke-width: 1.4; }
+.prop-line, .cham-zz path { fill: none; stroke: var(--fg); stroke-width: 2; }
+.prop-paint { fill: none; stroke: var(--bad); stroke-width: 3; }
+.prop-paper { fill: var(--card) !important; }
+.cham g { transform-box: fill-box; transform-origin: center; }
+
+/* each mode's place for the chameleon */
+.session-scene[data-mode="silent"] .prop-book,
+.session-scene[data-mode="silent"] .prop-mug { display: inline; }
+.session-scene[data-mode="sprint"] { flex-direction: column; justify-content: flex-end; padding-bottom: 2.5rem; }
+/* perched on the timer: its feet on the timer's top edge */
+.session-scene[data-mode="sprint"] .cham { z-index: 2; width: 46%; max-width: 13rem; left: 27%;
+  bottom: calc(2.5rem + clamp(2.5rem, 16vw, 4.5rem) * 1.1 + 22px - 12px); }
+.session-scene[data-mode="sprint"] .session-timer { position: relative; z-index: 1; line-height: 1.1; background: var(--card);
+  border: 3px solid var(--line); border-radius: var(--radius); padding: var(--space-2) var(--space-4); }
+.session-scene[data-mode="guided"] { min-height: 7rem; flex: 0 0 auto; }
+.session-scene[data-mode="guided"] .cham { width: 34%; left: 2%; bottom: 10%; }
+.session-scene[data-mode="silent"] .session-timer,
+.session-scene[data-mode="guided"] .session-timer { position: absolute; top: var(--space-2); right: var(--space-3); }
+.session[data-mode="guided"] .session-line { position: relative; background: var(--card); border: 2px solid var(--line);
+  border-radius: var(--radius); padding: var(--space-4); font-size: 1.5rem; }
+.session[data-mode="guided"] .session-line::before { content: ""; position: absolute; left: 1.5rem; top: -12px;
+  border: 10px solid transparent; border-top: 0; border-bottom-color: var(--line); }
+
+/* a slow breathing pulse by Silent Anchor's timer */
+.session-scene[data-mode="silent"] .session-timer::after { content: ""; display: inline-block; width: .5rem;
+  height: .5rem; margin-left: var(--space-2); border-radius: 50%; background: var(--accent);
+  vertical-align: middle; animation: breathe 6s ease-in-out infinite; }
+
+/* the animation states (themi.core.body_double_scene.FLAGS) */
+.session-scene[data-state="idle"] .cham-body { animation: breathe-body 5s ease-in-out infinite; }
+.session-scene[data-state="idle"] .cham-lid { animation: blink 7s infinite; }
+.session-scene[data-state="sweeping"] .prop-broom { display: inline; }
+.session-scene[data-state="sweeping"] .prop-book, .session-scene[data-state="sweeping"] .prop-mug { display: none; }
+.session-scene[data-state="sweeping"] .prop-broom { animation: sweep 1.2s ease-in-out infinite; transform-origin: top; }
+.session-scene[data-state="dozing"] .prop-blanket, .session-scene[data-state="dozing"] .cham-zz { display: inline; }
+.session-scene[data-state="dozing"] .cham-lid { opacity: 1; }
+.session-scene[data-state="dozing"] .cham-zz { animation: float 3s ease-in-out infinite; }
+.session-scene[data-state="painting"] .prop-easel { display: inline; }
+.session-scene[data-state="painting"] .cham-hand-front { animation: dab 1.6s ease-in-out infinite; }
+.session-scene[data-state="stretching"] .cham-body { animation: stretch 4s ease-in-out infinite; }
+.session-scene[data-state="stretching"] .cham-hand-front { transform: rotate(-60deg); }
+.session-scene[data-state="doodling"] .prop-pencil { display: inline; }
+.session-scene[data-state="doodling"] .cham-hand-front { animation: dab 0.9s ease-in-out infinite; }
+.session-scene[data-state="cheering"] .cham { animation: hop .6s ease-in-out 3; }
+.session-scene[data-state="cheering"] .cham-hand-front { transform: rotate(-80deg); }
+.session-scene[data-state="cheering"] .prop { display: none; }
+
+@keyframes breathe { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1.1); } }
+@keyframes breathe-body { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(1.03); } }
+@keyframes blink { 0%, 94%, 100% { opacity: 0; } 96% { opacity: 1; } }
+@keyframes sweep { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(10deg); } }
+@keyframes float { 0%, 100% { transform: translateY(0); opacity: .6; } 50% { transform: translateY(-6px); opacity: 1; } }
+@keyframes dab { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-18deg); } }
+@keyframes stretch { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, .94); } }
+@keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
+
+/* break chat on the page: a bubble over most of it, the countdown kept in a corner */
+.session-chat { position: fixed; inset: 3.5rem var(--space-3) var(--space-3); z-index: 20; display: flex;
+  flex-direction: column; gap: var(--space-2); background: var(--card); border: 2px solid var(--line);
+  border-radius: var(--radius); padding: var(--space-3); }
+.session-chat[hidden] { display: none; }
+.session-chat ol { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 0; display: flex;
+  flex-direction: column; gap: var(--space-2); }
+.session-chat li { max-width: 85%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm);
+  background: var(--soft); white-space: pre-line; overflow-wrap: anywhere; }
+.session-chat li.you { align-self: flex-end; background: var(--info-bg); }
+.session-chat form { display: flex; gap: var(--space-2); }
+.session-chat input[type="text"] { flex: 1; min-width: 0; min-height: var(--tap); }
+body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top: var(--space-2); right: var(--space-3);
+  font-size: 1.25rem; padding: var(--space-1) var(--space-3); }
+.session-chat-open[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .session-scene *, .session-scene *::after, .session-scene .cham { animation: none !important; transition: none !important; }
+}
+
+/* BD4b: each guided step's picture, in the step's bubble */
+.session-picture { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--soft);
+  aspect-ratio: 1 / 1; max-height: 45vh; display: flex; align-items: center; justify-content: center; }
+.session-picture img { width: 100%; height: 100%; object-fit: contain; }
+.session-picture[data-status="none"] { display: none; }
+.session-picture-wait { display: none; width: 30%; aspect-ratio: 1; border-radius: 50%; background: var(--line); }
+.session-picture[data-status="making"] .session-picture-wait { display: block; animation: breathe 3s ease-in-out infinite; }
+.session-redo { display: flex; gap: var(--space-2); }
+.session-redo input[type="text"] { flex: 1; min-width: 0; min-height: var(--tap); }
+.session-note:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .session-picture-wait { animation: none !important; } }
+
+/* BD5a: the built-in loop's controls */
+.session-music { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.session-music select { flex: 1 1 8rem; min-height: var(--tap); }
+.session-music input[type="range"] { flex: 1 1 6rem; min-width: 0; }
+.session-play { min-height: var(--tap); min-width: 5rem; }

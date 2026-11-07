@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi.ai.adapters.defaults import (
     ANTHROPIC_DEFAULT_EFFORT,
     ANTHROPIC_DEFAULT_MODEL,
+    CLOUDFLARE_DEFAULT_IMAGE_MODEL,
     GEMINI_DEFAULT_MODEL,
     LM_STUDIO_URL,
     OLLAMA_URL,
@@ -24,11 +25,12 @@ if TYPE_CHECKING:
     from themi.ai.adapters.gemini import GeminiProvider
     from themi.ai.adapters.openai_compat import OpenAICompatProvider
 
-AdapterKind = Literal["anthropic", "gemini", "ollama", "lm_studio", "openai_compat"]
+AdapterKind = Literal["anthropic", "gemini", "ollama", "lm_studio", "openai_compat", "cloudflare"]
 
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": ANTHROPIC_DEFAULT_MODEL,
     "gemini": GEMINI_DEFAULT_MODEL,
+    "cloudflare": CLOUDFLARE_DEFAULT_IMAGE_MODEL,  # pictures only
 }
 
 
@@ -79,6 +81,17 @@ def build_provider(config: AdapterConfig) -> Provider:
             base_url=config.base_url,
             timeout=config.timeout,
         )
+    if config.kind == "cloudflare":
+        if config.api_key is None or not config.base_url:
+            raise PermanentError("Cloudflare needs an API token and the account ID")
+        from themi.ai.adapters.cloudflare import CloudflareProvider
+
+        try:
+            return CloudflareProvider(
+                config.api_key, config.base_url, model, timeout=config.timeout
+            )
+        except ValueError as exc:
+            raise PermanentError(str(exc)) from exc
     capabilities = Capabilities(
         tools=config.supports_tools,
         structured=config.supports_structured,
@@ -104,6 +117,7 @@ def build_provider(config: AdapterConfig) -> Provider:
 # so code that just reads AI settings starts quickly.
 _PROVIDERS = {
     "AnthropicProvider": "themi.ai.adapters.anthropic",
+    "CloudflareProvider": "themi.ai.adapters.cloudflare",
     "GeminiProvider": "themi.ai.adapters.gemini",
     "OpenAICompatProvider": "themi.ai.adapters.openai_compat",
 }

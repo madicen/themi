@@ -220,16 +220,16 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
-| BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [ ] |
-| BD1b | Body double: Guided Step-Through in chat | Body double | [ ] |
-| BD2 | Body double: choosing the mode, and learning from sessions | Body double | [ ] |
-| BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
-| BD3b | Body double: Themi the chameleon | Body double | [ ] |
-| BD4a | AI layer: image generation | Body double | [ ] |
-| BD4b | Body double: a picture for each step | Body double | [ ] |
-| BD5a | Body double: built-in music | Body double | [ ] |
-| BD5b | Spotify: playing their own music | Body double | [ ] |
-| BD5c | Body double: music that suits the task | Body double | [ ] |
+| BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [x] 2026-11-06 |
+| BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
+| BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
+| BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
+| BD3b | Body double: Themi the chameleon | Body double | [~] |
+| BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
+| BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
+| BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
+| BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
+| BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
@@ -11319,7 +11319,7 @@ Open decisions (defaults used until Michael or Erin say otherwise):
   12 pictures a day each).
 
 ### BD1a · Body double: sessions in chat (Silent Anchor and Sprint Partner)
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: B1, 20, F6a, 11
 Read first: the plan's Module behaviour A (Communication: PDA shielding, plain phrasing) and
 B (Energy: inputs, matching); this section's intro; B1's notes (the "break" pause topic).
@@ -11355,8 +11355,47 @@ scenarios: a Silent Anchor hour ending with Done (task closed), a sprint of two 
 with a break, a sprint left unanswered, a nudge held then delivered after. Evals: starting
 phrases, "stop" mid-sprint, "pomodoro" not mistaken for a task title.
 
+Notes (2026-11-06):
+- The plan's "Body double" part is in the doc as Module behaviour "F. Body double"
+  (Michael signed off the wording, 2026-11-06).
+- `themi.core.body_double`: `BodyDouble` (installed after the scheduler, like
+  `CookingTimers`) with `start`, `switch`, `end`, `current`, and `act` for a tap (BD3a's page
+  uses it too). Migration 0126: `body_double_sessions` (as asked, plus `label`, `phase`,
+  `asking`, `phase_ends_at`, `seq`, `pause_id`, `ask_outbox_id`, `switched_from`) and
+  `members.sprint_work_minutes` (5-90, 25) and `sprint_break_minutes` (1-30, 5), on My
+  settings ("Body double").
+- Every block's end is a `body_double.tick` scheduler job carrying the row's `seq`; any
+  change bumps `seq`, so an old job or button does nothing.
+- A "body_double" pause topic holds what a break holds; it runs to the block's end plus
+  the hour a question may wait, and is lifted (with `release_held`) when the session ends.
+  A session's questions are their own outbox kind, `body_double`, an answer kind (no daily
+  limit or quiet hours, not counted), as they set the times.
+- Deviation, the unanswered question: the prompt's "no answer within ten minutes: waits up
+  to an hour" is read as one hour from the question. It never moves on by itself; at the
+  hour it ends as `left` with nothing said, and the question loses its buttons.
+- Silent Anchor's [A bit longer] is 15 minutes. "That's the hour" / "two hours" / "75
+  minutes" says the planned length; an open session asks at four hours.
+- Sprint: a planned length (`minutes`) ends the sprint at the first block end past it with
+  the end question. [Stop here] ends as `stopped`; with a task still open it adds
+  [It's done], which marks the task done and makes the session `finished`. A new session
+  ends the old as `stopped` (`switched` is only for a mode change: the new row keeps the
+  start time and the task, and `switched_from` points back).
+- [Body double] is on a task's nudge only for bigger jobs (effort 3 or more, or with
+  steps), never on a medicine or a check-in, so device chores and quick errands keep
+  [Done] [Later]. `TaskBoard.nudge_buttons` is the hook.
+- Tools `start_body_double` (mode '', quiet, sprint, steps; minutes; task_id; what),
+  `switch_body_double_mode`, `end_body_double(finished)`, in a new "body_double" tool group.
+  While a session is on, the group is always sent (`Services.group_sources`, new) and an
+  open item says how "I'm done" and "stop" end it. Starting refuses in burnout mode, and
+  ends a break; starting a break or burnout mode ends the session as `stopped`.
+- `/bodydouble [quiet|sprint|steps] [minutes]`. Evals: `body_double` cases (starting
+  phrases, "pomodoro the laundry" isn't a task, "stop" mid-sprint, "I'm done"), with a new
+  eval setup step `{"body_double": "sprint"}`. Routing cases: five more (the bound is now
+  130).
+- Setup: restart `themi run` (migration 0126).
+
 ### BD1b · Body double: Guided Step-Through in chat
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1a
 Read first: F6a's and F26c's notes (steps on tasks); this section's intro.
 - Guided mode uses the task's own `steps`. A task without steps (or no task) gets proposed
@@ -11376,8 +11415,33 @@ Tests: unit tests for step navigation, skip, edit-in-place; scenarios: a six-ste
 with Back and Skip, a task with no steps getting proposed ones then kept. Evals: proposed
 steps are short, concrete, in order, with no "you should".
 
+Notes (2026-11-06):
+- `themi.core.body_double_guided.GuidedSteps`, installed on `BodyDouble.guided`; taps go
+  through `BodyDouble.act` as in BD1a. Migration 0127: the session's own `steps`, `step`,
+  `step_since`, `steps_proposed`, `nudged` and `card_message_id` (the chat message that
+  shows a session, for every mode: BD3a edits it), and `ai_routes` rebuilt for the new AI
+  task `body_double_steps` (on the AI page; each person starts with their quick-jobs chain).
+- Deviation, the card's words: "Step 2 of 6:" and the step on its own quoted line
+  (`> Clear the counter`), as cooking does, so the PDA shield never rewords a step.
+  Optional steps say "(optional)" after the count, keep their tag, and get [Skip].
+- Proposed steps: one structured call with the job (and, when changing them, the earlier
+  steps and their words) in delimited blocks, their phrasing register, at most 12 (trimmed,
+  an optional one tagged "(Optional/Bonus)"). The card shows them numbered with [Go]
+  [Change them] [No steps], plus [Keep these steps] for a task (saves them on the task, then
+  goes). [Go] doesn't keep them. [Change them] asks "How would you change them?" and takes
+  their next message. With no model, or [No steps], the session becomes quiet company
+  (a switch, so the row says so).
+- [Done] mid-way and [All done] both finish (the task too). Typed "next", "back", "skip"
+  answer with a fresh card below and the old one says "(Carried on below.)"; "next" on the
+  last step is All done.
+- The gentle line comes at 20 minutes on a step, once a session at most, never on an
+  optional step. Four hours on one step with no tap ends the session as `left`, quietly.
+- Evals: `tests/evals/test_body_double_evals.py` (6 jobs, 5 to pass: at most 12 steps,
+  eight words each, no advice words, in order where the job has one).
+- Setup: restart `themi run` (migration 0127).
+
 ### BD2 · Body double: choosing the mode, and learning from sessions
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1b, 19
 Read first: the plan's Module behaviour B (Model, Learning); `themi.energy.outcomes` (the
 same smoothing); this section's intro.
@@ -11406,8 +11470,39 @@ defaults winning; a scenario where three good sprints for tidying in the evening
 suggestion from the table's. Evals: category picks for 30 real task titles from the Pi
 (with the owner's say-so), no energy words in the offer.
 
+Notes (2026-11-06):
+- `themi.core.body_double_modes`: pure functions (`by_words`, `settled`, `part_of_day`,
+  `observations`, `rate`, `learned`, `choose`) and `ModeChooser` (installed on
+  `BodyDouble.modes`). Migration 0128: `tasks.category`, `task_mode_preferences` and
+  `body_double_sessions.mode_chosen`.
+- The kind of job: keywords first (tidying's words beat a plain "clean"); when none or
+  several match, one structured call on the quick-jobs route (`structured_misc`), the job
+  in a delimited block; with no model, the first keyword match or `other`. Kept on the
+  task; a session with no words at all is `other` without a call. `set_job_category`
+  ("that's admin") corrects a task or the session going on, and sticks.
+- Learning: the same smoothing as `themi.energy.outcomes` from an even start (0.5, which
+  counts as one: steps 1/2, 1/3, ... never below 0.1). A cell is person × kind × part of
+  the day (morning 5-12, afternoon 12-17, evening otherwise) × mode; the low/not-low split
+  is used once it has three sessions. A mode beats the table with three sessions in its cell
+  and a lead of 0.2. A switched session counts against its mode and for the one switched to;
+  the new row's own outcome counts as well.
+- The table, as asked: tidy is already sprints, so the prompt's "three good sprints for
+  tidying change the suggestion" can't show a change. The scenario uses chores (the dishes:
+  guided by the table) in the evening instead.
+- Defaults: `set_body_double_default` ("always use pomodoro for tidying") and a select per
+  kind of job in My settings' "Body double" row ("Let Themi choose" clears it). A default
+  always wins and starts without an offer.
+- The offer: with no mode said and no default, the start opens with "Starting a sprint for
+  this one." / "Quiet company for this one." / "Taking this one step by step." and buttons
+  for the other two ([Quiet instead] [Sprints instead] [Step by step instead]), which
+  switch. Never a reason. A nudge's [Body double] starts in the picked mode the same way.
+- Evals: `test_body_double_categories` (30 titles written fresh, 26 to pass) and cases
+  `bd-default`, `bd-offer-no-energy`. Follow-up: swap in 30 real titles from the Pi once
+  their owner says yes.
+- Setup: restart `themi run` (migration 0128).
+
 ### BD3a · Body double: the session page and the Telegram Mini App
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1a, W1
 Read first: the plan's "The management site" and "Reaching the site" (Funnel); W1's notes
 (the shell and kit); this section's intro.
@@ -11429,8 +11524,36 @@ Tests: unit tests for `initData` checking (good, stale, forged, unknown user), t
 endpoint per mode; integration tests for page access (someone else's session is 404); a
 scenario where Next on the page edits the chat message.
 
+Notes (2026-11-06):
+- `themi.web.session_pages`: `GET /session` (a page of its own, no menu bar), `GET
+  /session/state` (JSON), `POST /session/{id}/act` (CSRF-checked; someone else's is 404; an
+  old `seq` does nothing) and `POST /session/telegram`.
+- Mini App sign-in: Telegram puts `tgWebAppData` in the page's URL fragment, so the page's
+  own script posts it to `/session/telegram` (no Telegram script is loaded; the CSP stays
+  same-origin). `themi.channels.mini_app.check_init_data` checks the HMAC with the bot's
+  token, `auth_date` under a minute old, and the user's Telegram id against the family;
+  anything else is 403. Good data starts an ordinary site session (the same cookie).
+- The session page alone may be framed by `https://web.telegram.org` (Telegram's web app
+  shows Mini Apps in a frame), so it has no `X-Frame-Options` and its own
+  `frame-ancestors`; every other page is unchanged.
+- [Open] is a `web_app` button (`Button.web_app`, kept through the outbox), added to every
+  session's first message by a start decorator, only when `site_url` is https (Telegram
+  refuses others, so local runs have none). No BotFather setup is needed for inline
+  Mini App buttons.
+- Deviation: the page polls the JSON with its own small script (`static/session.js`)
+  rather than htmx, since it draws the timer from the same data. Taps post with fetch and
+  redraw from the JSON reply; without the script they're plain forms. `navigator.wakeLock`
+  keeps the screen on where offered.
+- The state: mode, label, phase, a line (the question, the step, "Quiet until 10 am."),
+  the timer (`down` to the block's end in a sprint, `up` from the start otherwise), the
+  step count in Guided, and the same buttons as chat for that moment. Never the energy
+  level. A page tap goes through `BodyDouble.act_from_page`, which also edits the chat
+  message showing the session (the question, or the guided card).
+- Checked by eye at 360px in light and dark with headless Chrome: no sideways scroll; the
+  scene is a plain panel until BD3b.
+
 ### BD3b · Body double: Themi the chameleon
-Status: [ ]
+Status: [~] built 2026-11-06; waiting for Michael and Erin to look at the scenes on their phones
 Depends on: BD3a
 Read first: this section's intro (the modes' scenes, original art only).
 - `themi/web/static/chameleon/`: one SVG character, original, drawn as named parts (body,
@@ -11453,8 +11576,35 @@ Tests: unit tests for the state picker (mode × category × phase); a page test 
 flag has a CSS state; a scenario of break chat on the page reaching Telegram too. Michael
 and Erin look at the scenes on their phones before it's marked done.
 
+Notes (2026-11-06):
+- `static/chameleon/chameleon.svg`: one original character as named parts (`cham-body`,
+  `cham-head`, `cham-eye` with a lid, `cham-tail`, `cham-hand-front`/`-back`,
+  `cham-foot`) and props (`prop-book`, `-mug`, `-broom`, `-easel`, `-pencil`,
+  `-blanket`, plus a "zz"). `scenes.svg`: a desk by a rainy window (Silent Anchor), a
+  floor for the timer (Sprint), a branch (Guided). Both are put into the page inline
+  (`kit.inline_svg`) so the stylesheet colours them from the site's tokens and moves their
+  parts; neither carries a style or script (the CSP), which a test checks.
+- Scenes: Silent Anchor reads at the desk with a mug, rain on the window, and a slow
+  breathing dot by a small elapsed timer; Sprint perches on the big countdown; Guided sits
+  on a branch in the corner above the step, which is a large bubble.
+- `themi.core.body_double_scene.pick_state` gives the state flag in `/session/state`
+  (`scene`): `cheering` for 20 seconds after a sprint block or a guided step is done
+  (`cheer_until`, migration 0129); on a break, dozing, painting, stretching, doodling in
+  turn every two minutes, or `idle` while they've chatted on the page in the last two
+  minutes (`chat_at`); during work on a chores or tidy job, `sweeping` one minute in four,
+  in any mode; otherwise `idle` (blinking and breathing). No randomness.
+- Break chat: in a sprint's break the page shows [Chat], which opens a panel over most of
+  the page with the countdown fixed in a corner. `POST /session/chat` logs the message and
+  hands it to the agent as their own chat (`InboundEvent`, the Telegram path), so replies
+  go to Telegram through the outbox; the page shows the conversation since the break began
+  from `message_log`. Outside a break it does nothing.
+- `prefers-reduced-motion`: every animation in the scene is off; only the timer moves.
+- Checked by eye at 360px, light and dark, every state, with headless Chrome. Still to do:
+  Michael and Erin look at it on their phones (then this is [x]).
+- Setup: restart `themi run` (migration 0129).
+
 ### BD4a · AI layer: image generation
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 06, F30d
 Read first: the plan's AI backend (providers, routing per task, retries); F30d's notes (the
 daily cap).
@@ -11472,8 +11622,55 @@ daily cap).
 Tests: unit tests for routing, fallback, the cap, the prompt's delimiting; live smoke test
 (opt-in, `tests/live`) for each adapter.
 
+Notes (2026-11-06):
+- Models and prices, checked 2026-11-06 on Google's pricing page
+  (aistudio.google.com/docs/pricing): no Gemini image model has a free tier.
+  `gemini-3.1-flash-lite-image` is $0.0336 a 1K picture (the default; Google suggests it in
+  place of `gemini-2.5-flash-image`, $0.039, which shuts down 2027-03-15);
+  `gemini-3.1-flash-image` $0.067; `gemini-3-pro-image` $0.134. OpenAI: `gpt-image-2`,
+  billed by tokens; third-party figures put a low-quality 1024px picture at a few cents
+  (OpenAI's own page wasn't reached; check it before relying on that). `gpt-image-1` was
+  retired 2026-10-23. At the default cap (12 a day) Gemini is at most about $0.40 a day each.
+- So the open decision's default ("the person's Gemini key") needs billing turned on for
+  that key; the free-tier key the family uses for chat can't make pictures. Without it,
+  pictures fail and BD4b falls back to text, as it does past the cap.
+- `Provider.image(prompt, size) -> ImageResult` (bytes, mime type) on every adapter: Gemini
+  asks the route's model for an IMAGE response (1:1); OpenAI-compatible calls the images
+  API at low quality (Ollama and LM Studio say they can't); Claude says it can't.
+  `TaskClient.image` goes through the router like `chat` (per-member keys, retries, the
+  breaker, fallback, an `ai_calls` row).
+- AI task `step_image` (migration 0130 rebuilds `ai_routes`): each person's chain is their
+  quick-jobs chain, with Gemini's image model or `gpt-image-2` as the route's model. On
+  the AI page it's "Pictures for guided steps", with the cap beside it.
+- Cap: `members.image_daily_cap` (0-100, default 12; 0 turns pictures off), counted from
+  today's successful `step_image` calls in `ai_calls` (local midnight). Past it,
+  `ImageCapReached` and no model is called.
+- `themi.core.step_images.image_prompt(step, notes, earlier)`: a fixed style line (simple,
+  friendly, no text, no faces) and the step, the old prompt and their words each in a
+  delimited block.
+- Fakes: `ScriptedProvider.image` returns `TINY_PNG` unless something is queued
+  (`queue_image`, `queue_error(..., "image")`). Live: `tests/live/test_image_providers_live.py`
+  (`THEMI_LIVE_GEMINI_IMAGE_KEY`, `THEMI_LIVE_OPENAI_IMAGE_KEY`; a few cents each). Not run.
+- Setup: restart `themi run` (migration 0130); turn billing on for a Gemini key (or add an
+  OpenAI backend) and put it first in "Pictures for guided steps".
+- Follow-up (2026-11-06, Michael): free pictures through Cloudflare Workers AI.
+  `themi.ai.adapters.cloudflare.CloudflareProvider`, a new backend kind `cloudflare`
+  ("Cloudflare Workers AI (pictures only)"; chat and the rest say they can't, so the router
+  moves on). It runs `@cf/black-forest-labs/flux-1-schnell` at 4 steps and decodes the
+  base64 picture (JPEG). Free tier: 10,000 neurons a day per account, no card; at 4.8
+  neurons a 512px tile and 9.6 a step, a 1024px picture is about 58, so some 170 a day
+  (Cloudflare's pricing page, 2026-11-06; my arithmetic). Migration 0134 rebuilds
+  `ai_backends` for the new kind, keeping `ai_routes` aside and putting it back (a test
+  checks they survive). Live test: `THEMI_LIVE_CLOUDFLARE_TOKEN` and
+  `THEMI_LIVE_CLOUDFLARE_ACCOUNT`, not run.
+- Setup for Cloudflare: a free account at dash.cloudflare.com; its account ID (the
+  dashboard's sidebar) and an API token with the "Workers AI" permission (My Profile → API
+  Tokens → Create). On the AI page, add a backend: Cloudflare Workers AI, the account ID as
+  its address, the token as its key; put it first in "Pictures for guided steps" (Gemini
+  after it as a fallback). Restart `themi run` first (migration 0134).
+
 ### BD4b · Body double: a picture for each step
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1b, BD3a, BD4a
 Read first: this section's intro (Guided Step-Through).
 - When a guided session starts, a background job makes each step's picture in order
@@ -11493,8 +11690,35 @@ Tests: unit tests for the job order, reuse, cap and failure fallbacks; a scenari
 guided session where step 2's picture is redone. Evals: redo requests read as instructions
 for the picture, never acted on as anything else.
 
+Notes (2026-11-06):
+- `themi.core.step_images.StepPictures`: when a guided session's steps are settled (the
+  task's own steps, or [Go]/[Keep these steps]), a `body_double.pictures` job makes each
+  step's picture in turn, the current step first, then the rest after it, then those
+  before. Files in `step_images/` beside the database (`data/step_images/`, not committed);
+  rows in `step_images` (migration 0131), one per session and step.
+- Reuse: a step of a task whose words match a picture made before for that task (and whose
+  file is still there) uses it again, with no call.
+- Past the cap: the step and every step left are `capped` (text alone), and the page says
+  "No more pictures today; the steps are all here." under the step. A picture that fails is
+  `failed`: that step is text alone, and the job goes on to the next.
+- The page: the step's picture above the step's bubble, a soft pulsing placeholder while
+  it's made, nothing when there's none. A text box under it ("Change the picture: from
+  above") posts to `/session/pictures/redo`.
+- Redo: `redo_step_picture(step, words)` in chat or the page's box queues one new picture
+  from the step, the old prompt and their words, each in a delimited block; the new file
+  replaces the old (the page's address changes with it). Their words never do anything
+  else; evals `bd-redo-picture` and `bd-redo-not-a-task` check that.
+- Chat: `send_step_picture(step)` sends the picture as a photo ("Step 2 of 6") only when
+  asked; the card stays text. That needed photos in the outbox: `Outbox.send_photo` (sent
+  at once as a reply, its caption shielded) and `TelegramChannel.send_photo`; the fake
+  Telegram answers `sendPhoto`.
+- `GET /session/pictures/{session}/{step}` serves a file only to the session's owner
+  (anyone else: 404).
+- Setup: restart `themi run` (migration 0131). Pictures need BD4a's setup (a key that can
+  make them).
+
 ### BD5a · Body double: built-in music
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD3a
 Read first: this section's intro (music).
 - A few built-in loops (lofi, rain, soft piano, brown noise) under `web/static/audio/`,
@@ -11508,8 +11732,23 @@ Read first: this section's intro (music).
 Tests: unit tests for the setting; a page test that every listed loop exists and has a
 licence line.
 
+Notes (2026-11-06):
+- The loops are original, not downloaded: `tools/make_loops.py` synthesises them with
+  ffmpeg's noise and expression sources (no samples), so they're ours and dedicated CC0 in
+  `static/audio/LICENCES.md`. Four, about a minute each, mono AAC (`.m4a`, which every phone
+  browser plays; Opus in Ogg doesn't play on older iPhones), 350-480 kB: lofi (soft keys,
+  80 BPM beat, crackle), rain (filtered pink noise), soft piano (four chords at 66 BPM) and
+  brown noise. Rerun the script to change them.
+- `themi.core.body_double_music`: `LOOPS`, `loop_for` (chat words), and the tool
+  `choose_session_sound` ("play rain"), in the body double tool group. Migration 0132:
+  `members.body_double_sound` (default lofi) and `body_double_volume` (0-100, 50).
+- The page: [Play]/[Pause], the loop, and a volume slider, saved to them through
+  `POST /session/music` (CSRF-checked; a bad value is 400). Nothing plays until they tap
+  Play; changing the loop keeps it playing. Shown in every mode.
+- Setup: restart `themi run` (migration 0132).
+
 ### BD5b · Spotify: playing their own music
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD5a, 21, 11
 Read first: the plan's Integrations and Trust tiers; this section's intro (Premium).
 - `themi.connectors.spotify`: OAuth (authorization code with PKCE) from Accounts, tokens
@@ -11527,8 +11766,33 @@ Read first: the plan's Integrations and Trust tiers; this section's intro (Premi
 Tests: unit tests for OAuth, refresh, the Premium check, no device; scenarios: "put on lofi
 while I work" in a session, a free account getting a link. Live smoke test opt-in.
 
+Notes (2026-11-06):
+- `themi.connectors.spotify`: `SpotifyClient` (the wire: PKCE sign-in, `/me`, search,
+  their playlists, devices, play, pause, next, volume) and `SpotifyLinks` (each person's
+  own link). Migration 0133: `spotify_links` (refresh token encrypted, display name,
+  Premium), `spotify_states` (the one-time state and the PKCE verifier, encrypted, 10
+  minutes), the `music` category, and `body_double_sessions.music` / `music_name`.
+- Linking is personal, on Accounts ("My music"): `POST /accounts/spotify/link`, then
+  `/auth/spotify/callback`, which completes only for the signed-in person who started it.
+  Premium is read from `/me` then; a 403 PREMIUM_REQUIRED later also marks it free.
+- `themi.core.music`: tools `play_music(query)` and `pause_music`, in a new "music" tool
+  group, staged through the trust tiers (`music.play`, `music.pause`) as asked in chat.
+  The `music` category is household-scoped and starts at Tier 2, as the prompt says; it's
+  the one category that does (the autonomy test names it). "my ..." looks in their own
+  playlists first, then search (playlists, albums, tracks). Free: "Here it is on Spotify:
+  <link>". No device: one line to open Spotify and ask again; no retries.
+- A session's music: what Themi played, and a built-in loop the moment they tap Play on
+  the page (the page posts `played`), is kept on the session row for BD5c.
+- `tests/fakes/spotify.py` (`fake_spotify`): PKCE checked, devices, Premium and free
+  accounts, their playlists and a catalogue. A live smoke test wasn't added: Spotify's
+  sign-in needs a person at a browser, so there's no unattended way to get a token.
+- Setup (DEPLOY.md and `.env.example`): a Spotify developer app with the Funnel callback
+  `<public URL>/auth/spotify/callback`, `SPOTIFY_CLIENT_ID` in `.env`, each person's
+  Spotify email under the app's User Management (development mode), then each links on
+  Accounts. Restart `themi run` (migration 0133).
+
 ### BD5c · Body double: music that suits the task
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD2, BD5b
 Read first: BD2's notes (the learning model); this section's intro.
 - For each person × category × part of the day, what played in their `finished` sessions
@@ -11538,6 +11802,21 @@ Read first: BD2's notes (the learning model); this section's intro.
 - Never started on its own; never mentions how sessions went.
 Tests: unit tests for the pick and thresholds; a scenario where the offer follows three
 finished sessions with the same playlist.
+
+Notes (2026-11-06):
+- `themi.core.body_double_music.pick` (pure, over the session rows): for the session's
+  kind of job and part of the day, the music that played most in their `finished`
+  sessions, once it has played in at least two (the latest breaks a tie). Else the kind's
+  default: lofi for deep work, and lofi for tidying too, since none of the built-ins is
+  fast (they're kept at 60-90 BPM; an upbeat loop is a follow-up if wanted). Admin, chores
+  and other have no default, so nothing is offered until something is learned.
+- `MusicOffers`, a start decorator: one line on the session's first message ("Rain again,
+  like last time?" or "Some lofi while you work?") with [Play] [Not now]. [Play] on a
+  built-in sets it on the session page (browsers won't start sound by themselves; it says
+  to tap play there); on Spotify it goes through the music tier like `play_music`, by the
+  item's uri. [Not now] removes the line. Never started on its own; the words never say
+  how sessions went.
+- Spotify items need BD5b set up; when it isn't, a learned Spotify pick isn't offered.
 
 ## Expense sheets
 

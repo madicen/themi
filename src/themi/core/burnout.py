@@ -111,6 +111,8 @@ class Burnout:
     async def start(self, member: Member) -> str:
         if self.current(member) is not None:
             return ALREADY_TEXT
+        if self.services.body_double is not None:  # BD1a: burnout mode wins over a session
+            await self.services.body_double.stop_for_other(member)
         now = clock.now()
         pause = self.pauses.pause(member, TOPIC, now + FOREVER)
         self.db.execute(

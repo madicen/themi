@@ -33,6 +33,7 @@ from themi.accounts.models import DAY_NAMES
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import conversation_mode
+from themi.core.body_double import MODES
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
 from themi.web.task_pages import task_rows
@@ -93,11 +94,14 @@ def security_headers(response: Response, form_targets: str = "") -> None:
         if page == "picker"
         else "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     )
+    # BD3a: the session page opens as a Telegram Mini App, which Telegram's web app frames.
+    ancestors = "https://web.telegram.org" if page == "session" else "'none'"
     response.headers["Content-Security-Policy"] = (
-        f"{base}frame-ancestors 'none'; form-action {form_action}; base-uri 'none'"
+        f"{base}frame-ancestors {ancestors}; form-action {form_action}; base-uri 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if page != "session":
+        response.headers["X-Frame-Options"] = "DENY"
     # Login links carry their token in the URL; never leak it in a Referer.
     response.headers["Referrer-Policy"] = "no-referrer"
 
@@ -116,6 +120,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         maintenance_pages,
         recipe_pages,
         safeway_pages,
+        session_pages,
         spending_pages,
         task_pages,
         week_pages,
@@ -131,6 +136,10 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         config = home_connect.client.config
         hops = f"{_origin(config.base_url)} {_origin(config.sign_in_url)}"
         form_targets = f"{form_targets} {hops}".strip()
+    music = ctx.app.services.music
+    if music is not None:  # BD5b: linking Spotify leads to its sign-in page
+        accounts = _origin(music.links.client.config.accounts_url)
+        form_targets = f"{form_targets} {accounts}".strip()
     web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @web.middleware("http")
@@ -185,6 +194,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
+    web.include_router(session_pages.routes(kit))  # BD3a
 
 
 def core_routes(kit: Kit) -> APIRouter:
@@ -380,8 +390,19 @@ def core_routes(kit: Kit) -> APIRouter:
                 and conversation_mode.offered(app.services, member)
                 else []
             ),
+            "job_modes": job_modes(member),  # BD2
             **extra,
         }
+
+    def job_modes(member: Member) -> list[tuple[str, str, str]]:
+        """(category, its words, their own mode or "") for each kind of job (BD2)."""
+        from themi.core.body_double_modes import CATEGORIES, CATEGORY_WORDS
+
+        body_double = app.services.body_double
+        if body_double is None or body_double.modes is None:
+            return []
+        own = body_double.modes.defaults(member)
+        return [(c, CATEGORY_WORDS[c], own.get(c, "")) for c in CATEGORIES]
 
     @router.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
@@ -418,6 +439,8 @@ def core_routes(kit: Kit) -> APIRouter:
                 setup_note=form.get("setup_note") == "on",
                 list_style=str(form.get("list_style", "")) or None,
                 break_extend_minutes=as_int(form.get("break_extend_minutes")),
+                sprint_work_minutes=as_int(form.get("sprint_work_minutes")),
+                sprint_break_minutes=as_int(form.get("sprint_break_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
                 conversation_mode=(  # CM1a: only when the switch was on the page
@@ -435,6 +458,14 @@ def core_routes(kit: Kit) -> APIRouter:
                 csrf=session.csrf_token,
                 **settings_values(member, error=str(exc)),
             )
+        body_double = app.services.body_double
+        if body_double is not None and body_double.modes is not None:  # BD2: their own modes
+            for category, _, _ in job_modes(member):
+                if f"job_mode_{category}" in form:
+                    chosen = str(form.get(f"job_mode_{category}", ""))
+                    body_double.modes.set_default(
+                        member, category, chosen if chosen in MODES else None
+                    )
         return kit.redirect("/settings", "Saved.")
 
     @router.post("/settings/busy")

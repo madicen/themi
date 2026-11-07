@@ -295,3 +295,35 @@ def test_the_test_template_matches_a_fresh_migration() -> None:
     assert copied.query(schema) == fresh.query(schema)
     assert copied.scalar("SELECT MAX(version) FROM schema_version") == migrations.latest_version()
     assert copied.scalar("PRAGMA foreign_keys") == 1
+
+
+def test_0134_keeps_every_route_while_ai_backends_is_rebuilt(tmp_path: Path) -> None:
+    """Cloudflare as a backend kind: ai_backends is rebuilt, and dropping it would cascade
+    to ai_routes, so the routes must come back exactly."""
+    db = Database(tmp_path / "t.db")
+    apply(db, [m for m in discover() if m.version < 134])
+    now = "2026-11-06T00:00:00+00:00"
+    db.execute("INSERT INTO family (id, name, timezone, created_at, updated_at) "
+               "VALUES (1, 'F', 'UTC', ?, ?)", (now, now))  # fmt: skip
+    member = db.execute(
+        "INSERT INTO members (name, role, quiet_start, quiet_end, daily_limit, tracking, "
+        "created_at, updated_at) VALUES ('Erin', 'admin', '22:00', '07:00', 8, '{}', ?, ?)",
+        (now, now),
+    )
+    backend = db.execute(
+        "INSERT INTO ai_backends (member_id, label, kind, created_at, updated_at) "
+        "VALUES (?, 'Gemini', 'gemini', ?, ?)",
+        (member, now, now),
+    )
+    db.execute("INSERT INTO ai_routes (member_id, task, position, backend_id, model) "
+               "VALUES (?, 'step_image', 0, ?, 'm')", (member, backend))  # fmt: skip
+    before = db.query("SELECT * FROM ai_routes ORDER BY task")
+    apply(db)
+    assert db.query("SELECT * FROM ai_routes ORDER BY task") == before
+    db.execute(
+        "INSERT INTO ai_backends (member_id, label, kind, created_at, updated_at) "
+        "VALUES (?, 'Cloudflare', 'cloudflare', ?, ?)",
+        (member, now, now),
+    )
+    assert "ai_routes_keep" not in table_names(db)
+    assert db.query("PRAGMA foreign_key_check") == []

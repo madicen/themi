@@ -36,6 +36,7 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.recipe_page import PageReader
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.search import SearchBackend
+from themi.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
@@ -43,6 +44,10 @@ from themi.core import email_forward
 from themi.core.agent import Agent
 from themi.core.appliances import Appliances
 from themi.core.approvals import ApprovalsUI
+from themi.core.body_double import BodyDouble
+from themi.core.body_double_guided import GuidedSteps
+from themi.core.body_double_modes import ModeChooser
+from themi.core.body_double_music import MusicOffers
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
@@ -80,6 +85,7 @@ from themi.core.litter_box import LitterBox
 from themi.core.maintenance import Maintenance
 from themi.core.meals import Meals
 from themi.core.memory import Memory
+from themi.core.music import Music
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
@@ -96,6 +102,7 @@ from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.step_images import StepPictures
 from themi.core.taking import Taking
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
@@ -159,6 +166,7 @@ def build_app(
     search: SearchBackend | None = None,
     recipe_pages: PageReader | None = None,  # RC4a: tests and `make dev` point it at fakes
     home_connect: HomeConnectClient | None = None,
+    spotify: SpotifyClient | None = None,  # BD5b
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
     tuya: TuyaConfig | None = None,
@@ -252,6 +260,15 @@ def build_app(
     VendorCalls(services, tasks).install()
     scheduler = Scheduler(db)
     CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
+    body_double = BodyDouble(services, scheduler)  # BD1a: block ends are scheduler jobs
+    body_double.install()
+    guided = GuidedSteps(services, body_double)  # BD1b
+    guided.install()
+    StepPictures(body_double, guided, scheduler).install()  # BD4b
+    if spotify is not None:  # BD5b: their own music
+        Music(services, SpotifyLinks(db, cipher, spotify)).install()
+    MusicOffers(services, body_double).install()  # BD5c
+    ModeChooser(services, body_double).install()  # BD2
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:

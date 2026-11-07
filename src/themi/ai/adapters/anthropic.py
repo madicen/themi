@@ -31,11 +31,12 @@ from themi.ai.errors import (
     error_for_status,
     parse_retry_after,
 )
-from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
+from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StopReason,
     StructuredResponse,
@@ -160,6 +161,11 @@ class AnthropicProvider:
         self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Embeddings:
         raise CapabilityError("Claude has no embeddings API; route embeddings elsewhere")
+
+    async def image(
+        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+    ) -> ImageResult:
+        raise CapabilityError("Claude doesn't make pictures; route step pictures elsewhere")
 
     # ----- internals ----------------------------------------------------------
 

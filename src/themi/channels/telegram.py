@@ -50,6 +50,7 @@ from telegram import (
     MessageReactionUpdated,
     ReactionTypeEmoji,
     Update,
+    WebAppInfo,
 )
 from telegram.constants import ChatAction, ChatType
 from telegram.error import Conflict, NetworkError, RetryAfter, TelegramError
@@ -66,6 +67,7 @@ from themi.channels.events import (
     VoiceNote,
 )
 from themi.channels.family_group import FamilyGroup, replies_to_group
+from themi.channels.mini_app import INIT_DATA_MAX_AGE, check_init_data
 from themi.http import tls
 from themi.logs import quiet_chatty_libraries
 from themi.storage.secrets import Secret
@@ -153,6 +155,10 @@ class TelegramChannel:
         # PTB logs whole updates (what people write) at DEBUG, and httpx logs
         # request URLs, which contain the bot token, at INFO.
         quiet_chatty_libraries()
+
+    def web_app_user(self, init_data: str, max_age: timedelta = INIT_DATA_MAX_AGE) -> int | None:
+        """The Telegram user a Mini App's `initData` is for, if it's genuine and fresh (BD3a)."""
+        return check_init_data(init_data, self.bot.token, clock.now(), max_age)
 
     @classmethod
     def from_token(
@@ -588,6 +594,17 @@ class TelegramChannel:
             anyone=anyone,
         )
 
+    async def send_photo(
+        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+    ) -> int:
+        """A picture with a caption, to the member's own chat (BD4b). Returns its id."""
+        sent = await self._with_flood_retry(
+            lambda: self.bot.send_photo(_chat_id(member), photo, caption=caption or None)
+        )
+        self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind,
+                               sent.message_id)  # fmt: skip
+        return sent.message_id
+
     async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
         """Show the commands in Telegram's menu: (name without slash, description)."""
         await self.bot.set_my_commands([BotCommand(name, words) for name, words in commands])
@@ -685,6 +702,9 @@ class TelegramChannel:
         now = clock.now()
         made = []
         for button in buttons:
+            if button.web_app is not None:  # BD3a: opens the page; nothing comes back
+                made.append(InlineKeyboardButton(button.label, web_app=WebAppInfo(button.web_app)))
+                continue
             token = secrets.token_urlsafe(12)  # Telegram allows 64 bytes of callback data
             self.store.db.execute(
                 "INSERT INTO callback_tokens (token, group_id, member_id, label, kind, payload, "

@@ -26,11 +26,12 @@ from typing import Any, Literal
 
 from themi import clock
 from themi.ai.errors import CapabilityError, RefusalError, RetryableError, error_for_status
-from themi.ai.provider import DEFAULT_MAX_TOKENS, Capabilities
+from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StopReason,
     StructuredResponse,
@@ -41,7 +42,12 @@ from themi.ai.types import (
     Usage,
 )
 
-Operation = Literal["chat", "structured", "transcribe", "embed"]
+Operation = Literal["chat", "structured", "transcribe", "embed", "image"]
+# BD4a: a 1x1 PNG, what an image call gives unless something else is queued.
+TINY_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d49444154789c6360f8cfc0f01f0005000201fd4fa3b10000000049454e44ae426082"
+)
 
 
 @dataclass
@@ -77,6 +83,7 @@ class ScriptedProvider:
             "structured": deque(),
             "transcribe": deque(),
             "embed": deque(),
+            "image": deque(),
         }
         self._ids = count(1)
         self._takes: deque[float] = deque()
@@ -225,6 +232,22 @@ class ScriptedProvider:
             raise CapabilityError(f"{self.name} has no embeddings scripted")
         vectors = tuple(tuple(self.embed_with(t)) for t in texts)
         return Embeddings(vectors, self.name, self.model)
+
+    def queue_image(self, data: bytes = TINY_PNG) -> ScriptedProvider:
+        self._push("image", ImageResult(data, "image/png", self.name, self.model))
+        return self
+
+    async def image(
+        self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
+    ) -> ImageResult:
+        """A queued picture or error, else TINY_PNG: pictures are background work that
+        tests don't usually script one by one."""
+        self.requests.append(RecordedRequest("image", kind, prompt=prompt))
+        if self._queues["image"]:
+            result = self._pop("image")
+            assert isinstance(result, ImageResult)
+            return result
+        return ImageResult(TINY_PNG, "image/png", self.name, self.model)
 
     # ----- internals ----------------------------------------------------------
 

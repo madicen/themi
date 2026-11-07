@@ -41,25 +41,27 @@ from themi.ai.breaker import BreakerBoard, BreakerState
 from themi.ai.errors import (
     AIError,
     CapabilityError,
+    ImageCapReached,
     MalformedOutputError,
     PermanentError,
     RefusalError,
     RetriesExhausted,
     RetryableError,
 )
-from themi.ai.provider import DEFAULT_MAX_TOKENS, Provider
+from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Provider
 from themi.ai.retry import DEFAULT_POLICY, OnRetry, RetryPolicy, Sleep, call_with_retry
 from themi.ai.settings import AISettingsStore, AITask, ResolvedEntry
 from themi.ai.types import (
     CallKind,
     ChatResponse,
     Embeddings,
+    ImageResult,
     Message,
     StructuredResponse,
     ToolSpec,
     Transcription,
 )
-from themi.localtime import to_utc_iso
+from themi.localtime import start_of_local_day, to_utc_iso
 
 T = TypeVar("T")
 ProviderFactory = Callable[[AdapterConfig], Provider]
@@ -214,6 +216,21 @@ class AIRouter:
             raise errors[-1][1]
         failure = Deferred if kind is CallKind.BACKGROUND else AllProvidersFailed
         raise failure(f"no AI backend could handle {task.value}", errors)
+
+    def image_cap(self, member_id: int) -> int:
+        row = self.settings.db.one("SELECT image_daily_cap FROM members WHERE id = ?", (member_id,))
+        return int(row["image_daily_cap"]) if row else 0
+
+    def images_today(self, member_id: int, task: AITask) -> int:
+        family = self.settings.db.one("SELECT timezone FROM family WHERE id = 1")
+        midnight = start_of_local_day(clock.now(), family["timezone"] if family else "UTC")
+        return int(
+            self.settings.db.scalar(
+                "SELECT COUNT(*) FROM ai_calls WHERE member_id = ? AND task = ? AND ok = 1 "
+                "AND started_at >= ?",
+                (member_id, task.value, to_utc_iso(midnight)),
+            )
+        )
 
     def _record(
         self, member_id: int, task: AITask, kind: CallKind, call: _CallRecord, *, ok: bool
@@ -421,6 +438,25 @@ class TaskClient:
             if not provider.capabilities.audio:
                 raise CapabilityError(f"{provider.name} can't transcribe audio")
             return await provider.transcribe(audio, mime_type, kind=kind)
+
+        return await self._router.run(self.member_id, self.task, kind, operation, on_retry)
+
+    async def image(
+        self,
+        prompt: str,
+        size: str = IMAGE_SIZE,
+        *,
+        kind: CallKind = CallKind.BACKGROUND,
+        on_retry: OnRetry | None = None,
+    ) -> ImageResult:
+        """A picture (BD4a), under the person's daily cap: past it, `ImageCapReached` and
+        no model is asked. Counted from today's successful calls in `ai_calls`."""
+        cap = self._router.image_cap(self.member_id)
+        if self._router.images_today(self.member_id, self.task) >= cap:
+            raise ImageCapReached(cap)
+
+        async def operation(provider: Provider) -> ImageResult:
+            return await provider.image(prompt, size, kind=kind)
 
         return await self._router.run(self.member_id, self.task, kind, operation, on_retry)
 

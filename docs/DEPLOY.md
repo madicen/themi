@@ -177,6 +177,17 @@ Then:
    URI `https://<machine>.<tailnet>.ts.net/auth/google/callback`.
 3. Open `https://<machine>.<tailnet>.ts.net/health`. It should answer `{"status": "ok", ...}`.
 
+Spotify (optional, BD5b), once the address works:
+
+1. At <https://developer.spotify.com/dashboard>, create an app with the **Web API**, and
+   add the redirect URI `https://<machine>.<tailnet>.ts.net/auth/spotify/callback`.
+2. Put its client id in `.env` as `SPOTIFY_CLIENT_ID` (there's no secret: the sign-in
+   uses PKCE) and restart.
+3. A new app is in development mode: add each person's Spotify email under **User
+   Management** (development mode allows a few named users), then each links their own
+   account on the website's Accounts page. Playing from Themi needs Premium; a free
+   account gets links instead.
+
 Tailscale's free Personal plan covers this. It was reorganised in April 2026 and now
 covers 6 users, which is more than enough.
 

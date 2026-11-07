@@ -47,6 +47,14 @@ class CapabilityError(AIError):
     pass
 
 
+class ImageCapReached(AIError):
+    """BD4a: today's pictures are used up; nothing was asked of any model."""
+
+    def __init__(self, cap: int) -> None:
+        super().__init__(f"the daily cap of {cap} pictures is reached")
+        self.cap = cap
+
+
 class MalformedOutputError(AIError):
     """The model answered, but not in the shape asked for (bad JSON, truncated output)."""
 

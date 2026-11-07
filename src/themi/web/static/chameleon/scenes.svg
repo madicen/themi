@@ -1,0 +1,21 @@
+<svg class="scene-art" viewBox="0 0 360 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <!-- BD3b: the scenes around the chameleon, one group per mode; CSS shows the one for the
+       session's mode. Original art: a desk by a rainy window, a timer to perch on, a branch. -->
+  <g class="scene scene-silent">
+    <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
+    <rect class="scene-window" x="196" y="18" width="136" height="104" rx="6"/>
+    <path class="scene-frame" d="M264 18 L 264 122 M196 70 L 332 70"/>
+    <g class="scene-rain"><path d="M212 30 l -4 12 M236 46 l -4 12 M252 26 l -4 12 M282 34 l -4 12 M300 52 l -4 12 M318 28 l -4 12 M226 84 l -4 12 M290 88 l -4 12 M312 96 l -4 12"/></g>
+    <rect class="scene-desk" x="0" y="160" width="360" height="40"/>
+    <rect class="scene-lamp" x="30" y="120" width="6" height="40"/><path class="scene-lampshade" d="M18 120 L 48 120 L 40 104 L 26 104 Z"/>
+  </g>
+  <g class="scene scene-sprint">
+    <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
+    <rect class="scene-floor" x="0" y="168" width="360" height="32"/>
+  </g>
+  <g class="scene scene-guided">
+    <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
+    <path class="scene-branch" d="M0 176 C 60 168, 110 172, 150 160 C 160 157, 170 150, 176 146"/>
+    <path class="scene-leaf" d="M90 170 C 96 156, 110 154, 114 160 C 108 168, 98 172, 90 170 Z M140 162 C 150 150, 162 152, 164 158 C 156 164, 148 166, 140 162 Z"/>
+  </g>
+</svg>
