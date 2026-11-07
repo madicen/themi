@@ -498,6 +498,8 @@ TOOL_GROUPS: dict[str, str] = {
             "end_body_double",
             "set_body_double_default",
             "set_job_category",
+            "redo_step_picture",  # BD4b
+            "send_step_picture",
         ),
         "body_double",
     ),

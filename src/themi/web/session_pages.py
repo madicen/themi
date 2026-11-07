@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from themi.web.auth import COOKIE_NAME, SESSION_TTL
 from themi.web.kit import Kit, NotSignedIn
@@ -78,6 +78,36 @@ def routes(kit: Kit) -> APIRouter:
         handler = getattr(app.channel, "handler", None)
         if event is not None and handler is not None:
             await handler.handle(event, app.channel)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return session_state(request)
+        return kit.redirect("/session")
+
+    @router.get("/session/pictures/{session_id}/{index}")
+    def step_picture(request: Request, session_id: int, index: int) -> Response:
+        """BD4b: a step's picture, only ever to the session's owner."""
+        signed = kit.current(request)
+        bd = body_double()
+        pictures = getattr(bd, "pictures", None)
+        found = bd.get(session_id) if bd is not None else None
+        if pictures is None or found is None or found.member_id != signed.member.id:
+            return Response(status_code=404)
+        row = pictures.row(session_id, index)
+        path = pictures.path(row) if row is not None else None
+        if row is None or path is None:
+            return Response(status_code=404)
+        return FileResponse(path, media_type=row["mime_type"] or "image/png",
+                            headers={"Cache-Control": "private, max-age=3600"})  # fmt: skip
+
+    @router.post("/session/pictures/redo")
+    async def redo_picture(request: Request) -> Response:
+        signed, form = await kit.checked(request)
+        pictures = getattr(body_double(), "pictures", None)
+        if pictures is not None:
+            try:
+                step = int(str(form.get("step", "0")) or 0)
+                pictures.redo(signed.member, step, str(form.get("words", "")))
+            except ValueError:
+                pass
         if request.headers.get("X-Requested-With") == "fetch":
             return session_state(request)
         return kit.redirect("/session")

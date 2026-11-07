@@ -205,6 +205,7 @@ class BodyDouble:
         self.start_decorators: list[StartDecorator] = []
         self.end_listeners: list[EndListener] = []
         self.guided: Any = None  # BD1b's GuidedSteps, once installed
+        self.pictures: Any = None  # BD4b's StepPictures, once installed
 
     def install(self) -> None:
         s = self.services
@@ -742,6 +743,7 @@ class BodyDouble:
             "timer": timer,
             "now": to_utc_iso(now),
             **steps,
+            **(self.pictures.page_state(session) if self.pictures is not None else {}),
             "buttons": [
                 {"label": b.label, "action": b.payload.get("action", ""),
                  "mode": b.payload.get("mode", "")}

@@ -99,6 +99,7 @@ from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
 from themi.core.spending import Spending
 from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.step_images import StepPictures
 from themi.core.taking import Taking
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
@@ -257,7 +258,9 @@ def build_app(
     CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
     body_double = BodyDouble(services, scheduler)  # BD1a: block ends are scheduler jobs
     body_double.install()
-    GuidedSteps(services, body_double).install()  # BD1b
+    guided = GuidedSteps(services, body_double)  # BD1b
+    guided.install()
+    StepPictures(body_double, guided, scheduler).install()  # BD4b
     ModeChooser(services, body_double).install()  # BD2
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None

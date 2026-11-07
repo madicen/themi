@@ -60,6 +60,7 @@
       scene.dataset.state = state.scene;
     }
     drawChat(state);
+    drawPicture(state);
     var el = document.querySelector(".session-timer");
     if (el) {
       el.dataset.timer = state.timer.kind;
@@ -87,6 +88,17 @@
       });
     }
     tick();
+  }
+
+  // BD4b: the step's picture, a soft placeholder while it's made, or the text alone
+  function drawPicture(state) {
+    var figure = document.querySelector(".session-picture");
+    if (!figure) { if (state.picture) location.reload(); return; }
+    var picture = state.picture || { status: "none" };
+    figure.dataset.status = picture.status;
+    var img = figure.querySelector("img");
+    if (picture.url) { if (img.getAttribute("src") !== picture.url) img.src = picture.url; img.hidden = false; }
+    else { img.hidden = true; img.removeAttribute("src"); }
   }
 
   // BD3b: chat on the page during a sprint's break
@@ -135,8 +147,23 @@
       .then(function (s) { if (s) redraw(s); }, function () {});
   }
 
+  function onRedo(event) {
+    var form = event.target;
+    if (!form.closest || !form.closest(".session-redo")) return false;
+    event.preventDefault();
+    var data = new URLSearchParams(new FormData(form)).toString();
+    form.reset();
+    var figure = document.querySelector(".session-picture");
+    if (figure) figure.dataset.status = "making";
+    fetch(form.action, {
+      method: "POST", body: data, credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }
+    }).then(function () {}, function () {});
+    return true;
+  }
+
   function onSubmit(event) {
-    if (onChat(event)) return;
+    if (onChat(event) || onRedo(event)) return;
     var form = event.target;
     if (!form.closest || !form.closest(".session-moves")) return;
     event.preventDefault();

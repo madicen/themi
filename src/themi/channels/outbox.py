@@ -388,6 +388,21 @@ class Outbox:
                 rows[i] = row
         return rows
 
+    async def send_photo(
+        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+    ) -> int | None:
+        """A picture they asked for (BD4b), sent now as a reply. The caption is shielded
+        like any message. None when the channel can't send pictures or it failed."""
+        send = getattr(self.sender, "send_photo", None)
+        if send is None:
+            return None
+        try:
+            shielded = await self.shield.apply(caption, member, kind=CallKind.INTERACTIVE)
+            return await send(member, photo, shielded.text, kind=kind)
+        except Exception:
+            log.exception("A picture for member %s couldn't be sent", member.id)
+            return None
+
     async def _deliver(self, row: dict[str, Any]) -> OutboxResult:
         if row["id"] in self._sending:
             return OutboxResult("queued", row["id"])

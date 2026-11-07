@@ -357,3 +357,15 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 @media (prefers-reduced-motion: reduce) {
   .session-scene *, .session-scene *::after, .session-scene .cham { animation: none !important; transition: none !important; }
 }
+
+/* BD4b: each guided step's picture, in the step's bubble */
+.session-picture { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--soft);
+  aspect-ratio: 1 / 1; max-height: 45vh; display: flex; align-items: center; justify-content: center; }
+.session-picture img { width: 100%; height: 100%; object-fit: contain; }
+.session-picture[data-status="none"] { display: none; }
+.session-picture-wait { display: none; width: 30%; aspect-ratio: 1; border-radius: 50%; background: var(--line); }
+.session-picture[data-status="making"] .session-picture-wait { display: block; animation: breathe 3s ease-in-out infinite; }
+.session-redo { display: flex; gap: var(--space-2); }
+.session-redo input[type="text"] { flex: 1; min-width: 0; min-height: var(--tap); }
+.session-note:empty { display: none; }
+@media (prefers-reduced-motion: reduce) { .session-picture-wait { animation: none !important; } }

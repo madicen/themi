@@ -594,6 +594,17 @@ class TelegramChannel:
             anyone=anyone,
         )
 
+    async def send_photo(
+        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+    ) -> int:
+        """A picture with a caption, to the member's own chat (BD4b). Returns its id."""
+        sent = await self._with_flood_retry(
+            lambda: self.bot.send_photo(_chat_id(member), photo, caption=caption or None)
+        )
+        self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind,
+                               sent.message_id)  # fmt: skip
+        return sent.message_id
+
     async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
         """Show the commands in Telegram's menu: (name without slash, description)."""
         await self.bot.set_my_commands([BotCommand(name, words) for name, words in commands])

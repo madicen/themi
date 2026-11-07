@@ -115,6 +115,8 @@ class GuidedSteps:
         self.bd = body_double
         self.db = services.store.db
         self.card = StepCard(services.outbox, KIND)
+        # BD4b: told when a session's steps are settled (its pictures can be made).
+        self.ready_listeners: list[Any] = []
 
     def install(self) -> None:
         self.bd.guided = self
@@ -137,6 +139,7 @@ class GuidedSteps:
                 step_since=clock.now(), steps_proposed=0,
             )  # fmt: skip
             self._watch(session)
+            self._ready(session)
             text, buttons = self.render(session)
             return session, text, buttons
         steps = await self._propose(session, said="")
@@ -236,6 +239,10 @@ class GuidedSteps:
 
     # ----- moving -------------------------------------------------------------------------
 
+    def _ready(self, session: Session) -> None:
+        for listener in self.ready_listeners:
+            listener(session)
+
     def _watch(self, session: Session) -> None:
         """A job for the step just shown: the one gentle line, or the end at four hours."""
         since = datetime.fromisoformat(session.row["step_since"])
@@ -270,6 +277,7 @@ class GuidedSteps:
             action = "go"
         if action == "go":
             session = self._save(session, phase="work", step=0, step_since=clock.now())
+            self._ready(session)
         elif action == "change":
             session = self._save(session, phase="changing")
             return self.render(session)
