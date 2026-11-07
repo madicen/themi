@@ -228,7 +228,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
-| BD5b | Spotify: playing their own music | Body double | [ ] |
+| BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [ ] |
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
@@ -11733,7 +11733,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0132).
 
 ### BD5b · Spotify: playing their own music
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD5a, 21, 11
 Read first: the plan's Integrations and Trust tiers; this section's intro (Premium).
 - `themi.connectors.spotify`: OAuth (authorization code with PKCE) from Accounts, tokens
@@ -11750,6 +11750,31 @@ Read first: the plan's Integrations and Trust tiers; this section's intro (Premi
 - `tests/fakes`: a fake Spotify API with devices, a Premium and a free account.
 Tests: unit tests for OAuth, refresh, the Premium check, no device; scenarios: "put on lofi
 while I work" in a session, a free account getting a link. Live smoke test opt-in.
+
+Notes (2026-11-06):
+- `themi.connectors.spotify`: `SpotifyClient` (the wire: PKCE sign-in, `/me`, search,
+  their playlists, devices, play, pause, next, volume) and `SpotifyLinks` (each person's
+  own link). Migration 0133: `spotify_links` (refresh token encrypted, display name,
+  Premium), `spotify_states` (the one-time state and the PKCE verifier, encrypted, 10
+  minutes), the `music` category, and `body_double_sessions.music` / `music_name`.
+- Linking is personal, on Accounts ("My music"): `POST /accounts/spotify/link`, then
+  `/auth/spotify/callback`, which completes only for the signed-in person who started it.
+  Premium is read from `/me` then; a 403 PREMIUM_REQUIRED later also marks it free.
+- `themi.core.music`: tools `play_music(query)` and `pause_music`, in a new "music" tool
+  group, staged through the trust tiers (`music.play`, `music.pause`) as asked in chat.
+  The `music` category is household-scoped and starts at Tier 2, as the prompt says; it's
+  the one category that does (the autonomy test names it). "my ..." looks in their own
+  playlists first, then search (playlists, albums, tracks). Free: "Here it is on Spotify:
+  <link>". No device: one line to open Spotify and ask again; no retries.
+- A session's music: what Themi played, and a built-in loop the moment they tap Play on
+  the page (the page posts `played`), is kept on the session row for BD5c.
+- `tests/fakes/spotify.py` (`fake_spotify`): PKCE checked, devices, Premium and free
+  accounts, their playlists and a catalogue. A live smoke test wasn't added: Spotify's
+  sign-in needs a person at a browser, so there's no unattended way to get a token.
+- Setup (DEPLOY.md and `.env.example`): a Spotify developer app with the Funnel callback
+  `<public URL>/auth/spotify/callback`, `SPOTIFY_CLIENT_ID` in `.env`, each person's
+  Spotify email under the app's User Management (development mode), then each links on
+  Accounts. Restart `themi run` (migration 0133).
 
 ### BD5c · Body double: music that suits the task
 Status: [ ]
