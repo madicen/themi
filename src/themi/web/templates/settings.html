@@ -52,46 +52,46 @@
     <p class="muted">0 shows them all. The rest wait their turn; medicines and other important chores always show. Unticked, chores for either of you always show too.</p>
   {% endif %}{% endcall %}{% endif %}
 
-  {% call(part) row("My calendars", meta=("Summary of my day at " ~ (member.morning_summary | clock)) if member.morning_summary else "No summary of my day", id="calendars") %}{% if part == "body" %}
-    <label>Who sees what's on my calendars
+  {% call(part) row("My calendars", meta=("Summary of my day at " ~ (prefs.day_summary.morning_summary | clock)) if prefs.day_summary and prefs.day_summary.morning_summary else "No summary of my day", id="calendars") %}{% if part == "body" %}
+    {% if prefs.calendar %}<label>Who sees what's on my calendars
       <select name="calendar_details">
-        <option value="me" {% if member.calendar_details == "me" %}selected{% endif %}>Just me</option>
-        <option value="partner" {% if member.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
+        <option value="me" {% if prefs.calendar.calendar_details == "me" %}selected{% endif %}>Just me</option>
+        <option value="partner" {% if prefs.calendar.calendar_details == "partner" %}selected{% endif %}>Me and my partner</option>
       </select>
     </label>
     <label>The same event on two of my calendars
       <select name="calendar_twins">
-        <option value="ask" {% if member.calendar_twins == "ask" %}selected{% endif %}>Ask me which to keep</option>
-        <option value="guess" {% if member.calendar_twins == "guess" %}selected{% endif %}>Merge it where Themi thinks best (with an undo)</option>
-        <option value="keep" {% if member.calendar_twins == "keep" %}selected{% endif %}>Keep both</option>
+        <option value="ask" {% if prefs.calendar.calendar_twins == "ask" %}selected{% endif %}>Ask me which to keep</option>
+        <option value="guess" {% if prefs.calendar.calendar_twins == "guess" %}selected{% endif %}>Merge it where Themi thinks best (with an undo)</option>
+        <option value="keep" {% if prefs.calendar.calendar_twins == "keep" %}selected{% endif %}>Keep both</option>
       </select>
-    </label>
-    <label>A summary of my day at <input type="time" name="morning_summary" value="{{ member.morning_summary.strftime('%H:%M') if member.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
-    <label class="check"><input type="checkbox" name="morning_summary_empty" {% if member.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>
-    <label class="check"><input type="checkbox" name="leave_heads_up" {% if member.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>
-    <label class="check"><input type="checkbox" name="setup_note" {% if member.setup_note %}checked{% endif %}> When Themi starts an event earlier to give me set-up time, note the real start in its description</label>
-    <label>Lists with sub-items show their levels as
+    </label>{% endif %}
+    {% if prefs.day_summary %}<label>A summary of my day at <input type="time" name="morning_summary" value="{{ prefs.day_summary.morning_summary.strftime('%H:%M') if prefs.day_summary.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
+    <label class="check"><input type="checkbox" name="morning_summary_empty" {% if prefs.day_summary.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on, too</label>{% endif %}
+    {% if prefs.travel %}<label class="check"><input type="checkbox" name="leave_heads_up" {% if prefs.travel.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>{% endif %}
+    {% if prefs.calendar %}<label class="check"><input type="checkbox" name="setup_note" {% if prefs.calendar.setup_note %}checked{% endif %}> When Themi starts an event earlier to give me set-up time, note the real start in its description</label>{% endif %}
+    {% if prefs.lists %}<label>Lists with sub-items show their levels as
       <select name="list_style">
-        <option value="dashes" {% if member.list_style == "dashes" %}selected{% endif %}>Dashes (- , -- )</option>
-        <option value="bullets" {% if member.list_style == "bullets" %}selected{% endif %}>Indented bullets</option>
-        <option value="numbers" {% if member.list_style == "numbers" %}selected{% endif %}>Numbers (1., 1.1.)</option>
+        <option value="dashes" {% if prefs.lists.list_style == "dashes" %}selected{% endif %}>Dashes (- , -- )</option>
+        <option value="bullets" {% if prefs.lists.list_style == "bullets" %}selected{% endif %}>Indented bullets</option>
+        <option value="numbers" {% if prefs.lists.list_style == "numbers" %}selected{% endif %}>Numbers (1., 1.1.)</option>
       </select>
-    </label>
-    <label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ member.getting_ready_minutes }}"> minutes</label>
+    </label>{% endif %}
+    {% if prefs.travel %}<label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ prefs.travel.getting_ready_minutes }}"> minutes</label>{% endif %}
     <p class="muted">Themi reads the calendars you choose on <a href="/accounts">Accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
   {% endif %}{% endcall %}
 
   {% set noise_words = {"daily": "Once a day", "twice": "Twice a day", "every_other_day": "Every other day"} %}
-  {% call(part) row("My email", meta="Noise emails: " ~ noise_words.get(member.noise_emails, member.noise_emails) | lower, id="email") %}{% if part == "body" %}
+  {% if prefs.gmail %}{% call(part) row("My email", meta="Noise emails: " ~ noise_words.get(prefs.gmail.noise_emails, prefs.gmail.noise_emails) | lower, id="email") %}{% if part == "body" %}
     <label>Ask me about emails that look like noise, all together,
       <select name="noise_emails">
-        <option value="daily" {% if member.noise_emails == "daily" %}selected{% endif %}>once a day (6 pm)</option>
-        <option value="twice" {% if member.noise_emails == "twice" %}selected{% endif %}>twice a day (noon and 6 pm)</option>
-        <option value="every_other_day" {% if member.noise_emails == "every_other_day" %}selected{% endif %}>every other day (6 pm)</option>
+        <option value="daily" {% if prefs.gmail.noise_emails == "daily" %}selected{% endif %}>once a day (6 pm)</option>
+        <option value="twice" {% if prefs.gmail.noise_emails == "twice" %}selected{% endif %}>twice a day (noon and 6 pm)</option>
+        <option value="every_other_day" {% if prefs.gmail.noise_emails == "every_other_day" %}selected{% endif %}>every other day (6 pm)</option>
       </select>
     </label>
     <p class="muted">One message lists them, with a button to archive them all. You can also pick on <a href="/email/noise">Emails to archive</a>. Emails you've already moved out of your inbox are left out.</p>
-  {% endif %}{% endcall %}
+  {% endif %}{% endcall %}{% endif %}
 
   {% call(part) row("How Themi says things", meta=("Plain: say it straight" if member.phrasing == "plain" else "Gentle: indirect and low-key"), id="phrasing") %}{% if part == "body" %}
     <label>Style
@@ -100,14 +100,14 @@
         <option value="gentle" {% if member.phrasing == "gentle" %}selected{% endif %}>Gentle: indirect and low-key</option>
       </select>
     </label>
-    <label class="check"><input type="checkbox" name="checkin_reviews" {% if member.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>
-    <label class="check"><input type="checkbox" name="done_praise" {% if member.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>
+    {% if prefs.checkin_reviews %}<label class="check"><input type="checkbox" name="checkin_reviews" {% if prefs.checkin_reviews.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>{% endif %}
+    {% if prefs.tasks %}<label class="check"><input type="checkbox" name="done_praise" {% if prefs.tasks.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>{% endif %}
     <label class="check"><input type="checkbox" name="listen_first" {% if member.listen_first %}checked{% endif %}> When I share how I feel, listen first, and ask before suggesting fixes</label>
-    {% if conversation_offered %}<label class="check"><input type="checkbox" name="conversation_mode" {% if member.conversation_mode %}checked{% endif %}> Conversation mode: just chat with me, and pick out anything to do in the background <span class="muted">(asking me to add or check something works as usual)</span></label>
+    {% if conversation_offered %}<label class="check"><input type="checkbox" name="conversation_mode" {% if prefs.conversation_mode and prefs.conversation_mode.conversation_mode %}checked{% endif %}> Conversation mode: just chat with me, and pick out anything to do in the background <span class="muted">(asking me to add or check something works as usual)</span></label>
     {% if picked_out %}<p class="muted">Picked out lately (say "that wasn't a task" in chat to take the latest back):</p>
     <ul class="muted">{% for turn in picked_out %}<li>{{ turn.when }}: {{ turn.lines | join("; ") }}{% if turn.status == "missed" %} (taken back or reported){% endif %}</li>{% endfor %}</ul>{% endif %}{% endif %}
-    <label>When it's too much, just <input type="number" name="focus_count" min="1" max="10" value="{{ member.focus_count }}"> things for now</label>
-    <label>When it's too much and the rest is spread out, at most <input type="number" name="day_budget" min="0" max="20" value="{{ member.day_budget }}"> things on a day <span class="muted">(0: what I usually get done)</span></label>
+    {% if prefs.focus %}<label>When it's too much, just <input type="number" name="focus_count" min="1" max="10" value="{{ prefs.focus.focus_count }}"> things for now</label>
+    <label>When it's too much and the rest is spread out, at most <input type="number" name="day_budget" min="0" max="20" value="{{ prefs.focus.day_budget }}"> things on a day <span class="muted">(0: what I usually get done)</span></label>{% endif %}
     <label>Your own notes on phrasing
       <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
     </label>

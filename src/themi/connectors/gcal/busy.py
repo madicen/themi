@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import AccountStore, Member
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.gcal.sync import CalendarSync
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core.prompts import as_data
@@ -270,7 +271,8 @@ class CalendarBusy:
         return [
             m
             for m in self.store.list_members()
-            if m.id == viewer.id or m.calendar_details == "partner"
+            if m.id == viewer.id
+            or self.store.preferences(m.id, CalendarPreferences).calendar_details == "partner"
         ]
 
     def context(self, viewer: Member) -> str:

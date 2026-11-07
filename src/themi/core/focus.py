@@ -31,11 +31,15 @@ import statistics
 from collections import Counter
 from collections.abc import Collection
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
+from themi.accounts.store import MAX_DAY_BUDGET, MAX_FOCUS_COUNT
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys, listening, partner, priority
@@ -120,6 +124,28 @@ def for_partner(text: str, member: Member, members: list[Member]) -> Member | No
     return partner.named(text, member, members) if about else None
 
 
+class FocusPreferences(Preferences):
+    """CR7b1: things "for now" when it's too much (O1a), and a day's budget (O1b)."""
+
+    module: ClassVar[str] = "focus"
+    focus_count: int = 3
+    day_budget: int = 0  # at most this many on a day when the rest is spread; 0: usual
+
+    @field_validator("focus_count")
+    @classmethod
+    def _focus_count(cls, value: int) -> int:
+        if not (1 <= value <= MAX_FOCUS_COUNT):
+            raise ValueError(f"things for now are between 1 and {MAX_FOCUS_COUNT}")
+        return value
+
+    @field_validator("day_budget")
+    @classmethod
+    def _day_budget(cls, value: int) -> int:
+        if not (0 <= value <= MAX_DAY_BUDGET):
+            raise ValueError(f"a day's budget is between 0 and {MAX_DAY_BUDGET}")
+        return value
+
+
 class Focus:
     def __init__(self, services: Services, board: TaskBoard, summary: DaySummary) -> None:
         self.services = services
@@ -155,7 +181,17 @@ class Focus:
         if among is not None:
             due = [t for t in due if t.id in among]
         medicines = [t for t in due if t.medicine]
-        few = max(min(member.focus_count, len(due) - 1), 1) if times == 1 else max(3 - times, 0)
+        few = (
+            max(
+                min(
+                    self.services.store.preferences(member.id, FocusPreferences).focus_count,
+                    len(due) - 1,
+                ),
+                1,
+            )
+            if times == 1
+            else max(3 - times, 0)
+        )
         cut = max(few, len(medicines))
         return due[:cut], due[cut:]
 
@@ -233,8 +269,8 @@ class Focus:
 
     def budget(self, member: Member) -> int:
         """At most this many on a day: their setting, else what they usually get done."""
-        if member.day_budget:
-            return member.day_budget
+        if self.services.store.preferences(member.id, FocusPreferences).day_budget:
+            return self.services.store.preferences(member.id, FocusPreferences).day_budget
         tz, today = self._tz(), self.summary.today(member)
         midnight = datetime(today.year, today.month, today.day, tzinfo=tz)
         done = self.board.done_between(member, midnight - HISTORY, midnight)
@@ -334,6 +370,7 @@ class FocusModule(Module):
     """O1a: a few things for now when it's too much."""
 
     name = "focus"
+    preferences = FocusPreferences
     requires = ("tasks", "day_summary")
 
     def install(self, ctx: ModuleContext) -> None:

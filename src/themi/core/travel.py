@@ -21,13 +21,17 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import Entry
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.travel import (
     Place,
     Route,
@@ -56,6 +60,21 @@ MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look e
 SLACK = timedelta(minutes=3)  # the job runs every 5 minutes: send a little early, not late
 RETRY_NOT_FOUND = timedelta(days=1)
 LOOK_AHEAD_ON_REQUEST = timedelta(days=14)  # as far as calendars are read (K1)
+
+
+class TravelPreferences(Preferences):
+    """CR7b1: "time to get ready" before events with a place (K4)."""
+
+    module: ClassVar[str] = "travel"
+    getting_ready_minutes: int = 15
+    leave_heads_up: bool = True
+
+    @field_validator("getting_ready_minutes")
+    @classmethod
+    def _getting_ready_minutes(cls, value: int) -> int:
+        if not (0 <= value <= 120):
+            raise ValueError("getting ready takes between 0 and 120 minutes")
+        return value
 
 
 class TravelHeadsUps:
@@ -100,7 +119,10 @@ class TravelHeadsUps:
         now = clock.now()
         sent = 0
         for member in self.services.store.list_members():
-            if not member.leave_heads_up or member.telegram_user_id is None:
+            if (
+                not self.services.store.preferences(member.id, TravelPreferences).leave_heads_up
+                or member.telegram_user_id is None
+            ):
                 continue
             for entry in reader.entries(member, now, now + LOOK_AHEAD):
                 if await self._consider(member, entry, home, now):
@@ -112,7 +134,11 @@ class TravelHeadsUps:
             return False
         if self._sent(member, entry):
             return False
-        ready = timedelta(minutes=member.getting_ready_minutes)
+        ready = timedelta(
+            minutes=self.services.store.preferences(
+                member.id, TravelPreferences
+            ).getting_ready_minutes
+        )
         address = self.address_for(member, entry.location)
         place = await self._place(address) if address else None
         if place is None or distance_km(home, place) < AT_HOME_KM:
@@ -203,7 +229,11 @@ class TravelHeadsUps:
             return as_data("calendars", line) + "\n" + far
         route = await self._route(found[1], place, entry.starts_at)
         leave_by = entry.starts_at - timedelta(minutes=route.minutes)
-        ready = leave_by - timedelta(minutes=viewer.getting_ready_minutes)
+        ready = leave_by - timedelta(
+            minutes=self.services.store.preferences(
+                viewer.id, TravelPreferences
+            ).getting_ready_minutes
+        )
         now = clock.now()
         if leave_by <= now:
             plan = "leave now"
@@ -222,9 +252,13 @@ class TravelHeadsUps:
     ) -> str:
         """When the heads-up comes, and to whom: the person whose calendar it's on (bug #24:
         Themi had said there were no advance reminders)."""
-        if not owner.leave_heads_up:
+        if not self.services.store.preferences(owner.id, TravelPreferences).leave_heads_up:
             return f" {owner.name} has the heads-up switched off."
-        at = leave_by - timedelta(minutes=owner.getting_ready_minutes)
+        at = leave_by - timedelta(
+            minutes=self.services.store.preferences(
+                owner.id, TravelPreferences
+            ).getting_ready_minutes
+        )
         if at <= now:
             return ""
         when = _clock(at.astimezone(self._tz()))
@@ -260,7 +294,9 @@ class TravelHeadsUps:
         return [
             m.name
             for m in self.services.store.list_members()
-            if m.id != viewer.id and m.calendar_details != "partner"
+            if m.id != viewer.id
+            and self.services.store.preferences(m.id, CalendarPreferences).calendar_details
+            != "partner"
         ]
 
     def address_for(self, member: Member, location: str) -> str | None:

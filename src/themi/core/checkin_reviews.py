@@ -18,10 +18,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import Any, ClassVar
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
@@ -57,6 +58,13 @@ class CheckIn:
     ref_id: int
     member_id: int
     name: str
+
+
+class CheckinReviewsPreferences(Preferences):
+    """CR7b1: now and then, ask whether a check-in is helping (idea #13)."""
+
+    module: ClassVar[str] = "checkin_reviews"
+    checkin_reviews: bool = True
 
 
 class CheckinReviews:
@@ -119,7 +127,11 @@ class CheckinReviews:
         for check_in in self.check_ins():
             row = self._row(check_in)
             member = self.store.get_member(check_in.member_id)
-            if row["state"] != "on" or row["asked_at"] or not member.checkin_reviews:
+            if (
+                row["state"] != "on"
+                or row["asked_at"]
+                or not self.store.preferences(member.id, CheckinReviewsPreferences).checkin_reviews
+            ):
                 continue
             if self._total(check_in.kind, check_in.ref_id) - row["seen"] < row["every"]:
                 continue
@@ -231,8 +243,11 @@ async def set_check_in_reviews(ctx: ToolContext, args: dict[str, Any]) -> str:
     reviews = CheckinReviews(ctx.services)
     wanted = args["check_in"].strip().casefold()
     if not wanted:
-        ctx.services.store.update_settings(
-            ctx.member, ctx.member.id, checkin_reviews=not args["stop_asking"]
+        ctx.services.store.save_preferences(
+            ctx.member,
+            ctx.member.id,
+            CheckinReviewsPreferences,
+            checkin_reviews=not args["stop_asking"],
         )
         return (
             "Themi won't ask about any of their check-ins."
@@ -258,6 +273,7 @@ class CheckinReviewsModule(Module):
     """Now and then, asking whether a check-in is helping."""
 
     name = "checkin_reviews"
+    preferences = CheckinReviewsPreferences
 
     def install(self, ctx: ModuleContext) -> None:
         reviews = ctx.provide(CheckinReviews(ctx.services))

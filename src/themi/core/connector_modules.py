@@ -49,7 +49,7 @@ from themi.core.pantry import Pantry
 from themi.core.routines import Routines
 from themi.core.routines_wall import RoutinesWall
 from themi.core.tasks import TaskBoard
-from themi.core.travel import TravelHeadsUps
+from themi.core.travel import TravelHeadsUps, TravelPreferences
 from themi.core.vacuum import Vacuum
 from themi.modules import Module, ModuleContext, ModuleSetup
 
@@ -90,6 +90,7 @@ class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
     name = "travel"
+    preferences = TravelPreferences
     settings = TravelSettings
 
     def __init__(self, client: TravelClient) -> None:

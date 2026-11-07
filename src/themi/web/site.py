@@ -410,7 +410,9 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         member = session.member  # always the signed-in member; any member_id field is ignored
         try:
             for model in app.services.preference_models:  # CR7a: each module's own
-                app.store.save_preferences(member, member.id, model, **from_form(model, form))
+                shown = model.on_form(app.services, member)
+                values = from_form(model, form, shown)
+                app.store.save_preferences(member, member.id, model, **values)
             app.store.update_settings(
                 member,
                 member.id,
@@ -421,27 +423,9 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 pda_strength=as_int(form.get("pda_strength")),
                 phrasing=str(form.get("phrasing", "")) or None,
                 phrasing_notes=str(form.get("phrasing_notes", "")),
-                checkin_reviews=form.get("checkin_reviews") == "on",
-                done_praise=form.get("done_praise") == "on",
                 listen_first=form.get("listen_first") == "on",
-                day_budget=as_int(form.get("day_budget")),
-                focus_count=as_int(form.get("focus_count")),
-                calendar_details=str(form.get("calendar_details", "")) or None,
-                calendar_twins=str(form.get("calendar_twins", "")) or None,
                 day_ends=as_int(form.get("day_ends")),
-                morning_summary=str(form.get("morning_summary", "")),
-                morning_summary_empty=form.get("morning_summary_empty") == "on",
-                getting_ready_minutes=as_int(form.get("getting_ready_minutes")),
-                leave_heads_up=form.get("leave_heads_up") == "on",
-                setup_note=form.get("setup_note") == "on",
-                list_style=str(form.get("list_style", "")) or None,
-                noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
-                conversation_mode=(  # CM1a: only when the switch was on the page
-                    form.get("conversation_mode") == "on"
-                    if conversation_mode.offered(app.services, member)
-                    else None
-                ),
             )
         except InvalidValue as exc:
             return kit.page(
@@ -636,17 +620,20 @@ class Menu:
         return items
 
 
-def from_form(model: type[Preferences], form: Any) -> dict[str, Any]:
-    """CR7a: a module's preferences from the settings form. A checkbox left unticked is
-    False; a number left empty is left as it was."""
+def from_form(model: type[Preferences], form: Any, shown: set[str] | None = None) -> dict[str, Any]:
+    """CR7a: a module's preferences from the settings form, for the fields the page showed
+    (`shown`; None is all of them). A checkbox left unticked is False; a number left empty
+    is left as it was; text is passed on as written ("" may mean off)."""
     values: dict[str, Any] = {}
     for name, info in model.model_fields.items():
+        if shown is not None and name not in shown:
+            continue
         if info.annotation is bool:
             values[name] = form.get(name) == "on"
         elif info.annotation is int:
             values[name] = as_int(form.get(name))
         elif name in form:
-            values[name] = str(form.get(name)) or None
+            values[name] = str(form.get(name))
     return values
 
 

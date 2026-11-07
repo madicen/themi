@@ -29,11 +29,15 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
+from themi.accounts.store import NOISE_EMAILS
 from themi.autonomy import Action, Decision
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
@@ -68,6 +72,20 @@ ARCHIVED_TEXT = "Archived {count}."
 FAILED_TEXT = " {count} didn't go through; they're in /pending to try again."
 LATER_TEXT = "Left for now. They'll be in the next one."
 NOTHING_LEFT_TEXT = "Those are all taken care of already."
+
+
+class NoisePreferences(Preferences):
+    """CR7b1: when noise emails are offered for archiving, together (F16b)."""
+
+    module: ClassVar[str] = "gmail"
+    noise_emails: str = "daily"
+
+    @field_validator("noise_emails")
+    @classmethod
+    def _noise_emails(cls, value: str) -> str:
+        if value not in NOISE_EMAILS:
+            raise ValueError("noise emails come once a day, twice a day or every other day")
+        return value
 
 
 class NoiseDigest:
@@ -159,13 +177,20 @@ class NoiseDigest:
 
     def _due(self, member: Member, now: datetime) -> bool:
         last = self._last(member)
-        for at in SLOTS.get(member.noise_emails, SLOTS["daily"]):
+        for at in SLOTS.get(
+            self.services.store.preferences(member.id, NoisePreferences).noise_emails,
+            SLOTS["daily"],
+        ):
             due_at = now.replace(hour=at.hour, minute=at.minute, second=0, microsecond=0)
             if not due_at <= now < due_at + SEND_WITHIN:
                 continue
             if last is not None and last >= due_at:
                 return False  # this one went already
-            if member.noise_emails == "every_other_day" and last is not None:
+            if (
+                self.services.store.preferences(member.id, NoisePreferences).noise_emails
+                == "every_other_day"
+                and last is not None
+            ):
                 return (now.date() - last.astimezone(now.tzinfo).date()).days >= 2
             return True
         return False

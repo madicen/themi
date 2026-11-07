@@ -286,7 +286,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR5b | Core refactor: a settings model per module | Core refactor | [x] 2026-11-07 |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [x] 2026-11-07 |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [x] 2026-11-07 |
-| CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
+| CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | split |
+| CR7b1 | Core refactor: the other per-member feature settings as preferences | Core refactor | [x] 2026-11-07 |
+| CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [ ] |
+| CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [ ] |
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
 | CR10 | Core refactor: workspace packages | Core refactor | [ ] |
@@ -14366,7 +14369,7 @@ Notes:
   use `fake_cozyla`.
 
 ### CR7b · Core refactor: the rest of the feature settings, and the settings page
-Status: [ ]
+Status: split into CR7b1, CR7c and CR7d (2026-11-07)
 Depends on: CR7a
 Read first: CR7a's notes.
 - Move the remaining feature fields from `Member` (focus count, day budget, done praise,
@@ -14379,6 +14382,65 @@ Read first: CR7a's notes.
   titles and descriptions from the model). The family's page keeps today's order.
 - A migration drops the moved columns once their values are copied.
 Tests: as CR7a; golden files identical.
+
+### CR7b1 · Core refactor: the other per-member feature settings as preferences
+Status: [x] 2026-11-07
+Depends on: CR7a
+Read first: CR7b above; CR7a's notes.
+- Move these `Member` fields into their modules' preferences, with a data migration and
+  their old messages: focus (`focus_count`, `day_budget`), tasks (`done_praise`),
+  checkin_reviews (`checkin_reviews`), calendar (`calendar_details`, `calendar_twins`,
+  `setup_note`), day_summary (`morning_summary`, `morning_summary_empty`), travel
+  (`getting_ready_minutes`, `leave_heads_up`), gmail (`noise_emails`), conversation_mode
+  (`conversation_mode`), lists (`list_style`).
+- Stay on `Member` as core: identity, role, Telegram, quiet hours, daily limit, PDA,
+  phrasing and its notes, busy times, tracking, kind costs, `listen_first` (the agent's own
+  behaviour), `day_ends` (the day boundary `localtime` and the prompt use), `menu_bar`.
+- The settings page keeps its rows, each shown when its module is loaded.
+Tests: as CR7a; golden files identical; the family's settings form as before.
+
+Notes:
+- Nine more models, each declared by its module: `FocusPreferences` (focus),
+  `TasksPreferences` (tasks; in `core/praise.py`, to avoid an import cycle with tasks),
+  `CheckinReviewsPreferences`, `CalendarPreferences` (in
+  `connectors/gcal/preferences.py`, a leaf file: busy times, travel, day summaries and
+  events all read it), `DaySummaryPreferences`, `TravelPreferences`, `NoisePreferences`
+  (gmail), `ConversationPreferences`, `ListsPreferences`. Core migration 0146 copies the
+  values; the `members` columns stay, unused, until CR7c.
+- `Member` keeps the core fields listed in the prompt, plus `listen_first` and
+  `day_ends`.
+- The store saves preferences as `model_dump(mode="json")`, so a time is "07:15:00";
+  the morning summary's check reads that form back.
+- `Preferences.on_form(services, member)` says which fields the settings page shows that
+  member (None: all). Conversation mode shows its switch only where it's offered, so the
+  form doesn't switch it off for anyone else (before, the page passed None for it).
+- The settings page guards each input by its module: without Google there's no calendar
+  or email section (they did nothing); with every module loaded the form is exactly as
+  before (`test_settings_form.py`).
+- Tests changed: 38 places set or read these through preferences; two website tests now
+  use the Gmail and Calendar fakes so those rows are there.
+
+### CR7c · Core refactor: household settings per module, and the old columns dropped
+Status: [ ]
+Depends on: CR7b1
+- A household-level counterpart of preferences (`household_settings`: module, key, JSON
+  value), with the store's read and save. Move the `Family` fields that belong to one
+  module: spending (`takeout_budget_cents`), pantry (`staples`), burnout
+  (`handover_cost`), thinq (`laundry_fresh_hours`, `laundry_rinse_minutes`), tasks
+  (`task_owners`, where it's feature-specific). Data migration and old messages.
+- A migration drops the `members` and `family` columns moved in CR7a, CR7b1 and here.
+Tests: as CR7a; an existing database keeps every value.
+
+### CR7d · Core refactor: the settings page in sections from the modules
+Status: [ ]
+Depends on: CR7c
+- Each module with preferences contributes its section of the settings page (a template
+  fragment and its form handling) through `ModuleContext`; the page assembles them in
+  today's order. Deviation from CR7b's "rendered from the model": the family's page keeps
+  its exact words and layout, so each section is the module's own fragment, not generated.
+- The core sections (quiet hours, messages, phrasing and the rest) stay in the page.
+Tests: the family's form fields and section order as before; a module left out takes its
+section with it.
 
 ### CR8 · Core refactor: the prompt and tool groups from parts
 Status: [ ]

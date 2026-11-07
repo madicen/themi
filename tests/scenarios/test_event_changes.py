@@ -13,6 +13,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import dentist, local, on_primary, say, tool_result
 from tests.scenarios.test_triage import ERIN, link
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core.agent import FAILED_TEXT, NOTHING_CHANGED_TEXT
 
 
@@ -172,7 +173,7 @@ async def test_an_earlier_start_notes_the_real_one(scenario: Scenario, linked: F
 
 async def test_the_set_up_note_can_be_turned_off(scenario: Scenario, linked: FakeGcal) -> None:
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, setup_note=False)
+    scenario.app.store.save_preferences(erin, erin.id, CalendarPreferences, setup_note=False)
     await tutoring(scenario)
     await say(
         scenario, "I need extra time to set up", "change_calendar_event",

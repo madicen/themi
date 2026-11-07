@@ -29,11 +29,12 @@ import logging
 import re
 from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from themi import clock
 from themi.accounts import Member
 from themi.accounts.models import LoggedMessage
+from themi.accounts.preferences import Preferences
 from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.outbox import Priority
@@ -189,7 +190,10 @@ MODE_WORDS = {
 def offered(services: Services, member: Member) -> bool:
     """Is the website's switch shown to this member?"""
     rollout = services.conversation_rollout
-    return rollout == "on" or (rollout == "trial" and member.conversation_mode)
+    return rollout == "on" or (
+        rollout == "trial"
+        and services.store.preferences(member.id, ConversationPreferences).conversation_mode
+    )
 
 
 def is_request(text: str, list_names: Sequence[str] = (), open_titles: Sequence[str] = ()) -> bool:
@@ -260,6 +264,18 @@ def build_chat_turn(
     return f"<context>\n{context}\n</context>\n\n{member.name} says:\n{message}"
 
 
+class ConversationPreferences(Preferences):
+    """CR7b1: their own conversation mode switch (CM1a)."""
+
+    module: ClassVar[str] = "conversation_mode"
+    conversation_mode: bool = False
+
+    @classmethod
+    def on_form(cls, services: Any, member: Member) -> set[str] | None:
+        """CM1a: the switch is on the page only for whom it's offered."""
+        return {"conversation_mode"} if offered(services, member) else set()
+
+
 class ConversationMode:
     def __init__(self, services: Services) -> None:
         self.services = services
@@ -276,17 +292,28 @@ class ConversationMode:
     # ----- the switch ---------------------------------------------------------------------
 
     def is_on(self, member: Member) -> bool:
-        return self.services.conversation_rollout != "off" and member.conversation_mode
+        return (
+            self.services.conversation_rollout != "off"
+            and self.services.store.preferences(
+                member.id, ConversationPreferences
+            ).conversation_mode
+        )
 
     def set(self, member: Member, on: bool) -> Member:
-        return self.services.store.update_settings(member, member.id, conversation_mode=on)
+        store = self.services.store
+        store.save_preferences(member, member.id, ConversationPreferences, conversation_mode=on)
+        return store.get_member(member.id)
 
     async def on_command(self, member: Member, argument: str) -> None:
         word = argument.strip().lower()
         if self.services.conversation_rollout == "off":
             text = NOT_OFFERED_TEXT
         elif word in ("", "status"):
-            text = STATUS_TEXT[member.conversation_mode]
+            text = STATUS_TEXT[
+                self.services.store.preferences(
+                    member.id, ConversationPreferences
+                ).conversation_mode
+            ]
         elif word in ("on", "start", "yes"):
             self.set(member, True)
             text = ON_TEXT
@@ -371,6 +398,7 @@ class ConversationModeModule(Module):
     """CM1: conversation mode, its setting and its sidecar."""
 
     name = "conversation_mode"
+    preferences = ConversationPreferences
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(ConversationMode(ctx.services)).install()

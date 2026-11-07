@@ -13,6 +13,7 @@ from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi import clock
 from themi.accounts.store import SYSTEM
 from themi.core import keys
+from themi.core.noise_digest import NoisePreferences
 
 __all__ = ["inbox"]  # the fixture, from triage's scenarios
 
@@ -102,11 +103,11 @@ async def test_how_often_is_their_setting(scenario: Scenario, inbox: FakeGmail) 
     store = scenario.app.store
     await noise(scenario, inbox, SALE)
     assert await at(scenario, 12) == []  # once a day: 6 pm only
-    store.update_settings(SYSTEM, erin.id, noise_emails="twice")
+    store.save_preferences(SYSTEM, erin.id, NoisePreferences, noise_emails="twice")
     await noise(scenario, inbox, NEWS)
     (noon,) = await at(scenario, 12)
     assert noon.startswith("2 emails")
-    store.update_settings(SYSTEM, erin.id, noise_emails="every_other_day")
+    store.save_preferences(SYSTEM, erin.id, NoisePreferences, noise_emails="every_other_day")
     await noise(scenario, inbox, DICE)
     assert await at(scenario, 18) == []  # one went at noon today
     assert await at(scenario, 18) == []  # a day since

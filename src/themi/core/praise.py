@@ -11,16 +11,24 @@ from __future__ import annotations
 import secrets
 import zlib
 from datetime import timedelta
-from typing import Any
+from typing import Any, ClassVar
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.channels.outbox import PRAISE_KIND, Outbox, Priority
 
 PRAISE = ("Nice work.", "Well done.", "Good job.", "Nicely done.", "That's one off the list.")
 WALL_DONE_TEXT = "Ticked off on the wall: {titles}. {praise}"
 WALL_PRAISE_AFTER = timedelta(minutes=1)
 WALL_PRAISE_USEFUL = timedelta(hours=2)
+
+
+class TasksPreferences(Preferences):
+    """CR7b1: a short warm word when they mark a task done (idea #102)."""
+
+    module: ClassVar[str] = "tasks"
+    done_praise: bool = True
 
 
 def word(seed: str) -> str:
@@ -30,7 +38,10 @@ def word(seed: str) -> str:
 
 async def from_wall(outbox: Outbox, member: Member, title: str, seed: str) -> None:
     """Ticked on the wall by `member`: a warm word, a moment later, if they want one."""
-    if not member.done_praise or member.telegram_user_id is None:
+    if (
+        not outbox.store.preferences(member.id, TasksPreferences).done_praise
+        or member.telegram_user_id is None
+    ):
         return
     now = clock.now()
     await outbox.send(

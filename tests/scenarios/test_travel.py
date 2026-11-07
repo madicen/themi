@@ -15,7 +15,9 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.travel import TravelPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HOME = "12 Main St, Springfield"
@@ -127,12 +129,12 @@ async def test_a_moved_event_gets_a_new_one_and_settings_count(
         start={"dateTime": local(17)}, end={"dateTime": local(18)}
     )
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, getting_ready_minutes=30)
+    scenario.app.store.save_preferences(erin, erin.id, TravelPreferences, getting_ready_minutes=30)
     assert len(await at(scenario, 15, 50)) == 1  # leave 4:25, get ready from 3:55
     assert (await at(scenario, 15, 55))[-1] == (
         "Dentist at 5 pm, about 35 min with traffic: leave around 4:25 pm."
     )
-    scenario.app.store.update_settings(erin, erin.id, leave_heads_up=False)
+    scenario.app.store.save_preferences(erin, erin.id, TravelPreferences, leave_heads_up=False)
     ready.add_event(ERIN, local(20), local(21), summary="Dinner", location="Smile Dental")
     assert len(await at(scenario, 19, 30)) == 2  # switched off: nothing new
 
@@ -236,11 +238,15 @@ async def test_only_events_they_may_see(
     await scenario.run_periodic("calendar.busy")
     assert "No upcoming event of theirs matches" in await ask(scenario, "Erin", "dentist", "")
     husband = scenario.member("Husband")
-    scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
+    scenario.app.store.save_preferences(
+        husband, husband.id, CalendarPreferences, calendar_details="partner"
+    )
     result = await ask(scenario, "Erin", "dentist", "")
     assert "Husband: Dentist, Wed 21 Oct, 3-4 pm" in result
     assert "The heads-up to get ready goes to Husband, whose calendar it's on" in result
-    scenario.app.store.update_settings(husband, husband.id, leave_heads_up=False)
+    scenario.app.store.save_preferences(
+        husband, husband.id, TravelPreferences, leave_heads_up=False
+    )
     assert "Husband has the heads-up switched off" in await ask(scenario, "Erin", "dentist", "")
 
 

@@ -30,8 +30,13 @@ from themi.accounts import Member
 from themi.ai.settings import AITask
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.outbox import Priority
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.checkin_reviews import CheckinReviewsPreferences
+from themi.core.day_summary import DaySummaryPreferences
+from themi.core.noise_digest import NoisePreferences
 from themi.core.tools import ToolContext, tool
+from themi.core.travel import TravelPreferences
 from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
@@ -423,29 +428,35 @@ class FeedbackChat:
         }
 
     def _settings(self, member: Member, timezone: str) -> dict[str, str]:
-        pauses = self.services.outbox.pauses.active(member)
         from themi.core.chore_chart import ChartPreferences  # CR7a
 
-        chart = self.services.store.preferences(member.id, ChartPreferences)
+        pauses = self.services.outbox.pauses.active(member)
+        store = self.services.store  # CR7a, CR7b1: each module's own, or its defaults
+        chart = store.preferences(member.id, ChartPreferences)
+        reviews = store.preferences(member.id, CheckinReviewsPreferences)
+        summary = store.preferences(member.id, DaySummaryPreferences)
+        noise = store.preferences(member.id, NoisePreferences)
+        travel = store.preferences(member.id, TravelPreferences)
+        calendar = store.preferences(member.id, CalendarPreferences)
         return {
             "quiet hours": f"{member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}",
             "daily message limit": str(member.daily_limit),
             "phrasing": member.phrasing
             + (f" ({member.phrasing_notes})" if member.phrasing_notes else ""),
             "gentle phrasing": f"strength {member.pda_strength}" if member.pda_enabled else "off",
-            "check-in reviews": "on" if member.checkin_reviews else "off",
+            "check-in reviews": "on" if reviews.checkin_reviews else "off",
             "chores on the chart at a time": str(chart.chart_limit or "no limit")
             + ("" if chart.chart_counts_shared else " (shared chores don't count)"),
-            "morning summary": member.morning_summary.strftime("%H:%M")
-            if member.morning_summary
+            "morning summary": summary.morning_summary.strftime("%H:%M")
+            if summary.morning_summary
             else "off",
-            "noise emails": member.noise_emails.replace("_", " "),
-            "leave heads-up": f"on, {member.getting_ready_minutes} min to get ready"
-            if member.leave_heads_up
+            "noise emails": noise.noise_emails.replace("_", " "),
+            "leave heads-up": f"on, {travel.getting_ready_minutes} min to get ready"
+            if travel.leave_heads_up
             else "off",
-            "set-up notes on events": "on" if member.setup_note else "off",
+            "set-up notes on events": "on" if calendar.setup_note else "off",
             "calendar details seen by": "them only"
-            if member.calendar_details == "me"
+            if calendar.calendar_details == "me"
             else "them and their partner",
             "tracking": ", ".join(
                 f"{k} {'on' if v else 'off'}" for k, v in member.tracking.items()

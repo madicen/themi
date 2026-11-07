@@ -29,6 +29,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import keys, naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
+from themi.core.praise import TasksPreferences
 from themi.core.progression import Progression, amount_said, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
@@ -870,7 +871,11 @@ class TaskBoard:
         if task.holds_target:
             await self._release(task)
         thanks = DONE_TEXT.format(title=task.title)
-        if interactive and by.done_praise and said.startswith(thanks):
+        if (
+            interactive
+            and self.services.store.preferences(by.id, TasksPreferences).done_praise
+            and said.startswith(thanks)
+        ):
             said = thanks.removesuffix("Thank you.") + _praise(task) + said.removeprefix(thanks)
         if wall:
             await praise.from_wall(self.outbox, by, task.title, str(task.id))
@@ -2698,6 +2703,7 @@ class TasksModule(Module):
     """The task board: tasks, chores, schedules and check-ins."""
 
     name = "tasks"
+    preferences = TasksPreferences
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry

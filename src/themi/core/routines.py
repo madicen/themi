@@ -48,6 +48,7 @@ from themi.core.cozyla_routines import (
 from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
+from themi.core.praise import TasksPreferences
 from themi.core.services import Services
 from themi.core.tools import (
     Done,
@@ -446,7 +447,9 @@ class Routines:
         said = ""
         if item is not None and not self.ticked(item, day):
             await self.tick_now(item, day)
-            if event.member.done_praise:  # a warm word, as for a task (F19b)
+            if self.services.store.preferences(
+                event.member.id, TasksPreferences
+            ).done_praise:  # a warm word, as for a task (F19b)
                 said = TICKED_TEXT.format(title=item.title, praise=praise.word(f"r{item.id}"))
         still = self._still(found, day)
         if message is None:

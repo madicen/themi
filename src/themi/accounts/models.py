@@ -74,25 +74,11 @@ class Member:
     busy_times: tuple[BusyTime, ...] = ()
     phrasing: str = "plain"  # plain (say it straight) or gentle (indirect, low-key), idea #12
     phrasing_notes: str = ""  # their own words on how they like things said
-    checkin_reviews: bool = True  # now and then, ask whether a check-in is helping (idea #13)
-    done_praise: bool = True  # a short warm word when they mark a task done (idea #102)
     listen_first: bool = True  # feelings get listening; ask before problem-solving (F22e)
-    focus_count: int = 3  # things "for now" when it's too much (O1a)
-    day_budget: int = 0  # at most this many on a day when the rest is spread (O1b); 0: usual
-    calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
     day_ends: int = 0  # F34j: their day rolls over at this hour after midnight (0 to 4)
-    calendar_twins: str = "ask"  # F34e: the same event on two calendars: ask, guess or keep
-    morning_summary: time | None = None  # a summary of the day at this time; None: off (K2)
-    morning_summary_empty: bool = False  # sent on days with nothing on, too
-    getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)
-    leave_heads_up: bool = True  # "time to get ready" for events with a place
-    setup_note: bool = True  # F29a: an earlier start is noted as set-up time on the event
-    list_style: str = "dashes"  # F29g: how a list's levels show: dashes, bullets or numbers
-    noise_emails: str = "daily"  # when noise emails are offered for archiving, together (F16b)
     # The website's menu bar, in order (F28c): paths, at most MENU_BAR_MAX; None: the usual.
     menu_bar: tuple[str, ...] | None = None
     # CM1a: talk with a plain chat model; a background pass picks out tasks (CM1b).
-    conversation_mode: bool = False
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

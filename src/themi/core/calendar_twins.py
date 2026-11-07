@@ -33,6 +33,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
 from themi.core.events import MERGE, Events, Found, When, title_matches
 from themi.core.lists import name_key
@@ -191,10 +192,18 @@ class CalendarTwins:
                     kind=KIND,
                 )  # fmt: skip
             return
-        if apart and member.calendar_twins == "keep":
+        if (
+            apart
+            and self.services.store.preferences(member.id, CalendarPreferences).calendar_twins
+            == "keep"
+        ):
             self._record(member, a, b, "kept")
             return
-        if apart and member.calendar_twins == "guess":
+        if (
+            apart
+            and self.services.store.preferences(member.id, CalendarPreferences).calendar_twins
+            == "guess"
+        ):
             await self._guess(member, a, b)
             return
         await self._ask(member, a, b, apart)

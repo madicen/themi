@@ -16,10 +16,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import InvalidValue, Member
+from themi.accounts.preferences import Preferences
 from themi.autonomy import ExecutionContext
 from themi.core import keys
 from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
@@ -127,6 +130,20 @@ class NamedList:
     @property
     def ticked(self) -> list[ListItem]:
         return [i for i in self.items if i.done]
+
+
+class ListsPreferences(Preferences):
+    """CR7b1: how a list's levels show in chat (F29g): dashes, bullets or numbers."""
+
+    module: ClassVar[str] = "lists"
+    list_style: str = "dashes"
+
+    @field_validator("list_style")
+    @classmethod
+    def _list_style(cls, value: str) -> str:
+        if value not in ("dashes", "bullets", "numbers"):
+            raise ValueError("a list style is dashes, bullets or numbers")
+        return value
 
 
 class Lists:
@@ -673,7 +690,9 @@ async def show_lists(ctx: ToolContext, args: dict[str, Any]) -> str:
         nl = lists.find(ctx.member, args["list"])
         if any(i.parent_id for i in nl.open_items):
             # F29g (reply 271): with levels, Themi shows the list itself, in their style
-            shown = render(nl, ctx.member.list_style)
+            shown = render(
+                nl, ctx.services.store.preferences(ctx.member.id, ListsPreferences).list_style
+            )
             ctx.replies.append(shown)
             return f"Sent them the list as it is:\n{shown}"
         return lists.describe(nl)
@@ -723,6 +742,7 @@ class ListsModule(Module):
     """L1a: named lists Themi keeps."""
 
     name = "lists"
+    preferences = ListsPreferences
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry

@@ -36,6 +36,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarError, CalendarNotFound, event_id
 from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core import keys
 from themi.core.lists import name_key
@@ -1177,7 +1178,8 @@ async def change_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Propo
         "notes": {"text": notes, "mode": args.get("notes_mode") or "add"} if notes else None,
         # The member's setting (idea #150): an earlier start is set-up time, and a later
         # change keeps the line true.
-        "setup_note": ctx.member.setup_note and when != found.when,
+        "setup_note": ctx.services.store.preferences(ctx.member.id, CalendarPreferences).setup_note
+        and when != found.when,
         "earlier": earlier,
     }
     both = " (on both calendars)" if len(copies) > 1 else ""

@@ -21,12 +21,21 @@ as InvalidValue with its words, as the member settings' checks do.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
+
+if TYPE_CHECKING:
+    from themi.accounts.models import Member
 
 
 class Preferences(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     module: ClassVar[str] = ""
+
+    @classmethod
+    def on_form(cls, services: Any, member: Member) -> set[str] | None:
+        """The fields the settings page shows this member (None: all of them). One left off
+        isn't saved from the form: a checkbox that wasn't there isn't unticked."""
+        return None

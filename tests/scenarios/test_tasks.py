@@ -7,6 +7,7 @@ from datetime import date
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
+from themi.core.praise import TasksPreferences
 
 
 async def test_erins_draining_note_routes_the_next_task_to_her_husband(
@@ -505,7 +506,7 @@ async def test_the_warm_word_can_be_turned_off(scenario: Scenario) -> None:
     board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+    scenario.app.store.save_preferences(erin, erin.id, TasksPreferences, done_praise=False)
     await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))
     await scenario.advance(hours=1)
     await scenario.tap("Erin", "Done")

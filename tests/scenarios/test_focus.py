@@ -12,7 +12,7 @@ import pytest
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.focus import SIGNAL, overwhelmed, partner_signal
+from themi.core.focus import SIGNAL, FocusPreferences, overwhelmed, partner_signal
 from themi.core.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)
@@ -212,7 +212,7 @@ SPREAD_DAY = (
 async def busy_week(scenario: Scenario) -> None:
     """Erin's full day, at most two a day, and Thursday has one already."""
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, day_budget=2)
+    scenario.app.store.save_preferences(erin, erin.id, FocusPreferences, day_budget=2)
     await a_full_day(scenario)
     await task(scenario, "Erin", "Return the library books", WED + timedelta(days=1))
 
@@ -265,7 +265,7 @@ async def test_a_chore_goes_to_its_next_round_and_a_shared_one_stays_with_the_ot
     from themi.core.repeat import parse
 
     erin, husband = scenario.member("Erin"), scenario.member("Husband")
-    scenario.app.store.update_settings(erin, erin.id, day_budget=2)
+    scenario.app.store.save_preferences(erin, erin.id, FocusPreferences, day_budget=2)
     for n in range(3):
         await task(scenario, "Erin", f"Errand {n}", importance="high")
     bins = await task(scenario, "Erin", "Bring bins in", None)
@@ -297,14 +297,14 @@ async def test_the_budget_is_what_usually_gets_done(scenario: Scenario) -> None:
             await board(scenario).complete(done.id, erin)
         clock.advance(timedelta(days=1))
     assert focus.budget(erin) == 2
-    scenario.app.store.update_settings(erin, erin.id, day_budget=5)
+    scenario.app.store.save_preferences(erin, erin.id, FocusPreferences, day_budget=5)
     assert focus.budget(scenario.member("Erin")) == 5
 
 
 async def test_how_few_is_their_own_number(scenario: Scenario) -> None:
     """The family's answer to "how few?": each person sets it (three unless they do)."""
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, focus_count=2)
+    scenario.app.store.save_preferences(erin, erin.id, FocusPreferences, focus_count=2)
     await a_full_day(scenario)
     focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None

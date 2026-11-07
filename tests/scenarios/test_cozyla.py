@@ -8,6 +8,7 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
 from themi.core.chore_chart import ChartPreferences
+from themi.core.praise import TasksPreferences
 
 
 async def test_ticking_a_to_do_off_on_the_wall_stops_the_nudges(
@@ -151,7 +152,7 @@ async def test_no_warm_word_when_its_off_or_whose_tick_is_unknown(
     erin = scenario.member("Erin")
     task = await board.create(erin, "Bring bins in", "errand", 1, assignee=erin, nudge=False)
     if case == "off":
-        scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+        scenario.app.store.save_preferences(erin, erin.id, TasksPreferences, done_praise=False)
     else:
         await board.make_either(task.id)  # either of them could have ticked it
     await scenario.run_periodic("cozyla.sync")

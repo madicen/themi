@@ -13,6 +13,7 @@ from datetime import timedelta
 
 from themi.connectors.gcal import CalendarSync
 from themi.connectors.gcal.busy import CalendarBusy
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
 from themi.core import email_forward
@@ -23,7 +24,7 @@ from themi.core.calendar_twins import CalendarTwins
 from themi.core.connector_settings import GoogleSettings
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
-from themi.core.noise_digest import NoiseDigest
+from themi.core.noise_digest import NoiseDigest, NoisePreferences
 from themi.core.senders import SenderSuggestions
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard
@@ -59,6 +60,7 @@ class GmailModule(Module):
     """Gmail: mail read every minute, triaged, and the features that follow from it."""
 
     name = "gmail"
+    preferences = NoisePreferences
     requires = ("google",)
 
     def install(self, ctx: ModuleContext) -> None:
@@ -90,6 +92,7 @@ class CalendarModule(Module):
     hold Themi's own messages."""
 
     name = "calendar"
+    preferences = CalendarPreferences
     requires = ("google", "tasks")
 
     def install(self, ctx: ModuleContext) -> None:

@@ -19,13 +19,18 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime, time, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
+from themi.accounts.store import parse_hhmm
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import event_line
+from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
 from themi.core.partner import named
 from themi.core.prompts import as_data
@@ -40,6 +45,23 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 SEND_WITHIN = timedelta(hours=3)  # a summary missed by more than this (Themi was down) is skipped
+
+
+class DaySummaryPreferences(Preferences):
+    """CR7b1: a summary of their day (K2)."""
+
+    module: ClassVar[str] = "day_summary"
+    morning_summary: time | None = None  # at this time; None: off
+    morning_summary_empty: bool = False  # sent on days with nothing on, too
+
+    @field_validator("morning_summary", mode="before")
+    @classmethod
+    def _morning(cls, value: object) -> time | None:
+        if value is None or value == "":
+            return None  # "" from the settings form: off
+        if isinstance(value, str) and value.count(":") == 2:
+            return time.fromisoformat(value)  # as stored: "07:15:00"
+        return parse_hhmm(value)  # type: ignore[arg-type]
 
 
 class DaySummary:
@@ -165,7 +187,7 @@ class DaySummary:
         now = clock.now().astimezone(tz)
         sent = 0
         for member in self.services.store.list_members():
-            at = member.morning_summary
+            at = self.services.store.preferences(member.id, DaySummaryPreferences).morning_summary
             if at is None or member.telegram_user_id is None:
                 continue
             due_at = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
@@ -177,7 +199,9 @@ class DaySummary:
             )
             text = self.text(member, now.date(), partner=True)
             if text is None:
-                if not member.morning_summary_empty:
+                if not self.services.store.preferences(
+                    member.id, DaySummaryPreferences
+                ).morning_summary_empty:
                     continue
                 text = f"{now:%a %d %b}: nothing on the calendar, nothing due."
             await self.services.outbox.send(
@@ -256,7 +280,10 @@ async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
     person, hidden = ctx.member, ""
     if whose == "partner" and other is not None:
         person = other
-        if other.calendar_details != "partner":
+        if (
+            ctx.services.store.preferences(other.id, CalendarPreferences).calendar_details
+            != "partner"
+        ):
             # F29e (#155's thread): "Erin has no calendar events today" from a private one
             hidden = (
                 f"\n{other.name} keeps calendar details private, so their events aren't "
@@ -284,6 +311,7 @@ class DaySummaryModule(Module):
     """K2: what's on someone's day, and the morning summary."""
 
     name = "day_summary"
+    preferences = DaySummaryPreferences
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:
