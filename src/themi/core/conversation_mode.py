@@ -40,7 +40,7 @@ from themi.channels.outbox import Priority
 from themi.core import listening
 from themi.core.agent import CLAIMS_DONE
 from themi.core.lists import name_key
-from themi.core.prompts import PHRASING_WORDS
+from themi.core.prompts import PHRASING_WORDS, day_note
 from themi.core.sidecar import Sidecar
 from themi.localtime import to_local
 from themi.logs import redact
@@ -234,6 +234,7 @@ def build_chat_turn(
     signals: Sequence[str] = (),
 ) -> str:
     when = local_now.strftime("%A %d %B %Y, %I:%M %p").replace(" 0", " ")
+    when += day_note(member, local_now)
     phrasing = PHRASING_WORDS.get(member.phrasing, PHRASING_WORDS["plain"])
     if member.phrasing_notes:
         phrasing += f"; their own notes: {redact(member.phrasing_notes)}"

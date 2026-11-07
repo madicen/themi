@@ -106,3 +106,24 @@ async def test_the_daily_limit_counts_from_their_rollover(scenario: Scenario) ->
 async def test_the_setting_on_my_settings(scenario: Scenario) -> None:
     rollover(scenario, 2)
     assert scenario.app.store.get_member(scenario.member("Husband").id).day_ends == 2
+
+
+def test_the_models_context_says_its_still_friday(scenario: Scenario) -> None:
+    from themi.core.prompts import day_note
+
+    rollover(scenario)
+    michael = scenario.app.store.get_member(scenario.member("Husband").id)
+    late = datetime(2026, 10, 24, 0, 40, tzinfo=PACIFIC)
+    assert day_note(michael, late).startswith(" (For Husband it's still Friday until 3 am")
+    assert "'tonight' means now" in day_note(michael, late)
+    assert day_note(michael, datetime(2026, 10, 24, 3, 5, tzinfo=PACIFIC)) == ""
+    assert day_note(scenario.member("Erin"), late) == ""
+
+
+async def test_a_habit_check_in_is_once_for_their_day(scenario: Scenario) -> None:
+    rollover(scenario)
+    habits = scenario.app.services.habits
+    assert habits is not None
+    michael = scenario.member("Husband")
+    await at(scenario, SAT, 0, 40)
+    assert habits._today(michael) == FRI

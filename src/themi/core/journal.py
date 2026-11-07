@@ -30,7 +30,7 @@ from themi.core.memory import terms
 from themi.core.prompts import as_data
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 from themi.logs import redact
 
 log = logging.getLogger(__name__)
@@ -105,11 +105,11 @@ class Journal:
     async def write(self) -> int:
         """Scheduler job: each person's finished days not yet written. Returns how many."""
         tz = self._tz()
-        today = clock.now().astimezone(tz).date()
         written = 0
         for member in self.store.list_members():
+            own = member_day(member, clock.now(), tz)  # F34j: a day is over at their rollover
             for back in range(CATCH_UP, 0, -1):
-                day = today - timedelta(days=back)
+                day = own - timedelta(days=back)
                 if self.db.one(
                     "SELECT 1 FROM journal_entries WHERE member_id = ? AND day = ?",
                     (member.id, day.isoformat()),
