@@ -235,7 +235,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [x] 2026-11-07 |
 | F34m | Idea: a recipe from a photo | Feedback | [x] 2026-11-07 |
-| F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [ ] |
+| F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [x] 2026-11-07 |
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
@@ -12033,7 +12033,7 @@ Notes (2026-11-07):
   (Gemini by default).
 
 ### F34mb · Idea (2026-11-07): a recipe over two photos (an album, or the next page)
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34m
 - From F34m's Build: two pictures in one Telegram album (`media_group_id`) are one recipe,
   read together in order; a second picture after "here's the other page" within F34l's
@@ -12071,6 +12071,32 @@ same two as an album makes one question, not two. A yes to the no-words question
 second picture reads both.
 Scenario: bug #184, Michael's two pages, one card with every ingredient and step. Mark #184
 reviewed once live.
+
+Notes (2026-11-07):
+- Telegram: an album's updates in one fetch (same `media_group_id`, one after another, in a
+  private chat) become one picture event (`InboundEvent.more_pictures`, `media_group`; the
+  `pictures` property lists them all). Its caption is whichever picture had one. Each
+  picture is logged as "[a picture]", so each counts towards the daily cap. There's no wait
+  for the rest of an album: one split over two fetches is joined by `KeptPictures` instead.
+  When the later part has no words, it's kept with no reply, and a yes reads it all.
+- `KeptPictures` keeps a group per member: a picture within a minute of the group's latest
+  (`TOGETHER`) or of its album joins it, up to 4 (`MOST_TOGETHER`, the latest kept). A new
+  group remembers the one before (`before`, for 30 minutes). `use` and `group` return
+  tuples; `peek` still returns the latest picture, so F34o's reports keep one.
+- The model sees the whole group in one data block, in order, with `PICTURES_TOGETHER` ("may
+  be parts of one thing"). `ToolContext.images` is the group and `images_before` the one
+  before it; `image` is still the latest.
+- `recipe_from_picture` reads the whole group in one structured call (`PICTURES_PROMPT`).
+  Its new `continues` argument (default false) adds the group before, for "here's the
+  other page" sent more than a minute later. The kept recipe's key hashes all the
+  pictures' bytes, so the single page read first stays as its own unsaved row and is
+  cleared after 30 days.
+- Deviation: when the pictures together still lack a part, it says so for all of them
+  (`UNREADABLE_TOGETHER`, "I couldn't read the steps in those 2 pictures..."). It doesn't
+  name what each picture showed: that would need a field per picture in RC4a's shared
+  schema.
+- Not done: `/bug` with an album keeps only the first picture (F34o's `pictures_for`).
+- Setup: none (no migration). Restart `themi run`.
 
 ### F34n · Idea (2026-11-07): a calendar event from a photo
 Status: [x] 2026-11-07
