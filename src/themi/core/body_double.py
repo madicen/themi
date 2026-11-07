@@ -43,6 +43,7 @@ from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.routines import Routine
@@ -1154,3 +1155,12 @@ async def end_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
         await _send(ctx, said, buttons)
     ctx.cards.append("body double ended")
     return f"Ended; Themi told them itself: {said!r}"
+
+
+class BodyDoubleModule(Module):
+    """BD1a: body double sessions; block ends are scheduler jobs."""
+
+    name = "body_double"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(BodyDouble(ctx.services, ctx.scheduler)).install()

@@ -30,6 +30,7 @@ from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -283,3 +284,13 @@ async def log_call_outcome(ctx: ToolContext, args: dict[str, Any]) -> str:
     if task.status not in ("done", "cancelled"):
         await calls.board.complete(task.id, ctx.member, interactive=True)
     return f"Logged the call to {row['vendor']}: {row['outcome']}"
+
+
+class CallsModule(Module):
+    """Calls to vendors, prepared for a person to make."""
+
+    name = "calls"
+    requires = ("tasks",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(VendorCalls(ctx.services, ctx.get(TaskBoard))).install()

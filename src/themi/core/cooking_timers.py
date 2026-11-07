@@ -25,6 +25,7 @@ from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.localtime import next_waking_start, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.cooking import Cooking, Part, Session
@@ -293,3 +294,15 @@ class CookingTimers:
         local = to_local(moment, self._tz())
         hour = local.hour % 12 or 12
         return f"{hour}:{local.minute:02d} {'am' if local.hour < 12 else 'pm'}"
+
+
+class CookingTimersModule(Module):
+    """RC3c: a step's timers, as scheduler jobs."""
+
+    name = "cooking_timers"
+    requires = ("cooking",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.cooking import Cooking  # at install: at the top it would be an import cycle
+
+        ctx.provide(CookingTimers(ctx.get(Cooking), ctx.scheduler)).install()

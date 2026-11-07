@@ -31,6 +31,7 @@ from themi.core import cookbook as book
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -252,3 +253,14 @@ async def save_recipe_to_cookbook(ctx: ToolContext, args: dict[str, Any]) -> str
         raise ToolFailed(f"{exc} Say so.") from exc
     ctx.cards.append(sent)
     return "Sent them the entry and an approval card. Nothing is in the doc until they say yes."
+
+
+class CookbookSaveModule(Module):
+    """RC5: saving a liked recipe to the cookbook."""
+
+    name = "cookbook_save"
+    requires = ("recipes",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.services.cookbook_save = ctx.provide(CookbookSave(ctx.services, ctx.get(Recipes)))
+        ctx.services.cookbook_save.install()

@@ -51,6 +51,7 @@ from themi.energy.matching import Assignment
 from themi.energy.model import SOURCE_INPUT
 from themi.energy.windows import RECEPTIVE, Projection
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 from themi.scheduler import Scheduler
 
 log = logging.getLogger(__name__)
@@ -807,3 +808,18 @@ async def log_maintenance(ctx: ToolContext, args: dict[str, Any]) -> str:
     except ValueError as exc:
         raise ToolFailed("day is a date like 2026-11-04.") from exc
     return await maintenance.log(item, ctx.member, on, str(args["notes"]), interactive=True)
+
+
+class MaintenanceModule(Module):
+    """Home maintenance, offered when it comes due."""
+
+    name = "maintenance"
+    requires = ("tasks",)
+    optional = ("calendar",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        upkeep = ctx.provide(
+            Maintenance(ctx.services, ctx.get(TaskBoard), ctx.services.calendar, ctx.scheduler)
+        )
+        upkeep.install()
+        ctx.periodic("maintenance.offer", timedelta(minutes=15), upkeep.offer)

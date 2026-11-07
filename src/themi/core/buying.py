@@ -25,6 +25,7 @@ from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, ref
 from themi.core.lists import ADD_CATEGORY, THINGS_TO_BUY, Lists, NamedList, name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -220,3 +221,13 @@ async def set_usual_store(ctx: ToolContext, args: dict[str, Any]) -> str:
     except InvalidValue as exc:
         raise ToolFailed(str(exc)) from exc
     return f"Noted: {name} usually comes from {store}."
+
+
+class BuyingModule(Module):
+    """L2a: things to buy that aren't food, and their stores."""
+
+    name = "buying"
+    requires = ("lists",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(ThingsToBuy(ctx.services, ctx.get(Lists))).install()

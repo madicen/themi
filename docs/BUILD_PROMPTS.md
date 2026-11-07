@@ -277,7 +277,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
-| CR2b | Core refactor: home features onto the contract | Core refactor | [ ] |
+| CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
 | CR3 | Core refactor: a typed service registry | Core refactor | [ ] |
 | CR4 | Core refactor: website pages from modules | Core refactor | [ ] |
@@ -14038,7 +14038,7 @@ Notes:
 - `tests/unit/test_standard_modules.py` installs each module alone on `bare_services`.
 
 ### CR2b · Core refactor: home features onto the contract
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR2a
 Read first: CR2a's notes; `src/themi/app.py`.
 - Modules for groceries, safeway, buying, spending, pantry, meals, calls, recipes,
@@ -14049,6 +14049,20 @@ Read first: CR2a's notes; `src/themi/app.py`.
 - Where today's code checks `services.gmail is not None`, the module lists `gmail` as
   optional and asks `ctx.maybe(...)`. Behaviour stays the same.
 Tests: as CR2a.
+
+Notes:
+- 21 home modules: groceries, safeway, buying, spending, pantry, meals, calls, recipes,
+  cookbook_save, recipe_groceries, recipe_ideas, cooking, cooking_timers, body_double,
+  guided_steps, step_pictures, mode_chooser, music_offers, web_recipes, maintenance,
+  appliances. Spotify's `Music` stays hand-wired for CR2c (it's the connector's).
+- Modules that need a connector's object take it in their constructor:
+  `RecipesModule(google_config)`, `WebRecipesModule(page_reader)`. Recipes and maintenance
+  still read `services.google` and `services.calendar` at install, with `google` and
+  `calendar` as optional modules; CR2c makes those modules and CR3 moves the slots.
+- Cross-feature classes are imported inside `install` where the file didn't already import
+  them at runtime (import cycles otherwise).
+- `module_context(store)` in `tests/fakes/modules.py`: `bare_services` plus what the core
+  provides (energy model, rulebook). `tests/unit/test_home_modules.py` uses it.
 
 ### CR2c · Core refactor: connectors as modules, and the app built by a loop
 Status: [ ]

@@ -19,8 +19,12 @@ from themi.autonomy import Autonomy, ExecutorRegistry
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import PdaShield
+from themi.core.rules import Rulebook
 from themi.core.services import Services
 from themi.core.tools import ToolRegistry
+from themi.energy import EnergyModel
+from themi.modules import ModuleContext
+from themi.scheduler import Scheduler
 
 
 class RefusingSender:
@@ -42,3 +46,12 @@ def bare_services(store: AccountStore) -> Services:
         tools=ToolRegistry(),
         autonomy=Autonomy(store, ExecutorRegistry()),
     )
+
+
+def module_context(store: AccountStore) -> ModuleContext:
+    """A context over `bare_services`, with what `build_app` provides from the core."""
+    services = bare_services(store)
+    ctx = ModuleContext(services, scheduler=Scheduler(store.db))
+    ctx.provide(EnergyModel(store))  # core, until it's a module
+    ctx.provide(Rulebook(services.autonomy, services.outbox))
+    return ctx

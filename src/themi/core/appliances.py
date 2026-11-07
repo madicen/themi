@@ -30,6 +30,7 @@ from themi.connectors.tuya.events import state_word as feeder_words
 from themi.core.services import Services
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, tool
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -272,3 +273,12 @@ async def appliance_status(ctx: ToolContext, args: dict[str, Any]) -> str:
     if appliances is None:
         return NONE_LINKED
     return await appliances.status(args["appliance"])
+
+
+class AppliancesModule(Module):
+    """F20b: asked how the appliances are doing, it reads them."""
+
+    name = "appliances"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Appliances(ctx.services)).install()

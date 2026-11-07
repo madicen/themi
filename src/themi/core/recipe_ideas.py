@@ -33,6 +33,7 @@ from themi.core.recipe_groceries import RecipeGroceries
 from themi.core.recipes import Recipe, Recipes, stem
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -200,3 +201,13 @@ async def cookbook_recipes_we_can_make(ctx: ToolContext, args: dict[str, Any]) -
     )
     ctx.cards.append(text)
     return f"Sent them this, with a button per recipe: {text}"
+
+
+class RecipeIdeasModule(Module):
+    """RC7: cookbook recipes in meal ideas."""
+
+    name = "recipe_ideas"
+    requires = ("recipes", "recipe_groceries")
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(RecipeIdeas(ctx.services, ctx.get(Recipes), ctx.get(RecipeGroceries))).install()

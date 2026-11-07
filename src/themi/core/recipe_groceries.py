@@ -38,6 +38,7 @@ from themi.core.quantities import NeedsYield, describe, scale_for, scale_line
 from themi.core.recipes import Recipe, Recipes, clear_match, stem
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -653,3 +654,13 @@ async def set_recipe_yield(ctx: ToolContext, args: dict[str, Any]) -> str:
     (recipe,) = resolve(groceries.recipes, [str(args["recipe"])])
     groceries.db.execute("UPDATE recipes SET yield_said = ? WHERE id = ?", (makes, recipe.id))
     return f"Kept: {recipe.name} makes {makes}. Now carry on with what they asked."
+
+
+class RecipeGroceriesModule(Module):
+    """RC2a: a recipe's ingredients onto the grocery list."""
+
+    name = "recipe_groceries"
+    requires = ("recipes",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(RecipeGroceries(ctx.services, ctx.get(Recipes))).install()

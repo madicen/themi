@@ -39,6 +39,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.core.triage import ReceiptFound
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -496,3 +497,19 @@ async def show_pantry(ctx: ToolContext, args: dict[str, Any]) -> str:
             details.append(f"use by {item.expiry.isoformat()}")
         lines.append(f"- {item.name}: {', '.join(details)}")
     return "\n".join(lines) or "The pantry is empty so far."
+
+
+class PantryModule(Module):
+    """What's in the pantry, and what's running low."""
+
+    name = "pantry"
+    requires = ("groceries",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.groceries import (
+            GroceryList,  # at install: at the top it would be an import cycle
+        )
+
+        pantry = ctx.provide(Pantry(ctx.services, ctx.get(GroceryList)))
+        pantry.install()
+        ctx.periodic("pantry.predict", timedelta(hours=6), pantry.predict)

@@ -24,6 +24,7 @@ from themi.core.pantry import Pantry, PantryItem
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 log = logging.getLogger(__name__)
 
@@ -206,3 +207,13 @@ async def suggest_meals(ctx: ToolContext, args: dict[str, Any]) -> str:
         f"Sent two options as buttons ({titles}). They're already in the chat, so a short "
         "line is enough; don't list them again."
     )
+
+
+class MealsModule(Module):
+    """Meal ideas from what the pantry has."""
+
+    name = "meals"
+    requires = ("pantry",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Meals(ctx.services, ctx.get(Pantry))).install()

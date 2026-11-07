@@ -34,6 +34,7 @@ from themi.ai.types import CallKind
 from themi.core.body_double import GUIDED, MODE_WORDS, MODES, SILENT, SPRINT, BodyDouble
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -377,3 +378,13 @@ async def set_job_category(ctx: ToolContext, args: dict[str, object]) -> str:
     elif session is None:
         raise ToolDeclined("Which task? There's no session going on.")
     return f"Noted: that's {CATEGORY_WORDS[category].split(' (')[0]}."
+
+
+class ModeChooserModule(Module):
+    """BD2: choosing a session's mode, and learning from sessions."""
+
+    name = "mode_chooser"
+    requires = ("body_double",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(ModeChooser(ctx.services, ctx.get(BodyDouble))).install()

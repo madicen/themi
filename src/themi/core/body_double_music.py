@@ -14,6 +14,7 @@ from typing import Any
 
 from themi.accounts import Member
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.modules import Module, ModuleContext
 
 
 @dataclass(frozen=True)
@@ -274,3 +275,17 @@ class MusicOffers:
             interactive=True, requested=True,
         )  # fmt: skip
         return outcome.message
+
+
+class MusicOffersModule(Module):
+    """BD5c: music that suits the task."""
+
+    name = "music_offers"
+    requires = ("body_double",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.body_double import (
+            BodyDouble,  # at install: at the top it would be an import cycle
+        )
+
+        ctx.provide(MusicOffers(ctx.services, ctx.get(BodyDouble))).install()

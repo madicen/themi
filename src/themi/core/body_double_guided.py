@@ -36,6 +36,7 @@ from themi.core.body_double import KIND, OPEN_ENDED, SILENT, BodyDouble, Session
 from themi.core.body_double_scene import CHEER_FOR
 from themi.core.prompts import PHRASING_WORDS, as_data
 from themi.core.tasks import clean_steps
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -384,3 +385,13 @@ class GuidedSteps:
         if session.row["phase"] != "work" or not steps:
             return ""
         return f", on step {session.row['step'] + 1} of {len(steps)}"
+
+
+class GuidedStepsModule(Module):
+    """BD1b: a body double session's guided step-through."""
+
+    name = "guided_steps"
+    requires = ("body_double",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(GuidedSteps(ctx.services, ctx.get(BodyDouble))).install()

@@ -32,6 +32,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.body_double import BodyDouble, Session
@@ -298,3 +299,22 @@ async def send_step_picture(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolDeclined(f"Not sent: {exc}.") from exc
     ctx.cards.append("step picture")
     return said
+
+
+class StepPicturesModule(Module):
+    """BD4b: a picture for each guided step."""
+
+    name = "step_pictures"
+    requires = ("body_double", "guided_steps")
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.body_double import (
+            BodyDouble,  # at install: at the top it would be an import cycle
+        )
+        from themi.core.body_double_guided import (
+            GuidedSteps,  # at install: at the top it would be an import cycle
+        )
+
+        ctx.provide(
+            StepPictures(ctx.get(BodyDouble), ctx.get(GuidedSteps), ctx.scheduler)
+        ).install()

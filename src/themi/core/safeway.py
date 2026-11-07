@@ -34,6 +34,7 @@ from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.groceries import GroceryList
@@ -557,3 +558,19 @@ async def fill_safeway_cart(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
 
 def _named(items: list[dict[str, Any]]) -> str:
     return and_list([f"{i['qty']} {i['name']}" if i["qty"] > 1 else i["name"] for i in items])
+
+
+class SafewayModule(Module):
+    """35c: the Safeway cart, filled by the helper extension."""
+
+    name = "safeway"
+    requires = ("groceries",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.groceries import (
+            GroceryList,  # at install: at the top it would be an import cycle
+        )
+
+        cart = ctx.provide(SafewayCart(ctx.services, ctx.get(GroceryList)))
+        cart.install()
+        ctx.periodic("safeway.expire", timedelta(minutes=5), cart.expire_stale)

@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import pytest
 
-from tests.fakes.modules import bare_services
+from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
 from themi.core.burnout import Burnout, BurnoutModule
 from themi.core.business_hours import BusinessHours, BusinessHoursModule
@@ -25,14 +25,11 @@ from themi.core.lists import Lists, ListsModule
 from themi.core.memory import Memory, MemoryModule
 from themi.core.reminders import Reminders, RemindersModule
 from themi.core.routines import Routines, RoutinesModule
-from themi.core.rules import Rulebook
 from themi.core.taking import Taking, TakingModule
 from themi.core.tasks import TaskBoard, TasksModule
 from themi.core.web_search import WebSearch, WebSearchModule
 from themi.core.which_list import WhichList, WhichListModule
-from themi.energy import EnergyModel
 from themi.modules import Module, ModuleContext
-from themi.scheduler import Scheduler
 
 # module, what it provides, the modules it needs first, the jobs it adds
 CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[str]]] = [
@@ -61,11 +58,7 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
 
 
 def core_context(family: SeededFamily) -> ModuleContext:
-    services = bare_services(family.store)
-    ctx = ModuleContext(services, scheduler=Scheduler(family.db))
-    ctx.provide(EnergyModel(family.store))  # core, until it's a module
-    ctx.provide(Rulebook(services.autonomy, services.outbox))
-    return ctx
+    return module_context(family.store)
 
 
 @pytest.mark.parametrize(

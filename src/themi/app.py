@@ -42,26 +42,26 @@ from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
 from themi.core import email_forward
 from themi.core.agent import Agent
-from themi.core.appliances import Appliances
+from themi.core.appliances import AppliancesModule
 from themi.core.approvals import ApprovalsUI
-from themi.core.body_double import BodyDouble
-from themi.core.body_double_guided import GuidedSteps
-from themi.core.body_double_modes import ModeChooser
-from themi.core.body_double_music import MusicOffers
+from themi.core.body_double import BodyDoubleModule
+from themi.core.body_double_guided import GuidedStepsModule
+from themi.core.body_double_modes import ModeChooserModule
+from themi.core.body_double_music import MusicOffersModule
 from themi.core.breaks import BreaksModule
 from themi.core.burnout import BurnoutModule
 from themi.core.business_hours import BusinessHoursModule
-from themi.core.buying import ThingsToBuy
+from themi.core.buying import BuyingModule
 from themi.core.calendar import TaskCalendar
 from themi.core.calendar_copies import CalendarCopies
 from themi.core.calendar_twins import CalendarTwins
-from themi.core.calls import VendorCalls
+from themi.core.calls import CallsModule
 from themi.core.checkin_reviews import CheckinReviewsModule
 from themi.core.commands import CommandsModule
 from themi.core.conversation_mode import ConversationModeModule
-from themi.core.cookbook_save import CookbookSave
-from themi.core.cooking import Cooking
-from themi.core.cooking_timers import CookingTimers
+from themi.core.cookbook_save import CookbookSaveModule
+from themi.core.cooking import CookingModule
+from themi.core.cooking_timers import CookingTimersModule
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -76,36 +76,36 @@ from themi.core.focus import FocusModule
 from themi.core.follow_ups import FollowUpsModule
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
-from themi.core.groceries import GroceryList
+from themi.core.groceries import GroceriesModule, GroceryList
 from themi.core.guides import GuidesModule
 from themi.core.habits import HabitsModule
 from themi.core.journal import JournalModule
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry
 from themi.core.liaison import LiaisonModule
-from themi.core.lists import Lists, ListsModule
+from themi.core.lists import ListsModule
 from themi.core.litter_box import LitterBox
-from themi.core.maintenance import Maintenance
-from themi.core.meals import Meals
+from themi.core.maintenance import MaintenanceModule
+from themi.core.meals import MealsModule
 from themi.core.memory import MemoryModule
 from themi.core.music import Music
 from themi.core.noise_digest import NoiseDigest
-from themi.core.pantry import Pantry
+from themi.core.pantry import Pantry, PantryModule
 from themi.core.reactions import ReactionsModule
-from themi.core.recipe_groceries import RecipeGroceries
-from themi.core.recipe_ideas import RecipeIdeas
-from themi.core.recipes import Recipes
+from themi.core.recipe_groceries import RecipeGroceriesModule
+from themi.core.recipe_ideas import RecipeIdeasModule
+from themi.core.recipes import RecipesModule
 from themi.core.reminders import RemindersModule
 from themi.core.routines import Routines, RoutinesModule
 from themi.core.routines_wall import RoutinesWall
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
-from themi.core.safeway import SafewayCart
+from themi.core.safeway import SafewayModule
 from themi.core.senders import SenderSuggestions
 from themi.core.services import Services
-from themi.core.spending import Spending
+from themi.core.spending import SpendingModule
 from themi.core.starter_tools import STARTER_TOOLS
-from themi.core.step_images import StepPictures
+from themi.core.step_images import StepPicturesModule
 from themi.core.taking import TakingModule
 from themi.core.task_blocks import TaskBlocks
 from themi.core.tasks import TaskBoard, TasksModule
@@ -113,7 +113,7 @@ from themi.core.tools import ToolRegistry
 from themi.core.travel import TravelHeadsUps
 from themi.core.triage import EmailTriage
 from themi.core.vacuum import Vacuum
-from themi.core.web_recipes import WebRecipes
+from themi.core.web_recipes import WebRecipesModule
 from themi.core.web_search import WebSearchModule
 from themi.core.which_list import WhichListModule
 from themi.core.which_task import TaskNamer
@@ -215,18 +215,18 @@ def build_app(
         SenderSuggestions(services).install()
         ExpectedEmails(services, services.gmail).install()
         NoiseDigest(services, approvals, services.gmail).install()
-    groceries = GroceryList(services)
-    groceries.install()
-    safeway = SafewayCart(services, groceries)
-    safeway.install()
-    ctx.load(ListsModule())
-    ThingsToBuy(services, ctx.get(Lists)).install()
-    ctx.load(WhichListModule())
-    Spending(services).install()
-    ctx.load(LiaisonModule())
-    ctx.load(BreaksModule())
-    pantry = Pantry(services, groceries)
-    pantry.install()
+    ctx.load(
+        GroceriesModule(),
+        SafewayModule(),
+        ListsModule(),
+        BuyingModule(),
+        WhichListModule(),
+        SpendingModule(),
+        LiaisonModule(),
+        BreaksModule(),
+        PantryModule(),
+    )
+    groceries, pantry = ctx.get(GroceryList), ctx.get(Pantry)
     ctx.load(TasksModule(), FollowUpsModule())
     tasks = ctx.get(TaskBoard)
     if services.gmail is not None:
@@ -239,28 +239,25 @@ def build_app(
         TakingModule(),
         GuidesModule(),
     )
-    recipes = Recipes(services, services.google, google)  # RC1a: the cookbook doc
-    recipes.install()
-    services.cookbook_save = CookbookSave(services, recipes)  # RC5
-    services.cookbook_save.install()
-    recipe_groceries = RecipeGroceries(services, recipes)  # RC2a
-    recipe_groceries.install()
-    RecipeIdeas(services, recipes, recipe_groceries).install()  # RC7
-    cooking = Cooking(services, recipes, recipe_groceries)  # RC3a
-    cooking.install()
-    ctx.load(BurnoutModule(), ConversationModeModule(), CheckinReviewsModule())
-    Meals(services, pantry).install()
-    VendorCalls(services, tasks).install()
-    CookingTimers(cooking, scheduler).install()  # RC3c: timers are scheduler jobs
-    body_double = BodyDouble(services, scheduler)  # BD1a: block ends are scheduler jobs
-    body_double.install()
-    guided = GuidedSteps(services, body_double)  # BD1b
-    guided.install()
-    StepPictures(body_double, guided, scheduler).install()  # BD4b
+    ctx.load(
+        RecipesModule(google),  # RC1a: the cookbook doc
+        CookbookSaveModule(),
+        RecipeGroceriesModule(),
+        RecipeIdeasModule(),
+        CookingModule(),
+        BurnoutModule(),
+        ConversationModeModule(),
+        CheckinReviewsModule(),
+        MealsModule(),
+        CallsModule(),
+        CookingTimersModule(),
+        BodyDoubleModule(),
+        GuidedStepsModule(),
+        StepPicturesModule(),
+    )
     if spotify is not None:  # BD5b: their own music
         Music(services, SpotifyLinks(db, cipher, spotify)).install()
-    MusicOffers(services, body_double).install()  # BD5c
-    ModeChooser(services, body_double).install()  # BD2
+    ctx.load(MusicOffersModule(), ModeChooserModule())
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None
     if services.google is not None:
@@ -277,14 +274,12 @@ def build_app(
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     ctx.load(WebSearchModule(search))  # F30d: says how to set it up without a key
-    web_recipes = WebRecipes(services, recipes, recipe_pages)  # RC4a: recipes from links
-    web_recipes.install()
+    ctx.load(WebRecipesModule(recipe_pages))  # RC4a: recipes from links
     travel_heads_ups: TravelHeadsUps | None = None
     if travel is not None:
         travel_heads_ups = TravelHeadsUps(services, travel)
         travel_heads_ups.install()
-    maintenance = Maintenance(services, tasks, services.calendar, scheduler)
-    maintenance.install()
+    ctx.load(MaintenanceModule())
     ctx.load(
         RoutinesModule(),
         HabitsModule(),
@@ -306,12 +301,6 @@ def build_app(
         PeriodicTask("approvals.expire", timedelta(hours=1), approvals.expire),
         PeriodicTask("rules.expire_drafts", timedelta(hours=1), rulebook.expire_drafts),
         PeriodicTask("energy.expire_outcomes", timedelta(minutes=15), _async(outcomes.expire)),
-        PeriodicTask("pantry.predict", timedelta(hours=6), pantry.predict),
-        PeriodicTask("safeway.expire", timedelta(minutes=5), safeway.expire_stale),
-        PeriodicTask("maintenance.offer", timedelta(minutes=15), maintenance.offer),
-        PeriodicTask("recipes.sync", timedelta(minutes=15), recipes.sync),
-        PeriodicTask("cooking.expire", timedelta(minutes=15), cooking.expire),
-        PeriodicTask("recipes.forget_web", timedelta(days=1), _async(web_recipes.forget_stale)),
     ]
     periodic.extend(ctx.jobs)
     server = ServerControl(services, control_dir)
@@ -389,7 +378,7 @@ def build_app(
             PeriodicTask("devices.litter_box", timedelta(minutes=10), services.catgenie.poll)
         )
         LitterBox(services, tasks, services.catgenie).install()
-    Appliances(services).install()  # F20b: asked how they're doing, it reads them
+    ctx.load(AppliancesModule())  # F20b: asked how they're doing, it reads them
     if services.google_tasks is not None:
         periodic.append(
             PeriodicTask("google_tasks.inbox", timedelta(minutes=1), services.google_tasks.run)

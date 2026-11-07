@@ -47,6 +47,7 @@ from themi.core.prompts import as_data
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes, site_name
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext, as_job
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -525,3 +526,18 @@ async def recipe_from_picture(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolFailed(f"{exc} Say so in a line.", reply=None) from exc
     ctx.cards.append(recipe.name)
     return f"Sent them the recipe from the picture, as written: {recipe.name}. Don't repeat it."
+
+
+class WebRecipesModule(Module):
+    """RC4a: recipes from links and from the web."""
+
+    name = "web_recipes"
+    requires = ("recipes",)
+
+    def __init__(self, reader: PageReader | None = None) -> None:
+        self.reader = reader
+
+    def install(self, ctx: ModuleContext) -> None:
+        web = ctx.provide(WebRecipes(ctx.services, ctx.get(Recipes), self.reader))
+        web.install()
+        ctx.periodic("recipes.forget_web", timedelta(days=1), as_job(web.forget_stale))

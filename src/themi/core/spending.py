@@ -30,6 +30,7 @@ from themi.accounts.setup import parse_money_to_cents
 from themi.connectors.gmail.parse import web_link
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -353,3 +354,12 @@ async def remove_spending(ctx: ToolContext, args: dict[str, Any]) -> str:
     except InvalidValue as exc:
         raise ToolFailed(f"Not removed: {exc}.") from exc
     return f"Removed: {spending.describe(spend)}."
+
+
+class SpendingModule(Module):
+    """X1: takeout, eating out and business expenses."""
+
+    name = "spending"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(Spending(ctx.services)).install()

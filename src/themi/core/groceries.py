@@ -32,6 +32,7 @@ from themi.core.tools import (
     tool,
 )
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -295,3 +296,12 @@ async def show_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> str:
     if waiting:
         text += f" Waiting on a yes: {', '.join(waiting)}."
     return text
+
+
+class GroceriesModule(Module):
+    """The grocery list."""
+
+    name = "groceries"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(GroceryList(ctx.services)).install()

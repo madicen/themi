@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
@@ -33,6 +33,7 @@ from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.connectors.google import GoogleConfig
@@ -741,3 +742,18 @@ async def find_recipe(ctx: ToolContext, args: dict[str, Any]) -> str:
 )
 async def show_recipe(ctx: ToolContext, args: dict[str, Any]) -> str:
     return await _answer(ctx, _recipes(ctx), str(args["name"]), "")
+
+
+class RecipesModule(Module):
+    """RC1a: the family cookbook, read from its Google Doc."""
+
+    name = "recipes"
+    optional = ("google",)
+
+    def __init__(self, config: GoogleConfig | None = None) -> None:
+        self.config = config
+
+    def install(self, ctx: ModuleContext) -> None:
+        recipes = ctx.provide(Recipes(ctx.services, ctx.services.google, self.config))
+        recipes.install()
+        ctx.periodic("recipes.sync", timedelta(minutes=15), recipes.sync)

@@ -47,6 +47,7 @@ from themi.core.recipe_groceries import Ingredient, resolve
 from themi.core.recipes import Recipe, Recipes, stem
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
+from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:
     from themi.core.cooking_timers import CookingTimers
@@ -836,3 +837,19 @@ async def stop_cooking(ctx: ToolContext, args: dict[str, Any]) -> str:
     await cooking.advance(session, "stop")
     ctx.cards.append("stopped cooking")
     return "Ended the cooking session; the card says so."
+
+
+class CookingModule(Module):
+    """RC3a: cooking a recipe, prep first, then one step at a time."""
+
+    name = "cooking"
+    requires = ("recipes", "recipe_groceries")
+
+    def install(self, ctx: ModuleContext) -> None:
+        from themi.core.recipe_groceries import (
+            RecipeGroceries,  # at install: at the top it would be an import cycle
+        )
+
+        cooking = ctx.provide(Cooking(ctx.services, ctx.get(Recipes), ctx.get(RecipeGroceries)))
+        cooking.install()
+        ctx.periodic("cooking.expire", timedelta(minutes=15), cooking.expire)
