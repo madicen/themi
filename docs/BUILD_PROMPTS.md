@@ -228,7 +228,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34ga | Idea: a picture with its words reaches the tool agent | Feedback | [x] 2026-11-07 |
 | F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [x] 2026-11-07 |
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
-| F34hb | Feedback: body doubling through several tasks in a row | Feedback | [ ] |
+| F34hb | Feedback: body doubling through several tasks in a row | Feedback | [x] 2026-11-07 |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
 | F34j | Idea: when someone's day rolls over | Feedback | [ ] |
 | F34k | Idea: a call before the business closes | Feedback | [ ] |
@@ -11632,10 +11632,26 @@ Notes (2026-11-07):
 - Setup: restart `themi run` (migration 0135).
 
 ### F34hb · Feedback (2026-11-07): body doubling through several tasks in a row
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34ha
 - From F34h's Build: `task_ids` and a routine then tasks in one session, "Next up" between
   them, each closed as it's finished, and the session page's "which of how many".
+
+Notes (2026-11-07):
+- `start_body_double` takes `then`, a list of what comes after, as "task 12" or their own
+  words, instead of `task_ids` (one argument covers tasks, routines and plain words);
+  `BodyDouble.resolve` finds each part (a task number, a routine, an open task by name,
+  else just the words). Every property is required in strict mode, so it's `[]` for one
+  thing.
+- Each part is its own `body_double_sessions` row (migration 0138: `queue`, `part`,
+  `parts`), so each keeps its own outcome and category for BD2's learning. `finish_or_next`
+  (Done, All done, "I'm done") ends the part as finished (its task closed), then starts the
+  next one in the same mode without the mode or music offers, on the same message:
+  "Marked done: Clean the kitchen. ... Next up: Put the laundry away." and its first card.
+  A part done or gone since the run began is passed over. Stop here stops the whole run.
+- Guided cards in a run say '"Clean the kitchen", step 1 of 6:' (the title quoted, or the
+  shield turns it into "Up next: clean the kitchen"). The session page shows "Part 2 of 3".
+- Setup: restart `themi run` (migration 0138).
 
 ### F34i · Idea (2026-11-07): their own Spotify playlists in a session's music choices
 Status: [ ]
