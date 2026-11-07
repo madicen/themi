@@ -96,6 +96,11 @@ def security_headers(response: Response, form_targets: str = "") -> None:
         if page == "picker"
         else "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     )
+    if page == "session":
+        # BD4b, bug 2026-11-07: the session page loads its step pictures with its session
+        # header (Telegram's browser may drop cookies) and shows them from blob: addresses,
+        # made by its own script from its own server's answers.
+        base = base.replace("img-src 'self' data:;", "img-src 'self' data: blob:;")
     # BD3a: the session page opens as a Telegram Mini App, which Telegram's web app frames.
     ancestors = "https://web.telegram.org" if page == "session" else "'none'"
     response.headers["Content-Security-Policy"] = (

@@ -39,6 +39,9 @@ async def test_signed_out_it_signs_in_with_the_mini_apps_init_data(
     page = await site.get("/session")
     assert page.status_code == 200 and "Opening your session" in page.text
     assert "frame-ancestors https://web.telegram.org" in page.headers["content-security-policy"]
+    assert "img-src 'self' data: blob:;" in page.headers["content-security-policy"]  # BD4b
+    other = await site.get("/signed-out")
+    assert "blob:" not in other.headers["content-security-policy"]  # only the session page
     assert "x-frame-options" not in page.headers
     erin = scenario.member("Erin")
     assert erin.telegram_user_id is not None
