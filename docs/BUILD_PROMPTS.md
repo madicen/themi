@@ -294,7 +294,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR8a | Core refactor: the system prompt from template and module parts | Core refactor | [x] 2026-11-07 |
 | CR8b | Core refactor: tool groups from modules | Core refactor | [x] 2026-11-07 |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [x] 2026-11-07 |
-| CR10 | Core refactor: workspace packages | Core refactor | [ ] |
+| CR10 | Core refactor: workspace packages | Core refactor | split |
+| CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
+| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | [ ] |
 | CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
 | CR12 | Core refactor: the work template | Core refactor | [ ] |
 | CR13 | Gate: tutoring design | Core refactor | [ ] |
@@ -14605,7 +14607,7 @@ Notes:
 - Tests changed: the old-schema helpers insert the family row with the old columns.
 
 ### CR10 · Core refactor: workspace packages
-Status: [ ]
+Status: split into CR10a and CR10b (2026-11-07)
 Depends on: CR9
 Read first: the refactor doc's Repository layout; `pyproject.toml`; `Dockerfile`; the CI
 workflow; `Makefile`; CR9's notes.
@@ -14621,9 +14623,56 @@ workflow; `Makefile`; CR9's notes.
   family image's contents match today's. `tools/smoke_container.sh` passes.
 Tests: full suite green from the new layout; the container smoke test.
 
+### CR10a · Core refactor: the standard modules stop importing home code
+Status: [x] 2026-11-07
+Depends on: CR9
+Why first: measured on 2026-11-07, standard modules (lists, routines, reminders, reactions,
+senders, task_blocks, which_list, feedback) import home code at runtime, mostly small text
+helpers in groceries. Moving files into packages before untangling that would only move
+the tangle across package lines.
+- A pack map (`tools/check_packs.py`, run by `make lint`): the home pack's files (groceries,
+  pantry, recipes and cooking, the body double, devices, the wall, Safeway, spending,
+  maintenance, liaison) and a rule that no other file imports them at runtime (type-only
+  imports are allowed until CR10b splits `keys.py`). The composition root is exempt.
+- Move the text helpers to a standard file; invert routines and the wall's routines; the
+  feedback snapshot finds the chore chart's settings without importing it; split the
+  home modules out of `connector_modules.py`.
+Tests: the pack check catches a planted import; golden files identical.
+
+Notes:
+- `tools/check_packs.py` (in `make lint`): the home pack is the household files in
+  `themi.core` (groceries, pantry, recipes and cooking, body double, appliances and devices,
+  the wall and chore chart, Safeway, spending, maintenance, liaison, which_list,
+  home_modules) and their pages (grocery, maintenance, recipe, Safeway, session,
+  spending). Nothing else imports them at runtime; type-only imports are allowed (keys.py),
+  and `themi.app` and `themi.cli` are exempt.
+- Untangled: the shared text helpers (`and_list`, `item_name`, `asks_to_add`,
+  `picture_asks_to_add`, `refuse_spending`) are in `core/wording.py` (groceries still
+  re-exports the ones it uses); the routines' texts and checks live in `routines.py` and the
+  wall's routines import them; the feedback snapshot finds the chore chart's settings by
+  module name; `/groceries/add` moved from the lists page to `web/grocery_pages.py`, the
+  groceries module's page.
+- `core/home_modules.py` holds the home connector modules (Spotify, OurGroceries, Keep,
+  Cozyla, Home Connect, ThinQ, Roborock, Tuya, CatGenie); `connector_modules.py` keeps the
+  email audit, Google Tasks and travel. Entry points moved with them (run `make install`).
+- A settings section can bring values and a save step
+  (`ctx.settings_section(..., values=, save=)`); the body double's per-job modes use it, so
+  the settings page no longer imports the body double.
+- Judgement call recorded: which_list and liaison are home (which list an item goes on;
+  notes between partners); routines, focus, burnout and the rest stay standard.
+- Not checked yet: standard modules use the connectors' code (tasks uses calendar events);
+  work has the connectors, so that's left for CR10b's split.
+- Golden files identical.
+
+### CR10b · Core refactor: workspace packages
+Status: [ ]
+Depends on: CR12 (moved after it on 2026-11-07: the work template runs from one package, and
+the physical split is the riskiest move left; CR10a leaves it a matter of moving files)
+Read first: CR10 above; CR10a's notes.
+
 ### CR11 · Core refactor: the setup wizard
 Status: [ ]
-Depends on: CR10
+Depends on: CR10a
 Read first: the refactor doc's Configuration section; `src/themi/cli.py` (`init`);
 CR10's notes.
 - `themi setup [--dir PATH]`: pick a template or none; toggle modules, adding requirements

@@ -36,17 +36,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import groups, keys, praise
-from themi.core.cozyla_routines import (
-    ALL_DONE_TEXT,
-    CHECK_TEXT,
-    EVENING_BEFORE_QUIET,
-    ROUTINE_SIGNAL,
-    SKIPPED_TEXT,
-    already_there,
-    asked_to_remove,
-)
 from themi.core.events import near_twin, title_matches, words_in_common
-from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.praise import TasksPreferences
 from themi.core.services import Services
@@ -54,11 +44,13 @@ from themi.core.tools import (
     Done,
     Proposal,
     ToolContext,
+    ToolDeclined,
     ToolFailed,
     in_their_words,
     staged_tool,
     tool,
 )
+from themi.core.wording import and_list
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 
@@ -77,6 +69,35 @@ ADD_CATEGORY, ADD_EXECUTOR = "routine_item_add", "routines.add_item"
 KIND = "routine"  # the outbox kind, as C3's checks
 CHECK_KEY = re.compile(r"routine-r(\d+)-(\d{4}-\d{2}-\d{2})")  # Themi's own, not C3's
 TICKED_TEXT = "Marked done: {title}. {praise}"  # a tick on the check, said with a warm word
+
+
+# CR10a: shared with the wall's routines (cozyla_routines), which import them from here.
+EVENING_BEFORE_QUIET = timedelta(hours=1)
+CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
+ALL_DONE_TEXT = "{part} routine: all done."
+SKIPPED_TEXT = "{part} routine: left for today."
+ROUTINE_SIGNAL = 0.5  # a part of the day done, or not: a small lift or dip
+
+
+# F33d (reply 237): a message asking to take something off, and nothing on (a swap)
+REMOVING = re.compile(r"\b(?:remove|delete|drop|get rid of|take\b.*\boff)\b")
+ADDING = re.compile(r"\b(?:add|put|swap|switch|replace|instead|move|new)\b")
+
+
+def asked_to_remove(said: str) -> bool:
+    """They asked to take an item off, and nothing on: an add of an item that's there
+    already is the model's muddle, not what they want (reply 237 made a card for one)."""
+    return bool(REMOVING.search(name_key(said))) and not ADDING.search(name_key(said))
+
+
+def already_there(title: str, routine: str, titles: list[str]) -> None:
+    """F33d: decline an add, in a message asking to remove, of an item already on it."""
+    for each in titles:
+        if name_key(each) == name_key(title) or title_matches(title, each):
+            raise ToolDeclined(
+                f"{each} is already on the {routine} routine, and they asked to remove "
+                "something. Use remove_routine_item."
+            )
 
 
 @dataclass(frozen=True)

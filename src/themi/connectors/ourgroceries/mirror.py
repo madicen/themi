@@ -37,7 +37,7 @@ from typing import Any
 from themi import clock
 from themi.accounts import InvalidValue
 from themi.connectors.ourgroceries.client import GroceryListClient, MirrorError, RemoteItem
-from themi.core.groceries import item_name
+from themi.core.wording import item_name
 from themi.localtime import to_utc_iso
 from themi.storage.db import Database
 

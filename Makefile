@@ -25,6 +25,7 @@ lint:
 	$(PYTHON) -m pyright --pythonpath "$$($(PYTHON) -c 'import sys; print(sys.executable)')"
 	$(PYTHON) tools/check_clock.py
 	$(PYTHON) tools/check_layers.py
+	$(PYTHON) tools/check_packs.py
 
 test:
 	$(PYTEST) $(PARALLEL) tests/unit

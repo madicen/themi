@@ -56,21 +56,7 @@ from themi.core.buying import BuyingModule
 from themi.core.calls import CallsModule
 from themi.core.checkin_reviews import CheckinReviewsModule
 from themi.core.commands import CommandsModule
-from themi.core.connector_modules import (
-    CatGenieModule,
-    CozylaChoresModule,
-    CozylaTodosModule,
-    EmailAuditModule,
-    GoogleTasksModule,
-    HomeConnectModule,
-    KeepModule,
-    OurGroceriesModule,
-    RoborockModule,
-    SpotifyModule,
-    ThinqModule,
-    TravelModule,
-    TuyaModule,
-)
+from themi.core.connector_modules import EmailAuditModule, GoogleTasksModule, TravelModule
 from themi.core.conversation_mode import ConversationModeModule
 from themi.core.cookbook_save import CookbookSaveModule
 from themi.core.cooking import CookingModule
@@ -83,6 +69,18 @@ from themi.core.google_modules import CalendarModule, GmailModule, GoogleModule
 from themi.core.groceries import GroceriesModule
 from themi.core.guides import GuidesModule
 from themi.core.habits import HabitsModule
+from themi.core.home_modules import (
+    CatGenieModule,
+    CozylaChoresModule,
+    CozylaTodosModule,
+    HomeConnectModule,
+    KeepModule,
+    OurGroceriesModule,
+    RoborockModule,
+    SpotifyModule,
+    ThinqModule,
+    TuyaModule,
+)
 from themi.core.journal import JournalModule
 from themi.core.liaison import LiaisonModule
 from themi.core.lists import ListsModule

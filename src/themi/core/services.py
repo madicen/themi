@@ -125,6 +125,10 @@ class Services(Registry):
     household_models: list[type[HouseholdSettings]] = field(default_factory=list)
     # CR7d: the settings form's sections from modules, as (order, template).
     settings_sections: list[tuple[int, str]] = field(default_factory=list)
+    # CR10a: what a module's settings section shows beyond its preferences, and how it
+    # saves those (the body double's mode for each kind of job).
+    settings_values: list[Callable[[Member], dict[str, Any]]] = field(default_factory=list)
+    settings_savers: list[Callable[[Member, Any], None]] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.
     persona: str = ""
     prompt_fragments: list[PromptFragment] = field(default_factory=list)

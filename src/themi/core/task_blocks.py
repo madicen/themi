@@ -33,10 +33,10 @@ from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
 from themi.core import keys
 from themi.core.events import MAKE_TIME, OWN, When, parse_when, when_words
-from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import Proposal, ToolContext, ToolFailed, staged_tool
+from themi.core.wording import and_list
 from themi.energy.model import EnergyModel
 from themi.energy.windows import windows
 from themi.localtime import to_utc_iso

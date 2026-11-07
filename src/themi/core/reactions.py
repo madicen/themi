@@ -21,8 +21,8 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import InboundEvent
 from themi.core import keys
-from themi.core.groceries import and_list
 from themi.core.services import Services
+from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 

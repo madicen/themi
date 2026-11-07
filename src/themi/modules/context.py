@@ -149,10 +149,23 @@ class ModuleContext:
         """CR8a: rules for the system prompt about this module's feature."""
         self.services.prompt_fragments.extend(fragments)
 
-    def settings_section(self, template: str, order: int) -> None:
+    def settings_section(
+        self,
+        template: str,
+        order: int,
+        *,
+        values: Callable[[Member], dict[str, object]] | None = None,
+        save: Callable[[Member, object], None] | None = None,
+    ) -> None:
         """CR7d: a section of the settings form (a template under the site's templates),
-        placed among the core's by `order` (quiet hours 10 ... what Themi notices 100)."""
+        placed among the core's by `order` (quiet hours 10 ... what Themi notices 100).
+        CR10a: `values` adds to what the page shows; `save` takes the form after the
+        preferences are saved, for what isn't a preference."""
         self.services.settings_sections.append((order, template))
+        if values is not None:
+            self.services.settings_values.append(values)
+        if save is not None:
+            self.services.settings_savers.append(save)
 
     def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
         """CR4: the module's website pages, and where they go in the menu."""

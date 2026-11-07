@@ -20,9 +20,9 @@ from themi.autonomy import AutonomyError
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import buying, groceries, keys
-from themi.core.groceries import item_name
 from themi.core.lists import ADD_CATEGORY, ADD_EXECUTOR, THINGS_TO_BUY, list_key, name_key
 from themi.core.tools import Proposal, ToolContext, ToolFailed, tool
+from themi.core.wording import item_name
 from themi.modules import Module, ModuleContext
 
 if TYPE_CHECKING:

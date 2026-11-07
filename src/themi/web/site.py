@@ -35,7 +35,6 @@ from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import conversation_mode, keys
-from themi.core.body_double import MODES
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.web import icons
 from themi.web.auth import COOKIE_NAME
@@ -381,24 +380,14 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 and conversation_mode.offered(app.services, member)
                 else []
             ),
-            "job_modes": job_modes(member),  # BD2
             "sections": settings_sections(app.services),  # CR7d: core's and modules', in order
             "prefs": {  # CR7a: each loaded module's preferences, by module
                 model.module: app.store.preferences(member.id, model)
                 for model in app.services.preference_models
             },
+            **{k: v for values in app.services.settings_values for k, v in values(member).items()},
             **extra,
         }
-
-    def job_modes(member: Member) -> list[tuple[str, str, str]]:
-        """(category, its words, their own mode or "") for each kind of job (BD2)."""
-        from themi.core.body_double_modes import CATEGORIES, CATEGORY_WORDS
-
-        body_double = app.services.maybe(keys.body_double)
-        if body_double is None or body_double.modes is None:
-            return []
-        own = body_double.modes.defaults(member)
-        return [(c, CATEGORY_WORDS[c], own.get(c, "")) for c in CATEGORIES]
 
     @router.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request) -> HTMLResponse:
@@ -437,14 +426,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 csrf=session.csrf_token,
                 **settings_values(member, error=str(exc)),
             )
-        body_double = app.services.maybe(keys.body_double)
-        if body_double is not None and body_double.modes is not None:  # BD2: their own modes
-            for category, _, _ in job_modes(member):
-                if f"job_mode_{category}" in form:
-                    chosen = str(form.get(f"job_mode_{category}", ""))
-                    body_double.modes.set_default(
-                        member, category, chosen if chosen in MODES else None
-                    )
+        for save in app.services.settings_savers:  # CR10a: the modules' own, not preferences
+            save(member, form)
         return kit.redirect("/settings", "Saved.")
 
     @router.post("/settings/busy")

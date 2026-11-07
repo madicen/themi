@@ -1213,8 +1213,34 @@ class BodyDoubleModule(Module):
     preferences = BodyDoublePreferences
 
     def install(self, ctx: ModuleContext) -> None:
-        ctx.settings_section("settings/body_double.html", 40)
         from themi.web import session_pages
 
+        body_double = ctx.provide(BodyDouble(ctx.services, ctx.scheduler))
+
+        def job_modes(member: Member) -> list[tuple[str, str, str]]:
+            """(category, its words, their own mode or "") for each kind of job (BD2)."""
+            from themi.core.body_double_modes import CATEGORIES, CATEGORY_WORDS
+
+            if body_double.modes is None:
+                return []
+            own = body_double.modes.defaults(member)
+            return [(c, CATEGORY_WORDS[c], own.get(c, "")) for c in CATEGORIES]
+
+        def save_modes(member: Member, form: Any) -> None:  # BD2: their own modes
+            if body_double.modes is None:
+                return
+            for category, _, _ in job_modes(member):
+                if f"job_mode_{category}" in form:
+                    chosen = str(form.get(f"job_mode_{category}", ""))
+                    body_double.modes.set_default(
+                        member, category, chosen if chosen in MODES else None
+                    )
+
+        ctx.settings_section(
+            "settings/body_double.html",
+            40,
+            values=lambda member: {"job_modes": job_modes(member)},
+            save=save_modes,
+        )
         ctx.web(session_pages.routes)
-        ctx.provide(BodyDouble(ctx.services, ctx.scheduler)).install()
+        body_double.install()

@@ -428,11 +428,11 @@ class FeedbackChat:
         }
 
     def _settings(self, member: Member, timezone: str) -> dict[str, str]:
-        from themi.core.chore_chart import ChartPreferences  # CR7a
-
         pauses = self.services.outbox.pauses.active(member)
         store = self.services.store  # CR7a, CR7b1: each module's own, or its defaults
-        chart = store.preferences(member.id, ChartPreferences)
+        models = {m.module: m for m in self.services.preference_models}  # CR10a: no import
+        chart_model = models.get("cozyla_chores")  # the chore chart's, when the wall's loaded
+        chart: Any = store.preferences(member.id, chart_model) if chart_model else None
         reviews = store.preferences(member.id, CheckinReviewsPreferences)
         summary = store.preferences(member.id, DaySummaryPreferences)
         noise = store.preferences(member.id, NoisePreferences)
@@ -445,8 +445,12 @@ class FeedbackChat:
             + (f" ({member.phrasing_notes})" if member.phrasing_notes else ""),
             "gentle phrasing": f"strength {member.pda_strength}" if member.pda_enabled else "off",
             "check-in reviews": "on" if reviews.checkin_reviews else "off",
-            "chores on the chart at a time": str(chart.chart_limit or "no limit")
-            + ("" if chart.chart_counts_shared else " (shared chores don't count)"),
+            "chores on the chart at a time": (
+                str(chart.chart_limit or "no limit")
+                + ("" if chart.chart_counts_shared else " (shared chores don't count)")
+            )
+            if chart is not None
+            else "no chart",
             "morning summary": summary.morning_summary.strftime("%H:%M")
             if summary.morning_summary
             else "off",

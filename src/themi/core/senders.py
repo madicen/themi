@@ -24,8 +24,8 @@ from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.groceries import and_list
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:

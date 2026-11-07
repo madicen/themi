@@ -25,9 +25,9 @@ from themi.accounts import InvalidValue, Member
 from themi.accounts.preferences import Preferences
 from themi.autonomy import ExecutionContext
 from themi.core import groups, keys
-from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
+from themi.core.wording import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
