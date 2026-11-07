@@ -34,14 +34,28 @@ def routes(kit: Kit) -> APIRouter:
         return response
 
     @router.get("/session", response_class=HTMLResponse)
-    def session_page(request: Request) -> Response:
-        try:
-            signed = kit.current(request)
-        except NotSignedIn:  # opened from Telegram: the page signs in with initData
-            return page(request, member=None, csrf="", state=None)
+    def session_page(request: Request, ticket: str = "") -> Response:
+        token = ""
+        member = kit.auth.consume_link(ticket) if ticket else None
+        if member is not None:  # signed in from Telegram: the page carries the session
+            token = kit.auth.start_session(member)
+            signed = kit.auth.session(token)
+        else:
+            try:
+                signed = kit.current(request)
+            except NotSignedIn:  # opened from Telegram: the page signs in with initData
+                return page(request, member=None, csrf="", state=None, session_token="")
+        assert signed is not None
         bd = body_double()
         state = bd.state(signed.member) if bd is not None else {"active": False}
-        return page(request, member=signed.member, csrf=signed.csrf_token, state=state)
+        response = page(request, member=signed.member, csrf=signed.csrf_token, state=state,
+                        session_token=token)  # fmt: skip
+        if token:  # the cookie too, for a browser that keeps it
+            response.set_cookie(
+                COOKIE_NAME, token, max_age=int(SESSION_TTL.total_seconds()), httponly=True,
+                samesite="lax", secure=kit.ctx.secure_cookies,
+            )  # fmt: skip
+        return response
 
     @router.post("/session/telegram")
     async def telegram_sign_in(request: Request) -> Response:
@@ -52,16 +66,17 @@ def routes(kit: Kit) -> APIRouter:
         member = app.store.member_by_telegram(user_id) if user_id is not None else None
         if member is None:
             return Response(status_code=403)
-        response = Response(status_code=204)
-        response.set_cookie(
-            COOKIE_NAME,
-            kit.auth.start_session(member),
-            max_age=int(SESSION_TTL.total_seconds()),
-            httponly=True,
-            samesite="lax",
-            secure=kit.ctx.secure_cookies,
-        )
-        return response
+        # A one-time ticket (a sign-in link's token: once, 10 minutes) for the page's
+        # address, not a cookie: Telegram's in-app browser may drop cookies (bug 2026-11-07).
+        ticket = kit.auth.create_link_token(member)
+        return JSONResponse({"ticket": ticket}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/session/ticket")
+    async def fresh_ticket(request: Request) -> JSONResponse:
+        """A new one-time ticket, so the page can reload itself without a cookie."""
+        signed, _ = await kit.checked(request)
+        ticket = kit.auth.create_link_token(signed.member)
+        return JSONResponse({"ticket": ticket}, headers={"Cache-Control": "no-store"})
 
     @router.get("/session/state")
     def session_state(request: Request) -> JSONResponse:

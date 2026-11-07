@@ -4,6 +4,32 @@
   "use strict";
   var body = document.body;
   var POLL = 5000;
+  // Bug 2026-11-07: Telegram's in-app browser may not keep cookies, so the page carries its
+  // session in a header, and reloads itself with a fresh one-time ticket.
+  var session = body.dataset.session || "";
+  try {
+    if (session) sessionStorage.setItem("themi_session", session);
+    else session = sessionStorage.getItem("themi_session") || "";
+  } catch (e) { /* storage off: the cookie or the ticket carries it */ }
+  if (location.search.indexOf("ticket=") !== -1) history.replaceState(null, "", "/session" + location.hash);
+
+  function auth(headers) {
+    headers = headers || {};
+    if (session) headers["X-Themi-Session"] = session;
+    return headers;
+  }
+
+  function reload() {
+    if (!session) { location.reload(); return; }
+    fetch("/session/ticket", {
+      method: "POST", credentials: "same-origin",
+      headers: auth({ "X-CSRF-Token": body.dataset.csrf })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        if (t && t.ticket) location.replace("/session?ticket=" + encodeURIComponent(t.ticket) + location.hash);
+        else location.reload();
+      }, function () { location.reload(); });
+  }
   var offset = 0; // server time minus this browser's time, in ms
   var timer = null;
 
@@ -17,10 +43,11 @@
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ init_data: data }).toString(),
       credentials: "same-origin"
-    }).then(function (r) {
-      if (r.status === 204) { location.replace("/session"); }
-      else if (help) { help.hidden = false; }
-    }, function () { if (help) help.hidden = false; });
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        if (t && t.ticket) location.replace("/session?ticket=" + encodeURIComponent(t.ticket) + location.hash);
+        else if (help) help.hidden = false;
+      }, function () { if (help) help.hidden = false; });
   }
 
   function two(n) { return (n < 10 ? "0" : "") + n; }
@@ -42,10 +69,11 @@
   }
 
   function redraw(state) {
-    if (!state.active) { location.reload(); return; }
+    var showing = document.querySelector(".session-moves");
+    if (!state.active) { if (showing) reload(); return; }  // it ended; "no session" stays put
     offset = Date.parse(state.now) - Date.now();
     var moves = document.querySelector(".session-moves");
-    if (!moves || String(state.id) !== moves.dataset.session) { location.reload(); return; }
+    if (!moves || String(state.id) !== moves.dataset.session) { reload(); return; }
     var fields = document.querySelectorAll("[data-field]");
     for (var i = 0; i < fields.length; i++) {
       var f = fields[i].dataset.field;
@@ -55,7 +83,7 @@
     }
     var scene = document.querySelector(".session-scene");
     if (scene) {
-      if (scene.dataset.mode !== state.mode) { location.reload(); return; }
+      if (scene.dataset.mode !== state.mode) { reload(); return; }
       scene.dataset.phase = state.phase;
       scene.dataset.state = state.scene;
     }
@@ -93,12 +121,18 @@
   // BD4b: the step's picture, a soft placeholder while it's made, or the text alone
   function drawPicture(state) {
     var figure = document.querySelector(".session-picture");
-    if (!figure) { if (state.picture) location.reload(); return; }
+    if (!figure) { if (state.picture) reload(); return; }
     var picture = state.picture || { status: "none" };
     figure.dataset.status = picture.status;
     var img = figure.querySelector("img");
-    if (picture.url) { if (img.getAttribute("src") !== picture.url) img.src = picture.url; img.hidden = false; }
-    else { img.hidden = true; img.removeAttribute("src"); }
+    if (picture.url) {
+      if (img.dataset.url !== picture.url) {
+        img.dataset.url = picture.url;
+        fetch(picture.url, { credentials: "same-origin", headers: auth() })
+          .then(function (r) { return r.ok ? r.blob() : null; })
+          .then(function (b) { if (b) { img.src = URL.createObjectURL(b); img.hidden = false; } }, function () {});
+      }
+    } else { img.hidden = true; img.removeAttribute("src"); delete img.dataset.url; }
   }
 
   // BD3b: chat on the page during a sprint's break
@@ -135,14 +169,14 @@
     form.reset();
     fetch(form.action, {
       method: "POST", body: data, credentials: "same-origin",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (s) { if (s) redraw(s); }, function () {});
     return true;
   }
 
   function poll() {
-    fetch("/session/state", { credentials: "same-origin", cache: "no-store" })
+    fetch("/session/state", { credentials: "same-origin", cache: "no-store", headers: auth() })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (s) { if (s) redraw(s); }, function () {});
   }
@@ -157,7 +191,7 @@
     if (figure) figure.dataset.status = "making";
     fetch(form.action, {
       method: "POST", body: data, credentials: "same-origin",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
     }).then(function () {}, function () {});
     return true;
   }
@@ -170,7 +204,7 @@
     fetch(form.action, {
       method: "POST",
       body: new URLSearchParams(new FormData(form)).toString(),
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" },
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }),
       credentials: "same-origin"
     }).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (s) { if (s) redraw(s); }, function () {});
@@ -187,7 +221,7 @@
       fields.csrf = body.dataset.csrf;
       fetch("/session/music", {
         method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded" }),
         body: new URLSearchParams(fields).toString()
       }).then(function () {}, function () {});
     }
@@ -228,5 +262,6 @@
   music();
   tick();
   timer = setInterval(tick, 1000);
+  poll();  // now, for the step's picture
   setInterval(poll, POLL);
 })();

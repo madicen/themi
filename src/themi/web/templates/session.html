@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="{{ asset('themi.css') }}">
   <script src="{{ asset('session.js') }}" defer></script>
 </head>
-<body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}">
+<body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}" data-session="{{ session_token }}">
 <main id="session" class="session" aria-live="polite"{% if state and state.active %} data-mode="{{ state.mode }}"{% endif %}>
 {% if not member %}
   <p class="session-label" id="signing-in">Opening your session…</p>
@@ -26,7 +26,7 @@
   {% if state.of %}<p class="muted" data-field="steps">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
   {% if state.picture %}
   <figure class="session-picture" data-status="{{ state.picture.status }}">
-    <img alt="" {% if state.picture.url %}src="{{ state.picture.url }}"{% else %}hidden{% endif %}>
+    <img alt="" hidden>
     <span class="session-picture-wait" aria-hidden="true"></span>
   </figure>
   {% endif %}

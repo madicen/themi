@@ -4,6 +4,7 @@ The clock starts Wednesday 21 October 2026, 9 am."""
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import urlencode
 
 import httpx
@@ -43,9 +44,10 @@ async def test_signed_out_it_signs_in_with_the_mini_apps_init_data(
     signed = await site.post(
         "/session/telegram", data={"init_data": init_data(erin.telegram_user_id)}
     )
-    assert signed.status_code == 204 and COOKIE_NAME in signed.cookies
-    page = await site.get("/session")
+    assert signed.status_code == 200 and COOKIE_NAME not in signed.cookies
+    page = await site.get(f"/session?ticket={signed.json()['ticket']}")
     assert "No session going on" in page.text
+    assert COOKIE_NAME in page.cookies  # kept too, where the browser keeps cookies
 
 
 async def test_bad_init_data_is_403(scenario: Scenario, site: httpx.AsyncClient) -> None:
@@ -148,3 +150,30 @@ async def test_play_rain_in_chat_sets_the_page(scenario: Scenario) -> None:
     scenario.primary.queue_text("Rain it is; tap play on the session page.")
     await scenario.say("Erin", "play rain")
     assert scenario.member("Erin").body_double_sound == "rain"
+
+
+async def test_the_mini_app_works_when_the_webview_drops_cookies(scenario: Scenario) -> None:
+    """Bug (2026-11-07, Michael on the Pi): Telegram's in-app browser didn't send the session
+    cookie back, so after signing in the page showed "Opening your session..." again. The
+    page now signs in by a one-time ticket in its address and carries the session in a
+    header, so nothing depends on the cookie."""
+    from tests.fixtures.web import web_client
+
+    erin = scenario.member("Erin")
+    assert erin.telegram_user_id is not None
+    await bd(scenario).start(erin, mode=SILENT, minutes=30)
+    async with web_client(scenario) as site:
+        signed = await site.post("/session/telegram",
+                                 data={"init_data": init_data(erin.telegram_user_id)})  # fmt: skip
+        assert signed.status_code == 200
+        ticket = signed.json()["ticket"]
+        site.cookies.clear()  # the webview keeps nothing
+        page = await site.get(f"/session?ticket={ticket}")
+        assert "Quiet company" in page.text and "Opening your session" not in page.text
+        token = re.search(r'data-session="([^"]+)"', page.text)
+        assert token is not None
+        site.cookies.clear()
+        state = await site.get("/session/state", headers={"X-Themi-Session": token.group(1)})
+        assert state.status_code == 200 and state.json()["active"] is True
+        again = await site.get(f"/session?ticket={ticket}")  # a ticket works once
+        assert "Opening your session" in again.text
