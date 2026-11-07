@@ -27,7 +27,6 @@ import pytest
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.app import App
-from themi.core.prompts import build_system
 from themi.core.tools import TOOL_GROUPS
 from themi.web import HealthSources, create_app
 from themi.web.kit import SiteContext
@@ -143,7 +142,7 @@ async def test_the_family_app_matches_its_golden_files(scenario: Scenario) -> No
     check("jobs.json", jobs_of(app))
     check("handlers.json", handlers_of(app))
     check("routes.json", routes_of(scenario))
-    check("system_prompt.txt", build_system())
+    check("system_prompt.txt", app.services.system_text())  # CR8a: composed from parts
 
 
 @pytest.mark.usefixtures(*CONNECTORS)

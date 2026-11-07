@@ -25,6 +25,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -206,6 +207,21 @@ async def remove_follow_up(ctx: ToolContext, args: dict[str, Any]) -> str:
     return REMOVED_TEXT.format(after=after.title)
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "follow_ups.something-to-do-once",
+        "act",
+        230,
+        """\
+- Something to do once another task is done ("right after I clean the bird cage, remind
+  me to refill the water") is add_follow_up on that task: it has no date of its own. When
+  that job isn't a task yet ("after Michael brings the laundry up, remind me to put it
+  away"), create_task it for them first, then add_follow_up on the new task.""",
+    ),
+)
+
+
 class FollowUpsModule(Module):
     """F18: following up on what someone is waiting for."""
 
@@ -213,4 +229,5 @@ class FollowUpsModule(Module):
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*PROMPT_RULES)
         ctx.provide(FollowUps(ctx.services, ctx.get(TaskBoard))).install()

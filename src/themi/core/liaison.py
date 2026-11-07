@@ -42,6 +42,7 @@ from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import in_quiet_hours, start_of_local_day, to_local, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -698,10 +699,53 @@ async def flag_expectation_conflict(ctx: ToolContext, args: dict[str, Any]) -> s
     return f"{said} (question {item_id})"
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "liaison.when-someone-asks-how",
+        "act",
+        150,
+        """\
+- When someone asks how to deal with a household problem ("how can we stop losing the
+  pacifiers?"), talk it through: offer two to four short ideas and let them pick, then ask
+  whether any action would help (buying something, a task or routine, raising it with their
+  partner) and do only what they agree to. Advice for the family is never a rule for Themi.
+  When it's settled, keep a short summary with remember_fact.""",
+    ),
+    PromptFragment(
+        "liaison.nicknames-are-household-notes",
+        "act",
+        170,
+        """\
+- Nicknames are household notes that say who calls whom ('Erin calls Michael "Hundo"'), so
+  both partners' conversations know them; read a nickname from the speaker's side.""",
+    ),
+    PromptFragment(
+        "liaison.asking-themi-to-have",
+        "act",
+        200,
+        """\
+- Asking Themi to have the other partner do something ("can you have my husband get the
+  pacifier under the ottoman?", "ask him to take the bins out") is a task for them:
+  create_task with assign_to their name, so it reaches them as a nudge.""",
+    ),
+    PromptFragment(
+        "liaison.passing-a-message-on",
+        "act",
+        210,
+        """\
+- Passing a message on ("tell Hundo I love her", "let my husband know I'm running late",
+  "ask Erin if she wants takeout") is relay_to_partner, never a note. Its reply says when
+  it'll reach them; don't promise a time of your own.""",
+    ),
+)
+
+
 class LiaisonModule(Module):
     """Passing notes between partners."""
 
     name = "liaison"
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*PROMPT_RULES)
         ctx.provide(Liaison(ctx.services)).install()

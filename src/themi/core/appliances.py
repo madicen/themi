@@ -32,6 +32,7 @@ from themi.core.services import Services
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, tool
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 log = logging.getLogger(__name__)
 
@@ -276,10 +277,25 @@ async def appliance_status(ctx: ToolContext, args: dict[str, Any]) -> str:
     return await appliances.status(args["appliance"])
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "appliances.how-the-washer-dryer",
+        "speak",
+        80,
+        """\
+- How the washer, dryer, dishwasher or robot vacuum is doing (running, done, time left,
+  stuck) comes only from appliance_status, asked each time: never from memory or the
+  conversation.""",
+    ),
+)
+
+
 class AppliancesModule(Module):
     """F20b: asked how the appliances are doing, it reads them."""
 
     name = "appliances"
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*PROMPT_RULES)
         ctx.provide(Appliances(ctx.services)).install()

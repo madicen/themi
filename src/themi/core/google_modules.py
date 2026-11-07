@@ -31,6 +31,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.triage import EmailTriage
 from themi.energy import EnergyModel
 from themi.modules import Module, ModuleContext, ModuleSetup, as_job
+from themi.modules.prompt import PromptFragment
 
 
 class GoogleModule(Module):
@@ -88,6 +89,19 @@ class GmailModule(Module):
         ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
 
 
+# CR8a: the system prompt's rules about this module's feature.
+CALENDAR_PROMPT_RULES = (
+    PromptFragment(
+        "calendar.an-appointment-or-event",
+        "act",
+        120,
+        """\
+- An appointment or event at a set time ("the dentist Tuesday at 3") goes on a calendar
+  (add_calendar_event, theirs or the family's); something they have to do is a task.""",
+    ),
+)
+
+
 class CalendarModule(Module):
     """Google Calendar: each person's calendars, events made from chat, and busy times that
     hold Themi's own messages."""
@@ -97,6 +111,7 @@ class CalendarModule(Module):
     requires = ("google", "tasks")
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*CALENDAR_PROMPT_RULES)
         s = ctx.services
         sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
         ctx.provide(sync)

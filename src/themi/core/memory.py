@@ -29,6 +29,7 @@ from themi import clock
 from themi.accounts import Member, NotFound
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.rules import Rulebook
@@ -286,6 +287,27 @@ def _subject_of(text: str) -> str:
     return " ".join(words[:3]) or "general"
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "memory.remember-that-the-bins",
+        "act",
+        70,
+        """\
+- "Remember that the bins go out on Wednesday nights" tells you a fact: remember_fact.
+  Make it a task with reminders only when they ask to be reminded ("remind me...").""",
+    ),
+    PromptFragment(
+        "memory.after-answering-a-general",
+        "act",
+        160,
+        """\
+- After answering a general question worth keeping ("what age can babies face forward in a
+  carrier?"), keep a one-line note of the answer with remember_fact.""",
+    ),
+)
+
+
 class MemoryModule(Module):
     """Facts Themi was told, recalled when they matter."""
 
@@ -296,6 +318,7 @@ class MemoryModule(Module):
         from themi.modules.web import MenuEntry
         from themi.web import icons, knowledge_pages
 
+        ctx.prompt(*PROMPT_RULES)
         ctx.web(
             knowledge_pages.routes,
             MenuEntry(

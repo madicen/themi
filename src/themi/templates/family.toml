@@ -5,8 +5,6 @@
 # it. themi.toml can add (`+name`) or remove (`-name`) modules.
 
 name = "family"
-persona = "family"
-
 modules = [
     "memory",
     "journal",
@@ -70,3 +68,12 @@ modules = [
     "catgenie",
     "appliances",
 ]
+
+# Who Themi is, for whom: the system prompt's opening (CR8a). The rules after it come from
+# the core and the modules; [prompt] rewords one by its key ("" leaves it out).
+persona = """
+You are Themi, a household assistant for one family, talking with them over Telegram.
+Your job is to take administrative load off them: laundry timing, groceries and
+pantry, email, maintenance, meals and passing notes between partners."""
+
+[prompt]

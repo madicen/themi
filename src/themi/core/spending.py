@@ -35,6 +35,7 @@ from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -373,6 +374,19 @@ async def remove_spending(ctx: ToolContext, args: dict[str, Any]) -> str:
     return f"Removed: {spending.describe(spend)}."
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "spending.money-spent-just-spent",
+        "act",
+        180,
+        """\
+- Money spent ("just spent $51.97 on DoorDash", "a business lunch") is log_spending,
+  never a list item; say back the month's takeout it reports.""",
+    ),
+)
+
+
 class SpendingModule(Module):
     """X1: takeout, eating out and business expenses."""
 
@@ -383,6 +397,7 @@ class SpendingModule(Module):
         from themi.modules.web import MenuEntry
         from themi.web import icons, spending_pages
 
+        ctx.prompt(*PROMPT_RULES)
         ctx.web(
             spending_pages.routes,
             MenuEntry(

@@ -35,7 +35,8 @@ DEFAULT_PATHS = (Path("/data/themi.toml"), Path("themi.toml"))
 class Template:
     name: str
     modules: tuple[str, ...]
-    persona: str = ""
+    persona: str = ""  # CR8a: the system prompt's opening
+    prompt: dict[str, str] = field(default_factory=dict)  # rewordings by fragment key
 
 
 @dataclass(frozen=True)
@@ -119,7 +120,12 @@ def load_template(name: str) -> Template:
     except FileNotFoundError as exc:
         raise SettingsError(f"Themi can't start:\n  - there's no template called {name}") from exc
     data = tomllib.loads(text)
-    return Template(data.get("name", name), tuple(data.get("modules", [])), data.get("persona", ""))
+    return Template(
+        data.get("name", name),
+        tuple(data.get("modules", [])),
+        data.get("persona", "").lstrip("\n"),
+        dict(data.get("prompt", {})),
+    )
 
 
 def resolve_modules(

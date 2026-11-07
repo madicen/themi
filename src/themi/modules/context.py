@@ -33,6 +33,7 @@ if TYPE_CHECKING:
         TextHandler,
     )
     from themi.core.tools import Tool
+    from themi.modules.prompt import PromptFragment
     from themi.scheduler import Scheduler
     from themi.web.kit import Kit
 
@@ -139,6 +140,10 @@ class ModuleContext:
     def preferences[P: Preferences](self, member: Member, model: type[P]) -> P:
         """CR7a: a member's preferences for a module (the store holds them)."""
         return self.services.store.preferences(member.id, model)
+
+    def prompt(self, *fragments: PromptFragment) -> None:
+        """CR8a: rules for the system prompt about this module's feature."""
+        self.services.prompt_fragments.extend(fragments)
 
     def settings_section(self, template: str, order: int) -> None:
         """CR7d: a section of the settings form (a template under the site's templates),

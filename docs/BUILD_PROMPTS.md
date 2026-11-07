@@ -290,7 +290,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR7b1 | Core refactor: the other per-member feature settings as preferences | Core refactor | [x] 2026-11-07 |
 | CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [x] 2026-11-07 |
 | CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [x] 2026-11-07 |
-| CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
+| CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | split |
+| CR8a | Core refactor: the system prompt from template and module parts | Core refactor | [x] 2026-11-07 |
+| CR8b | Core refactor: tool groups from modules | Core refactor | [ ] |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
 | CR10 | Core refactor: workspace packages | Core refactor | [ ] |
 | CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
@@ -14477,7 +14479,7 @@ Notes:
 - Tests: the full family's sections keep their order; a module left out takes its section.
 
 ### CR8 · Core refactor: the prompt and tool groups from parts
-Status: [ ]
+Status: split into CR8a and CR8b (2026-11-07)
 Depends on: CR7b
 Read first: `src/themi/core/prompts.py`; `GROUPS` and `TOOL_GROUPS` in
 `src/themi/core/tools.py`; `src/themi/core/routing.py`; CR7b's notes.
@@ -14493,6 +14495,46 @@ Read first: `src/themi/core/prompts.py`; `GROUPS` and `TOOL_GROUPS` in
 - `make router-eval` must score the same as before; record both numbers in Notes.
 Tests: golden files identical; a module left out drops its rules and groups; the
 router eval.
+
+### CR8a · Core refactor: the system prompt from template and module parts
+Status: [x] 2026-11-07
+Depends on: CR7d
+Read first: CR8 above; `src/themi/core/prompts.py`.
+- The prompt's opening lines (persona) come from the template. Each rule line is a
+  fragment with a key, its section ("How you speak", "How you act"), its place, and its
+  owner: the core, or the module whose feature it's about. A template can replace a
+  fragment's words by its key (CR12's work template needs that).
+- The family's composed prompt is byte-identical to `system_prompt.txt`; the golden test
+  reads the composed prompt from the app.
+Tests: golden files identical; a module left out drops its lines; an override by key.
+
+Notes:
+- `themi.modules.prompt`: `PromptFragment(key, section, order, text)` and
+  `compose_system(persona, fragments, overrides)`. `Services.system_text()` composes the
+  template's persona (`themi/templates/family.toml`), the core's rules
+  (`core/prompts.py` `CORE_RULES`, 15) and the loaded modules' (`ctx.prompt(...)`: tasks 7,
+  liaison 4, memory 2, the chore chart 2, appliances, calendar, travel, spending, lists and
+  follow_ups 1 each). `STABLE_SYSTEM` is gone; `build_system(..., base=...)` takes the
+  composed text.
+- The fragments were cut from the old text by a script that checked recomposing them gave
+  it back byte for byte; the golden test now reads the app's composed prompt, unchanged.
+- A template's `[prompt]` table rewords a fragment by its key ("" leaves it out): CR12 needs
+  it for the core rules that use household words ("Some of the family experience direct
+  requests as stressful", the washer example).
+- Behaviour change: an app without a module no longer tells the model about that module's
+  tools (no Google: no calendar rule; no wall: no chore chart rules).
+- `make router-eval`: 138/156 (88%), the same as before CR1 (checked against the commit
+  before the refactor started).
+- Tests changed: tests that read "the family's prompt" use `tests/fakes/prompt.py`'s
+  `FAMILY_SYSTEM` (the golden file); the hello test compares with its app's own prompt.
+
+### CR8b · Core refactor: tool groups from modules
+Status: [ ]
+Depends on: CR8a
+- `ctx.tool_group(name, description, pattern)` and the group named with each tool replace
+  the central `GROUPS` and `TOOL_GROUPS`; the router and registry read the registered ones.
+- `tools.json` stays identical and `make router-eval` scores the same (record both).
+Tests: golden files identical; a module left out drops its group; the router eval.
 
 ### CR9 · Core refactor: workspaces and template roles
 Status: [ ]

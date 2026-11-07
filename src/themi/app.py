@@ -28,6 +28,7 @@ from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
+from themi.config import Template, load_template
 from themi.connectors.catgenie import CatGenieConfig
 from themi.connectors.cozyla import CozylaClient
 from themi.connectors.gkeep import KeepFactory
@@ -89,6 +90,7 @@ from themi.core.maintenance import MaintenanceModule
 from themi.core.meals import MealsModule
 from themi.core.memory import MemoryModule
 from themi.core.pantry import PantryModule
+from themi.core.prompts import CORE_RULES
 from themi.core.reactions import ReactionsModule
 from themi.core.recipe_groceries import RecipeGroceriesModule
 from themi.core.recipe_ideas import RecipeIdeasModule
@@ -251,8 +253,11 @@ def build_app(
     control_dir: Path | None = None,
     hedge_after: float | None = HEDGE_AFTER,
     modules: list[Module] | None = None,
+    template: Template | None = None,
 ) -> App:
-    """`modules`: the list to load instead of the family's (tests, and CR5's templates)."""
+    """`modules`: the list to load instead of the family's (tests, and CR5's templates).
+    `template`: the persona and prompt rewordings (CR8a); the family's when None."""
+    template = template or load_template("family")
     if modules is None:
         modules = family_modules(
             google=google,
@@ -292,6 +297,9 @@ def build_app(
         autonomy=Autonomy(store, ExecutorRegistry()),
         energy=energy,
         outcomes=outcomes,
+        persona=template.persona,  # CR8a
+        prompt_fragments=list(CORE_RULES),
+        prompt_overrides=dict(template.prompt),
     )
     scheduler = Scheduler(db)
     ctx = ModuleContext(services, scheduler=scheduler)

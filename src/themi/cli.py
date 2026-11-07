@@ -148,13 +148,16 @@ def build_runtime(
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
     modules = None
+    template = None
     options: dict[str, Any] = {}
     if connectors is not None:  # `make dev`: the fakes, as the family's connectors
         options = dict(connectors)
     else:  # CR5a: the modules themi.toml (or the family template) names
-        from themi.config import config_path, load_config, resolve_modules
+        from themi.config import config_path, load_config, load_template, resolve_modules
 
-        modules = resolve_modules(load_config(config_path()), settings)
+        config = load_config(config_path())
+        modules = resolve_modules(config, settings)
+        template = load_template(config.template)
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
@@ -170,6 +173,7 @@ def build_runtime(
         conversation_mode=settings.conversation_mode,
         control_dir=settings.control_dir,
         modules=modules,
+        template=template,
         **options,
     )
     return Runtime(

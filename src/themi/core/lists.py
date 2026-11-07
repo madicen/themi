@@ -30,6 +30,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -738,6 +739,19 @@ async def move_list_item(ctx: ToolContext, args: dict[str, Any]) -> str:
     return f"Moved {item.name} {where}. Now: {words(fresh)}"
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "lists.a-named-list-someone",
+        "act",
+        220,
+        """\
+- A named list someone asks for ("a packing list", "my gift ideas") is one of Themi's
+  lists (create_list, add_to_list...), not a task and not the grocery list.""",
+    ),
+)
+
+
 class ListsModule(Module):
     """L1a: named lists Themi keeps."""
 
@@ -748,6 +762,7 @@ class ListsModule(Module):
         from themi.modules.web import MenuEntry
         from themi.web import icons, list_pages
 
+        ctx.prompt(*PROMPT_RULES)
         ctx.web(
             list_pages.routes,
             MenuEntry(

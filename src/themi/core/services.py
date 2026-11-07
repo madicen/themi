@@ -23,6 +23,7 @@ from themi.channels.outbox import Outbox
 from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
+from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
 from themi.modules.web import WebPages
 
@@ -124,6 +125,10 @@ class Services(Registry):
     household_models: list[type[HouseholdSettings]] = field(default_factory=list)
     # CR7d: the settings form's sections from modules, as (order, template).
     settings_sections: list[tuple[int, str]] = field(default_factory=list)
+    # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.
+    persona: str = ""
+    prompt_fragments: list[PromptFragment] = field(default_factory=list)
+    prompt_overrides: dict[str, str] = field(default_factory=dict)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
@@ -151,6 +156,11 @@ class Services(Registry):
         for row in self.outbox.queued(member.id):
             items.append(OpenItem(f"Scheduled to send later: {row['text'][:80]}"))
         return items
+
+    def system_text(self) -> str:
+        """The system prompt's stable part: the persona, then the core's and the loaded
+        modules' rules (CR8a)."""
+        return compose_system(self.persona, self.prompt_fragments, self.prompt_overrides)
 
     def calendar_context(self, member: Member) -> str:
         """Today's and tomorrow's events this person may see, for the model (K1)."""

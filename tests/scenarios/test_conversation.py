@@ -1,5 +1,6 @@
 """Conversations end to end: Telegram in, agent and tools, outbox and Telegram out."""
 
+from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.events import Button
@@ -12,7 +13,6 @@ from themi.core.agent import (
     TANGLED_TEXT,
     VOICE_FAILED_TEXT,
 )
-from themi.core.prompts import STABLE_SYSTEM
 from themi.core.services import AwaitingItem
 
 
@@ -21,7 +21,7 @@ async def test_hello_gets_a_reply(scenario: Scenario) -> None:
     assert await scenario.say("Erin", "hello") == ["Hi Erin! Quiet morning so far."]
 
     request = scenario.primary.last_request
-    assert request.system.startswith(STABLE_SYSTEM)
+    assert request.system.startswith(scenario.app.services.system_text())  # CR8a: its modules'
     turn = request.messages[0].text
     assert "Talking with: Erin (admin)" in turn
     assert "Local time: Wednesday 21 October 2026, 9:00 AM (America/Los_Angeles)" in turn
@@ -324,7 +324,6 @@ def test_a_busy_reply_doesnt_promise_a_retry() -> None:
     # Bug #77's thread: "Will you retry automatically?" got "Yes, I will retry that
     # automatically as soon as the service is clear." Nothing retries it.
     assert "I won't retry it on my own" in BUSY_TEXT
-    from themi.core.prompts import STABLE_SYSTEM
 
     assert "isn't retried by Themi" in STABLE_SYSTEM
 

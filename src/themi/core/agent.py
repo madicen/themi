@@ -615,7 +615,13 @@ class Agent:
         timezone = family.timezone if family else "UTC"
         pinned, notes = services.facts_for(member, text)
         household, personal = services.rules(member)
-        system = build_system(household, pinned, personal_rules=personal, owner=member.name)
+        system = build_system(
+            household,
+            pinned,
+            personal_rules=personal,
+            owner=member.name,
+            base=services.system_text(),
+        )
         history = self._history(member, event)
         turn = build_turn(
             member,

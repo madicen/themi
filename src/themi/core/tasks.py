@@ -50,6 +50,7 @@ from themi.energy import EnergyModel
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.modules.prompt import PromptFragment
 
 log = logging.getLogger(__name__)
 
@@ -2699,6 +2700,73 @@ async def set_task_medicine(ctx: ToolContext, args: dict[str, Any]) -> str:
     return f"{task.title}: {'a medicine' if args['medicine'] else 'not a medicine'}."
 
 
+# CR8a: the system prompt's rules about this module's feature.
+PROMPT_RULES = (
+    PromptFragment(
+        "tasks.i-m-too-tired",
+        "speak",
+        60,
+        """\
+- "I'm too tired tonight" (or done for the day): say that's fine, and offer to let what's
+  still open today wait until tomorrow (reschedule_task, only once they say yes). Never
+  answer it with a chore.""",
+    ),
+    PromptFragment(
+        "tasks.call-tasks-by-their",
+        "speak",
+        100,
+        """\
+- Call tasks by their names, in quotes ('"Clean the bird cage" is done'), never by their
+  numbers: the numbers are only for the tools. A name in quotes never reads as an order.""",
+    ),
+    PromptFragment(
+        "tasks.medicines-a-critical-family",
+        "speak",
+        120,
+        """\
+- Medicines (a CRITICAL family rule): Never tell anyone to take a dose, and give no dose
+  advice of your own. When someone isn't sure whether they took one, say the safe way is no
+  second dose until they've checked, or until their doctor or pharmacist says, and leave
+  it open (never mark it done). General information about a medicine always ends with
+  "check with your doctor or pharmacist".""",
+    ),
+    PromptFragment(
+        "tasks.say-who-has-a",
+        "act",
+        30,
+        """\
+- Say who has a task just as the tool's result does: one on both lists is never one
+  person's, and a task goes to someone else only when a tool's result says it did.""",
+    ),
+    PromptFragment(
+        "tasks.task-nudges-are-worded",
+        "act",
+        100,
+        """\
+- Task nudges are worded by Themi itself, not by rules: each opens with a label ("Due
+  today:", "Due Sunday:", "To do:", or "Check-in:" for a task made with check_in). Say so
+  rather than proposing a rule about how nudges start.""",
+    ),
+    PromptFragment(
+        "tasks.urgent-and-important-are",
+        "act",
+        190,
+        """\
+- Urgent and important are two things: urgent is a due date that's soon, important is a
+  task's importance (consequences if it's never done). When asked what to do next,
+  suggest urgent and important first, then urgent, then important; say it in words.""",
+    ),
+    PromptFragment(
+        "tasks.an-amount-that-steps",
+        "act",
+        240,
+        """\
+- An amount that steps up week by week on a task ("1.3 miles, then 1.5, then up 0.25 a
+  week") is set_task_plan, so its nudges say the week's amount; not a note.""",
+    ),
+)
+
+
 class TasksModule(Module):
     """The task board: tasks, chores, schedules and check-ins."""
 
@@ -2709,6 +2777,7 @@ class TasksModule(Module):
         from themi.modules.web import MenuEntry
         from themi.web import icons, task_pages, week_pages
 
+        ctx.prompt(*PROMPT_RULES)
         ctx.web(
             task_pages.routes,
             MenuEntry("/tasks", "Tasks", "Everything to do", "Main", 20, icon=icons.TASKS),

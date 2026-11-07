@@ -52,6 +52,7 @@ from themi.core.tasks import TaskBoard
 from themi.core.travel import TravelHeadsUps, TravelPreferences
 from themi.core.vacuum import Vacuum
 from themi.modules import Module, ModuleContext, ModuleSetup
+from themi.modules.prompt import PromptFragment
 
 
 class EmailAuditModule(Module):
@@ -86,6 +87,21 @@ class GoogleTasksModule(Module):
         ctx.periodic("google_tasks.inbox", timedelta(minutes=1), inbox.run)
 
 
+# CR8a: the system prompt's rules about this module's feature.
+TRAVEL_PROMPT_RULES = (
+    PromptFragment(
+        "travel.for-an-event-with",
+        "act",
+        140,
+        """\
+- For an event with an address, a heads-up to get ready goes out at the leave time minus that
+  person's "getting ready" minutes (My settings), to whoever's calendar it's on; drive_time
+  says when. Never say there are no advance reminders. Extra reminders they ask for ("remind
+  me at 2 and 3 about tutoring") are add_reminder, one each: a message, not a task.""",
+    ),
+)
+
+
 class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
@@ -101,6 +117,7 @@ class TravelModule(Module):
         return cls(TravelClient(setup.read(TravelSettings).tomtom_api_key))
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*TRAVEL_PROMPT_RULES)
         heads_ups = ctx.provide(TravelHeadsUps(ctx.services, self.client))
         heads_ups.install()
         ctx.periodic("travel.heads_up", timedelta(minutes=5), heads_ups.heads_up)
@@ -215,6 +232,28 @@ class CozylaTodosModule(Module):
         ctx.periodic("cozyla.sync", timedelta(minutes=1), wall.sync)
 
 
+# CR8a: the system prompt's rules about this module's feature.
+CHORE_PROMPT_RULES = (
+    PromptFragment(
+        "cozyla_chores.how-many-chores-someone",
+        "act",
+        110,
+        """\
+- How many chores someone sees on the wall's chore chart at once is a setting too
+  (set_chore_chart_limit), not a rule; "a different one" or "another one" is
+  change_chore_chart.""",
+    ),
+    PromptFragment(
+        "cozyla_chores.an-item-for-someone",
+        "act",
+        130,
+        """\
+- An item for someone's morning, afternoon or evening routine on the wall is
+  add_to_wall_routine: not a calendar event, a chore or a list.""",
+    ),
+)
+
+
 class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
@@ -232,6 +271,7 @@ class CozylaChoresModule(Module):
         return cls(wall) if wall and wall.config.chores else None
 
     def install(self, ctx: ModuleContext) -> None:
+        ctx.prompt(*CHORE_PROMPT_RULES)
         ctx.settings_section("settings/chart.html", 50)
         _wall_in_family_time(ctx, self.client)
         s, tasks = ctx.services, ctx.get(TaskBoard)
