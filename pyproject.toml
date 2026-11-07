@@ -53,7 +53,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-themi = ["storage/schema/*.sql", "web/templates/*.html", "web/static/*"]
+themi = ["storage/schema/*.sql", "web/templates/*.html", "web/static/*", "web/static/*/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

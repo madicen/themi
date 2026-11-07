@@ -11561,6 +11561,12 @@ Notes (2026-11-06):
   token). Reloads fetch a fresh ticket (`POST /session/ticket`); step pictures load through
   the same header. The cookie is still set for browsers that keep it. Also fixed: a page
   showing "No session going on" reloaded itself every 5 seconds.
+- Fix (2026-11-07, on the Pi): the session page answered "Internal Server Error". The
+  package's data rule `web/static/*` didn't reach into `chameleon/` or `audio/`, so the
+  installed app had no chameleon art (BD3b) and no loops (BD5a); tests run from the source
+  tree and never saw it. `pyproject.toml` adds `web/static/*/*`, and
+  `tests/unit/test_package_data.py` checks every file under `web/` and `storage/schema/`
+  is covered.
 
 ### BD3b · Body double: Themi the chameleon
 Status: [~] built 2026-11-06; waiting for Michael and Erin to look at the scenes on their phones
