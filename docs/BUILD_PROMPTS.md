@@ -231,7 +231,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34hb | Feedback: body doubling through several tasks in a row | Feedback | [x] 2026-11-07 |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [x] 2026-11-07 |
 | F34ja | Idea: when someone's day rolls over: the setting, tasks and routines | Feedback | [x] 2026-11-07 |
-| F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [ ] |
+| F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [x] 2026-11-07 |
 | F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [ ] |
 | F34m | Idea: a recipe from a photo | Feedback | [ ] |
@@ -11820,13 +11820,31 @@ Notes (2026-11-07):
 - Quiet hours are untouched. Setup: restart `themi run` (migration 0142); Michael sets 3 am.
 
 ### F34jb · Idea (2026-11-07): when someone's day rolls over: the rest of core
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34ja
 - The other modules' "today" for a person through `member_day` (habits, journal, focus,
   spending, meals, cooking, the morning summary's "yesterday", Cozyla chores and to-dos),
   shared things by the person acting; "tonight" said after midnight and before their
   rollover means now; and the test that greps core for a person's "today" worked out
   without the helper (`now().astimezone(...).date()`), as the clock rule's test does.
+
+Notes (2026-11-07):
+- Habit check-ins (once per their day), the journal (a day is written once it's over for
+  them) and Focus ("too much today", the day's budget) use `member_day`.
+- "Tonight" is the model's reading, so its context says so: `prompts.day_note` adds to the
+  local time, after midnight and before their rollover, "(For Michael it's still Friday
+  until 3 am: their Friday's chores and routines are still today's, and 'tonight' means
+  now. 'Tomorrow' is still the calendar day after Saturday.)", in both the agent's and
+  conversation mode's context. As the prompt says, "tomorrow" stays the calendar's.
+- `tests/unit/test_member_day.py` finds every core module that works out the family's
+  date from the clock; each is listed with its reason (the family's date when no person
+  is given, household things such as meals, maintenance and spending, the wall's own
+  calendar days, calendar words like "on Friday", a business's opening day). A new one
+  fails the test until it uses `member_day` or is listed.
+- Left as they are, on purpose: Cozyla's chores, routines and to-dos (the wall is by
+  calendar day; a tick made in Themi still lands on their day, F34ja), meals, maintenance,
+  spending and the dishwasher (the household's), and calendar words.
+- Setup: none beyond F34ja's.
 
 ### F34k · Idea (2026-11-07): a call before the business closes
 Status: [x] 2026-11-07
