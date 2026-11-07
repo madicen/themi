@@ -229,7 +229,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [x] 2026-11-07 |
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
 | F34hb | Feedback: body doubling through several tasks in a row | Feedback | [x] 2026-11-07 |
-| F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
+| F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [x] 2026-11-07 |
 | F34j | Idea: when someone's day rolls over | Feedback | [ ] |
 | F34k | Idea: a call before the business closes | Feedback | [ ] |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [ ] |
@@ -11709,7 +11709,7 @@ Notes (2026-11-07):
 - Setup: restart `themi run` (migration 0138).
 
 ### F34i · Idea (2026-11-07): their own Spotify playlists in a session's music choices
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: BD5a, BD5b, BD5c
 Read first: BD5a's notes (the built-in loops and the music offer); BD5b's notes
 (`SpotifyClient`, their playlists, `play_music`); BD5c's notes (music that suits the task).
@@ -11739,6 +11739,26 @@ Scenario: Michael starts a quiet session and taps his "Deep Focus" playlist; it 
 next time it's offered first.
 
 Data: mark #183 reviewed once live.
+
+Notes (2026-11-07):
+- `SpotifyClient.playlists` and `Music.playlists` ([] when not linked or Spotify doesn't
+  answer). Read once when a session starts and kept on its row (migration 0141,
+  `body_double_sessions.playlists`), in the offer's order: the playlist from their last
+  session of this kind (same category) first, then names that fit the job (`FITS`: focus,
+  study, deep... for deep work; clean, dance, upbeat... for chores and tidying), then the
+  rest as Spotify lists them (most recent first). "More" pages through that copy, ten at a
+  time, with no Spotify call; the next part of a run (F34hb) keeps it.
+- The offer: "Some lofi while you work, or one of yours?" with [Play] (the loop, or BD5c's
+  learned pick), up to three of theirs, [More] and [Not now]. With a learned pick, its line
+  stays "Deep Focus again, like last time?" and that playlist isn't offered twice. Linked
+  with no playlists of their own, or not linked: only the loop, as before.
+- A playlist tapped goes through `music.play` as BD5b's do (`requested`): their active
+  device, BD5b's line without one, the link for a free account; the session row records it.
+- The session page has "My Spotify" when there are playlists: a choice of them with Play,
+  Pause and Next (a new `music.next` executor), posted to /session/spotify. Play takes only
+  a playlist read for this session.
+- Setup: restart `themi run` (migration 0141). Nothing to link again: /me/playlists is in
+  BD5b's scopes already.
 
 ### F34j · Idea (2026-11-07): when someone's day rolls over
 Status: [ ]
