@@ -117,3 +117,34 @@ async def test_a_page_tap_with_an_old_seq_does_nothing(
         )
     ).json()
     assert state["active"] is True
+
+
+# ----- BD5a: built-in music -------------------------------------------------------------------
+
+
+async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.AsyncClient) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    erin = scenario.member("Erin")
+    assert (erin.body_double_sound, erin.body_double_volume) == ("lofi", 50)
+    await bd(scenario).start(erin, mode=SILENT)
+    page = (await site.get("/session")).text
+    assert 'class="session-music"' in page and "autoplay" not in page
+    assert '<audio loop preload="none" src="/static/audio/lofi.m4a?v=' in page
+    saved = await site.post("/session/music", data={"csrf": csrf, "sound": "rain", "volume": "30"})
+    assert saved.status_code == 204
+    music = (await site.get("/session/state")).json()["music"]
+    assert (music["sound"], music["volume"], music["file"]) == ("rain", 30, "rain.m4a")
+    bad = await site.post("/session/music", data={"csrf": csrf, "sound": "loud", "volume": ""})
+    assert bad.status_code == 400
+    bad = await site.post("/session/music", data={"csrf": csrf, "sound": "", "volume": "101"})
+    assert bad.status_code == 400
+    assert scenario.member("Erin").body_double_sound == "rain"
+    audio = await site.get("/static/audio/rain.m4a")
+    assert audio.status_code == 200 and len(audio.content) > 10_000
+
+
+async def test_play_rain_in_chat_sets_the_page(scenario: Scenario) -> None:
+    scenario.primary.queue_tool_call("choose_session_sound", {"sound": "rain"})
+    scenario.primary.queue_text("Rain it is; tap play on the session page.")
+    await scenario.say("Erin", "play rain")
+    assert scenario.member("Erin").body_double_sound == "rain"

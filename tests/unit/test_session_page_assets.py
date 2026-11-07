@@ -42,3 +42,29 @@ def test_still_scenes_for_reduced_motion() -> None:
     assert any(".session-scene *" in b.split("}\n")[0] + b for b in blocks)
     scene = next(b for b in blocks if b.lstrip(" {\n").startswith(".session-scene *"))
     assert "animation: none" in scene.split("\n}")[0]
+
+
+# ----- BD5a: the built-in loops --------------------------------------------------------------
+
+AUDIO = STATIC / "audio"
+
+
+def test_every_loop_exists_small_and_licensed() -> None:
+    from themi.core.body_double_music import LOOPS
+
+    licences = (AUDIO / "LICENCES.md").read_text()
+    for loop in LOOPS.values():
+        path = AUDIO / loop.file
+        assert path.is_file(), loop.file
+        assert 10_000 < path.stat().st_size < 5_000_000, loop.file
+        line = next((x for x in licences.splitlines() if x.startswith(f"| {loop.file} ")), "")
+        assert "CC0" in line, loop.file
+
+
+def test_the_loops_are_named_in_chat_words() -> None:
+    from themi.core.body_double_music import loop_for
+
+    assert loop_for("rain").key == "rain"  # type: ignore[union-attr]
+    assert loop_for("the soft piano").key == "soft_piano"  # type: ignore[union-attr]
+    assert loop_for("Lo-Fi").key == "lofi"  # type: ignore[union-attr]
+    assert loop_for("death metal") is None
