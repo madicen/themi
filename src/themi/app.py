@@ -47,6 +47,7 @@ from themi.core.approvals import ApprovalsUI
 from themi.core.body_double import BodyDouble
 from themi.core.body_double_guided import GuidedSteps
 from themi.core.body_double_modes import ModeChooser
+from themi.core.body_double_music import MusicOffers
 from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
@@ -266,6 +267,7 @@ def build_app(
     StepPictures(body_double, guided, scheduler).install()  # BD4b
     if spotify is not None:  # BD5b: their own music
         Music(services, SpotifyLinks(db, cipher, spotify)).install()
+    MusicOffers(services, body_double).install()  # BD5c
     ModeChooser(services, body_double).install()  # BD2
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None

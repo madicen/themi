@@ -78,7 +78,13 @@ class Music:
         query = str(payload.get("query", ""))
         item: Item | None = None
         try:
-            item = await self.find(member, query)
+            if payload.get("uri"):  # BD5c's offer: something that played before
+                uri = str(payload["uri"])
+                kind = uri.split(":")[1] if uri.count(":") >= 2 else "playlist"
+                link = f"https://open.spotify.com/{kind}/{uri.rsplit(':', 1)[-1]}"
+                item = Item(uri, str(payload.get("name") or uri), kind, link)
+            else:
+                item = await self.find(member, query)
             if item is None:
                 return NOTHING_FOUND_TEXT.format(query=query)
             if not self.premium(member):
