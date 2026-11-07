@@ -233,3 +233,21 @@ ul.items details.more[open] { flex-basis: 100%; order: 2; padding: 0 var(--space
 .kitchen-moves form { flex: 1; }
 .kitchen-moves button.big { width: 100%; font-size: 1.25rem; padding: var(--space-3); }
 @media (prefers-reduced-motion: reduce) { .kitchen * { transition: none; } }
+
+/* BD3a: the body double session page, full screen, phone first. BD3b dresses the scene. */
+body.session-page { min-height: 100vh; min-height: 100dvh; }
+.session { display: flex; flex-direction: column; gap: var(--space-2); min-height: 100vh;
+  min-height: 100dvh; padding-top: max(var(--space-4), env(safe-area-inset-top));
+  padding-bottom: max(var(--space-4), var(--safe-bottom)); overflow-x: hidden; }
+.session-mode { color: var(--muted); font-size: .95rem; margin: 0; }
+.session-label { font-size: 1.4rem; margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+.session-scene { flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 9rem; border-radius: var(--radius); background: var(--soft); }
+.session-timer { font-size: clamp(2.5rem, 16vw, 4.5rem); font-variant-numeric: tabular-nums;
+  margin: 0; letter-spacing: .02em; }
+.session-scene[data-mode="silent"] .session-timer,
+.session-scene[data-mode="guided"] .session-timer { font-size: 1.25rem; color: var(--muted); }
+.session-line { font-size: 1.3rem; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.session-moves { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.session-moves form { flex: 1 1 8rem; }
+.session-moves button.big { width: 100%; font-size: 1.1rem; padding: var(--space-3); min-height: var(--tap); }

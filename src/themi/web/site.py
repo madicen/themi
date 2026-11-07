@@ -94,11 +94,14 @@ def security_headers(response: Response, form_targets: str = "") -> None:
         if page == "picker"
         else "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
     )
+    # BD3a: the session page opens as a Telegram Mini App, which Telegram's web app frames.
+    ancestors = "https://web.telegram.org" if page == "session" else "'none'"
     response.headers["Content-Security-Policy"] = (
-        f"{base}frame-ancestors 'none'; form-action {form_action}; base-uri 'none'"
+        f"{base}frame-ancestors {ancestors}; form-action {form_action}; base-uri 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if page != "session":
+        response.headers["X-Frame-Options"] = "DENY"
     # Login links carry their token in the URL; never leak it in a Referer.
     response.headers["Referrer-Policy"] = "no-referrer"
 
@@ -117,6 +120,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         maintenance_pages,
         recipe_pages,
         safeway_pages,
+        session_pages,
         spending_pages,
         task_pages,
         week_pages,
@@ -186,6 +190,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
     web.include_router(google_pages.routes(kit))
+    web.include_router(session_pages.routes(kit))  # BD3a
 
 
 def core_routes(kit: Kit) -> APIRouter:

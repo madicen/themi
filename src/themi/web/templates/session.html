@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Session · Themi</title>
+  <link rel="stylesheet" href="{{ asset('themi.css') }}">
+  <script src="{{ asset('session.js') }}" defer></script>
+</head>
+<body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}">
+<main id="session" class="session" aria-live="polite">
+{% if not member %}
+  <p class="session-label" id="signing-in">Opening your session…</p>
+  <p class="muted" id="sign-in-help" hidden>Open this from the [Open] button in Telegram, or send /site to Themi for a sign-in link.</p>
+{% elif not state.active %}
+  <p class="session-mode">No session going on</p>
+  <p class="muted">Say "sit with me while I…" to Themi in chat, or /bodydouble, and it opens here.</p>
+{% else %}
+  <p class="session-mode" data-field="mode_name">{{ state.mode_name | capitalize }}</p>
+  <h1 class="session-label" data-field="label">{{ state.label }}</h1>
+  <div class="session-scene" data-mode="{{ state.mode }}" data-phase="{{ state.phase }}">
+    <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">&nbsp;</p>
+  </div>
+  {% if state.of %}<p class="muted" data-field="steps">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
+  <p class="session-line" data-field="line">{{ state.line }}</p>
+  <div class="session-moves" data-session="{{ state.id }}" data-seq="{{ state.seq }}">
+  {% for b in state.buttons %}
+    <form method="post" action="/session/{{ state.id }}/act">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="hidden" name="seq" value="{{ state.seq }}">
+      <input type="hidden" name="action" value="{{ b.action }}">
+      <input type="hidden" name="mode" value="{{ b.mode }}">
+      <button class="{% if loop.first %}primary {% endif %}big">{{ b.label }}</button>
+    </form>
+  {% endfor %}
+  </div>
+{% endif %}
+</main>
+</body>
+</html>

@@ -22,6 +22,8 @@ class Button:
     label: str
     kind: str
     payload: dict[str, Any] = field(default_factory=dict)
+    # BD3a: a Telegram Mini App button that opens this https page instead of calling back.
+    web_app: str | None = None
 
 
 @dataclass(frozen=True)

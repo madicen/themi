@@ -213,6 +213,17 @@ class BodyDouble:
         s.group_sources.append(lambda m: {"body_double"} if self.current(m) else set())
         for t in (start_body_double, switch_body_double_mode, end_body_double):
             s.tools.register(t)
+        self.start_decorators.append(self._open_button)
+
+    async def _open_button(
+        self, session: Session, text: str, buttons: list[Button]
+    ) -> tuple[str, list[Button]]:
+        """[Open]: the session page as a Telegram Mini App (BD3a). Telegram only opens https
+        pages, so a site without one (local runs) has no button."""
+        base = self.services.site_url.rstrip("/")
+        if not base.startswith("https://"):
+            return text, buttons
+        return text, [*buttons, Button("Open", "web_app", web_app=f"{base}/session")]
 
     # ----- the stored session ------------------------------------------------------------
 
@@ -480,7 +491,8 @@ class BodyDouble:
             return  # an old question: the session moved on
         self.remember_message(session, event.button.message_id)
         if payload.get("action") == "switch":  # BD2's offer: another mode instead
-            _, text, buttons = await self.switch(member, str(payload.get("mode")))
+            new, text, buttons = await self.switch(member, str(payload.get("mode")))
+            self.remember_message(new, event.button.message_id)
             await self._reply(event, member, text, buttons)
             return
         text, buttons = await self.act(session, str(payload.get("action", "")))
@@ -653,6 +665,96 @@ class BodyDouble:
         assert session.phase_ends_at is not None
         text = SWITCHED_TEXT[SILENT].format(until=self._clock(session.phase_ends_at))
         return session, text, buttons
+
+    # ----- the session page (BD3a) ------------------------------------------------------------
+
+    def page_buttons(self, session: Session) -> list[Button]:
+        """The same choices as chat, for the page."""
+        if session.phase == "asking":
+            return self.question(session)[1]
+        if session.mode == GUIDED and self.guided is not None:
+            return self.guided.render(session)[1]
+        tap = {"session": session.id, "seq": session.seq}
+
+        def button(label: str, action: str) -> Button:
+            return Button(label, "body_double", {**tap, "action": action})
+
+        if session.phase == "break":
+            return [button("Carry on", "carry_on"), button("Stop here", "stop")]
+        if session.mode == SPRINT:
+            return [button("Break", "break"), button("Stop here", "stop")]
+        return [button("Done", "done"), button("Not finished", "not_finished")]
+
+    def page_line(self, session: Session) -> str:
+        if session.phase == "asking":
+            return self.question(session)[0]
+        if session.mode == GUIDED and self.guided is not None:
+            text = self.guided.render(session)[0]
+            if session.phase == "work":  # the page shows the count itself
+                text = text.split("\n", 1)[-1]
+            return "\n".join(line.removeprefix("> ") for line in text.splitlines())
+        if session.phase == "break":
+            return "On a break."
+        if session.mode == SPRINT:
+            return f"Working, {session.work_minutes} minutes at a time."
+        if session.phase_ends_at is not None and session.ends_at is not None:
+            return f"Quiet until {self._clock(session.phase_ends_at)}."
+        return "Quiet until you say you're done."
+
+    def state(self, member: Member) -> dict[str, Any]:
+        """What the session page shows, as JSON. Never the energy level or any score."""
+        now = clock.now()
+        session = self.current(member)
+        if session is None:
+            return {"active": False, "now": to_utc_iso(now)}
+        if session.mode == SPRINT and session.phase in ("work", "break"):
+            timer = {"kind": "down", "to": to_utc_iso(session.phase_ends_at or now)}
+        else:
+            timer = {"kind": "up", "from": to_utc_iso(session.started_at)}
+        steps: dict[str, Any] = {}
+        if session.mode == GUIDED and self.guided is not None:
+            all_steps = self.guided.steps(session)
+            steps = {"step": session.row["step"] + 1, "of": len(all_steps)}
+        return {
+            "active": True,
+            "id": session.id,
+            "seq": session.seq,
+            "mode": session.mode,
+            "mode_name": MODE_NAMES[session.mode],
+            "label": session.label,
+            "phase": session.phase,
+            "line": self.page_line(session),
+            "timer": timer,
+            "now": to_utc_iso(now),
+            **steps,
+            "buttons": [
+                {"label": b.label, "action": b.payload.get("action", ""),
+                 "mode": b.payload.get("mode", "")}
+                for b in self.page_buttons(session)
+            ],
+        }  # fmt: skip
+
+    async def act_from_page(
+        self, member: Member, session_id: int, action: str, seq: int, mode: str = ""
+    ) -> bool:
+        """A tap on the page: the same as in chat, and the chat message shows it too.
+        False when it's not theirs, over, or out of date."""
+        session = self.get(session_id)
+        if session is None or session.member_id != member.id or session.ended_at is not None:
+            return False
+        if seq != session.seq:
+            return False
+        target = session.row["card_message_id"]
+        if session.phase == "asking" and session.ask_outbox_id is not None:
+            target = self.services.outbox.message_id(session.ask_outbox_id) or target
+        if action == "switch":
+            new, text, buttons = await self.switch(member, mode)
+            self.remember_message(new, target)
+        else:
+            text, buttons = await self.act(session, action)
+        if target is not None:
+            await self.services.outbox.edit(member, target, text, buttons)
+        return True
 
     # ----- chat ---------------------------------------------------------------------------
 
