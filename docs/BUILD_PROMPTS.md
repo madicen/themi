@@ -11575,6 +11575,14 @@ Notes (2026-11-06):
   `X-Themi-Session` header first, and the page no longer falls back to a session kept in
   `sessionStorage`. Taps and refusals are logged now, and the page reports its own script
   errors and refused requests (`POST /session/report`) to the server's log.
+- Fix (2026-11-07, found by that log from Michael's iPhone): the real cause of the dead
+  buttons. Each tap's form has a hidden input named `action`, which shadows `form.action`,
+  so the script posted every tap to "[object HTMLInputElement]" and was turned away, in
+  every browser, since BD3a. The script now reads and sets the attribute
+  (`getAttribute("action")`). No test had run the page's script: the others post to the
+  server directly. `tests/integration/test_session_page_browser.py` now loads the page in
+  headless Chrome, taps [Go] and checks the session moved (skipped where Chrome isn't
+  installed), and a unit test keeps `form.action` out of the script.
 - Fix (2026-11-07, on the Pi): the session page answered "Internal Server Error". The
   package's data rule `web/static/*` didn't reach into `chameleon/` or `audio/`, so the
   installed app had no chameleon art (BD3b) and no loops (BD5a); tests run from the source
