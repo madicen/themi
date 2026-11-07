@@ -11567,6 +11567,14 @@ Notes (2026-11-06):
   token). Reloads fetch a fresh ticket (`POST /session/ticket`); step pictures load through
   the same header. The cookie is still set for browsers that keep it. Also fixed: a page
   showing "No session going on" reloaded itself every 5 seconds.
+- Fix (2026-11-07, Michael on iPhone and Telegram Web): the page loaded and kept itself up
+  to date, but every tap did nothing. The in-app browser still held a cookie from an
+  earlier /site sign-in; the server took that cookie's session ahead of the page's header,
+  and the page's CSRF token (its own session's) failed the check, so each tap was a silent
+  403, while reads, needing no token, worked. `Kit.current` now takes the page's
+  `X-Themi-Session` header first, and the page no longer falls back to a session kept in
+  `sessionStorage`. Taps and refusals are logged now, and the page reports its own script
+  errors and refused requests (`POST /session/report`) to the server's log.
 - Fix (2026-11-07, on the Pi): the session page answered "Internal Server Error". The
   package's data rule `web/static/*` didn't reach into `chameleon/` or `audio/`, so the
   installed app had no chameleon art (BD3b) and no loops (BD5a); tests run from the source

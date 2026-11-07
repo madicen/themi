@@ -6,11 +6,10 @@
   var POLL = 5000;
   // Bug 2026-11-07: Telegram's in-app browser may not keep cookies, so the page carries its
   // session in a header, and reloads itself with a fresh one-time ticket.
+  // Only the session the server drew this page for: its CSRF token is that session's (an
+  // old one kept in the browser made every tap fail).
   var session = body.dataset.session || "";
-  try {
-    if (session) sessionStorage.setItem("themi_session", session);
-    else session = sessionStorage.getItem("themi_session") || "";
-  } catch (e) { /* storage off: the cookie or the ticket carries it */ }
+  try { sessionStorage.removeItem("themi_session"); } catch (e) { /* storage off */ }
   if (location.search.indexOf("ticket=") !== -1) history.replaceState(null, "", "/session" + location.hash);
 
   // Problems in the page itself go to the server's log (Telegram's browser shows nothing).
