@@ -89,6 +89,13 @@ class TravelModule(Module):
     def build(cls, setup: ModuleSetup) -> Module | None:
         return cls(TravelClient(setup.read(TravelSettings).tomtom_api_key))
 
+    async def check(self) -> str | None:
+        try:
+            found = await self.client.geocode("Pike Place Market, Seattle")
+        except Exception as exc:  # whatever went wrong, said once, for the wizard
+            return f"The map service didn't answer: {exc}"
+        return None if found is not None else "The map service found nothing for a test address."
+
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*TRAVEL_PROMPT_RULES)
         heads_ups = ctx.provide(TravelHeadsUps(ctx.services, self.client))

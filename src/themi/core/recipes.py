@@ -749,6 +749,7 @@ class RecipesModule(Module):
     """RC1a: the family cookbook, read from its Google Doc."""
 
     name = "recipes"
+    website = "Once Google is linked, pick the family cookbook on Accounts (/accounts)."
     tool_groups = (groups.RECIPES,)
     optional = ("google",)
 

@@ -104,12 +104,18 @@ class Module:
     migrations: ClassVar[str | Path | None] = None
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
     tool_groups: ClassVar[tuple[ToolGroup, ...]] = ()  # CR8b: the groups its tools are in
+    website: ClassVar[str] = ""  # CR11: what's left to do on the website once it's set up
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
         """This module as the settings set it up, or None when it isn't (a connector with
         no login). Modules that take nothing override nothing."""
         return cls()
+
+    async def check(self) -> str | None:
+        """CR11: try the module's settings against its service, through its own client:
+        None when they work, else what's wrong, in plain words. Most have nothing to try."""
+        return None
 
     def install(self, ctx: ModuleContext) -> None:
         raise NotImplementedError(f"module {self.name or type(self).__name__} has no install")

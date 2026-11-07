@@ -297,7 +297,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR10 | Core refactor: workspace packages | Core refactor | split |
 | CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
 | CR10b | Core refactor: workspace packages (after CR12) | Core refactor | [ ] |
-| CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
+| CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
 | CR12 | Core refactor: the work template | Core refactor | [ ] |
 | CR13 | Gate: tutoring design | Core refactor | [ ] |
 | CR14 | Tutoring pack for one family | Core refactor | [ ] |
@@ -14671,7 +14671,7 @@ the physical split is the riskiest move left; CR10a leaves it a matter of moving
 Read first: CR10 above; CR10a's notes.
 
 ### CR11 · Core refactor: the setup wizard
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR10a
 Read first: the refactor doc's Configuration section; `src/themi/cli.py` (`init`);
 CR10's notes.
@@ -14686,6 +14686,24 @@ CR10's notes.
 - The wizard's prompts read like Themi's: plain, no pressure.
 Tests: a scripted run for the family template and for an empty template (input fed in,
 files compared); a failing check; `--check`; secrets never written to `themi.toml`.
+
+Notes:
+- `themi setup [--dir PATH]` (`themi/setup_wizard.py`): the Telegram token (hidden), a new
+  secret key, the public address; a template or `empty` (new: no modules, a plain persona);
+  modules to leave out and to add, with what they need added and said; each module's
+  questions; then `themi.toml` (plain answers, `[module.<name>]`) and `.env` (secrets,
+  mode 600), never replacing a file without a yes. It ends by trying each module and
+  listing what's left on the website. `themi setup --check` tries an existing setup again.
+- Questions come from the settings models: `env_field(..., ask=, help=)`, read by
+  `questions(model)`. A model shared by two modules (the wall's) is asked once and its
+  plain answers go to both modules' sections.
+- `Module.check()` (async, on the built module, through its own client): OurGroceries reads
+  the list, the wall runs `themi cozyla check`'s read, web search searches once, travel
+  geocodes a test address. Others have nothing to try without a person signing in: they say
+  what's left instead (`Module.website`): Google, the cookbook, Spotify, Home Connect,
+  ThinQ, Roborock, the feeders, the litter box, Keep.
+- Tests: scripted family and empty runs, a failing check (with `--check`), keeping a file,
+  the wall asked once; each check against its fake.
 
 ### CR12 · Core refactor: the work template
 Status: [ ]

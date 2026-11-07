@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from themi import __version__
@@ -31,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
+    setup = commands.add_parser(
+        "setup", help="make themi.toml and .env for a new Themi: template, modules, settings"
+    )
+    setup.add_argument("--dir", default=".", help="where to write them (default: here)")
+    setup.add_argument("--check", action="store_true", help="try an existing setup's modules again")
     config = commands.add_parser("config", help="what this Themi is made of (themi.toml)")
     config_commands = config.add_subparsers(dest="config_command", required=True)
     config_commands.add_parser(
@@ -526,6 +532,21 @@ def _catgenie_capture(out: str) -> int:
     return 0
 
 
+def _setup(out_dir: Path, check: bool) -> int:
+    """CR11: `themi setup` and `themi setup --check`."""
+    import getpass
+
+    from themi.setup_wizard import SetupCancelled, check_setup, run_setup
+
+    if check:
+        return 1 if check_setup(out_dir, print) else 0
+    try:
+        run_setup(_ask, lambda q: getpass.getpass(f"{q} (hidden): "), print, out_dir)
+    except SetupCancelled:
+        return 1
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -551,6 +572,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(pairing_instructions(member, code, _bot_username()))
         elif args.command == "run":
             _run()
+        elif args.command == "setup":
+            return _setup(Path(args.dir), args.check)
         elif args.command == "config":
             print(config_report(Settings.load()))
         elif args.command == "login-link":

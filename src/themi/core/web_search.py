@@ -441,5 +441,14 @@ class WebSearchModule(Module):
         s = setup.read(SearchSettings)
         return cls(choose(s.backend.lower(), s.tavily_api_key, s.firecrawl_api_key))
 
+    async def check(self) -> str | None:
+        if self.backend is None:
+            return None  # no key: Themi says how to set one up when asked to look something up
+        try:
+            await self.backend.search("weather today", count=1)
+        except Exception as exc:  # whatever went wrong, said once, for the wizard
+            return f"The web search didn't answer: {exc}"
+        return None
+
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(WebSearch(ctx.services, self.backend)).install()

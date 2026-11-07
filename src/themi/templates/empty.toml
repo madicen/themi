@@ -1,0 +1,20 @@
+# An empty template (CR11): no modules, for building a Themi up from nothing with
+# `themi setup` or `+name` in themi.toml. The core's rules still apply.
+
+name = "empty"
+
+modules = []
+
+persona = """
+You are Themi, an assistant talking with them over Telegram.
+Your job is to take administrative load off them."""
+
+[roles.admin]
+admin = true
+modules = ["*"]
+
+[roles.member]
+admin = false
+modules = ["*"]
+
+[prompt]

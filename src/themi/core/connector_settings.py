@@ -37,8 +37,15 @@ class GoogleSettings(ModuleSettings):
     """Google sign-in and linking (the google module; gmail, calendar, Google Tasks and the
     cookbook build on it)."""
 
-    client_id: str = env_field("GOOGLE_CLIENT_ID", "")
-    client_secret: Secret | None = env_field("GOOGLE_CLIENT_SECRET", secret=True)
+    client_id: str = env_field(
+        "GOOGLE_CLIENT_ID",
+        "",
+        ask="Google OAuth client id",
+        help="console.cloud.google.com, APIs & Services, Credentials (a Web application)",
+    )
+    client_secret: Secret | None = env_field(
+        "GOOGLE_CLIENT_SECRET", secret=True, ask="Google OAuth client secret"
+    )
     # Endpoint overrides, only for pointing Themi at a local fake Google.
     auth_url: str = env_field("GOOGLE_AUTH_URL", "")
     token_url: str = env_field("GOOGLE_TOKEN_URL", "")
@@ -83,9 +90,13 @@ class GoogleSettings(ModuleSettings):
 
 
 class OurGroceriesSettings(ModuleSettings):
-    username: str = env_field("OURGROCERIES_USERNAME", "")
-    password: Secret | None = env_field("OURGROCERIES_PASSWORD", secret=True)
-    list_name: str = env_field("OURGROCERIES_LIST", "Groceries")
+    username: str = env_field("OURGROCERIES_USERNAME", "", ask="OurGroceries email")
+    password: Secret | None = env_field(
+        "OURGROCERIES_PASSWORD", secret=True, ask="OurGroceries password"
+    )
+    list_name: str = env_field(
+        "OURGROCERIES_LIST", "Groceries", ask="The OurGroceries list to keep in step"
+    )
 
     @model_validator(mode="after")
     def _pair(self) -> Self:
@@ -102,11 +113,15 @@ class OurGroceriesSettings(ModuleSettings):
 class CozylaSettings(ModuleSettings):
     """The Cozyla wall (unofficial API), for both wall modules."""
 
-    email: str = env_field("COZYLA_EMAIL", "")
-    password: Secret | None = env_field("COZYLA_PASSWORD", secret=True)
-    todo_list: str = env_field("COZYLA_TODO_LIST", "")
+    email: str = env_field("COZYLA_EMAIL", "", ask="Cozyla account email")
+    password: Secret | None = env_field("COZYLA_PASSWORD", secret=True, ask="Cozyla password")
+    todo_list: str = env_field(
+        "COZYLA_TODO_LIST", "", ask="The wall's to-do list to keep in step (blank: none)"
+    )
     device_sn: str = env_field("COZYLA_DEVICE_SN", "themi")
-    chores: bool = env_field("COZYLA_CHORES", False)
+    chores: bool = env_field(
+        "COZYLA_CHORES", False, ask="Keep the wall's chore chart in step? (yes or no)"
+    )
 
     @model_validator(mode="after")
     def _pair(self) -> Self:
@@ -123,18 +138,33 @@ class CozylaSettings(ModuleSettings):
 
 class TravelSettings(ModuleSettings):
     # K4: TomTom's routing with live traffic; without it, a free geocoder and an estimate.
-    tomtom_api_key: Secret | None = env_field("TOMTOM_API_KEY", secret=True)
+    tomtom_api_key: Secret | None = env_field(
+        "TOMTOM_API_KEY",
+        secret=True,
+        ask="TomTom API key, for live traffic (blank: estimates)",
+        help="developer.tomtom.com, free plan",
+    )
 
 
 class SearchSettings(ModuleSettings):
     # F30d: web search for lookups. Tavily by default, or Firecrawl; free plans, no card.
-    tavily_api_key: Secret | None = env_field("TAVILY_API_KEY", secret=True)
+    tavily_api_key: Secret | None = env_field(
+        "TAVILY_API_KEY",
+        secret=True,
+        ask="Tavily API key, for web search (blank: none)",
+        help="tavily.com, free plan",
+    )
     firecrawl_api_key: Secret | None = env_field("FIRECRAWL_API_KEY", secret=True)
     backend: str = env_field("THEMI_SEARCH_BACKEND", "")  # "tavily", "firecrawl", or ""
 
 
 class SpotifySettings(ModuleSettings):
-    client_id: str = env_field("SPOTIFY_CLIENT_ID", "")  # BD5b: a developer app (PKCE)
+    client_id: str = env_field(  # BD5b: a developer app (PKCE)
+        "SPOTIFY_CLIENT_ID",
+        "",
+        ask="Spotify app client id",
+        help="developer.spotify.com/dashboard",
+    )
     accounts_url: str = SPOTIFY_ACCOUNTS_URL
     api_url: str = SPOTIFY_API_URL
 
@@ -149,8 +179,10 @@ class SpotifySettings(ModuleSettings):
 class HomeConnectSettings(ModuleSettings):
     """H1: the dishwasher, through Home Connect's API (a developer app's id and secret)."""
 
-    client_id: str = env_field("HOME_CONNECT_CLIENT_ID", "")
-    client_secret: Secret | None = env_field("HOME_CONNECT_CLIENT_SECRET", secret=True)
+    client_id: str = env_field("HOME_CONNECT_CLIENT_ID", "", ask="Home Connect client id")
+    client_secret: Secret | None = env_field(
+        "HOME_CONNECT_CLIENT_SECRET", secret=True, ask="Home Connect client secret"
+    )
     url: str = env_field("HOME_CONNECT_URL", HOME_CONNECT_URL)
 
     @model_validator(mode="after")

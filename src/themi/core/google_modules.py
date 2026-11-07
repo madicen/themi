@@ -38,6 +38,7 @@ class GoogleModule(Module):
     """Linking Google accounts, for the Google modules that read and write through them."""
 
     name = "google"
+    website = "Each person links their Google account on Accounts (/accounts)."
     settings = GoogleSettings
 
     def __init__(self, config: GoogleConfig) -> None:

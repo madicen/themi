@@ -34,8 +34,13 @@ class ModuleSettings(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
 
-def env_field(env: str, default: Any = None, *, secret: bool = False) -> Any:
-    return Field(default, json_schema_extra={"env": env, "secret": secret})
+def env_field(
+    env: str, default: Any = None, *, secret: bool = False, ask: str = "", help: str = ""
+) -> Any:
+    """A setting read from `env`. `ask`: the setup wizard's question for it (CR11); no
+    question, and the wizard leaves it alone. `help`: where to get it."""
+    extra = {"env": env, "secret": secret, "ask": ask, "help": help}
+    return Field(default, json_schema_extra=extra)
 
 
 def _extra(info: FieldInfo) -> dict[str, Any]:
@@ -86,6 +91,25 @@ def read_settings[S: ModuleSettings](
             message = str(error.get("msg", ""))
             lines.append(message.removeprefix("Value error, "))
         raise SettingsProblem(lines) from exc
+
+
+def questions(model: type[ModuleSettings]) -> list[tuple[str, str, str, bool, str]]:
+    """CR11: what the setup wizard asks for a model: (field, env variable, question, secret,
+    help), for each field with a question."""
+    out = []
+    for name, info in model.model_fields.items():
+        extra = _extra(info)
+        if extra.get("ask"):
+            out.append(
+                (
+                    name,
+                    env_name(info),
+                    str(extra["ask"]),
+                    is_secret(info),
+                    str(extra.get("help", "")),
+                )
+            )
+    return out
 
 
 def plain_values(settings: ModuleSettings) -> dict[str, Any]:

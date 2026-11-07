@@ -55,6 +55,7 @@ class SpotifyModule(Module):
     """BD5b: playing their own music, from Spotify."""
 
     name = "spotify"
+    website = "Each person who wants it links Spotify on Accounts (/accounts)."
     tool_groups = (groups.MUSIC,)
     settings = SpotifySettings
 
@@ -95,6 +96,13 @@ class OurGroceriesModule(Module):
         grocery = setup.read(OurGroceriesSettings).config()
         return cls(OurGroceriesClient(grocery)) if grocery else None
 
+    async def check(self) -> str | None:
+        try:
+            await self.client.items()
+        except Exception as exc:  # whatever went wrong, said once, for the wizard
+            return f"OurGroceries didn't open the list: {exc}"
+        return None
+
     def install(self, ctx: ModuleContext) -> None:
         mirror = GroceryMirror(ctx.services.store.db, self.client, bought=_bought(ctx))
         ctx.periodic("groceries.mirror", timedelta(minutes=1), mirror.sync)
@@ -105,6 +113,7 @@ class KeepModule(Module):
     runs `themi keep link`."""
 
     name = "keep"
+    website = "Each person who wants it runs `themi keep link <name>` on the server."
     requires = ("groceries", "pantry")
 
     def __init__(self, factory: KeepFactory) -> None:
@@ -158,6 +167,15 @@ class CozylaTodosModule(Module):
         wall = _wall(setup)
         return cls(wall) if wall and wall.config.todo_list else None
 
+    async def check(self) -> str | None:
+        from themi.connectors.cozyla.check import check
+
+        try:
+            await check(self.client)
+        except Exception as exc:  # whatever went wrong, said once, for the wizard
+            return f"The Cozyla wall didn't answer: {exc}"
+        return None
+
     def install(self, ctx: ModuleContext) -> None:
         _wall_in_family_time(ctx, self.client)
         wall = ctx.provide(CozylaTodos(ctx.services, ctx.get(TaskBoard), self.client))
@@ -204,6 +222,15 @@ class CozylaChoresModule(Module):
         wall = _wall(setup)
         return cls(wall) if wall and wall.config.chores else None
 
+    async def check(self) -> str | None:
+        from themi.connectors.cozyla.check import check
+
+        try:
+            await check(self.client)
+        except Exception as exc:  # whatever went wrong, said once, for the wizard
+            return f"The Cozyla wall didn't answer: {exc}"
+        return None
+
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*CHORE_PROMPT_RULES)
         ctx.settings_section("settings/chart.html", 50)
@@ -224,6 +251,7 @@ class HomeConnectModule(Module):
     """H1: the dishwasher, through Home Connect."""
 
     name = "home_connect"
+    website = "An admin links Home Connect on Accounts (/accounts)."
     settings = HomeConnectSettings
     requires = ("tasks",)
 
@@ -249,6 +277,7 @@ class ThinqModule(Module):
     """30: the washer and dryer, through LG ThinQ, and laundry that's waiting."""
 
     name = "thinq"
+    website = "An admin adds the ThinQ token on Accounts (/accounts)."
     household = LaundrySettings
     settings = ThinqSettings
     requires = ("tasks",)
@@ -281,6 +310,7 @@ class RoborockModule(Module):
     """V1: the robot vacuum, through Roborock."""
 
     name = "roborock"
+    website = "An admin signs in to Roborock on Accounts (/accounts)."
     requires = ("tasks",)
 
     def __init__(self, login: RoborockLogin) -> None:
@@ -307,6 +337,7 @@ class TuyaModule(Module):
     """32: the pet feeders, through Tuya's cloud."""
 
     name = "tuya"
+    website = "An admin links the feeders on Accounts (/accounts)."
     requires = ("tasks",)
 
     def __init__(self, config: TuyaConfig) -> None:
@@ -328,6 +359,7 @@ class CatGenieModule(Module):
     """CG1a: the litter box, through CatGenie's cloud."""
 
     name = "catgenie"
+    website = "An admin links the litter box on Accounts (/accounts)."
     requires = ("tasks",)
 
     def __init__(self, config: CatGenieConfig) -> None:
