@@ -36,6 +36,7 @@ from themi.connectors.ourgroceries import GroceryListClient, GroceryMirror
 from themi.connectors.recipe_page import PageReader
 from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWatcher
 from themi.connectors.search import SearchBackend
+from themi.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
@@ -83,6 +84,7 @@ from themi.core.litter_box import LitterBox
 from themi.core.maintenance import Maintenance
 from themi.core.meals import Meals
 from themi.core.memory import Memory
+from themi.core.music import Music
 from themi.core.noise_digest import NoiseDigest
 from themi.core.pantry import Pantry
 from themi.core.reactions import Reactions
@@ -163,6 +165,7 @@ def build_app(
     search: SearchBackend | None = None,
     recipe_pages: PageReader | None = None,  # RC4a: tests and `make dev` point it at fakes
     home_connect: HomeConnectClient | None = None,
+    spotify: SpotifyClient | None = None,  # BD5b
     thinq: ThinqConfig | None = None,
     roborock: RoborockLogin | None = None,
     tuya: TuyaConfig | None = None,
@@ -261,6 +264,8 @@ def build_app(
     guided = GuidedSteps(services, body_double)  # BD1b
     guided.install()
     StepPictures(body_double, guided, scheduler).install()  # BD4b
+    if spotify is not None:  # BD5b: their own music
+        Music(services, SpotifyLinks(db, cipher, spotify)).install()
     ModeChooser(services, body_double).install()  # BD2
     calendar_busy: CalendarBusy | None = None
     task_blocks: TaskBlocks | None = None

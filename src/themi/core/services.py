@@ -64,6 +64,7 @@ if TYPE_CHECKING:
     from themi.core.maintenance import Maintenance
     from themi.core.meals import Meals
     from themi.core.memory import Memory
+    from themi.core.music import Music
     from themi.core.noise_digest import NoiseDigest
     from themi.core.pantry import Pantry
     from themi.core.reactions import Reactions
@@ -194,6 +195,7 @@ class Services:
     safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
     breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
     body_double: BodyDouble | None = None  # company while they work (BD1a)
+    music: Music | None = None  # their own Spotify (BD5b)
     # BD1a: tool groups a member's state calls for, whatever the words (a session going on).
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
     burnout: Burnout | None = None  # everything held, no demands (F22d)

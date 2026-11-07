@@ -136,6 +136,10 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         config = home_connect.client.config
         hops = f"{_origin(config.base_url)} {_origin(config.sign_in_url)}"
         form_targets = f"{form_targets} {hops}".strip()
+    music = ctx.app.services.music
+    if music is not None:  # BD5b: linking Spotify leads to its sign-in page
+        accounts = _origin(music.links.client.config.accounts_url)
+        form_targets = f"{form_targets} {accounts}".strip()
     web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
     @web.middleware("http")

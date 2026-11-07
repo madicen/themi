@@ -193,14 +193,16 @@
     }
     function shown(on) { play.textContent = on ? "Pause" : "Play"; play.setAttribute("aria-pressed", on ? "true" : "false"); }
     play.addEventListener("click", function () {
-      if (audio.paused) { audio.play().then(function () { shown(true); }, function () { shown(false); }); }
+      if (audio.paused) {
+        audio.play().then(function () { shown(true); save({ played: "1" }); }, function () { shown(false); });
+      }
       else { audio.pause(); shown(false); }
     });
     sound.addEventListener("change", function () {
       var playing = !audio.paused;
       audio.src = sound.options[sound.selectedIndex].dataset.src;
       if (playing) audio.play().then(function () {}, function () { shown(false); });
-      save({ sound: sound.value });
+      save(playing ? { sound: sound.value, played: "1" } : { sound: sound.value });
     });
     volume.addEventListener("input", function () { audio.volume = Number(volume.value) / 100; });
     volume.addEventListener("change", function () { save({ volume: volume.value }); });

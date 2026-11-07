@@ -19,6 +19,7 @@ from themi.connectors.catgenie import CatGenieError
 from themi.connectors.google import DRIVE_FILE_SCOPE, TASKS_SCOPE
 from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
 from themi.connectors.roborock import RoborockError
+from themi.connectors.spotify import SpotifyError, SpotifyLinks
 from themi.connectors.thinq import ThinqError
 from themi.connectors.tuya import REGIONS, TuyaError
 from themi.web.kit import Kit
@@ -45,8 +46,16 @@ def accounts_values(app: Any, member: Member, **extra: Any) -> dict[str, Any]:
         if app.services.recipes is not None and app.services.recipes.ready()
         else None,
         "household": household_values(app) if member.is_admin else None,
+        "spotify": _spotify(app, member),  # BD5b: their own
         **extra,
     }
+
+
+def _spotify(app: Any, member: Member) -> dict[str, Any] | None:
+    music = app.services.music
+    if music is None:
+        return None
+    return {"link": music.links.link(member)}
 
 
 def household_values(app: Any) -> dict[str, Any]:
@@ -387,6 +396,49 @@ def routes(kit: Kit) -> APIRouter:
         except AccountsError as exc:
             return kit.redirect(to, f"Not saved: {exc}.")
         return kit.redirect(to, "Laundry settings saved.")
+
+    # ----- Spotify (BD5b): each person's own --------------------------------------------------
+
+    @router.post("/accounts/spotify/link")
+    async def link_spotify(request: Request) -> Response:
+        session, _ = await kit.checked(request)
+        music = app.services.music
+        if music is None:
+            return kit.redirect(back("spotify"), "Spotify isn't set up on this server.")
+        redirect = SpotifyLinks.redirect_uri(kit.ctx.base_url)
+        return RedirectResponse(
+            music.links.authorization_url(session.member, redirect), status_code=303
+        )
+
+    @router.get("/auth/spotify/callback")
+    async def spotify_callback(
+        request: Request, state: str = "", code: str = "", error: str = ""
+    ) -> Response:
+        session = kit.current(request)  # only for whoever started it
+        music = app.services.music
+        to = back("spotify")
+        if music is None:
+            return kit.redirect(to, "Spotify isn't set up on this server.")
+        if error or not state or not code:
+            return kit.redirect(to, "Spotify wasn't linked, so nothing changed.")
+        try:
+            premium = await music.links.complete(
+                session.member, state, code, SpotifyLinks.redirect_uri(kit.ctx.base_url)
+            )
+        except SpotifyError as exc:
+            return kit.redirect(to, f"Spotify wasn't linked: {exc}")
+        if premium:
+            return kit.redirect(to, "Linked Spotify. Ask Themi to play something.")
+        return kit.redirect(
+            to, "Linked Spotify. Without Premium, Themi sends links to play instead of playing."
+        )
+
+    @router.post("/accounts/spotify/unlink")
+    async def unlink_spotify(request: Request) -> Response:
+        session, _ = await kit.checked(request)
+        if app.services.music is not None:
+            app.services.music.links.unlink(session.member)
+        return kit.redirect(back("spotify"), "Unlinked Spotify.")
 
     # ----- Home Connect (H1) ----------------------------------------------------------------
 

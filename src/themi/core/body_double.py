@@ -755,6 +755,16 @@ class BodyDouble:
             ],
         }  # fmt: skip
 
+    def note_music(self, member: Member, music: str, name: str) -> None:
+        """What's playing in the session going on ("builtin:rain", a Spotify uri), for
+        BD5c's suggestions."""
+        session = self.current(member)
+        if session is not None:
+            self.db.execute(
+                "UPDATE body_double_sessions SET music = ?, music_name = ? WHERE id = ?",
+                (music, name, session.id),
+            )
+
     def music_state(self, member: Member) -> dict[str, Any]:
         """The page's built-in loop and volume (BD5a); it plays only when they tap play."""
         from themi.core.body_double_music import LOOPS

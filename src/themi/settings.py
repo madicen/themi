@@ -20,6 +20,9 @@ from themi.connectors.google.oauth import GoogleConfig
 from themi.connectors.homeconnect.client import BASE_URL as HOME_CONNECT_URL
 from themi.connectors.homeconnect.client import HomeConnectConfig
 from themi.connectors.ourgroceries.client import OurGroceriesConfig
+from themi.connectors.spotify import ACCOUNTS_URL as SPOTIFY_ACCOUNTS_URL
+from themi.connectors.spotify import API_URL as SPOTIFY_API_URL
+from themi.connectors.spotify import SpotifyConfig
 from themi.connectors.thinq.client import ThinqConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
@@ -88,6 +91,9 @@ class Settings(BaseModel):
     firecrawl_api_key: Secret | None = None
     search_backend: str = ""  # "tavily", "firecrawl", or "" for whichever has a key
     # H1: the dishwasher, through Home Connect's API (a developer app's client id and secret).
+    spotify_client_id: str = ""  # BD5b: a Spotify developer app's client id (PKCE, no secret)
+    spotify_accounts_url: str = SPOTIFY_ACCOUNTS_URL
+    spotify_api_url: str = SPOTIFY_API_URL
     home_connect_client_id: str = ""
     home_connect_client_secret: Secret | None = None
     home_connect_url: str = HOME_CONNECT_URL
@@ -127,6 +133,14 @@ class Settings(BaseModel):
             self.cozyla_todo_list,
             self.cozyla_device_sn,
             chores=self.cozyla_chores,
+        )
+
+    def spotify(self) -> SpotifyConfig | None:
+        """Spotify (BD5b), if a client id is set."""
+        if not self.spotify_client_id:
+            return None
+        return SpotifyConfig(
+            self.spotify_client_id, self.spotify_accounts_url, self.spotify_api_url
         )
 
     def home_connect(self) -> HomeConnectConfig | None:
@@ -273,6 +287,7 @@ class Settings(BaseModel):
             tavily_api_key=Secret(tavily_key) if tavily_key else None,
             firecrawl_api_key=Secret(firecrawl_key) if firecrawl_key else None,
             search_backend=get("THEMI_SEARCH_BACKEND").lower(),
+            spotify_client_id=get("SPOTIFY_CLIENT_ID"),
             home_connect_client_id=get("HOME_CONNECT_CLIENT_ID"),
             home_connect_client_secret=(
                 Secret(home_connect_secret) if home_connect_secret else None
