@@ -16,11 +16,14 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
@@ -44,10 +47,25 @@ EXTENDED_TEXT = "Longer it is: no task nudges or check-ins until {until}."
 NO_BREAK_TEXT = "There's no break going on."
 
 
+class BreaksPreferences(Preferences):
+    """CR7a: what a break's "Extend" button offers (B1)."""
+
+    module: ClassVar[str] = "breaks"
+    break_extend_minutes: int = 15
+
+    @field_validator("break_extend_minutes")
+    @classmethod
+    def _extend(cls, value: int) -> int:
+        if not 5 <= value <= 120:
+            raise ValueError("a break's extension is between 5 and 120 minutes")
+        return value
+
+
 class BreaksModule(Module):
     """B1: a rest mode that ends with a question."""
 
     name = "breaks"
+    preferences = BreaksPreferences
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(Breaks(ctx.services)).install()
@@ -93,7 +111,7 @@ class Breaks:
             "INSERT INTO breaks (member_id, pause_id, started_at, until) VALUES (?, ?, ?, ?)",
             (member.id, pause.id, to_utc_iso(now), to_utc_iso(until)),
         )
-        extend = member.break_extend_minutes
+        extend = self.services.store.preferences(member.id, BreaksPreferences).break_extend_minutes
         result = await self.services.outbox.send(
             member,
             UP_TEXT,
@@ -138,7 +156,8 @@ class Breaks:
         if row is None:
             return
         if event.button.payload.get("action") == "extend":
-            until = await self._begin(member, member.break_extend_minutes)
+            extend = self.services.store.preferences(member.id, BreaksPreferences)
+            until = await self._begin(member, extend.break_extend_minutes)
             text = EXTENDED_TEXT.format(until=self._clock(until))
         else:
             self._finish(member)

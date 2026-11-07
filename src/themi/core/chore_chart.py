@@ -26,11 +26,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import InvalidValue, Member, NotFound
+from themi.accounts.preferences import Preferences
+from themi.accounts.store import MAX_CHART_LIMIT
 from themi.connectors.cozyla.schedule import wall_can_say
 from themi.core import keys
 from themi.core.services import Services
@@ -62,6 +66,22 @@ class Pick:
     prompted: bool
 
 
+class ChartPreferences(Preferences):
+    """CR7a: how many of each person's chores the wall shows at once (C2d), and whether
+    chores for either of them count toward it. The cozyla_chores module's."""
+
+    module: ClassVar[str] = "cozyla_chores"
+    chart_limit: int = 0  # 0 is no limit
+    chart_counts_shared: bool = True
+
+    @field_validator("chart_limit")
+    @classmethod
+    def _limit(cls, value: int) -> int:
+        if not 0 <= value <= MAX_CHART_LIMIT:
+            raise ValueError(f"chores at a time is between 0 and {MAX_CHART_LIMIT}")
+        return value
+
+
 class ChartQueue:
     def __init__(self, services: Services, board: TaskBoard) -> None:
         self.services = services
@@ -77,11 +97,13 @@ class ChartQueue:
 
     # ----- what counts, and what's up ------------------------------------------------------
 
-    @staticmethod
-    def counts(task: Task, member: Member) -> bool:
+    def prefs(self, member: Member) -> ChartPreferences:
+        return self.store.preferences(member.id, ChartPreferences)  # CR7a
+
+    def counts(self, task: Task, member: Member) -> bool:
         """One of this person's chores that their limit applies to."""
         if task.either or task.shared:
-            theirs = member.chart_counts_shared  # their choice whether shared ones count
+            theirs = self.prefs(member).chart_counts_shared  # whether shared ones count
         else:
             theirs = task.assignee == member.id
         return (
@@ -122,10 +144,11 @@ class ChartQueue:
 
     def held(self, task: Task, member: Member) -> bool:
         """Waiting its turn: this person has a limit, it counts, and it isn't up."""
-        return member.chart_limit > 0 and self.counts(task, member) and not self.is_up(task, member)
+        limit = self.prefs(member).chart_limit
+        return limit > 0 and self.counts(task, member) and not self.is_up(task, member)
 
     def limited(self) -> list[Member]:
-        return [m for m in self.store.list_members() if m.chart_limit > 0]
+        return [m for m in self.store.list_members() if self.prefs(m).chart_limit > 0]
 
     # ----- bringing chores up -------------------------------------------------------------
 
@@ -137,7 +160,7 @@ class ChartQueue:
         for member in self.limited():
             self._forget_finished(member)
             up = self.picks(member)
-            for _ in range(member.chart_limit - sum(not p.extra for p in up)):
+            for _ in range(self.prefs(member).chart_limit - sum(not p.extra for p in up)):
                 task = self._next(member, today)
                 if task is None:
                     break
@@ -246,7 +269,7 @@ class ChartQueue:
     # ----- asked for in chat --------------------------------------------------------------
 
     def change(self, member: Member, action: str, task_id: int) -> str:
-        if member.chart_limit == 0:
+        if self.prefs(member).chart_limit == 0:
             raise ToolFailed(
                 "They have no limit on the chart, so all their chores show already. "
                 "set_chore_chart_limit sets one."
@@ -341,23 +364,24 @@ def _queue(ctx: ToolContext) -> ChartQueue:
 async def set_chore_chart_limit(ctx: ToolContext, args: dict[str, Any]) -> str:
     shared = {"yes": True, "no": False}.get(args["shared_count"])
     try:
-        member = ctx.services.store.update_settings(
+        prefs = ctx.services.store.save_preferences(
             ctx.member,
             ctx.member.id,
+            ChartPreferences,
             chart_limit=args["limit"] if args["limit"] >= 0 else None,
             chart_counts_shared=shared,
         )
     except InvalidValue as exc:
         raise ToolFailed(str(exc)) from exc
-    if member.chart_limit == 0:
+    if prefs.chart_limit == 0:
         return "All their chores show on the wall's chart, within a few minutes."
     shared_words = (
         "chores for either of you count toward it"
-        if member.chart_counts_shared
+        if prefs.chart_counts_shared
         else "chores for either of you always show"
     )
     return (
-        f"Their chart shows {member.chart_limit} chore(s) at a time from the next sync (a few "
+        f"Their chart shows {prefs.chart_limit} chore(s) at a time from the next sync (a few "
         f"minutes); important ones always show, and {shared_words}. Ticking or deleting one "
         "there brings up the next."
     )

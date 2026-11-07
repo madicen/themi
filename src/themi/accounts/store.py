@@ -15,10 +15,12 @@ import hashlib
 import json
 import re
 import secrets
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import ValidationError
 
 from themi import clock
 from themi.accounts.models import (
@@ -32,6 +34,7 @@ from themi.accounts.models import (
     Member,
     Role,
 )
+from themi.accounts.preferences import Preferences
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
 
@@ -152,13 +155,6 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         listen_first=bool(row["listen_first"]),
         day_budget=row["day_budget"],
         focus_count=row["focus_count"],
-        chart_limit=row["chart_limit"],
-        break_extend_minutes=row["break_extend_minutes"],
-        sprint_work_minutes=row["sprint_work_minutes"],
-        sprint_break_minutes=row["sprint_break_minutes"],
-        body_double_sound=row["body_double_sound"],
-        body_double_volume=row["body_double_volume"],
-        chart_counts_shared=bool(row["chart_counts_shared"]),
         calendar_details=row["calendar_details"],
         calendar_twins=row["calendar_twins"],
         morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
@@ -204,18 +200,46 @@ class AccountStore:
     def __init__(self, db: Database, cipher: Cipher) -> None:
         self.db = db
         self._cipher = cipher
-        # CR3: a module's own check of a setting it owns (setting -> what's wrong, or None).
-        self.setting_checks: dict[str, Callable[[Any], str | None]] = {}
 
     @property
     def cipher(self) -> Cipher:
         return self._cipher
 
-    def _check(self, setting: str, value: Any) -> None:
-        check = self.setting_checks.get(setting)
-        problem = check(value) if check is not None else None
-        if problem:
-            raise InvalidValue(problem)
+    # ----- module preferences (CR7a) ---------------------------------------------
+
+    def preferences[P: Preferences](self, member_id: int, model: type[P]) -> P:
+        """This member's preferences for one module: what they set, else the defaults."""
+        rows = self.db.query(
+            "SELECT key, value FROM member_preferences WHERE member_id = ? AND module = ?",
+            (member_id, model.module),
+        )
+        stored = {r["key"]: json.loads(r["value"]) for r in rows if r["key"] in model.model_fields}
+        return model(**stored)
+
+    def save_preferences[P: Preferences](
+        self, actor: Actor, member_id: int, model: type[P], **changes: Any
+    ) -> P:
+        """Change some of this member's preferences for a module: only the member themselves
+        (or SYSTEM), as with their other settings. A None value is left as it is."""
+        self._require_self(actor, member_id)
+        self.get_member(member_id)
+        changes = {k: v for k, v in changes.items() if v is not None}
+        current = self.preferences(member_id, model)
+        try:
+            updated = model(**{**current.model_dump(), **changes})
+        except ValidationError as exc:
+            message = str(exc.errors()[0].get("msg", "")).removeprefix("Value error, ")
+            raise InvalidValue(message) from exc
+        now = clock.now().isoformat()
+        with self.db.transaction():
+            for key in changes:
+                self.db.execute(
+                    "INSERT INTO member_preferences (member_id, module, key, value, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?) ON CONFLICT (member_id, module, key) "
+                    "DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                    (member_id, model.module, key, json.dumps(getattr(updated, key)), now),
+                )
+        return updated
 
     # ----- permission helpers -------------------------------------------------
 
@@ -426,8 +450,6 @@ class AccountStore:
         listen_first: bool | None = None,
         day_budget: int | None = None,
         focus_count: int | None = None,
-        chart_limit: int | None = None,
-        chart_counts_shared: bool | None = None,
         calendar_details: str | None = None,
         calendar_twins: str | None = None,  # F34e: "ask", "guess" or "keep"
         morning_summary: str | None = None,  # "HH:MM", or "" for off
@@ -436,11 +458,6 @@ class AccountStore:
         leave_heads_up: bool | None = None,
         setup_note: bool | None = None,
         list_style: str | None = None,  # F29g: "dashes", "bullets" or "numbers"
-        break_extend_minutes: int | None = None,
-        sprint_work_minutes: int | None = None,  # BD1a
-        sprint_break_minutes: int | None = None,
-        body_double_sound: str | None = None,  # BD5a
-        body_double_volume: int | None = None,
         noise_emails: str | None = None,  # one of NOISE_EMAILS
         conversation_mode: bool | None = None,  # CM1a
         day_ends: int | None = None,  # F34j: 0 (midnight) to 4 am
@@ -489,31 +506,6 @@ class AccountStore:
             changes["phrasing_notes"] = phrasing_notes.strip()
         if checkin_reviews is not None:
             changes["checkin_reviews"] = int(checkin_reviews)
-        if chart_limit is not None:
-            if not 0 <= chart_limit <= MAX_CHART_LIMIT:
-                raise InvalidValue(f"chores at a time is between 0 and {MAX_CHART_LIMIT}")
-            changes["chart_limit"] = chart_limit
-        if break_extend_minutes is not None:
-            if not 5 <= break_extend_minutes <= 120:
-                raise InvalidValue("a break's extension is between 5 and 120 minutes")
-            changes["break_extend_minutes"] = break_extend_minutes
-        if sprint_work_minutes is not None:
-            if not 5 <= sprint_work_minutes <= 90:
-                raise InvalidValue("a sprint's work block is between 5 and 90 minutes")
-            changes["sprint_work_minutes"] = sprint_work_minutes
-        if sprint_break_minutes is not None:
-            if not 1 <= sprint_break_minutes <= 30:
-                raise InvalidValue("a sprint's break is between 1 and 30 minutes")
-            changes["sprint_break_minutes"] = sprint_break_minutes
-        if body_double_sound is not None:
-            self._check("body_double_sound", body_double_sound)
-            changes["body_double_sound"] = body_double_sound
-        if body_double_volume is not None:
-            if not 0 <= body_double_volume <= 100:
-                raise InvalidValue("the volume is between 0 and 100")
-            changes["body_double_volume"] = body_double_volume
-        if chart_counts_shared is not None:
-            changes["chart_counts_shared"] = int(chart_counts_shared)
         if calendar_details is not None:
             if calendar_details not in ("me", "partner"):
                 raise InvalidValue("calendar details are for 'me' or 'partner'")

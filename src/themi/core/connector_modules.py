@@ -22,6 +22,7 @@ from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWa
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
 from themi.core.agent import Agent
+from themi.core.chore_chart import ChartPreferences
 from themi.core.connector_settings import (
     CozylaSettings,
     GoogleSettings,
@@ -217,6 +218,7 @@ class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
     name = "cozyla_chores"
+    preferences = ChartPreferences
     settings = CozylaSettings
     requires = ("tasks", "routines")
 

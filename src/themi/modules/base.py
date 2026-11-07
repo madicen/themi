@@ -8,8 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
-from pydantic import BaseModel
-
+from themi.accounts.preferences import Preferences
 from themi.modules.settings import ModuleSettings, read_settings
 
 if TYPE_CHECKING:
@@ -97,7 +96,7 @@ class Module:
     requires: ClassVar[tuple[str, ...]] = ()
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
-    preferences: ClassVar[type[BaseModel] | None] = None  # CR7a
+    preferences: ClassVar[type[Preferences] | None] = None  # CR7a: per member
     # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
     migrations: ClassVar[str | Path | None] = None
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11

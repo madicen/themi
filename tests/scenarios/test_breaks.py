@@ -10,6 +10,7 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.core import keys
+from themi.core.breaks import BreaksPreferences
 from themi.core.tasks import TaskBoard
 
 
@@ -75,7 +76,7 @@ async def test_the_command_and_the_extension_setting(
     page = await site.get("/settings")
     assert 'name="break_extend_minutes"' in page.text
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, break_extend_minutes=25)
+    scenario.app.store.save_preferences(erin, erin.id, BreaksPreferences, break_extend_minutes=25)
     assert csrf
     replies = await scenario.say("Erin", "/break 10")
     assert replies == [

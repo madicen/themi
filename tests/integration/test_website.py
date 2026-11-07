@@ -14,6 +14,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import Role
 from themi.autonomy import ExecutionContext
+from themi.core.chore_chart import ChartPreferences
 from themi.web.auth import COOKIE_NAME, WebAuth
 
 # ----- signing in ---------------------------------------------------------------
@@ -100,6 +101,7 @@ async def test_the_csrf_header_works_for_htmx(scenario: Scenario, site: httpx.As
 # ----- settings -------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("fake_cozyla")  # CR7a: the chart's settings come with the wall
 async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -> None:
     csrf = await sign_in(scenario, site, "Erin")
     form = {
@@ -122,7 +124,8 @@ async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -
         "07:45",
     )
     assert (erin.daily_limit, erin.pda_enabled, erin.pda_strength) == (3, True, 3)
-    assert erin.chart_limit == 1 and not erin.chart_counts_shared  # left unticked
+    chart = scenario.app.store.preferences(erin.id, ChartPreferences)  # CR7a
+    assert chart.chart_limit == 1 and not chart.chart_counts_shared  # left unticked
     assert erin.calendar_twins == "guess"  # F34e
     assert erin.tracks("text_notes") and not erin.tracks("message_timing")
     page = await site.get("/settings")
@@ -395,6 +398,7 @@ async def test_each_settings_section_says_what_its_set_to(
     assert "Summary of my day at 7:15 am" in page and "Plain: say it straight</span>" in page
 
 
+@pytest.mark.usefixtures("fake_cozyla")  # CR7a: the chart's settings come with the wall
 async def test_one_save_bar_saves_every_section(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:

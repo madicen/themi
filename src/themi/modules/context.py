@@ -20,6 +20,8 @@ from themi.storage.migrations import apply_track
 if TYPE_CHECKING:
     from fastapi import APIRouter
 
+    from themi.accounts import Member
+    from themi.accounts.preferences import Preferences
     from themi.autonomy.engine import Executor
     from themi.core.services import (
         AwaitingSource,
@@ -57,6 +59,8 @@ class ModuleContext:
             try:
                 if module.migrations is not None:  # CR6: its tables, before it installs
                     apply_track(self.services.store.db, module.name, module.migrations)
+                if module.preferences is not None:  # CR7a: for the settings page
+                    self.services.preference_models.append(module.preferences)
                 module.install(self)
             finally:
                 self._current = ""
@@ -129,6 +133,10 @@ class ModuleContext:
 
     def open_item_source(self, source: OpenItemSource) -> None:
         self.services.open_item_sources.append(source)
+
+    def preferences[P: Preferences](self, member: Member, model: type[P]) -> P:
+        """CR7a: a member's preferences for a module (the store holds them)."""
+        return self.services.store.preferences(member.id, model)
 
     def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
         """CR4: the module's website pages, and where they go in the menu."""

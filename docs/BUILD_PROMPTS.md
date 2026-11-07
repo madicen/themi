@@ -285,7 +285,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR5a | Core refactor: themi.toml, templates, and modules found and built from settings | Core refactor | [x] 2026-11-07 |
 | CR5b | Core refactor: a settings model per module | Core refactor | [x] 2026-11-07 |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [x] 2026-11-07 |
-| CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
+| CR7a | Core refactor: per-member module preferences | Core refactor | [x] 2026-11-07 |
 | CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
@@ -14325,7 +14325,7 @@ Notes:
 - The rule is in Fixed technical choices.
 
 ### CR7a · Core refactor: per-member module preferences
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR6
 Read first: `src/themi/accounts/models.py`; `src/themi/accounts/store.py`; the settings
 page (`web/site.py`, `settings_page`); CR6's notes.
@@ -14339,6 +14339,31 @@ page (`web/site.py`, `settings_page`); CR6's notes.
   member table's columns stay until CR7b, unused.
 Tests: defaults, saved values, the data copy from an existing database, settings page
 unchanged for the family (a snapshot of its form fields).
+
+Notes:
+- `themi.accounts.preferences.Preferences`: a module's per-member model (`module` names
+  it; defaults and checks on the model). `AccountStore.preferences(member_id, Model)` and
+  `save_preferences(actor, member_id, Model, **changes)` (only the member or SYSTEM, as
+  with `update_settings`; None leaves a value; a check's words come back as InvalidValue).
+  `ModuleContext.preferences(member, Model)` reads them too.
+- Core migration 0145 makes `member_preferences` (member, module, key, JSON value) and
+  copies every member's current values. The `members` columns stay, unused, for CR7b.
+- Moved: `BodyDoublePreferences` (sprint work and break minutes, sound, volume) in
+  body_double; `BreaksPreferences` (break extend minutes) in breaks; `ChartPreferences`
+  (chart limit, shared chores count) in chore_chart, owned by the cozyla_chores module.
+  The prompt named the break extension a body-double field; it belongs to breaks.
+- `Member` and `update_settings` no longer have those seven fields. The account store's
+  `setting_checks` hook from CR3 is gone: the sound check is on the model now.
+- The settings page shows a module's rows only when it's loaded
+  (`services.preference_models`), and saves each loaded module's preferences from the
+  form (`from_form`). Behaviour change: without the Cozyla wall, the chore chart rows
+  aren't shown (they did nothing). With every module loaded the form's fields are exactly
+  as before (checked against the CR6 commit; `tests/scenarios/test_settings_form.py`).
+- Known edge: the page saves preferences, then the member settings; a bad member setting
+  after good preferences leaves the preferences saved (each is checked before it's written).
+- Tests changed: chart, sound, sprint and break tests set and read these through
+  `save_preferences`/`preferences`; two website tests that check the chart's fields now
+  use `fake_cozyla`.
 
 ### CR7b · Core refactor: the rest of the feature settings, and the settings page
 Status: [ ]

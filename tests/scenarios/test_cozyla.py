@@ -7,6 +7,7 @@ import pytest
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
+from themi.core.chore_chart import ChartPreferences
 
 
 async def test_ticking_a_to_do_off_on_the_wall_stops_the_nudges(
@@ -73,7 +74,7 @@ async def test_erin_sees_one_chore_at_a_time(scenario: Scenario, fake_cozyla: Fa
     board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=1)
     titles = ("Clean the kitchen", "Clean upstairs", "Clean the bathroom")
     for title in titles:
         task = await board.create(erin, title, "physical", 2, assignee=erin)

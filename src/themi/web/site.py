@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 
 from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
+from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import conversation_mode, keys
@@ -381,6 +382,10 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 else []
             ),
             "job_modes": job_modes(member),  # BD2
+            "prefs": {  # CR7a: each loaded module's preferences, by module
+                model.module: app.store.preferences(member.id, model)
+                for model in app.services.preference_models
+            },
             **extra,
         }
 
@@ -404,6 +409,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         session, form = await kit.checked(request)
         member = session.member  # always the signed-in member; any member_id field is ignored
         try:
+            for model in app.services.preference_models:  # CR7a: each module's own
+                app.store.save_preferences(member, member.id, model, **from_form(model, form))
             app.store.update_settings(
                 member,
                 member.id,
@@ -419,8 +426,6 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 listen_first=form.get("listen_first") == "on",
                 day_budget=as_int(form.get("day_budget")),
                 focus_count=as_int(form.get("focus_count")),
-                chart_limit=as_int(form.get("chart_limit")),
-                chart_counts_shared=form.get("chart_counts_shared") == "on",
                 calendar_details=str(form.get("calendar_details", "")) or None,
                 calendar_twins=str(form.get("calendar_twins", "")) or None,
                 day_ends=as_int(form.get("day_ends")),
@@ -430,9 +435,6 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 leave_heads_up=form.get("leave_heads_up") == "on",
                 setup_note=form.get("setup_note") == "on",
                 list_style=str(form.get("list_style", "")) or None,
-                break_extend_minutes=as_int(form.get("break_extend_minutes")),
-                sprint_work_minutes=as_int(form.get("sprint_work_minutes")),
-                sprint_break_minutes=as_int(form.get("sprint_break_minutes")),
                 noise_emails=str(form.get("noise_emails", "")) or None,
                 tracking={name: form.get(f"track_{name}") == "on" for name in TRACKING_INPUTS},
                 conversation_mode=(  # CM1a: only when the switch was on the page
@@ -632,6 +634,20 @@ class Menu:
             }
         )
         return items
+
+
+def from_form(model: type[Preferences], form: Any) -> dict[str, Any]:
+    """CR7a: a module's preferences from the settings form. A checkbox left unticked is
+    False; a number left empty is left as it was."""
+    values: dict[str, Any] = {}
+    for name, info in model.model_fields.items():
+        if info.annotation is bool:
+            values[name] = form.get(name) == "on"
+        elif info.annotation is int:
+            values[name] = as_int(form.get(name))
+        elif name in form:
+            values[name] = str(form.get(name)) or None
+    return values
 
 
 def _is_on(href: str, path: str) -> bool:

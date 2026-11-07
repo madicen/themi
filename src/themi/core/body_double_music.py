@@ -50,7 +50,15 @@ def loop_for(said: str) -> Loop | None:
 def set_sound(
     store: Any, member: Member, sound: str | None = None, volume: int | None = None
 ) -> None:
-    store.update_settings(member, member.id, body_double_sound=sound, body_double_volume=volume)
+    from themi.core.body_double import BodyDoublePreferences  # CR7a; a cycle at the top
+
+    store.save_preferences(
+        member,
+        member.id,
+        BodyDoublePreferences,
+        body_double_sound=sound,
+        body_double_volume=volume,
+    )
 
 
 @tool(

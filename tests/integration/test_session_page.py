@@ -16,7 +16,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.mini_app import sign_init_data
 from themi.core import keys
-from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble
+from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble, BodyDoublePreferences
 from themi.web.auth import COOKIE_NAME
 
 ENERGY_WORDS = ("energy", "capacity", "score", "low", "medium", "high")
@@ -132,7 +132,8 @@ async def test_a_page_tap_with_an_old_seq_does_nothing(
 async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.AsyncClient) -> None:
     csrf = await sign_in(scenario, site, "Erin")
     erin = scenario.member("Erin")
-    assert (erin.body_double_sound, erin.body_double_volume) == ("lofi", 50)
+    prefs = scenario.app.store.preferences(erin.id, BodyDoublePreferences)
+    assert (prefs.body_double_sound, prefs.body_double_volume) == ("lofi", 50)
     await bd(scenario).start(erin, mode=SILENT)
     page = (await site.get("/session")).text
     assert 'class="session-music"' in page and "autoplay" not in page
@@ -145,7 +146,7 @@ async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.Asyn
     assert bad.status_code == 400
     bad = await site.post("/session/music", data={"csrf": csrf, "sound": "", "volume": "101"})
     assert bad.status_code == 400
-    assert scenario.member("Erin").body_double_sound == "rain"
+    assert sound(scenario) == "rain"
     audio = await site.get("/static/audio/rain.m4a")
     assert audio.status_code == 200 and len(audio.content) > 10_000
 
@@ -154,7 +155,7 @@ async def test_play_rain_in_chat_sets_the_page(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call("choose_session_sound", {"sound": "rain"})
     scenario.primary.queue_text("Rain it is; tap play on the session page.")
     await scenario.say("Erin", "play rain")
-    assert scenario.member("Erin").body_double_sound == "rain"
+    assert sound(scenario) == "rain"
 
 
 async def test_the_mini_app_works_when_the_webview_drops_cookies(scenario: Scenario) -> None:
@@ -231,3 +232,8 @@ async def test_a_tap_works_beside_an_older_website_cookie(scenario: Scenario) ->
             data={"csrf": csrf, "action": "break", "seq": session.seq},
         )
         assert tapped.status_code == 200 and tapped.json()["phase"] == "break"
+
+
+def sound(scenario: Scenario) -> str:
+    erin = scenario.member("Erin")
+    return scenario.app.store.preferences(erin.id, BodyDoublePreferences).body_double_sound

@@ -17,6 +17,7 @@ from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.ai.types import ToolResult
 from themi.core import keys
+from themi.core.chore_chart import ChartPreferences
 from themi.core.progression import parse_plan
 from themi.core.repeat import parse
 from themi.core.tasks import TaskBoard
@@ -146,7 +147,7 @@ async def test_a_chore_waiting_for_the_chart_is_in_tomorrows_summary(
     """Idea #19: Erin's bird cage, her one chart chore, was missing from tomorrow's list,
     because today it's still waiting its turn."""
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=1)
     cage = await board(scenario).create(
         erin, "Clean the bird cage", "physical", 2, assignee=erin, nudge=False
     )

@@ -31,10 +31,13 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import BODY_DOUBLE_KIND, Priority
 from themi.core import keys, praise
@@ -198,6 +201,46 @@ def parse_command(argument: str) -> tuple[str, int]:
 # (session, text, buttons) -> (text, buttons).
 StartDecorator = Callable[[Session, str, list[Button]], Awaitable[tuple[str, list[Button]]]]
 EndListener = Callable[[Session, str], Awaitable[None]]
+
+
+class BodyDoublePreferences(Preferences):
+    """CR7a: each person's body double settings (BD1a, BD5a)."""
+
+    module: ClassVar[str] = "body_double"
+    sprint_work_minutes: int = 25  # a sprint's work block
+    sprint_break_minutes: int = 5  # and its break
+    body_double_sound: str = "lofi"  # the session page's built-in loop
+    body_double_volume: int = 50  # 0-100
+
+    @field_validator("sprint_work_minutes")
+    @classmethod
+    def _work(cls, value: int) -> int:
+        if not 5 <= value <= 90:
+            raise ValueError("a sprint's work block is between 5 and 90 minutes")
+        return value
+
+    @field_validator("sprint_break_minutes")
+    @classmethod
+    def _break(cls, value: int) -> int:
+        if not 1 <= value <= 30:
+            raise ValueError("a sprint's break is between 1 and 30 minutes")
+        return value
+
+    @field_validator("body_double_sound")
+    @classmethod
+    def _sound(cls, value: str) -> str:
+        from themi.core.body_double_music import LOOPS  # a cycle at the top
+
+        if value not in LOOPS:
+            raise ValueError(f"the sounds are {', '.join(LOOPS)}")
+        return value
+
+    @field_validator("body_double_volume")
+    @classmethod
+    def _volume(cls, value: int) -> int:
+        if not 0 <= value <= 100:
+            raise ValueError("the volume is between 0 and 100")
+        return value
 
 
 class BodyDouble:
@@ -390,6 +433,7 @@ class BodyDouble:
             self.services.get(keys.breaks).end(member)  # back from a break, to work
         member = self.store.get_member(member.id)
         pause = self.pauses.pause(member, TOPIC, now + OPEN_ENDED + LEFT_AFTER)
+        prefs = self.store.preferences(member.id, BodyDoublePreferences)  # CR7a
         session_id = self.db.execute(
             "INSERT INTO body_double_sessions (member_id, task_id, label, category, mode, "
             "mode_chosen, started_at, planned_minutes, work_minutes, break_minutes, "
@@ -397,8 +441,8 @@ class BodyDouble:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?, ?, ?, ?, ?)",
             (
                 member.id, task.id if task is not None else None, label, category, mode,
-                int(chosen), to_utc_iso(now), minutes or None, member.sprint_work_minutes,
-                member.sprint_break_minutes, self.hour_of_week(now), energy, pause.id,
+                int(chosen), to_utc_iso(now), minutes or None, prefs.sprint_work_minutes,
+                prefs.sprint_break_minutes, self.hour_of_week(now), energy, pause.id,
                 routine.id if routine is not None else None,
                 json.dumps(queue) if queue else None, part_no if parts > 1 else None,
                 parts if parts > 1 else None,
@@ -889,11 +933,11 @@ class BodyDouble:
         """The page's built-in loop and volume (BD5a); it plays only when they tap play."""
         from themi.core.body_double_music import LOOPS
 
-        member = self.store.get_member(member.id)
-        loop = LOOPS.get(member.body_double_sound) or LOOPS["lofi"]
+        prefs = self.store.preferences(member.id, BodyDoublePreferences)  # CR7a
+        loop = LOOPS.get(prefs.body_double_sound) or LOOPS["lofi"]
         return {
             "sound": loop.key,
-            "volume": member.body_double_volume,
+            "volume": prefs.body_double_volume,
             "file": loop.file,
             "loops": [{"key": k.key, "name": k.name, "file": k.file} for k in LOOPS.values()],
         }
@@ -1165,15 +1209,10 @@ class BodyDoubleModule(Module):
     """BD1a: body double sessions; block ends are scheduler jobs."""
 
     name = "body_double"
+    preferences = BodyDoublePreferences
 
     def install(self, ctx: ModuleContext) -> None:
-        from themi.core.body_double_music import LOOPS  # at install: a cycle at the top
         from themi.web import session_pages
 
         ctx.web(session_pages.routes)
-
-        def sound(value: object) -> str | None:  # BD5a: the session page's built-in loops
-            return None if value in LOOPS else f"the sounds are {', '.join(LOOPS)}"
-
-        ctx.services.store.setting_checks["body_double_sound"] = sound
         ctx.provide(BodyDouble(ctx.services, ctx.scheduler)).install()

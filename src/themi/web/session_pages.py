@@ -116,10 +116,11 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=400)
         bd = body_double()
         if form.get("played") and bd is not None:  # BD5b: it played in this session
+            from themi.core.body_double import BodyDoublePreferences
             from themi.core.body_double_music import LOOPS
 
             member = app.store.get_member(signed.member.id)
-            loop = LOOPS[member.body_double_sound]
+            loop = LOOPS[app.store.preferences(member.id, BodyDoublePreferences).body_double_sound]
             bd.note_music(member, f"builtin:{loop.key}", loop.name)
         return Response(status_code=204)
 

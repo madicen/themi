@@ -133,10 +133,12 @@ class CozylaChores:
         limited = [m for m in self.queue.limited() if self.queue.counts(task, m)]
         up = next((m for m in limited if self.queue.is_up(task, m)), None)
         if up is not None:
-            return f"Up now on {up.name}'s chore chart ({up.chart_limit} at a time)."
+            limit = self.queue.prefs(up).chart_limit
+            return f"Up now on {up.name}'s chore chart ({limit} at a time)."
         if limited and not self._wall_members(task):
             charts = " and ".join(
-                f"{m.name}'s chore chart ({m.chart_limit} at a time)" for m in limited
+                f"{m.name}'s chore chart ({self.queue.prefs(m).chart_limit} at a time)"
+                for m in limited
             )
             return f"Waiting its turn for {charts}; not on the wall yet."
         day = day_words(self._round_day(task, self._today()))

@@ -12,6 +12,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
 from themi.core import keys
+from themi.core.body_double import BodyDoublePreferences
 from themi.core.tasks import Task, TaskBoard
 
 
@@ -160,8 +161,9 @@ async def test_stop_here_then_its_done_after_all(scenario: Scenario) -> None:
 
 async def test_the_sprint_lengths_are_theirs(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, sprint_work_minutes=50,
-                                       sprint_break_minutes=10)  # fmt: skip
+    scenario.app.store.save_preferences(
+        erin, erin.id, BodyDoublePreferences, sprint_work_minutes=50, sprint_break_minutes=10
+    )
     replies = await scenario.say("Erin", "/bodydouble pomodoro")
     assert replies == ["Sprint on: 50 minutes, then a 10-minute break. I'll say when."]
 
@@ -537,11 +539,14 @@ async def test_not_now_leaves_the_music_alone(scenario: Scenario) -> None:
     replies = await start(scenario, "keep me company while I write", mode="quiet",
                           what="my essay")  # fmt: skip
     assert replies[0].endswith("\nSome lofi while you work?")
-    scenario.app.store.update_settings(scenario.member("Erin"), scenario.member("Erin").id,
-                                       body_double_sound="rain")  # fmt: skip
+    erin = scenario.member("Erin")
+    scenario.app.store.save_preferences(erin, erin.id, BodyDoublePreferences,
+                                        body_double_sound="rain")  # fmt: skip
     await scenario.tap("Erin", "Not now")
     assert card(scenario) == "I'm here. Going quiet until you say you're done."
-    assert scenario.member("Erin").body_double_sound == "rain"
+    assert (
+        scenario.app.store.preferences(erin.id, BodyDoublePreferences).body_double_sound == "rain"
+    )
     await scenario.say("Erin", "/bodydouble quiet 30")  # no words, no kind of job: no offer
     assert "while you work" not in scenario.inbox("Erin")[-1]
 

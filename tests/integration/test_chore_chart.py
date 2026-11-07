@@ -11,6 +11,7 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.accounts import InvalidValue
 from themi.core import keys
+from themi.core.chore_chart import ChartPreferences
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -28,7 +29,7 @@ async def sync(scenario: Scenario) -> Any:
 
 def limit(scenario: Scenario, name: str, count: int) -> None:
     member = scenario.member(name)
-    scenario.app.store.update_settings(member, member.id, chart_limit=count)
+    scenario.app.store.save_preferences(member, member.id, ChartPreferences, chart_limit=count)
 
 
 async def chore(scenario: Scenario, title: str, phrase: str, who: str = "Erin", **kw: Any) -> Task:
@@ -143,8 +144,8 @@ async def test_she_can_choose_that_shared_chores_dont_count(
     scenario.primary.queue_tool_call("set_chore_chart_limit", {"limit": -1, "shared_count": "no"})
     scenario.primary.queue_text("Shared chores will always show.")
     await scenario.say("Erin", "Chores either of us can do shouldn't count toward my one")
-    erin = scenario.member("Erin")
-    assert (erin.chart_limit, erin.chart_counts_shared) == (1, False)  # the limit kept
+    chart = scenario.app.store.preferences(scenario.member("Erin").id, ChartPreferences)
+    assert (chart.chart_limit, chart.chart_counts_shared) == (1, False)  # the limit kept
     await sync(scenario)
     assert on_wall(fake_cozyla) == {
         "Clean the kitchen": ["m-erin"],  # her one
@@ -278,7 +279,10 @@ async def test_the_limit_is_a_setting(scenario: Scenario, fake_cozyla: FakeCozyl
     scenario.primary.queue_tool_call("set_chore_chart_limit", {"limit": 1, "shared_count": "keep"})
     scenario.primary.queue_text("Just one at a time from now on.")
     await scenario.say("Erin", "Only show me one chore at a time on the wall")
-    assert scenario.member("Erin").chart_limit == 1
+    assert (
+        scenario.app.store.preferences(scenario.member("Erin").id, ChartPreferences).chart_limit
+        == 1
+    )
     assert not scenario.app.db.query("SELECT 1 FROM rules WHERE status = 'draft'")
     await sync(scenario)
     assert len(on_wall(fake_cozyla)) == 1
@@ -288,4 +292,4 @@ async def test_the_limit_is_a_setting(scenario: Scenario, fake_cozyla: FakeCozyl
     assert set(on_wall(fake_cozyla)) == {"Clean the kitchen", "Clean upstairs"}
     erin = scenario.member("Erin")
     with pytest.raises(InvalidValue):
-        scenario.app.store.update_settings(erin, erin.id, chart_limit=11)
+        scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=11)

@@ -79,13 +79,6 @@ class Member:
     listen_first: bool = True  # feelings get listening; ask before problem-solving (F22e)
     focus_count: int = 3  # things "for now" when it's too much (O1a)
     day_budget: int = 0  # at most this many on a day when the rest is spread (O1b); 0: usual
-    chart_limit: int = 0  # chores on the wall's chart at a time; 0 is no limit (C2d)
-    break_extend_minutes: int = 15  # what a break's "Extend" button offers (B1)
-    sprint_work_minutes: int = 25  # a body double sprint's work block (BD1a)
-    sprint_break_minutes: int = 5  # and its break
-    body_double_sound: str = "lofi"  # the session page's built-in loop (BD5a)
-    body_double_volume: int = 50  # 0-100
-    chart_counts_shared: bool = True  # chores for either of you count toward that limit
     calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
     day_ends: int = 0  # F34j: their day rolls over at this hour after midnight (0 to 4)
     calendar_twins: str = "ask"  # F34e: the same event on two calendars: ask, guess or keep
