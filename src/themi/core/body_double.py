@@ -247,6 +247,14 @@ class BodyDouble:
     def _owner(self, session: Session) -> Member:
         return self.store.get_member(session.member_id)
 
+    def remember_message(self, session: Session, message_id: int | None) -> None:
+        """The chat message showing the session (its start, or the guided card)."""
+        if message_id is not None:
+            self.db.execute(
+                "UPDATE body_double_sessions SET card_message_id = ? WHERE id = ?",
+                (message_id, session.id),
+            )
+
     def _tz(self) -> str:
         family = self.store.get_family()
         return family.timezone if family else "UTC"
@@ -362,6 +370,9 @@ class BodyDouble:
             return
         if int(payload.get("seq", -1)) != session.seq:
             return  # something changed since: a newer job carries it
+        if session.mode == GUIDED and self.guided is not None and session.phase != "asking":
+            await self.guided.on_job(session)
+            return
         if session.phase == "asking":
             await self._end(session, "left", quietly=True)
             return
@@ -446,6 +457,7 @@ class BodyDouble:
             return
         if int(payload.get("seq", -1)) != session.seq:
             return  # an old question: the session moved on
+        self.remember_message(session, event.button.message_id)
         text, buttons = await self.act(session, str(payload.get("action", "")))
         await self._reply(event, member, text, buttons)
 
@@ -502,7 +514,8 @@ class BodyDouble:
             return
         if self.services.burnout is not None and self.services.burnout.current(member):
             return  # burnout mode wins; a held nudge shouldn't have been tapped
-        _, text, buttons = await self.start(member, task=task)
+        session, text, buttons = await self.start(member, task=task)
+        self.remember_message(session, event.button.message_id)
         await self._reply(event, member, text, buttons)
 
     # ----- ending -------------------------------------------------------------------------
@@ -627,9 +640,12 @@ class BodyDouble:
                 "Try /bodydouble, /bodydouble sprint or /bodydouble quiet 45 (minutes).",
                 [],
             )
-        await self.services.outbox.send(
+        result = await self.services.outbox.send(
             member, text, priority=Priority.REPLY, kind=KIND, buttons=buttons
         )
+        session = self.current(member)
+        if session is not None and result.outbox_id is not None:
+            self.remember_message(session, self.services.outbox.message_id(result.outbox_id))
 
     def open_items(self, member: Member) -> list[Any]:
         from themi.core.prompts import OpenItem, as_data
@@ -639,6 +655,8 @@ class BodyDouble:
             return []
         what = as_data("their words", session.label) if session.task_id is None else ""
         task = f" (task {session.task_id})" if session.task_id is not None else ""
+        if self.guided is not None and session.mode == GUIDED:
+            task += self.guided.open_item_words(session)
         return [
             OpenItem(
                 f"Keeping them company now ({MODE_NAMES[session.mode]}){task}"
@@ -670,10 +688,15 @@ def _mode_arg(value: Any) -> str:
     return MODE_WORDS[said]
 
 
-async def _send(ctx: ToolContext, text: str, buttons: list[Button]) -> None:
-    await ctx.services.outbox.send(
+async def _send(
+    ctx: ToolContext, text: str, buttons: list[Button], session: Session | None = None
+) -> None:
+    result = await ctx.services.outbox.send(
         ctx.member, text, priority=Priority.REPLY, kind=KIND, buttons=buttons
     )
+    if session is not None and result.outbox_id is not None:
+        message_id = ctx.services.outbox.message_id(result.outbox_id)
+        _body_double(ctx).remember_message(session, message_id)
 
 
 @tool(
@@ -716,7 +739,7 @@ async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
         )
     except ValueError as exc:
         raise ToolFailed(f"Not started: {exc}.") from exc
-    await _send(ctx, text, buttons)
+    await _send(ctx, text, buttons, session)
     ctx.cards.append(f"body double {session.mode}")
     return f"Started ({MODE_NAMES[session.mode]}); Themi told them itself: {text!r}"
 
@@ -730,10 +753,10 @@ async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def switch_body_double_mode(ctx: ToolContext, args: dict[str, Any]) -> str:
     mode = _mode_arg(args.get("mode"))
     try:
-        _, text, buttons = await _body_double(ctx).switch(ctx.member, mode or SILENT)
+        session, text, buttons = await _body_double(ctx).switch(ctx.member, mode or SILENT)
     except ValueError as exc:
         raise ToolDeclined(f"Not switched: {exc}.") from exc
-    await _send(ctx, text, buttons)
+    await _send(ctx, text, buttons, session)
     ctx.cards.append("body double switched")
     return f"Switched; Themi told them itself: {text!r}"
 

@@ -29,6 +29,7 @@ TASK_LABELS = {
     AITask.CHAT: "Conversation mode: the chat reply",
     AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
     AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",
+    AITask.BODY_DOUBLE_STEPS: "Body double: steps for a guided session",
 }
 KIND_LABELS = {
     "gemini": "Gemini",

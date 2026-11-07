@@ -44,6 +44,7 @@ class AITask(StrEnum):
     CHAT = "chat"  # CM1a: the reply in conversation mode, no tools
     SIDECAR = "sidecar"  # CM1b: the background pass that picks out tasks and events
     RECIPES = "recipes"  # RC2a-RC4a: reading ingredients, prep and recipes from pages
+    BODY_DOUBLE_STEPS = "body_double_steps"  # BD1b: proposed steps for a guided session
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)
