@@ -42,14 +42,7 @@ CORE_IN_FEATURES = {
 OUTSIDE = ("themi.core", "themi.connectors", "themi.energy", "themi.web", "themi.app")
 
 # (file relative to the src root, imported module): the prompt that removes it.
-KNOWN = {
-    ("themi/settings.py", "themi.connectors.cozyla.client"): "CR5b",
-    ("themi/settings.py", "themi.connectors.google.oauth"): "CR5b",
-    ("themi/settings.py", "themi.connectors.homeconnect.client"): "CR5b",
-    ("themi/settings.py", "themi.connectors.ourgroceries.client"): "CR5b",
-    ("themi/settings.py", "themi.connectors.spotify"): "CR5b",
-    ("themi/settings.py", "themi.connectors.thinq.client"): "CR5b",
-}
+KNOWN: dict[tuple[str, str], str] = {}  # none left after CR5b
 
 
 def core_files(src: Path) -> list[Path]:

@@ -281,9 +281,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [x] 2026-11-07 |
 | CR3 | Core refactor: a typed service registry | Core refactor | [x] 2026-11-07 |
 | CR4 | Core refactor: website pages from modules | Core refactor | [x] 2026-11-07 |
-| CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | split |
+| CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | split, [x] 2026-11-07 |
 | CR5a | Core refactor: themi.toml, templates, and modules found and built from settings | Core refactor | [x] 2026-11-07 |
-| CR5b | Core refactor: a settings model per module | Core refactor | [ ] |
+| CR5b | Core refactor: a settings model per module | Core refactor | [x] 2026-11-07 |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
 | CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
@@ -14253,7 +14253,7 @@ Notes:
   are registered (an editable install reads them from its metadata).
 
 ### CR5b · Core refactor: a settings model per module
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR5a
 Read first: CR5 above; CR5a's notes.
 - Each module's `settings` is a pydantic model read from `[module.<name>]` and from env
@@ -14265,6 +14265,28 @@ Read first: CR5 above; CR5a's notes.
 - `themi config show` adds each module's non-secret settings.
 Tests: today's env variables still configure each connector; secrets never read from TOML;
 each validation message; golden files identical.
+
+Notes:
+- `themi.modules.settings`: `ModuleSettings` (a pydantic base), `env_field(VAR, default,
+  secret=)`, `read_settings(model, env, section, module)`, `plain_values`, and
+  `SettingsProblem` (lines for the person). Precedence: the environment (with .env), then
+  the module's `[module.<name>]` section, then the default. A secret in themi.toml, or a key
+  the model doesn't have, is refused.
+- The connector settings models are in `themi/core/connector_settings.py` (Google,
+  OurGroceries, Cozyla, Travel, Search, Spotify, Home Connect, ThinQ), with the old variable
+  names, defaults and messages. Modules declare `settings = ...` and read it in `build`
+  through `setup.read(Model)`; recipes and google_tasks read Google's
+  (`setup.read(GoogleSettings, "google")`). Each model is read once per resolve.
+- `Settings` keeps only core fields, plus `environment` (every variable as read, never in
+  its repr) for the modules. It no longer imports any connector; the layer check's KNOWN
+  list is empty.
+- Connector settings are now checked when modules are resolved (`themi run`, `themi config
+  show`), not by every command: `themi invite` no longer stops on a half-set Google pair.
+- A `[module.<name>]` section must name a known module that has settings.
+- `build_runtime`'s `make dev` path passes the fakes only; it no longer reads connector
+  settings (it never needed them: the fakes replace every one).
+- Tests moved: the four "off until both are set" tests went from `test_settings.py` to
+  `test_module_settings.py`, checking the same values and messages.
 
 ### CR6 · Core refactor: migration tracks per module
 Status: [ ]

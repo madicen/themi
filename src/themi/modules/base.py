@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from pydantic import BaseModel
 
+from themi.modules.settings import ModuleSettings, read_settings
+
 if TYPE_CHECKING:
     from themi.modules.context import ModuleContext
     from themi.settings import Settings
@@ -49,23 +51,41 @@ def as_job(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
 
 
 class ModuleSetup:
-    """What a module is built from (CR5a): the app's settings, its own `[module.<name>]`
-    section of themi.toml, and objects modules share (one Cozyla client for two modules)."""
+    """What a module is built from (CR5a, CR5b): the app's core settings, the environment
+    and themi.toml's module sections (for module settings), and objects modules share (one
+    Cozyla client for two modules)."""
 
     def __init__(
         self,
         settings: Settings,
         section: dict[str, object] | None = None,
         shared: dict[str, object] | None = None,
+        *,
+        module: str = "",
+        sections: dict[str, dict[str, object]] | None = None,
     ) -> None:
         self.settings = settings
         self.section = section or {}
         self._shared = {} if shared is None else shared
+        self.module = module
+        self.sections = sections or ({module: self.section} if module else {})
 
     def shared(self, key: str, make: Callable[[], T]) -> T:
         if key not in self._shared:
             self._shared[key] = make()
         return self._shared[key]  # type: ignore[return-value]
+
+    def read[S: ModuleSettings](self, model: type[S], module: str = "") -> S:
+        """A module's settings: this module's, or another's it builds on (Google's, for the
+        cookbook). Raises SettingsProblem with lines for the person."""
+        name = module or self.module
+        key = f"settings:{name}:{model.__name__}"
+        return self.shared(
+            key,
+            lambda: read_settings(
+                model, self.settings.environment, self.sections.get(name, {}), name
+            ),
+        )
 
 
 class Module:
@@ -75,7 +95,7 @@ class Module:
     name: ClassVar[str] = ""
     requires: ClassVar[tuple[str, ...]] = ()
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
-    settings: ClassVar[type[BaseModel] | None] = None  # CR5
+    settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
     preferences: ClassVar[type[BaseModel] | None] = None  # CR7a
     migrations: ClassVar[str | None] = None  # CR6: a package folder of SQL files
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11

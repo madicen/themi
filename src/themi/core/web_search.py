@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.connectors.search import SearchBackend, SearchError, SearchResult
 from themi.core import keys
+from themi.core.connector_settings import SearchSettings
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import start_of_local_day, to_utc_iso
@@ -427,6 +428,7 @@ class WebSearchModule(Module):
     one up."""
 
     name = "web_search"
+    settings = SearchSettings
 
     def __init__(self, backend: SearchBackend | None) -> None:
         self.backend = backend
@@ -435,8 +437,8 @@ class WebSearchModule(Module):
     def build(cls, setup: ModuleSetup) -> Module | None:
         from themi.connectors.search import choose
 
-        s = setup.settings
-        return cls(choose(s.search_backend, s.tavily_api_key, s.firecrawl_api_key))
+        s = setup.read(SearchSettings)
+        return cls(choose(s.backend.lower(), s.tavily_api_key, s.firecrawl_api_key))
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(WebSearch(ctx.services, self.backend)).install()

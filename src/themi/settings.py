@@ -11,40 +11,15 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from themi.backup.s3 import S3Config
 from themi.backup.snapshots import BackupConfig
-from themi.connectors.cozyla.client import CozylaConfig
-from themi.connectors.google.oauth import GoogleConfig
-from themi.connectors.homeconnect.client import BASE_URL as HOME_CONNECT_URL
-from themi.connectors.homeconnect.client import HomeConnectConfig
-from themi.connectors.ourgroceries.client import OurGroceriesConfig
-from themi.connectors.spotify import ACCOUNTS_URL as SPOTIFY_ACCOUNTS_URL
-from themi.connectors.spotify import API_URL as SPOTIFY_API_URL
-from themi.connectors.spotify import SpotifyConfig
-from themi.connectors.thinq.client import ThinqConfig
 from themi.storage.secrets import Cipher, Secret, SecretKeyError
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 ToolRouting = Literal["groups", "all", "embeddings"]
 ConversationRollout = Literal["off", "trial", "on"]
-
-
-GOOGLE_ENDPOINT_VARIABLES = {
-    "auth_url": "GOOGLE_AUTH_URL",
-    "token_url": "GOOGLE_TOKEN_URL",
-    "revoke_url": "GOOGLE_REVOKE_URL",
-    "userinfo_url": "GOOGLE_USERINFO_URL",
-    "gmail_url": "GOOGLE_GMAIL_URL",
-    "calendar_url": "GOOGLE_CALENDAR_URL",
-    "tasks_url": "GOOGLE_TASKS_URL",
-    "docs_url": "GOOGLE_DOCS_URL",
-    "drive_url": "GOOGLE_DRIVE_URL",
-    # RC1a: not endpoints, but strings for the same config: Google's file picker.
-    "picker_api_key": "GOOGLE_PICKER_API_KEY",
-    "project_number": "GOOGLE_PROJECT_NUMBER",
-}
 
 
 class SettingsError(Exception):
@@ -72,87 +47,15 @@ class Settings(BaseModel):
     http_port: int = 8080
     # Off only for smoke tests and diagnostics: the process runs without polling Telegram.
     telegram_enabled: bool = True
-    google_client_id: str = ""
-    google_client_secret: Secret | None = None
-    # Endpoint overrides, only for pointing Themi at a local fake Google.
-    google_endpoints: dict[str, str] = {}
-    ourgroceries_username: str = ""
-    ourgroceries_password: Secret | None = None
-    ourgroceries_list: str = "Groceries"
-    cozyla_email: str = ""
-    cozyla_password: Secret | None = None
-    cozyla_todo_list: str = ""
-    cozyla_device_sn: str = "themi"
-    cozyla_chores: bool = False
-    # K4: TomTom's routing with live traffic; without it, a free geocoder and an estimate.
-    tomtom_api_key: Secret | None = None
-    # F30d: web search for lookups. Tavily by default, or Firecrawl; free plans, no card.
-    tavily_api_key: Secret | None = None
-    firecrawl_api_key: Secret | None = None
-    search_backend: str = ""  # "tavily", "firecrawl", or "" for whichever has a key
-    # H1: the dishwasher, through Home Connect's API (a developer app's client id and secret).
-    spotify_client_id: str = ""  # BD5b: a Spotify developer app's client id (PKCE, no secret)
-    spotify_accounts_url: str = SPOTIFY_ACCOUNTS_URL
-    spotify_api_url: str = SPOTIFY_API_URL
-    home_connect_client_id: str = ""
-    home_connect_client_secret: Secret | None = None
-    home_connect_url: str = HOME_CONNECT_URL
-    # 30: LG ThinQ needs no settings (the token is added on the Accounts page); this only
-    # points it at a fake instead of LG's regional servers.
-    thinq_url: str = ""
     backup: BackupConfig | None = None
     # D3a: the folder shared with the host's runner, for updates asked for on the website.
     control_dir: Path | None = None
+    # CR5b: every variable as read (.env, then the environment), for the modules' own
+    # settings (themi.modules.settings). Never shown: it holds their secrets.
+    environment: dict[str, str] = Field(default_factory=dict, repr=False)
 
     def cipher(self) -> Cipher:
         return Cipher(self.secret_key)
-
-    def google(self) -> GoogleConfig | None:
-        """Google sign-in and linking, if a client id and secret are set."""
-        if not self.google_client_id or self.google_client_secret is None:
-            return None
-        return GoogleConfig(
-            self.google_client_id, self.google_client_secret, **self.google_endpoints
-        )
-
-    def ourgroceries(self) -> OurGroceriesConfig | None:
-        """The OurGroceries mirror, if a login is set."""
-        if not self.ourgroceries_username or self.ourgroceries_password is None:
-            return None
-        return OurGroceriesConfig(
-            self.ourgroceries_username, self.ourgroceries_password, self.ourgroceries_list
-        )
-
-    def cozyla(self) -> CozylaConfig | None:
-        """The Cozyla connection (unofficial API), if a login is set."""
-        if not self.cozyla_email or self.cozyla_password is None:
-            return None
-        return CozylaConfig(
-            self.cozyla_email,
-            self.cozyla_password,
-            self.cozyla_todo_list,
-            self.cozyla_device_sn,
-            chores=self.cozyla_chores,
-        )
-
-    def spotify(self) -> SpotifyConfig | None:
-        """Spotify (BD5b), if a client id is set."""
-        if not self.spotify_client_id:
-            return None
-        return SpotifyConfig(
-            self.spotify_client_id, self.spotify_accounts_url, self.spotify_api_url
-        )
-
-    def home_connect(self) -> HomeConnectConfig | None:
-        """Home Connect, if a client id and secret are set."""
-        if not self.home_connect_client_id or self.home_connect_client_secret is None:
-            return None
-        return HomeConnectConfig(
-            self.home_connect_client_id, self.home_connect_client_secret, self.home_connect_url
-        )
-
-    def thinq(self) -> ThinqConfig:
-        return ThinqConfig(self.thinq_url)
 
     @classmethod
     def load(
@@ -201,29 +104,6 @@ class Settings(BaseModel):
         if not port_text.isdigit() or not 0 <= int(port_text) <= 65535:
             problems.append(f"THEMI_HTTP_PORT must be a port number, not {port_text}")
 
-        if bool(get("GOOGLE_CLIENT_ID")) != bool(get("GOOGLE_CLIENT_SECRET")):
-            problems.append(
-                "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET go together; set both or neither"
-            )
-
-        if bool(get("OURGROCERIES_USERNAME")) != bool(get("OURGROCERIES_PASSWORD")):
-            problems.append(
-                "OURGROCERIES_USERNAME and OURGROCERIES_PASSWORD go together; set both or neither"
-            )
-        if bool(get("HOME_CONNECT_CLIENT_ID")) != bool(get("HOME_CONNECT_CLIENT_SECRET")):
-            problems.append(
-                "HOME_CONNECT_CLIENT_ID and HOME_CONNECT_CLIENT_SECRET go together; "
-                "set both or neither"
-            )
-        home_connect_url = get("HOME_CONNECT_URL")
-        if home_connect_url and not home_connect_url.startswith(("https://", "http://127.0.0.1")):
-            problems.append(f"HOME_CONNECT_URL must be an https:// address, not {home_connect_url}")
-        thinq_url = get("THINQ_URL")
-        if thinq_url and not thinq_url.startswith(("https://", "http://127.0.0.1")):
-            problems.append(f"THINQ_URL must be an https:// address, not {thinq_url}")
-        if bool(get("COZYLA_EMAIL")) != bool(get("COZYLA_PASSWORD")):
-            problems.append("COZYLA_EMAIL and COZYLA_PASSWORD go together; set both or neither")
-
         backup_names = (
             "THEMI_BACKUP_ENDPOINT",
             "THEMI_BACKUP_BUCKET",
@@ -250,16 +130,6 @@ class Settings(BaseModel):
             raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
 
         token = get("TELEGRAM_BOT_TOKEN")
-        google_secret = get("GOOGLE_CLIENT_SECRET")
-        grocery_password = get("OURGROCERIES_PASSWORD")
-        cozyla_password = get("COZYLA_PASSWORD")
-        tomtom_key = get("TOMTOM_API_KEY")
-        tavily_key = get("TAVILY_API_KEY")
-        firecrawl_key = get("FIRECRAWL_API_KEY")
-        home_connect_secret = get("HOME_CONNECT_CLIENT_SECRET")
-        endpoints = {
-            field: get(name) for field, name in GOOGLE_ENDPOINT_VARIABLES.items() if get(name)
-        }
         return cls(
             db_path=Path(get("THEMI_DB_PATH") or "data/themi.db"),
             secret_key=Secret(key),
@@ -272,28 +142,6 @@ class Settings(BaseModel):
             http_host=get("THEMI_HTTP_HOST") or "127.0.0.1",
             http_port=int(port_text),
             telegram_enabled=get("THEMI_DISABLE_TELEGRAM").lower() not in ("1", "true", "yes"),
-            google_client_id=get("GOOGLE_CLIENT_ID"),
-            google_client_secret=Secret(google_secret) if google_secret else None,
-            google_endpoints=endpoints,
-            ourgroceries_username=get("OURGROCERIES_USERNAME"),
-            ourgroceries_password=Secret(grocery_password) if grocery_password else None,
-            ourgroceries_list=get("OURGROCERIES_LIST") or "Groceries",
-            cozyla_email=get("COZYLA_EMAIL"),
-            cozyla_password=Secret(cozyla_password) if cozyla_password else None,
-            cozyla_todo_list=get("COZYLA_TODO_LIST"),
-            cozyla_device_sn=get("COZYLA_DEVICE_SN") or "themi",
-            cozyla_chores=get("COZYLA_CHORES").lower() in ("1", "true", "yes"),
-            tomtom_api_key=Secret(tomtom_key) if tomtom_key else None,
-            tavily_api_key=Secret(tavily_key) if tavily_key else None,
-            firecrawl_api_key=Secret(firecrawl_key) if firecrawl_key else None,
-            search_backend=get("THEMI_SEARCH_BACKEND").lower(),
-            spotify_client_id=get("SPOTIFY_CLIENT_ID"),
-            home_connect_client_id=get("HOME_CONNECT_CLIENT_ID"),
-            home_connect_client_secret=(
-                Secret(home_connect_secret) if home_connect_secret else None
-            ),
-            home_connect_url=home_connect_url.rstrip("/") or HOME_CONNECT_URL,
-            thinq_url=thinq_url.rstrip("/"),
             control_dir=Path(control) if (control := get("THEMI_CONTROL_DIR")) else None,
             backup=BackupConfig(
                 S3Config(
@@ -308,6 +156,7 @@ class Settings(BaseModel):
             )
             if backup_set
             else None,
+            environment={k: v for k, v in values.items() if isinstance(v, str)},
         )
 
 

@@ -22,6 +22,15 @@ from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWa
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
 from themi.core.agent import Agent
+from themi.core.connector_settings import (
+    CozylaSettings,
+    GoogleSettings,
+    HomeConnectSettings,
+    OurGroceriesSettings,
+    SpotifySettings,
+    ThinqSettings,
+    TravelSettings,
+)
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
@@ -65,7 +74,7 @@ class GoogleTasksModule(Module):
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        google = setup.settings.google()
+        google = setup.read(GoogleSettings, "google").config()
         return cls(google.tasks_url) if google else None
 
     def install(self, ctx: ModuleContext) -> None:
@@ -80,13 +89,14 @@ class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
     name = "travel"
+    settings = TravelSettings
 
     def __init__(self, client: TravelClient) -> None:
         self.client = client
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        return cls(TravelClient(setup.settings.tomtom_api_key))
+        return cls(TravelClient(setup.read(TravelSettings).tomtom_api_key))
 
     def install(self, ctx: ModuleContext) -> None:
         heads_ups = ctx.provide(TravelHeadsUps(ctx.services, self.client))
@@ -98,13 +108,14 @@ class SpotifyModule(Module):
     """BD5b: playing their own music, from Spotify."""
 
     name = "spotify"
+    settings = SpotifySettings
 
     def __init__(self, client: SpotifyClient) -> None:
         self.client = client
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        spotify = setup.settings.spotify()
+        spotify = setup.read(SpotifySettings).config()
         return cls(SpotifyClient(spotify)) if spotify else None
 
     def install(self, ctx: ModuleContext) -> None:
@@ -123,6 +134,7 @@ class OurGroceriesModule(Module):
     """The grocery list mirrored to OurGroceries."""
 
     name = "ourgroceries"
+    settings = OurGroceriesSettings
     requires = ("groceries", "pantry")
 
     def __init__(self, client: GroceryListClient) -> None:
@@ -132,7 +144,7 @@ class OurGroceriesModule(Module):
     def build(cls, setup: ModuleSetup) -> Module | None:
         from themi.connectors.ourgroceries import OurGroceriesClient
 
-        grocery = setup.settings.ourgroceries()
+        grocery = setup.read(OurGroceriesSettings).config()
         return cls(OurGroceriesClient(grocery)) if grocery else None
 
     def install(self, ctx: ModuleContext) -> None:
@@ -170,7 +182,7 @@ class KeepModule(Module):
 
 def _wall(setup: ModuleSetup) -> CozylaClient | None:
     """One Cozyla client for both wall modules, as before (CR5a)."""
-    config = setup.settings.cozyla()
+    config = setup.read(CozylaSettings).config()
     return setup.shared("cozyla", lambda: CozylaClient(config)) if config else None
 
 
@@ -183,6 +195,7 @@ class CozylaTodosModule(Module):
     """The Cozyla wall's to-do list, kept in step with Themi's tasks."""
 
     name = "cozyla_todos"
+    settings = CozylaSettings
     requires = ("tasks",)
 
     def __init__(self, client: CozylaClient) -> None:
@@ -204,6 +217,7 @@ class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
     name = "cozyla_chores"
+    settings = CozylaSettings
     requires = ("tasks", "routines")
 
     def __init__(self, client: CozylaClient) -> None:
@@ -232,6 +246,7 @@ class HomeConnectModule(Module):
     """H1: the dishwasher, through Home Connect."""
 
     name = "home_connect"
+    settings = HomeConnectSettings
     requires = ("tasks",)
 
     def __init__(self, client: HomeConnectClient) -> None:
@@ -239,7 +254,7 @@ class HomeConnectModule(Module):
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        config = setup.settings.home_connect()
+        config = setup.read(HomeConnectSettings).config()
         return cls(HomeConnectClient(config)) if config else None
 
     def install(self, ctx: ModuleContext) -> None:
@@ -256,6 +271,7 @@ class ThinqModule(Module):
     """30: the washer and dryer, through LG ThinQ, and laundry that's waiting."""
 
     name = "thinq"
+    settings = ThinqSettings
     requires = ("tasks",)
 
     def __init__(self, config: ThinqConfig) -> None:
@@ -267,7 +283,8 @@ class ThinqModule(Module):
 
         from themi.connectors.thinq import mqtt
 
-        return cls(dataclasses.replace(setup.settings.thinq(), mqtt=mqtt.available()))
+        thinq = setup.read(ThinqSettings).config()
+        return cls(dataclasses.replace(thinq, mqtt=mqtt.available()))
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services

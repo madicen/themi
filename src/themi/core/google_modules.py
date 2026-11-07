@@ -20,6 +20,7 @@ from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
 from themi.core.calendar_copies import CalendarCopies
 from themi.core.calendar_twins import CalendarTwins
+from themi.core.connector_settings import GoogleSettings
 from themi.core.events import Events
 from themi.core.expected import ExpectedEmails
 from themi.core.noise_digest import NoiseDigest
@@ -35,13 +36,14 @@ class GoogleModule(Module):
     """Linking Google accounts, for the Google modules that read and write through them."""
 
     name = "google"
+    settings = GoogleSettings
 
     def __init__(self, config: GoogleConfig) -> None:
         self.config = config
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        google = setup.settings.google()
+        google = setup.read(GoogleSettings).config()
         return cls(google) if google else None
 
     def install(self, ctx: ModuleContext) -> None:

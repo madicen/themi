@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import sys
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
@@ -134,21 +133,10 @@ def build_runtime(
 ) -> Runtime:
     """Wire Themi from its settings, as `themi run` (and `make dev`) runs it.
 
-    `connectors` replaces `build_app`'s connector arguments that settings would give
-    (`make dev` passes the fakes this way, D5a)."""
+    The modules come from themi.toml, or the family template (CR5a). `connectors` instead
+    gives the family's modules these connectors (`make dev` passes the fakes, D5a)."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
-    from themi.connectors.catgenie import CatGenieConfig
-    from themi.connectors.cozyla import CozylaClient
-    from themi.connectors.gkeep import GKeepAccount
-    from themi.connectors.homeconnect import HomeConnectClient
-    from themi.connectors.ourgroceries import OurGroceriesClient
-    from themi.connectors.roborock import library as roborock_library
-    from themi.connectors.search import choose as choose_search
-    from themi.connectors.spotify import SpotifyClient
-    from themi.connectors.thinq import mqtt as thinq_mqtt
-    from themi.connectors.travel import TravelClient
-    from themi.connectors.tuya import TuyaConfig
     from themi.runtime import Runtime
     from themi.settings import SettingsError
     from themi.storage import open_database
@@ -159,27 +147,10 @@ def build_runtime(
     # With Telegram disabled the channel is never started; sends simply queue.
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
-    options: dict[str, Any] = {
-        "google": settings.google(),
-        "grocery_list": (
-            OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None
-        ),
-        "cozyla": CozylaClient(wall) if (wall := settings.cozyla()) else None,
-        "travel": TravelClient(settings.tomtom_api_key),
-        "search": choose_search(
-            settings.search_backend, settings.tavily_api_key, settings.firecrawl_api_key
-        ),
-        "home_connect": HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
-        "spotify": SpotifyClient(sp) if (sp := settings.spotify()) else None,  # BD5b
-        "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
-        "roborock": roborock_library.available(),
-        "tuya": TuyaConfig(),
-        "catgenie": CatGenieConfig(),
-        "keep": GKeepAccount,
-    }
     modules = None
+    options: dict[str, Any] = {}
     if connectors is not None:  # `make dev`: the fakes, as the family's connectors
-        options.update(connectors)
+        options = dict(connectors)
     else:  # CR5a: the modules themi.toml (or the family template) names
         from themi.config import config_path, load_config, resolve_modules
 
@@ -214,6 +185,7 @@ def build_runtime(
 def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
     """`themi config show`: where the config came from, the template, and each module."""
     from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.modules.settings import plain_values, read_settings
 
     path = config_path(env)
     config = load_config(path)
@@ -230,9 +202,17 @@ def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
     if left_out:
         lines.append("Left out (not set up, or removed):")
         lines += [f"  {n}" for n in dict.fromkeys(left_out)]
-    for name, section in sorted(config.sections.items()):
-        lines.append(f"[module.{name}]")
-        lines += [f"  {key} = {value!r}" for key, value in sorted(section.items())]
+    for module in modules:  # CR5b: each module's settings, secrets left out
+        model = type(module).settings
+        if model is None:
+            continue
+        values = plain_values(
+            read_settings(
+                model, settings.environment, config.sections.get(module.name, {}), module.name
+            )
+        )
+        lines.append(f"[module.{module.name}]")
+        lines += [f"  {key} = {value!r}" for key, value in values.items()]
     return "\n".join(lines)
 
 
@@ -409,10 +389,16 @@ def _cozyla_check(titles: bool, fields: bool = False) -> int:
 
     from themi.connectors.cozyla import CozylaClient, CozylaError
     from themi.connectors.cozyla.check import check
+    from themi.core.connector_settings import CozylaSettings
+    from themi.modules.settings import SettingsProblem, read_settings
     from themi.settings import Settings
 
     settings = Settings.load()
-    config = settings.cozyla()
+    try:
+        config = read_settings(CozylaSettings, settings.environment, {}, "cozyla_todos").config()
+    except SettingsProblem as exc:
+        print("; ".join(exc.problems), file=sys.stderr)
+        return 1
     if config is None:
         print("Set COZYLA_EMAIL and COZYLA_PASSWORD in .env first.", file=sys.stderr)
         return 1

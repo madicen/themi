@@ -31,7 +31,8 @@ def settings(**env: str) -> Settings:
 
 
 def before_cr5a(s: Settings) -> list[str]:
-    """The module list `build_runtime` gave before CR5a: its options, as it built them."""
+    """The module list `build_runtime` gave before CR5a: its options, as it built them
+    (CR5b: from the modules' settings, which hold what `Settings` held then)."""
     from themi.connectors.catgenie import CatGenieConfig
     from themi.connectors.cozyla import CozylaClient
     from themi.connectors.gkeep import GKeepAccount
@@ -43,16 +44,26 @@ def before_cr5a(s: Settings) -> list[str]:
     from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
     from themi.connectors.tuya import TuyaConfig
+    from themi.core import connector_settings as cs
+    from themi.modules.settings import read_settings
 
+    def read(model: Any) -> Any:
+        return read_settings(model, s.environment, {}, "x")
+
+    search = read(cs.SearchSettings)
     options: dict[str, Any] = {
-        "google": s.google(),
-        "grocery_list": OurGroceriesClient(g) if (g := s.ourgroceries()) else None,
-        "cozyla": CozylaClient(w) if (w := s.cozyla()) else None,
-        "travel": TravelClient(s.tomtom_api_key),
-        "search": choose_search(s.search_backend, s.tavily_api_key, s.firecrawl_api_key),
-        "home_connect": HomeConnectClient(h) if (h := s.home_connect()) else None,
-        "spotify": SpotifyClient(sp) if (sp := s.spotify()) else None,
-        "thinq": dataclasses.replace(s.thinq(), mqtt=thinq_mqtt.available()),
+        "google": read(cs.GoogleSettings).config(),
+        "grocery_list": OurGroceriesClient(g)
+        if (g := read(cs.OurGroceriesSettings).config())
+        else None,
+        "cozyla": CozylaClient(w) if (w := read(cs.CozylaSettings).config()) else None,
+        "travel": TravelClient(read(cs.TravelSettings).tomtom_api_key),
+        "search": choose_search(search.backend, search.tavily_api_key, search.firecrawl_api_key),
+        "home_connect": HomeConnectClient(h)
+        if (h := read(cs.HomeConnectSettings).config())
+        else None,
+        "spotify": SpotifyClient(sp) if (sp := read(cs.SpotifySettings).config()) else None,
+        "thinq": dataclasses.replace(read(cs.ThinqSettings).config(), mqtt=thinq_mqtt.available()),
         "roborock": roborock_library.available(),
         "tuya": TuyaConfig(),
         "catgenie": CatGenieConfig(),
@@ -187,8 +198,16 @@ def test_config_show(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from themi.cli import config_report
 
     path = tmp_path / "themi.toml"
-    path.write_text('modules = ["-safeway"]\n[module.gmail]\npoll_minutes = 2\n')
-    report = config_report(settings(), {"THEMI_CONFIG": str(path)})
+    path.write_text('modules = ["-safeway"]\n[module.web_search]\nbackend = "tavily"\n')
+    report = config_report(settings(TAVILY_API_KEY="secret-key"), {"THEMI_CONFIG": str(path)})
     assert f"Config: {path}" in report and "Template: family" in report
     assert "  tasks\n" in report and "  safeway" in report.split("Left out")[1]
-    assert "[module.gmail]\n  poll_minutes = 2" in report
+    assert "[module.web_search]\n  backend = 'tavily'" in report
+    assert "secret-key" not in report and "tavily_api_key" not in report
+
+
+def test_a_section_must_be_a_module_with_settings() -> None:
+    with pytest.raises(SettingsError, match=r"\[module.gmail\]: gmail has no settings"):
+        names("[module.gmail]\npoll_minutes = 2")
+    with pytest.raises(SettingsError, match=r"\[module.nope\]: there's no module called nope"):
+        names("[module.nope]\nx = 1")

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from themi.modules import Module, ModuleSetup
+from themi.modules.settings import SettingsProblem
 from themi.settings import Settings, SettingsError
 
 ENTRY_POINTS = "themi.modules"
@@ -142,6 +143,11 @@ def resolve_modules(
     for name in template.modules:
         if name not in known:
             problems.append(f"the {template.name} template names {name}, which isn't installed")
+    for name in config.sections:  # CR5b: a section is a module's own settings
+        if name not in known:
+            problems.append(f"[module.{name}]: there's no module called {name}")
+        elif known[name].settings is None:
+            problems.append(f"[module.{name}]: {name} has no settings of its own")
     if problems:
         raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
     names = [n for n in template.modules if n not in config.removed]
@@ -149,8 +155,14 @@ def resolve_modules(
     shared: dict[str, object] = {}  # one store of shared objects for every module
     built: dict[str, Module] = {}
     for name in names:
-        setup = ModuleSetup(settings, config.sections.get(name), shared)
-        module = known[name].build(setup)
+        setup = ModuleSetup(
+            settings, config.sections.get(name), shared, module=name, sections=config.sections
+        )
+        try:
+            module = known[name].build(setup)
+        except SettingsProblem as exc:  # CR5b: its settings, in the person's words
+            problems.extend(exc.problems)
+            continue
         if module is None and name in config.added:
             problems.append(f"{name} is added in themi.toml, but its settings aren't there")
         elif module is not None:

@@ -756,7 +756,9 @@ class RecipesModule(Module):
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        return cls(setup.settings.google())
+        from themi.core.connector_settings import GoogleSettings
+
+        return cls(setup.read(GoogleSettings, "google").config())
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry
