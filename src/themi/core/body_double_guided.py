@@ -238,7 +238,11 @@ class GuidedSteps:
         n = min(session.row["step"], len(steps) - 1)
         step = steps[n]
         optional = " (optional)" if is_optional(step) else ""
-        text = f"Step {n + 1} of {len(steps)}{optional}:\n> {step}"
+        count = f"step {n + 1} of {len(steps)}{optional}"
+        if session.row.get("parts"):  # F34hb: a run of several, each under its title
+            text = f'"{session.label}", {count}:\n> {step}'
+        else:
+            text = f"{count[:1].upper()}{count[1:]}:\n> {step}"
         buttons = []
         if n > 0:
             buttons.append(button("Back", "back"))
@@ -332,10 +336,10 @@ class GuidedSteps:
             session = self._save(session, step=max(step - 1, 0), step_since=clock.now())
         elif action == "all_done":
             await self._tick_step(session, step)
-            said = await self.bd.finish(session)
+            said, buttons = await self.bd.finish_or_next(session)
             if session.task_id is None:
                 said = said.replace("That's done.", "All done.", 1)
-            return said, []
+            return said, buttons
         else:
             return self.render(session)
         self._watch(session)
@@ -363,9 +367,12 @@ class GuidedSteps:
             action = "next"
         result, buttons = await self.act(session, action)
         if action == "all_done":
-            await self.services.outbox.send(
+            sent = await self.services.outbox.send(
                 member, result, priority=Priority.REPLY, kind=KIND, buttons=buttons
             )
+            if sent.outbox_id is not None:  # F34hb: the next part's card is this message
+                message_id = self.services.outbox.message_id(sent.outbox_id)
+                self.bd._carry_message(session, member, message_id)
             return True
         fresh = self.bd.get(session.id)
         assert fresh is not None

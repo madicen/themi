@@ -70,7 +70,8 @@ async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     assert erin.telegram_user_id is not None
     scenario.primary.queue_tool_call(
-        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom"}
+        "start_body_double",
+        {"mode": "steps", "minutes": 0, "task_id": 0, "what": "the bathroom", "then": []},
     )
     scenario.primary.queue_structured(
         {"steps": [{"text": "Spray the shower", "optional": False},

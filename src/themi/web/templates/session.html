@@ -23,6 +23,7 @@
     {{ inline_svg("chameleon/chameleon.svg") }}
     <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">{{ state.timer.text }}</p>
   </div>
+  {% if state.part %}<p class="muted" data-field="part">{{ state.part }}</p>{% endif %}
   {% if state.of %}<p class="muted" data-field="steps">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
   {% if state.picture %}
   <figure class="session-picture" data-status="{{ state.picture.status }}">

@@ -25,6 +25,7 @@ energy, scores or how past sessions went.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
@@ -85,6 +86,7 @@ NOT_FINISHED_TEXT = "That's fine. It'll keep for another time."
 STOPPED_TEXT = "Stopping there."
 STOPPED_TASK_TEXT = "Stopping there. If {title} is done, tap below."
 ENDED_TEXT = "That session's over."
+NEXT_UP_TEXT = "{done}\n\nNext up: {label}.\n\n{start}"
 NO_SESSION_TEXT = "There's no session going on."
 SWITCHED_TEXT = {
     SILENT: "Quiet company instead: going quiet until {until}.",
@@ -349,10 +351,14 @@ class BodyDouble:
         task: Task | None = None,
         label: str = "",
         routine: Routine | None = None,
+        then: list[dict[str, Any]] | None = None,
+        part: tuple[int, int] | None = None,
     ) -> tuple[Session, str, list[Button]]:
         """Start a session (ending any going on). Returns it with its first message and
         buttons, for the caller to send or edit in. With a routine (F34h), its open items
-        are the steps."""
+        are the steps. `then`: what comes after, in order (F34hb, `resolve`'s parts);
+        `part`: (this one, of how many), for the next part of a run, which starts without
+        the mode offer or the music offer."""
         if mode and mode not in MODES:
             raise ValueError(f"the modes are {', '.join(MODES)}")
         if not 0 <= minutes <= MAX_MINUTES:
@@ -364,6 +370,8 @@ class BodyDouble:
         energy = self.services.energy.suggested_level(member)
         category = None
         chosen = False  # Themi picked the mode: the start says so, as an offer (BD2)
+        queue = list(then or [])
+        part_no, parts = part if part is not None else (1, 1 + len(queue))
         if routine is not None:
             category = "chores"  # F34h: a routine is household jobs; no call to ask
         elif self.modes is not None:
@@ -382,24 +390,70 @@ class BodyDouble:
         session_id = self.db.execute(
             "INSERT INTO body_double_sessions (member_id, task_id, label, category, mode, "
             "mode_chosen, started_at, planned_minutes, work_minutes, break_minutes, "
-            "hour_of_week, energy_level, phase, pause_id, routine_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?, ?)",
+            "hour_of_week, energy_level, phase, pause_id, routine_id, queue, part, parts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?, ?, ?, ?, ?)",
             (
                 member.id, task.id if task is not None else None, label, category, mode,
                 int(chosen), to_utc_iso(now), minutes or None, member.sprint_work_minutes,
                 member.sprint_break_minutes, self.hour_of_week(now), energy, pause.id,
                 routine.id if routine is not None else None,
+                json.dumps(queue) if queue else None, part_no if parts > 1 else None,
+                parts if parts > 1 else None,
             ),
         )  # fmt: skip
         session = self.get(session_id)
         assert session is not None
         log.info("Body double %s started for member %s (%s)", mode, member.id, session_id)
         session, text, buttons = await self._begin(session)
+        if part is not None:
+            return session, text, buttons  # the next part of a run: no offers again
         if chosen and session.mode == mode:  # once, as an offer (BD2)
             text, buttons = self.offer(session, text, buttons)
         for decorate in self.start_decorators:
             text, buttons = await decorate(session, text, buttons)
         return session, text, buttons
+
+    def resolve(self, member: Member, what: str) -> dict[str, Any]:
+        """F34hb: one part of a run, from their words: "task 12", a routine of theirs, an
+        open task by its name, or else just their words."""
+        said = what.strip()
+        if m := re.fullmatch(r"(?:task\s*)?#?(\d+)", said, re.IGNORECASE):
+            return {"task": self.task_for(member, int(m.group(1))).id}
+        if (routine := self.find_routine(member, said)) is not None:
+            return {"routine": routine.id}
+        if (task := self.find_task(member, said)) is not None:
+            return {"task": task.id}
+        return {"label": said}
+
+    async def finish_or_next(self, session: Session) -> tuple[str, list[Button]]:
+        """Done with this part: it's finished (its task closed), and the next part of the
+        run, if there is one, starts in the same mode: "Next up: Put the laundry away"."""
+        said = await self.finish(session)
+        queue = list(json.loads(session.row.get("queue") or "[]"))
+        member = self._owner(session)
+        while queue:
+            item = queue.pop(0)
+            task = routine = None
+            try:
+                if "task" in item:
+                    task = self.task_for(member, int(item["task"]))
+                elif "routine" in item and self.services.routines is not None:
+                    routine = self.services.routines.get(int(item["routine"]))
+            except (ValueError, NotFound):
+                continue  # done or gone since the run began: on to the one after
+            done_so_far = session.row.get("part") or 1
+            new, text, buttons = await self.start(
+                member, mode=session.mode, task=task, routine=routine,
+                label=str(item.get("label") or ""), then=queue,
+                part=(done_so_far + 1, session.row.get("parts") or done_so_far + 1),
+            )  # fmt: skip
+            return NEXT_UP_TEXT.format(done=said, label=new.label, start=text), buttons
+        return said, []
+
+    def part_words(self, session: Session) -> str:
+        """ "Part 2 of 3" for a part of a run, else ''."""
+        parts = session.row.get("parts") or 0
+        return f"Part {session.row.get('part') or 1} of {parts}" if parts > 1 else ""
 
     def offer(self, session: Session, text: str, buttons: list[Button]) -> tuple[str, list[Button]]:
         """The mode Themi picked, said once with the other two as buttons: never a reason."""
@@ -547,7 +601,14 @@ class BodyDouble:
             await self._reply(event, member, text, buttons)
             return
         text, buttons = await self.act(session, str(payload.get("action", "")))
+        self._carry_message(session, member, event.button.message_id)
         await self._reply(event, member, text, buttons)
+
+    def _carry_message(self, session: Session, member: Member, message_id: int | None) -> None:
+        """F34hb: the next part of a run shows on the same message as the part before."""
+        now = self.current(member)
+        if now is not None and now.id != session.id:
+            self.remember_message(now, message_id)
 
     async def _show_current(self, event: InboundEvent, member: Member, session: Session) -> None:
         """A tap on a button from an earlier moment: never nothing. A guided card or an open
@@ -584,7 +645,7 @@ class BodyDouble:
             self._schedule(session, ends)
             return LONGER_TEXT.format(until=self._clock(ends)), []
         if action == "done":
-            return await self.finish(session), []
+            return await self.finish_or_next(session)
         if action == "not_finished":
             await self._end(session, "stopped")
             return NOT_FINISHED_TEXT, []
@@ -789,6 +850,7 @@ class BodyDouble:
             "mode": session.mode,
             "mode_name": MODE_NAMES[session.mode],
             "label": session.label,
+            "part": self.part_words(session),
             "phase": session.phase,
             "line": self.page_line(session),
             "timer": timer,
@@ -905,6 +967,7 @@ class BodyDouble:
             self.remember_message(new, target)
         else:
             text, buttons = await self.act(session, action)
+            self._carry_message(session, member, target)
         if target is not None:
             await self.services.outbox.edit(member, target, text, buttons)
         return True
@@ -987,12 +1050,16 @@ async def _send(
     "unless they said one; 'quiet' (quiet company), 'sprint' (pomodoro: work and break "
     "blocks) or 'steps' (one step at a time). minutes: how long they said, or 0. task_id: "
     "their open task it's for, or 0; what: their own words for it ('the bird cage', 'my evening "
-    "routine'): a task or routine of theirs by that name is found, with its own steps.",
+    "routine'): a task or routine of theirs by that name is found, with its own steps. "
+    "Pass the task or routine whenever there is one. then: what comes after it in the same "
+    "session, in order, as 'task 12' or their words ('the laundry', 'my evening routine'); "
+    "[] for one thing.",
     {
         "mode": {"type": "string", "enum": ["", "quiet", "sprint", "steps"]},
         "minutes": {"type": "integer"},
         "task_id": {"type": "integer"},
         "what": {"type": "string"},
+        "then": {"type": "array", "items": {"type": "string"}},
     },
 )
 async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -1017,6 +1084,7 @@ async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
     if routine is not None and not mode:
         mode = GUIDED  # a routine is its items, one at a time
     try:
+        then = [body_double.resolve(ctx.member, str(w)) for w in args.get("then") or [] if w]
         session, text, buttons = await body_double.start(
             ctx.member,
             mode=mode,
@@ -1024,6 +1092,7 @@ async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
             task=task,
             label=what,
             routine=routine,
+            then=then,
         )
     except ValueError as exc:
         raise ToolFailed(f"Not started: {exc}.") from exc
@@ -1062,7 +1131,12 @@ async def end_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
     if session is None:
         raise ToolDeclined(NO_SESSION_TEXT)
     if bool(args.get("finished")):
-        said = await body_double.finish(session)
+        said, buttons = await body_double.finish_or_next(session)
+        new = body_double.current(ctx.member)
+        if new is not None:  # F34hb: the next part of the run started
+            await _send(ctx, said, buttons, new)
+            ctx.cards.append("body double next part")
+            return f"Done, and the next part started; Themi told them itself: {said!r}"
         if session.task_id is not None:
             ctx.done.append(said)
             return (
