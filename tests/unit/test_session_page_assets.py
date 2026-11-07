@@ -68,3 +68,14 @@ def test_the_loops_are_named_in_chat_words() -> None:
     assert loop_for("the soft piano").key == "soft_piano"  # type: ignore[union-attr]
     assert loop_for("Lo-Fi").key == "lofi"  # type: ignore[union-attr]
     assert loop_for("death metal") is None
+
+
+def test_the_page_never_reads_a_forms_action_property() -> None:
+    """Bug (2026-11-07, the Pi's log from an iPhone): each tap's form has a hidden input named
+    "action", and a named input shadows `form.action`, so the page posted every tap to
+    "[object HTMLInputElement]". The script reads and sets the attribute instead."""
+    script = (STATIC / "session.js").read_text()
+    template = (STATIC.parent / "templates" / "session.html").read_text()
+    assert 'name="action"' in template  # the input that shadows the property
+    assert not re.search(r"\bform\.action\b", script)
+    assert 'getAttribute("action")' in script

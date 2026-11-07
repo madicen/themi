@@ -114,7 +114,7 @@
       state.buttons.forEach(function (b, n) {
         var form = document.createElement("form");
         form.method = "post";
-        form.action = "/session/" + state.id + "/act";
+        form.setAttribute("action", "/session/" + state.id + "/act");
         [["csrf", body.dataset.csrf], ["seq", state.seq], ["action", b.action], ["mode", b.mode]]
           .forEach(function (pair) {
             var input = document.createElement("input");
@@ -180,7 +180,7 @@
     event.preventDefault();
     var data = new URLSearchParams(new FormData(form)).toString();
     form.reset();
-    fetch(form.action, {
+    fetch(form.getAttribute("action"), {
       method: "POST", body: data, credentials: "same-origin",
       headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
     }).then(function (r) { return r.ok ? r.json() : null; })
@@ -202,7 +202,7 @@
     form.reset();
     var figure = document.querySelector(".session-picture");
     if (figure) figure.dataset.status = "making";
-    fetch(form.action, {
+    fetch(form.getAttribute("action"), {
       method: "POST", body: data, credentials: "same-origin",
       headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
     }).then(function () {}, function () {});
@@ -214,13 +214,13 @@
     var form = event.target;
     if (!form.closest || !form.closest(".session-moves")) return;
     event.preventDefault();
-    fetch(form.action, {
+    fetch(form.getAttribute("action"), {
       method: "POST",
       body: new URLSearchParams(new FormData(form)).toString(),
       headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }),
       credentials: "same-origin"
     }).then(function (r) {
-      if (!r.ok) report("tap " + form.action.split("/").slice(-2).join("/") + " answered " + r.status);
+      if (!r.ok) report("tap " + form.getAttribute("action").split("/").slice(-2).join("/") + " answered " + r.status);
       return r.ok ? r.json() : null;
     }).then(function (s) { if (s) redraw(s); }, function (e) { report("tap failed: " + e); });
   }
