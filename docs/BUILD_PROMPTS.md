@@ -220,7 +220,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
-| BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [ ] |
+| BD1a | Body double: sessions in chat (Silent Anchor and Sprint Partner) | Body double | [x] 2026-11-06 |
 | BD1b | Body double: Guided Step-Through in chat | Body double | [ ] |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [ ] |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [ ] |
@@ -11319,7 +11319,7 @@ Open decisions (defaults used until Michael or Erin say otherwise):
   12 pictures a day each).
 
 ### BD1a · Body double: sessions in chat (Silent Anchor and Sprint Partner)
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: B1, 20, F6a, 11
 Read first: the plan's Module behaviour A (Communication: PDA shielding, plain phrasing) and
 B (Energy: inputs, matching); this section's intro; B1's notes (the "break" pause topic).
@@ -11354,6 +11354,45 @@ Tests: unit tests for the timers with a frozen clock, the topic holding nudges, 
 scenarios: a Silent Anchor hour ending with Done (task closed), a sprint of two blocks
 with a break, a sprint left unanswered, a nudge held then delivered after. Evals: starting
 phrases, "stop" mid-sprint, "pomodoro" not mistaken for a task title.
+
+Notes (2026-11-06):
+- The plan's "Body double" part is drafted but not written to the doc: Michael checks the
+  wording first (it's in the session's report). Until then this section is the reference.
+- `themi.core.body_double`: `BodyDouble` (installed after the scheduler, like
+  `CookingTimers`) with `start`, `switch`, `end`, `current`, and `act` for a tap (BD3a's page
+  uses it too). Migration 0126: `body_double_sessions` (as asked, plus `label`, `phase`,
+  `asking`, `phase_ends_at`, `seq`, `pause_id`, `ask_outbox_id`, `switched_from`) and
+  `members.sprint_work_minutes` (5-90, 25) and `sprint_break_minutes` (1-30, 5), on My
+  settings ("Body double").
+- Every block's end is a `body_double.tick` scheduler job carrying the row's `seq`; any
+  change bumps `seq`, so an old job or button does nothing.
+- A "body_double" pause topic holds what a break holds; it runs to the block's end plus
+  the hour a question may wait, and is lifted (with `release_held`) when the session ends.
+  A session's questions are their own outbox kind, `body_double`, an answer kind (no daily
+  limit or quiet hours, not counted), as they set the times.
+- Deviation, the unanswered question: the prompt's "no answer within ten minutes: waits up
+  to an hour" is read as one hour from the question. It never moves on by itself; at the
+  hour it ends as `left` with nothing said, and the question loses its buttons.
+- Silent Anchor's [A bit longer] is 15 minutes. "That's the hour" / "two hours" / "75
+  minutes" says the planned length; an open session asks at four hours.
+- Sprint: a planned length (`minutes`) ends the sprint at the first block end past it with
+  the end question. [Stop here] ends as `stopped`; with a task still open it adds
+  [It's done], which marks the task done and makes the session `finished`. A new session
+  ends the old as `stopped` (`switched` is only for a mode change: the new row keeps the
+  start time and the task, and `switched_from` points back).
+- [Body double] is on a task's nudge only for bigger jobs (effort 3 or more, or with
+  steps), never on a medicine or a check-in, so device chores and quick errands keep
+  [Done] [Later]. `TaskBoard.nudge_buttons` is the hook.
+- Tools `start_body_double` (mode '', quiet, sprint, steps; minutes; task_id; what),
+  `switch_body_double_mode`, `end_body_double(finished)`, in a new "body_double" tool group.
+  While a session is on, the group is always sent (`Services.group_sources`, new) and an
+  open item says how "I'm done" and "stop" end it. Starting refuses in burnout mode, and
+  ends a break; starting a break or burnout mode ends the session as `stopped`.
+- `/bodydouble [quiet|sprint|steps] [minutes]`. Evals: `body_double` cases (starting
+  phrases, "pomodoro the laundry" isn't a task, "stop" mid-sprint, "I'm done"), with a new
+  eval setup step `{"body_double": "sprint"}`. Routing cases: five more (the bound is now
+  130).
+- Setup: restart `themi run` (migration 0126).
 
 ### BD1b · Body double: Guided Step-Through in chat
 Status: [ ]
