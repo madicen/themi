@@ -235,9 +235,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [x] 2026-11-07 |
 | F34m | Idea: a recipe from a photo | Feedback | [x] 2026-11-07 |
-| F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [ ] |
+| F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [x] 2026-11-07 |
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
+| F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12032,7 +12033,7 @@ Notes (2026-11-07):
   (Gemini by default).
 
 ### F34mb · Idea (2026-11-07): a recipe over two photos (an album, or the next page)
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34m
 - From F34m's Build: two pictures in one Telegram album (`media_group_id`) are one recipe,
   read together in order; a second picture after "here's the other page" within F34l's
@@ -12042,6 +12043,60 @@ Depends on: F34m
   keep more than one. `read_picture` takes a list.
 - Tests: a two-picture album is one recipe with both pages' lines, in order; "here's the
   other page" adds to it; an album with a caption on the second picture keeps the caption.
+
+What the Pi shows (Michael's bug #184, 2026-11-07, 12:23 pm, "combing the text of
+multiple pictures if necessary"): two photos of "Bean and Corn Taquitos (page 252)", 3
+seconds apart (replies 371 and 372). The first had no words, so F34gb only described it
+and asked "Add this recipe to the cookbook?". The second, captioned "Import this recipe",
+ran `recipe_from_picture` on that picture alone, which had the steps but not the
+ingredients: "I couldn't read the ingredients in that picture, so I haven't kept it." A
+yes to the first question would have failed the same way, with the steps missing.
+`KeptPictures` holds one picture per member, so the first page was already gone.
+
+Add to the Build:
+- Pictures from one person within a short window (an album's `media_group_id`, or ones
+  arriving under a minute apart) are kept together, in order, up to 4. F34gb's no-words
+  question waits the album's moment, then asks once for all of them ("Bean and Corn
+  Taquitos, over two pictures. Add it to the cookbook?").
+- `recipe_from_picture` reads every kept picture from that window in one call. If one
+  picture alone shows only part of a recipe (no ingredients, or no steps) and an earlier
+  kept picture is still there, it reads them together before saying anything is
+  missing.
+- Unreadable stays as it is when the pictures together still lack a part. It names what
+  each picture showed ("The first shows the ingredients; I couldn't find the steps.").
+
+Add to the Tests: bug #184's order. A no-words picture with the ingredients, then 3 s
+later "Import this recipe" with a picture of the steps, makes one recipe with both. The
+same two as an album makes one question, not two. A yes to the no-words question after the
+second picture reads both.
+Scenario: bug #184, Michael's two pages, one card with every ingredient and step. Mark #184
+reviewed once live.
+
+Notes (2026-11-07):
+- Telegram: an album's updates in one fetch (same `media_group_id`, one after another, in a
+  private chat) become one picture event (`InboundEvent.more_pictures`, `media_group`; the
+  `pictures` property lists them all). Its caption is whichever picture had one. Each
+  picture is logged as "[a picture]", so each counts towards the daily cap. There's no wait
+  for the rest of an album: one split over two fetches is joined by `KeptPictures` instead.
+  When the later part has no words, it's kept with no reply, and a yes reads it all.
+- `KeptPictures` keeps a group per member: a picture within a minute of the group's latest
+  (`TOGETHER`) or of its album joins it, up to 4 (`MOST_TOGETHER`, the latest kept). A new
+  group remembers the one before (`before`, for 30 minutes). `use` and `group` return
+  tuples; `peek` still returns the latest picture, so F34o's reports keep one.
+- The model sees the whole group in one data block, in order, with `PICTURES_TOGETHER` ("may
+  be parts of one thing"). `ToolContext.images` is the group and `images_before` the one
+  before it; `image` is still the latest.
+- `recipe_from_picture` reads the whole group in one structured call (`PICTURES_PROMPT`).
+  Its new `continues` argument (default false) adds the group before, for "here's the
+  other page" sent more than a minute later. The kept recipe's key hashes all the
+  pictures' bytes, so the single page read first stays as its own unsaved row and is
+  cleared after 30 days.
+- Deviation: when the pictures together still lack a part, it says so for all of them
+  (`UNREADABLE_TOGETHER`, "I couldn't read the steps in those 2 pictures..."). It doesn't
+  name what each picture showed: that would need a field per picture in RC4a's shared
+  schema.
+- Not done: `/bug` with an album keeps only the first picture (F34o's `pictures_for`).
+- Setup: none (no migration). Restart `themi run`.
 
 ### F34n · Idea (2026-11-07): a calendar event from a photo
 Status: [x] 2026-11-07
@@ -12148,6 +12203,40 @@ Notes (2026-11-07):
   pictures there, decrypted (`report-<id>-<n>.png`). Nothing else ever decrypts them.
 - Setup: restart `themi run` (migration 0144). To see one: `themi feedback --pictures
   ~/shots`, then copy the folder off the Pi (scp).
+
+### F35a · Idea (2026-11-07): Themi's pronouns, chosen by the family
+Status: [ ]
+Depends on: 15, W4 (settings pages)
+Read first: prompts.py (the system prompt says who Themi is and "how it speaks");
+conversation_mode.py's system prompt; the plan's PDA phrasing rules. From Erin's idea #176
+(2026-11-06, 12:42 pm): "user should be able to select pronouns for Themi. List of
+options to be provided at a later time".
+
+What the Pi shows: nothing set or asked. Both system prompts call Themi "it", and Themi
+refers to itself in the first person, so the pronouns show only where Themi is talked
+about in the third person: relays to the partner, the wall, the website, the morning
+summary, and the model's own wording when it describes itself.
+
+Decide before building (Erin): the list of options. She said she'd give it later, so this
+prompt waits for that list. Until then, assume it/its (today's), she/her, he/him,
+they/them, and "just the name" (no pronouns: "Themi" every time).
+
+Build:
+- A household setting (one choice for the family, since Themi is the same assistant to
+  both; say so if Erin wants it per person): `themi_pronouns`, shown and set on the
+  website's settings page and by "/settings", from the agreed list.
+- The system prompts take it in place of the fixed "it" ("Themi uses she/her"), so the
+  model's words about Themi follow it. Templated text that names Themi in the third
+  person (relays, the wall, summaries) uses it too; grep for "it'll", "its" and "Themi
+  is" in those templates.
+- "Just the name" repeats "Themi" and never uses a pronoun.
+- Changing it says so in a line ("Done. I'll go by she/her."), with no fuss.
+
+Tests: each choice reaches both system prompts; a relay template says "Themi" with the
+chosen pronoun; "just the name" leaves no pronoun in the templates; the default stays it/its
+for a household that hasn't chosen.
+Scenario: Erin sets they/them on the website, and Michael's next relay from Themi uses it.
+Data: mark #176 reviewed once live.
 
 ## Conversation mode
 

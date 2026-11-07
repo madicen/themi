@@ -277,6 +277,11 @@ PICTURE_OPEN = (
 )
 PICTURE_NOW = "with this message"
 PICTURE_BEFORE = "a moment ago (not with this message: it's the one their words may mean)"
+# F34mb: pictures sent together (bug #184: two pages of one recipe, 3 seconds apart).
+PICTURES_TOGETHER = (
+    " These {count} pictures were sent together, in order, the last one most recently: they "
+    "may be parts of one thing (the pages of one recipe), so name them as one when they are."
+)
 PICTURE_COMMANDS = frozenset({"/bug", "/idea"})  # a caption that's a command (F34o)
 
 
@@ -350,7 +355,11 @@ class Agent:
             if self._pictures_today(member) > self._picture_cap(member):
                 await self._reply(member, PICTURE_CAP_TEXT)
                 return
-            self.services.kept_pictures.keep(member.id, event.picture)  # F34l
+            joined = self.services.kept_pictures.keep(  # F34l; F34mb: kept together
+                member.id, *event.pictures, album=event.media_group
+            )
+            if joined and not event.text.strip():
+                return  # F34mb: the rest of an album already asked about; a yes reads it all
             text = event.text
         else:
             text = event.text
@@ -387,10 +396,10 @@ class Agent:
         ):  # CM1c: "that wasn't a task" takes the sidecar's latest back
             await self._reply(member, await conversation.sidecar.undo(member))
             return
-        earlier = None if picture else self._earlier_picture(member)
+        earlier = () if picture else self._earlier_picture(member)
         chatting = (  # F34g: a picture always goes to the tool agent; F34l: one from before too
             not picture
-            and earlier is None
+            and not earlier
             and conversation is not None
             and conversation.takes(member, text, in_group=event.in_group)
         )
@@ -582,8 +591,9 @@ class Agent:
         )
         return any(r["telegram_message_id"] not in cards for r in rows)
 
-    def _earlier_picture(self, member: Member) -> Picture | None:
-        """F34l: their latest picture, for the next two messages within half an hour."""
+    def _earlier_picture(self, member: Member) -> tuple[Picture, ...]:
+        """F34l: their latest picture (F34mb: the pictures sent together with it), for the
+        next two messages within half an hour."""
         return self.services.kept_pictures.use(member.id)
 
     async def _converse(
@@ -593,7 +603,7 @@ class Agent:
         event: InboundEvent,
         timer: ReplyTimer,
         *,
-        earlier: Picture | None = None,
+        earlier: tuple[Picture, ...] = (),
     ) -> str:
         services = self.services
         if services.calendars is not None and JUST_ADDED.search(text):
@@ -622,7 +632,10 @@ class Agent:
             signals=self._signals(member, text),
             in_group=event.in_group,
         )
-        messages = [_with_picture(turn, event, member, earlier)]
+        # F34mb: a picture this turn brings the ones sent just before it, as one group.
+        shown = services.kept_pictures.group(member.id) if event.picture else earlier
+        shown = shown or event.pictures
+        messages = [_with_picture(turn, event, member, shown)]
         client = services.router.client_for(member.id, AITask.CONVERSATION)
         before = next((m.text for m in reversed(history) if m.direction == "in"), "")
         said = next((m.text for m in reversed(history) if m.direction == "out"), "")
@@ -631,7 +644,7 @@ class Agent:
         routing = services.tool_routing
         recent = [text, *(m.text for m in history[-4:])]
         groups = set(GROUPS) if routing == "all" else choose_groups(recent)
-        if event.picture is not None or earlier is not None:
+        if shown:
             groups |= PICTURE_GROUPS  # F34l: "this" or no words picks no group
         for source in services.group_sources:  # BD1a: a session going on brings its tools
             groups |= source(member)
@@ -649,7 +662,9 @@ class Agent:
             said_before=said,
             groups=groups,
             picture=event.picture is not None,
-            image=event.picture or earlier,
+            image=shown[-1] if shown else None,
+            images=shown,
+            images_before=services.kept_pictures.before(member.id) if shown else (),
         )
         quiet = event.picture is not None and not event.text.strip()
         offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
@@ -851,22 +866,21 @@ class Agent:
 
 
 def _with_picture(
-    turn: str, event: InboundEvent, member: Member, earlier: Picture | None = None
+    turn: str, event: InboundEvent, member: Member, pictures: tuple[Picture, ...] = ()
 ) -> Message:
     """The turn, and their picture inside its data block (F34g): this message's, or
-    (F34l) the one they sent a moment ago."""
-    picture = event.picture or earlier
-    if picture is None:
+    (F34l) the one they sent a moment ago. F34mb: several sent together (an album, or
+    each just after the one before) go in one block, in order."""
+    if not pictures:
         return Message.user(turn)
     if event.picture is not None and not event.text.strip():
         turn = f"{turn}\n\n{PICTURE_NO_WORDS.format(name=member.name)}"
     when = PICTURE_NOW if event.picture is not None else PICTURE_BEFORE
+    opening = PICTURE_OPEN.format(name=member.name, when=when)
+    if len(pictures) > 1:
+        opening += PICTURES_TOGETHER.format(count=len(pictures))
+    images = tuple(ImageBlock(p.data, p.mime_type) for p in pictures)
     return Message(
         "user",
-        (
-            TextBlock(turn),
-            TextBlock(PICTURE_OPEN.format(name=member.name, when=when)),
-            ImageBlock(picture.data, picture.mime_type),
-            TextBlock(PICTURE_CLOSE),
-        ),
+        (TextBlock(turn), TextBlock(opening), *images, TextBlock(PICTURE_CLOSE)),
     )

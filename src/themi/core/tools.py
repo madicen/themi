@@ -82,6 +82,10 @@ class ToolContext:
     # F34l: the picture this turn can see: its own, or theirs from a moment ago. In memory
     # only; a tool that reads one (a recipe, F34m) uses this, never the model's retelling.
     image: Picture | None = None
+    # F34mb: every picture sent together with `image` (an album, or each under a minute
+    # after the one before), in order, ending with it; and the group sent before those.
+    images: tuple[Picture, ...] = ()
+    images_before: tuple[Picture, ...] = ()
 
 
 @dataclass(frozen=True)
