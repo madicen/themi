@@ -72,7 +72,8 @@ class DaySummary:
                         continue  # one calendar both read (bug #43)
                     seen.add((e.calendar_id, e.event_id))
                     whose = (
-                        f" ({shared[e.calendar_id]})"
+                        # F34d, reply 321: "(Madicen Family)" was taken for a place
+                        f" (on the {shared[e.calendar_id]} calendar)"
                         if e.calendar_id in shared
                         else ""
                         if owner.id == member.id

@@ -545,6 +545,7 @@ TOOL_GROUPS: dict[str, str] = {
             "add_calendar_event",
             "change_calendar_event",
             "delete_calendar_event",
+            "merge_calendar_events",
             "day_summary",
             "drive_time",
             "block_time_for_task",

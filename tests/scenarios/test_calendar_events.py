@@ -16,6 +16,7 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, link, verdict
+from themi import clock
 from themi.ai.types import ToolResult
 from themi.autonomy.engine import Decision
 
@@ -622,3 +623,137 @@ async def test_two_different_events_the_same_evening_are_both_kept(
     )  # fmt: skip
     statuses = scenario.app.db.query("SELECT status FROM pending_actions")
     assert [r["status"] for r in statuses] == ["pending", "pending"]
+
+
+async def test_mine_finds_their_event_on_the_family_calendar_when_its_the_only_one(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F34d, bug #174: Erin's placeholder "ND psych in person" was on the shared family
+    calendar, and calendar "mine" said "No event of theirs matches"."""
+    db = scenario.app.db
+    family = "family@group.calendar.google.com"
+    account = db.scalar("SELECT id FROM linked_accounts WHERE member_id = ?",
+                        (scenario.member("Erin").id,))  # fmt: skip
+    db.execute(
+        "INSERT INTO calendars (account_id, name, calendar_id) VALUES (?, 'Madicen Family', ?)",
+        (account, family),
+    )
+    db.execute(
+        "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, title, "
+        "location, starts_at, ends_at, all_day, video, busy, source, fetched_at) "
+        "VALUES (?, ?, ?, 'psych', 'ND psych in person', '', ?, ?, 0, 0, 1, NULL, ?)",
+        (scenario.member("Erin").id, account, family, "2026-10-28T20:00:00+00:00",
+         "2026-10-28T21:00:00+00:00", clock.now().isoformat()),
+    )  # fmt: skip
+    args = {"event": "ND psych", "on": "2026-10-28", "calendar": "mine", "date": "",
+            "start": "", "end": "", "location": "401 Quarry Rd", "title": "", "notes": "",
+            "notes_mode": ""}  # fmt: skip
+    await say(scenario, "put 401 Quarry Rd on the ND psych appointment", "change_calendar_event",
+              args)  # fmt: skip
+    assert "No event of theirs" not in tool_result(scenario)
+    assert db.query("SELECT 1 FROM pending_actions WHERE status = 'pending'")
+
+
+async def test_a_failed_change_is_said_even_after_a_summary(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F34d, bug #174 (reply 321): the change and the delete both failed, a day summary went
+    out twice, and nothing was said about the failures."""
+    change = {"event": "ND psych", "on": "2026-10-28", "calendar": "mine", "date": "",
+              "start": "", "end": "", "location": "Madicen Family", "title": "", "notes": "",
+              "notes_mode": ""}  # fmt: skip
+    scenario.primary.queue_tool_calls(
+        [("change_calendar_event", change, None),
+         ("day_summary", {"whose": "me", "date": "2026-10-28"}, None)]
+    )  # fmt: skip
+    scenario.primary.queue_text("")
+    replies = await scenario.say("Erin", "merge my two appointments next Wednesday")
+    assert replies[-1] == "That didn't go through, so nothing has changed yet."
+
+
+async def two_appointments(scenario: Scenario, linked: FakeGcal) -> tuple[str, str]:
+    """Bug #174: Erin's placeholder on the family calendar, and the detailed visit the
+    clinic's app put on her own, at the same time on Wed 28 Oct."""
+    family = linked.add_calendar(ERIN, "Madicen Family")
+    psych = linked.add_event(ERIN, local(13, day=28), local(14, day=28),
+                             summary="ND psych in person", calendar=family,
+                             description="Ask about the forms")  # fmt: skip
+    visit = linked.add_event(
+        ERIN, local(13, day=28), local(13, 30, day=28),
+        summary="Return Patient Visit with Thuc Quyen Nguyen, MD",
+        location="401 Quarry Rd Palo Alto", description="Arrive early",
+    )  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    db = scenario.app.db
+    account = db.scalar("SELECT id FROM linked_accounts WHERE member_id = ?",
+                        (scenario.member("Erin").id,))  # fmt: skip
+    db.execute(
+        "INSERT INTO calendars (account_id, name, calendar_id) VALUES (?, 'Madicen Family', ?)",
+        (account, family),
+    )
+    if not db.query("SELECT 1 FROM calendar_entries WHERE event_id = ?", (psych,)):
+        db.execute(
+            "INSERT INTO calendar_entries (member_id, account_id, calendar_id, event_id, title, "
+            "location, starts_at, ends_at, all_day, video, busy, source, fetched_at) "
+            "VALUES (?, ?, ?, ?, 'ND psych in person', '', ?, ?, 0, 0, 1, NULL, ?)",
+            (scenario.member("Erin").id, account, family, psych, "2026-10-28T20:00:00+00:00",
+             "2026-10-28T21:00:00+00:00", clock.now().isoformat()),
+        )  # fmt: skip
+    return psych, visit
+
+
+def merge(keep_on: str = "") -> dict[str, str]:
+    return {"first": "ND psych", "second": "Return Patient Visit", "on": "2026-10-28",
+            "keep_on": keep_on}  # fmt: skip
+
+
+async def test_two_events_on_two_calendars_ask_where_the_merged_one_goes(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await two_appointments(scenario, linked)
+    await say(scenario, "merge the two appointments next Wednesday", "merge_calendar_events",
+              merge())  # fmt: skip
+    result = tool_result(scenario)
+    assert "on two calendars" in result and "keep_on" in result
+    assert not scenario.app.db.query("SELECT 1 FROM pending_actions")
+
+
+async def test_merged_onto_her_calendar_with_both_sets_of_notes(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F34d, bug #174: one event, the detailed one's title, place and time, on the calendar
+    she chose, with both notes; the placeholder is gone."""
+    await two_appointments(scenario, linked)
+    replies = await say(scenario, "merge them, keep it on my calendar", "merge_calendar_events",
+                        merge("mine"))  # fmt: skip
+    assert replies[0].startswith(
+        "Merging ND psych in person into Return Patient Visit with Thuc Quyen Nguyen, MD"
+    )
+    await scenario.tap("Erin", "Go ahead")
+    assert [e["summary"] for e in linked.events(ERIN, "Madicen Family")] == []
+    kept = on_primary(linked)["Return Patient Visit with Thuc Quyen Nguyen, MD"]
+    assert kept["location"] == "401 Quarry Rd Palo Alto"
+    assert kept["description"] == "Arrive early\nAsk about the forms"
+
+
+async def test_kept_on_the_family_calendar_takes_the_details(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await two_appointments(scenario, linked)
+    await say(scenario, "your call", "merge_calendar_events", merge("family"))
+    await scenario.tap("Erin", "Go ahead")
+    assert "Return Patient Visit with Thuc Quyen Nguyen, MD" not in on_primary(linked)
+    (kept,) = linked.events(ERIN, "Madicen Family")
+    assert kept["summary"] == "Return Patient Visit with Thuc Quyen Nguyen, MD"
+    assert kept["location"] == "401 Quarry Rd Palo Alto"
+    assert kept["end"]["dateTime"].startswith("2026-10-28T13:30")
+
+
+async def test_your_call_keeps_the_detailed_ones_calendar(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    await two_appointments(scenario, linked)
+    await say(scenario, "your call", "merge_calendar_events", merge("auto"))
+    await scenario.tap("Erin", "Go ahead")
+    assert linked.events(ERIN, "Madicen Family") == []
+    assert "Return Patient Visit with Thuc Quyen Nguyen, MD" in on_primary(linked)

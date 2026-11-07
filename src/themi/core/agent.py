@@ -104,6 +104,14 @@ def _honest(reply: str, waiting: list[str], outcomes: list[str]) -> str:
     return reply
 
 
+def _unsaid_failure(ctx: ToolContext) -> str:
+    """F34d, bug #174 (reply 321): a change failed, then a day summary said the day, and the
+    reply was left out as said already. A failed change is always said."""
+    said = {"more_tools", *ctx.answered}
+    failed = any(outcome == "failed" and name not in said for name, outcome, _ in ctx.calls)
+    return FAILED_TEXT if failed else ""
+
+
 MADE_TASK = re.compile(r"Task (\d+) created")
 UPDATED = re.compile(r"\b(?:updated|changed|edited)\b", re.IGNORECASE)
 
@@ -597,11 +605,11 @@ class Agent:
                         # The tools said it all (bug #118); a retry's repeat once (#119).
                         return "\n".join(dict.fromkeys(ctx.replies))
                     reply = _unquoted(response.text)
-                    if ctx.answered and not reply:
-                        return _done_first(ctx.done, "")  # F22b: the tool's message said it
+                    if ctx.answered and not reply:  # F22b: the tool's message said it
+                        return _done_first(ctx.done, _unsaid_failure(ctx))
                     reply = reply or ("Done." if used_tools else TANGLED_TEXT)
                     if ctx.answered and (len(reply) > SHORT_LINE or "\n" in reply):
-                        return ""  # the tool's message was the answer (bug #89)
+                        return _unsaid_failure(ctx)  # the tool's message was the answer (#89)
                     reply = _by_name(_without_done(reply) if ctx.done else reply, self._task_title)
                     reply = self._whole_truth(self._titles_quoted(reply, ctx), ctx)
                     reply = listening.trimmed(reply, text)  # F22e: no "Anything else?"

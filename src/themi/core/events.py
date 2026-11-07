@@ -55,6 +55,7 @@ OWN, CHANGE, FROM_EMAIL, FAMILY = (
     "calendar_write",
 )
 ADD, MOVE, DELETE = "calendar.add_event", "calendar.move_event", "calendar.delete_event"
+MERGE = "calendar.merge_events"  # F34d
 OFFER_AFTER = 3  # email events approved in a row before offering to make them automatic
 EXAMPLE = "Try a date like 2026-11-03 and times like 15:00 (empty for an all-day event)."
 MAX_TITLE = 120
@@ -279,7 +280,9 @@ class Events:
         for name, executor in ((ADD, self._execute_add), (MOVE, self._execute_move)):
             s.autonomy.executors.register(name)(executor)
         s.autonomy.executors.register(DELETE)(self._execute_delete)
-        for t in (add_calendar_event, change_calendar_event, delete_calendar_event):
+        s.autonomy.executors.register(MERGE)(self._execute_merge)
+        for t in (add_calendar_event, change_calendar_event, delete_calendar_event,
+                  merge_calendar_events):  # fmt: skip
             s.tools.register(t)
         if s.triage is not None:
             s.triage.verdict_listeners.append(self.on_email)
@@ -330,7 +333,10 @@ class Events:
                 found[row["event_id"]] = self._found(row, None)
         matches = [f for f in found.values() if title_matches(words, f.title)]
         if calendar in ("mine", "family"):
-            matches = [f for f in matches if self.on_family(f) == (calendar == "family")]
+            # F34d, bug #174: "mine" for their only match, on the shared family calendar,
+            # found nothing. The calendar only picks between copies.
+            picked = [f for f in matches if self.on_family(f) == (calendar == "family")]
+            matches = picked or matches
         if len(matches) == 1 or (matches and self._copies(matches)):
             return matches
         listed = "; ".join(
@@ -630,6 +636,40 @@ class Events:
         both = " (both calendars)" if len(copies) > 1 else ""
         shown = describe(found.title, found.when, "", self._tz())
         return f"Deleted from the calendar{both}: {shown}."
+
+    async def _execute_merge(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        """F34d: the kept event takes the detailed one's title, place and times and both sets
+        of notes; the other goes (or, kept on both, gets the same)."""
+        keep, other = self._payload_found(payload["keep"]), self._payload_found(payload["other"])
+        when = When(
+            datetime.fromisoformat(payload["starts"]),
+            datetime.fromisoformat(payload["ends"]),
+            bool(payload["all_day"]),
+        )
+        title, location = str(payload["title"]), str(payload["location"])
+        notes = [await self._description(keep), await self._description(other)]
+        merged = "\n".join(dict.fromkeys(n.strip() for n in notes if n.strip()))
+        each = {"notes": {"text": merged, "mode": "replace"}} if merged else {}
+        await self._change(keep, when, title, location, each)
+        await self.withdraw_changes(keep.event_id, keep=ctx.action_id)
+        if payload.get("both"):
+            await self._change(other, when, title, location, each)
+        else:
+            await self._execute_delete(payload["other"], ctx)
+        await self.withdraw_changes(other.event_id, keep=ctx.action_id)
+        shown = describe(title, when, location, self._tz())
+        where = "both calendars" if payload.get("both") else self.calendar_words(keep)
+        return f"Merged into one event on {where}: {shown}."
+
+    async def _description(self, found: Found) -> str:
+        """An event's description, read to merge it and never kept (the plan's privacy)."""
+        try:
+            event = await self._client(found.account_id).get_event(
+                found.calendar_id, found.event_id
+            )
+        except CalendarNotFound:
+            return ""
+        return str(event.get("description") or "")
 
     async def _write(
         self, account_id: int, calendar_id: str, eid: str, title: str, location: str,
@@ -984,8 +1024,9 @@ CALENDAR_ARG = {"type": "string", "enum": ["", "mine", "family"]}
     "could be more than one, else ''. calendar: 'mine' or 'family' to pick one copy, '' for "
     "whichever has it (the same event on both changes on both). date, start, end as for "
     "add_calendar_event, all three '' to keep its time; location, title: the new one, or '' "
-    "to keep it. notes: text for its description, or ''; notes_mode 'add' (after what's "
-    "there) or 'replace'. Events Themi made change at once; others need their yes.",
+    "to keep it (a calendar's name is never a location). notes: text for its description, "
+    "or ''; notes_mode 'add' (after what's there) or 'replace'. Events Themi made change at "
+    "once; others need their yes.",
     {
         "event": {"type": "string"},
         "on": {"type": "string"},
@@ -1072,6 +1113,70 @@ def _new_when(was: When, args: dict[str, Any], today: date, tz: ZoneInfo) -> Whe
     if not start and not end and not was.all_day:
         start, end = local_start.strftime("%H:%M"), local_end.strftime("%H:%M")
     return parse_when(day, start, end, today, tz)
+
+
+def _fuller(a: Found, b: Found) -> tuple[Found, Found]:
+    """(the detailed one, the placeholder): a place, then the longer title (F34d)."""
+    rank = lambda f: (bool(f.location.strip()), len(f.title))  # noqa: E731
+    return (a, b) if rank(a) >= rank(b) else (b, a)
+
+
+@staged_tool(
+    "merge_calendar_events",
+    "Make two of their events one ('merge my placeholder with the real appointment', 'those "
+    "two are the same thing'). first, second: words from each one's title; on: their date "
+    "(YYYY-MM-DD) or ''. The merged event gets the fuller one's title, place and times and "
+    "both sets of notes, and the other is deleted. keep_on: '' unless they said, 'mine' "
+    "(their own calendar), 'family', 'both' (both kept, both given the details), or 'auto' "
+    "when they leave it to Themi ('your call').",
+    {
+        "first": {"type": "string"},
+        "second": {"type": "string"},
+        "on": {"type": "string"},
+        "keep_on": {"type": "string", "enum": ["", "mine", "family", "both", "auto"]},
+    },
+)
+async def merge_calendar_events(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+    events = _events(ctx)
+    a = events.find(ctx.member, args["first"], args["on"])[0]
+    b = events.find(ctx.member, args["second"], args["on"])[0]
+    if a.event_id == b.event_id:
+        raise ToolFailed(f'"{args["first"]}" and "{args["second"]}" are the same event.')
+    tz = events._tz()
+    detailed, placeholder = _fuller(a, b)
+    keep_on = str(args.get("keep_on") or "")
+    apart = events.on_family(a) != events.on_family(b)
+    if apart and not keep_on:
+        raise ToolFailed(
+            f"They're on two calendars: {detailed.title} on {events.calendar_words(detailed)}, "
+            f"{placeholder.title} on {events.calendar_words(placeholder)}. Ask which one to "
+            "keep it on (keep_on 'mine' or 'family'), on both ('both'), or Themi's call "
+            "('auto'), in one short question."
+        )
+    keep, other = detailed, placeholder
+    if keep_on in ("mine", "family") and apart:
+        wanted = keep_on == "family"
+        keep, other = (a, b) if events.on_family(a) == wanted else (b, a)
+    when = detailed.when
+    for each in (a, b):
+        await events.withdraw_changes(each.event_id)
+    payload = {
+        "keep": _found_payload(keep),
+        "other": _found_payload(other),
+        "title": detailed.title,
+        "location": detailed.location or placeholder.location,
+        "starts": when.starts.isoformat(),
+        "ends": when.ends.isoformat(),
+        "all_day": when.all_day,
+        "both": keep_on == "both",
+    }
+    where = "both calendars" if keep_on == "both" else events.calendar_words(keep)
+    summary = (
+        f"Merging {placeholder.title} into {detailed.title}, {when_words(when, tz)}"
+        f"{f', at {payload["location"]}' if payload['location'] else ''}: one event on {where}"
+    )
+    themi_made = all(each.themi_id is not None for each in (a, b))
+    return Proposal(OWN if themi_made else CHANGE, summary, MERGE, payload, expires=when.ends)
 
 
 @staged_tool(
