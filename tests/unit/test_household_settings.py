@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.fixtures.family import SeededFamily
-from themi.accounts import SYSTEM, AccountStore, InvalidValue, Role
+from themi.accounts import AccountStore, InvalidValue
 from themi.accounts.store import PermissionDenied
 from themi.core.body_double import BodyDoublePreferences
 from themi.core.laundry import LaundrySettings
@@ -22,12 +22,14 @@ def columns(db: Database, table: str) -> set[str]:
     return {r["name"] for r in db.query(f"PRAGMA table_info({table})")}
 
 
+from tests.unit.test_member_preferences import old_family  # noqa: E402
+
+
 def test_an_existing_database_keeps_every_value(tmp_path: Path) -> None:
     db = Database(tmp_path / "old.db")
     migrations.apply(db, [m for m in migrations.discover() if m.version < 145])
     store = AccountStore(db, Cipher(generate_key()))
-    store.create_family("Household", "America/Los_Angeles")
-    erin = store.create_member(SYSTEM, "Erin", Role.ADMIN)
+    erin = old_family(store).erin
     db.execute(
         'UPDATE family SET takeout_budget_cents = 300, staples = \'["eggs", "rice"]\', '
         "laundry_fresh_hours = 6.5, laundry_rinse_minutes = 25"

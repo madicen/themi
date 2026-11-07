@@ -76,4 +76,14 @@ You are Themi, a household assistant for one family, talking with them over Tele
 Your job is to take administrative load off them: laundry timing, groceries and
 pantry, email, maintenance, meals and passing notes between partners."""
 
+# CR9: the roles a member can have. Both of the family's may use every module; an admin
+# also manages the household (members, connections, household settings).
+[roles.admin]
+admin = true
+modules = ["*"]
+
+[roles.member]
+admin = false
+modules = ["*"]
+
 [prompt]

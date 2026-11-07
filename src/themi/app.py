@@ -302,6 +302,7 @@ def build_app(
         persona=template.persona,  # CR8a
         prompt_fragments=list(CORE_RULES),
         prompt_overrides=dict(template.prompt),
+        role_modules={name: role.allowed() for name, role in template.roles.items()},  # CR9
     )
     scheduler = Scheduler(db)
     ctx = ModuleContext(services, scheduler=scheduler)

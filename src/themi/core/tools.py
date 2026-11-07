@@ -348,6 +348,8 @@ class ToolRegistry:
         self._tools: dict[str, Tool] = {}
         self._groups: dict[str, ToolGroup] = {}
         self._words: dict[str, re.Pattern[str]] | None = None
+        self._owners: dict[str, str] = {}  # CR9: tool -> the module that registered it
+        self.installing = ""  # set by the module loader while a module installs
         for t in tools or []:
             self.register(t)
 
@@ -405,6 +407,11 @@ class ToolRegistry:
                 "so they go through the trust tiers"
             )
         self._tools[t.spec.name] = t
+        self._owners[t.spec.name] = self.installing or "core"
+
+    def module_of(self, tool: str) -> str:
+        """CR9: the module that registered this tool, or "core"."""
+        return self._owners.get(tool, "core")
 
     def specs(self, groups: set[str] | None = None) -> list[ToolSpec]:
         """Every tool, or (P1) the core and these groups', with any twin set (P6) they
@@ -427,12 +434,19 @@ class ToolRegistry:
             return rest
         return sorted([*rest, offer], key=lambda spec: spec.name)
 
-    def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
+    def specs_for(
+        self, groups: set[str], routing: str = "groups", allowed: set[str] | None = None
+    ) -> list[ToolSpec]:
         """The tools one model call gets. P5's "all" is every tool but more_tools, which
-        would have nothing to add."""
+        would have nothing to add. `allowed`: the modules this person's role may use (CR9);
+        None is all of them, and the core's tools always go."""
         if routing == "all":
-            return [spec for spec in self.specs() if spec.name != more_tools.spec.name]
-        return self.specs(groups)
+            specs = [spec for spec in self.specs() if spec.name != more_tools.spec.name]
+        else:
+            specs = self.specs(groups)
+        if allowed is None:
+            return specs
+        return [s for s in specs if self.module_of(s.name) in allowed | {"core"}]
 
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
@@ -444,6 +458,11 @@ class ToolRegistry:
             call = replace(call, arguments={**empty, **call.arguments})
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
+        may_use = getattr(ctx.services, "may_use", None)  # a test's stand-in may not have it
+        if may_use is not None and not may_use(ctx.member, t.spec.name):  # CR9: their role's
+            return ToolResult(
+                call.id, f"{ctx.member.name} can't use {t.spec.name} here.", is_error=True
+            )
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
         ctx.calls.append((call.name, outcome, result.content))

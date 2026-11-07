@@ -34,6 +34,7 @@ from themi.accounts.models import (
     LoggedMessage,
     Member,
     Role,
+    Workspace,
 )
 from themi.accounts.preferences import Preferences
 from themi.storage.db import Database
@@ -287,23 +288,25 @@ class AccountStore:
 
     # ----- family -------------------------------------------------------------
 
-    def get_family(self) -> Family | None:
+    def get_workspace(self) -> Workspace | None:
+        """CR9: the workspace this database is (one per database; row 1)."""
         row = self.db.one("SELECT * FROM family WHERE id = 1")
         if row is None:
             return None
-        return Family(
+        return Workspace(
             name=row["name"],
             timezone=row["timezone"],
             created_at=_parse_dt(row["created_at"]),
             task_owners={k: int(v) for k, v in json.loads(row["task_owners"]).items()},
             handover_cost=float(row["handover_cost"]),
+            template=row.get("template", "family"),  # a schema from before CR9: the family
         )
 
-    def create_family(
-        self,
-        name: str,
-        timezone: str,
-    ) -> Family:
+    def get_family(self) -> Family | None:
+        """The family template's name for `get_workspace` (CR9): its callers stay."""
+        return self.get_workspace()
+
+    def create_family(self, name: str, timezone: str, template: str = "family") -> Family:
         if self.get_family() is not None:
             raise AccountsError("this server already has a family")
         name = name.strip()
@@ -312,9 +315,9 @@ class AccountStore:
         _validate_timezone(timezone)
         now = _iso(clock.now())
         self.db.execute(
-            "INSERT INTO family (id, name, timezone, created_at, updated_at) "
-            "VALUES (1, ?, ?, ?, ?)",
-            (name, timezone, now, now),
+            "INSERT INTO family (id, name, timezone, template, created_at, updated_at) "
+            "VALUES (1, ?, ?, ?, ?, ?)",
+            (name, timezone, template, now, now),
         )
         family = self.get_family()
         assert family is not None

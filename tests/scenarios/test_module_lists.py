@@ -11,6 +11,7 @@ from tests.fakes.wiring import connector_options
 from tests.fixtures.family import SeededFamily
 from themi.app import App, build_app, family_modules
 from themi.channels.telegram import TelegramChannel
+from themi.config import Template
 from themi.modules import Module
 from themi.storage.secrets import Secret
 
@@ -67,7 +68,12 @@ def options(family: SeededFamily, request: pytest.FixtureRequest) -> dict[str, A
     )
 
 
-def build(family: SeededFamily, telegram: FakeTelegram, modules: list[Module]) -> App:
+def build(
+    family: SeededFamily,
+    telegram: FakeTelegram,
+    modules: list[Module],
+    template: Template | None = None,
+) -> App:
     return build_app(
         family.db,
         family.store.cipher,
@@ -75,6 +81,7 @@ def build(family: SeededFamily, telegram: FakeTelegram, modules: list[Module]) -
             Secret(BOT_TOKEN), store, None, base_url=telegram.base_url, poll_timeout=0
         ),
         modules=modules,
+        template=template,
     )
 
 

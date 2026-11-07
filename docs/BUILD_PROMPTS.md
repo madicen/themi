@@ -293,7 +293,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | split, [x] 2026-11-07 |
 | CR8a | Core refactor: the system prompt from template and module parts | Core refactor | [x] 2026-11-07 |
 | CR8b | Core refactor: tool groups from modules | Core refactor | [x] 2026-11-07 |
-| CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
+| CR9 | Core refactor: workspaces and template roles | Core refactor | [x] 2026-11-07 |
 | CR10 | Core refactor: workspace packages | Core refactor | [ ] |
 | CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
 | CR12 | Core refactor: the work template | Core refactor | [ ] |
@@ -14562,7 +14562,7 @@ Notes:
   with their app's loaded groups.
 
 ### CR9 · Core refactor: workspaces and template roles
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR8
 Read first: the refactor doc's Tutoring section (for what roles must later support);
 `src/themi/accounts/`; CR8's notes.
@@ -14577,6 +14577,32 @@ Read first: the refactor doc's Tutoring section (for what roles must later suppo
   workspace's store. Add a test that two apps on two database files in one process don't
   see each other's data, as groundwork for CR15.
 Tests: role permissions, two workspaces in one process, golden files identical.
+
+Notes:
+- `Workspace` (name, timezone, template, and the energy model's task owners and hand-over
+  cost); `Family = Workspace`. Migration 0149 adds `family.template` (default "family").
+  The smaller change was kept: the table is still `family`, so no query changed.
+  `store.get_workspace()`; `get_family()` stays as its alias, and `create_family` takes a
+  template.
+- `get_family()` callers not moved (75 calls; most read the timezone): cli, gcal sync and
+  busy, cozyla chores/todos/routines, dishwasher, body_double, noise_digest, journal,
+  tasks, conversation_mode, habits, travel, sidecar, cooking and its timers, maintenance,
+  litter_box, events, feedback, appliances, chore_chart, liaison, day_summary, feeders,
+  reminders, vacuum, connector_modules, laundry, expected, calendar, breaks, task_blocks,
+  recipe_ideas, agent, routines, calendar_copies, web_search, business_hours, commands,
+  spending, calls, focus, pantry, energy (model, matching, outcomes), web kit,
+  connection/admin/task pages, accounts store and setup, outbox.
+- Template roles: `[roles.<name>]` with `admin` and `modules` (`config.RoleSpec`). The
+  family's are admin and member, both with every module. `Services.role_modules`,
+  `allowed_modules(member)` and `may_use(member, tool)`; the agent sends a member only
+  their role's modules' tools (and the core's), and `ToolRegistry.run` refuses one that
+  isn't theirs. The registry records which module registered each tool (`module_of`).
+- Not yet: `Member.role` is still the `Role` enum (admin, member), and `is_admin` reads it,
+  not the template's `admin` flag. Tutoring's roles (parent, student, tutor) need `Role`
+  widened to the template's names: CR13 decides them, CR14 builds them.
+- No global database handle: `test_workspaces.py` runs two apps on two database files in
+  one process, and neither sees the other's tasks.
+- Tests changed: the old-schema helpers insert the family row with the old columns.
 
 ### CR10 · Core refactor: workspace packages
 Status: [ ]

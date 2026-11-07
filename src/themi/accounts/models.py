@@ -20,12 +20,19 @@ TRACKING_INPUTS = ("text_notes", "message_timing", "device_activity", "calendar"
 
 
 @dataclass(frozen=True)
-class Family:
+class Workspace:
+    """CR9: what a Themi serves: a family, a person's work, a tutoring family. Its template
+    says which modules, roles and persona it has."""
+
     name: str
     timezone: str
     created_at: datetime
     task_owners: dict[str, int] = field(default_factory=dict, hash=False)  # kind -> member id
     handover_cost: float = 10.0
+    template: str = "family"
+
+
+Family = Workspace  # CR9: the name every caller used; a family is a workspace
 
 
 DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")

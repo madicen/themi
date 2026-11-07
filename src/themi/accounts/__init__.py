@@ -9,6 +9,7 @@ from themi.accounts.models import (
     LoggedMessage,
     Member,
     Role,
+    Workspace,
     sender_matches,
 )
 from themi.accounts.store import (
@@ -40,6 +41,7 @@ __all__ = [
     "NotFound",
     "PermissionDenied",
     "Role",
+    "Workspace",
     "sender_matches",
     "sender_pattern",
 ]

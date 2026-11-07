@@ -32,11 +32,26 @@ DEFAULT_PATHS = (Path("/data/themi.toml"), Path("themi.toml"))
 
 
 @dataclass(frozen=True)
+class RoleSpec:
+    """CR9: a role a template's members can have: whether it's an admin's, and which
+    modules' tools it may use ("*": every module's)."""
+
+    name: str
+    admin: bool = False
+    modules: tuple[str, ...] = ("*",)
+
+    def allowed(self) -> set[str] | None:
+        """The modules this role may use, or None for all of them."""
+        return None if "*" in self.modules else set(self.modules)
+
+
+@dataclass(frozen=True)
 class Template:
     name: str
     modules: tuple[str, ...]
     persona: str = ""  # CR8a: the system prompt's opening
     prompt: dict[str, str] = field(default_factory=dict)  # rewordings by fragment key
+    roles: dict[str, RoleSpec] = field(default_factory=dict)  # CR9: by role name
 
 
 @dataclass(frozen=True)
@@ -125,6 +140,10 @@ def load_template(name: str) -> Template:
         tuple(data.get("modules", [])),
         data.get("persona", "").lstrip("\n"),
         dict(data.get("prompt", {})),
+        {
+            role: RoleSpec(role, bool(spec.get("admin", False)), tuple(spec.get("modules", ["*"])))
+            for role, spec in data.get("roles", {}).items()
+        },
     )
 
 

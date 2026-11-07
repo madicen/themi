@@ -73,9 +73,16 @@ def test_a_value_out_of_range_says_so_in_the_old_words(
 def old_family(store: AccountStore) -> SeededFamily:
     """A family as an older schema holds it: only what create_family and create_member
     write (no module settings yet, their tables come later)."""
-    from themi.accounts import SYSTEM, Role
+    from themi import clock
+    from themi.accounts import SYSTEM, Role, Workspace
 
-    family = store.create_family("Household", "America/Los_Angeles")
+    now = clock.now().isoformat()
+    store.db.execute(  # as the old schema has it: no template column yet (CR9)
+        "INSERT INTO family (id, name, timezone, created_at, updated_at) "
+        "VALUES (1, 'Household', 'America/Los_Angeles', ?, ?)",
+        (now, now),
+    )
+    family = Workspace("Household", "America/Los_Angeles", clock.now())
     erin = store.create_member(SYSTEM, "Erin", Role.ADMIN)
     husband = store.create_member(SYSTEM, "Husband", Role.MEMBER)
     return SeededFamily(store, family, erin, husband)

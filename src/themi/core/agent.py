@@ -675,14 +675,15 @@ class Agent:
         )
         quiet = event.picture is not None and not event.text.strip()
         offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
-        timer.route(offered, len(services.tools.specs_for(groups, routing)))
+        allowed = services.allowed_modules(member)  # CR9: their role's
+        timer.route(offered, len(services.tools.specs_for(groups, routing, allowed)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for step in range(1, self.max_steps + 2):
                 # F34gb: a picture with no words is only described, and asked about.
-                tools = [] if quiet else services.tools.specs_for(ctx.groups, routing)
+                tools = [] if quiet else services.tools.specs_for(ctx.groups, routing, allowed)
                 twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
                 call_system = f"{system}\n\n{twins}" if twins else system
                 if step > self.max_steps:

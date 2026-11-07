@@ -129,6 +129,9 @@ class Services(Registry):
     persona: str = ""
     prompt_fragments: list[PromptFragment] = field(default_factory=list)
     prompt_overrides: dict[str, str] = field(default_factory=dict)
+    # CR9: the modules each role may use (the template's roles); a role not named, or one
+    # with "*", may use them all.
+    role_modules: dict[str, set[str] | None] = field(default_factory=dict)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
@@ -156,6 +159,14 @@ class Services(Registry):
         for row in self.outbox.queued(member.id):
             items.append(OpenItem(f"Scheduled to send later: {row['text'][:80]}"))
         return items
+
+    def allowed_modules(self, member: Member) -> set[str] | None:
+        """CR9: the modules this person's role may use; None is all of them."""
+        return self.role_modules.get(str(member.role))
+
+    def may_use(self, member: Member, tool: str) -> bool:
+        allowed = self.allowed_modules(member)
+        return allowed is None or self.tools.module_of(tool) in allowed | {"core"}
 
     def system_text(self) -> str:
         """The system prompt's stable part: the persona, then the core's and the loaded

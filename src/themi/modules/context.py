@@ -66,9 +66,11 @@ class ModuleContext:
                     self.services.preference_models.append(module.preferences)
                 if module.household is not None:  # CR7c: for the family's pages
                     self.services.household_models.append(module.household)
+                self.services.tools.installing = module.name  # CR9: whose tools these are
                 module.install(self)
             finally:
                 self._current = ""
+                self.services.tools.installing = ""
             self.installed.append(module.name)
         return ordered
 
