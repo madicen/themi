@@ -122,6 +122,40 @@ def routes(kit: Kit) -> APIRouter:
             bd.note_music(member, f"builtin:{loop.key}", loop.name)
         return Response(status_code=204)
 
+    @router.post("/session/spotify")
+    async def session_spotify(request: Request) -> Response:
+        """F34i: one of their playlists on their active device, or Pause, or Next."""
+        signed, form = await kit.checked(request)
+        from themi.core.music import CATEGORY, NEXT, PAUSE, PLAY
+
+        bd = body_double()
+        session = bd.current(signed.member) if bd is not None else None
+        if bd is None or session is None or app.services.music is None:
+            return kit.redirect("/session")
+        action = str(form.get("action", ""))
+        if action == "play":
+            kept = {p["uri"]: p for p in bd.state(signed.member).get("spotify", [])}
+            chosen = kept.get(str(form.get("uri", "")))
+            if chosen is None:  # only their own, as read for this session
+                return Response(status_code=400)
+            summary, payload, executor = (
+                f"Play {chosen['name']} on Spotify",
+                {"uri": chosen["uri"], "name": chosen["name"]},
+                PLAY,
+            )
+        elif action in ("pause", "next"):
+            summary = "Pause Spotify" if action == "pause" else "Next on Spotify"
+            payload, executor = {}, PAUSE if action == "pause" else NEXT
+        else:
+            return Response(status_code=400)
+        await app.services.autonomy.stage(
+            CATEGORY, signed.member, summary, payload, executor, interactive=True,
+            requested=True,
+        )  # fmt: skip
+        if request.headers.get("X-Requested-With") == "fetch":
+            return session_state(request)
+        return kit.redirect("/session")
+
     @router.post("/session/chat")
     async def session_chat(request: Request) -> Response:
         """BD3b: chat on the page during a sprint's break, as their own chat with Themi."""

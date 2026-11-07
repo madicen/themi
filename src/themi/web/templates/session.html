@@ -60,6 +60,20 @@
     <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
     <audio loop preload="none" src="{{ asset('audio/' ~ state.music.file) }}"></audio>
   </section>
+  {% if state.spotify %}
+  <section class="session-spotify" aria-label="My Spotify">
+    <h2>My Spotify</h2>
+    <form method="post" action="/session/spotify">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <select name="uri" aria-label="Which playlist">
+        {% for p in state.spotify %}<option value="{{ p.uri }}">{{ p.name }}</option>{% endfor %}
+      </select>
+      <button name="action" value="play" class="primary">Play</button>
+      <button name="action" value="pause">Pause</button>
+      <button name="action" value="next">Next</button>
+    </form>
+  </section>
+  {% endif %}
   <button class="session-chat-open" type="button" {% if state.phase != "break" %}hidden{% endif %}>Chat</button>
   <section class="session-chat" aria-label="Chat with Themi" hidden>
     <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>

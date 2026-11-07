@@ -8,6 +8,7 @@ choice for the page.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,6 +74,29 @@ DEFAULTS = {"deep_work": "builtin:lofi", "tidy": "builtin:lofi"}
 LEARNED_AFTER = 2  # finished sessions with the same music in the cell before it's offered
 OFFER_LEARNED_TEXT = "{name} again, like last time?"
 OFFER_DEFAULT_TEXT = "Some {name} while you work?"
+OFFER_MINE_TEXT = "Some {name} while you work, or one of yours?"  # F34i
+OFFER_ONLY_MINE_TEXT = "Some of your music while you work?"
+MORE_TEXT = "More of yours:"
+SHOWN = 3  # their own playlists on the offer itself
+PAGE = 10  # and on each page of "More"
+# F34i: words in a playlist's name that suit a kind of job.
+FITS = {
+    "deep_work": ("focus", "study", "concentrat", "deep", "instrumental", "ambient", "work"),
+    "admin": ("focus", "work", "instrumental", "ambient"),
+    "chores": ("clean", "chore", "dance", "upbeat", "energy", "party", "pop", "kitchen"),
+    "tidy": ("clean", "chore", "dance", "upbeat", "energy", "party", "pop", "kitchen"),
+}
+
+
+def ranked(playlists: list[dict[str, str]], category: str | None,
+           last: str | None) -> list[dict[str, str]]:  # fmt: skip
+    """F34i: the one from their last session of this kind first, then names that fit the
+    job, then the rest as Spotify lists them (most recent first)."""
+    fits = FITS.get(category or "", ())
+    first = [p for p in playlists if p["uri"] == last]
+    fitting = [p for p in playlists if p not in first and any(w in p["name"].lower()
+                                                             for w in fits)]  # fmt: skip
+    return [*first, *fitting, *(p for p in playlists if p not in first and p not in fitting)]
 
 
 @dataclass(frozen=True)
@@ -138,25 +162,96 @@ class MusicOffers:
         )
         return pick(rows, session.category, part_of_day(session.row["hour_of_week"]))
 
+    def _last_playlist(self, session: Any) -> str | None:
+        row = self.db.one(
+            "SELECT music FROM body_double_sessions WHERE member_id = ? AND id != ? "
+            "AND category IS ? AND music LIKE 'spotify:%' ORDER BY id DESC LIMIT 1",
+            (session.member_id, session.id, session.category),
+        )
+        return str(row["music"]) if row else None
+
+    async def _playlists(self, session: Any) -> list[dict[str, str]]:
+        """F34i: their own playlists, read once for the session and kept on its row."""
+        music = self.services.music
+        if music is None:
+            return []
+        member = self.services.store.get_member(session.member_id)
+        found = [{"uri": p.uri, "name": p.name, "link": p.link}
+                 for p in await music.playlists(member)]  # fmt: skip
+        found = ranked(found, session.category, self._last_playlist(session))
+        if found:
+            self.db.execute(
+                "UPDATE body_double_sessions SET playlists = ? WHERE id = ?",
+                (json.dumps(found), session.id),
+            )
+        return found
+
+    def kept(self, session_id: int) -> list[dict[str, str]]:
+        raw = self.db.scalar("SELECT playlists FROM body_double_sessions WHERE id = ?",
+                             (session_id,))  # fmt: skip
+        return list(json.loads(raw)) if raw else []
+
     async def offer(self, session: Any, text: str, buttons: list[Any]) -> tuple[str, list[Any]]:
         from themi.channels.events import Button
 
         chosen = self.choice(session)
-        if chosen is None:
+        spotify_gone = self.services.music is None
+        if chosen is not None and not chosen.music.startswith("builtin:") and spotify_gone:
+            chosen = None  # Spotify isn't set up any more
+        mine = await self._playlists(session)
+        if chosen is not None:
+            mine = [p for p in mine if p["uri"] != chosen.music]
+        if chosen is None and not mine:
             return text, buttons
-        if not chosen.music.startswith("builtin:") and self.services.music is None:
-            return text, buttons  # Spotify isn't set up any more
-        tap = {"session": session.id, "music": chosen.music, "name": chosen.name, "text": text}
-        return f"{text}\n{offer_text(chosen)}", [
-            *buttons,
-            Button("Play", "music_offer", {**tap, "action": "play"}),
-            Button("Not now", "music_offer", {**tap, "action": "skip"}),
-        ]
+        tap = {"session": session.id, "text": text}
+        offered = []
+        if chosen is not None:
+            line = offer_text(chosen)
+            if mine and not chosen.learned:
+                line = OFFER_MINE_TEXT.format(name=chosen.name)
+            offered.append(
+                Button(
+                    "Play",
+                    "music_offer",
+                    {**tap, "music": chosen.music, "name": chosen.name, "action": "play"},
+                )
+            )
+        else:
+            line = OFFER_ONLY_MINE_TEXT
+        offered += self._mine_buttons(tap, mine, 0, SHOWN)
+        offered.append(Button("Not now", "music_offer", {**tap, "action": "skip"}))
+        return f"{text}\n{line}", [*buttons, *offered]
+
+    def _mine_buttons(self, tap: dict[str, Any], mine: list[dict[str, str]], start: int,
+                      count: int) -> list[Any]:  # fmt: skip
+        from themi.channels.events import Button
+
+        out = [
+            Button(p["name"][:40], "music_offer",
+                   {**tap, "music": p["uri"], "name": p["name"], "action": "play"})
+            for p in mine[start : start + count]
+        ]  # fmt: skip
+        if len(mine) > start + count:
+            out.append(Button("More", "music_offer", {**tap, "action": "more",
+                                                      "from": start + count}))  # fmt: skip
+        return out
 
     async def on_button(self, event: Any) -> None:
         payload = event.button.payload
         member = self.services.store.get_member(event.member.id)
         said = str(payload.get("text", ""))
+        if payload.get("action") == "more":  # F34i: the next page, from the session's copy
+            from themi.channels.events import Button
+
+            tap = {"session": payload.get("session"), "text": said}
+            mine = self.kept(int(payload.get("session") or 0))
+            buttons = [*self._mine_buttons(tap, mine, int(payload.get("from") or 0), PAGE),
+                       Button("Not now", "music_offer", {**tap, "action": "skip"})]  # fmt: skip
+            if event.button.message_id is not None:
+                await self.services.outbox.edit(
+                    member, event.button.message_id, f"{said}\n{MORE_TEXT}", buttons
+                )
+            return
         if payload.get("action") != "play":
             result = said
         elif str(payload.get("music", "")).startswith("builtin:"):

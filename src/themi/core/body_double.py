@@ -447,6 +447,10 @@ class BodyDouble:
                 label=str(item.get("label") or ""), then=queue,
                 part=(done_so_far + 1, session.row.get("parts") or done_so_far + 1),
             )  # fmt: skip
+            self.db.execute(  # F34i: the playlists read for the run stay with it
+                "UPDATE body_double_sessions SET playlists = ? WHERE id = ?",
+                (session.row.get("playlists"), new.id),
+            )
             return NEXT_UP_TEXT.format(done=said, label=new.label, start=text), buttons
         return said, []
 
@@ -858,6 +862,7 @@ class BodyDouble:
             **steps,
             **(self.pictures.page_state(session) if self.pictures is not None else {}),
             "music": self.music_state(member),
+            "spotify": json.loads(session.row.get("playlists") or "[]"),  # F34i
             "buttons": [
                 {"label": b.label, "action": b.payload.get("action", ""),
                  "mode": b.payload.get("mode", "")}

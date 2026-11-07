@@ -692,3 +692,78 @@ async def test_quiet_company_through_two_tasks(scenario: Scenario) -> None:
     assert scenario.inbox("Erin")[-1].endswith(
         "Next up: Put the laundry away.\n\nI'm here. Going quiet until you say you're done."
     )
+
+
+# ----- F34i: their own playlists ---------------------------------------------------------------
+
+
+async def own_playlists(scenario: Scenario, site: httpx.AsyncClient, fake: FakeSpotify) -> None:
+    """Michael's idea #183. Their library, most recent first, as Spotify lists it."""
+    await link_spotify(scenario, site, fake)
+    fake.add_device("Desk speaker", active=True)
+    for name in ("Road Trip", "Deep Focus", "Kitchen Dance", "Chill Mix", *(f"Mix {n}" for n in
+                 range(1, 12))):  # fmt: skip
+        fake.add_mine(name)
+
+
+async def test_their_playlists_are_offered_with_the_loop(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    replies = await start(scenario, "keep me company while I write", mode="quiet",
+                          what="writing the newsletter")  # fmt: skip
+    assert replies[0].endswith("\nSome lofi while you work, or one of yours?")
+    # one that fits the job first, then their most recent
+    assert scenario.last_buttons("Erin") == [
+        "Play", "Deep Focus", "Road Trip", "Kitchen Dance", "More", "Not now",
+    ]  # fmt: skip
+    reads = fake_spotify.calls.count("GET /v1/me/playlists")
+    await scenario.tap("Erin", "More")
+    assert card_buttons(scenario)[:3] == ["Chill Mix", "Mix 1", "Mix 2"]
+    assert card_buttons(scenario)[-2:] == ["More", "Not now"]
+    await scenario.tap("Erin", "More")
+    assert card_buttons(scenario) == ["Mix 10", "Mix 11", "Not now"]
+    assert fake_spotify.calls.count("GET /v1/me/playlists") == reads  # read once a session
+
+    await scenario.tap("Erin", "Mix 11")
+    assert fake_spotify.playing == {"context_uri": "spotify:playlist:mix11", "device_id": "dev-1"}
+    assert session_row(scenario)["music"] == "spotify:playlist:mix11"
+
+
+async def test_last_sessions_playlist_comes_first_next_time(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet", minutes=30,
+                what="writing the newsletter")  # fmt: skip
+    await scenario.tap("Erin", "Kitchen Dance")
+    await scenario.advance(minutes=30)
+    await scenario.run_jobs()
+    await scenario.tap("Erin", "Done")
+    await start(scenario, "sit with me while I write", mode="quiet", what="writing the newsletter")
+    assert scenario.last_buttons("Erin")[1:4] == ["Kitchen Dance", "Deep Focus", "Road Trip"]
+
+
+async def test_the_session_page_has_my_spotify(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    page = (await site.get("/session")).text
+    assert "My Spotify" in page and "Deep Focus" in page and "Mix 11" in page
+    csrf = await sign_in(scenario, site, "Erin")
+    await site.post("/session/spotify", data={"csrf": csrf, "action": "play",
+                                              "uri": "spotify:playlist:deepfocus",
+                                              "name": "Deep Focus"})  # fmt: skip
+    assert fake_spotify.playing == {"context_uri": "spotify:playlist:deepfocus",
+                                    "device_id": "dev-1"}  # fmt: skip
+    await site.post("/session/spotify", data={"csrf": csrf, "action": "pause"})
+    assert fake_spotify.paused
+
+
+async def test_not_linked_only_the_loop(scenario: Scenario) -> None:
+    await start(scenario, "keep me company while I write", mode="quiet", what="my essay")
+    assert scenario.last_buttons("Erin") == ["Play", "Not now"]
+    bd = scenario.app.services.body_double
+    assert bd is not None and bd.state(scenario.member("Erin"))["spotify"] == []
