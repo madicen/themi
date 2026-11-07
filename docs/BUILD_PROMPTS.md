@@ -10,6 +10,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
   add the date and a few lines under **Notes**: deviations from the plan, follow-ups,
   anything the next prompt needs to know.
 - A prompt that turns out too big gets split into `NNa` / `NNb` here before work starts.
+- Tracks: the Core refactor (CR prompts, at the end of this file) has its own design doc,
+  the [Themi Core Refactor Plan](https://claude.ai/artifact/GPx1CsQiMWCNadYNxxDmCR), and its
+  own command: **"run the core refactor track"** works through it prompt after prompt
+  (CLAUDE.md). "Implement the next prompt" skips CR prompts.
 
 ## Progress
 
@@ -271,6 +275,26 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
+| CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [ ] |
+| CR2a | Core refactor: standard modules onto the contract | Core refactor | [ ] |
+| CR2b | Core refactor: home features onto the contract | Core refactor | [ ] |
+| CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
+| CR3 | Core refactor: a typed service registry | Core refactor | [ ] |
+| CR4 | Core refactor: website pages from modules | Core refactor | [ ] |
+| CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | [ ] |
+| CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
+| CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
+| CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
+| CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
+| CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
+| CR10 | Core refactor: workspace packages | Core refactor | [ ] |
+| CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
+| CR12 | Core refactor: the work template | Core refactor | [ ] |
+| CR13 | Gate: tutoring design | Core refactor | [ ] |
+| CR14 | Tutoring pack for one family | Core refactor | [ ] |
+| CR15a | Multi-family host: instance database and family registry | Core refactor | [ ] |
+| CR15b | Multi-family host: routing messages and the website | Core refactor | [ ] |
+| CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | [ ] |
 
 ## Fixed technical choices
 
@@ -13874,3 +13898,371 @@ Notes (2026-11-06):
   requested). A new tool, `cookbook_recipes_we_can_make`, lists up to five as buttons; the
   recipes group's words gained "what can we make" and "with what we have".
 - One eval (no energy words in the reply), not run here.
+
+---
+
+## Core refactor
+
+From Michael's request (2026-11-07): turn Themi into a small core plus modules, so the same
+code runs a family Themi, a work Themi (just Michael) and a tutoring Themi. Tutoring starts
+as one family per instance and later becomes one instance hosting many families that the
+tutor registers, each kept fully separate.
+
+Design source of truth for this track: the
+[Themi Core Refactor Plan](https://claude.ai/artifact/GPx1CsQiMWCNadYNxxDmCR), read with the
+Claude Docs tools like the Build Plan. Where it and a prompt here disagree, the doc wins:
+say so and update the prompt. Every prompt reads its "Rules every refactor prompt keeps"
+section first.
+
+Decisions (2026-11-07, with Michael):
+- **One repo, one image.** A monorepo with workspace packages (split late, in CR10). An
+  instance is the standard image plus a mounted `themi.toml` and `.env`. Secrets are never
+  baked into an image.
+- **Modules run in process**, found through the `themi.modules` entry point group. Each
+  declares its name, requirements, settings, member preferences, migrations and setup steps,
+  and adds everything else through a `ModuleContext` in `install(ctx)`.
+- **Core never imports a module.** Tasks, lists, reminders, memory and rules, journal,
+  energy and calendar are standard modules: shared, but still modules.
+- **One SQLite file per family** in the multi-family host, plus an instance database. No
+  family ID column.
+- **The family instance behaves the same at every step.** No `themi.toml` means the family
+  template with today's env variables, so the Pi deployment keeps working untouched.
+
+How to run this track (CLAUDE.md, "Run the core refactor track"): take the first CR prompt
+that isn't `[x]`, do it, commit, and go straight on to the next. Stop at a gate, a Blocked
+note, or the end of the track.
+
+Golden files (made in CR1, under `tests/golden/`) guard what the scenario suite can't see:
+- `tools.json`: every tool name with its group, for the family template.
+- `jobs.json`: every periodic job name with its interval.
+- `routes.json`: every website route with its method.
+- `system_prompt.txt`: the family's composed system prompt, with a fixed member and clock.
+
+`make golden` rewrites them. A prompt may change a golden file only where its own text says
+what changes, and the commit says so. Otherwise a diff in them is a bug in the prompt.
+
+### CR1 · Core refactor: the module contract, loader and golden files
+Status: [ ]
+Depends on: none
+Read first: the refactor doc, all of it; `src/themi/app.py`; `src/themi/core/services.py`;
+`src/themi/core/tools.py` (the registry and `TOOL_GROUPS`).
+- Golden files first, before any wiring changes: a `tools/golden.py` that builds the app
+  from the scenario harness's fakes (no network) and writes the four files above, a
+  `make golden` target, and `tests/unit/test_golden.py` comparing a fresh build with them.
+  Commit them on their own, so later diffs show against today's behaviour.
+- `themi.modules`: `Module` (the protocol in the doc), `ModuleContext`, `SetupStep` (a
+  plain dataclass for now: key, prompt, secret flag, help URL), and `ModuleError` for a
+  missing requirement, a cycle or a duplicate name, each with a message that names the
+  modules involved.
+- `ModuleContext` wraps `Services` for now. It exposes the core services and registration
+  methods: `tool`, `command`, `event_command`, `button`, `reaction`, `text_handler`,
+  `awaiting_source`, `open_item_source`, `periodic(name, every, run)`, `executor`. Each one
+  forwards to what `install()` methods do today, so modules and old features can coexist.
+- `themi.modules.loader.load(modules, ctx)`: orders by `requires` (stable, so ties keep the
+  given order, which keeps today's install order), checks `optional` names without failing,
+  installs each once, and returns the periodic jobs. Discovery from entry points comes in
+  CR5; in CR1 the list is passed in.
+- `build_app` keeps its signature. It builds the core (store, router, outbox, services,
+  approvals, rules), then calls the loader with a list of modules, then the remaining
+  hand-wired features as today. Move only `Breaks`, `Reactions` and `WrongReplies` into
+  modules here, as the worked example for CR2.
+- `tools/check_layers.py`, run by `make lint`: no file under core paths (`themi.accounts`,
+  `themi.ai`, `themi.autonomy`, `themi.channels`, `themi.storage`, `themi.modules`,
+  `themi.clock`, `themi.scheduler`) imports `themi.core.*` features or `themi.connectors.*`.
+  The account store's import of `body_double_music` is the one known breach: list it in an
+  allowlist inside the script, with "removed in CR3".
+Tests: loader ordering, missing requirement, cycle, duplicate, optional absent; the three
+moved modules; the layer check catches a planted import (a fixture tree, not the real code);
+golden files unchanged.
+
+### CR2a · Core refactor: standard modules onto the contract
+Status: [ ]
+Depends on: CR1
+Read first: the refactor doc's Target architecture; CR1's notes; `src/themi/app.py`.
+- Turn each always-on, non-household feature in `build_app` into a module with `requires`
+  set from what its constructor takes: tasks (TaskBoard), follow_ups, reminders,
+  business_hours, day_summary, focus, taking, guides, lists, which_list, burnout,
+  conversation_mode, checkin_reviews, habits, routines, journal, memory and rules (rules is
+  core, memory a module), feedback, commands, liaison, web_search.
+- Their periodic jobs move into their modules through `ctx.periodic`, with the same names
+  and intervals (`jobs.json` stays identical).
+- Each module class lives next to its feature (`themi/core/tasks.py` gets `TasksModule`), not
+  in a new tree; files move in CR10.
+- `build_app` passes the module list in today's order. Features that still need hand wiring
+  stay below the loader call until CR2b.
+Tests: golden files identical; one unit test per module that it installs alone with fakes
+for what it requires; full suite green.
+
+### CR2b · Core refactor: home features onto the contract
+Status: [ ]
+Depends on: CR2a
+Read first: CR2a's notes; `src/themi/app.py`.
+- Modules for groceries, safeway, buying, spending, pantry, meals, calls, recipes,
+  cookbook_save, recipe_groceries, recipe_ideas, cooking, cooking_timers, body_double,
+  guided steps, step pictures, mode chooser, music offers, maintenance, appliances.
+- Modules that need the scheduler get it from the context (`ctx.scheduler`), created once by
+  the core before the loader runs.
+- Where today's code checks `services.gmail is not None`, the module lists `gmail` as
+  optional and asks `ctx.maybe(...)`. Behaviour stays the same.
+Tests: as CR2a.
+
+### CR2c · Core refactor: connectors as modules, and the app built by a loop
+Status: [ ]
+Depends on: CR2b
+Read first: CR2b's notes; `src/themi/app.py`; `src/themi/settings.py`.
+- Modules for google (accounts and OAuth), gmail (with triage, email_forward, senders,
+  expected, noise digest, email audit, receipts into the pantry), calendar (sync, busy,
+  task calendar, events, twins, copies, task blocks), google_tasks, travel, spotify and
+  music, ourgroceries, keep, cozyla (todos, chores, routines, routines wall), home_connect
+  (dishwasher), thinq (laundry), roborock (vacuum), tuya (feeders), catgenie (litter box),
+  backup, server control.
+- A module whose connector isn't configured is simply not in the list. For now
+  `build_app`'s keyword arguments decide the list; CR5 moves that into config.
+- `build_app` ends as: build the core, choose the modules, `load`, return `App`. The
+  periodic list comes only from modules.
+Tests: golden files identical; a test that the family module list with every connector
+configured builds; a test that each connector module left out still builds.
+
+### CR3 · Core refactor: a typed service registry
+Status: [ ]
+Depends on: CR2c
+Read first: CR2c's notes; `src/themi/core/services.py`.
+- `ctx.provide(obj)` registers a module's public object by type; `ctx.get(Type)` returns
+  it or raises `ModuleError` naming who asked; `ctx.maybe(Type)` returns it or None.
+  `Services` gets the same `get` and `maybe`, so tool handlers (which see `Services`) use
+  them too.
+- Replace every optional feature slot on `Services` (about 60) with registry lookups, and
+  delete the slots. Core fields (store, router, outbox, tools, autonomy, energy, the
+  handler lists and dicts) stay.
+- Remove the account store's import of `body_double_music`: whatever it needs comes in
+  through a hook the body-double module installs. Empty the layer check's allowlist.
+Tests: golden files identical; registry unit tests; full suite green. pyright clean with no
+new ignores.
+
+### CR4 · Core refactor: website pages from modules
+Status: [ ]
+Depends on: CR3
+Read first: CR3's notes; `src/themi/web/site.py`; `src/themi/web/kit.py`; the templates'
+menu.
+- `ctx.web(router_factory, menu=...)`: a module contributes a router built from the `Kit`,
+  and optional menu entries (label, path, order, who sees it).
+- `install_site` keeps the core routes (login, dashboard, settings, admin, connections,
+  AI, dev) and adds each loaded module's routers. Recipes, tasks, lists, week, spending,
+  maintenance, safeway, email, google, guides, knowledge and session pages move to their
+  modules.
+- The menu is built from the entries, in today's order for the family template.
+- The dashboard's feature panels (groceries bought, approvals) stay as they are; note in
+  Notes which ones should become module panels later.
+Tests: `routes.json` identical; a page from a module left out returns 404; the menu
+matches today's for the family.
+
+### CR5 · Core refactor: themi.toml, templates and module settings
+Status: [ ]
+Depends on: CR4
+Read first: the refactor doc's Configuration section; `src/themi/settings.py`; CR4's notes.
+- Discovery: modules are found through the `themi.modules` entry point group in
+  `pyproject.toml` (one entry per module).
+- `themi.config`: reads `themi.toml` (path from `THEMI_CONFIG`, default `/data/themi.toml`,
+  then `./themi.toml`). Missing file: the family template, with every connector module
+  whose env settings are present, exactly as `build_app`'s arguments decide today.
+- Templates are TOML files shipped as package data: `templates/family.toml` (module list,
+  default settings, persona key, roles). `modules` in `themi.toml` adds `+name` or removes
+  `-name` from the template's list.
+- Each module's `settings` is a pydantic model read from `[modules.<name>]` and from env
+  variables with its prefix; secret fields only from env. Move every connector's fields out
+  of the flat `Settings` into its module. Keep every existing env variable name working: a
+  module may declare the old names as aliases.
+- `Settings` keeps only core fields (db path, secret key, public URL, Telegram, log level,
+  HTTP, tool routing, conversation mode).
+- `themi config show` prints the resolved template, modules and non-secret settings.
+Tests: no file gives today's family build (golden files identical); a file that removes a
+module; an unknown module named in the file stops startup with a plain message; a
+module's env alias; secrets never read from TOML.
+
+### CR6 · Core refactor: migration tracks per module
+Status: [ ]
+Depends on: CR5
+Read first: `src/themi/storage/migrations.py`; CR5's notes.
+- `schema_version` gains a `track` column (migration: existing rows become track `core`).
+  The 144 existing migrations stay the `core` track, frozen. No more files are added there
+  except for core tables.
+- A module's `migrations` folder is its own track, numbered from 0001. The runner applies
+  core first, then each loaded module's track in load order, each step in its own
+  transaction as today.
+- A module turned off keeps its tables; turned on again, its track resumes.
+- Write the rule into this file's Fixed technical choices: new feature tables go in their
+  module's track.
+Tests: an existing database upgrades with no change; a fresh database; a module track
+applied, resumed and left alone when the module is off; two modules both numbering 0001.
+
+### CR7a · Core refactor: per-member module preferences
+Status: [ ]
+Depends on: CR6
+Read first: `src/themi/accounts/models.py`; `src/themi/accounts/store.py`; the settings
+page (`web/site.py`, `settings_page`); CR6's notes.
+- Migration (core track): `member_preferences` (member id, module, key, JSON value,
+  updated_at), primary key (member, module, key).
+- `ctx.preferences(member)` returns the module's `preferences` model filled from the table
+  with defaults for missing keys; `save` writes only changed keys.
+- Move the body-double fields (sprint work and break minutes, sound, volume, break extend
+  minutes) and the chart fields (chart limit, chart counts shared) off `Member` into the
+  body_double and cozyla modules' preferences. A data migration copies today's values. The
+  member table's columns stay until CR7b, unused.
+Tests: defaults, saved values, the data copy from an existing database, settings page
+unchanged for the family (a snapshot of its form fields).
+
+### CR7b · Core refactor: the rest of the feature settings, and the settings page
+Status: [ ]
+Depends on: CR7a
+Read first: CR7a's notes.
+- Move the remaining feature fields from `Member` (focus count, day budget, done praise,
+  listen first, check-in reviews, calendar details and the others that belong to one
+  module) and from `Family` (takeout budget, staples, laundry hours, task owners where
+  feature-specific) into module preferences or module settings. Keep on `Member` only what
+  core uses: identity, role, Telegram, quiet hours, daily limit, PDA, phrasing, busy times,
+  tracking, kind costs, AI tier.
+- The settings page renders a section per loaded module from its preferences model (field
+  titles and descriptions from the model). The family's page keeps today's order.
+- A migration drops the moved columns once their values are copied.
+Tests: as CR7a; golden files identical.
+
+### CR8 · Core refactor: the prompt and tool groups from parts
+Status: [ ]
+Depends on: CR7b
+Read first: `src/themi/core/prompts.py`; `GROUPS` and `TOOL_GROUPS` in
+`src/themi/core/tools.py`; `src/themi/core/routing.py`; CR7b's notes.
+- The template names a persona: the opening lines ("You are Themi, a household assistant
+  for one family...") become `persona/family.txt` in the template's package.
+- `ctx.prompt(section, text)`: modules contribute rule lines to named sections ("How you
+  speak", "How you act", ...). Move each household-specific rule to the module it belongs
+  to (appliances, medicines to tasks, nicknames and partners to liaison, and so on).
+- `ctx.tool_group(name, description, pattern)` and the group named on each tool replace the
+  central `GROUPS` and `TOOL_GROUPS` tables.
+- The family's composed prompt must be byte-identical to `system_prompt.txt`. Order
+  fragments explicitly to get there; don't change words.
+- `make router-eval` must score the same as before; record both numbers in Notes.
+Tests: golden files identical; a module left out drops its rules and groups; the
+router eval.
+
+### CR9 · Core refactor: workspaces and template roles
+Status: [ ]
+Depends on: CR8
+Read first: the refactor doc's Tutoring section (for what roles must later support);
+`src/themi/accounts/`; CR8's notes.
+- `Family` becomes `Workspace` (name, timezone, template). Migration renames the table or
+  adds a view; choose the smaller change and say which in Notes.
+- Roles come from the template: each has a name, whether it's an admin, and which modules'
+  tools it may use. The family template defines today's roles with today's permissions.
+  The agent offers a member only the tools their role allows.
+- `get_family()` stays as a thin alias for the family template so its 79 callers can move
+  over in this prompt or later ones. List the callers that still use it in Notes.
+- No global database handle anywhere: everything reaches the database through the
+  workspace's store. Add a test that two apps on two database files in one process don't
+  see each other's data, as groundwork for CR15.
+Tests: role permissions, two workspaces in one process, golden files identical.
+
+### CR10 · Core refactor: workspace packages
+Status: [ ]
+Depends on: CR9
+Read first: the refactor doc's Repository layout; `pyproject.toml`; `Dockerfile`; the CI
+workflow; `Makefile`; CR9's notes.
+- Split into `packages/themi-core`, `packages/themi-connectors`, `packages/themi-home`,
+  `packages/themi-work` (empty pack and template stub), `packages/themi-tutoring` (empty).
+  Keep the import package `themi` for core and standard modules; packs use `themi_home`,
+  `themi_work`, `themi_tutoring`; connectors `themi_connectors`, with today's extras.
+- Move files with `jj` so history follows. Tests move with their package; shared fakes stay
+  in `tests/fakes`.
+- `make install` installs every package in editable mode; `make test-all`, `make lint` and
+  `make cov` cover them all; the layer check also stops packs importing each other.
+- Dockerfile: build arguments `PACKS` (default `home`) and `EXTRAS` (today's default). The
+  family image's contents match today's. `tools/smoke_container.sh` passes.
+Tests: full suite green from the new layout; the container smoke test.
+
+### CR11 · Core refactor: the setup wizard
+Status: [ ]
+Depends on: CR10
+Read first: the refactor doc's Configuration section; `src/themi/cli.py` (`init`);
+CR10's notes.
+- `themi setup [--dir PATH]`: pick a template or none; toggle modules, adding requirements
+  with a line saying why; for each module run its `setup` steps (secret answers hidden);
+  run each module's `check(settings)` (a new optional module method) against the real
+  service; write `themi.toml` and `.env` (mode 600, never overwriting without asking);
+  finish with the website links still to do (Google linking, Spotify and the like).
+- `themi setup --check` reruns the checks against existing files.
+- Give every connector module its setup steps and check. Checks go through the same clients
+  as the module, so tests run them against fakes.
+- The wizard's prompts read like Themi's: plain, no pressure.
+Tests: a scripted run for the family template and for an empty template (input fed in,
+files compared); a failing check; `--check`; secrets never written to `themi.toml`.
+
+### CR12 · Core refactor: the work template
+Status: [ ]
+Depends on: CR11
+Read first: CR11's notes.
+- `themi_work/templates/work.toml`: one member as admin; modules tasks, reminders,
+  follow_ups, focus, day_summary, business_hours, lists, memory, journal, feedback,
+  commands, web_search, google, gmail, calendar, google_tasks.
+- A work persona (`persona/work.txt`): Themi as a work assistant for one person. The
+  phrasing shield and energy model stay on, with the member's defaults set plain.
+- No household words in anything the work template sends: a test greps the composed prompt
+  and tool descriptions for a list of household words (washer, pantry, partner, chore,
+  family).
+- A scenario: boot the work template from a `themi.toml`, pair Michael, add a task with a
+  due time, get its reminder, mark it done.
+- DEPLOY.md: running a second instance next to the family one (its own data volume, bot
+  token and port).
+Tests: the scenario; the household-words test; the setup wizard's work run.
+
+### CR13 · Gate: tutoring design
+Status: [ ]
+Depends on: CR12
+Gate: stop here. This prompt is a conversation with Michael and the tutor, not code.
+- Settle: the roles and what each can see (especially what a parent sees of a student's
+  conversations), what a session, homework and progress are, which existing modules the
+  tutoring template uses, what's new, and how families are invited.
+- Write the decisions into the refactor doc's Tutoring section, then replace CR14 below
+  with prompts sized for one session each.
+
+### CR14 · Tutoring pack for one family
+Status: [ ]
+Depends on: CR13
+Written by CR13.
+
+### CR15a · Multi-family host: instance database and family registry
+Status: [ ]
+Depends on: CR14
+Read first: the refactor doc's Tutoring section; CR9's two-workspaces test.
+- An instance database (its own core track) with the tutor as admin and the family
+  registry (name, database file, created, status).
+- The host builds one app graph per family database with the same loader, and runs each
+  family's periodic jobs. One family's job failing doesn't stop another's.
+- `THEMI_DB_PATH` keeps meaning a single-family instance; `[host] families_dir` in
+  `themi.toml` turns the host on.
+Tests: two families' jobs run separately; a failing family; isolation (data written in one
+can't be read from the other's app).
+
+### CR15b · Multi-family host: routing messages and the website
+Status: [ ]
+Depends on: CR15a
+- One Telegram bot: an inbound message goes to the family of its sender's Telegram
+  account, looked up in the instance database. Parents and students belong to one family.
+- The tutor's messages carry a family context: a `/family` switch, or a guess from a
+  student's name that the tutor confirms with buttons. Nothing runs against a family until
+  it's settled.
+- The website: the tutor gets a family switcher; everyone else sees only their own family.
+Tests: routing for each role; the tutor's switch and guess; a parent can't reach another
+family's pages.
+
+### CR15c · Multi-family host: the tutor's summaries and registering families
+Status: [ ]
+Depends on: CR15b
+- Each family's app exposes a narrow summary interface (sessions today, homework due,
+  open questions). The tutor's "what's on today" reads only through it, never raw queries.
+- A model call carries one family's data, except the tutor's cross-family summary, which
+  carries only summary lines.
+- Registering a family (website and chat): creates its database from the tutoring
+  template and issues invite codes for its parents and students. Removing one archives its
+  file.
+Tests: the summary across two families; a model call's input checked for one family's data
+only; registering and removing a family; a scenario from registration to a parent's first
+message.
