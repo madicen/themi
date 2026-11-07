@@ -224,7 +224,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
-| BD3b | Body double: Themi the chameleon | Body double | [ ] |
+| BD3b | Body double: Themi the chameleon | Body double | [~] |
 | BD4a | AI layer: image generation | Body double | [ ] |
 | BD4b | Body double: a picture for each step | Body double | [ ] |
 | BD5a | Body double: built-in music | Body double | [ ] |
@@ -11553,7 +11553,7 @@ Notes (2026-11-06):
   scene is a plain panel until BD3b.
 
 ### BD3b · Body double: Themi the chameleon
-Status: [ ]
+Status: [~] built 2026-11-06; waiting for Michael and Erin to look at the scenes on their phones
 Depends on: BD3a
 Read first: this section's intro (the modes' scenes, original art only).
 - `themi/web/static/chameleon/`: one SVG character, original, drawn as named parts (body,
@@ -11575,6 +11575,33 @@ Read first: this section's intro (the modes' scenes, original art only).
 Tests: unit tests for the state picker (mode × category × phase); a page test that every
 flag has a CSS state; a scenario of break chat on the page reaching Telegram too. Michael
 and Erin look at the scenes on their phones before it's marked done.
+
+Notes (2026-11-06):
+- `static/chameleon/chameleon.svg`: one original character as named parts (`cham-body`,
+  `cham-head`, `cham-eye` with a lid, `cham-tail`, `cham-hand-front`/`-back`,
+  `cham-foot`) and props (`prop-book`, `-mug`, `-broom`, `-easel`, `-pencil`,
+  `-blanket`, plus a "zz"). `scenes.svg`: a desk by a rainy window (Silent Anchor), a
+  floor for the timer (Sprint), a branch (Guided). Both are put into the page inline
+  (`kit.inline_svg`) so the stylesheet colours them from the site's tokens and moves their
+  parts; neither carries a style or script (the CSP), which a test checks.
+- Scenes: Silent Anchor reads at the desk with a mug, rain on the window, and a slow
+  breathing dot by a small elapsed timer; Sprint perches on the big countdown; Guided sits
+  on a branch in the corner above the step, which is a large bubble.
+- `themi.core.body_double_scene.pick_state` gives the state flag in `/session/state`
+  (`scene`): `cheering` for 20 seconds after a sprint block or a guided step is done
+  (`cheer_until`, migration 0129); on a break, dozing, painting, stretching, doodling in
+  turn every two minutes, or `idle` while they've chatted on the page in the last two
+  minutes (`chat_at`); during work on a chores or tidy job, `sweeping` one minute in four,
+  in any mode; otherwise `idle` (blinking and breathing). No randomness.
+- Break chat: in a sprint's break the page shows [Chat], which opens a panel over most of
+  the page with the countdown fixed in a corner. `POST /session/chat` logs the message and
+  hands it to the agent as their own chat (`InboundEvent`, the Telegram path), so replies
+  go to Telegram through the outbox; the page shows the conversation since the break began
+  from `message_log`. Outside a break it does nothing.
+- `prefers-reduced-motion`: every animation in the scene is off; only the timer moves.
+- Checked by eye at 360px, light and dark, every state, with headless Chrome. Still to do:
+  Michael and Erin look at it on their phones (then this is [x]).
+- Setup: restart `themi run` (migration 0129).
 
 ### BD4a · AI layer: image generation
 Status: [ ]
