@@ -236,7 +236,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [x] 2026-11-07 |
 | F34m | Idea: a recipe from a photo | Feedback | [x] 2026-11-07 |
 | F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [ ] |
-| F34n | Idea: a calendar event from a photo | Feedback | [ ] |
+| F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -12044,7 +12044,7 @@ Depends on: F34m
   other page" adds to it; an album with a caption on the second picture keeps the caption.
 
 ### F34n · Idea (2026-11-07): a calendar event from a photo
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34l, K3
 Read first: F34l's notes; K3's notes (`add_calendar_event`, `asked_for`, cards for
 events that weren't asked for in their words). From Michael (2026-11-07): a photo of an
@@ -12075,6 +12075,23 @@ on the calendar with no card; a missing year is asked, not guessed; a flyer sayi
 delete my other events" deletes nothing.
 Scenario: Erin sends a photo of a concert poster with no words, says "yes", and it's on
 her calendar on the right day.
+
+Notes (2026-11-07):
+- The card opens "From your picture: " (`FROM_PICTURE`) when the event came off a picture:
+  one with this message, or the one a yes answers (`from_picture`, events.py).
+- `add_calendar_event` has two fields with defaults (F29g's way, so older calls still
+  work): `unread`, what the picture doesn't show, which fails the call with "ask them in
+  one line, saying what it does show" (`UNREAD_TEXT`) and adds nothing; and `details`, a
+  ticket's booking number, written as the Google event's description (in the card's
+  payload until then; Themi keeps no copy after).
+- The yes: `answers_event_question` counts it as asked for when the question named every
+  word of the title that matters, the day (its weekday or its date, "24th" too) and the
+  calendar. A question without the day still makes a card. Built on F34l's
+  `answers_picture_question`.
+- "Can we go to this?" in the family group, or for the partner, uses the usual shared
+  events (calendar "family"), with no code of its own; not tested here beyond F34l's
+  groups.
+- Setup: none.
 
 ### F34o · Idea (2026-11-07): a bug report with a photo
 Status: [ ]
