@@ -11653,6 +11653,21 @@ Notes (2026-11-06):
   (`THEMI_LIVE_GEMINI_IMAGE_KEY`, `THEMI_LIVE_OPENAI_IMAGE_KEY`; a few cents each). Not run.
 - Setup: restart `themi run` (migration 0130); turn billing on for a Gemini key (or add an
   OpenAI backend) and put it first in "Pictures for guided steps".
+- Follow-up (2026-11-06, Michael): free pictures through Cloudflare Workers AI.
+  `themi.ai.adapters.cloudflare.CloudflareProvider`, a new backend kind `cloudflare`
+  ("Cloudflare Workers AI (pictures only)"; chat and the rest say they can't, so the router
+  moves on). It runs `@cf/black-forest-labs/flux-1-schnell` at 4 steps and decodes the
+  base64 picture (JPEG). Free tier: 10,000 neurons a day per account, no card; at 4.8
+  neurons a 512px tile and 9.6 a step, a 1024px picture is about 58, so some 170 a day
+  (Cloudflare's pricing page, 2026-11-06; my arithmetic). Migration 0134 rebuilds
+  `ai_backends` for the new kind, keeping `ai_routes` aside and putting it back (a test
+  checks they survive). Live test: `THEMI_LIVE_CLOUDFLARE_TOKEN` and
+  `THEMI_LIVE_CLOUDFLARE_ACCOUNT`, not run.
+- Setup for Cloudflare: a free account at dash.cloudflare.com; its account ID (the
+  dashboard's sidebar) and an API token with the "Workers AI" permission (My Profile → API
+  Tokens → Create). On the AI page, add a backend: Cloudflare Workers AI, the account ID as
+  its address, the token as its key; put it first in "Pictures for guided steps" (Gemini
+  after it as a fallback). Restart `themi run` first (migration 0134).
 
 ### BD4b · Body double: a picture for each step
 Status: [x] 2026-11-06
