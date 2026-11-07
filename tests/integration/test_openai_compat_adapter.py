@@ -1,16 +1,20 @@
 """The OpenAI-compatible adapter (Ollama, LM Studio, ...) against a local fake."""
 
+import base64
+
 import pytest
 
 from tests.fakes.http_ai import FakeAIServer, openai_completion, openai_error, openai_tool_call
 from themi.ai import (
     Capabilities,
     CapabilityError,
+    ImageBlock,
     Message,
     PermanentError,
     RefusalError,
     RetryableError,
     StopReason,
+    TextBlock,
     ToolResult,
     ToolSpec,
 )
@@ -180,3 +184,20 @@ async def test_transcription_depends_on_configuration(fake_ai: FakeAIServer) -> 
     assert result.text == "had toast" and result.model == "whisper-1"
     assert fake_ai.requests[0].path == "/v1/audio/transcriptions"
     assert fake_ai.requests[0].headers["authorization"] == "Bearer sk-test-openai-key-000000000000"
+
+
+async def test_a_picture_goes_as_a_data_url(fake_ai: FakeAIServer) -> None:
+    """F34g: a model that takes pictures gets them as an `image_url` data URL."""
+    fake_ai.queue(openai_completion("Milk and eggs."))
+    picture = Message("user", (TextBlock("add these"), ImageBlock(b"\x89PNG-picture", "image/png")))
+    await provider(fake_ai, capabilities=Capabilities(images=True)).chat("Be warm.", [picture])
+
+    (request,) = fake_ai.requests
+    data = base64.b64encode(b"\x89PNG-picture").decode()
+    assert request.json["messages"][1] == {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "add these"},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}"}},
+        ],
+    }

@@ -46,6 +46,7 @@ class AdapterConfig:
     supports_tools: bool = True
     supports_structured: bool = True
     supports_audio: bool = False
+    supports_images: bool = False  # F34g; the website switch is F34gb
     # Claude only: thinking effort (low, medium, high, xhigh, max).
     effort: str | None = None
 
@@ -96,6 +97,7 @@ def build_provider(config: AdapterConfig) -> Provider:
         tools=config.supports_tools,
         structured=config.supports_structured,
         audio=config.supports_audio,
+        images=config.supports_images,
     )
     default_urls = {"ollama": OLLAMA_URL, "lm_studio": LM_STUDIO_URL}
     base_url = config.base_url or default_urls.get(config.kind)

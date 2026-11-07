@@ -254,7 +254,14 @@ def _messages(system: str, messages: Sequence[Message]) -> list[Any]:
             converted.append(entry)
             continue
         text = "".join(b.text for b in message.content if isinstance(b, TextBlock))
-        if text:
+        if message.images:  # F34g: a picture goes as a data URL beside the words
+            parts: list[dict[str, Any]] = [{"type": "text", "text": text}] if text else []
+            for image in message.images:
+                data = base64.b64encode(image.data).decode("ascii")
+                url = f"data:{image.mime_type};base64,{data}"
+                parts.append({"type": "image_url", "image_url": {"url": url}})
+            converted.append({"role": "user", "content": parts})
+        elif text:
             converted.append({"role": "user", "content": text})
         for block in message.content:
             if isinstance(block, ToolResult):

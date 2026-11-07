@@ -375,7 +375,11 @@ class TaskClient:
         kind: CallKind = CallKind.INTERACTIVE,
         on_retry: OnRetry | None = None,
     ) -> ChatResponse:
+        pictures = any(m.images for m in messages)
+
         async def operation(provider: Provider) -> ChatResponse:
+            if pictures and not provider.capabilities.images:  # F34g: the next backend may
+                raise CapabilityError(f"{provider.name} can't see pictures")
             if tools and not provider.capabilities.tools:
                 if not provider.capabilities.structured:
                     raise CapabilityError(f"{provider.name} supports neither tools nor JSON")

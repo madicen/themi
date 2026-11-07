@@ -6,7 +6,15 @@ import pytest
 from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fixtures.family import SeededFamily
 from themi import clock
-from themi.ai import Capabilities, Message, RefusalError, StopReason, ToolSpec
+from themi.ai import (
+    Capabilities,
+    ImageBlock,
+    Message,
+    RefusalError,
+    StopReason,
+    TextBlock,
+    ToolSpec,
+)
 from themi.ai.adapters import AdapterConfig
 from themi.ai.router import AIRouter, AllProvidersFailed, Deferred
 from themi.ai.settings import AISettingsStore, AITask, RouteEntry
@@ -239,6 +247,20 @@ async def test_transcription_skips_backends_without_audio(
     )
     assert result.text == "had soup"
     assert factory.providers[ERIN_CLAUDE].requests == []
+
+
+async def test_a_picture_skips_backends_that_cant_see_one(
+    family: SeededFamily, ai: AISettingsStore, factory: Factory, router: AIRouter
+) -> None:
+    """F34g: a backend without pictures is passed over for that call, not for the next."""
+    two_step_chain(family, ai)
+    factory.provider(ERIN_CLAUDE, capabilities=Capabilities(images=False)).queue_text("hi")
+    factory.provider(ERIN_GEMINI, capabilities=Capabilities(images=True)).queue_text("milk")
+    client = router.client_for(family.erin.id, AITask.CONVERSATION)
+    picture = Message("user", (TextBlock("add these"), ImageBlock(b"png", "image/png")))
+    assert (await client.chat("s", [picture])).text == "milk"
+    assert factory.providers[ERIN_CLAUDE].requests == []
+    assert (await client.chat("s", hello())).text == "hi"  # words alone still go first
 
 
 async def test_on_retry_hook_reaches_the_caller(

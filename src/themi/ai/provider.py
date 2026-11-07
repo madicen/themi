@@ -37,6 +37,7 @@ class Capabilities:
     tools: bool = True
     structured: bool = True
     audio: bool = False
+    images: bool = False  # F34g: pictures in a user message
 
 
 @runtime_checkable

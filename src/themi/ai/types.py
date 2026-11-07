@@ -33,6 +33,14 @@ class TextBlock:
 
 
 @dataclass(frozen=True)
+class ImageBlock:
+    """A picture someone sent (F34g): the bytes go to the model, never to disk."""
+
+    data: bytes = field(repr=False)
+    mime_type: str
+
+
+@dataclass(frozen=True)
 class ToolCall:
     id: str
     name: str
@@ -46,7 +54,7 @@ class ToolResult:
     is_error: bool = False
 
 
-Block = TextBlock | ToolCall | ToolResult
+Block = TextBlock | ImageBlock | ToolCall | ToolResult
 
 
 @dataclass(frozen=True)
@@ -71,6 +79,10 @@ class Message:
     @property
     def text(self) -> str:
         return "".join(b.text for b in self.content if isinstance(b, TextBlock))
+
+    @property
+    def images(self) -> tuple[ImageBlock, ...]:
+        return tuple(b for b in self.content if isinstance(b, ImageBlock))
 
     @property
     def tool_calls(self) -> tuple[ToolCall, ...]:

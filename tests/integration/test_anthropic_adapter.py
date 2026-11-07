@@ -1,5 +1,7 @@
 """The Claude adapter against a local fake of the Messages API, over real HTTP."""
 
+import base64
+
 import pytest
 
 from tests.fakes.http_ai import (
@@ -12,11 +14,13 @@ from tests.fakes.http_ai import (
 from themi.ai import (
     CallKind,
     CapabilityError,
+    ImageBlock,
     Message,
     PermanentError,
     RefusalError,
     RetryableError,
     StopReason,
+    TextBlock,
     ToolResult,
     ToolSpec,
     call_with_retry,
@@ -228,3 +232,23 @@ async def test_retry_policy_and_adapter_together(fake_ai: FakeAIServer) -> None:
     )
     assert response.text == "back"
     assert len(fake_ai.requests) == 2 and waits == [2.0]
+
+
+async def test_a_picture_goes_as_an_image_block(fake_ai: FakeAIServer) -> None:
+    """F34g: a picture sent in chat reaches Claude as a base64 image beside the words."""
+    fake_ai.queue(anthropic_text("Milk and eggs."))
+    picture = Message("user", (TextBlock("add these"), ImageBlock(b"\x89PNG-picture", "image/png")))
+    await provider(fake_ai).chat("Be warm.", [picture])
+
+    (request,) = fake_ai.requests
+    assert request.json["messages"][0]["content"] == [
+        {"type": "text", "text": "add these"},
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": base64.b64encode(b"\x89PNG-picture").decode(),
+            },
+        },
+    ]
