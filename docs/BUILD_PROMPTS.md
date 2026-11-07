@@ -226,7 +226,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
 | BD3b | Body double: Themi the chameleon | Body double | [~] |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
-| BD4b | Body double: a picture for each step | Body double | [ ] |
+| BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD5a | Body double: built-in music | Body double | [ ] |
 | BD5b | Spotify: playing their own music | Body double | [ ] |
 | BD5c | Body double: music that suits the task | Body double | [ ] |
@@ -11655,7 +11655,7 @@ Notes (2026-11-06):
   OpenAI backend) and put it first in "Pictures for guided steps".
 
 ### BD4b · Body double: a picture for each step
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD1b, BD3a, BD4a
 Read first: this section's intro (Guided Step-Through).
 - When a guided session starts, a background job makes each step's picture in order
@@ -11674,6 +11674,33 @@ Read first: this section's intro (Guided Step-Through).
 Tests: unit tests for the job order, reuse, cap and failure fallbacks; a scenario of a
 guided session where step 2's picture is redone. Evals: redo requests read as instructions
 for the picture, never acted on as anything else.
+
+Notes (2026-11-06):
+- `themi.core.step_images.StepPictures`: when a guided session's steps are settled (the
+  task's own steps, or [Go]/[Keep these steps]), a `body_double.pictures` job makes each
+  step's picture in turn, the current step first, then the rest after it, then those
+  before. Files in `step_images/` beside the database (`data/step_images/`, not committed);
+  rows in `step_images` (migration 0131), one per session and step.
+- Reuse: a step of a task whose words match a picture made before for that task (and whose
+  file is still there) uses it again, with no call.
+- Past the cap: the step and every step left are `capped` (text alone), and the page says
+  "No more pictures today; the steps are all here." under the step. A picture that fails is
+  `failed`: that step is text alone, and the job goes on to the next.
+- The page: the step's picture above the step's bubble, a soft pulsing placeholder while
+  it's made, nothing when there's none. A text box under it ("Change the picture: from
+  above") posts to `/session/pictures/redo`.
+- Redo: `redo_step_picture(step, words)` in chat or the page's box queues one new picture
+  from the step, the old prompt and their words, each in a delimited block; the new file
+  replaces the old (the page's address changes with it). Their words never do anything
+  else; evals `bd-redo-picture` and `bd-redo-not-a-task` check that.
+- Chat: `send_step_picture(step)` sends the picture as a photo ("Step 2 of 6") only when
+  asked; the card stays text. That needed photos in the outbox: `Outbox.send_photo` (sent
+  at once as a reply, its caption shielded) and `TelegramChannel.send_photo`; the fake
+  Telegram answers `sendPhoto`.
+- `GET /session/pictures/{session}/{step}` serves a file only to the session's owner
+  (anyone else: 404).
+- Setup: restart `themi run` (migration 0131). Pictures need BD4a's setup (a key that can
+  make them).
 
 ### BD5a · Body double: built-in music
 Status: [ ]
