@@ -227,7 +227,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD3b | Body double: Themi the chameleon | Body double | [~] |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
-| BD5a | Body double: built-in music | Body double | [ ] |
+| BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [ ] |
 | BD5c | Body double: music that suits the task | Body double | [ ] |
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
@@ -11703,7 +11703,7 @@ Notes (2026-11-06):
   make them).
 
 ### BD5a · Body double: built-in music
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: BD3a
 Read first: this section's intro (music).
 - A few built-in loops (lofi, rain, soft piano, brown noise) under `web/static/audio/`,
@@ -11716,6 +11716,21 @@ Read first: this section's intro (music).
 - In chat: "play rain" sets the choice for the page.
 Tests: unit tests for the setting; a page test that every listed loop exists and has a
 licence line.
+
+Notes (2026-11-06):
+- The loops are original, not downloaded: `tools/make_loops.py` synthesises them with
+  ffmpeg's noise and expression sources (no samples), so they're ours and dedicated CC0 in
+  `static/audio/LICENCES.md`. Four, about a minute each, mono AAC (`.m4a`, which every phone
+  browser plays; Opus in Ogg doesn't play on older iPhones), 350-480 kB: lofi (soft keys,
+  80 BPM beat, crackle), rain (filtered pink noise), soft piano (four chords at 66 BPM) and
+  brown noise. Rerun the script to change them.
+- `themi.core.body_double_music`: `LOOPS`, `loop_for` (chat words), and the tool
+  `choose_session_sound` ("play rain"), in the body double tool group. Migration 0132:
+  `members.body_double_sound` (default lofi) and `body_double_volume` (0-100, 50).
+- The page: [Play]/[Pause], the loop, and a volume slider, saved to them through
+  `POST /session/music` (CSRF-checked; a bad value is 400). Nothing plays until they tap
+  Play; changing the loop keeps it playing. Shown in every mode.
+- Setup: restart `themi run` (migration 0132).
 
 ### BD5b · Spotify: playing their own music
 Status: [ ]
