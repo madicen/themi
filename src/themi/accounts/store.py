@@ -47,6 +47,9 @@ SYSTEM = SystemActor()
 Actor = Member | SystemActor
 
 INVITE_TTL = timedelta(hours=24)
+# F34g: pictures sent in chat Themi looks at a day. Michael, 2026-11-07: 100 (the column's
+# own default, from migration 0136, is still 30).
+PICTURE_DAILY_CAP = 100
 INVITE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L
 PROVIDERS = ("gmail",)
 DEVICE_PROVIDERS = ("lg_thinq", "tuya", "catgenie", "home_connect", "roborock")
@@ -379,9 +382,16 @@ class AccountStore:
             raise InvalidValue(f"there's already a member called {name}")
         now = _iso(clock.now())
         member_id = self.db.execute(
-            "INSERT INTO members (name, role, tracking, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (name, role.value, json.dumps(dict.fromkeys(TRACKING_INPUTS, True)), now, now),
+            "INSERT INTO members (name, role, tracking, picture_daily_cap, created_at, "
+            "updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                name,
+                role.value,
+                json.dumps(dict.fromkeys(TRACKING_INPUTS, True)),
+                PICTURE_DAILY_CAP,
+                now,
+                now,
+            ),
         )
         return self.get_member(member_id)
 

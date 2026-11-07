@@ -47,6 +47,14 @@ nobody else (admins included) can see or change them. Keys are never shown again
     <button>Save</button>
   </form>
   {% endif %}
+  {% if task.value == "conversation" %}
+  <form method="post" action="/ai/picture-cap">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Look at up to <input type="number" name="picture_daily_cap" min="0" max="500" value="{{ picture_cap }}" required> pictures you send a day</label>
+    <p class="muted">Pictures you send in chat go to the first backend here that can see them (Claude, Gemini, or one marked "Can see pictures"). 0 turns them off.</p>
+    <button>Save</button>
+  </form>
+  {% endif %}
 {% endif %}
 {% endcall %}
 {% endfor %}
@@ -72,6 +80,9 @@ nobody else (admins included) can see or change them. Keys are never shown again
       <label class="check"><input type="checkbox" name="supports_tools" {% if b.supports_tools %}checked{% endif %}> Can use tools</label>
       <label class="check"><input type="checkbox" name="supports_structured" {% if b.supports_structured %}checked{% endif %}> Can answer in JSON</label>
       <label class="check"><input type="checkbox" name="supports_audio" {% if b.supports_audio %}checked{% endif %}> Can hear voice notes</label>
+      {% if b.kind in ("openai_compat", "ollama", "lm_studio") %}
+      <label class="check"><input type="checkbox" name="supports_images" {% if b.supports_images %}checked{% endif %}> Can see pictures</label>
+      {% endif %}
       {% if b.kind == "anthropic" %}
       <label>Thinking effort
         <select name="effort">

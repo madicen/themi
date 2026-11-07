@@ -481,3 +481,35 @@ async def test_each_ai_job_shows_its_chain(scenario: Scenario, site: httpx.Async
     labels = [b.label for b in scenario.app.ai_settings.backends(scenario.member("Erin").id)]
     chain = row_of(page, "job-conversation")
     assert "Conversation" in chain and " → ".join(labels[:2]) in chain
+
+
+async def test_the_picture_switch_and_the_picture_cap(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """F34gb: an OpenAI-compatible backend can be marked as seeing pictures (Claude's form
+    has no such box), and the cap on pictures sent in chat is theirs to set."""
+    ai = scenario.app.ai_settings
+    erin = scenario.member("Erin")
+    local = ai.add_backend(erin, erin.id, "Laptop", "ollama", model="llava")
+    claude = ai.add_backend(erin, erin.id, "Claude", "anthropic", api_key=Secret("sk-ant-x"))
+    csrf = await sign_in(scenario, site, "Erin")
+    page = (await site.get("/ai")).text
+
+    def form_of(backend_id: int) -> str:
+        return page.split(f'id="backend-{backend_id}"')[1].split("</form>")[0]
+
+    assert 'name="supports_images"' in form_of(local.id)
+    assert 'name="supports_images"' not in form_of(claude.id)
+    assert 'name="picture_daily_cap" min="0" max="500" value="100"' in page
+    form = {"csrf": csrf, "label": "Laptop", "model": "llava", "timeout": "60"}
+    await site.post(f"/ai/backends/{local.id}", data={**form, "supports_images": "on"})
+    assert ai.get_backend(local.id).supports_images
+    await site.post(f"/ai/backends/{local.id}", data=form)
+    assert not ai.get_backend(local.id).supports_images
+
+    await site.post("/ai/picture-cap", data={"csrf": csrf, "picture_daily_cap": "12"})
+    cap = "SELECT picture_daily_cap FROM members WHERE id = ?"
+    assert scenario.app.db.one(cap, (erin.id,))["picture_daily_cap"] == 12  # type: ignore[index]
+    await site.post("/ai/picture-cap", data={"csrf": csrf, "picture_daily_cap": "9000"})
+    assert scenario.app.db.one(cap, (erin.id,))["picture_daily_cap"] == 12  # type: ignore[index]
+    assert "a number from 0 to 500" in (await site.get("/ai")).text

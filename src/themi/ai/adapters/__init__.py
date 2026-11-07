@@ -46,7 +46,7 @@ class AdapterConfig:
     supports_tools: bool = True
     supports_structured: bool = True
     supports_audio: bool = False
-    supports_images: bool = False  # F34g; the website switch is F34gb
+    supports_images: bool = False  # F34g; switched on the AI page (F34gb)
     # Claude only: thinking effort (low, medium, high, xhigh, max).
     effort: str | None = None
 
