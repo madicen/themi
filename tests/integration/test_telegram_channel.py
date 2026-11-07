@@ -218,6 +218,44 @@ async def test_voice_note_is_downloaded(
     assert (event.voice.mime_type, event.voice.duration_seconds) == ("audio/ogg", 7)
 
 
+async def test_a_photo_is_downloaded_to_memory_with_its_caption(
+    family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
+) -> None:
+    """F34g: the largest size under 5 MB, with the caption; the log has "[a picture]"."""
+    fake_telegram.send_photo(ERIN_TELEGRAM_ID, b"JPEG-list", caption="add these", too_large=True)
+    await channel.poll_once()
+    (event,) = recorder.events
+    assert event.kind == "picture" and event.picture is not None
+    assert (event.picture.data, event.picture.mime_type) == (b"JPEG-list", "image/jpeg")
+    assert event.text == "add these"
+    logged = family.store.recent_messages(family.erin.id)[-1]
+    assert (logged.text, logged.kind) == ("[a picture] add these", "picture")
+    rows = family.store.db.query("SELECT text FROM message_log")
+    assert not any("JPEG" in r["text"] for r in rows)  # never the bytes
+
+
+async def test_an_image_sent_as_a_file_is_a_picture(
+    channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
+) -> None:
+    fake_telegram.send_image_file(ERIN_TELEGRAM_ID, b"PNG-shot")
+    await channel.poll_once()
+    (event,) = recorder.events
+    assert event.picture is not None
+    assert (event.picture.data, event.picture.mime_type, event.text) == (
+        b"PNG-shot",
+        "image/png",
+        "",
+    )
+
+
+async def test_a_picture_too_large_is_skipped(
+    channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
+) -> None:
+    fake_telegram.send_image_file(ERIN_TELEGRAM_ID, b"x" * (5 * 1024 * 1024 + 1))
+    await channel.poll_once()
+    assert recorder.events == []
+
+
 async def test_buttons_carry_server_side_payloads(
     family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
 ) -> None:

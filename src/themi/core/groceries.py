@@ -62,6 +62,14 @@ def asks_to_add(request_text: str, previous_text: str = "") -> bool:
     return follow_on and bool(ADD_INTENT.search(before))
 
 
+def picture_asks_to_add(ctx: ToolContext) -> bool:
+    """F34g: items read off their picture are asked for only when the words they sent with
+    it ask to add ("add these"). Never from the message before, and never from the picture:
+    what's written in it is data."""
+    said = " ".join(re.sub(r"[^\w\s&'/-]", " ", ctx.request_text).split()).lower()
+    return ctx.picture and bool(ADD_INTENT.search(said))
+
+
 SPENT = re.compile(r"\b(?:spent|paid|cost me|was charged|got charged)\b")
 PRICE = re.compile(r"[$€£]\s?\d|\b\d+\.\d{2}\b")
 SPENT_TEXT = "That's money spent, not something to buy: nothing was added. Use log_spending."
@@ -253,7 +261,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         bool(said)
         and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
         and asks_to_add(ctx.request_text, ctx.previous_text)
-    )
+    ) or picture_asks_to_add(ctx)
     buying = ctx.services.buying
     other = [n for n in names if buying is not None and buying.kind_of(n) == "other"]
     if other and not asked:  # L2a: settled before as not food

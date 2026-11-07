@@ -163,6 +163,66 @@ class FakeTelegram:
         }
         return self._push("message", message)
 
+    def send_photo(
+        self, user_id: int, data: bytes, *, caption: str = "", too_large: bool = False
+    ) -> int:
+        """F34g: a photo in Telegram's sizes, a thumbnail and the full one (`data`). With
+        `too_large`, a third, larger size is listed that the bot must not pick."""
+        file_id = f"photo-{len(self.state.files) + 1}"
+        with self._lock:
+            self.state.files[file_id] = data
+            self.state.files[f"{file_id}-thumb"] = b"thumb"
+        sizes = [
+            {
+                "file_id": f"{file_id}-thumb",
+                "file_unique_id": f"u-{file_id}-t",
+                "width": 90,
+                "height": 90,
+                "file_size": 5,
+            },
+            {
+                "file_id": file_id,
+                "file_unique_id": f"u-{file_id}",
+                "width": 1280,
+                "height": 960,
+                "file_size": len(data),
+            },
+        ]
+        if too_large:
+            sizes.append(
+                {
+                    "file_id": f"{file_id}-huge",
+                    "file_unique_id": f"u-{file_id}-h",
+                    "width": 4000,
+                    "height": 3000,
+                    "file_size": 9 * 1024 * 1024,
+                }
+            )
+        message = self._message(user_id, None, "private")
+        message["photo"] = sizes
+        if caption:
+            message["caption"] = caption
+        return self._push("message", message)
+
+    def send_image_file(
+        self, user_id: int, data: bytes, *, mime_type: str = "image/png", caption: str = ""
+    ) -> int:
+        """F34g: an image sent as a file (a document), e.g. an uncompressed screenshot."""
+        file_id = f"doc-{len(self.state.files) + 1}"
+        with self._lock:
+            self.state.files[file_id] = data
+        message = self._message(user_id, None, "private")
+        message["document"] = {
+            "file_id": file_id,
+            "file_unique_id": f"u-{file_id}",
+            "file_name": "screenshot.png",
+            "mime_type": mime_type,
+            "file_size": len(data),
+        }
+        if caption:
+            message["caption"] = caption
+        return self._push("message", message)
+
     def tap(
         self,
         user_id: int,

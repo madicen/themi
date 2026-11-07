@@ -76,6 +76,8 @@ class ToolContext:
     staged: list[str] = field(default_factory=list)
     # Each call this turn: (tool, outcome, result text), for replies checked by tool (F30a).
     calls: list[tuple[str, str, str]] = field(default_factory=list)
+    # F34g: they sent a picture this turn, with `request_text` as its caption.
+    picture: bool = False
 
 
 @dataclass(frozen=True)

@@ -78,7 +78,7 @@ class ModelBank:
     def __getitem__(self, model: str) -> ScriptedProvider:
         if model not in self.providers:
             self.providers[model] = ScriptedProvider(
-                name="scripted", model=model, capabilities=Capabilities(audio=True)
+                name="scripted", model=model, capabilities=Capabilities(audio=True, images=True)
             )
         return self.providers[model]
 
@@ -229,6 +229,14 @@ class Scenario:
     async def voice(self, name: str, audio: bytes = b"OggS-voice", seconds: int = 4) -> list[str]:
         return await self._collect(
             name, lambda chat: self.telegram.send_voice(chat, audio, duration=seconds)
+        )
+
+    async def picture(
+        self, name: str, data: bytes = b"JPEG-picture", caption: str = ""
+    ) -> list[str]:
+        """F34g: a photo sent in chat, with its caption."""
+        return await self._collect(
+            name, lambda chat: self.telegram.send_photo(chat, data, caption=caption)
         )
 
     async def tap(self, name: str, label: str) -> list[str]:

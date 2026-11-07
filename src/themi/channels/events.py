@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from themi.channels.outbox import Outbox
     from themi.channels.telegram import TelegramChannel
 
-EventKind = Literal["text", "voice", "button", "reaction"]
+EventKind = Literal["text", "voice", "picture", "button", "reaction"]
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,15 @@ class VoiceNote:
     data: bytes = field(repr=False)
     mime_type: str
     duration_seconds: int
+
+
+@dataclass(frozen=True)
+class Picture:
+    """A photo or image sent in chat (F34g). Held in memory only: never on disk or in the
+    database; the message log keeps "[a picture]" and its caption."""
+
+    data: bytes = field(repr=False)
+    mime_type: str
 
 
 @dataclass(frozen=True)
@@ -57,6 +66,7 @@ class InboundEvent:
     update_id: int
     text: str = ""
     voice: VoiceNote | None = None
+    picture: Picture | None = None  # with its caption as `text`
     button: ButtonPress | None = None
     reaction: Reaction | None = None
     reply_to_message_id: int | None = None  # the message this one replies to (Telegram's Reply)
