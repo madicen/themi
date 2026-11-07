@@ -142,6 +142,9 @@ class ExecutorRegistry:
     def __contains__(self, name: str) -> bool:
         return name in self._executors
 
+    def names(self) -> list[str]:
+        return sorted(self._executors)
+
 
 def _actor_label(actor: Actor | str) -> str:
     if isinstance(actor, str):

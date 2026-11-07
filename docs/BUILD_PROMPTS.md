@@ -275,7 +275,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
-| CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [ ] |
+| CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [~] |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [ ] |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [ ] |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
@@ -13942,7 +13942,7 @@ Golden files (made in CR1, under `tests/golden/`) guard what the scenario suite 
 what changes, and the commit says so. Otherwise a diff in them is a bug in the prompt.
 
 ### CR1 · Core refactor: the module contract, loader and golden files
-Status: [ ]
+Status: [~]
 Depends on: none
 Read first: the refactor doc, all of it; `src/themi/app.py`; `src/themi/core/services.py`;
 `src/themi/core/tools.py` (the registry and `TOOL_GROUPS`).

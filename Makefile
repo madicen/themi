@@ -7,7 +7,7 @@ PARALLEL ?= -n auto --dist loadfile
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
+.PHONY: golden venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -78,3 +78,7 @@ dev-prod:
 dev-invite:
 	$(PYTHON) -m tools.dev invite "$(NAME)"
 
+
+# CR1: write the golden files again (tests/golden); say why in the commit.
+golden:
+	THEMI_WRITE_GOLDEN=1 $(PYTEST) tests/scenarios/test_golden.py -q
