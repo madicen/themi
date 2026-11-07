@@ -568,12 +568,15 @@ class Match:
     wanted: int  # how many words were wanted
 
 
+PICTURE_SOURCE = "your picture"  # F34m: where a recipe copied from a picture is from
+
+
 def recipe_lines(recipe: Recipe, link: str | None = None) -> tuple[str, str]:
     """Its ingredients part and its steps part, as sent: the name plain, the recipe's own
     words quoted, as written."""
     where = recipe.section + (f" · {recipe.subsection}" if recipe.subsection else "")
-    if recipe.source == "web":
-        where = site_name(recipe.url or "") or "the web"
+    if recipe.source == "web":  # F34m: a picture's has no link, and says so
+        where = site_name(recipe.url) if recipe.url else (recipe.source_text or "the web")
     head = f"{recipe.name} ({where})" if where else recipe.name
     first = [head, "", "Ingredients"]
     group = ""

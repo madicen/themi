@@ -28,7 +28,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DocsConflict, DocsError
 from themi.core import cookbook as book
-from themi.core.recipes import Recipe, Recipes
+from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
@@ -89,6 +89,8 @@ class CookbookSave:
     def entry(self, recipe: Recipe) -> list[tuple[str, str]]:
         site = recipe.source_text or ""
         source = f"{site} ({recipe.url})" if site and recipe.url else (recipe.url or site)
+        if not recipe.url and site == PICTURE_SOURCE:
+            source = "a photo"  # F34m: "your picture" is only theirs to read
         return book.entry_text(
             recipe.name, list(recipe.ingredients), list(recipe.steps), list(recipe.notes), source
         )

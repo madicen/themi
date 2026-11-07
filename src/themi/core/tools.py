@@ -510,6 +510,7 @@ TOOL_GROUPS: dict[str, str] = {
             "start_cooking",
             "stop_cooking",
             "recipe_from_link",
+            "recipe_from_picture",
             "find_web_recipe",
             "save_recipe_to_cookbook",
             "cookbook_recipes_we_can_make",
