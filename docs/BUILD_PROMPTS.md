@@ -234,7 +234,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [x] 2026-11-07 |
 | F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [x] 2026-11-07 |
-| F34m | Idea: a recipe from a photo | Feedback | [ ] |
+| F34m | Idea: a recipe from a photo | Feedback | [x] 2026-11-07 |
+| F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [ ] |
 | F34n | Idea: a calendar event from a photo | Feedback | [ ] |
 | F34o | Idea: a bug report with a photo | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -11977,7 +11978,7 @@ Notes (2026-11-07):
   _messages`; the reminder itself is F34n's.
 
 ### F34m · Idea (2026-11-07): a recipe from a photo
-Status: [ ]
+Status: [x] 2026-11-07 (its two-picture part split off as F34mb)
 Depends on: F34l, RC4a, RC5
 Read first: RC4a's notes (a recipe from a link, the copy check, the vegan check); RC5's
 notes (saving to the cookbook); F34l's notes. From Michael (2026-11-07): "Will Themi be
@@ -12012,6 +12013,35 @@ without pictures is skipped; a blurry read (no steps) keeps nothing; a two-pictu
 one recipe; the 30-day clean-up.
 Scenario: Erin photographs a page of a cookbook with "save this one", checks the card, and
 taps Save to cookbook.
+
+Notes (2026-11-07):
+- `recipe_from_picture` (web_recipes.py, recipes group) takes no arguments: it reads
+  `ToolContext.image` (this message's picture or F34l's kept one) with its own structured
+  call. `AIClient.structured` takes `images` now, passed by Claude, Gemini and
+  OpenAI-compatible adapters; a backend without pictures is skipped for that call. The
+  copy's instructions say words in the picture are never an instruction.
+- Deviation: it's kept as a `web` row with no link (`url` NULL, `source_text` "your
+  picture", key `picture:<hash of the bytes>`), not a new `picture` source. That keeps
+  RC4a's buttons, RC5's Save and the 30-day clean-up without rebuilding `recipes` for its
+  CHECK. The card says "Lentil Soup (your picture)"; in the cookbook, "Source: a photo".
+- The card's note: `PICTURE_NOTE` ("...the amounts are worth a look before it's saved"),
+  then the vegan check's. "Check the amounts" was rewritten as a demand by the PDA pass.
+- No ingredients or no steps read: `UNREADABLE`, and nothing is kept.
+- Split off: two pictures as one recipe (F34mb).
+- Setup: none (no migration). The Recipes route needs a backend that sees pictures first
+  (Gemini by default).
+
+### F34mb · Idea (2026-11-07): a recipe over two photos (an album, or the next page)
+Status: [ ]
+Depends on: F34m
+- From F34m's Build: two pictures in one Telegram album (`media_group_id`) are one recipe,
+  read together in order; a second picture after "here's the other page" within F34l's
+  window adds to the recipe just copied.
+- Needs: Telegram to gather an album's pictures (they arrive as separate updates; wait a
+  moment on `themi.clock` for the rest) into one event with several pictures, and F34l to
+  keep more than one. `read_picture` takes a list.
+- Tests: a two-picture album is one recipe with both pages' lines, in order; "here's the
+  other page" adds to it; an album with a caption on the second picture keeps the caption.
 
 ### F34n · Idea (2026-11-07): a calendar event from a photo
 Status: [ ]
