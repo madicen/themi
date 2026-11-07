@@ -226,7 +226,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
 | F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
 | F34ga | Idea: a picture with its words reaches the tool agent | Feedback | [x] 2026-11-07 |
-| F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [ ] |
+| F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [x] 2026-11-07 |
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
 | F34hb | Feedback: body doubling through several tasks in a row | Feedback | [ ] |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
@@ -11442,7 +11442,7 @@ Setup: Michael picks the rule for his work calendar once live. Mark #175 reviewe
 and F34e are live.
 
 ### F34g · Idea (2026-11-07): Themi sees pictures sent in chat
-Status: split into F34ga [x] and F34gb [ ] (2026-11-07)
+Status: split into F34ga [x] and F34gb [x] (2026-11-07)
 Depends on: 06, 09, F29ha
 Read first: the plan's AI backend section (routing per task) and Security (outside text is
 data). F29ha's notes (guides; F29hb, a guide from a photo, is waiting on this). From Erin's
@@ -11517,7 +11517,7 @@ Notes (2026-11-07):
   that sees pictures first (Gemini or Claude); a local model is skipped for pictures.
 
 ### F34gb · Idea (2026-11-07): a picture with no words, and the backend's picture switch
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34ga
 - From F34g's Build: with no caption, a short description and one question. The website's
   switch for an OpenAI-compatible backend that takes pictures (`supports_images`) and the
@@ -11526,6 +11526,26 @@ Depends on: F34ga
   turn; check it does nothing until they answer, and that a "yes" after it adds what the
   picture showed (the picture isn't in history, so the question must name what it saw).
   `supports_images` needs a column beside `supports_audio` in the backend settings.
+
+Notes (2026-11-07):
+- No words: the turn gets no tools at all, so nothing is done until they answer; a tool
+  call the model makes anyway isn't run (`PICTURE_ASK_TEXT` if it said nothing).
+  `PICTURE_NO_WORDS` now asks it to name what matters (the items, a day and time), since
+  it won't see the picture again, and to name the list in its question.
+- The yes: `answers_picture_question` (groceries.py, used by the grocery list, Things to
+  Buy and named lists). An add counts as asked for when their message before was a
+  picture (`[a picture]` in the log), Themi's last message asked to add with a "?", it
+  named every item, and this message is a plain yes ("yes please", "add them", 👍). An
+  item the question didn't name still waits on a card; a yes with no picture before is
+  unchanged.
+- Migration 0137: `ai_backends.supports_images` (the router already used it), a "Can see
+  pictures" box on the AI page for Ollama, LM Studio and OpenAI-compatible backends only.
+- Michael, 2026-11-07: pictures a day go to 100. Migration 0137 moves every member still at
+  30 to 100; new members get `PICTURE_DAILY_CAP` (accounts/store.py), since the column's
+  default can't change without rebuilding `members`. The cap is under "Conversation" on
+  the AI page (0 to 500; `/ai/picture-cap`).
+- Setup: restart `themi run` (migration 0137). Mark #173 reviewed once it's checked on the
+  Pi (a picture with no words, then "yes").
 
 ### F34h · Feedback (2026-11-07): body doubling uses the task's own steps, routines and several tasks in a row
 Status: split into F34ha [x] and F34hb [ ] (2026-11-07)
