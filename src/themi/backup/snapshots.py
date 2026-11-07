@@ -98,12 +98,16 @@ def inspect(path: Path) -> tuple[int, str, dict[str, int]]:
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
-        try:
-            version = conn.execute(
-                "SELECT COALESCE(MAX(version), 0) FROM schema_version"
-            ).fetchone()[0]
-        except sqlite3.Error:
-            version = 0
+        version = 0
+        for query in (  # CR6: the core's track; a snapshot from before CR6 has no tracks
+            "SELECT COALESCE(MAX(version), 0) FROM schema_version WHERE track = 'core'",
+            "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+        ):
+            try:
+                version = conn.execute(query).fetchone()[0]
+                break
+            except sqlite3.Error:
+                continue
         counts = {}
         for table in COUNTED_TABLES:
             try:

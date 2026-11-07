@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
 from pydantic import BaseModel
@@ -97,7 +98,8 @@ class Module:
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
     preferences: ClassVar[type[BaseModel] | None] = None  # CR7a
-    migrations: ClassVar[str | None] = None  # CR6: a package folder of SQL files
+    # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
+    migrations: ClassVar[str | Path | None] = None
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
 
     @classmethod

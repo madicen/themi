@@ -284,7 +284,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | split, [x] 2026-11-07 |
 | CR5a | Core refactor: themi.toml, templates, and modules found and built from settings | Core refactor | [x] 2026-11-07 |
 | CR5b | Core refactor: a settings model per module | Core refactor | [x] 2026-11-07 |
-| CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
+| CR6 | Core refactor: migration tracks per module | Core refactor | [x] 2026-11-07 |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
 | CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | [ ] |
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
@@ -315,6 +315,10 @@ and record the change here.
   httpx's does. It has wheels for the Pi (aarch64) and `python:3.13-slim`. Tests and
   `make dev` still go through an httpx transport, behind the client's small wire seam.
 - SQLite (stdlib `sqlite3`, WAL, FTS5) with a small numbered-migration runner. No ORM.
+- Migrations come in tracks (CR6, 2026-11-07). The core's 144 files are the frozen
+  baseline (track `core`); a new feature table goes in its module's own track
+  (`Module.migrations`, numbered from 0001), applied after the core's in load order.
+  Only a new core table goes in `src/themi/storage/schema/`.
 - `cryptography` Fernet for secrets at rest; key from `THEMI_SECRET_KEY` or a key file.
 - Tests: pytest, pytest-asyncio, Hypothesis, coverage.py. Lint/format: ruff. Types: pyright.
 - Version control: jj (colocated with git). Each major change is its own `jj commit`.
@@ -14289,7 +14293,7 @@ Notes:
   `test_module_settings.py`, checking the same values and messages.
 
 ### CR6 · Core refactor: migration tracks per module
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR5
 Read first: `src/themi/storage/migrations.py`; CR5's notes.
 - `schema_version` gains a `track` column (migration: existing rows become track `core`).
@@ -14303,6 +14307,22 @@ Read first: `src/themi/storage/migrations.py`; CR5's notes.
   module's track.
 Tests: an existing database upgrades with no change; a fresh database; a module track
 applied, resumed and left alone when the module is off; two modules both numbering 0001.
+
+Notes:
+- `schema_version` has a `track` column, key (track, version). Deviation: the change is
+  made by the runner (`_ensure_version_table`), not a numbered migration, because the
+  runner owns that table; a pre-CR6 database's rows all become track `core`, untouched
+  otherwise (tested on a database built the old way).
+- `apply(db, migrations, track="core")`, `current_version(db, track)`, and
+  `apply_track(db, module_name, migrations)`. `Module.migrations` is a package name
+  ("themi_work.schema") or a `Path`. `ModuleContext.load` applies a module's track just
+  before installing it, so tracks run after the core's, in load order.
+- No module has a track yet: every existing table stays in the frozen core track.
+- `backup.snapshots.inspect` reads the core track's version, and still reads a snapshot
+  from before CR6.
+- Test changed: `test_newer_database_is_refused` names the columns in its insert (the
+  table has a track column first now).
+- The rule is in Fixed technical choices.
 
 ### CR7a · Core refactor: per-member module preferences
 Status: [ ]

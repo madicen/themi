@@ -15,6 +15,7 @@ from themi.modules.base import Module, ModuleError, PeriodicTask
 from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
 from themi.modules.web import MenuEntry, WebPages
+from themi.storage.migrations import apply_track
 
 if TYPE_CHECKING:
     from fastapi import APIRouter
@@ -54,6 +55,8 @@ class ModuleContext:
         for module in ordered:
             self._current = module.name
             try:
+                if module.migrations is not None:  # CR6: its tables, before it installs
+                    apply_track(self.services.store.db, module.name, module.migrations)
                 module.install(self)
             finally:
                 self._current = ""

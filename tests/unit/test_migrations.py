@@ -73,7 +73,10 @@ def test_newer_database_is_refused(tmp_path: Path) -> None:
     write(tmp_path, "0001_first.sql", "CREATE TABLE a (x);")
     db = Database(":memory:")
     apply(db, discover(tmp_path))
-    db.execute("INSERT INTO schema_version VALUES (7, 'from_the_future', '2027-01-01')")
+    db.execute(  # CR6: the table has a track column now, so the columns are named
+        "INSERT INTO schema_version (version, name, applied_at) "
+        "VALUES (7, 'from_the_future', '2027-01-01')"
+    )
     with pytest.raises(DatabaseTooNewError, match="schema version 7"):
         apply(db, discover(tmp_path))
 
