@@ -232,7 +232,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [x] 2026-11-07 |
 | F34ja | Idea: when someone's day rolls over: the setting, tasks and routines | Feedback | [x] 2026-11-07 |
 | F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [ ] |
-| F34k | Idea: a call before the business closes | Feedback | [ ] |
+| F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
 | F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [ ] |
 | F34m | Idea: a recipe from a photo | Feedback | [ ] |
 | F34n | Idea: a calendar event from a photo | Feedback | [ ] |
@@ -11829,7 +11829,7 @@ Depends on: F34ja
   without the helper (`now().astimezone(...).date()`), as the clock rule's test does.
 
 ### F34k · Idea (2026-11-07): a call before the business closes
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F30d, F31c, F14a
 Read first: F30d's and F31c's notes (web searches, near home); F14a's notes (nudges at a
 time); the plan's PDA phrasing rules. From Erin's idea #177 (2026-11-06, 4:50 pm): "for tasks
@@ -11862,6 +11862,35 @@ Scenario: Erin adds "Call the dentist"; at 3:30 pm she gets "closes at 5 today" 
 choices and taps "Next open day".
 
 Data: mark #177 reviewed once live.
+
+Notes (2026-11-07):
+- `themi.core.business_hours`. A call task names a business when its title says so ("Call
+  the dentist", "Phone Rosewood Dental about the bill": a business word, or a name of two
+  capitalised words), not a person ("Call mom", "Call back about ..."). Migration 0143:
+  `place_hours` (by place, with the place's own name, a number and the link), `task_places`
+  and `closing_nudges`; a table rather than a `tasks.business_hours` column, so hours said
+  for a place are there for its next call too.
+- The hours are looked up by the job (`tasks.closing`, every 15 minutes), never when the
+  task is made: hours already kept for the place, else one near-home search (F31c's
+  `near_home`, counted in the day's cap), read by `parse_hours` here with no model call
+  ("Mon-Fri 8am-5pm, Sat 9-1, Sun closed", "Monday - Thursday: 8:30 - 5", "daily
+  11am-10pm", "open 24 hours"; days not mentioned are closed). Only the hours and a phone
+  number are taken from the web text. Not found: "I couldn't find Acme Plumbing's hours,
+  so there's no "before they close" reminder" once.
+- Themi's open items say "Rosewood Dental: open until 5 pm today (Monday to Friday 8 am-5
+  pm; ...)". `set_business_hours(task_id, hours)` keeps their own words for the place.
+- The nudge: on the doer's day (F34ja) when it's due or has no date, the place is open
+  today and the task isn't put off, between 90 and 30 minutes before closing, once a day:
+  "Rosewood Dental closes at 5 pm today. Call now, or later?" It isn't queued when the
+  outbox couldn't send it before then (quiet hours, the day's limit): a late "closes at 11
+  pm today" the next morning would be wrong.
+- Call now: "Rosewood Dental: (650) 555-0100." and the task's steps. Later, voicemail's
+  fine: put off until five minutes after closing. Next open day: until an hour after that
+  day's opening.
+- Not done: the buttons in their own words (custom buttons) and learning from which they
+  pick (BD2/S5); a follow-up prompt if those are wanted.
+- Setup: restart `themi run` (migration 0143). Needs the web search key (F30d) and the
+  family home (F31c) for a search near home.
 
 ### F34l · Idea (2026-11-07): a picture can start anything (the shared groundwork)
 Status: [ ]
