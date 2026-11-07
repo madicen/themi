@@ -182,7 +182,7 @@ async def add_to_things_to_buy(ctx: ToolContext, args: dict[str, Any]) -> Propos
     refuse_spending(names, ctx.request_text)
     asked = (
         _said(names, ctx.request_text) and asks_to_add(ctx.request_text, ctx.previous_text)
-    ) or picture_asks_to_add(ctx)
+    ) or picture_asks_to_add(ctx, names)
     food = [n for n in names if buying.kind_of(n) == "food"]
     if food and not asked:
         raise ToolFailed(

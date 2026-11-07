@@ -583,7 +583,7 @@ async def add_to_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
             asks_to_add(ctx.request_text, ctx.previous_text)
             or _opens_with(lists, ctx.member, nl, ctx.request_text)
         )
-    ) or picture_asks_to_add(ctx)
+    ) or picture_asks_to_add(ctx, names)
     return replace(proposal, requested=asked)
 
 
