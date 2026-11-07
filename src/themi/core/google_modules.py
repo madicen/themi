@@ -1,0 +1,102 @@
+"""CR2c: the Google modules. Each brings a connector with the features built on it.
+
+- `google`: linking Google accounts (OAuth), which Gmail, Calendar, Tasks and the
+  cookbook all go through.
+- `gmail`: reading mail, with triage, forwarding, urgent-sender suggestions, expected
+  emails and the noise digest.
+- `calendar`: calendars read and written, busy times, events, twins, copies and blocks.
+"""
+
+from __future__ import annotations
+
+from datetime import timedelta
+
+from themi.connectors.gcal import CalendarSync
+from themi.connectors.gcal.busy import CalendarBusy
+from themi.connectors.gmail import GmailSync, install_executors
+from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
+from themi.core import email_forward
+from themi.core.approvals import ApprovalsUI
+from themi.core.calendar import TaskCalendar
+from themi.core.calendar_copies import CalendarCopies
+from themi.core.calendar_twins import CalendarTwins
+from themi.core.events import Events
+from themi.core.expected import ExpectedEmails
+from themi.core.noise_digest import NoiseDigest
+from themi.core.senders import SenderSuggestions
+from themi.core.task_blocks import TaskBlocks
+from themi.core.tasks import TaskBoard
+from themi.core.triage import EmailTriage
+from themi.energy import EnergyModel
+from themi.modules import Module, ModuleContext, as_job
+
+
+class GoogleModule(Module):
+    """Linking Google accounts, for the Google modules that read and write through them."""
+
+    name = "google"
+
+    def __init__(self, config: GoogleConfig) -> None:
+        self.config = config
+
+    def install(self, ctx: ModuleContext) -> None:
+        store = ctx.services.store
+        google = GoogleAccounts(store, GoogleOAuth(store.db, store.cipher, self.config))
+        ctx.services.google = ctx.provide(google)
+        ctx.periodic(
+            "google.forget_states", timedelta(days=1), as_job(google.oauth.forget_expired_states)
+        )
+
+
+class GmailModule(Module):
+    """Gmail: mail read every minute, triaged, and the features that follow from it."""
+
+    name = "gmail"
+    requires = ("google",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        s = ctx.services
+        gmail = GmailSync(s.store, ctx.get(GoogleAccounts), s.outbox)
+        s.gmail = ctx.provide(gmail)
+        install_executors(s.autonomy.executors, gmail)
+        triage = ctx.provide(EmailTriage(s, gmail))
+        triage.install()
+        email_forward.install(s)  # F31d
+        senders = ctx.provide(SenderSuggestions(s))
+        senders.install()
+        expected = ctx.provide(ExpectedEmails(s, gmail))
+        expected.install()
+        noise = ctx.provide(NoiseDigest(s, ctx.get(ApprovalsUI), gmail))
+        noise.install()
+        ctx.periodic("gmail.poll", timedelta(minutes=1), gmail.poll_all)
+        ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
+        ctx.periodic("email.senders", timedelta(hours=6), senders.offer)
+        ctx.periodic("email.noise", timedelta(minutes=5), noise.run)
+        ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
+
+
+class CalendarModule(Module):
+    """Google Calendar: each person's calendars, events made from chat, and busy times that
+    hold Themi's own messages."""
+
+    name = "calendar"
+    requires = ("google", "tasks")
+
+    def install(self, ctx: ModuleContext) -> None:
+        s = ctx.services
+        sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
+        s.calendar = ctx.provide(sync)
+        tasks = ctx.get(TaskBoard)
+        ctx.provide(TaskCalendar(s, tasks, sync, ctx.scheduler)).install()
+        busy = CalendarBusy(s.store, sync)
+        s.calendars = ctx.provide(busy)
+        s.outbox.calendar_blocks = busy.blocks
+        ctx.get(EnergyModel).calendar_blocks = busy.blocks
+        events = ctx.provide(Events(s))
+        events.install()
+        ctx.provide(CalendarTwins(s, events)).install()  # F34e: the same event twice
+        ctx.provide(CalendarCopies(s)).install()  # F34f: a calendar on the family calendar
+        blocks = ctx.provide(TaskBlocks(s, tasks))
+        blocks.install()
+        ctx.periodic("calendar.busy", timedelta(minutes=15), busy.refresh)
+        ctx.periodic("blocks.tick", timedelta(minutes=5), blocks.tick)

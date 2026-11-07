@@ -278,7 +278,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
-| CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [ ] |
+| CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [x] 2026-11-07 |
 | CR3 | Core refactor: a typed service registry | Core refactor | [ ] |
 | CR4 | Core refactor: website pages from modules | Core refactor | [ ] |
 | CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | [ ] |
@@ -14065,7 +14065,7 @@ Notes:
   provides (energy model, rulebook). `tests/unit/test_home_modules.py` uses it.
 
 ### CR2c · Core refactor: connectors as modules, and the app built by a loop
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR2b
 Read first: CR2b's notes; `src/themi/app.py`; `src/themi/settings.py`.
 - Modules for google (accounts and OAuth), gmail (with triage, email_forward, senders,
@@ -14080,6 +14080,27 @@ Read first: CR2b's notes; `src/themi/app.py`; `src/themi/settings.py`.
   periodic list comes only from modules.
 Tests: golden files identical; a test that the family module list with every connector
 configured builds; a test that each connector module left out still builds.
+
+Notes:
+- `build_app` builds the core, then `ctx.load(*modules)` once. `family_modules(...)` in
+  `themi/app.py` returns the family's list from the connector options, in install order;
+  `build_app(modules=...)` takes another list (tests now, CR5's templates next).
+- The Google modules (`google`, `gmail`, `calendar`) are in `themi/core/google_modules.py`;
+  the other connector modules (`email_audit`, `google_tasks`, `travel`, `spotify`,
+  `ourgroceries`, `keep`, `cozyla_todos`, `cozyla_chores`, `home_connect`, `thinq`,
+  `roborock`, `tuya`, `catgenie`) are in `themi/core/connector_modules.py`. CR10 splits them
+  into the connectors package.
+- Deviation: server control and backups stay in the core part of `build_app`, not modules:
+  `themi.updates` and `themi.backup` are core in the layer check and every template needs
+  them. Their jobs go through `ctx.periodic` like everyone else's.
+- The agent is created before the modules and provided (`ctx.get(Agent)`): its constructor
+  reads nothing, and `google_tasks` needs it. The approvals UI is provided too (the noise
+  digest needs it).
+- `pantry.receipts` moved into the pantry module (with `gmail` optional): it's added when
+  triage is there, as before.
+- All jobs now come from `ctx.jobs`; `App.periodic` is that list.
+- `tests/scenarios/test_module_lists.py` builds the app with each connector module left out
+  (and what requires it).
 
 ### CR3 · Core refactor: a typed service registry
 Status: [ ]

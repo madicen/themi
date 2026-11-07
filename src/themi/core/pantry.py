@@ -504,6 +504,7 @@ class PantryModule(Module):
 
     name = "pantry"
     requires = ("groceries",)
+    optional = ("gmail",)  # receipts read from email fill it in
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.core.groceries import (
@@ -513,3 +514,5 @@ class PantryModule(Module):
         pantry = ctx.provide(Pantry(ctx.services, ctx.get(GroceryList)))
         pantry.install()
         ctx.periodic("pantry.predict", timedelta(hours=6), pantry.predict)
+        if ctx.services.triage is not None:
+            ctx.periodic("pantry.receipts", timedelta(minutes=10), pantry.read_pending_receipts)
