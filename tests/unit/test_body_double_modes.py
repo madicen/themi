@@ -98,3 +98,44 @@ ENERGY = ("energy", "tired", "score", "capacity", "usually", "last time", "fail"
 def test_the_offer_never_gives_a_reason() -> None:
     for text in [*OFFER_TEXT.values(), *OFFER_BUTTONS.values()]:
         assert not any(word in text.lower() for word in ENERGY), text
+
+
+# ----- BD5c: the music to offer --------------------------------------------------------------
+
+
+def played(n: int, music: str, *, outcome: str = "finished", category: str = "deep_work",
+           hour: int = 9, name: str = "") -> dict:  # fmt: skip
+    return {"id": n, "music": music, "music_name": name or music, "outcome": outcome,
+            "category": category, "hour_of_week": hour}  # fmt: skip
+
+
+def test_the_pick_needs_two_finished_sessions() -> None:
+    from themi.core.body_double_music import Pick, pick
+
+    one = [played(1, "builtin:rain", name="Rain")]
+    assert pick(one, "deep_work", "morning") == Pick("builtin:lofi", "lofi", False)  # default
+    two = [*one, played(2, "builtin:rain", name="Rain")]
+    assert pick(two, "deep_work", "morning") == Pick("builtin:rain", "Rain", True)
+    assert pick(two, "deep_work", "evening").learned is False  # type: ignore[union-attr]
+    stopped = [played(1, "x", outcome="stopped"), played(2, "x", outcome="left")]
+    assert pick(stopped, "deep_work", "morning").music == "builtin:lofi"  # type: ignore[union-attr]
+    assert pick([], "admin", "morning") is None  # no default for admin
+    assert pick([], "tidy", "evening").music == "builtin:lofi"  # type: ignore[union-attr]
+
+
+def test_the_most_played_wins_and_the_latest_breaks_a_tie() -> None:
+    from themi.core.body_double_music import pick
+
+    rows = [played(1, "a"), played(2, "a"), played(3, "b"), played(4, "b")]
+    assert pick(rows, "deep_work", "morning").music == "b"  # type: ignore[union-attr]
+    rows.append(played(5, "a"))
+    assert pick(rows, "deep_work", "morning").music == "a"  # type: ignore[union-attr]
+
+
+def test_the_offer_says_nothing_about_how_sessions_went() -> None:
+    from themi.core.body_double_music import Pick, offer_text
+
+    for text in (offer_text(Pick("x", "rain", True)), offer_text(Pick("y", "lofi", False))):
+        words = ("energy", "score", "usually", "fail", "finished", "better", "percent")
+        assert not any(w in text.lower() for w in words)
+    assert offer_text(Pick("x", "rain", True)) == "Rain again, like last time?"

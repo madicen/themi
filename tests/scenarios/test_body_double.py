@@ -117,9 +117,12 @@ async def test_a_bigger_tasks_nudge_offers_a_body_double(scenario: Scenario) -> 
     assert scenario.last_buttons("Erin") == ["Done", "Later", "Body double"]
     await scenario.tap("Erin", "Body double")  # BD2: writing is deep work, quiet company
     assert scenario.edits("Erin")[-1]["text"] == (
-        "Quiet company for this one.\nI'm here. Going quiet until you say you're done."
+        "Quiet company for this one.\nI'm here. Going quiet until you say you're done.\n"
+        "Some lofi while you work?"  # BD5c: deep work's default, offered once
     )
-    assert card_buttons(scenario) == ["Sprints instead", "Step by step instead"]
+    assert card_buttons(scenario) == [
+        "Sprints instead", "Step by step instead", "Play", "Not now",
+    ]  # fmt: skip
     assert session_row(scenario)["task_id"] == task.id
 
 
@@ -494,3 +497,48 @@ async def test_a_built_in_loop_played_is_kept_on_the_session(
     assert (session_row(scenario)["music"], session_row(scenario)["music_name"]) == (
         "builtin:rain", "Rain",
     )  # fmt: skip
+
+
+# ----- BD5c: music that suits the task --------------------------------------------------------
+
+
+async def test_the_offer_follows_three_finished_sessions_with_the_same_playlist(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    await link_spotify(scenario, site, fake_spotify)
+    fake_spotify.add_device("Desk speaker", active=True)
+    fake_spotify.add("playlist", "Deep Focus")
+    for _ in range(3):
+        await start(scenario, "keep me company while I write", mode="quiet", minutes=30,
+                    what="writing the newsletter")  # fmt: skip
+        scenario.primary.queue_tool_call("play_music", {"query": "deep focus"})
+        assert await scenario.say("Erin", "put on deep focus") == [
+            "Playing Deep Focus on Desk speaker."
+        ]
+        await scenario.advance(minutes=30)
+        await scenario.run_jobs()
+        await scenario.tap("Erin", "Done")
+    replies = await start(scenario, "sit with me while I write", mode="quiet", minutes=30,
+                          what="writing the newsletter")  # fmt: skip
+    assert replies == ["I'm here. Going quiet until 11 am.\nDeep Focus again, like last time?"]
+    assert scenario.last_buttons("Erin") == ["Play", "Not now"]
+    fake_spotify.playing = None
+    await scenario.tap("Erin", "Play")
+    assert fake_spotify.playing == {"context_uri": "spotify:playlist:deepfocus",
+                                    "device_id": "dev-1"}  # fmt: skip
+    assert card(scenario) == (
+        "I'm here. Going quiet until 11 am.\nPlaying Deep Focus on Desk speaker."
+    )
+
+
+async def test_not_now_leaves_the_music_alone(scenario: Scenario) -> None:
+    replies = await start(scenario, "keep me company while I write", mode="quiet",
+                          what="my essay")  # fmt: skip
+    assert replies[0].endswith("\nSome lofi while you work?")
+    scenario.app.store.update_settings(scenario.member("Erin"), scenario.member("Erin").id,
+                                       body_double_sound="rain")  # fmt: skip
+    await scenario.tap("Erin", "Not now")
+    assert card(scenario) == "I'm here. Going quiet until you say you're done."
+    assert scenario.member("Erin").body_double_sound == "rain"
+    await scenario.say("Erin", "/bodydouble quiet 30")  # no words, no kind of job: no offer
+    assert "while you work" not in scenario.inbox("Erin")[-1]
