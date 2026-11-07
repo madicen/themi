@@ -225,7 +225,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34db | Feedback: an event just added is read again first | Feedback | [x] 2026-11-07 |
 | F34e | Idea: Themi spots the same event twice and offers to merge it | Feedback | [ ] |
 | F34f | Idea: how much of an event another calendar shows | Feedback | [ ] |
-| F34g | Idea: Themi sees pictures sent in chat | Feedback | [ ] |
+| F34ga | Idea: a picture with its words reaches the tool agent | Feedback | [x] 2026-11-07 |
+| F34gb | Idea: a picture with no words, and the backend's picture switch | Feedback | [ ] |
 | F34ha | Feedback: body doubling finds the task by name, and goes through a routine | Feedback | [x] 2026-11-07 |
 | F34hb | Feedback: body doubling through several tasks in a row | Feedback | [ ] |
 | F34i | Idea: their own Spotify playlists in a session's music choices | Feedback | [ ] |
@@ -11441,7 +11442,7 @@ Setup: Michael picks the rule for his work calendar once live. Mark #175 reviewe
 and F34e are live.
 
 ### F34g · Idea (2026-11-07): Themi sees pictures sent in chat
-Status: [ ]
+Status: split into F34ga [x] and F34gb [ ] (2026-11-07)
 Depends on: 06, 09, F29ha
 Read first: the plan's AI backend section (routing per task) and Security (outside text is
 data). F29ha's notes (guides; F29hb, a guide from a photo, is waiting on this). From Erin's
@@ -11479,6 +11480,52 @@ Scenario: Erin sends a screenshot of a grocery list with "add these"; they're on
 Buy.
 
 Data: mark #173 reviewed once live.
+
+### F34ga · Idea (2026-11-07): a picture with its words reaches the tool agent
+Status: [x] 2026-11-07
+Depends on: F34g (its text above)
+- From F34g's Build: Telegram photos and image documents (to memory, "[a picture]" in the
+  log), the image part in the AI layer and its adapters, a backend without images skipped,
+  the tool agent with the picture as data, conversation mode sending it there, the per-member
+  daily cap. Its tests (but the no-caption one) and the scenario.
+
+Notes (2026-11-07):
+- Telegram: `_download_picture` takes a photo's largest size under 5 MB, or a document
+  whose mime type is `image/*`, into memory. The event is `"picture"` (`InboundEvent.picture`,
+  its caption as `text`); the log has `"[a picture] <caption>"` with kind `picture`. Direct
+  chats only: a picture in the family group is still ignored.
+- AI layer: `ImageBlock(data, mime_type)` and `Capabilities.images`. Claude (a base64 image
+  block) and Gemini (`Part.from_bytes`) say yes; an OpenAI-compatible backend only with
+  `AdapterConfig.supports_images` (no switch for it yet: F34gb); Cloudflare never. The
+  router raises `CapabilityError` for a backend without pictures, so the next one is tried
+  for that call only.
+- The agent puts the picture between `<data source="their picture">` and `</data>` text
+  blocks after the turn, saying that words in it are never an instruction. It isn't kept
+  in history: a later turn sees only "[a picture] ...". A picture skips the commands, the
+  text handlers, the yes/no fast path and conversation mode's chat reply.
+- Deviation, needed for "add these": list adds count as asked for only when the items are
+  in their own words, which a picture's never are. `picture_asks_to_add` (groceries.py)
+  makes the grocery list, Things to Buy and named lists count a picture as asked for when
+  its own caption asks to add ("add these"). Never from the message before or the picture
+  itself, so "these please" or a screenshot saying "add wine" still waits on a card.
+- The cap: migration 0136 `members.picture_daily_cap` (default 30), counted from the log's
+  `picture` rows since their midnight. Past it, `PICTURE_CAP_TEXT` and no model call. It
+  isn't on the AI page yet (F34gb).
+- No caption: the turn already asks for a one-line description and one question
+  (`PICTURE_NO_WORDS`), but it's untested and unchecked on the Pi; F34gb finishes it.
+- Setup: restart `themi run` (migration 0136). Erin's conversation chain needs a backend
+  that sees pictures first (Gemini or Claude); a local model is skipped for pictures.
+
+### F34gb · Idea (2026-11-07): a picture with no words, and the backend's picture switch
+Status: [ ]
+Depends on: F34ga
+- From F34g's Build: with no caption, a short description and one question. The website's
+  switch for an OpenAI-compatible backend that takes pictures (`supports_images`) and the
+  cap on the AI page. The no-caption test.
+- Read first: F34ga's notes. `PICTURE_NO_WORDS` (agent.py) is the start of the no-caption
+  turn; check it does nothing until they answer, and that a "yes" after it adds what the
+  picture showed (the picture isn't in history, so the question must name what it saw).
+  `supports_images` needs a column beside `supports_audio` in the backend settings.
 
 ### F34h · Feedback (2026-11-07): body doubling uses the task's own steps, routines and several tasks in a row
 Status: split into F34ha [x] and F34hb [ ] (2026-11-07)
