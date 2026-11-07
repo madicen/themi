@@ -11356,8 +11356,8 @@ with a break, a sprint left unanswered, a nudge held then delivered after. Evals
 phrases, "stop" mid-sprint, "pomodoro" not mistaken for a task title.
 
 Notes (2026-11-06):
-- The plan's "Body double" part is drafted but not written to the doc: Michael checks the
-  wording first (it's in the session's report). Until then this section is the reference.
+- The plan's "Body double" part is in the doc as Module behaviour "F. Body double"
+  (Michael signed off the wording, 2026-11-06).
 - `themi.core.body_double`: `BodyDouble` (installed after the scheduler, like
   `CookingTimers`) with `start`, `switch`, `end`, `current`, and `act` for a tap (BD3a's page
   uses it too). Migration 0126: `body_double_sessions` (as asked, plus `label`, `phase`,
