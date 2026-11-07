@@ -36,6 +36,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import OutboxResult, Priority
+from themi.core import keys
 from themi.core.prompts import OpenItem
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
@@ -138,7 +139,7 @@ class Liaison:
         self.outbox = services.outbox
 
     def install(self) -> None:
-        self.services.liaison = self
+        self.services.provide(keys.liaison, self)
         self.services.tools.register(relay_to_partner)
         self.services.tools.register(flag_expectation_conflict)
         self.services.button_handlers[ALIGNMENT] = self.on_alignment_button
@@ -292,7 +293,7 @@ class Liaison:
 
     def can_send_now(self, recipient: Member) -> bool:
         """The button isn't offered in burnout mode, whose holds still apply (F22d)."""
-        burnout = self.services.burnout
+        burnout = self.services.maybe(keys.burnout)
         return burnout is None or burnout.current(recipient) is None
 
     async def offer_send_now(self, sender: Member, relay: Relay, said: str) -> str:
@@ -632,7 +633,7 @@ class Liaison:
 
 
 def _liaison(ctx: ToolContext) -> Liaison:
-    liaison = ctx.services.liaison
+    liaison = ctx.services.maybe(keys.liaison)
     assert liaison is not None
     return liaison
 

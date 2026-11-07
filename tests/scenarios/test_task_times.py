@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -17,8 +18,8 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -128,7 +129,7 @@ async def test_put_off_to_tomorrow_afternoon_waits_for_tomorrow(scenario: Scenar
         {"task_id": tea.id, "until": "14:00", "day": "2026-10-22"},
     )  # fmt: skip
     assert result == "No rush on that one (Drink green tea). It waits until Thu 22 Oct, 2 pm."
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     assert "green tea" not in (summary.text(scenario.member("Erin"), date(2026, 10, 21)) or "")
     await until(scenario, 21, 14, 1)

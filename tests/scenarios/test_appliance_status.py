@@ -16,6 +16,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_dishwasher import DISHWASHER, link
 from themi import clock
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.appliances import NONE_LINKED
 
 WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
@@ -25,7 +26,7 @@ WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 async def laundry_room(scenario: Scenario, fake_thinq: FakeThinq) -> FakeThinq:
     fake_thinq.add_device(WASHER, "DEVICE_WASHER", "Washer")
     fake_thinq.add_device(DRYER, "DEVICE_DRYER", "Dryer", "DLEX4000W")
-    watcher = scenario.app.services.thinq
+    watcher = scenario.app.services.maybe(keys.thinq)
     assert watcher is not None
     await watcher.link(scenario.member("Erin"), TOKEN, "US")
     await scenario.run_periodic("devices.thinq")  # the starting point: both off

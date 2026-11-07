@@ -20,6 +20,7 @@ from tests.evals.runner import use_backend
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.recipe_groceries import line_key
 
 LINES: list[tuple[str, tuple[str, ...]]] = [
@@ -83,7 +84,7 @@ async def test_recipe_items(
     use_backend(scenario, eval_backend)
     await scenario.start()
     try:
-        reader = scenario.app.services.recipe_groceries
+        reader = scenario.app.services.maybe(keys.recipe_groceries)
         assert reader is not None
         read = await reader._read(scenario.member("Erin"), [line for line, _ in LINES])
     finally:

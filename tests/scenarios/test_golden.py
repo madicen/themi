@@ -32,6 +32,25 @@ from themi.core.tools import TOOL_GROUPS
 from themi.web import HealthSources, create_app
 from themi.web.kit import SiteContext
 
+CONNECTORS = (
+    "fake_google",
+    "fake_gmail",
+    "fake_gcal",
+    "fake_gtasks",
+    "fake_gdocs",
+    "fake_ourgroceries",
+    "fake_cozyla",
+    "fake_travel",
+    "fake_search",
+    "fake_home_connect",
+    "fake_spotify",
+    "fake_thinq",
+    "fake_roborock",
+    "fake_tuya",
+    "fake_catgenie",
+    "fake_keep",
+    "fake_runner",
+)
 GOLDEN = Path(__file__).resolve().parents[1] / "golden"
 WRITE = os.environ.get("THEMI_WRITE_GOLDEN") == "1"
 
@@ -117,25 +136,7 @@ def check(name: str, value: Any) -> None:
     )
 
 
-@pytest.mark.usefixtures(
-    "fake_google",
-    "fake_gmail",
-    "fake_gcal",
-    "fake_gtasks",
-    "fake_gdocs",
-    "fake_ourgroceries",
-    "fake_cozyla",
-    "fake_travel",
-    "fake_search",
-    "fake_home_connect",
-    "fake_spotify",
-    "fake_thinq",
-    "fake_roborock",
-    "fake_tuya",
-    "fake_catgenie",
-    "fake_keep",
-    "fake_runner",
-)
+@pytest.mark.usefixtures(*CONNECTORS)
 async def test_the_family_app_matches_its_golden_files(scenario: Scenario) -> None:
     app = scenario.app
     check("tools.json", tools_of(app))
@@ -143,3 +144,17 @@ async def test_the_family_app_matches_its_golden_files(scenario: Scenario) -> No
     check("handlers.json", handlers_of(app))
     check("routes.json", routes_of(scenario))
     check("system_prompt.txt", build_system())
+
+
+@pytest.mark.usefixtures(*CONNECTORS)
+async def test_every_key_finds_its_object_in_the_full_family_app(scenario: Scenario) -> None:
+    from themi.core import keys
+    from themi.modules.registry import Key
+
+    services = scenario.app.services
+    missing = [
+        name
+        for name, key in vars(keys).items()
+        if isinstance(key, Key) and services.maybe(key) is None
+    ]
+    assert missing == [], f"keys with nothing behind them in the full family app: {missing}"

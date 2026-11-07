@@ -32,6 +32,7 @@ from themi.connectors.homeconnect import (
     HomeConnectError,
     RateLimited,
 )
+from themi.core import keys
 from themi.core.events import title_matches
 from themi.core.services import Services
 from themi.core.tasks import TaskBoard, clock_words
@@ -61,7 +62,7 @@ class Dishwasher:
 
     def install(self) -> None:
         self.services.autonomy.executors.register(EXECUTOR)(self._execute)
-        self.services.dishwasher = self
+        self.services.provide(keys.dishwasher, self)
 
     # ----- linking --------------------------------------------------------------------
 
@@ -161,7 +162,7 @@ class Dishwasher:
 
     async def _to_check_off(self, today: date) -> list[tuple[str, Member, dict[str, Any]]]:
         found: list[tuple[str, Member, dict[str, Any]]] = []
-        wall = self.services.wall_routines
+        wall = self.services.maybe(keys.wall_routines)
         if wall is not None:
             try:
                 items = await wall.open_matching(WORDS)
@@ -194,7 +195,7 @@ class Dishwasher:
             task = self.board.get(int(payload["task"]))
             await self.board.complete(task.id, ctx.member)
             return f"Checked off {task.title}."
-        wall = self.services.wall_routines
+        wall = self.services.maybe(keys.wall_routines)
         if wall is None:
             return "The wall's routines aren't connected any more, so nothing was ticked."
         await wall.tick(int(payload["routine"]), date.fromisoformat(str(payload["day"])))

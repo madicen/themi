@@ -279,7 +279,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [x] 2026-11-07 |
-| CR3 | Core refactor: a typed service registry | Core refactor | [ ] |
+| CR3 | Core refactor: a typed service registry | Core refactor | [x] 2026-11-07 |
 | CR4 | Core refactor: website pages from modules | Core refactor | [ ] |
 | CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | [ ] |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
@@ -14103,7 +14103,7 @@ Notes:
   (and what requires it).
 
 ### CR3 · Core refactor: a typed service registry
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR2c
 Read first: CR2c's notes; `src/themi/core/services.py`.
 - `ctx.provide(obj)` registers a module's public object by type; `ctx.get(Type)` returns
@@ -14117,6 +14117,30 @@ Read first: CR2c's notes; `src/themi/core/services.py`.
   through a hook the body-double module installs. Empty the layer check's allowlist.
 Tests: golden files identical; registry unit tests; full suite green. pyright clean with no
 new ignores.
+
+Notes:
+- `Services` mixes in `themi.modules.registry.Registry`: `provide(key, obj)` (None takes it
+  away), `get(key)` (raises `ModuleError`), `maybe(key)`, `provided()`. Objects are filed
+  under their class's name; a key is the class itself or a `Key("ClassName")`.
+- Deviation, for import cycles: looking features up by class would have added about 65
+  import cycles between features. So `themi/core/keys.py` holds a `Key` per former slot,
+  named as the slot was (`keys.triage`, `keys.taskboard`), importing the classes only for
+  type checking. Code reads `services.maybe(keys.triage)`; modules can still use classes
+  (`ctx.get(TaskBoard)`). keys.py is feature code: CR10 splits it by pack.
+- All 64 optional feature slots are gone from `Services`. The ones kept as fields are core:
+  `group_router`, `task_namer`, `rulebook`, `outcomes`.
+- A codemod rewrote 764 uses in 189 files: reads became `maybe(keys.x)`, writes became
+  `provide(keys.x, ...)`. Where the old code had checked the slot for None first (pyright
+  showed each), the read became `get(keys.x)`: same behaviour, since it was never None there.
+- `ModuleContext.provide/get/maybe` use the same registry; the context still refuses two
+  modules providing different objects of one class.
+- The agent's context no longer names features: `Services.calendar_source`,
+  `lands_source` and `facts_source` are hooks the calendar, reactions and memory modules
+  fill in (CR8 may fold these into prompt fragments).
+- The account store no longer imports the body-double code: `AccountStore.setting_checks`
+  holds a module's own check of a setting; the body_double module registers the sound check.
+  The layer check's KNOWN list now has only CR5's entries.
+- Tests: the registry, and that every key finds its object in the full family app.
 
 ### CR4 · Core refactor: website pages from modules
 Status: [ ]

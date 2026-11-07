@@ -10,12 +10,13 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.lists import Lists, NamedList
 
 
 def lists(scenario: Scenario) -> Lists:
-    assert scenario.app.services.lists is not None
-    return scenario.app.services.lists
+    assert scenario.app.services.maybe(keys.lists) is not None
+    return scenario.app.services.get(keys.lists)
 
 
 def tool_result(scenario: Scenario) -> str:

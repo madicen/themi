@@ -16,6 +16,7 @@ from themi.accounts import AccountsError, InvalidValue, Role
 from themi.accounts.setup import pairing_instructions, parse_money_to_cents
 from themi.autonomy import AutonomyError
 from themi.connectors.travel import TravelError
+from themi.core import keys
 from themi.core.rules import RuleError
 from themi.web.kit import Kit
 
@@ -33,8 +34,10 @@ def routes(kit: Kit) -> APIRouter:
             "family": family,
             "budget": f"{family.takeout_budget_cents / 100:.2f}" if family else "0.00",
             "members": store.list_members(),
-            "home": app.services.travel.home() if app.services.travel else None,
-            "travel": app.services.travel is not None,
+            "home": app.services.maybe(keys.travel).home()
+            if app.services.maybe(keys.travel)
+            else None,
+            "travel": app.services.maybe(keys.travel) is not None,
             **extra,
         }
 
@@ -42,7 +45,7 @@ def routes(kit: Kit) -> APIRouter:
     async def save_home(request: Request) -> Response:
         """The family's home, for travel times (K4)."""
         _, form = await kit.checked(request, admin=True)
-        travel = app.services.travel
+        travel = app.services.maybe(keys.travel)
         if travel is None:
             return kit.redirect("/family", "Travel times aren't set up.")
         address = str(form.get("address", ""))
@@ -141,7 +144,7 @@ def routes(kit: Kit) -> APIRouter:
             store.delete_member(session.member, member_id)
         except InvalidValue as exc:
             return kit.redirect("/family", str(exc))
-        google = kit.app.services.google
+        google = kit.app.services.maybe(keys.google)
         if google is not None:
             for token in tokens:
                 await google.revoke_quietly(token)

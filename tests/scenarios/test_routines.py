@@ -9,6 +9,7 @@ from datetime import date, time, timedelta
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.pauses import EVERYTHING
+from themi.core import keys
 from themi.core.praise import PRAISE
 from themi.core.routines import Routines
 
@@ -16,8 +17,8 @@ WED = date(2026, 10, 21)
 
 
 def routines(scenario: Scenario) -> Routines:
-    assert scenario.app.services.routines is not None
-    return scenario.app.services.routines
+    assert scenario.app.services.maybe(keys.routines) is not None
+    return scenario.app.services.get(keys.routines)
 
 
 async def at(scenario: Scenario, day: date, hour: int, minute: int = 0) -> None:

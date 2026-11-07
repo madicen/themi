@@ -26,6 +26,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.cooking import ahead_of_time
 from themi.core.groceries import CATEGORY, EXECUTOR, and_list, list_summary
 from themi.core.lists import name_key
@@ -72,7 +73,7 @@ class RecipeIdeas:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.recipe_ideas = self
+        self.services.provide(keys.recipe_ideas, self)
         self.services.recipe_buttons["idea_add"] = self.on_add
         self.services.tools.register(cookbook_recipes_we_can_make)
 
@@ -89,7 +90,7 @@ class RecipeIdeas:
         return counts, recent
 
     def pick(self, member: Member, limit: int = 1) -> list[Idea]:
-        pantry = self.services.pantry
+        pantry = self.services.maybe(keys.pantry)
         if pantry is None:
             return []
         items = pantry.items()
@@ -148,7 +149,7 @@ class RecipeIdeas:
     async def on_add(self, event: InboundEvent) -> None:
         assert event.button is not None
         names = [str(n) for n in event.button.payload.get("items") or []]
-        groceries = self.services.groceries
+        groceries = self.services.maybe(keys.groceries)
         if not names or groceries is None:
             return
         member = self.services.store.get_member(event.member.id)
@@ -169,7 +170,7 @@ class RecipeIdeas:
 
 
 def _ideas(ctx: ToolContext) -> RecipeIdeas:
-    found = ctx.services.recipe_ideas
+    found = ctx.services.maybe(keys.recipe_ideas)
     if found is None:
         raise ToolFailed("Recipes aren't set up.")
     return found

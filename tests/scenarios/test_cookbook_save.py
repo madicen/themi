@@ -13,6 +13,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_cookbook import choose
 from tests.scenarios.test_cookbook import linked as linked  # a fixture
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 URL = "https://plants.example/vegan-brownies"
 BROWNIES = {
@@ -32,7 +33,7 @@ async def ready(
     fake = FakeRecipeSite()
     fake.page(URL, recipe_page(BROWNIES))
     fake.page("https://plants.example/odd", recipe_page({**BROWNIES, "name": "Mystery Thing"}))
-    scenario.app.services.web_recipes.reader = fake.reader()  # type: ignore[union-attr]
+    scenario.app.services.maybe(keys.web_recipes).reader = fake.reader()  # type: ignore[union-attr]
     return linked
 
 
@@ -129,8 +130,8 @@ async def test_an_unclear_section_asks(scenario: Scenario, ready: FakeGdocs) -> 
 
 async def test_after_cooking_a_web_recipe(scenario: Scenario, ready: FakeGdocs) -> None:
     await show(scenario)
-    cooking = scenario.app.services.cooking
-    recipes = scenario.app.services.recipes
+    cooking = scenario.app.services.maybe(keys.cooking)
+    recipes = scenario.app.services.maybe(keys.recipes)
     assert cooking is not None and recipes is not None
     brownies = next(r for r in recipes.all(source="web"))
     scenario.primary.queue_structured(

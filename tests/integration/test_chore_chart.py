@@ -10,6 +10,7 @@ import pytest
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.accounts import InvalidValue
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -17,8 +18,8 @@ WED = date(2026, 10, 21)  # the scenario clock's first day
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def sync(scenario: Scenario) -> Any:
@@ -241,7 +242,7 @@ async def test_the_only_chore_waiting_stays_up(scenario: Scenario, fake_cozyla: 
     limit(scenario, "Erin", 1)
     await chore(scenario, "Clean the kitchen", "every Wednesday")
     await sync(scenario)
-    queue = scenario.app.services.chart_queue
+    queue = scenario.app.services.maybe(keys.chart_queue)
     assert queue is not None
     erin = scenario.member("Erin")
     assert queue.change(erin, "different", 0) == "That's the only chore waiting, so it stays up."

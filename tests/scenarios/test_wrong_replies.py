@@ -14,6 +14,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.wrong_replies import ReplyReview, decide, report
 
 OLIVE_OIL = "remind me to buy olive oil tomorrow"
@@ -134,7 +135,7 @@ async def test_bug_reports_name_their_reply(scenario: Scenario) -> None:
         "groups_added": [],
         "shaped": [],  # F30b: nothing the gentle phrasing changed
     }
-    feedback = scenario.app.services.feedback
+    feedback = scenario.app.services.maybe(keys.feedback)
     assert feedback is not None
     text = feedback.book.report(feedback.book.items())
     offered = ", ".join(["core", *context["reply"]["groups"]])
@@ -194,7 +195,7 @@ async def test_a_bug_report_shows_each_tool_call_and_what_it_said(scenario: Scen
     assert "no task with that number" in row["result"]
 
     await scenario.say("Erin", "/bug it didn't mark it")
-    feedback = scenario.app.services.feedback
+    feedback = scenario.app.services.maybe(keys.feedback)
     assert feedback is not None
     text = feedback.book.report(feedback.book.items())
     assert '1. complete_task {"task_id": 99} → ' in text

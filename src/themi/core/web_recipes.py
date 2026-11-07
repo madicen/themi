@@ -42,6 +42,7 @@ from themi.connectors.recipe_page import (
     schema_recipe,
 )
 from themi.connectors.search import SearchError
+from themi.core import keys
 from themi.core.kept_pictures import MOST_TOGETHER
 from themi.core.prompts import as_data
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes, site_name
@@ -195,7 +196,7 @@ class WebRecipes:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.web_recipes = self
+        self.services.provide(keys.web_recipes, self)
         self.services.tools.register(recipe_from_link)
         self.services.tools.register(find_web_recipe)  # RC4b
         self.services.tools.register(recipe_from_picture)  # F34m
@@ -203,7 +204,7 @@ class WebRecipes:
     # ----- reading -------------------------------------------------------------------------
 
     def _count(self, member: Member) -> None:
-        web = self.services.web_search
+        web = self.services.maybe(keys.web_search)
         if web is not None:
             web.spend(member.id, "read")
 
@@ -225,7 +226,7 @@ class WebRecipes:
         return await self._copied(member, url, text)
 
     async def _backend_read(self, url: str) -> str:
-        web = self.services.web_search
+        web = self.services.maybe(keys.web_search)
         if web is None or web.backend is None:
             raise PageError("The site wouldn't let Themi read it.")
         try:
@@ -398,7 +399,7 @@ class WebRecipes:
     async def search(self, member: Member, asked: str, said: str) -> list[Recipe]:
         """Up to three readable recipes from a web search: pages with recipe data only, so
         no model call is spent on each."""
-        web = self.services.web_search
+        web = self.services.maybe(keys.web_search)
         if web is None or web.backend is None:
             raise ToolFailed(SEARCH_SETUP_TEXT)
         web.spend(member.id, "search")
@@ -431,7 +432,7 @@ class WebRecipes:
 
 
 def _web(ctx: ToolContext) -> WebRecipes:
-    found = ctx.services.web_recipes
+    found = ctx.services.maybe(keys.web_recipes)
     if found is None:
         raise ToolFailed("Web recipes aren't set up.")
     return found

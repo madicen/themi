@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from themi.accounts import Member
+from themi.core import keys
 from themi.localtime import to_local
 from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
@@ -130,7 +131,7 @@ class Kit:
 
     @property
     def google_signin(self) -> bool:
-        return self.app.services.google is not None
+        return self.app.services.maybe(keys.google) is not None
 
     # ----- rendering ----------------------------------------------------------------
 

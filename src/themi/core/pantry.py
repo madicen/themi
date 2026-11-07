@@ -26,6 +26,7 @@ from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.autonomy import Outcome
+from themi.core import keys
 from themi.core.groceries import (
     CATEGORY,
     EXECUTOR,
@@ -151,11 +152,11 @@ class Pantry:
 
     def install(self) -> None:
         s = self.services
-        s.pantry = self
+        s.provide(keys.pantry, self)
         s.tools.register(update_pantry)
         s.tools.register(show_pantry)
-        if s.triage is not None:
-            s.triage.receipt_listeners.append(self.on_receipt)
+        if s.maybe(keys.triage) is not None:
+            s.get(keys.triage).receipt_listeners.append(self.on_receipt)
 
     # ----- items --------------------------------------------------------------
 
@@ -323,7 +324,7 @@ class Pantry:
             return False
         names = sorted(i.name for i in self.items())
         member = self.services.store.get_member(row["member_id"])
-        buying = self.services.buying
+        buying = self.services.maybe(keys.buying)
         to_buy = [i.name for i in buying.lists.things_to_buy(member).open_items] if buying else []
         prompt = (
             f"The family's pantry names: {', '.join(names) or 'none yet'}.\n"
@@ -353,9 +354,9 @@ class Pantry:
         if data.get("kind") == "grocery":
             for line in lines:
                 self._purchase(line, email_id, vendor, purchased_at)
-            if self.services.safeway is not None:  # 35c: Safeway's words for the item
+            if self.services.maybe(keys.safeway) is not None:  # 35c: Safeway's words for the item
                 self._teach_safeway(lines, vendor)
-        spending = self.services.spending
+        spending = self.services.maybe(keys.spending)
         if data.get("kind") == "takeout" and spending is not None:  # X1: the month's takeout
             total = data.get("total_cents")
             if not isinstance(total, int) or total <= 0:
@@ -378,7 +379,7 @@ class Pantry:
     def _teach_safeway(self, lines: list[dict[str, Any]], vendor: str) -> None:
         """A Safeway receipt line matched to a grocery item: its words are what to search
         for next time the cart is filled."""
-        safeway = self.services.safeway
+        safeway = self.services.maybe(keys.safeway)
         assert safeway is not None
         for line in lines:
             try:
@@ -443,7 +444,7 @@ class Pantry:
     },
 )
 async def update_pantry(ctx: ToolContext, args: dict[str, Any]) -> str:
-    pantry = ctx.services.pantry
+    pantry = ctx.services.maybe(keys.pantry)
     assert pantry is not None
     lines, restock = [], []
     for entry in args["items"]:
@@ -484,7 +485,7 @@ async def update_pantry(ctx: ToolContext, args: dict[str, Any]) -> str:
     {},
 )
 async def show_pantry(ctx: ToolContext, args: dict[str, Any]) -> str:
-    pantry = ctx.services.pantry
+    pantry = ctx.services.maybe(keys.pantry)
     assert pantry is not None
     lines = []
     for item in pantry.items():
@@ -514,5 +515,5 @@ class PantryModule(Module):
         pantry = ctx.provide(Pantry(ctx.services, ctx.get(GroceryList)))
         pantry.install()
         ctx.periodic("pantry.predict", timedelta(hours=6), pantry.predict)
-        if ctx.services.triage is not None:
+        if ctx.services.maybe(keys.triage) is not None:
             ctx.periodic("pantry.receipts", timedelta(minutes=10), pantry.read_pending_receipts)

@@ -197,7 +197,7 @@ class HomeConnectModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         account = HomeConnectAccount(s.store.db, s.store.cipher, self.client)
-        s.home_connect = ctx.provide(account)
+        ctx.provide(account)
         dishwasher = ctx.provide(Dishwasher(s, ctx.get(TaskBoard), account))
         dishwasher.install()
         ctx.periodic("devices.dishwasher", timedelta(minutes=5), dishwasher.poll)
@@ -217,7 +217,7 @@ class ThinqModule(Module):
         s = ctx.services
         account = ThinqAccount(s.store.db, s.store.cipher, self.config)
         watcher = ThinqWatcher(s.store, account, ThinqPush(account, self.config.mqtt))
-        s.thinq = ctx.provide(watcher)
+        ctx.provide(watcher)
         ctx.periodic("devices.thinq", timedelta(minutes=5), watcher.poll)
         ctx.periodic("devices.thinq_push", timedelta(minutes=1), watcher.listen)
         laundry = ctx.provide(Laundry(s, ctx.get(TaskBoard), watcher))
@@ -237,7 +237,7 @@ class RoborockModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         watcher = RoborockWatcher(s.store, RoborockAccount(s.store.db, s.store.cipher, self.login))
-        s.roborock = ctx.provide(watcher)
+        ctx.provide(watcher)
         ctx.periodic("devices.vacuum", timedelta(minutes=1), watcher.poll)
         vacuum = ctx.provide(Vacuum(s, ctx.get(TaskBoard), watcher))
         vacuum.install()
@@ -256,7 +256,7 @@ class TuyaModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         watcher = TuyaWatcher(s.store, TuyaAccount(s.store.db, s.store.cipher, self.config))
-        s.tuya = ctx.provide(watcher)
+        ctx.provide(watcher)
         ctx.periodic("devices.feeders", timedelta(minutes=10), watcher.poll)
         ctx.provide(Feeders(s, ctx.get(TaskBoard), watcher)).install()
 
@@ -274,6 +274,6 @@ class CatGenieModule(Module):
         s = ctx.services
         account = CatGenieAccount(s.store.db, s.store.cipher, self.config)
         watcher = CatGenieWatcher(s.store, account)
-        s.catgenie = ctx.provide(watcher)
+        ctx.provide(watcher)
         ctx.periodic("devices.litter_box", timedelta(minutes=10), watcher.poll)
         ctx.provide(LitterBox(s, ctx.get(TaskBoard), watcher)).install()

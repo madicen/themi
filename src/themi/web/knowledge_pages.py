@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import Member, NotFound, PermissionDenied
+from themi.core import keys
 from themi.core.memory import Fact, Memory
 from themi.core.rules import RuleError
 from themi.web.kit import Kit
@@ -20,14 +21,14 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def memory() -> Memory:
-        assert app.services.memory is not None
-        return app.services.memory
+        assert app.services.maybe(keys.memory) is not None
+        return app.services.maybe(keys.memory)
 
     @router.get("/knowledge", response_class=HTMLResponse)
     def knowledge_page(request: Request, q: str = "") -> HTMLResponse:
         session = kit.current(request)
         member = session.member
-        journal = app.services.journal
+        journal = app.services.maybe(keys.journal)
         query = q.strip()[:200]
         entries = (
             []
@@ -54,7 +55,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/journal/{entry_id}/delete")
     async def delete_entry(request: Request, entry_id: int) -> Response:
         session, _ = await kit.checked(request)
-        journal = app.services.journal
+        journal = app.services.maybe(keys.journal)
         if journal is None or not journal.delete(session.member, entry_id):
             return kit.redirect("/knowledge", "That entry isn't one of yours.")
         return kit.redirect("/knowledge", "Deleted that day from your journal.")

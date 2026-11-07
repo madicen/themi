@@ -37,7 +37,7 @@ from themi.accounts.models import LoggedMessage
 from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.outbox import Priority
-from themi.core import listening
+from themi.core import keys, listening
 from themi.core.agent import CLAIMS_DONE
 from themi.core.lists import name_key
 from themi.core.prompts import PHRASING_WORDS, day_note
@@ -267,7 +267,7 @@ class ConversationMode:
 
     def install(self) -> None:
         s = self.services
-        s.conversation = self
+        s.provide(keys.conversation, self)
         if s.conversation_rollout == "on":
             s.add_command("/chat", self.on_command, COMMAND_HELP)
         else:  # in a trial it's there for whoever knows it, off the command menu
@@ -319,10 +319,14 @@ class ConversationMode:
     def _open_titles(self, member: Member) -> list[str]:
         """Their open tasks' and routine items' titles (F34a)."""
         s = self.services
-        titles = [t.title for t in s.taskboard.open_for(member)] if s.taskboard else []
-        if s.routines is not None:
-            for routine in s.routines.of(member):
-                titles += [i.title for i in s.routines.items(routine)]
+        titles = (
+            [t.title for t in s.get(keys.taskboard).open_for(member)]
+            if s.maybe(keys.taskboard)
+            else []
+        )
+        if s.maybe(keys.routines) is not None:
+            for routine in s.get(keys.routines).of(member):
+                titles += [i.title for i in s.get(keys.routines).items(routine)]
         return titles
 
     def _list_names(self) -> list[str]:
@@ -331,7 +335,9 @@ class ConversationMode:
 
     def modes(self, member: Member) -> list[str]:
         found = []
-        if self.services.burnout is not None and self.services.burnout.current(member):
+        if self.services.maybe(keys.burnout) is not None and self.services.get(
+            keys.burnout
+        ).current(member):
             found.append(MODE_WORDS["burnout"])
         for pause in self.services.outbox.pauses.active(member):
             if pause.topic != "burnout":
@@ -344,7 +350,7 @@ class ConversationMode:
         family = s.store.get_family()
         timezone = family.timezone if family else "UTC"
         _pinned, notes = s.facts_for(member, text)
-        in_burnout = bool(s.burnout and s.burnout.current(member))
+        in_burnout = bool(s.maybe(keys.burnout) and s.get(keys.burnout).current(member))
         turn = build_chat_turn(
             member,
             text,

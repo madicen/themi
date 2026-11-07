@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from themi.autonomy import AutonomyError
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import buying, groceries
+from themi.core import buying, groceries, keys
 from themi.core.groceries import item_name
 from themi.core.lists import ADD_CATEGORY, ADD_EXECUTOR, THINGS_TO_BUY, list_key, name_key
 from themi.core.tools import Proposal, ToolContext, ToolFailed, tool
@@ -52,13 +52,13 @@ class WhichList:
     def install(self) -> None:
         self.services.button_handlers[KIND] = self.on_button
         self.services.tools.register(ask_which_list)
-        self.services.which_list = self
+        self.services.provide(keys.which_list, self)
 
     def target(self, member: Member, name: str) -> tuple[str, str]:
         """(the button's target, its label) for a list named in words. Raises ToolFailed."""
         if name.strip().lower() in GROCERY_WORDS:
             return GROCERY, GROCERY_LABEL
-        lists = self.services.lists
+        lists = self.services.maybe(keys.lists)
         if lists is None:
             raise ToolFailed("Themi's lists aren't set up.")
         if list_key(name) in BUY_WORDS:  # made the first time it's needed
@@ -98,13 +98,16 @@ class WhichList:
         """The add, or None when it's there already; and the list's name."""
         s = self.services
         if to == GROCERY:
-            assert s.groceries is not None
+            assert s.maybe(keys.groceries) is not None
             name = item_name(item)
-            if s.groceries.is_needed(name) or name in s.groceries.awaiting_approval():
+            if (
+                s.get(keys.groceries).is_needed(name)
+                or name in s.get(keys.groceries).awaiting_approval()
+            ):
                 return None, "the grocery list"
             return groceries.proposal([name]), "the grocery list"
-        assert s.lists is not None
-        nl = s.lists.get(int(to), member)
+        assert s.maybe(keys.lists) is not None
+        nl = s.get(keys.lists).get(int(to), member)
         if nl is None:
             raise ToolFailed("That list is gone.")
         if any(name_key(i.name) == name_key(item) for i in nl.open_items):
@@ -146,7 +149,7 @@ def _capital(text: str) -> str:
     {"item": {"type": "string"}, "lists": {"type": "array", "items": {"type": "string"}}},
 )
 async def ask_which_list(ctx: ToolContext, args: dict[str, Any]) -> str:
-    which = ctx.services.which_list
+    which = ctx.services.maybe(keys.which_list)
     assert which is not None
     item = " ".join(str(args["item"]).split())[:100]
     if not item:

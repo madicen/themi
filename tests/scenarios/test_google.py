@@ -11,6 +11,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi.accounts import SYSTEM
+from themi.core import keys
 
 
 def path_of(url: str) -> str:
@@ -168,7 +169,7 @@ async def test_linking_redirects_are_allowed_by_the_csp(
 async def test_without_google_set_up_the_site_says_so(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    assert scenario.app.services.google is None
+    assert scenario.app.services.maybe(keys.google) is None
     assert "Sign in with Google" not in (await site.get("/signed-out")).text
     assert (await site.get("/auth/google")).status_code == 404
     assert (

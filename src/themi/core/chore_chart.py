@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import InvalidValue, Member, NotFound
 from themi.connectors.cozyla.schedule import wall_can_say
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -69,7 +70,7 @@ class ChartQueue:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.chart_queue = self
+        self.services.provide(keys.chart_queue, self)
         self.board.holds.append(self.held)
         self.services.tools.register(set_chore_chart_limit)
         self.services.tools.register(change_chore_chart)
@@ -319,7 +320,7 @@ def _due_key(task: Task, today: date) -> tuple[Any, ...]:
 
 
 def _queue(ctx: ToolContext) -> ChartQueue:
-    queue = ctx.services.chart_queue
+    queue = ctx.services.maybe(keys.chart_queue)
     if queue is None:
         raise ToolFailed("The wall's chore chart isn't connected.")
     return queue

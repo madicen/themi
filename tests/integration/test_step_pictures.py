@@ -10,6 +10,7 @@ from tests.fakes.scripted_provider import TINY_PNG
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
+from themi.core import keys
 from themi.core.body_double import GUIDED, BodyDouble
 from themi.core.step_images import CAPPED_TEXT, StepPictures
 from themi.core.tasks import Task
@@ -18,8 +19,8 @@ STEPS = ["Clear the counter", "Load the dishwasher", "Wipe the stovetop", "Sweep
 
 
 def bd(scenario: Scenario) -> BodyDouble:
-    assert scenario.app.services.body_double is not None
-    return scenario.app.services.body_double
+    assert scenario.app.services.maybe(keys.body_double) is not None
+    return scenario.app.services.get(keys.body_double)
 
 
 def pictures(scenario: Scenario) -> StepPictures:
@@ -29,7 +30,7 @@ def pictures(scenario: Scenario) -> StepPictures:
 
 
 async def kitchen(scenario: Scenario, owner: str = "Erin") -> Task:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     member = scenario.member(owner)
     task = await board.create(member, "Clean the kitchen", "physical", 3)

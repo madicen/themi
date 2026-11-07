@@ -115,6 +115,11 @@ class Memory:
         self.db = db
         self.rulebook = rulebook
 
+    def prompt_facts(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
+        """(pinned facts for the system prompt, notes retrieved for this message)."""
+        pinned, retrieved = self.for_prompt(member, message)
+        return [f.fact for f in pinned], [f.fact for f in retrieved]
+
     # ----- writing ------------------------------------------------------------
 
     def remember(
@@ -289,4 +294,5 @@ class MemoryModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         from themi.core.rules import Rulebook  # at install: importing it at the top is a cycle
 
-        ctx.services.memory = ctx.provide(Memory(ctx.services.store.db, ctx.get(Rulebook)))
+        memory = ctx.provide(Memory(ctx.services.store.db, ctx.get(Rulebook)))
+        ctx.services.facts_source = memory.prompt_facts

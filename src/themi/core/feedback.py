@@ -30,6 +30,7 @@ from themi.accounts import Member
 from themi.ai.settings import AITask
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tools import ToolContext, tool
 from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
@@ -284,7 +285,7 @@ class FeedbackChat:
         s.add_event_command("/bug", self.on_bug, "Report something that went wrong")
         s.add_event_command("/idea", self.on_idea, "Suggest an improvement to Themi")
         s.tools.register(log_feedback)
-        s.feedback = self
+        s.provide(keys.feedback, self)
 
     async def on_bug(self, event: InboundEvent, argument: str) -> None:
         await self._on_command(event, argument, "bug")
@@ -301,8 +302,10 @@ class FeedbackChat:
         item_id = self.record(
             member, kind, argument, f"/{kind}", event.reply_to_message_id, pictures=pictures
         )
-        if kind == "bug" and self.services.conversation is not None:  # CM1c: a miss to look at
-            self.services.conversation.sidecar.mark_missed(member)
+        if (
+            kind == "bug" and self.services.maybe(keys.conversation) is not None
+        ):  # CM1c: a miss to look at
+            self.services.get(keys.conversation).sidecar.mark_missed(member)
         thanks = THANKS[kind].format(id=item_id) + self._kept_words(item_id)
         await self.services.outbox.send(member, thanks, priority=Priority.REPLY)
 
@@ -363,7 +366,9 @@ class FeedbackChat:
             "conversation": conversation,
             "open_items": [item.summary for item in s.open_items(member)],
             "sidecar": (  # CM1c: what conversation mode's sidecar picked out lately
-                s.conversation.sidecar.recent(member, 3) if s.conversation is not None else []
+                s.get(keys.conversation).sidecar.recent(member, 3)
+                if s.maybe(keys.conversation) is not None
+                else []
             ),
             "settings": self._settings(member, timezone),
             "ai": self._ai(member),
@@ -481,7 +486,7 @@ class FeedbackChat:
     },
 )
 async def log_feedback(ctx: ToolContext, args: dict[str, Any]) -> str:
-    chat = ctx.services.feedback
+    chat = ctx.services.maybe(keys.feedback)
     if chat is None:
         return "Feedback isn't set up on this server."
     sent = ctx.image if ctx.picture else None

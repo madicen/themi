@@ -12,6 +12,7 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_sender_suggestions import mail
 from tests.scenarios.test_triage import arrive, inbox, verdict
+from themi.core import keys
 from themi.core.email_audit import EmailAudit
 from themi.core.tasks import TaskBoard
 
@@ -39,13 +40,13 @@ def masked(texts: list[str]) -> list[str]:
 
 
 def audit(scenario: Scenario) -> EmailAudit:
-    assert scenario.app.services.email_audit is not None
-    return scenario.app.services.email_audit
+    assert scenario.app.services.maybe(keys.email_audit) is not None
+    return scenario.app.services.get(keys.email_audit)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def audit_titles(scenario: Scenario) -> list[str]:

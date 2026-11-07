@@ -6,6 +6,7 @@ from __future__ import annotations
 from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
+from themi.core import keys
 from themi.core.email_audit import LEVELS_TEXT
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
@@ -56,7 +57,7 @@ async def test_likely_senders_wait_in_the_audit_and_only_an_answer_adds_one(
     assert account.urgent_senders == ("alerts@schwab.example",)
 
     await scenario.run_periodic("email.senders")  # each is offered once
-    audit = scenario.app.services.email_audit
+    audit = scenario.app.services.maybe(keys.email_audit)
     assert audit is not None
     assert len(audit.waiting(scenario.member("Erin"))) == 1  # Bob Tenant, still
 

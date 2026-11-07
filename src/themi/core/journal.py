@@ -26,6 +26,7 @@ from themi.accounts import Member
 from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
+from themi.core import keys
 from themi.core.memory import terms
 from themi.core.prompts import as_data
 from themi.core.services import Services
@@ -98,7 +99,7 @@ class Journal:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.journal = self
+        self.services.provide(keys.journal, self)
         self.services.tools.register(search_journal)
 
     # ----- writing --------------------------------------------------------------------
@@ -210,7 +211,7 @@ class Journal:
     {"query": {"type": "string", "description": "The topic, in a few words."}},
 )
 async def search_journal(ctx: ToolContext, args: dict[str, Any]) -> str:
-    journal = ctx.services.journal
+    journal = ctx.services.maybe(keys.journal)
     if journal is None:
         raise ToolFailed("The journal isn't set up.")
     found = journal.search(ctx.member, str(args["query"]))

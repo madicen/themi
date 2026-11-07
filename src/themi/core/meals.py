@@ -20,6 +20,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.pantry import Pantry, PantryItem
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
@@ -111,7 +112,7 @@ class Meals:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.meals = self
+        self.services.provide(keys.meals, self)
         self.services.button_handlers["meal"] = self.on_button
         self.services.tools.register(suggest_meals)
 
@@ -149,7 +150,7 @@ class Meals:
             Button(o["title"], "meal", {"suggestion": suggestion_id, "choice": n})
             for n, o in enumerate(options)
         ]
-        ideas = self.services.recipe_ideas  # RC7: a cookbook recipe the pantry covers
+        ideas = self.services.maybe(keys.recipe_ideas)  # RC7: a cookbook recipe the pantry covers
         cookbook = ideas.offer(member) if ideas is not None else None
         if cookbook is not None:
             text = f"{text}\n{cookbook[0]}"
@@ -197,7 +198,7 @@ class Meals:
     },
 )
 async def suggest_meals(ctx: ToolContext, args: dict[str, Any]) -> str:
-    meals = ctx.services.meals
+    meals = ctx.services.maybe(keys.meals)
     assert meals is not None
     options = await meals.suggest(ctx.member, str(args.get("request") or ""))
     if options is None:

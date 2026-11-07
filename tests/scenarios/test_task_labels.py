@@ -4,12 +4,13 @@
 from datetime import date
 
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard, _label
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def nudge_for(scenario: Scenario, title: str, due: date | None = None, **kw) -> str:

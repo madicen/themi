@@ -14,6 +14,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import PACIFIC, local
 from tests.scenarios.test_triage import ERIN, link
+from themi.core import keys
 from themi.core.calendar_copies import CalendarCopies
 
 GUESTS = [{"email": ERIN, "self": True}, {"email": "boss@example.com"}]
@@ -28,7 +29,7 @@ async def linked(
 
 
 def copies(scenario: Scenario) -> CalendarCopies:
-    found = scenario.app.services.calendar_copies
+    found = scenario.app.services.maybe(keys.calendar_copies)
     assert found is not None
     return found
 
@@ -40,7 +41,7 @@ def account_id(scenario: Scenario) -> int:
 
 async def work_calendar(scenario: Scenario, fake: FakeGcal, level: str = "label") -> str:
     work = fake.add_calendar(ERIN, "Work")
-    calendars = scenario.app.services.calendars
+    calendars = scenario.app.services.maybe(keys.calendars)
     assert calendars is not None
     calendars.choose(account_id(scenario), [("primary", "primary"), (work, "Work")])
     await copies(scenario).set_rule(scenario.member("Erin"), account_id(scenario), work, "Work",
@@ -130,7 +131,7 @@ async def test_a_copy_isnt_copied_back_or_taken_for_a_twin(
                      calendar=work)  # fmt: skip
     await read(scenario)
     family_id = scenario.app.db.scalar("SELECT calendar_id FROM calendars")
-    calendars = scenario.app.services.calendars
+    calendars = scenario.app.services.maybe(keys.calendars)
     assert calendars is not None
     calendars.choose(account_id(scenario), [("primary", "primary"), (work, "Work"),
                                             (family_id, "Themi")])  # fmt: skip
@@ -166,7 +167,7 @@ async def test_the_calendars_page_sets_the_rule_and_the_labels(
     scenario: Scenario, linked: FakeGcal, site: httpx.AsyncClient
 ) -> None:
     work = linked.add_calendar(ERIN, "Work")
-    calendars = scenario.app.services.calendars
+    calendars = scenario.app.services.maybe(keys.calendars)
     assert calendars is not None
     calendars.choose(account_id(scenario), [("primary", "primary"), (work, "Work")])
     csrf = await sign_in(scenario, site, "Erin")

@@ -21,74 +21,11 @@ from themi.channels.outbox import Outbox
 from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
+from themi.modules.registry import Registry
 
 if TYPE_CHECKING:
-    from themi.connectors.catgenie import CatGenieWatcher
-    from themi.connectors.gcal import CalendarSync
-    from themi.connectors.gcal.busy import CalendarBusy
-    from themi.connectors.gmail import GmailSync
-    from themi.connectors.google import GoogleAccounts
-    from themi.connectors.homeconnect import HomeConnectAccount
-    from themi.connectors.roborock import RoborockWatcher
-    from themi.connectors.thinq import ThinqWatcher
-    from themi.connectors.tuya import TuyaWatcher
-    from themi.core.appliances import Appliances
-    from themi.core.body_double import BodyDouble
-    from themi.core.breaks import Breaks
-    from themi.core.burnout import Burnout
-    from themi.core.business_hours import BusinessHours
-    from themi.core.buying import ThingsToBuy
-    from themi.core.calendar_copies import CalendarCopies
-    from themi.core.calls import VendorCalls
-    from themi.core.chore_chart import ChartQueue
-    from themi.core.conversation_mode import ConversationMode
-    from themi.core.cookbook_save import CookbookSave
-    from themi.core.cooking import Cooking
-    from themi.core.cozyla_routines import CozylaRoutines
-    from themi.core.cozyla_todos import CozylaTodos
-    from themi.core.day_summary import DaySummary
-    from themi.core.dishwasher import Dishwasher
-    from themi.core.email_audit import EmailAudit
-    from themi.core.events import Events
-    from themi.core.expected import ExpectedEmails
-    from themi.core.feedback import FeedbackChat
-    from themi.core.feeders import Feeders
-    from themi.core.focus import Focus
-    from themi.core.follow_ups import FollowUps
-    from themi.core.google_tasks import GoogleTasksInbox
-    from themi.core.groceries import GroceryList
-    from themi.core.guides import Guides
-    from themi.core.habits import HabitReserve
-    from themi.core.journal import Journal
-    from themi.core.laundry import Laundry
-    from themi.core.liaison import Liaison
-    from themi.core.lists import Lists
-    from themi.core.litter_box import LitterBox
-    from themi.core.maintenance import Maintenance
-    from themi.core.meals import Meals
-    from themi.core.memory import Memory
-    from themi.core.music import Music
-    from themi.core.noise_digest import NoiseDigest
-    from themi.core.pantry import Pantry
-    from themi.core.reactions import Reactions
-    from themi.core.recipe_groceries import RecipeGroceries
-    from themi.core.recipe_ideas import RecipeIdeas
-    from themi.core.recipes import Recipes
-    from themi.core.routines import Routines
     from themi.core.routing import EmbeddingRouter
     from themi.core.rules import Rulebook
-    from themi.core.safeway import SafewayCart
-    from themi.core.senders import SenderSuggestions
-    from themi.core.spending import Spending
-    from themi.core.taking import Taking
-    from themi.core.task_blocks import TaskBlocks
-    from themi.core.tasks import TaskBoard
-    from themi.core.travel import TravelHeadsUps
-    from themi.core.triage import EmailTriage
-    from themi.core.vacuum import Vacuum
-    from themi.core.web_recipes import WebRecipes
-    from themi.core.web_search import WebSearch
-    from themi.core.which_list import WhichList
     from themi.core.which_task import TaskNamer
     from themi.energy.outcomes import OutcomeTracker
 
@@ -145,7 +82,7 @@ TextHandler = Callable[[InboundEvent, Member, str], Awaitable[bool]]
 
 
 @dataclass
-class Services:
+class Services(Registry):
     store: AccountStore
     ai_settings: AISettingsStore
     router: AIRouter
@@ -167,79 +104,19 @@ class Services:
     group_router: EmbeddingRouter | None = None  # P7b, used when tool_routing is "embeddings"
     task_namer: TaskNamer | None = None  # P8b: which open task a message names, by meaning
     rulebook: Rulebook | None = None
-    memory: Memory | None = None
     outcomes: OutcomeTracker | None = None
-    taskboard: TaskBoard | None = None
-    habits: HabitReserve | None = None
-    google: GoogleAccounts | None = None
-    gmail: GmailSync | None = None
-    calendar: CalendarSync | None = None
-    calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
-    calendar_copies: CalendarCopies | None = None  # F34f: a calendar shown on the family's
-    day_summary: DaySummary | None = None  # what's on someone's day (K2)
-    events: Events | None = None  # calendar events made and changed from chat (K3)
-    travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
-    task_blocks: TaskBlocks | None = None  # time blocked on calendars for tasks (K5)
-    wall_routines: CozylaRoutines | None = None  # the wall's routines (C3, bug #22)
-    senders: SenderSuggestions | None = None  # suggesting always-urgent senders (E1)
-    email_audit: EmailAudit | None = None  # the email audit (E2)
-    triage: EmailTriage | None = None
-    noise: NoiseDigest | None = None  # noise emails offered together (F16b)
-    expected: ExpectedEmails | None = None
-    feedback: FeedbackChat | None = None
-    groceries: GroceryList | None = None
-    pantry: Pantry | None = None
-    meals: Meals | None = None
-    calls: VendorCalls | None = None
-    wall: CozylaTodos | None = None  # the Cozyla wall's to-do lists, when configured
-    chart_queue: ChartQueue | None = None  # chores waiting their turn for the chart (C2d)
-    lists: Lists | None = None  # named lists Themi keeps (L1a)
-    buying: ThingsToBuy | None = None  # things to buy that aren't food, and stores (L2a)
-    spending: Spending | None = None  # takeout, eating out, business expenses (X1)
-    safeway: SafewayCart | None = None  # the Safeway cart, filled by the helper (35c)
-    breaks: Breaks | None = None  # a rest mode that ends with a question (B1)
-    body_double: BodyDouble | None = None  # company while they work (BD1a)
-    music: Music | None = None  # their own Spotify (BD5b)
+    # CR3: what the agent's context reads from modules, set by the module that has it.
+    calendar_source: Callable[[Member], str] | None = None  # the calendar module (K1)
+    lands_source: Callable[[Member], str] | None = None  # reactions (S5)
+    facts_source: Callable[[Member, str], tuple[list[str], list[str]]] | None = None  # memory
     # BD1a: tool groups a member's state calls for, whatever the words (a session going on).
     group_sources: list[Callable[[Member], set[str]]] = field(default_factory=list)
-    burnout: Burnout | None = None  # everything held, no demands (F22d)
-    web_search: WebSearch | None = None  # looking things up online (F30d)
-    business_hours: BusinessHours | None = None  # F34k: a call before the business closes
-    guides: Guides | None = None  # the family's own guides (F29ha)
-    recipes: Recipes | None = None  # the family cookbook, from its Google Doc (RC1a)
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
     recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
-    recipe_groceries: RecipeGroceries | None = None  # what a recipe needs, to the list (RC2a)
-    cooking: Cooking | None = None  # cooking a recipe with Themi (RC3a)
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
-    web_recipes: WebRecipes | None = None  # recipes from a link or a search (RC4a, RC4b)
-    cookbook_save: CookbookSave | None = None  # a liked recipe into the cookbook doc (RC5)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
-    recipe_ideas: RecipeIdeas | None = None  # cookbook recipes the pantry covers (RC7)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
-    taking: Taking | None = None  # a partner's tasks someone could take on (F29f)
-    conversation: ConversationMode | None = None  # CM1a: plain chat, and the sidecar (CM1b)
-    focus: Focus | None = None  # a few things for now, when it's too much (O1)
-    which_list: WhichList | None = None  # which list, as a card (F17b)
-    follow_ups: FollowUps | None = None  # reminders once a task is done (F17b)
-    home_connect: HomeConnectAccount | None = None  # the family's Home Connect sign-in (H1)
-    dishwasher: Dishwasher | None = None  # its cycles, read from Home Connect (H1)
-    thinq: ThinqWatcher | None = None  # the washer and dryer, from LG ThinQ (30)
-    laundry: Laundry | None = None  # wet loads moved, or rescued with a rewash (31)
-    maintenance: Maintenance | None = None  # seasonal and long-term upkeep (33)
-    appliances: Appliances | None = None  # how they're doing, asked in chat (F20b)
-    roborock: RoborockWatcher | None = None  # the robot vacuum, from Roborock (V1)
-    vacuum: Vacuum | None = None  # its chores when it needs a hand (V1)
-    tuya: TuyaWatcher | None = None  # the pet feeders, from Tuya's cloud (32)
-    feeders: Feeders | None = None  # their chores when one needs a hand (32)
-    catgenie: CatGenieWatcher | None = None  # the litter box, from CatGenie's cloud (CG1a)
-    litter_box: LitterBox | None = None  # its chores when it needs a hand (CG1b)
-    reactions: Reactions | None = None  # what lands with each person (S5)
-    journal: Journal | None = None  # each person's private journal of conversations (M1)
-    google_tasks: GoogleTasksInbox | None = None  # Google Tasks as an inbox (GT1a)
-    routines: Routines | None = None  # routines kept in Themi (R1a)
-    liaison: Liaison | None = None  # notes passed on between partners (34a)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:
         self.commands[name] = handler
@@ -267,11 +144,11 @@ class Services:
 
     def calendar_context(self, member: Member) -> str:
         """Today's and tomorrow's events this person may see, for the model (K1)."""
-        return self.calendars.context(member) if self.calendars is not None else ""
+        return self.calendar_source(member) if self.calendar_source is not None else ""
 
     def what_lands(self, member: Member) -> str:
         """What kinds of messages go down well with this person, in words (S5)."""
-        return self.reactions.picture(member) if self.reactions is not None else ""
+        return self.lands_source(member) if self.lands_source is not None else ""
 
     def rules(self, member: Member) -> tuple[list[str], list[str]]:
         """(locked household rules, the member's own personal rules), for the system prompt."""
@@ -279,7 +156,6 @@ class Services:
 
     def facts_for(self, member: Member, message: str = "") -> tuple[list[str], list[str]]:
         """(pinned facts for the system prompt, notes retrieved for this message)."""
-        if self.memory is None:
+        if self.facts_source is None:
             return [], []
-        pinned, retrieved = self.memory.for_prompt(member, message)
-        return [f.fact for f in pinned], [f.fact for f in retrieved]
+        return self.facts_source(member, message)

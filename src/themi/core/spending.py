@@ -28,6 +28,7 @@ from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.accounts.setup import parse_money_to_cents
 from themi.connectors.gmail.parse import web_link
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
@@ -91,7 +92,7 @@ class Spending:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.spending = self
+        self.services.provide(keys.spending, self)
         for t in (log_spending, spending_summary, mark_business_expense, remove_spending):
             self.services.tools.register(t)
 
@@ -252,7 +253,7 @@ class Spending:
 
 
 def _spending(ctx: ToolContext) -> Spending:
-    spending = ctx.services.spending
+    spending = ctx.services.maybe(keys.spending)
     if spending is None:
         raise ToolFailed("Spending isn't set up.")
     return spending

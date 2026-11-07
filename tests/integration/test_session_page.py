@@ -15,6 +15,7 @@ from tests.fixtures.web import csrf_of, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.mini_app import sign_init_data
+from themi.core import keys
 from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble
 from themi.web.auth import COOKIE_NAME
 
@@ -22,8 +23,8 @@ ENERGY_WORDS = ("energy", "capacity", "score", "low", "medium", "high")
 
 
 def bd(scenario: Scenario) -> BodyDouble:
-    assert scenario.app.services.body_double is not None
-    return scenario.app.services.body_double
+    assert scenario.app.services.maybe(keys.body_double) is not None
+    return scenario.app.services.get(keys.body_double)
 
 
 def init_data(user_id: int, *, token: str = BOT_TOKEN, ago: int = 0) -> str:
@@ -82,7 +83,7 @@ async def test_the_state_per_mode(scenario: Scenario, site: httpx.AsyncClient) -
     state = (await site.get("/session/state")).json()
     assert state["timer"] == {"kind": "down", "to": "2026-10-21T16:25:00+00:00", "text": "25:00"}
     assert [b["label"] for b in state["buttons"]] == ["Break", "Stop here"]
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Clean the kitchen", "physical", 3)
     await board.update(task.id, erin, steps=["Clear the counter", "Sweep"])

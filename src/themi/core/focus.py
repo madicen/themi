@@ -38,7 +38,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import listening, partner, priority
+from themi.core import keys, listening, partner, priority
 from themi.core.repeat import next_occurrences
 from themi.core.tasks import Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -127,7 +127,7 @@ class Focus:
         self.summary = summary
 
     def install(self) -> None:
-        self.services.focus = self
+        self.services.provide(keys.focus, self)
         self.services.tools.register(focus_now)
         self.services.button_handlers["focus"] = self.on_button
 
@@ -305,7 +305,7 @@ class Focus:
     {"spread": {"type": "boolean"}},
 )
 async def focus_now(ctx: ToolContext, args: dict[str, Any]) -> str:
-    focus = ctx.services.focus
+    focus = ctx.services.maybe(keys.focus)
     if focus is None:
         raise ToolFailed("This isn't set up.")
     members = ctx.services.store.list_members()

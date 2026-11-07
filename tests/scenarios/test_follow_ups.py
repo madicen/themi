@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -12,8 +13,8 @@ REFILL = "Refill water and food bowls"
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def nudges(scenario: Scenario, title: str) -> list[str]:

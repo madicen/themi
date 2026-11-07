@@ -12,6 +12,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi import clock
 from themi.accounts.store import SYSTEM
+from themi.core import keys
 
 __all__ = ["inbox"]  # the fixture, from triage's scenarios
 
@@ -30,7 +31,7 @@ async def noise(scenario: Scenario, inbox: FakeGmail, *mails: dict) -> list[int]
 async def at(scenario: Scenario, hour: int) -> list[str]:
     """Move the clock to `hour` local time today (or tomorrow if that's past), and run the
     job. Returns what was sent."""
-    now = clock.now().astimezone(scenario.app.services.noise._tz())  # type: ignore[union-attr]
+    now = clock.now().astimezone(scenario.app.services.maybe(keys.noise)._tz())  # type: ignore[union-attr]
     target = now.replace(hour=hour, minute=0, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)

@@ -26,6 +26,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import event_line
+from themi.core import keys
 from themi.core.partner import named
 from themi.core.prompts import as_data
 from themi.core.tasks import Task, TaskBoard
@@ -49,7 +50,7 @@ class DaySummary:
 
     def install(self) -> None:
         self.services.tools.register(day_summary)
-        self.services.day_summary = self
+        self.services.provide(keys.day_summary, self)
 
     # ----- what's on ----------------------------------------------------------------------
 
@@ -64,7 +65,7 @@ class DaySummary:
         tz = self._tz()
         start = datetime(day.year, day.month, day.day, tzinfo=tz)
         lines: list[tuple[tuple[int, datetime], str]] = []
-        reader = self.services.calendars
+        reader = self.services.maybe(keys.calendars)
         if reader is not None:
             shared, seen = self._shared_calendars(), set()
             owners = [m for m in reader.visible_to(viewer) if m.id == member.id or partner]
@@ -243,7 +244,7 @@ def _clock(at: time) -> str:
     {"date": {"type": "string"}, "whose": {"type": "string", "enum": ["me", "both", "partner"]}},
 )
 async def day_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
-    summary = ctx.services.day_summary
+    summary = ctx.services.maybe(keys.day_summary)
     if summary is None:
         raise ToolFailed("Day summaries aren't set up.")
     raw = str(args["date"]).strip()

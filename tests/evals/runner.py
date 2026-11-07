@@ -17,6 +17,7 @@ from themi.accounts import Member
 from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
 from themi.ai.settings import AITask, RouteEntry
 from themi.connectors.google.oauth import LINK_SCOPES
+from themi.core import keys
 from themi.core.body_double import MODE_WORDS
 from themi.core.groceries import list_summary
 from themi.storage.secrets import Secret
@@ -64,14 +65,14 @@ async def apply_setup(scenario: Scenario, case: Case) -> None:
         elif "task" in step:
             await _task(scenario, member, step)
         elif "list" in step:
-            assert services.lists is not None
-            services.lists.create(member, step["list"], personal=False)
+            assert services.maybe(keys.lists) is not None
+            services.get(keys.lists).create(member, step["list"], personal=False)
         elif "noise" in step:
             await _noise(scenario, member, step["noise"])
         elif "body_double" in step:  # BD1a: a session going on, {"body_double": "sprint"}
-            assert services.body_double is not None
+            assert services.maybe(keys.body_double) is not None
             mode = MODE_WORDS[step["body_double"]]
-            await services.body_double.start(member, mode=mode, label="my work")
+            await services.get(keys.body_double).start(member, mode=mode, label="my work")
         elif "routine" in step:
             assert scenario.cozyla is not None, "a routine case needs the fake wall"
             uid = f"m-{case.speaker.lower()}"
@@ -85,7 +86,7 @@ async def _task(scenario: Scenario, member: Member, step: dict[str, Any]) -> Non
     """A task of theirs: {"task": title}, and optionally "due" ("today", "tomorrow" or a
     date), "at" ("HH:MM"), "both" (either of them, F19c and O1) and "for" (someone else's,
     by name: T2)."""
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     if set(step) == {"task"}:  # as the cases before O1 had it: matched, and nudged
         await board.create(member, step["task"], "errand", 1)
@@ -118,7 +119,9 @@ async def _noise(scenario: Scenario, member: Member, mails: list[dict[str, str]]
     triage leaves them (bug #67). Needs the Scenario built with the fake Gmail."""
     services = scenario.app.services
     google = scenario.google
-    assert google is not None and services.gmail is not None, "this case needs fake Gmail"
+    assert google is not None and services.maybe(keys.gmail) is not None, (
+        "this case needs fake Gmail"
+    )
     address = f"{member.name.lower()}@gmail.com"
     token = f"eval-refresh-{member.id}"
     google.state.refresh_tokens[token] = _Refresh(address, LINK_SCOPES)

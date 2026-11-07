@@ -12,6 +12,7 @@ import pytest
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -19,8 +20,8 @@ LA = ZoneInfo("America/Los_Angeles")
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def sync(scenario: Scenario) -> Any:

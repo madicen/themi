@@ -9,6 +9,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.accounts import SYSTEM
 from themi.channels.outbox import Priority
+from themi.core import keys
 
 LONG = "Here's the whole story of the week so far. " * 15
 
@@ -55,7 +56,7 @@ async def test_reactions_are_recorded_with_the_kind_and_length(scenario: Scenari
 
 
 async def test_a_check_in_is_told_apart_from_a_nudge(scenario: Scenario) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     run = await board.create(erin, "Go for a run", "physical", 2, check_in=True, nudge=False)

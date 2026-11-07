@@ -4,14 +4,15 @@ partners, and an offer to step up after a steady stretch."""
 import httpx
 
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 BIRD_CAGE = ["Shake out the top tray", "Refill the water dispenser"]
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def bird_cage(scenario: Scenario, escalate_to: str = "both") -> Task:
@@ -186,7 +187,7 @@ async def test_a_chore_for_either_of_you_isnt_called_overdue(scenario) -> None: 
 
     from themi.core.repeat import parse
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     erin = scenario.member("Erin")
     bins = await board.create(erin, "Bring bins in", "physical", 1, assignee=erin)
     await board.set_schedule(

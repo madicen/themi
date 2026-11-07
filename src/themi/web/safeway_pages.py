@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+from themi.core import keys
 from themi.core.safeway import Helper, InvalidResults, SafewayCart, check_product
 from themi.web.kit import Kit
 
@@ -29,8 +30,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def safeway() -> SafewayCart:
-        assert app.services.safeway is not None
-        return app.services.safeway
+        assert app.services.maybe(keys.safeway) is not None
+        return app.services.maybe(keys.safeway)
 
     def page(request: Request, **values: Any) -> HTMLResponse:
         session = kit.current(request)

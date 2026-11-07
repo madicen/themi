@@ -15,6 +15,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -26,8 +27,8 @@ def local(hour: int, minute: int = 0, day: int = 21) -> str:
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 @pytest.fixture
@@ -248,7 +249,7 @@ async def test_time_made_for_two_tasks_holds_both(scenario: Scenario, linked: Fa
     )
     erin = scenario.member("Erin")
     assert board(scenario).held(mimi, erin) and board(scenario).held(merlin, erin)
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     assert summary.due(erin, WED) == []
 

@@ -23,6 +23,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
@@ -61,7 +62,7 @@ class Breaks:
 
     def install(self) -> None:
         s = self.services
-        s.breaks = self
+        s.provide(keys.breaks, self)
         s.button_handlers["break"] = self.on_button
         s.add_command("/break", self.on_command, "Take a break: /break 30 (minutes)")
         for t in (start_break, end_break):
@@ -83,8 +84,8 @@ class Breaks:
 
     async def _begin(self, member: Member, minutes: int) -> datetime:
         self._finish(member)
-        if self.services.body_double is not None:  # BD1a: a break wins over a session
-            await self.services.body_double.stop_for_other(member)
+        if self.services.maybe(keys.body_double) is not None:  # BD1a: a break wins over a session
+            await self.services.get(keys.body_double).stop_for_other(member)
         now = clock.now()
         until = now + timedelta(minutes=minutes)
         pause = self.pauses.pause(member, TOPIC, until + GRACE)
@@ -162,7 +163,7 @@ class Breaks:
 
 
 def _breaks(ctx: ToolContext) -> Breaks:
-    breaks = ctx.services.breaks
+    breaks = ctx.services.maybe(keys.breaks)
     if breaks is None:
         raise ToolFailed("Breaks aren't set up.")
     return breaks

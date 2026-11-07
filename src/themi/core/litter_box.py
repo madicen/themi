@@ -44,6 +44,7 @@ from themi.connectors.catgenie import (
     LitterBoxEvent,
     LitterBoxReading,
 )
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
@@ -87,7 +88,7 @@ class LitterBox:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.litter_box = self
+        self.services.provide(keys.litter_box, self)
         self.watcher.listeners.append(self.on_event)
         self.watcher.reading_listeners.append(self._counted)
         self.watcher.broken_listeners.append(self._broken)

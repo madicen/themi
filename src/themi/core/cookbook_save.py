@@ -28,6 +28,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DocsConflict, DocsError
 from themi.core import cookbook as book
+from themi.core import keys
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -209,7 +210,7 @@ class CookbookSave:
 
 
 def _saver(ctx: ToolContext) -> CookbookSave:
-    found = ctx.services.cookbook_save
+    found = ctx.services.maybe(keys.cookbook_save)
     if found is None:
         raise ToolFailed("Recipes aren't set up.")
     return found
@@ -262,5 +263,5 @@ class CookbookSaveModule(Module):
     requires = ("recipes",)
 
     def install(self, ctx: ModuleContext) -> None:
-        ctx.services.cookbook_save = ctx.provide(CookbookSave(ctx.services, ctx.get(Recipes)))
-        ctx.services.cookbook_save.install()
+        ctx.provide(CookbookSave(ctx.services, ctx.get(Recipes)))
+        ctx.services.get(keys.cookbook_save).install()

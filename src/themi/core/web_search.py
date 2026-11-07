@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.connectors.search import SearchBackend, SearchError, SearchResult
+from themi.core import keys
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import start_of_local_day, to_utc_iso
@@ -100,7 +101,7 @@ class WebSearch:
         self._texts: dict[int, list[Shown]] = {}  # results each member saw lately (F31c)
 
     def install(self) -> None:
-        self.services.web_search = self
+        self.services.provide(keys.web_search, self)
         self.services.tools.register(search_web)
         self.services.tools.register(read_web_page)
 
@@ -365,7 +366,7 @@ def _personal(query: str, said: str) -> str | None:
 
 
 def _web(ctx: ToolContext) -> WebSearch:
-    web = ctx.services.web_search
+    web = ctx.services.maybe(keys.web_search)
     if web is None:
         raise ToolFailed(SETUP_TEXT)
     return web

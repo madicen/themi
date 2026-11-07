@@ -33,6 +33,7 @@ from themi import clock
 from themi.accounts import Device, Member
 from themi.channels.outbox import Button, Priority
 from themi.connectors.tuya import FAULT, FOOD, JAMMED, OUT, FeederEvent, TuyaWatcher
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
@@ -71,7 +72,7 @@ class Feeders:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.feeders = self
+        self.services.provide(keys.feeders, self)
         self.watcher.listeners.append(self.on_event)
         self.watcher.broken_listeners.append(self._broken)
         self.board.own_nudges.append(self._nudge)

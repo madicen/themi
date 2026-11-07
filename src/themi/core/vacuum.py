@@ -60,6 +60,7 @@ from themi.connectors.roborock import (
     RoborockWatcher,
     VacuumEvent,
 )
+from themi.core import keys
 from themi.core.events import words_in_common
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
@@ -138,7 +139,7 @@ class Vacuum:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.vacuum = self
+        self.services.provide(keys.vacuum, self)
         self.services.autonomy.executors.register(EXECUTOR)(self._execute)
         self.services.autonomy.executors.register(DONE_EXECUTOR)(self._execute_done)
         self.watcher.listeners.append(self.on_event)
@@ -204,7 +205,7 @@ class Vacuum:
     async def _check_off(self, event: VacuumEvent) -> None:
         """Gone: today's unticked routine items about it are checked off (a card each, to
         whoever's item it is, until a rule makes it automatic), task or no task."""
-        wall = self.services.wall_routines
+        wall = self.services.maybe(keys.wall_routines)
         device = self._device(event.device_id)
         if wall is None or device is None:
             return
@@ -262,7 +263,7 @@ class Vacuum:
             by = self.store.get_member(task.assignee) if task.assignee else self._admin()
             await self.board.complete(task.id, by)
             return f"Marked {task.title} done."
-        wall = self.services.wall_routines
+        wall = self.services.maybe(keys.wall_routines)
         if wall is None:
             return "The wall's routines aren't connected any more, so nothing was ticked."
         await wall.tick(int(payload["routine"]), date.fromisoformat(str(payload["day"])))

@@ -41,6 +41,7 @@ from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
 from themi.connectors.cozyla.emoji import better_icon, routine_icon
 from themi.connectors.cozyla.schedule import to_wall, wall_can_say, with_round_days
+from themi.core import keys
 from themi.core.cozyla_chores import LOOK_BACK, is_routine
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.events import title_matches
@@ -111,7 +112,7 @@ class CozylaRoutines:
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         self.services.tools.register(add_to_wall_routine)
         self.services.tools.register(show_routine)
-        self.services.wall_routines = self
+        self.services.provide(keys.wall_routines, self)
 
     async def sync(self) -> int:
         """Scheduler job: ticks both ways, Themi's check-ins on the wall, then the morning
@@ -640,7 +641,7 @@ PERSONS_TASKS = re.compile(r"\b\w+'?s\s+(?:tasks|chores|jobs|to-?dos?)\b", re.IG
     },
 )
 async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
-    if ctx.services.wall_routines is None:
+    if ctx.services.maybe(keys.wall_routines) is None:
         raise ToolFailed("The wall's routines aren't connected.")
     title = " ".join(str(args["title"]).split())[:50]
     if not title:
@@ -654,7 +655,7 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     once = once and not EVERY_DAY.search(said)
     if phrase:
         try:
-            repeat = parse(phrase, ctx.services.wall_routines._today())
+            repeat = parse(phrase, ctx.services.get(keys.wall_routines)._today())
         except RepeatError as exc:
             raise ToolFailed(str(exc)) from exc
         if not wall_can_say(repeat):
@@ -672,8 +673,8 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         )
     if asked_to_remove(ctx.request_text):  # F33d
         part = str(args["part"])
-        titles = await ctx.services.wall_routines.titles_on(ctx.member, part)
-        routines = ctx.services.routines
+        titles = await ctx.services.get(keys.wall_routines).titles_on(ctx.member, part)
+        routines = ctx.services.maybe(keys.routines)
         ours = routines.find(ctx.member, part) if routines is not None else None
         if routines is not None and ours is not None:
             titles += [i.title for i in routines.items(ours)]
@@ -708,7 +709,7 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
 
 
 def board_list(ctx: ToolContext, task: Task) -> str:
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     return board.whose_list(task) if board is not None else "its list"
 
 
@@ -716,7 +717,7 @@ def _moved_task(ctx: ToolContext, task_id: int, title: str, said: str) -> Task |
     """The task a routine item takes the place of: the one asked for by id. Said as moving a
     task with no id, an open task like it is named back, so the model can pass it rather
     than make a second item beside it (bug #133)."""
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     if board is None:
         return None
     if task_id:
@@ -758,9 +759,9 @@ def _moved_task(ctx: ToolContext, task_id: int, title: str, said: str) -> Task |
     {"part": {"type": "string", "enum": ["", *PARTS]}},
 )
 async def show_routine(ctx: ToolContext, args: dict[str, Any]) -> str:
-    if ctx.services.wall_routines is None:
+    if ctx.services.maybe(keys.wall_routines) is None:
         raise ToolFailed("The wall's routines aren't connected.")
-    return await ctx.services.wall_routines.describe(ctx.member, str(args["part"]))
+    return await ctx.services.get(keys.wall_routines).describe(ctx.member, str(args["part"]))
 
 
 def _display_order(routine: Routine) -> float:

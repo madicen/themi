@@ -9,6 +9,7 @@ from tests.fakes.recipe_site import FakeRecipeSite, plain_page, recipe_page
 from tests.fixtures.cookbook import load
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 BROWNIES_URL = "https://cooks.example/fudgy-brownies"
 BROWNIES = {
@@ -25,7 +26,7 @@ BROWNIES = {
 @pytest.fixture
 def site(scenario: Scenario) -> FakeRecipeSite:
     fake = FakeRecipeSite()
-    web = scenario.app.services.web_recipes
+    web = scenario.app.services.maybe(keys.web_recipes)
     assert web is not None
     web.reader = fake.reader()
     load(scenario.app.services)
@@ -127,7 +128,7 @@ async def test_a_refusing_site_is_read_another_way(
 ) -> None:
     url = "https://picky.example/curry"
     site.page(url, status=403)
-    scenario.app.services.web_search.backend = fake_search.client()  # type: ignore[union-attr]
+    scenario.app.services.maybe(keys.web_search).backend = fake_search.client()  # type: ignore[union-attr]
     fake_search.page(url, "Curry\n1 tin chickpeas\n1 onion\nFry the onion.\nAdd the chickpeas.")
     scenario.primary.queue_tool_call("recipe_from_link", {"url": url})
     scenario.primary.queue_structured(
@@ -167,7 +168,7 @@ PAD_SEE_EW = {
 
 @pytest.fixture
 def searching(scenario: Scenario, site: FakeRecipeSite, fake_search) -> FakeRecipeSite:
-    scenario.app.services.web_search.backend = fake_search.client()  # type: ignore[union-attr]
+    scenario.app.services.maybe(keys.web_search).backend = fake_search.client()  # type: ignore[union-attr]
     fake_search.result("pad see ew", "Vegan Pad See Ew", "https://plants.example/pad-see-ew", "Ok")
     fake_search.result("pad see ew", "Pad see ew story", "https://blog.example/pse", "A story")
     fake_search.result("pad see ew", "Pad see ew", "https://picky.example/pse", "Blocked")
@@ -190,7 +191,7 @@ async def test_find_a_vegan_pad_see_ew_then_cook_it(scenario: Scenario, searchin
 
 
 async def test_the_search_asks_for_vegan(scenario: Scenario, searching, fake_search) -> None:
-    web = scenario.app.services.web_recipes
+    web = scenario.app.services.maybe(keys.web_recipes)
     assert web is not None
     assert web.query("pad see ew", "find pad see ew") == "vegan pad see ew recipe"
     assert web.query("chicken pad see ew", "") == "chicken pad see ew recipe"

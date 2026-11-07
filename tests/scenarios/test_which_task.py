@@ -10,6 +10,7 @@ from tests.fakes.embedder import TopicEmbedder
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 TOPICS = TopicEmbedder(
@@ -38,8 +39,8 @@ def meaning(scenario: Scenario) -> Scenario:
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def tasks(scenario: Scenario, *titles: str) -> list[Task]:

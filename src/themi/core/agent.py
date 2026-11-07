@@ -36,7 +36,7 @@ from themi.ai.types import ImageBlock, Message, TextBlock
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
-from themi.core import focus, listening, partner
+from themi.core import focus, keys, listening, partner
 from themi.core.approvals import ASK_TEXT
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
@@ -387,7 +387,7 @@ class Agent:
         energy_mark = self.services.store.db.scalar(
             "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
         )
-        conversation = self.services.conversation
+        conversation = self.services.maybe(keys.conversation)
         if (
             conversation is not None
             and conversation.is_on(member)
@@ -552,7 +552,7 @@ class Agent:
             for n, o, r in ctx.calls
             if n == "create_task" and o == "ok" and (m := MADE_TASK.match(r))
         ]
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if not (failed and made and UPDATED.search(reply)) or board is None:
             return reply
         lines = []
@@ -606,9 +606,9 @@ class Agent:
         earlier: tuple[Picture, ...] = (),
     ) -> str:
         services = self.services
-        if services.calendars is not None and JUST_ADDED.search(text):
+        if services.maybe(keys.calendars) is not None and JUST_ADDED.search(text):
             try:  # F34d, bug #174: an event they've just added isn't read yet
-                await services.calendars.refresh(member)
+                await services.get(keys.calendars).refresh(member)
             except Exception:
                 log.warning("Couldn't read member %s's calendar again", member.id, exc_info=True)
         family = services.store.get_family()
@@ -741,9 +741,9 @@ class Agent:
 
     async def _chat(self, member: Member, text: str, history: list) -> str:
         """Conversation mode's reply (CM1a): one model call with no tools."""
-        assert self.services.conversation is not None
+        assert self.services.maybe(keys.conversation) is not None
         try:
-            return await self.services.conversation.reply(member, text, history)
+            return await self.services.get(keys.conversation).reply(member, text, history)
         except RefusalError:
             return DECLINED_TEXT
         except AllProvidersFailed as exc:
@@ -755,7 +755,11 @@ class Agent:
         listening first (F22e), or a few things for now when it's too much (O1a). In
         burnout mode (F22d) its own line replaces both: focus_now would be a demand."""
         found = listening.signals(text, member)
-        held = self.services.burnout.signals(member) if self.services.burnout else []
+        held = (
+            self.services.get(keys.burnout).signals(member)
+            if self.services.maybe(keys.burnout)
+            else []
+        )
         if held:
             return held + [s for s in found if s != listening.LISTEN_SIGNAL]
         if listening.holds_off_solving(text, member):
@@ -796,7 +800,7 @@ class Agent:
         """A line that opens with the title of a task the turn touched has it in quotes: a
         title is often an order ("Renew the car registration is on both lists"), and the
         PDA shield would take it for one (the evals of 2026-10-31, once #98's quotes went)."""
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None or not ctx.tasks:
             return reply
         titles = sorted({board.get(i).title for i in ctx.tasks}, key=len, reverse=True)
@@ -812,7 +816,7 @@ class Agent:
     def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
         """Each sentence saying a task went to someone is kept only if one of the tasks it
         names in quotes (or else, that the turn touched) is that person's alone."""
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None:
             return reply
         members = self.services.store.list_members()
@@ -845,7 +849,7 @@ class Agent:
         return f"{text}\n{said}" if "\n" in text else f"{text} {said}".strip()
 
     def _open_titled(self, titles: list[str]) -> list:
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         assert board is not None
         rows = [
             self.services.store.db.one(

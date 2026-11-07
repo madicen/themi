@@ -7,12 +7,13 @@ from typing import Any
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.lists import Lists, NamedList
 
 
 def lists(scenario: Scenario) -> Lists:
-    assert scenario.app.services.lists is not None
-    return scenario.app.services.lists
+    assert scenario.app.services.maybe(keys.lists) is not None
+    return scenario.app.services.get(keys.lists)
 
 
 def named(scenario: Scenario, name: str, who: str = "Erin") -> NamedList:

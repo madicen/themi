@@ -41,6 +41,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarSync, event_id
+from themi.core import keys
 from themi.core.events import title_matches
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
@@ -203,7 +204,7 @@ class Maintenance:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.maintenance = self
+        self.services.provide(keys.maintenance, self)
         for each in (set_maintenance, remove_maintenance, get_maintenance_guide,
                      log_maintenance):  # fmt: skip
             self.services.tools.register(each)
@@ -443,7 +444,7 @@ class Maintenance:
         else:
             assignment = self.board.matcher.roomiest(TASK_KIND, EFFORT, now)
         member = assignment.assignee
-        burnout = self.services.burnout
+        burnout = self.services.maybe(keys.burnout)
         if burnout is not None and burnout.current(member) is not None:
             return None
         return assignment if self.in_window(member, now) else None
@@ -681,9 +682,9 @@ class Maintenance:
 
 
 def _maintenance(ctx: ToolContext) -> Maintenance:
-    if ctx.services.maintenance is None:
+    if ctx.services.maybe(keys.maintenance) is None:
         raise ToolFailed("Maintenance isn't set up.")
-    return ctx.services.maintenance
+    return ctx.services.get(keys.maintenance)
 
 
 def _found(ctx: ToolContext, said: str) -> Item:
@@ -819,7 +820,9 @@ class MaintenanceModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         upkeep = ctx.provide(
-            Maintenance(ctx.services, ctx.get(TaskBoard), ctx.services.calendar, ctx.scheduler)
+            Maintenance(
+                ctx.services, ctx.get(TaskBoard), ctx.services.maybe(keys.calendar), ctx.scheduler
+            )
         )
         upkeep.install()
         ctx.periodic("maintenance.offer", timedelta(minutes=15), upkeep.offer)

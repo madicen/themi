@@ -16,6 +16,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import Member, NotFound, PermissionDenied
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 from themi.web.kit import Kit
 
@@ -23,7 +24,7 @@ from themi.web.kit import Kit
 def task_rows(app: Any, member: Member, limit: int | None = None) -> dict[str, Any]:
     """What `_task_row.html` needs: the member's tasks, overdue first, then by due date
     (undated last), and those they added for someone else. Home shows the first `limit`."""
-    board: TaskBoard = app.services.taskboard
+    board: TaskBoard = app.services.maybe(keys.taskboard)
     family = app.store.get_family()
     tz = ZoneInfo(family.timezone if family else "UTC")
     today = board._today()
@@ -63,8 +64,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def board() -> TaskBoard:
-        assert app.services.taskboard is not None
-        return app.services.taskboard
+        assert app.services.maybe(keys.taskboard) is not None
+        return app.services.maybe(keys.taskboard)
 
     @router.get("/tasks", response_class=HTMLResponse)
     def tasks_page(request: Request) -> HTMLResponse:

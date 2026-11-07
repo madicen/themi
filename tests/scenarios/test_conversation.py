@@ -4,6 +4,7 @@ from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.agent import (
     BUSY_TEXT,
     DECLINED_TEXT,
@@ -223,7 +224,7 @@ async def test_plan_scenario_5_a_forgotten_fact_is_pinned_and_used(scenario: Sce
     scenario.primary.queue_text("Morning!")
     await scenario.say("Erin", "good morning")
     assert "The cat's vet appointments are on Tuesdays." in scenario.primary.last_request.system
-    (repair,) = scenario.app.services.memory.repairs()  # type: ignore[union-attr]
+    (repair,) = scenario.app.services.maybe(keys.memory).repairs()  # type: ignore[union-attr]
     assert repair["diagnosis"] == "never_stored"
 
 
@@ -243,12 +244,12 @@ async def test_a_question_about_a_suggestion_isnt_a_forgotten_fact(scenario: Sce
     )
     result = scenario.primary.last_request.messages[2].content[0]
     assert isinstance(result, ToolResult) and result.is_error
-    assert scenario.app.services.memory.repairs() == []  # type: ignore[union-attr]
+    assert scenario.app.services.maybe(keys.memory).repairs() == []  # type: ignore[union-attr]
     assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 0
 
 
 async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     memory.remember(scenario.member("Erin"), "vet", "The cat's vet is on Tuesdays.", pinned=True)
     scenario.primary.queue_tool_call(
@@ -331,7 +332,7 @@ def test_a_busy_reply_doesnt_promise_a_retry() -> None:
 async def test_a_reply_in_quotes_is_sent_without_them(scenario: Scenario) -> None:
     """Bugs #98 and #100 ("why are there quotes around the whole thing?")."""
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Refill whoosh litter", "errand", 1, assignee=erin)
     scenario.primary.queue_text(f"'Task {task.id} is set up for both of you.'")
@@ -343,7 +344,7 @@ async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: S
     """The evals of 2026-10-31: '"Renew the car registration is on both lists..."' lost its
     quotes (#98), and the title then read as a command to renew it."""
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Renew the car registration", "errand", 1, assignee=erin)
     scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})

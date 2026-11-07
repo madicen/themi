@@ -24,6 +24,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -199,7 +200,7 @@ class CheckinReviews:
             )
             log.info("Retired habit %s: not helping, said member %s", review["ref_id"], member.id)
             return
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         assert board is not None
         await board.cancel(review["ref_id"], member)
 

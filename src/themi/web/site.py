@@ -33,7 +33,7 @@ from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
-from themi.core import conversation_mode
+from themi.core import conversation_mode, keys
 from themi.core.body_double import MODES
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
@@ -135,15 +135,15 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
 
     kit = Kit(ctx)
     kit.templates.env.globals["menu_bar"] = menu_bar
-    google = ctx.app.services.google
+    google = ctx.app.services.maybe(keys.google)
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
     form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
-    home_connect = ctx.app.services.home_connect
+    home_connect = ctx.app.services.maybe(keys.home_connect)
     if home_connect is not None:  # and to Home Connect's and SingleKey ID's, to link it (H1)
         config = home_connect.client.config
         hops = f"{_origin(config.base_url)} {_origin(config.sign_in_url)}"
         form_targets = f"{form_targets} {hops}".strip()
-    music = ctx.app.services.music
+    music = ctx.app.services.maybe(keys.music)
     if music is not None:  # BD5b: linking Spotify leads to its sign-in page
         accounts = _origin(music.links.client.config.accounts_url)
         form_targets = f"{form_targets} {accounts}".strip()
@@ -256,7 +256,9 @@ def core_routes(kit: Kit) -> APIRouter:
     def dashboard_values(member: Member) -> dict[str, Any]:
         autonomy = app.services.autonomy
         actions = autonomy.open_for(member)
-        noise = app.services.noise.waiting(member) if app.services.noise else []
+        noise = (
+            app.services.maybe(keys.noise).waiting(member) if app.services.maybe(keys.noise) else []
+        )
         held = {a.id for a in noise}  # F16b: one link to their own page, not a card each
         actions = [a for a in actions if a.id not in held]
         activity = app.db.query(
@@ -278,11 +280,11 @@ def core_routes(kit: Kit) -> APIRouter:
         if failed:
             alerts.append(f"{len(failed)} action(s) didn't go through and can be tried again.")
         tasks: dict[str, Any] = {"mine": [], "more_tasks": 0}
-        if app.services.taskboard is not None:  # W2: the first few, with Done
+        if app.services.maybe(keys.taskboard) is not None:  # W2: the first few, with Done
             tasks = task_rows(app, member, limit=HOME_TASKS)
-            total = len(app.services.taskboard.open_for(member))
+            total = len(app.services.maybe(keys.taskboard).open_for(member))
             tasks["more_tasks"] = total if total > HOME_TASKS else 0
-        appliances = app.services.appliances
+        appliances = app.services.maybe(keys.appliances)
         return {
             **tasks,
             "around_the_house": appliances.at_a_glance() if appliances else None,
@@ -292,7 +294,9 @@ def core_routes(kit: Kit) -> APIRouter:
             ],
             "alerts": alerts,
             "noise_count": len(noise),
-            "groceries": app.services.groceries.needed() if app.services.groceries else [],
+            "groceries": app.services.maybe(keys.groceries).needed()
+            if app.services.maybe(keys.groceries)
+            else [],
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -306,7 +310,7 @@ def core_routes(kit: Kit) -> APIRouter:
     async def grocery_bought(request: Request, item_id: int) -> Response:
         _, form = await kit.checked(request)
         back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"
-        groceries, pantry = app.services.groceries, app.services.pantry
+        groceries, pantry = app.services.maybe(keys.groceries), app.services.maybe(keys.pantry)
         item = groceries.get(item_id) if groceries else None
         if item is None or item.status != "needed" or groceries is None:
             return kit.redirect(back, "That one is already off the list.")
@@ -393,8 +397,8 @@ def core_routes(kit: Kit) -> APIRouter:
             "strengths": STRENGTH_LABELS,
             "conversation_offered": conversation_mode.offered(app.services, member),
             "picked_out": (  # CM1b: what the sidecar picked out lately
-                app.services.conversation.sidecar.recent(member, 10)
-                if app.services.conversation is not None
+                app.services.maybe(keys.conversation).sidecar.recent(member, 10)
+                if app.services.maybe(keys.conversation) is not None
                 and conversation_mode.offered(app.services, member)
                 else []
             ),
@@ -406,7 +410,7 @@ def core_routes(kit: Kit) -> APIRouter:
         """(category, its words, their own mode or "") for each kind of job (BD2)."""
         from themi.core.body_double_modes import CATEGORIES, CATEGORY_WORDS
 
-        body_double = app.services.body_double
+        body_double = app.services.maybe(keys.body_double)
         if body_double is None or body_double.modes is None:
             return []
         own = body_double.modes.defaults(member)
@@ -468,7 +472,7 @@ def core_routes(kit: Kit) -> APIRouter:
                 csrf=session.csrf_token,
                 **settings_values(member, error=str(exc)),
             )
-        body_double = app.services.body_double
+        body_double = app.services.maybe(keys.body_double)
         if body_double is not None and body_double.modes is not None:  # BD2: their own modes
             for category, _, _ in job_modes(member):
                 if f"job_mode_{category}" in form:

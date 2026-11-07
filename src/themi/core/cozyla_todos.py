@@ -53,6 +53,7 @@ from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
 from themi.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo, TodoList
+from themi.core import keys
 from themi.core.cozyla_lists import WallLists
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
@@ -120,11 +121,11 @@ class CozylaTodos:
 
     def install(self) -> None:
         self.board.change_listeners.append(self.on_task_changed)
-        self.services.wall = self
+        self.services.provide(keys.wall, self)
         self.services.tools.register(put_task_on_wall_list)
         self.board.wall_notes.append(self.where)
-        if self.services.lists is not None:
-            self.wall_lists = WallLists(self.services, self.services.lists, self.client)
+        if self.services.maybe(keys.lists) is not None:
+            self.wall_lists = WallLists(self.services, self.services.get(keys.lists), self.client)
             self.wall_lists.install()
 
     def where(self, task: Task) -> str | None:
@@ -552,7 +553,7 @@ class CozylaTodos:
 
 
 def _wall(ctx: ToolContext) -> CozylaTodos:
-    wall = ctx.services.wall
+    wall = ctx.services.maybe(keys.wall)
     assert wall is not None
     return wall
 

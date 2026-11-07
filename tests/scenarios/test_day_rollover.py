@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import SYSTEM
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 from themi.localtime import member_day
@@ -18,8 +19,8 @@ WED, FRI, SAT = date(2026, 10, 21), date(2026, 10, 23), date(2026, 10, 24)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def at(scenario: Scenario, day: date, hour: int, minute: int = 0) -> None:
@@ -71,7 +72,7 @@ async def test_with_midnight_nothing_changes(scenario: Scenario) -> None:
 
 async def test_routines_tick_for_the_day_before_until_the_rollover(scenario: Scenario) -> None:
     rollover(scenario)
-    routines = scenario.app.services.routines
+    routines = scenario.app.services.maybe(keys.routines)
     assert routines is not None
     michael = scenario.member("Husband")
     evening, morning = routines.find(michael, "Evening"), routines.find(michael, "Morning")
@@ -122,7 +123,7 @@ def test_the_models_context_says_its_still_friday(scenario: Scenario) -> None:
 
 async def test_a_habit_check_in_is_once_for_their_day(scenario: Scenario) -> None:
     rollover(scenario)
-    habits = scenario.app.services.habits
+    habits = scenario.app.services.maybe(keys.habits)
     assert habits is not None
     michael = scenario.member("Husband")
     await at(scenario, SAT, 0, 40)

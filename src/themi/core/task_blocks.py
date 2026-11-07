@@ -31,6 +31,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
+from themi.core import keys
 from themi.core.events import MAKE_TIME, OWN, When, parse_when, when_words
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
@@ -61,7 +62,7 @@ class TaskBlocks:
 
     def install(self) -> None:
         s = self.services
-        s.task_blocks = self
+        s.provide(keys.task_blocks, self)
         s.autonomy.executors.register(EXECUTOR)(self._execute)
         s.tools.register(block_time_for_task)
         s.tools.register(find_time_for_task)
@@ -96,7 +97,7 @@ class TaskBlocks:
     # ----- making a block -------------------------------------------------------------------
 
     async def _execute(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
-        events = self.services.events
+        events = self.services.maybe(keys.events)
         if events is None:
             return "Calendars aren't set up."
         ids = payload.get("task_ids") or [payload["task_id"]]  # one task, before bug #131
@@ -252,8 +253,8 @@ def _round_up(moment: datetime) -> datetime:
 
 
 def _blocks(ctx: ToolContext) -> TaskBlocks:
-    blocks = ctx.services.task_blocks
-    if blocks is None or ctx.services.events is None:
+    blocks = ctx.services.maybe(keys.task_blocks)
+    if blocks is None or ctx.services.maybe(keys.events) is None:
         raise ToolFailed("Calendars aren't set up.")
     return blocks
 
@@ -292,7 +293,7 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
     if not ids:
         raise ToolFailed("Which task is the time for?")
     tasks = [_task(blocks, ctx, i) for i in ids]
-    events = ctx.services.events
+    events = ctx.services.maybe(keys.events)
     assert events is not None
     events.own_account(ctx.member)
     if not str(args["start"]).strip():
@@ -326,7 +327,7 @@ async def block_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposa
 async def find_time_for_task(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     blocks = _blocks(ctx)
     task = _task(blocks, ctx, int(args["task_id"]))
-    events = ctx.services.events
+    events = ctx.services.maybe(keys.events)
     assert events is not None
     events.own_account(ctx.member)
     minutes = int(args["minutes"])

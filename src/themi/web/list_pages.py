@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member
+from themi.core import keys
 from themi.core.groceries import CATEGORY, EXECUTOR, item_name, list_summary
 from themi.core.lists import ListItem, Lists, NamedList
 from themi.web.kit import Kit
@@ -20,8 +21,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def lists() -> Lists:
-        assert app.services.lists is not None
-        return app.services.lists
+        assert app.services.maybe(keys.lists) is not None
+        return app.services.maybe(keys.lists)
 
     def mine(member: Member, list_id: int) -> NamedList | None:
         return lists().get(list_id, member)
@@ -39,7 +40,7 @@ def routes(kit: Kit) -> APIRouter:
     def lists_page(request: Request, opened: str = Query("", alias="open")) -> HTMLResponse:
         session = kit.current(request)
         found = lists().visible(session.member)
-        groceries = app.services.groceries
+        groceries = app.services.maybe(keys.groceries)
         if not opened:  # the grocery list is the one used most; else a list on its own
             opened = "groceries" if groceries else str(found[0].id) if len(found) == 1 else ""
         return kit.with_flash(
@@ -58,7 +59,7 @@ def routes(kit: Kit) -> APIRouter:
         asked for in their own words, as in chat: that's their yes, unless the category
         always asks or is paused (then it waits on a yes like any other)."""
         session, form = await kit.checked(request)
-        groceries = app.services.groceries
+        groceries = app.services.maybe(keys.groceries)
         to = "/lists?open=groceries#groceries"
         if groceries is None:
             return kit.redirect(to, "The grocery list isn't set up on this server.")
@@ -122,7 +123,7 @@ def routes(kit: Kit) -> APIRouter:
         session, form = await kit.checked(request)
         nl = mine(session.member, list_id)
         item = item_of(nl, item_id) if nl else None
-        buying = app.services.buying
+        buying = app.services.maybe(keys.buying)
         if item is None or buying is None:
             return kit.redirect("/lists", "That item isn't on a list you can see.")
         store = " ".join(str(form.get("store", "")).split())[:40]

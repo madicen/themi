@@ -27,6 +27,7 @@ from themi.connectors.roborock.events import problems, state_word
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqError
 from themi.connectors.tuya import TuyaError
 from themi.connectors.tuya.events import state_word as feeder_words
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, tool
@@ -63,7 +64,7 @@ class Appliances:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.appliances = self
+        self.services.provide(keys.appliances, self)
         self.services.tools.register(appliance_status)
 
     async def status(self, which: str) -> str:
@@ -124,16 +125,16 @@ class Appliances:
         return f"{name}, read just now: {self._words(device, state, minutes)}."
 
     async def _read(self, device: Device) -> tuple[str | None, int | None]:
-        if device.provider == "lg_thinq" and self.services.thinq is not None:
-            return await self.services.thinq.read(device)
-        if device.provider == "home_connect" and self.services.dishwasher is not None:
-            word, minutes = await self.services.dishwasher.read(device)
+        if device.provider == "lg_thinq" and self.services.maybe(keys.thinq) is not None:
+            return await self.services.get(keys.thinq).read(device)
+        if device.provider == "home_connect" and self.services.maybe(keys.dishwasher) is not None:
+            word, minutes = await self.services.get(keys.dishwasher).read(device)
             return HOME_CONNECT.get(word, "offline" if word == "Offline" else IDLE), minutes
         return None, None
 
     async def _vacuum(self, device: Device, name: str) -> str:
         """The robot vacuum: what it's doing, and anything it needs a person for."""
-        watcher = self.services.roborock
+        watcher = self.services.maybe(keys.roborock)
         if watcher is None:
             return f"{name}: couldn't be read just now. {self._last_seen(device)}"
         try:
@@ -147,13 +148,13 @@ class Appliances:
         needs = [words for words in problems(status).values()]
         if needs:
             said += "; it needs a hand: " + "; ".join(needs)
-        vacuum = self.services.vacuum
+        vacuum = self.services.maybe(keys.vacuum)
         chores = vacuum.chores(device.id) if vacuum is not None else []  # F23d: and whose
         return " ".join([f"{name}, read just now: {said}.", *chores])
 
     async def _feeder(self, device: Device, name: str) -> str:
         """A pet feeder: its food, anything it needs a person for, and its last feeding."""
-        watcher = self.services.tuya
+        watcher = self.services.maybe(keys.tuya)
         if watcher is None:
             return f"{name}: couldn't be read just now. {self._last_seen(device)}"
         try:
@@ -169,13 +170,13 @@ class Appliances:
                 f"; last fed {self._local_words(at)}{self._day_words(at)}, "
                 f"{portions} portion{'s' if portions != 1 else ''}"
             )
-        feeders = self.services.feeders
+        feeders = self.services.maybe(keys.feeders)
         chores = feeders.chores(device.id) if feeders is not None else []
         return " ".join([f"{name}, read just now: {said}.", *chores])
 
     async def _litter_box(self, device: Device, name: str) -> str:
         """The litter box: cleaning or not, its sani-solution, any error, its last clean."""
-        watcher = self.services.catgenie
+        watcher = self.services.maybe(keys.catgenie)
         if watcher is None:
             return f"{name}: couldn't be read just now. {self._last_seen(device)}"
         try:
@@ -187,7 +188,7 @@ class Appliances:
         if reading.last_clean is not None:
             said += f"; last cleaned {self._local_words(reading.last_clean)}"
             said += self._day_words(reading.last_clean)
-        litter_box = self.services.litter_box
+        litter_box = self.services.maybe(keys.litter_box)
         chores = litter_box.chores(device.id) if litter_box is not None else []  # and whose
         return " ".join([f"{name}, read just now: {said}.", *chores])
 
@@ -269,7 +270,7 @@ def _minutes(minutes: int) -> str:
     },
 )
 async def appliance_status(ctx: ToolContext, args: dict[str, Any]) -> str:
-    appliances = ctx.services.appliances
+    appliances = ctx.services.maybe(keys.appliances)
     if appliances is None:
         return NONE_LINKED
     return await appliances.status(args["appliance"])

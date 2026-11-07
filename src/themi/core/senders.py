@@ -23,6 +23,7 @@ from themi import clock
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.groceries import and_list
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -64,7 +65,7 @@ class SenderSuggestions:
     def install(self) -> None:
         self.services.button_handlers["urgent_sender"] = self.on_button
         self.services.tools.register(inbox_setup)
-        self.services.senders = self
+        self.services.provide(keys.senders, self)
 
     def setup(self, account: LinkedAccount) -> str:
         """What's set for an inbox, in a line (bug #45)."""
@@ -139,7 +140,7 @@ class SenderSuggestions:
                 continue
             member = self.store.get_member(account.member_id)
             buttons = []
-            audit = self.services.email_audit
+            audit = self.services.maybe(keys.email_audit)
             for c in found:
                 suggestion = self.db.execute(
                     "INSERT INTO sender_suggestions (account_id, address, label, offered_at) "
@@ -162,10 +163,10 @@ class SenderSuggestions:
                 buttons=buttons,
             )
             sent += 1
-        if self.services.email_audit is not None:  # what's waiting has its task (E2)
+        if self.services.maybe(keys.email_audit) is not None:  # what's waiting has its task (E2)
             for member in self.store.list_members():
-                if self.services.email_audit.waiting(member):
-                    await self.services.email_audit.refresh(member)
+                if self.services.get(keys.email_audit).waiting(member):
+                    await self.services.get(keys.email_audit).refresh(member)
         return sent
 
     async def on_button(self, event: InboundEvent) -> None:
@@ -213,7 +214,7 @@ class SenderSuggestions:
     {},
 )
 async def inbox_setup(ctx: ToolContext, args: dict[str, Any]) -> str:
-    senders = ctx.services.senders
+    senders = ctx.services.maybe(keys.senders)
     if senders is None:
         raise ToolFailed("Email isn't set up on this server.")
     accounts = [

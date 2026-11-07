@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 from themi.modules.base import Module, ModuleError, PeriodicTask
 from themi.modules.loader import order
+from themi.modules.registry import Key, name_of
 
 if TYPE_CHECKING:
     from themi.autonomy.engine import Executor
@@ -37,7 +38,7 @@ class ModuleContext:
         self._scheduler = scheduler
         self.installed: list[str] = []
         self.jobs: list[PeriodicTask] = []
-        self._provided: dict[type, tuple[object, str]] = {}
+        self._providers: dict[str, str] = {}  # class name -> the module that provided it
         self._current = ""  # the module installing now, for error messages
 
     # ----- loading --------------------------------------------------------------------
@@ -61,29 +62,27 @@ class ModuleContext:
     # ----- services between modules ---------------------------------------------------
 
     def provide(self, obj: T) -> T:
-        """Make `obj` findable by its type (`get(type(obj))`). Returns it, for chaining."""
+        """Make `obj` findable by its class (`get(type(obj))`, or a key naming the class),
+        in the services registry. Returns it, for chaining."""
         kind = type(obj)
-        if kind in self._provided:
-            first = self._provided[kind][1] or "the core"
+        found = self.services.maybe(kind)
+        if found is not None and found is not obj:
+            first = self._providers.get(kind.__name__) or "the core"
             raise ModuleError(f"{kind.__name__} is provided twice ({first} and {self._who()})")
-        self._provided[kind] = (obj, self._current)
+        self.services.provide(kind, obj)
+        self._providers[kind.__name__] = self._current
         return obj
 
-    def get(self, kind: type[T]) -> T:
+    def get(self, kind: type[T] | Key[T]) -> T:
         found = self.maybe(kind)
         if found is None:
             raise ModuleError(
-                f"{self._who()} asked for {kind.__name__}, which no installed module provides"
+                f"{self._who()} asked for {name_of(kind)}, which no installed module provides"
             )
         return found
 
-    def maybe(self, kind: type[T]) -> T | None:
-        entry = self._provided.get(kind)
-        if entry is None:
-            return None
-        obj = entry[0]
-        assert isinstance(obj, kind)
-        return obj
+    def maybe(self, kind: type[T] | Key[T]) -> T | None:
+        return self.services.maybe(kind)  # type: ignore[arg-type]
 
     @property
     def scheduler(self) -> Scheduler:

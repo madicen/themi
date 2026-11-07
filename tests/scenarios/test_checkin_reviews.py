@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.habits import HabitReserve
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
@@ -11,8 +12,8 @@ ASK = 'Check-in review: is "Go for a run" helping?'
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def run_check_in(scenario: Scenario) -> Task:

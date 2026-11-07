@@ -15,7 +15,7 @@ import hashlib
 import json
 import re
 import secrets
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -204,10 +204,18 @@ class AccountStore:
     def __init__(self, db: Database, cipher: Cipher) -> None:
         self.db = db
         self._cipher = cipher
+        # CR3: a module's own check of a setting it owns (setting -> what's wrong, or None).
+        self.setting_checks: dict[str, Callable[[Any], str | None]] = {}
 
     @property
     def cipher(self) -> Cipher:
         return self._cipher
+
+    def _check(self, setting: str, value: Any) -> None:
+        check = self.setting_checks.get(setting)
+        problem = check(value) if check is not None else None
+        if problem:
+            raise InvalidValue(problem)
 
     # ----- permission helpers -------------------------------------------------
 
@@ -498,10 +506,7 @@ class AccountStore:
                 raise InvalidValue("a sprint's break is between 1 and 30 minutes")
             changes["sprint_break_minutes"] = sprint_break_minutes
         if body_double_sound is not None:
-            from themi.core.body_double_music import LOOPS
-
-            if body_double_sound not in LOOPS:
-                raise InvalidValue(f"the sounds are {', '.join(LOOPS)}")
+            self._check("body_double_sound", body_double_sound)
             changes["body_double_sound"] = body_double_sound
         if body_double_volume is not None:
             if not 0 <= body_double_volume <= 100:

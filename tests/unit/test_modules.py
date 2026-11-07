@@ -178,3 +178,55 @@ def test_reactions_and_wrong_replies_install_alone(family: SeededFamily) -> None
         "Reactions.on_reaction",
         "WrongReplies.on_reaction",
     ]
+
+
+# ----- CR3: the registry on Services ----------------------------------------------------
+
+
+def test_services_files_objects_under_their_class_name(family: SeededFamily) -> None:
+    from themi.core import keys
+    from themi.core.lists import Lists
+
+    services = bare_services(family.store)
+    lists = Lists(services)
+    services.provide(Lists, lists)
+    assert services.get(Lists) is lists
+    assert services.maybe(keys.lists) is lists  # a key names the same class
+    assert services.provided() == ["Lists"]
+
+
+def test_providing_none_takes_it_away_and_get_then_says_so(family: SeededFamily) -> None:
+    from themi.core import keys
+
+    services = bare_services(family.store)
+
+    class FakeTriage:
+        pass
+
+    services.provide(keys.triage, FakeTriage())  # type: ignore[arg-type]  # a test double
+    assert services.maybe(keys.triage) is not None
+    services.provide(keys.triage, None)
+    assert services.maybe(keys.triage) is None
+    with pytest.raises(ModuleError, match="nothing provides EmailTriage"):
+        services.get(keys.triage)
+
+
+def test_the_context_and_services_share_one_registry(family: SeededFamily) -> None:
+    services = bare_services(family.store)
+    ctx = ModuleContext(services)
+    breaks = ctx.load(BreaksModule()) and ctx.get(Breaks)
+    assert services.get(Breaks) is breaks
+
+
+def test_every_key_names_a_class_the_full_app_provides() -> None:
+    """A key whose name matches nothing would always find None, silently."""
+    import inspect
+
+    from themi.core import keys
+    from themi.modules.registry import Key
+
+    found = {name: k for name, k in vars(keys).items() if isinstance(k, Key)}
+    assert len(found) == 64
+    source = inspect.getsource(keys)
+    for attr, key in found.items():
+        assert f"import {key.name}\n" in source, f"keys.{attr} names {key.name}, never imported"

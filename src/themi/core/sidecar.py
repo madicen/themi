@@ -44,6 +44,7 @@ from themi.accounts.models import LoggedMessage
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind, Message, ToolCall
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tools import ToolContext
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import redact
@@ -317,7 +318,7 @@ class Sidecar:
         )
         if row is None:
             return NOTHING_TO_UNDO_TEXT
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         taken, kept = [], []
         for item in json.loads(row["items"]):
             if item["outcome"] != "ok":
@@ -385,7 +386,7 @@ class Sidecar:
         tool = str(item["tool"])
         label = ITEM_LABELS.get(tool) or tool.replace("_", " ")
         detail = str(args.get("title") or args.get("fact") or args.get("topic") or "")
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if not detail and board is not None and isinstance(args.get("task_id"), int):
             with suppress(Exception):
                 detail = board.get(args["task_id"]).title or ""

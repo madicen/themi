@@ -27,7 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
-from themi.core import naming, praise
+from themi.core import keys, naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.progression import Progression, amount_said, parse_plan
 from themi.core.progression import read_back as plan_read_back
@@ -313,7 +313,7 @@ class TaskBoard:
 
     def install(self) -> None:
         s = self.services
-        s.taskboard = self
+        s.provide(keys.taskboard, self)
         s.tools.register(create_task)
         s.tools.register(complete_task)
         s.tools.register(set_task_medicine)
@@ -1911,7 +1911,7 @@ def _quoted(steps: Sequence[str]) -> str:
 
 
 def _board(ctx: ToolContext) -> TaskBoard:
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     assert board is not None
     return board
 
@@ -2126,7 +2126,7 @@ def _twin_words(ctx: ToolContext, task: Task) -> str:
 
 def _numbers_where_found(ctx: ToolContext, texts: list[str], had: str, refused: str) -> None:
     """F31c (reply 306): a phone number from the web goes on the step for its place."""
-    web = ctx.services.web_search
+    web = ctx.services.maybe(keys.web_search)
     if web is None:
         return
     known = f"{ctx.request_text} {ctx.previous_text} {had}"

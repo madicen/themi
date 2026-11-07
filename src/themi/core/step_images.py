@@ -30,6 +30,7 @@ from themi.accounts import Member
 from themi.ai.errors import AIError, ImageCapReached
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
@@ -263,7 +264,7 @@ def _folder(db_path: str) -> Path:
 
 
 def _pictures(ctx: ToolContext) -> StepPictures:
-    body_double = ctx.services.body_double
+    body_double = ctx.services.maybe(keys.body_double)
     pictures = getattr(body_double, "pictures", None) if body_double else None
     if pictures is None:
         raise ToolFailed("Step pictures aren't set up.")

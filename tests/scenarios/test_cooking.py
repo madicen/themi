@@ -8,6 +8,7 @@ import pytest
 
 from tests.fixtures.cookbook import load
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 
 ALFREDO = [
     "cashews", "water", "garlic", "miso", "lemon juice", "salt", "nutmeg", "onion powder",
@@ -84,8 +85,8 @@ async def test_alfredo_from_cook_this_to_prep_done(cookbook: Scenario) -> None:
 
 
 async def test_the_prep_is_read_once(cookbook: Scenario) -> None:
-    cooking = cookbook.app.services.cooking
-    recipes = cookbook.app.services.recipes
+    cooking = cookbook.app.services.maybe(keys.cooking)
+    recipes = cookbook.app.services.maybe(keys.recipes)
     assert cooking is not None and recipes is not None
     alfredo = next(r for r in recipes.all() if r.name == "Alfredo Sauce")
     cookbook.primary.queue_structured(items(ALFREDO))
@@ -141,7 +142,7 @@ async def test_typing_moves_it_on_with_a_fresh_card(cookbook: Scenario) -> None:
     assert len(cookbook.primary.requests) == calls  # no model round for "done"
     replies = await cookbook.say("Erin", "stop cooking")
     assert replies == ["Stopped cooking Alfredo Sauce."]
-    assert cookbook.app.services.cooking.current(cookbook.member("Erin")) is None  # type: ignore[union-attr]
+    assert cookbook.app.services.maybe(keys.cooking).current(cookbook.member("Erin")) is None  # type: ignore[union-attr]
 
 
 async def test_questions_during_a_session_come_from_the_recipe(cookbook: Scenario) -> None:
@@ -160,7 +161,7 @@ async def test_someone_elses_card_isnt_theirs_to_tap(cookbook: Scenario) -> None
     await show_alfredo(cookbook)
     cookbook.primary.queue_structured(items(ALFREDO))
     await cookbook.tap("Erin", "Cook this")
-    cooking = cookbook.app.services.cooking
+    cooking = cookbook.app.services.maybe(keys.cooking)
     assert cooking is not None
     session = cooking.current(cookbook.member("Erin"))
     assert session is not None
@@ -258,8 +259,8 @@ async def test_a_nudge_waits_while_cooking(cookbook: Scenario) -> None:
 
 
 async def test_a_step_naming_another_recipe_offers_it(cookbook: Scenario) -> None:
-    cooking = cookbook.app.services.cooking
-    recipes = cookbook.app.services.recipes
+    cooking = cookbook.app.services.maybe(keys.cooking)
+    recipes = cookbook.app.services.maybe(keys.recipes)
     assert cooking is not None and recipes is not None
     lasagna = next(r for r in recipes.all() if r.name == "Lasagna")
     named = cooking.named_recipes(lasagna, "Top with the Bechamel Sauce and bake.")

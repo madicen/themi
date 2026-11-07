@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
+from themi.core import keys
 from themi.core.noise_digest import NoiseDigest
 from themi.web.kit import Kit
 
@@ -15,7 +16,7 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def noise() -> NoiseDigest | None:
-        return app.services.noise
+        return app.services.maybe(keys.noise)
 
     @router.get("/email/noise", response_class=HTMLResponse)
     def noise_page(request: Request) -> HTMLResponse:

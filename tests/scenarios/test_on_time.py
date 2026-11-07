@@ -12,6 +12,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tasks import TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -19,8 +20,8 @@ THURSDAY = date(2026, 10, 22)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def until(scenario: Scenario, day: date, hour: int, minute: int = 0) -> list[str]:

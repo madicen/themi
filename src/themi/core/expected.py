@@ -47,6 +47,7 @@ from themi.accounts.store import SystemActor
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import EmailReceived, GmailSync
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local, to_utc_iso
@@ -197,10 +198,10 @@ class ExpectedEmails:
 
     def install(self) -> None:
         s = self.services
-        s.expected = self
+        s.provide(keys.expected, self)
         self.gmail.listeners.append(self.on_email)
-        if s.triage is not None:
-            s.triage.verdict_listeners.append(self.on_triaged)
+        if s.maybe(keys.triage) is not None:
+            s.get(keys.triage).verdict_listeners.append(self.on_triaged)
         s.button_handlers["resume_automatic"] = self.on_resume_button
         s.tools.register(expect_email)
         s.tools.register(list_expected_emails)
@@ -542,7 +543,7 @@ def _describe(expected: ExpectedEmail, address: str) -> str:
     },
 )
 async def expect_email(ctx: ToolContext, args: dict[str, Any]) -> str:
-    expected_emails = ctx.services.expected
+    expected_emails = ctx.services.maybe(keys.expected)
     if expected_emails is None:
         return "Email isn't set up on this server."
     account = _account_for(ctx, str(args.get("inbox") or ""))
@@ -568,7 +569,7 @@ async def expect_email(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 @tool("list_expected_emails", "List the recurring emails Themi watches for, for this person.", {})
 async def list_expected_emails(ctx: ToolContext, args: dict[str, Any]) -> str:
-    expected_emails = ctx.services.expected
+    expected_emails = ctx.services.maybe(keys.expected)
     if expected_emails is None:
         return "Email isn't set up on this server."
     addresses = {a.id: a.address for a in ctx.services.store.linked_accounts(ctx.member.id)}
@@ -584,7 +585,7 @@ async def list_expected_emails(ctx: ToolContext, args: dict[str, Any]) -> str:
     {"name": {"type": "string", "description": "Its name, as list_expected_emails shows it."}},
 )
 async def forget_expected_email(ctx: ToolContext, args: dict[str, Any]) -> str:
-    expected_emails = ctx.services.expected
+    expected_emails = ctx.services.maybe(keys.expected)
     if expected_emails is None:
         return "Email isn't set up on this server."
     wanted = " ".join(str(args["name"]).split()).lower()

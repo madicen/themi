@@ -36,6 +36,7 @@ from themi.connectors.travel import (
     distance_km,
     estimate,
 )
+from themi.core import keys
 from themi.core.events import When, title_matches, when_words
 from themi.core.lists import name_key
 from themi.core.places import NOT_SURE_TEXT, named_place
@@ -64,7 +65,7 @@ class TravelHeadsUps:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.travel = self
+        self.services.provide(keys.travel, self)
         self.services.tools.register(drive_time)
 
     # ----- home -----------------------------------------------------------------------------
@@ -92,7 +93,7 @@ class TravelHeadsUps:
     async def heads_up(self) -> int:
         """Scheduler job: send the heads-ups that are due. Returns how many went."""
         found = self.home()
-        reader = self.services.calendars
+        reader = self.services.maybe(keys.calendars)
         if found is None or reader is None:
             return 0
         _, home = found
@@ -166,7 +167,7 @@ class TravelHeadsUps:
     def next_event(self, viewer: Member, words: str) -> tuple[Member, Entry] | None:
         """The soonest upcoming event, among those this person may see, whose title has all
         these words."""
-        reader = self.services.calendars
+        reader = self.services.maybe(keys.calendars)
         if reader is None:
             return None
         now = clock.now()
@@ -363,7 +364,7 @@ def _duration(minutes: int) -> str:
     {"event": {"type": "string"}, "address": {"type": "string"}},
 )
 async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
-    travel = ctx.services.travel
+    travel = ctx.services.maybe(keys.travel)
     if travel is None:
         raise ToolFailed("Travel times aren't set up.")
     words, address = str(args["event"]).strip(), " ".join(str(args["address"]).split())

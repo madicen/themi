@@ -53,6 +53,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail import GmailSync
 from themi.connectors.gmail.parse import in_primary
+from themi.core import keys
 from themi.core.events import title_matches
 from themi.core.prompts import as_data
 from themi.core.services import Services
@@ -280,13 +281,13 @@ class EmailTriage:
 
     def install(self) -> None:
         s = self.services
-        s.triage = self
+        s.provide(keys.triage, self)
         s.button_handlers["inbox_setup"] = self.on_setup_button
         s.tools.register(set_urgent_senders)
         s.tools.register(set_inbox_watched)
         s.tools.register(keep_email)
-        if s.google is not None:
-            s.google.link_listeners.append(self.on_linked)
+        if s.maybe(keys.google) is not None:
+            s.get(keys.google).link_listeners.append(self.on_linked)
         self.gmail.handled_listeners.append(self.on_handled)
         self.gmail.tabs_listeners.append(self.on_tabs_learned)
 
@@ -296,7 +297,7 @@ class EmailTriage:
         ten unread in Primary, all labelled Updates)."""
         member = self.store.get_member(account.member_id)
         tabs = self.gmail.tabs_shown(account.id)
-        audit = self.services.email_audit
+        audit = self.services.maybe(keys.email_audit)
         since = to_utc_iso(clock.now() - REOFFER_WITHIN)
         for row in self.db.query(
             "SELECT * FROM emails WHERE account_id = ? AND category = 'noise' "
@@ -335,9 +336,9 @@ class EmailTriage:
         ):
             await self.services.autonomy.withdraw(action["id"], HANDLED_TEXT)
         member = self.store.get_member(account.member_id)
-        if self.services.noise is not None:
-            await self.services.noise.refresh(member)
-        audit = self.services.email_audit
+        if self.services.maybe(keys.noise) is not None:
+            await self.services.get(keys.noise).refresh(member)
+        audit = self.services.maybe(keys.email_audit)
         if audit is not None and how != "read":
             asked = self.db.update(
                 "DELETE FROM email_audit_items WHERE email_id = ? AND answer IS NULL",
@@ -478,7 +479,7 @@ class EmailTriage:
         sender, subject = _sender(row), row["subject"] or "(no subject)"
         payload = {"email_id": row["id"]}
         stage = self.services.autonomy.stage
-        audit = self.services.email_audit
+        audit = self.services.maybe(keys.email_audit)
         if (
             audit is not None
             and verdict.unsure

@@ -11,6 +11,7 @@ import pytest
 from tests.fakes.search import FakeSearch
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -20,13 +21,13 @@ NUDGE = "Rosewood Dental closes at 5 pm today. Call now, or later?"
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 @pytest.fixture
 def searching(scenario: Scenario, fake_search: FakeSearch) -> FakeSearch:
-    search = scenario.app.services.web_search
+    search = scenario.app.services.maybe(keys.web_search)
     assert search is not None
     search.backend = fake_search.client()
     fake_search.result("dentist hours", "Rosewood Dental | Palo Alto", "https://rd.example",

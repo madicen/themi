@@ -19,6 +19,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from themi.accounts.store import InvalidValue
+from themi.core import keys
 from themi.web.auth import COOKIE_NAME, SESSION_TTL
 from themi.web.kit import Kit, NotSignedIn
 
@@ -30,7 +31,7 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def body_double() -> Any:
-        return app.services.body_double
+        return app.services.maybe(keys.body_double)
 
     def page(request: Request, **values: Any) -> HTMLResponse:
         response = kit.page(request, "session.html", **values)
@@ -130,7 +131,7 @@ def routes(kit: Kit) -> APIRouter:
 
         bd = body_double()
         session = bd.current(signed.member) if bd is not None else None
-        if bd is None or session is None or app.services.music is None:
+        if bd is None or session is None or app.services.maybe(keys.music) is None:
             return kit.redirect("/session")
         action = str(form.get("action", ""))
         if action == "play":

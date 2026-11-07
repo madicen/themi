@@ -31,6 +31,7 @@ from themi.accounts import Member
 from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
+from themi.core import keys
 from themi.core.body_double import GUIDED, MODE_WORDS, MODES, SILENT, SPRINT, BodyDouble
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
@@ -315,7 +316,7 @@ CATEGORY_ALIASES = {
 
 
 def _modes(ctx: ToolContext) -> ModeChooser:
-    body_double = ctx.services.body_double
+    body_double = ctx.services.maybe(keys.body_double)
     if body_double is None or body_double.modes is None:
         raise ToolFailed("Body double sessions aren't set up.")
     return body_double.modes

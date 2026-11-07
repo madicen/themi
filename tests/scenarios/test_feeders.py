@@ -17,6 +17,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
 from themi.accounts import SYSTEM
+from themi.core import keys
 
 FEEDER, MOCHI = "ebfeeder1", "ebfeeder2"
 LOW = "The cat feeder is running low on food (about 15% left). Top it up when you can?"
@@ -32,7 +33,7 @@ async def feeders(scenario: Scenario, fake_tuya: FakeTuya) -> FakeTuya:
     """Both feeders, linked and read once (the starting point: fed and fine)."""
     fake_tuya.add_feeder(FEEDER, "Cat Feeder")
     fake_tuya.add_feeder(MOCHI, "Mochi's feeder", "fault")
-    watcher = scenario.app.services.tuya
+    watcher = scenario.app.services.maybe(keys.tuya)
     assert watcher is not None
     await watcher.link(scenario.member("Erin"), ACCESS_ID, SECRET, "us")
     await scenario.run_periodic("devices.feeders")
@@ -80,7 +81,7 @@ async def test_linking_from_the_accounts_page(
     page = await site.get("/accounts")
     assert "Cat Feeder · plenty of food (64% left)" in page.text
     assert "<code>surplus_grain</code>: 64" in page.text  # its data points, for a mapping
-    watcher = scenario.app.services.tuya
+    watcher = scenario.app.services.maybe(keys.tuya)
     assert watcher is not None
     fountain = next(d for d in watcher.devices() if d.name == "Water fountain")
     mapped = await site.post(

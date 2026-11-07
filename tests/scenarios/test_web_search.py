@@ -8,6 +8,7 @@ import pytest
 from tests.fakes.search import FakeSearch
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.web_search import DAILY_CAP
 
 BOARD = "https://dbc.example/license/12345"
@@ -43,7 +44,7 @@ async def test_idea_162_is_he_still_practising(
 ) -> None:
     """Erin's question at 8:27 pm, answered from the results, with the link."""
     fake_search.backend = backend
-    scenario.app.services.web_search.backend = fake_search.client()  # type: ignore[union-attr]
+    scenario.app.services.maybe(keys.web_search).backend = fake_search.client()  # type: ignore[union-attr]
     scheinbach(fake_search)
     replies = await ask(
         scenario,
@@ -251,7 +252,7 @@ async def test_reply_306_a_number_goes_on_the_step_for_its_place(
         query="dentist 105 37th Ave San Mateo CA",
     )
     husband = scenario.member("Husband")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         husband,

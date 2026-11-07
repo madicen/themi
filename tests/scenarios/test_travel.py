@@ -15,6 +15,7 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
+from themi.core import keys
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HOME = "12 Main St, Springfield"
@@ -103,7 +104,7 @@ async def test_without_a_key_its_a_rough_guess(
     site: httpx.AsyncClient,
 ) -> None:
     fake_travel.use_tomtom = False  # too late for the app's client: make a new one
-    travel = scenario.app.services.travel
+    travel = scenario.app.services.maybe(keys.travel)
     assert travel is not None
     travel.client = fake_travel.client()
     await link(scenario, site, fake_google, "Erin", ERIN)
@@ -156,7 +157,7 @@ async def test_the_family_page_saves_home(
     await site.post("/family/home", data={"csrf": csrf, "address": HOME})
     page = await flash(site, "/family")
     assert "Home saved" in page and f'value="{HOME}"' in page
-    travel = scenario.app.services.travel
+    travel = scenario.app.services.maybe(keys.travel)
     assert travel is not None and travel.home() is not None
 
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from themi.core import partner
+from themi.core import keys, partner
 from themi.core.tools import Tool, ToolContext, ToolFailed, dumps, more_tools, tool
 
 # What the person must have said themselves before the model answers a card for them.
@@ -56,7 +56,7 @@ _FORGOT = re.compile(
     },
 )
 async def remember_fact(ctx: ToolContext, args: dict[str, Any]) -> str:
-    memory = ctx.services.memory
+    memory = ctx.services.maybe(keys.memory)
     assert memory is not None
     fact = args["fact"].strip()
     if not fact:
@@ -94,7 +94,7 @@ async def report_forgotten_context(ctx: ToolContext, args: dict[str, Any]) -> st
             "Not recorded: they didn't say Themi forgot or got something wrong. Just answer "
             "what they asked."
         )
-    memory = ctx.services.memory
+    memory = ctx.services.maybe(keys.memory)
     assert memory is not None
     repair = memory.repair(ctx.member, args["what_was_forgotten"], args["correct_version"])
     return f"Diagnosis: {repair.diagnosis}. Tell them, in your own words: {repair.message}"

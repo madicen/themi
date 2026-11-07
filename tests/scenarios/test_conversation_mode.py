@@ -8,6 +8,7 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import CallKind
+from themi.core import keys
 from themi.core.conversation_mode import (
     CHAT_SYSTEM,
     NOT_OFFERED_TEXT,
@@ -132,7 +133,7 @@ async def test_the_ai_page_has_the_two_new_routes(
 
 async def test_the_family_group_always_has_the_tool_agent(scenario: Scenario) -> None:
     await chat_on(scenario)
-    conversation = scenario.app.services.conversation
+    conversation = scenario.app.services.maybe(keys.conversation)
     assert conversation is not None
     erin = scenario.member("Erin")
     assert conversation.takes(erin, "long day", in_group=False)
@@ -142,7 +143,7 @@ async def test_the_family_group_always_has_the_tool_agent(scenario: Scenario) ->
 async def test_no_run_today_goes_to_the_tools(scenario: Scenario) -> None:
     """F34a, bug #178: with conversation mode on, "No run today ..." about her open run went
     to the tool-less chat, which said "Got it", and the run stayed due."""
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     await board.create(erin, "Go for a run", "physical", 2, assignee=erin, check_in=True)

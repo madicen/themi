@@ -9,6 +9,7 @@ from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
 from themi.ai.settings import AITask
 from themi.autonomy import Tier
+from themi.core import keys
 from themi.storage.secrets import Secret
 
 GEMINI_KEY = "AIzaVeryDistinctiveTestKey000000000000000"
@@ -217,7 +218,7 @@ async def test_escalated_categories_can_be_resumed(
 async def test_facts_show_household_and_your_own_only(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     memory.remember(scenario.member("Erin"), "bins", "Bins go out Wednesday mornings.")
     his = memory.remember(
@@ -234,7 +235,7 @@ async def test_facts_show_household_and_your_own_only(
 async def test_pinning_editing_and_forgetting_facts(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     fact = memory.remember(scenario.member("Erin"), "vet", "Vet on Mondays.")
     csrf = await sign_in(scenario, site, "Husband")  # household facts: anyone may edit

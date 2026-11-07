@@ -28,6 +28,7 @@ from themi.accounts import LinkedAccount, Member
 from themi.connectors.google import TASKS_SCOPE, GoogleAccounts, TokenRevoked
 from themi.connectors.google.oauth import OAuthError
 from themi.connectors.gtasks import DEFAULT_LIST, TasksClient, TasksError
+from themi.core import keys
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
@@ -69,7 +70,7 @@ class GoogleTasksInbox:
 
     def install(self, agent: Agent) -> None:
         self.agent = agent
-        self.services.google_tasks = self
+        self.services.provide(keys.google_tasks, self)
 
     def client(self, account_id: int) -> TasksClient:
         return TasksClient(

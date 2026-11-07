@@ -31,6 +31,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.groceries import CATEGORY, EXECUTOR, and_list, item_name, list_summary
 from themi.core.lists import name_key
 from themi.core.prompts import as_data
@@ -239,7 +240,7 @@ class RecipeGroceries:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.recipe_groceries = self
+        self.services.provide(keys.recipe_groceries, self)
         buttons = self.services.recipe_buttons
         buttons["groceries"] = self.on_recipe_button
         buttons["card_toggle"] = self.on_toggle
@@ -309,7 +310,7 @@ class RecipeGroceries:
     # ----- the card ----------------------------------------------------------------------
 
     def _pantry_plenty(self) -> set[str]:
-        pantry = self.services.pantry
+        pantry = self.services.maybe(keys.pantry)
         if pantry is None:
             return set()
         return {name_key(i.name) for i in pantry.items() if i.status == "plenty"}
@@ -525,7 +526,7 @@ class RecipeGroceries:
         if card is None:
             return
         member = self.services.store.get_member(event.member.id)
-        groceries = self.services.groceries
+        groceries = self.services.maybe(keys.groceries)
         assert groceries is not None
         waiting = groceries.awaiting_approval()
         names, skipped = [], []
@@ -586,7 +587,7 @@ def factor_for(recipes: list[Recipe], said: str) -> float:
 
 
 def _groceries(ctx: ToolContext) -> RecipeGroceries:
-    found = ctx.services.recipe_groceries
+    found = ctx.services.maybe(keys.recipe_groceries)
     if found is None:
         raise ToolFailed("Recipes aren't set up.")
     return found

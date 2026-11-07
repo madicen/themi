@@ -20,6 +20,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.connectors.gcal import CalendarError
 from themi.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
+from themi.core import keys
 from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
 from themi.web.connection_pages import accounts_values
@@ -40,7 +41,7 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def google() -> GoogleAccounts | None:
-        return app.services.google
+        return app.services.maybe(keys.google)
 
     def redirect_uri() -> str:
         return GoogleAccounts.redirect_uri(kit.ctx.base_url)
@@ -132,7 +133,7 @@ def routes(kit: Kit) -> APIRouter:
     # ----- which calendars Themi reads (K1) ------------------------------------------------
 
     async def _family_calendar(app: Any) -> tuple[int, str] | None:
-        sync = app.services.calendar
+        sync = app.services.maybe(keys.calendar)
         if sync is None or sync.account() is None:
             return None
         try:
@@ -148,7 +149,7 @@ def routes(kit: Kit) -> APIRouter:
     async def calendars_page(request: Request, account_id: int) -> Response:
         session = kit.current(request)
         account = own_account(session.member, account_id)
-        reader, sync = app.services.calendars, app.services.calendar
+        reader, sync = app.services.maybe(keys.calendars), app.services.maybe(keys.calendar)
         if account is None or reader is None or sync is None:
             return kit.redirect("/accounts", "That account isn't one of yours.")
         if not account.allows(CALENDAR_SCOPE):
@@ -163,7 +164,7 @@ def routes(kit: Kit) -> APIRouter:
              str(c["id"]) in chosen or (c.get("primary") and chosen == {"primary"}))
             for c in listed
         ]  # fmt: skip
-        copies = app.services.calendar_copies
+        copies = app.services.maybe(keys.calendar_copies)
         shown = (
             {r.calendar_id: r.level for r in copies.rules(session.member)
              if r.account_id == account.id}
@@ -183,7 +184,7 @@ def routes(kit: Kit) -> APIRouter:
         """F34f: how each calendar of theirs shows on the family calendar, and the labels."""
         session, form = await kit.checked(request)
         account = own_account(session.member, account_id)
-        copies = app.services.calendar_copies
+        copies = app.services.maybe(keys.calendar_copies)
         if account is None or copies is None:
             return kit.redirect("/accounts", "That account isn't one of yours.")
         copies.set_labels(
@@ -215,7 +216,7 @@ def routes(kit: Kit) -> APIRouter:
     async def choose_calendars(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
         account = own_account(session.member, account_id)
-        reader = app.services.calendars
+        reader = app.services.maybe(keys.calendars)
         if account is None or reader is None:
             return kit.redirect("/accounts", "That account isn't one of yours.")
         ticked = (await request.form()).getlist("calendar")  # every box, not just one
@@ -227,7 +228,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/accounts/{account_id}/expected")
     async def add_expected(request: Request, account_id: int) -> Response:
         session, form = await kit.checked(request)
-        expected = app.services.expected
+        expected = app.services.maybe(keys.expected)
         if expected is None:
             return kit.redirect("/accounts", "Email isn't set up on this server.")
         try:
@@ -250,7 +251,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/accounts/{account_id}/expected/{expected_id}/remove")
     async def remove_expected(request: Request, account_id: int, expected_id: int) -> Response:
         session, _ = await kit.checked(request)
-        expected = app.services.expected
+        expected = app.services.maybe(keys.expected)
         try:
             if expected is None or expected.get(expected_id).account_id != account_id:
                 raise AccountsError

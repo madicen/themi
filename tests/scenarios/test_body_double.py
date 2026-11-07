@@ -11,12 +11,13 @@ from tests.fakes.spotify import FakeSpotify
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def session_row(scenario: Scenario) -> dict:
@@ -608,7 +609,7 @@ async def test_body_doubling_my_evening_routine_goes_through_its_items(
 ) -> None:
     """F34h, bug #181: "body double my evening routine" got made-up steps ("Lock the front
     door", "Set the alarm"), not the routine's items. Each step done ticks its item."""
-    routines = scenario.app.services.routines
+    routines = scenario.app.services.maybe(keys.routines)
     assert routines is not None
     erin = scenario.member("Erin")
     evening = routines.find(erin, "Evening")
@@ -652,7 +653,7 @@ async def test_two_tasks_in_a_row_step_by_step(scenario: Scenario) -> None:
     assert card_buttons(scenario) == ["Next", "Done"]
     row = session_row(scenario)
     assert (row["task_id"], row["part"], row["parts"]) == (second.id, 2, 2)
-    bd = scenario.app.services.body_double
+    bd = scenario.app.services.maybe(keys.body_double)
     assert bd is not None
     state = bd.state(scenario.member("Erin"))
     assert state["part"] == "Part 2 of 2"
@@ -666,7 +667,7 @@ async def test_two_tasks_in_a_row_step_by_step(scenario: Scenario) -> None:
 
 
 async def test_my_evening_routine_then_a_task(scenario: Scenario) -> None:
-    routines = scenario.app.services.routines
+    routines = scenario.app.services.maybe(keys.routines)
     assert routines is not None
     evening = routines.find(scenario.member("Erin"), "Evening")
     assert evening is not None
@@ -765,5 +766,5 @@ async def test_the_session_page_has_my_spotify(
 async def test_not_linked_only_the_loop(scenario: Scenario) -> None:
     await start(scenario, "keep me company while I write", mode="quiet", what="my essay")
     assert scenario.last_buttons("Erin") == ["Play", "Not now"]
-    bd = scenario.app.services.body_double
+    bd = scenario.app.services.maybe(keys.body_double)
     assert bd is not None and bd.state(scenario.member("Erin"))["spotify"] == []

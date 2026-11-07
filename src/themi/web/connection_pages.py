@@ -22,6 +22,7 @@ from themi.connectors.roborock import RoborockError
 from themi.connectors.spotify import SpotifyError, SpotifyLinks
 from themi.connectors.thinq import ThinqError
 from themi.connectors.tuya import REGIONS, TuyaError
+from themi.core import keys
 from themi.web.kit import Kit
 
 
@@ -34,16 +35,16 @@ def accounts_values(app: Any, member: Member, **extra: Any) -> dict[str, Any]:
     """Everything accounts.html shows this member: their Google accounts, and the household's
     connections when they're an admin."""
     accounts = app.store.linked_accounts(member.id)
-    expected = app.services.expected
+    expected = app.services.maybe(keys.expected)
     return {
         "accounts": accounts,
-        "can_link": app.services.google is not None,
+        "can_link": app.services.maybe(keys.google) is not None,
         "expected": {a.id: expected.for_account(a.id) for a in accounts} if expected else {},
         "protectable": [c for c in app.services.autonomy.categories() if not c.capped],
         "tasks_scope": TASKS_SCOPE,
         "cookbook_scope": DRIVE_FILE_SCOPE,  # RC1a
-        "cookbook": app.services.recipes.settings()
-        if app.services.recipes is not None and app.services.recipes.ready()
+        "cookbook": app.services.maybe(keys.recipes).settings()
+        if app.services.maybe(keys.recipes) is not None and app.services.get(keys.recipes).ready()
         else None,
         "household": household_values(app) if member.is_admin else None,
         "spotify": _spotify(app, member),  # BD5b: their own
@@ -52,7 +53,7 @@ def accounts_values(app: Any, member: Member, **extra: Any) -> dict[str, Any]:
 
 
 def _spotify(app: Any, member: Member) -> dict[str, Any] | None:
-    music = app.services.music
+    music = app.services.maybe(keys.music)
     if music is None:
         return None
     return {"link": music.links.link(member)}
@@ -71,7 +72,7 @@ def household_values(app: Any) -> dict[str, Any]:
 
 
 def _calendar(app: Any) -> dict[str, Any] | None:
-    calendar = app.services.calendar
+    calendar = app.services.maybe(keys.calendar)
     if calendar is None:
         return None
     chosen, name = calendar.settings()
@@ -86,7 +87,7 @@ def _calendar(app: Any) -> dict[str, Any] | None:
 
 
 def _home_connect(app: Any) -> dict[str, Any] | None:
-    account, dishwasher = app.services.home_connect, app.services.dishwasher
+    account, dishwasher = app.services.maybe(keys.home_connect), app.services.maybe(keys.dishwasher)
     if account is None or dishwasher is None:
         return None
     states = {r["device_id"]: r["state"] for r in app.db.query("SELECT * FROM device_states")}
@@ -97,7 +98,7 @@ def _home_connect(app: Any) -> dict[str, Any] | None:
 
 
 def _thinq(app: Any) -> dict[str, Any] | None:
-    watcher = app.services.thinq
+    watcher = app.services.maybe(keys.thinq)
     if watcher is None:
         return None
     states = watcher.states()
@@ -110,7 +111,7 @@ def _thinq(app: Any) -> dict[str, Any] | None:
 
 
 def _roborock(app: Any) -> dict[str, Any] | None:
-    watcher = app.services.roborock
+    watcher = app.services.maybe(keys.roborock)
     if watcher is None:
         return None
     states = watcher.states()
@@ -123,7 +124,7 @@ def _roborock(app: Any) -> dict[str, Any] | None:
 
 
 def _tuya(app: Any) -> dict[str, Any] | None:
-    watcher = app.services.tuya
+    watcher = app.services.maybe(keys.tuya)
     if watcher is None:
         return None
     states = watcher.states()
@@ -138,11 +139,11 @@ def _tuya(app: Any) -> dict[str, Any] | None:
 
 
 def _catgenie(app: Any) -> dict[str, Any] | None:
-    watcher = app.services.catgenie
+    watcher = app.services.maybe(keys.catgenie)
     if watcher is None:
         return None
     states = watcher.states()
-    chores = app.services.litter_box
+    chores = app.services.maybe(keys.litter_box)
     return {
         "linked": watcher.account.linked(),
         "problem": watcher.account.problem(),
@@ -163,7 +164,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/calendar")
     async def save_calendar(request: Request) -> Response:
         _session, form = await kit.checked(request, admin=True)
-        calendar = app.services.calendar
+        calendar = app.services.maybe(keys.calendar)
         to = back("family-calendar")
         if calendar is None:
             return kit.redirect(to, "Google isn't set up on this server yet.")
@@ -180,7 +181,7 @@ def routes(kit: Kit) -> APIRouter:
     async def roborock_code(request: Request) -> Response:
         """The first step: Roborock emails a code to the app account."""
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.roborock
+        watcher = app.services.maybe(keys.roborock)
         to = back("roborock")
         if watcher is None:
             return kit.redirect(to, "The vacuum isn't set up on this server.")
@@ -200,7 +201,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/roborock/link")
     async def link_roborock(request: Request) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.roborock
+        watcher = app.services.maybe(keys.roborock)
         to = back("roborock")
         if watcher is None:
             return kit.redirect(to, "The vacuum isn't set up on this server.")
@@ -216,8 +217,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/roborock/unlink")
     async def unlink_roborock(request: Request) -> Response:
         await kit.checked(request, admin=True)
-        if app.services.roborock is not None:
-            await app.services.roborock.unlink()
+        if app.services.maybe(keys.roborock) is not None:
+            await app.services.maybe(keys.roborock).unlink()
         return kit.redirect(back("roborock"), "Unlinked Roborock.")
 
     # ----- Tuya, for the feeders (32) ---------------------------------------------------
@@ -225,7 +226,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/tuya/link")
     async def link_tuya(request: Request) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.tuya
+        watcher = app.services.maybe(keys.tuya)
         to = back("tuya")
         if watcher is None:
             return kit.redirect(to, "The feeders aren't set up on this server.")
@@ -250,8 +251,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/tuya/unlink")
     async def unlink_tuya(request: Request) -> Response:
         await kit.checked(request, admin=True)
-        if app.services.tuya is not None:
-            await app.services.tuya.unlink()
+        if app.services.maybe(keys.tuya) is not None:
+            await app.services.maybe(keys.tuya).unlink()
         return kit.redirect(
             back("tuya"), "Unlinked Tuya. Deleting the cloud project on Tuya's site finishes it."
         )
@@ -259,7 +260,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/tuya/devices/{device_id}")
     async def map_tuya_device(request: Request, device_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.tuya
+        watcher = app.services.maybe(keys.tuya)
         to = back("tuya")
         if watcher is None or device_id not in {d.id for d in watcher.devices()}:
             return kit.redirect(to, "That device isn't one of Tuya's.")
@@ -275,7 +276,7 @@ def routes(kit: Kit) -> APIRouter:
     async def catgenie_code(request: Request) -> Response:
         """The first step: PetNovations texts a code to the app account's phone."""
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.catgenie
+        watcher = app.services.maybe(keys.catgenie)
         to = back("catgenie")
         if watcher is None:
             return kit.redirect(to, "The litter box isn't set up on this server.")
@@ -295,7 +296,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/catgenie/link")
     async def link_catgenie(request: Request) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.catgenie
+        watcher = app.services.maybe(keys.catgenie)
         to = back("catgenie")
         if watcher is None:
             return kit.redirect(to, "The litter box isn't set up on this server.")
@@ -314,7 +315,7 @@ def routes(kit: Kit) -> APIRouter:
     async def catgenie_granules(request: Request, device_id: int) -> Response:
         """CG1b: every how many cleans the granules want topping up (blank: never asked)."""
         _session, form = await kit.checked(request, admin=True)
-        watcher, chores = app.services.catgenie, app.services.litter_box
+        watcher, chores = app.services.maybe(keys.catgenie), app.services.maybe(keys.litter_box)
         to = back("catgenie")
         if watcher is None or chores is None:
             return kit.redirect(to, "The litter box isn't set up on this server.")
@@ -335,8 +336,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/catgenie/unlink")
     async def unlink_catgenie(request: Request) -> Response:
         await kit.checked(request, admin=True)
-        if app.services.catgenie is not None:
-            await app.services.catgenie.unlink()
+        if app.services.maybe(keys.catgenie) is not None:
+            await app.services.maybe(keys.catgenie).unlink()
         return kit.redirect(back("catgenie"), "Unlinked CatGenie.")
 
     # ----- LG ThinQ (30) ----------------------------------------------------------------
@@ -344,7 +345,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/thinq/link")
     async def link_thinq(request: Request) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.thinq
+        watcher = app.services.maybe(keys.thinq)
         to = back("thinq")
         if watcher is None:
             return kit.redirect(to, "LG ThinQ isn't set up on this server.")
@@ -360,8 +361,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/thinq/unlink")
     async def unlink_thinq(request: Request) -> Response:
         await kit.checked(request, admin=True)
-        if app.services.thinq is not None:
-            await app.services.thinq.unlink()
+        if app.services.maybe(keys.thinq) is not None:
+            await app.services.maybe(keys.thinq).unlink()
         return kit.redirect(
             back("thinq"), "Unlinked LG ThinQ. Deleting the token on LG's site finishes it."
         )
@@ -369,7 +370,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/thinq/devices/{device_id}")
     async def map_thinq_device(request: Request, device_id: int) -> Response:
         session, form = await kit.checked(request, admin=True)
-        watcher = app.services.thinq
+        watcher = app.services.maybe(keys.thinq)
         to = back("thinq")
         if watcher is None or device_id not in {d.id for d in watcher.devices()}:
             return kit.redirect(to, "That appliance isn't one of LG ThinQ's.")
@@ -402,7 +403,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/accounts/spotify/link")
     async def link_spotify(request: Request) -> Response:
         session, _ = await kit.checked(request)
-        music = app.services.music
+        music = app.services.maybe(keys.music)
         if music is None:
             return kit.redirect(back("spotify"), "Spotify isn't set up on this server.")
         redirect = SpotifyLinks.redirect_uri(kit.ctx.base_url)
@@ -415,7 +416,7 @@ def routes(kit: Kit) -> APIRouter:
         request: Request, state: str = "", code: str = "", error: str = ""
     ) -> Response:
         session = kit.current(request)  # only for whoever started it
-        music = app.services.music
+        music = app.services.maybe(keys.music)
         to = back("spotify")
         if music is None:
             return kit.redirect(to, "Spotify isn't set up on this server.")
@@ -436,8 +437,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/accounts/spotify/unlink")
     async def unlink_spotify(request: Request) -> Response:
         session, _ = await kit.checked(request)
-        if app.services.music is not None:
-            app.services.music.links.unlink(session.member)
+        if app.services.maybe(keys.music) is not None:
+            app.services.maybe(keys.music).links.unlink(session.member)
         return kit.redirect(back("spotify"), "Unlinked Spotify.")
 
     # ----- Home Connect (H1) ----------------------------------------------------------------
@@ -445,7 +446,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/home-connect/link")
     async def link_home_connect(request: Request) -> Response:
         session, _ = await kit.checked(request, admin=True)
-        account = app.services.home_connect
+        account = app.services.maybe(keys.home_connect)
         if account is None:
             return kit.redirect(back("home-connect"), "Home Connect isn't set up on this server.")
         redirect = HomeConnectAccount.redirect_uri(kit.ctx.base_url)
@@ -457,7 +458,10 @@ def routes(kit: Kit) -> APIRouter:
     async def home_connect_callback(
         request: Request, state: str = "", code: str = "", error: str = ""
     ) -> Response:
-        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        account, dishwasher = (
+            app.services.maybe(keys.home_connect),
+            app.services.maybe(keys.dishwasher),
+        )
         to = back("home-connect")
         if account is None or dishwasher is None:
             return kit.redirect(to, "Home Connect isn't set up on this server.")
@@ -478,8 +482,8 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family/home-connect/unlink")
     async def unlink_home_connect(request: Request) -> Response:
         await kit.checked(request, admin=True)
-        if app.services.home_connect is not None:
-            app.services.home_connect.unlink()
+        if app.services.maybe(keys.home_connect) is not None:
+            app.services.maybe(keys.home_connect).unlink()
         return kit.redirect(
             back("home-connect"),
             "Unlinked Home Connect. Removing Themi in the Home Connect app's settings finishes it.",

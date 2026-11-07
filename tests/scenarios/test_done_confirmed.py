@@ -6,6 +6,7 @@ choices: no confirmations, no warm word, and a tap ran it all again."""
 from datetime import date
 
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.praise import PRAISE
 
 SAID = (
@@ -30,7 +31,7 @@ def sheets_for_husband() -> dict:
 
 
 async def test_whats_done_is_confirmed_with_a_warm_word(scenario: Scenario) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     vacuum = await board.create(erin, "Vacuum upstairs bedroom", "physical", 2, date(2026, 10, 21))

@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Priority
-from themi.core import partner
+from themi.core import keys, partner
 from themi.core.events import words_in_common
 from themi.core.habits import CATEGORY as HABIT_CATEGORY
 from themi.core.habits import EXECUTOR as HABIT_EXECUTOR
@@ -92,7 +92,7 @@ class Burnout:
 
     def install(self) -> None:
         s = self.services
-        s.burnout = self
+        s.provide(keys.burnout, self)
         self.board.details.append(self._why_yours)
         self.board.handed_on.append(lambda task: self._why_yours(task) is not None)
         s.add_command("/burnout", self.on_command, "Burnout mode: /burnout, /burnout off")
@@ -112,8 +112,10 @@ class Burnout:
     async def start(self, member: Member) -> str:
         if self.current(member) is not None:
             return ALREADY_TEXT
-        if self.services.body_double is not None:  # BD1a: burnout mode wins over a session
-            await self.services.body_double.stop_for_other(member)
+        if (
+            self.services.maybe(keys.body_double) is not None
+        ):  # BD1a: burnout mode wins over a session
+            await self.services.get(keys.body_double).stop_for_other(member)
         now = clock.now()
         pause = self.pauses.pause(member, TOPIC, now + FOREVER)
         self.db.execute(
@@ -263,7 +265,7 @@ class Burnout:
 
 
 def _burnout(ctx: ToolContext) -> Burnout:
-    burnout = ctx.services.burnout
+    burnout = ctx.services.maybe(keys.burnout)
     if burnout is None:
         raise ToolFailed("Burnout mode isn't set up.")
     return burnout

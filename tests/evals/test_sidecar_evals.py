@@ -23,6 +23,7 @@ from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
+from themi.core import keys
 
 CASES = load()
 
@@ -51,12 +52,12 @@ async def test_sidecar_case(
             async with web_client(scenario) as site:
                 await link(scenario, site, google, "Erin", ERIN)  # type: ignore[arg-type]
         member = scenario.member(case.speaker)
-        board = scenario.app.services.taskboard
+        board = scenario.app.services.maybe(keys.taskboard)
         assert board is not None
         ids = {}
         for title in case.tasks:
             ids[title] = (await board.create(member, title, "call", 1, assignee=member)).id
-        conversation = scenario.app.services.conversation
+        conversation = scenario.app.services.maybe(keys.conversation)
         assert conversation is not None
         items = await conversation.sidecar.run(member, case.message, case.reply, None, [])
         calls = [(i.tool, i.arguments) for i in items if i.outcome == "ok"]

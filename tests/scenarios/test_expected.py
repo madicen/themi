@@ -15,6 +15,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, link, verdict
 from themi.accounts import PermissionDenied
 from themi.autonomy import Tier
+from themi.core import keys
 from themi.core.expected import ExpectedEmail, ExpectedEmails
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
@@ -35,8 +36,8 @@ HOTEL = {"sender": "Hotel <stay@hotel.example>", "subject": "Booking confirmed",
 
 
 def expected_emails(scenario: Scenario) -> ExpectedEmails:
-    assert scenario.app.services.expected is not None
-    return scenario.app.services.expected
+    assert scenario.app.services.maybe(keys.expected) is not None
+    return scenario.app.services.get(keys.expected)
 
 
 def expect_pge(scenario: Scenario, address: str = ERIN, name: str = "Erin") -> ExpectedEmail:

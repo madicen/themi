@@ -16,6 +16,7 @@ from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import START, Scenario
 from themi import clock
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.laundry import RESCUE_TEXT, SUPERSEDED_TEXT, WASHED_TEXT, Laundry
 from themi.core.tasks import clock_words
 from themi.energy.windows import next_window
@@ -29,7 +30,7 @@ async def laundry_room(scenario: Scenario, fake_thinq: FakeThinq) -> FakeThinq:
     """The washer and dryer, linked and read once (the starting point), pushes connected."""
     fake_thinq.add_device(WASHER, "DEVICE_WASHER", "Washer")
     fake_thinq.add_device(DRYER, "DEVICE_DRYER", "Dryer", "DLEX4000W")
-    watcher = scenario.app.services.thinq
+    watcher = scenario.app.services.maybe(keys.thinq)
     assert watcher is not None
     await watcher.link(scenario.member("Erin"), TOKEN, "US")
     await scenario.run_periodic("devices.thinq")
@@ -39,8 +40,8 @@ async def laundry_room(scenario: Scenario, fake_thinq: FakeThinq) -> FakeThinq:
 
 
 def laundry(scenario: Scenario) -> Laundry:
-    assert scenario.app.services.laundry is not None
-    return scenario.app.services.laundry
+    assert scenario.app.services.maybe(keys.laundry) is not None
+    return scenario.app.services.get(keys.laundry)
 
 
 async def pushed(scenario: Scenario, fake: FakeThinq, device: str, word: str) -> None:
@@ -251,7 +252,7 @@ async def test_a_rewash_for_the_morning_is_suggested_in_the_morning(
     finished = await wash(scenario, laundry_room)  # 10 am
     clock.advance(timedelta(hours=12))  # 10 pm
     assert await scenario.run_periodic("laundry.fresh") == 1
-    model = scenario.app.services.taskboard.matcher.model  # type: ignore[union-attr]
+    model = scenario.app.services.maybe(keys.taskboard).matcher.model  # type: ignore[union-attr]
     row = scenario.app.db.one("SELECT rinse_from, ready_at FROM laundry_loads")
     assert row is not None
     start, ready = (datetime.fromisoformat(row[k]).astimezone(TZ) for k in row)

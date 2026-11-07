@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.autonomy import ExecutionContext
 from themi.connectors.cozyla import CozylaClient, CozylaError, Todo, TodoList
+from themi.core import keys
 from themi.core.lists import Lists, list_key, name_key, named_in
 from themi.core.services import Services
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
@@ -271,7 +272,7 @@ class WallLists:
     {"list": {"type": "string", "description": "The list's name, as they said it."}},
 )
 async def put_list_on_wall(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
-    lists = ctx.services.lists
+    lists = ctx.services.maybe(keys.lists)
     if lists is None:
         raise ToolFailed("Lists aren't set up.")
     nl = lists.find(ctx.member, args["list"])

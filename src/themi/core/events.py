@@ -37,6 +37,7 @@ from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarError, CalendarNotFound, event_id
 from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
 from themi.connectors.google import CALENDAR_SCOPE
+from themi.core import keys
 from themi.core.lists import name_key
 from themi.core.rules import RuleError
 from themi.core.tools import (
@@ -310,7 +311,7 @@ class Events:
 
     def install(self) -> None:
         s = self.services
-        s.events = self
+        s.provide(keys.events, self)
         for name, executor in ((ADD, self._execute_add), (MOVE, self._execute_move)):
             s.autonomy.executors.register(name)(executor)
         s.autonomy.executors.register(DELETE)(self._execute_delete)
@@ -318,8 +319,8 @@ class Events:
         for t in (add_calendar_event, change_calendar_event, delete_calendar_event,
                   merge_calendar_events):  # fmt: skip
             s.tools.register(t)
-        if s.triage is not None:
-            s.triage.verdict_listeners.append(self.on_email)
+        if s.maybe(keys.triage) is not None:
+            s.get(keys.triage).verdict_listeners.append(self.on_email)
 
     # ----- where events go ----------------------------------------------------------------
 
@@ -334,7 +335,7 @@ class Events:
 
     async def _target(self, member: Member, calendar: str) -> tuple[int, str]:
         if calendar == "family":
-            sync = self.services.calendar
+            sync = self.services.maybe(keys.calendar)
             if sync is None:
                 raise ToolFailed("The family calendar isn't set up.")
             target = await sync.target()
@@ -743,7 +744,7 @@ class Events:
         self, account_id: int, calendar_id: str, eid: str, title: str, location: str,
         when: When, themi_id: int, *, description: str = "",
     ) -> None:  # fmt: skip
-        sync = self.services.calendar
+        sync = self.services.maybe(keys.calendar)
         if sync is None:
             raise CalendarError("Google isn't set up")
         body: dict[str, Any] = {
@@ -919,7 +920,7 @@ class Events:
     # ----- small things -------------------------------------------------------------------
 
     def _client(self, account_id: int) -> Any:
-        sync = self.services.calendar
+        sync = self.services.maybe(keys.calendar)
         if sync is None:
             raise CalendarError("Google isn't set up")
         return sync.client(account_id)
@@ -996,14 +997,14 @@ def _found_payload(found: Found) -> dict[str, Any]:
 def _located(ctx: ToolContext, location: str) -> str:
     """A place they named that Themi has an address for ("my parent's house") is written
     as that address, so drive times and heads-ups find it (F29e). Otherwise as they said."""
-    travel = ctx.services.travel
+    travel = ctx.services.maybe(keys.travel)
     if not location or travel is None:
         return location
     return travel.address_for(ctx.member, location) or location
 
 
 def _events(ctx: ToolContext) -> Events:
-    events = ctx.services.events
+    events = ctx.services.maybe(keys.events)
     if events is None:
         raise ToolFailed("Calendars aren't set up.")
     return events
@@ -1012,7 +1013,7 @@ def _events(ctx: ToolContext) -> Events:
 def _not_for_tasks(ctx: ToolContext) -> None:
     """Time made for open tasks of theirs is a block, so the tasks wait for it; a plain
     event left them on today's list (bug #131)."""
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     said = name_key(ctx.request_text)
     if board is None or not MAKE_TIME.search(said):
         return

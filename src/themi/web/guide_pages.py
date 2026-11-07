@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
+from themi.core import keys
 from themi.core.guides import Guides
 from themi.core.tools import ToolFailed
 from themi.web.kit import Kit
@@ -16,8 +17,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def guides() -> Guides:
-        assert app.services.guides is not None
-        return app.services.guides
+        assert app.services.maybe(keys.guides) is not None
+        return app.services.maybe(keys.guides)
 
     @router.get("/guides", response_class=HTMLResponse)
     def guides_page(request: Request) -> HTMLResponse:

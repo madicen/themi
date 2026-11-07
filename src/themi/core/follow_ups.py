@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.outbox import Priority
-from themi.core import naming
+from themi.core import keys, naming
 from themi.core.memory import terms
 from themi.core.prompts import OpenItem
 from themi.core.tasks import TaskBoard
@@ -52,7 +52,7 @@ class FollowUps:
 
     def install(self) -> None:
         s = self.services
-        s.follow_ups = self
+        s.provide(keys.follow_ups, self)
         s.tools.register(add_follow_up)
         s.tools.register(remove_follow_up)
         s.open_item_sources.append(self.open_items)
@@ -151,7 +151,7 @@ def _named(after: Task, said: str, title: str) -> bool:
 
 
 def _follow_ups(ctx: ToolContext) -> FollowUps:
-    follow_ups = ctx.services.follow_ups
+    follow_ups = ctx.services.maybe(keys.follow_ups)
     if follow_ups is None:
         raise ToolFailed("Follow-ups aren't set up.")
     return follow_ups

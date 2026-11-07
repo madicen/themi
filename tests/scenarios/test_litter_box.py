@@ -17,6 +17,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
 from themi.accounts import SYSTEM
+from themi.core import keys
 
 BOX = "CGR0000001"
 
@@ -25,7 +26,7 @@ BOX = "CGR0000001"
 async def litter_box(scenario: Scenario, fake_catgenie: FakeCatGenie) -> FakeCatGenie:
     """The litter box, linked and read once (the starting point: ready, no errors)."""
     fake_catgenie.add_box(BOX, "CatGenie")
-    watcher = scenario.app.services.catgenie
+    watcher = scenario.app.services.maybe(keys.catgenie)
     assert watcher is not None
     await watcher.send_code(PHONE)
     await watcher.link(scenario.member("Erin"), PHONE, CODE)
@@ -81,8 +82,8 @@ async def test_a_wrong_code_says_so(
     )
     text = await flash(site, "/accounts")
     assert "linked: PetNovations didn" in text and "take that code" in text
-    assert scenario.app.services.catgenie is not None
-    assert not scenario.app.services.catgenie.account.linked()
+    assert scenario.app.services.maybe(keys.catgenie) is not None
+    assert not scenario.app.services.get(keys.catgenie).account.linked()
 
 
 async def test_only_an_admin_links_it(
@@ -236,7 +237,7 @@ async def test_the_granules_every_so_many_cleans_set_on_the_accounts_page(
     csrf = await sign_in(scenario, site, "Erin")
     page = await site.get("/accounts")
     assert "Top up the granules every" in page.text
-    device = scenario.app.services.catgenie.devices()[0]  # type: ignore[union-attr]
+    device = scenario.app.services.maybe(keys.catgenie).devices()[0]  # type: ignore[union-attr]
     saved = await site.post(
         f"/family/catgenie/granules/{device.id}", data={"csrf": csrf, "every": "3"}
     )

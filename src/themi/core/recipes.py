@@ -28,6 +28,7 @@ from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DOC_MIME, DocsClient, DocsError
 from themi.connectors.google import DRIVE_FILE_SCOPE, GoogleAccounts, OAuthError, TokenRevoked
 from themi.core import cookbook as book
+from themi.core import keys
 from themi.core.cookbook import Line, ParsedRecipe
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
@@ -142,7 +143,7 @@ class Recipes:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.recipes = self
+        self.services.provide(keys.recipes, self)
         self.services.button_handlers["recipe"] = self.on_button
         self.services.recipe_buttons["show"] = self.on_show
         self.services.tools.register(find_recipe)
@@ -342,7 +343,7 @@ class Recipes:
         return [r for r in self.all(include_charts=True) if r.is_chart and _is_reference(r)]
 
     def _has_guide_for(self, member: Member, recipe: Recipe) -> bool:
-        guides = self.services.guides
+        guides = self.services.maybe(keys.guides)
         if guides is None:
             return True
         wanted = {w.rstrip("s") for w in name_key(recipe.name).split() if w not in GUIDE_WORDS}
@@ -354,7 +355,7 @@ class Recipes:
 
     async def offer_guides(self, member: Member) -> None:
         """Once per cookbook: the References charts that aren't guides yet, as guides."""
-        if self.settings()["guides_offered"] or self.services.guides is None:
+        if self.settings()["guides_offered"] or self.services.maybe(keys.guides) is None:
             return
         charts = [r for r in self.reference_charts() if not self._has_guide_for(member, r)]
         self.db.execute("UPDATE cookbook SET guides_offered = 1 WHERE id = 1")
@@ -376,7 +377,7 @@ class Recipes:
         )  # fmt: skip
 
     def save_charts_as_guides(self, member: Member, ids: list[int]) -> list[str]:
-        guides = self.services.guides
+        guides = self.services.maybe(keys.guides)
         assert guides is not None
         saved = []
         for recipe_id in ids:
@@ -486,7 +487,7 @@ class Recipes:
         if recipe is None:
             return
         note = ""
-        web = self.services.web_recipes
+        web = self.services.maybe(keys.web_recipes)
         if recipe.source == "web" and web is not None:
             note = web.note_for(recipe, "")  # RC4b: a web recipe picked from a search
         await self.send(self.services.store.get_member(event.member.id), recipe, note=note)
@@ -683,7 +684,7 @@ def clear_match(matches: list[Match]) -> Recipe | None:
 
 
 def _recipes(ctx: ToolContext) -> Recipes:
-    recipes = ctx.services.recipes
+    recipes = ctx.services.maybe(keys.recipes)
     if recipes is None:
         raise ToolFailed("Recipes aren't set up.")
     return recipes
@@ -754,6 +755,6 @@ class RecipesModule(Module):
         self.config = config
 
     def install(self, ctx: ModuleContext) -> None:
-        recipes = ctx.provide(Recipes(ctx.services, ctx.services.google, self.config))
+        recipes = ctx.provide(Recipes(ctx.services, ctx.services.maybe(keys.google), self.config))
         recipes.install()
         ctx.periodic("recipes.sync", timedelta(minutes=15), recipes.sync)

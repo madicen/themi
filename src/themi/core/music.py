@@ -26,6 +26,7 @@ from themi.connectors.spotify import (
     SpotifyError,
     SpotifyLinks,
 )
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ class Music:
 
     def install(self) -> None:
         s = self.services
-        s.music = self
+        s.provide(keys.music, self)
         s.autonomy.executors.register(PLAY)(self._execute_play)
         s.autonomy.executors.register(PAUSE)(self._execute_pause)
         s.autonomy.executors.register(NEXT)(self._execute_next)
@@ -147,12 +148,12 @@ class Music:
 
     def note_session(self, member: Member, music: str, name: str) -> None:
         """What's playing, on the body double session going on (BD5c learns from it)."""
-        if self.services.body_double is not None:
-            self.services.body_double.note_music(member, music, name)
+        if self.services.maybe(keys.body_double) is not None:
+            self.services.get(keys.body_double).note_music(member, music, name)
 
 
 def _music(ctx: ToolContext) -> Music:
-    music = ctx.services.music
+    music = ctx.services.maybe(keys.music)
     if music is None:
         raise ToolFailed(
             "Spotify isn't set up on this server (SPOTIFY_CLIENT_ID). The session page's "

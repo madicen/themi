@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
+from themi.core import keys
 from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.lists import ADD_CATEGORY, THINGS_TO_BUY, Lists, NamedList, name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
@@ -64,7 +65,7 @@ class ThingsToBuy:
 
     def install(self) -> None:
         s = self.services
-        s.buying = self
+        s.provide(keys.buying, self)
         s.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         s.tools.register(add_to_things_to_buy)
         s.tools.register(set_usual_store)
@@ -137,7 +138,7 @@ class ThingsToBuy:
 
 
 def _buying(ctx: ToolContext) -> ThingsToBuy:
-    buying = ctx.services.buying
+    buying = ctx.services.maybe(keys.buying)
     if buying is None:
         raise ToolFailed("The Things to Buy list isn't set up.")
     return buying

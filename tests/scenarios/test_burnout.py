@@ -11,6 +11,7 @@ import pytest
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import WED, board, task, tool_result, turn
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.burnout import ENDED_TEXT, HANDED_TEXT, LIGHTEST_TEXT, SIGNAL, STARTED_TEXTS
 from themi.core.focus import SIGNAL as FOCUS_SIGNAL
 from themi.core.habits import HabitReserve
@@ -84,9 +85,9 @@ async def test_only_she_can_turn_it_on(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call("start_burnout", {})
     scenario.primary.queue_text("Only Erin can turn that on.")
     await scenario.say("Husband", "Can you put Erin in burnout mode?")
-    assert scenario.app.services.burnout is not None
-    assert scenario.app.services.burnout.current(scenario.member("Erin")) is None
-    assert scenario.app.services.burnout.current(scenario.member("Husband")) is None
+    assert scenario.app.services.maybe(keys.burnout) is not None
+    assert scenario.app.services.get(keys.burnout).current(scenario.member("Erin")) is None
+    assert scenario.app.services.get(keys.burnout).current(scenario.member("Husband")) is None
 
 
 async def test_asked_for_something_to_do_the_single_lightest(scenario: Scenario) -> None:

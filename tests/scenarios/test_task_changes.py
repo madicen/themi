@@ -8,6 +8,7 @@ from typing import Any
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 STEPS = [
@@ -18,7 +19,7 @@ STEPS = [
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    found = scenario.app.services.taskboard
+    found = scenario.app.services.maybe(keys.taskboard)
     assert found is not None
     return found
 

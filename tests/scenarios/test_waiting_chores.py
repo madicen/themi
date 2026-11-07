@@ -12,6 +12,7 @@ from tests.scenarios.harness import START, Scenario
 from themi import clock
 from themi.ai.types import ToolResult
 from themi.channels.pda import MAX_STRENGTH, find_demands
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -23,8 +24,8 @@ MESSAGE = (
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def until(scenario: Scenario, day: date, hour: int = 10) -> None:

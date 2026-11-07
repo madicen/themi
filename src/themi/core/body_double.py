@@ -37,7 +37,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import BODY_DOUBLE_KIND, Priority
-from themi.core import praise
+from themi.core import keys, praise
 from themi.core.body_double_scene import CHEER_FOR, pick_state
 from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task
@@ -215,7 +215,7 @@ class BodyDouble:
 
     def install(self) -> None:
         s = self.services
-        s.body_double = self
+        s.provide(keys.body_double, self)
         self.jobs.handler(JOB)(self.run_job)
         s.button_handlers["body_double"] = self.on_button
         s.add_command(
@@ -224,8 +224,8 @@ class BodyDouble:
             "Company while you work: /bodydouble, /bodydouble sprint, /bodydouble quiet 45",
         )
         s.open_item_sources.append(self.open_items)
-        if s.taskboard is not None:
-            s.taskboard.nudge_buttons.append(self.nudge_buttons)
+        if s.maybe(keys.taskboard) is not None:
+            s.get(keys.taskboard).nudge_buttons.append(self.nudge_buttons)
         s.group_sources.append(lambda m: {"body_double"} if self.current(m) else set())
         for t in (start_body_double, switch_body_double_mode, end_body_double):
             s.tools.register(t)
@@ -307,7 +307,7 @@ class BodyDouble:
     # ----- starting -------------------------------------------------------------------------
 
     def task_for(self, member: Member, task_id: int) -> Task:
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None:
             raise ValueError("tasks aren't set up")
         try:
@@ -321,7 +321,7 @@ class BodyDouble:
     def find_task(self, member: Member, what: str) -> Task | None:
         """F34h, bug #181: the open task they named, theirs first, then anyone's (doing a
         partner's chore is fine; whoever finishes it closes it)."""
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None or not what.strip():
             return None
         from themi.core.events import title_matches
@@ -336,7 +336,7 @@ class BodyDouble:
 
     def find_routine(self, member: Member, what: str) -> Routine | None:
         """F34h: "my evening routine", "the morning one"."""
-        routines = self.services.routines
+        routines = self.services.maybe(keys.routines)
         if routines is None:
             return None
         said = re.sub(r"^(?:my|the|our)\s+", "", name_key(what))
@@ -384,8 +384,10 @@ class BodyDouble:
                 chosen = True
         mode = mode or SILENT
         await self.stop_for_other(member)  # one at a time: a new one ends the old
-        if self.services.breaks is not None and self.services.breaks.current(member):
-            self.services.breaks.end(member)  # back from a break, to work
+        if self.services.maybe(keys.breaks) is not None and self.services.get(keys.breaks).current(
+            member
+        ):
+            self.services.get(keys.breaks).end(member)  # back from a break, to work
         member = self.store.get_member(member.id)
         pause = self.pauses.pause(member, TOPIC, now + OPEN_ENDED + LEFT_AFTER)
         session_id = self.db.execute(
@@ -438,8 +440,8 @@ class BodyDouble:
             try:
                 if "task" in item:
                     task = self.task_for(member, int(item["task"]))
-                elif "routine" in item and self.services.routines is not None:
-                    routine = self.services.routines.get(int(item["routine"]))
+                elif "routine" in item and self.services.maybe(keys.routines) is not None:
+                    routine = self.services.get(keys.routines).get(int(item["routine"]))
             except (ValueError, NotFound):
                 continue  # done or gone since the run began: on to the one after
             done_so_far = session.row.get("part") or 1
@@ -678,7 +680,9 @@ class BodyDouble:
         except ValueError as exc:
             await self._reply(event, member, f"Not started: {exc}.", [])
             return
-        if self.services.burnout is not None and self.services.burnout.current(member):
+        if self.services.maybe(keys.burnout) is not None and self.services.get(
+            keys.burnout
+        ).current(member):
             return  # burnout mode wins; a held nudge shouldn't have been tapped
         session, text, buttons = await self.start(member, task=task)
         self.remember_message(session, event.button.message_id)
@@ -693,12 +697,12 @@ class BodyDouble:
 
     async def _done_text(self, session: Session) -> str:
         member = self._owner(session)
-        if session.task_id is not None and self.services.taskboard is not None:
+        if session.task_id is not None and self.services.maybe(keys.taskboard) is not None:
             return await self._task_done(member, session.task_id)
         return DONE_TEXT.format(praise=praise.word(f"bd-{session.id}"))
 
     async def _task_done(self, member: Member, task_id: int) -> str:
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         assert board is not None
         said = await board.complete(task_id, member, interactive=True)
         last = self.db.one(
@@ -714,9 +718,9 @@ class BodyDouble:
 
     async def stop(self, session: Session) -> tuple[str, list[Button]]:
         await self._end(session, "stopped")
-        if session.task_id is None or self.services.taskboard is None:
+        if session.task_id is None or self.services.maybe(keys.taskboard) is None:
             return STOPPED_TEXT, []
-        task = self.services.taskboard.get(session.task_id)
+        task = self.services.get(keys.taskboard).get(session.task_id)
         if task.status != "open":
             return STOPPED_TEXT, []
         return STOPPED_TASK_TEXT.format(title=task.title), [
@@ -1024,7 +1028,7 @@ class BodyDouble:
 
 
 def _body_double(ctx: ToolContext) -> BodyDouble:
-    body_double = ctx.services.body_double
+    body_double = ctx.services.maybe(keys.body_double)
     if body_double is None:
         raise ToolFailed("Body double sessions aren't set up.")
     return body_double
@@ -1070,7 +1074,7 @@ async def _send(
 )
 async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
     body_double = _body_double(ctx)
-    burnout = ctx.services.burnout
+    burnout = ctx.services.maybe(keys.burnout)
     if burnout is not None and burnout.current(ctx.member):
         raise ToolFailed(
             "Not started: burnout mode is on, and it comes first. Keep them company in words "
@@ -1163,4 +1167,10 @@ class BodyDoubleModule(Module):
     name = "body_double"
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.core.body_double_music import LOOPS  # at install: a cycle at the top
+
+        def sound(value: object) -> str | None:  # BD5a: the session page's built-in loops
+            return None if value in LOOPS else f"the sounds are {', '.join(LOOPS)}"
+
+        ctx.services.store.setting_checks["body_double_sound"] = sound
         ctx.provide(BodyDouble(ctx.services, ctx.scheduler)).install()

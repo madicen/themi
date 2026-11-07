@@ -54,6 +54,7 @@ from themi.ai.router import ProviderFactory
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
+from themi.core import keys
 from themi.storage.secrets import Secret
 
 START = datetime(2026, 10, 21, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
@@ -206,8 +207,8 @@ class Scenario:
         before = len(self.telegram.sent_texts(chat))
         act(chat)
         await self.app.channel.poll_once()
-        if self.app.services.conversation is not None:  # CM1b's passes, after the reply
-            await self.app.services.conversation.sidecar.drain()
+        if self.app.services.maybe(keys.conversation) is not None:  # CM1b's passes, after the reply
+            await self.app.services.get(keys.conversation).sidecar.drain()
         return self.telegram.sent_texts(chat)[before:]
 
     async def say(self, name: str, text: str, reply_to_text: str | None = None) -> list[str]:

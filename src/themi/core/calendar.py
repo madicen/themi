@@ -22,6 +22,7 @@ from typing import Any
 from themi import clock
 from themi.autonomy import ExecutionContext
 from themi.connectors.gcal import CalendarSync, event_id
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
 from themi.localtime import to_utc_iso
@@ -104,7 +105,7 @@ class TaskCalendar:
             return
         if _personal(task):
             return  # theirs alone: not for the family calendar (Erin's idea #23)
-        if self.services.wall is not None:
+        if self.services.maybe(keys.wall) is not None:
             return  # the wall's own lists show tasks: not an event as well (bug #52)
         if self.sync.account() is None:
             log.info("Task %s has a date, but there's no calendar to put it on yet", task.id)

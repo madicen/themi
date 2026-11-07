@@ -12,6 +12,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.spending import Spending
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
@@ -24,8 +25,8 @@ DOORDASH = {
 
 
 def spending(scenario: Scenario) -> Spending:
-    assert scenario.app.services.spending is not None
-    return scenario.app.services.spending
+    assert scenario.app.services.maybe(keys.spending) is not None
+    return scenario.app.services.get(keys.spending)
 
 
 def tool_result(scenario: Scenario) -> str:

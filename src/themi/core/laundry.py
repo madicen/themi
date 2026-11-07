@@ -31,6 +31,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Button, Priority
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ApplianceEvent, ThinqWatcher
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi.energy.windows import STEP, Projection, next_window
@@ -62,7 +63,7 @@ class Laundry:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.laundry = self
+        self.services.provide(keys.laundry, self)
         self.watcher.listeners.append(self.on_event)
         self.board.own_nudges.append(self._nudge)
         self.board.change_listeners.append(self._task_changed)

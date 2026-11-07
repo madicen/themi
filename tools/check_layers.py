@@ -42,7 +42,6 @@ OUTSIDE = ("themi.core", "themi.connectors", "themi.energy", "themi.web", "themi
 
 # (file relative to the src root, imported module): the prompt that removes it.
 KNOWN = {
-    ("themi/accounts/store.py", "themi.core.body_double_music"): "CR3",
     ("themi/settings.py", "themi.connectors.cozyla.client"): "CR5",
     ("themi/settings.py", "themi.connectors.google.oauth"): "CR5",
     ("themi/settings.py", "themi.connectors.homeconnect.client"): "CR5",

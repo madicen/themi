@@ -12,6 +12,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi.channels.outbox import Priority
+from themi.core import keys
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
@@ -115,7 +116,7 @@ async def test_a_long_busy_time_is_followed_by_a_wind_down(scenario: Scenario) -
 async def test_a_pile_of_overdue_tasks_counts_against_more(scenario: Scenario) -> None:
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     matcher = board.matcher

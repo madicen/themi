@@ -11,6 +11,7 @@ from datetime import date
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
+from themi.core import keys
 from themi.core.spending import KIND_WORDS, Spending, money, month_of
 from themi.core.tools import ToolFailed
 from themi.web.kit import Kit
@@ -21,8 +22,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def spending() -> Spending:
-        assert app.services.spending is not None
-        return app.services.spending
+        assert app.services.maybe(keys.spending) is not None
+        return app.services.maybe(keys.spending)
 
     def month(request: Request) -> date:
         try:

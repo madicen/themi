@@ -11,6 +11,7 @@ import pytest
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.focus import SIGNAL, overwhelmed, partner_signal
 from themi.core.tasks import Task, TaskBoard
 
@@ -18,8 +19,8 @@ WED = date(2026, 10, 21)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def task(
@@ -94,7 +95,7 @@ async def test_a_long_reply_after_it_isnt_sent(scenario: Scenario) -> None:
 
 async def test_with_little_on_it_says_so(scenario: Scenario) -> None:
     await task(scenario, "Erin", "Call the vet")
-    focus = scenario.app.services.focus
+    focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None
     few, rest = focus.pick(scenario.member("Erin"))
     assert focus.text(scenario.member("Erin"), few, rest) == (
@@ -109,7 +110,7 @@ async def test_medicines_are_never_left_out(scenario: Scenario) -> None:
     for n in range(4):
         await task(scenario, "Erin", f"Pill {n}")
     await task(scenario, "Erin", "Call the vet", due_time=time(14))
-    focus = scenario.app.services.focus
+    focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None
     few, rest = focus.pick(scenario.member("Erin"))
     assert [t.title for t in few] == [f"Pill {n}" for n in range(4)]
@@ -271,13 +272,13 @@ async def test_a_chore_goes_to_its_next_round_and_a_shared_one_stays_with_the_ot
     await board(scenario).set_schedule(bins.id, erin, repeat=parse("every Wednesday", WED))
     laundry = await task(scenario, "Erin", "Cycle the laundry")
     await board(scenario).make_either(laundry.id)
-    focus = scenario.app.services.focus
+    focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None
     text = await focus.spread_now(erin)
     assert "Wed 28 Oct: Bring bins in" in text  # its next round, not stacked on a day
     assert board(scenario).get(bins.id).due_on == WED + timedelta(days=7)
     assert board(scenario).get(laundry.id).due_on == WED  # still today, for him
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     assert "Cycle the laundry" in (summary.text(husband, WED) or "")
     assert "Cycle the laundry" not in (summary.text(erin, WED) or "")
@@ -287,7 +288,7 @@ async def test_the_budget_is_what_usually_gets_done(scenario: Scenario) -> None:
     from themi import clock
 
     erin = scenario.member("Erin")
-    focus = scenario.app.services.focus
+    focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None
     assert focus.budget(erin) == 4  # nothing done yet to go by
     for day in range(3):  # two things done on each of three days
@@ -305,7 +306,7 @@ async def test_how_few_is_their_own_number(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     scenario.app.store.update_settings(erin, erin.id, focus_count=2)
     await a_full_day(scenario)
-    focus = scenario.app.services.focus
+    focus = scenario.app.services.maybe(keys.focus)
     assert focus is not None
     few, rest = focus.pick(scenario.member("Erin"))
     assert [t.title for t in few] == ["Mimi pill", "Call the vet"]

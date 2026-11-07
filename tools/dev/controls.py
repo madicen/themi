@@ -38,6 +38,7 @@ from themi.connectors.roborock import RoborockError
 from themi.connectors.roborock.events import PARTS, problems, read_status, state_word
 from themi.connectors.tuya.events import read_status as read_feeder
 from themi.connectors.tuya.events import state_word as feeder_word
+from themi.core import keys
 from tools.dev.fakes import (
     ADDRESSES,
     DISHWASHER,
@@ -292,7 +293,7 @@ EMAILS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
 async def _read_mail(fakes: DevFakes) -> None:
     """Every inbox read now (a poll waits 3 minutes after the last one)."""
     assert fakes.app is not None
-    gmail, store = fakes.app.services.gmail, fakes.app.store
+    gmail, store = fakes.app.services.maybe(keys.gmail), fakes.app.store
     if gmail is None:
         return
     for member in store.list_members():
@@ -835,7 +836,7 @@ async def _read_robot(fakes: DevFakes) -> None:
     """The vacuum read now, as when someone asks how it's doing (a poll waits 5 minutes
     while it's docked and fine)."""
     assert fakes.app is not None
-    watcher = fakes.app.services.roborock
+    watcher = fakes.app.services.maybe(keys.roborock)
     if watcher is None:
         return
     for device in watcher.devices():
@@ -931,8 +932,8 @@ async def _read_feeders(fakes: DevFakes) -> None:
     """The feeders read now, feeding logs too (a poll comes every 10 minutes, the logs
     hourly)."""
     assert fakes.app is not None
-    if fakes.app.services.tuya is not None:
-        await fakes.app.services.tuya.poll(feeds=True)
+    if fakes.app.services.maybe(keys.tuya) is not None:
+        await fakes.app.services.get(keys.tuya).poll(feeds=True)
 
 
 def _food(fakes: DevFakes, v: Values) -> str:
@@ -1030,8 +1031,8 @@ FEEDERS_SECTION = Section(
 async def _read_litter_box(fakes: DevFakes) -> None:
     """The litter box read now (a poll comes every 10 minutes)."""
     assert fakes.app is not None
-    if fakes.app.services.catgenie is not None:
-        await fakes.app.services.catgenie.poll()
+    if fakes.app.services.maybe(keys.catgenie) is not None:
+        await fakes.app.services.get(keys.catgenie).poll()
 
 
 def _sani(fakes: DevFakes, v: Values) -> str:
@@ -1119,7 +1120,7 @@ def _catgenie_back(fakes: DevFakes, v: Values) -> Awaitable[str]:
     async def relink() -> str:
         fakes.catgenie.set(LITTER, online=True)
         assert fakes.app is not None
-        watcher = fakes.app.services.catgenie
+        watcher = fakes.app.services.maybe(keys.catgenie)
         if watcher is None or not watcher.account.problem():
             return "CatGenie works again"
         admin = next(m for m in fakes.app.store.list_members() if m.is_admin)
@@ -1195,8 +1196,8 @@ SAFEWAY_OUTCOMES = {  # label -> the status the extension sends
 
 
 def _pair(fakes: DevFakes, v: Values) -> str:
-    assert fakes.app is not None and fakes.app.services.safeway is not None
-    fakes.safeway.token = fakes.app.services.safeway.connect(_member(fakes, v["person"]))
+    assert fakes.app is not None and fakes.app.services.maybe(keys.safeway) is not None
+    fakes.safeway.token = fakes.app.services.get(keys.safeway).connect(_member(fakes, v["person"]))
     return f"a helper connected by {v['person']}"
 
 
@@ -1256,7 +1257,7 @@ async def _answer_job(fakes: DevFakes, v: Values) -> str:
 
 def _safeway_state(fakes: DevFakes) -> list[str]:
     assert fakes.app is not None
-    safeway = fakes.app.services.safeway
+    safeway = fakes.app.services.maybe(keys.safeway)
     if safeway is None:
         return ["Safeway isn't set up"]
     paired = safeway.helper_for(fakes.safeway.token) is not None if fakes.safeway.token else False
@@ -1433,7 +1434,7 @@ def _tuya_back(fakes: DevFakes, v: Values) -> Awaitable[str]:
         fakes.tuya.lapsed = False
         fakes.tuya.offline_devices.clear()
         assert fakes.app is not None
-        watcher = fakes.app.services.tuya
+        watcher = fakes.app.services.maybe(keys.tuya)
         if watcher is None or not watcher.account.problem():
             return "Tuya works again"
         admin = next(m for m in fakes.app.store.list_members() if m.is_admin)

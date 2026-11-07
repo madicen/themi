@@ -35,7 +35,7 @@ from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import praise
+from themi.core import keys, praise
 from themi.core.cozyla_routines import (
     ALL_DONE_TEXT,
     CHECK_TEXT,
@@ -143,7 +143,7 @@ class Routines:
         self.tick_listeners: list[Callable[[Item, date], Awaitable[None]]] = []
 
     def install(self) -> None:
-        self.services.routines = self
+        self.services.provide(keys.routines, self)
         self.services.button_handlers["routine_item"] = self.on_button
         self.services.outbox.refreshers[KIND] = self._as_it_stands
         self.services.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
@@ -532,9 +532,9 @@ def _buttons(routine: Routine, still: list[Item], day: date) -> list[Button]:
 
 
 def _routines(ctx: ToolContext) -> Routines:
-    if ctx.services.routines is None:
+    if ctx.services.maybe(keys.routines) is None:
         raise ToolFailed("Routines aren't set up.")
-    return ctx.services.routines
+    return ctx.services.get(keys.routines)
 
 
 def _time(text: str, what: str) -> time:

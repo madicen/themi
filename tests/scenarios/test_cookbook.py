@@ -16,6 +16,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi.connectors.google import DRIVE_FILE_SCOPE
 from themi.connectors.google.oauth import LINK_SCOPES
+from themi.core import keys
 
 READ = (
     "I've read 13 recipes and 3 charts from the cookbook. 3 need a look: Bean Dip (headings typed "
@@ -48,7 +49,7 @@ async def choose(scenario: Scenario, site: httpx.AsyncClient, doc: str = LINK) -
 
 
 def names(scenario: Scenario) -> list[str]:
-    recipes = scenario.app.services.recipes
+    recipes = scenario.app.services.maybe(keys.recipes)
     assert recipes is not None
     return [r.name for r in recipes.all()]
 
@@ -66,7 +67,7 @@ async def test_the_cookbook_is_chosen_and_read(
         'Timings". Want them as guides, so you can ask me about them?'
     )
     assert "Alfredo Sauce" in names(scenario) and "Roasted Vegetables" not in names(scenario)
-    settings = scenario.app.services.recipes.settings()  # type: ignore[union-attr]
+    settings = scenario.app.services.maybe(keys.recipes).settings()  # type: ignore[union-attr]
     assert settings["doc_id"] == COOKBOOK_ID and settings["title"] == TITLE
     assert settings["revision"] == "rev1"
 
@@ -76,7 +77,7 @@ async def test_the_references_become_guides(
 ) -> None:
     await choose(scenario, site)
     await scenario.tap("Erin", "Save as guides")
-    guides = scenario.app.services.guides
+    guides = scenario.app.services.maybe(keys.guides)
     assert guides is not None
     saved = {g.name: g.text for g in guides.visible(scenario.member("Husband"))}
     assert set(saved) == {"Weights of Common Ingredients", "Instant Pot Grains Timings"}
@@ -90,7 +91,7 @@ async def test_the_references_become_guides(
 async def test_a_guide_already_there_isnt_offered_again(
     scenario: Scenario, linked: FakeGdocs, site: httpx.AsyncClient
 ) -> None:
-    guides = scenario.app.services.guides
+    guides = scenario.app.services.maybe(keys.guides)
     assert guides is not None
     guides.save(scenario.member("Erin"), "Instant Pot grains", "Quinoa 1 min", personal=False)
     guides.save(scenario.member("Erin"), "Ingredient weights", "Flour 120g", personal=False)
@@ -105,7 +106,7 @@ async def test_only_a_new_version_is_read_again(
     reads = linked.calls.count(("get", COOKBOOK_ID))
     await scenario.run_periodic("recipes.sync")
     assert linked.calls.count(("get", COOKBOOK_ID)) == reads  # same version: not read
-    recipes = scenario.app.services.recipes
+    recipes = scenario.app.services.maybe(keys.recipes)
     assert recipes is not None
     alfredo = next(r for r in recipes.all() if r.name == "Alfredo Sauce")
 
@@ -130,7 +131,7 @@ async def test_a_doc_themi_wasnt_given_says_how(
         scenario, site, "https://docs.google.com/document/d/1AnotherDocNobodyPickedForThemi00/edit"
     )
     assert "Google won&#39;t let Themi open that doc" in page.text
-    assert scenario.app.services.recipes.doc_id is None  # type: ignore[union-attr]
+    assert scenario.app.services.maybe(keys.recipes).doc_id is None  # type: ignore[union-attr]
 
 
 async def test_a_file_that_isnt_a_doc(
@@ -175,7 +176,7 @@ async def test_the_picker_page_alone_may_load_googles_scripts(
 ) -> None:
     from dataclasses import replace
 
-    recipes = scenario.app.services.recipes
+    recipes = scenario.app.services.maybe(keys.recipes)
     assert recipes is not None and recipes.config is not None
     recipes.config = replace(recipes.config, picker_api_key="AIza-test", project_number="123")
     await sign_in(scenario, site, "Erin")

@@ -42,6 +42,7 @@ from themi.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedu
 from themi.connectors.cozyla.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
 from themi.connectors.cozyla.emoji import better_icon, chore_icon
 from themi.connectors.cozyla.schedule import from_wall, to_wall
+from themi.core import keys
 from themi.core.chore_chart import ChartQueue, is_routine, on_chart
 from themi.core.cozyla_todos import backoff, member_map
 from themi.core.reminders import MEDICINE
@@ -92,7 +93,7 @@ def _same_schedule(a: WallSchedule, b: WallSchedule) -> bool:
     {"task_id": {"type": "integer"}},
 )
 async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     assert board is not None
     try:
         task = await board.put_on_chart(args["task_id"], ctx.member)

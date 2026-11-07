@@ -16,6 +16,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.progression import parse_plan
 from themi.core.repeat import parse
 from themi.core.tasks import TaskBoard
@@ -38,8 +39,8 @@ def local(hour: int, minute: int = 0, day: int = 21) -> str:
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -150,7 +151,7 @@ async def test_a_chore_waiting_for_the_chart_is_in_tomorrows_summary(
         erin, "Clean the bird cage", "physical", 2, assignee=erin, nudge=False
     )
     await board(scenario).set_schedule(cage.id, erin, repeat=parse("every Thursday", WED))
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     assert summary.text(erin, date(2026, 10, 22)) == "Thu 22 Oct:\n- Clean the bird cage"
 

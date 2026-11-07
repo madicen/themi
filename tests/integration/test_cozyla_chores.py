@@ -7,6 +7,7 @@ from typing import Any
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -14,8 +15,8 @@ WED = date(2026, 10, 21)  # the scenario clock's first day
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def sync(scenario: Scenario) -> Any:

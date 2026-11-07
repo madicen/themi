@@ -29,6 +29,7 @@ from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
@@ -308,7 +309,7 @@ class Reminders:
     },
 )
 async def set_task_importance(ctx: ToolContext, args: dict[str, Any]) -> str:
-    board = ctx.services.taskboard
+    board = ctx.services.maybe(keys.taskboard)
     assert board is not None
     try:
         task = board.get(args["task_id"])

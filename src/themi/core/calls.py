@@ -25,6 +25,7 @@ from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.prompts import OpenItem, as_data
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
@@ -102,7 +103,7 @@ class VendorCalls:
 
     def install(self) -> None:
         s = self.services
-        s.calls = self
+        s.provide(keys.calls, self)
         self.board.details.append(self.details_for)
         self.board.change_listeners.append(self.on_task_changed)
         s.open_item_sources.append(self.open_items)
@@ -218,7 +219,7 @@ class VendorCalls:
 
 
 def _calls(ctx: ToolContext) -> VendorCalls:
-    calls = ctx.services.calls
+    calls = ctx.services.maybe(keys.calls)
     assert calls is not None
     return calls
 

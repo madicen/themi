@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import Member
+from themi.core import keys
 from themi.core.maintenance import MONTHS, Maintenance, every_words, months_words
 from themi.web.kit import Kit
 
@@ -23,8 +24,8 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def maintenance() -> Maintenance:
-        assert app.services.maintenance is not None
-        return app.services.maintenance
+        assert app.services.maybe(keys.maintenance) is not None
+        return app.services.maybe(keys.maintenance)
 
     def back(item_id: int | None = None, message: str | None = None) -> Response:
         to = f"/maintenance?open={item_id}#item-{item_id}" if item_id else "/maintenance"

@@ -38,6 +38,7 @@ from themi.accounts.store import SYSTEM
 from themi.autonomy import Action, Decision, InvalidTransition
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -147,7 +148,7 @@ class ApprovalGroups:
         """Triage rated it urgent, or its sender is one they said is important (E2b)."""
         if email["category"] == "urgent":
             return True
-        audit = self.ui.services.email_audit if self.ui.services else None
+        audit = self.ui.services.maybe(keys.email_audit) if self.ui.services else None
         if audit is None:
             return False
         return audit.sender_levels(email["account_id"], email["from_address"])[1] > 0

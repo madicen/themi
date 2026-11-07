@@ -34,6 +34,7 @@ from themi.accounts import LinkedAccount, Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail.parse import web_link
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 
@@ -80,7 +81,7 @@ class EmailAudit:
 
     def install(self) -> None:
         s = self.services
-        s.email_audit = self
+        s.provide(keys.email_audit, self)
         s.button_handlers["email_audit"] = self.on_button
         s.tools.register(start_email_audit)
         s.tools.register(set_sender_levels)
@@ -355,8 +356,8 @@ class EmailAudit:
     def _apply(self, member: Member, item: dict[str, Any], answer: str) -> None:
         urgent = answer in ("urgent", "both")
         if item["email_id"] is None:
-            if urgent and item["suggestion_id"] and self.services.senders is not None:
-                self.services.senders.add(member, item["suggestion_id"])
+            if urgent and item["suggestion_id"] and self.services.maybe(keys.senders) is not None:
+                self.services.get(keys.senders).add(member, item["suggestion_id"])
             return
         if urgent:
             self.db.execute(
@@ -447,7 +448,7 @@ def _quadrant(urgency: int, importance: int) -> str:
     {},
 )
 async def start_email_audit(ctx: ToolContext, args: dict[str, Any]) -> str:
-    audit = ctx.services.email_audit
+    audit = ctx.services.maybe(keys.email_audit)
     if audit is None:
         raise ToolFailed("Email isn't set up.")
     if not await audit.start(ctx.member):
@@ -487,7 +488,7 @@ IMPORTANCE_KEYS = ("not", "somewhat", "very")
 async def set_sender_levels(ctx: ToolContext, args: dict[str, Any]) -> str:
     from themi.core.triage import find_email
 
-    audit = ctx.services.email_audit
+    audit = ctx.services.maybe(keys.email_audit)
     if audit is None:
         raise ToolFailed("Email isn't set up.")
     row = find_email(ctx, str(args["sender"]))

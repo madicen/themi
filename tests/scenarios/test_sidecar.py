@@ -11,6 +11,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import dentist, linked, on_primary
 from tests.scenarios.test_conversation_mode import chat_on
 from tests.scenarios.test_twins import TASK
+from themi.core import keys
 from themi.core.sidecar import REACTION
 
 __all__ = ["linked"]  # the fixture, used by name
@@ -124,8 +125,8 @@ async def test_burnout_mode_from_a_partners_words_is_refused(scenario: Scenario)
         "That's hard to watch.",
         ("start_burnout", {}),
     )
-    assert scenario.app.services.burnout is not None
-    assert scenario.app.services.burnout.current(scenario.member("Erin")) is None
+    assert scenario.app.services.maybe(keys.burnout) is not None
+    assert scenario.app.services.get(keys.burnout).current(scenario.member("Erin")) is None
     assert reactions(scenario) == [] and logged(scenario) == []
 
 
@@ -137,8 +138,8 @@ async def test_their_own_burnout_mode_is_turned_on_and_said(scenario: Scenario) 
         "I hear you.",
         ("start_burnout", {}),
     )
-    assert scenario.app.services.burnout is not None
-    assert scenario.app.services.burnout.current(scenario.member("Erin")) is not None
+    assert scenario.app.services.maybe(keys.burnout) is not None
+    assert scenario.app.services.get(keys.burnout).current(scenario.member("Erin")) is not None
     assert replies[0] == "I hear you." and len(replies) == 2  # and burnout's own few words
     assert reactions(scenario) == [REACTION]
 
@@ -146,7 +147,7 @@ async def test_their_own_burnout_mode_is_turned_on_and_said(scenario: Scenario) 
 async def test_two_quick_turns_make_one_task(scenario: Scenario) -> None:
     """The second pass waits for the first, so it sees the task already made."""
     await chat_on(scenario)
-    sidecar = scenario.app.services.conversation.sidecar  # type: ignore[union-attr]
+    sidecar = scenario.app.services.maybe(keys.conversation).sidecar  # type: ignore[union-attr]
     erin = scenario.member("Erin")
     for _ in range(2):
         scenario.primary.queue_tool_calls(

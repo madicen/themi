@@ -18,6 +18,7 @@ from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.autonomy import Decision
 from themi.connectors.google import GMAIL_SCOPE
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 FRIDAY = date(2026, 10, 30)
@@ -33,8 +34,8 @@ async def linked(
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def task(

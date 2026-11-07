@@ -9,13 +9,14 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.prompts import build_system
 from themi.core.tasks import NOT_SURE_TEXT, TaskBoard, is_medicine
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def tool_result(scenario: Scenario) -> str:

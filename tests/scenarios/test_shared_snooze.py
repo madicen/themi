@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -18,8 +19,8 @@ WED = date(2026, 10, 21)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def both(scenario: Scenario, title: str = "Bring bins in", at: str = "10:00") -> Task:
@@ -43,7 +44,7 @@ def nudges(scenario: Scenario, name: str, title: str = "Bring bins in") -> list[
 
 
 def on_their_day(scenario: Scenario, name: str, title: str = "Bring bins in") -> bool:
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     return title in (summary.text(scenario.member(name), WED) or "")
 

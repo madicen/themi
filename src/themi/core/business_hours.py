@@ -30,6 +30,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task, TaskBoard, clock_words
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -221,7 +222,7 @@ class BusinessHours:
 
     def install(self) -> None:
         s = self.services
-        s.business_hours = self
+        s.provide(keys.business_hours, self)
         s.button_handlers[KIND] = self.on_button
         s.tools.register(set_business_hours)
         self.board.wall_notes.append(self.note)
@@ -295,7 +296,7 @@ class BusinessHours:
         no search to do."""
         from themi.core.web_search import near_home
 
-        search = self.services.web_search
+        search = self.services.maybe(keys.web_search)
         if search is None or search.backend is None:
             return None
         member_id = task.assignee or task.created_by or 0
@@ -464,7 +465,7 @@ def next_open(hours: Hours, after: date) -> tuple[date | None, time | None]:
     {"task_id": {"type": "integer"}, "hours": {"type": "string"}},
 )
 async def set_business_hours(ctx: ToolContext, args: dict[str, Any]) -> str:
-    found = ctx.services.business_hours
+    found = ctx.services.maybe(keys.business_hours)
     if found is None:
         raise ToolFailed("Business hours aren't set up.")
     try:

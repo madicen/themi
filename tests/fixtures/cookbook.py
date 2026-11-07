@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from themi.core import keys
+
 COOKBOOK_ID = "12OocqIHwa2rLjZSMDZnMfnoYS_q4b6MdTOSEVSLkpkk"
 TITLE = "Madicen Family Cookbook"
 LINK = f"https://docs.google.com/document/d/{COOKBOOK_ID}/edit?usp=sharing"
@@ -389,7 +391,7 @@ def load(services: Any, blocks: list[Block] | None = None) -> None:
     """Put the fixture cookbook in Themi's copy, as a sync would (no Google needed)."""
     from themi.core import cookbook as book
 
-    services.recipes.store_doc(book.parse(document(blocks)).recipes)
+    services.maybe(keys.recipes).store_doc(book.parse(document(blocks)).recipes)
     services.store.db.execute(
         "UPDATE cookbook SET doc_id = ?, title = ? WHERE id = 1", (COOKBOOK_ID, TITLE)
     )

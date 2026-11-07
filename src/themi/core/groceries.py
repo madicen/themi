@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
+from themi.core import keys
 from themi.core.tools import (
     Proposal,
     ToolContext,
@@ -132,7 +133,7 @@ class GroceryList:
 
     def install(self) -> None:
         s = self.services
-        s.groceries = self
+        s.provide(keys.groceries, self)
         s.autonomy.executors.register(EXECUTOR)(self._execute_add)
         s.tools.register(add_to_grocery_list)
         s.tools.register(show_grocery_list)
@@ -200,9 +201,9 @@ class GroceryList:
     async def _execute_add(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
         names = [str(n) for n in payload.get("items", [])]
         added = self.add(names, by=ctx.member, action_id=ctx.action_id)
-        if self.services.buying is not None:  # settled: these are groceries (L2a)
+        if self.services.maybe(keys.buying) is not None:  # settled: these are groceries (L2a)
             for name in names:
-                self.services.buying.remember(name, kind="food")
+                self.services.get(keys.buying).remember(name, kind="food")
         if not added:
             return f"{and_list(names)} {'was' if len(names) == 1 else 'were'} already on the list."
         return f"Added {and_list(added)} to the grocery list."
@@ -248,7 +249,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             "Not added: they said what the house has, not to add it. That's update_pantry, "
             "which offers low staples for the grocery list itself."
         )
-    groceries = ctx.services.groceries
+    groceries = ctx.services.maybe(keys.groceries)
     assert groceries is not None
     waiting = groceries.awaiting_approval()
     names, skipped = [], []
@@ -276,7 +277,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         and all(re.search(rf"\b{re.escape(n)}\b", said) for n in names)
         and asks_to_add(ctx.request_text, ctx.previous_text)
     ) or picture_asks_to_add(ctx, names)
-    buying = ctx.services.buying
+    buying = ctx.services.maybe(keys.buying)
     other = [n for n in names if buying is not None and buying.kind_of(n) == "other"]
     if other and not asked:  # L2a: settled before as not food
         raise ToolFailed(
@@ -288,7 +289,7 @@ async def add_to_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> Proposa
 
 @tool("show_grocery_list", "What's on the family's grocery list right now.", {})
 async def show_grocery_list(ctx: ToolContext, args: dict[str, Any]) -> str:
-    groceries = ctx.services.groceries
+    groceries = ctx.services.maybe(keys.groceries)
     assert groceries is not None
     items = groceries.needed()
     waiting = sorted(groceries.awaiting_approval())

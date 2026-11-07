@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse, Response
 from themi.accounts import LinkedAccount, Member
 from themi.connectors.gdocs import DocsError, doc_id_from
 from themi.connectors.google import DRIVE_FILE_SCOPE
+from themi.core import keys
 from themi.core.cooking import Session, step_parts
 from themi.core.quantities import NeedsYield, describe, scale_for, scale_line
 from themi.core.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
@@ -45,7 +46,7 @@ def routes(kit: Kit) -> APIRouter:
     app = kit.app
 
     def recipes() -> Recipes | None:
-        return app.services.recipes
+        return app.services.maybe(keys.recipes)
 
     def own_account(member: Member, account_id: int) -> LinkedAccount | None:
         return next((a for a in app.store.linked_accounts(member.id) if a.id == account_id), None)
@@ -176,7 +177,7 @@ def routes(kit: Kit) -> APIRouter:
                         **kitchen_values(session.member))  # fmt: skip
 
     def kitchen_values(member: Member) -> dict[str, Any]:
-        cooking = app.services.cooking
+        cooking = app.services.maybe(keys.cooking)
         current: Session | None = cooking.current(member) if cooking else None
         if cooking is None or current is None:
             return {"cooking": None}
@@ -200,7 +201,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/recipes/kitchen/{session_id}/{action}")
     async def kitchen_move(request: Request, session_id: int, action: str) -> Response:
         signed, _ = await kit.checked(request)
-        cooking = app.services.cooking
+        cooking = app.services.maybe(keys.cooking)
         current = cooking.get(session_id) if cooking else None
         if (
             cooking is None
@@ -249,7 +250,7 @@ def routes(kit: Kit) -> APIRouter:
     async def to_groceries(request: Request, recipe_id: int) -> Response:
         signed, form = await kit.checked(request)
         recipe = book().get(recipe_id)
-        groceries = app.services.recipe_groceries
+        groceries = app.services.maybe(keys.recipe_groceries)
         if recipe is None or groceries is None:
             return kit.redirect("/recipes", "That recipe isn't in the cookbook any more.")
         said = str(form.get("scale", ""))
@@ -266,7 +267,7 @@ def routes(kit: Kit) -> APIRouter:
     async def cook(request: Request, recipe_id: int) -> Response:
         signed, form = await kit.checked(request)
         recipe = book().get(recipe_id)
-        cooking = app.services.cooking
+        cooking = app.services.maybe(keys.cooking)
         if recipe is None or cooking is None or recipe.is_chart:
             return kit.redirect("/recipes", "That recipe can't be cooked step by step.")
         said = str(form.get("scale", ""))

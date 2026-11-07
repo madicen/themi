@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
@@ -54,7 +55,7 @@ class Taking:
         self.store = services.store
 
     def install(self) -> None:
-        self.services.taking = self
+        self.services.provide(keys.taking, self)
         self.services.tools.register(tasks_i_could_take)
         self.services.button_handlers[KIND] = self.on_button
 
@@ -114,7 +115,7 @@ def _short(title: str) -> str:
     {},
 )
 async def tasks_i_could_take(ctx: ToolContext, args: dict[str, Any]) -> str:
-    taking = ctx.services.taking
+    taking = ctx.services.maybe(keys.taking)
     if taking is None:
         raise ToolFailed("Tasks aren't set up.")
     others = [m for m in ctx.services.store.list_members() if m.id != ctx.member.id]

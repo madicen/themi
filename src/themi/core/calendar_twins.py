@@ -33,6 +33,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
+from themi.core import keys
 from themi.core.events import MERGE, Events, Found, When, title_matches
 from themi.core.lists import name_key
 from themi.localtime import to_utc_iso
@@ -99,8 +100,8 @@ class CalendarTwins:
         s = self.services
         s.autonomy.executors.register(UNMERGE)(self._execute_unmerge)
         s.button_handlers[KIND] = self.on_button
-        if s.calendars is not None:
-            s.calendars.listeners.append(self.check)
+        if s.maybe(keys.calendars) is not None:
+            s.get(keys.calendars).listeners.append(self.check)
 
     # ----- finding pairs ------------------------------------------------------------------
 
@@ -326,7 +327,7 @@ class CalendarTwins:
             if found.event_id == keep_id:
                 await self.events._change(found, found.when, found.title, found.location, {})
                 continue
-            sync = self.services.calendar
+            sync = self.services.maybe(keys.calendar)
             if sync is None:
                 raise RuntimeError("Google isn't set up")
             body = {
@@ -335,8 +336,10 @@ class CalendarTwins:
                 **_google_times(found.when, self.events._tz()),
             }
             await sync.upsert(found.account_id, found.calendar_id, found.event_id, body)
-        if self.services.calendars is not None:  # the pair's row keeps it from being asked
-            await self.services.calendars.refresh(ctx.member)
+        if (
+            self.services.maybe(keys.calendars) is not None
+        ):  # the pair's row keeps it from being asked
+            await self.services.get(keys.calendars).refresh(ctx.member)
         return UNDONE_TEXT.format(first=originals[0].title, second=originals[1].title)
 
 

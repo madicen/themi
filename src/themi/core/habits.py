@@ -28,6 +28,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.services import Services
 from themi.energy.outcomes import OutcomeTracker
 from themi.localtime import member_day, to_utc_iso
@@ -78,7 +79,7 @@ class HabitReserve:
         return self.services.outcomes
 
     def install(self) -> None:
-        self.services.habits = self
+        self.services.provide(keys.habits, self)
         self.services.autonomy.executors.register(EXECUTOR)(self._activate)
 
     def _today(self, member: Member | None = None) -> date:
@@ -166,7 +167,7 @@ class HabitReserve:
     async def send_due(self) -> int:
         """Scheduler job: today's check-in for each active habit. Returns how many were queued."""
         sent = 0
-        burnout = self.services.burnout
+        burnout = self.services.maybe(keys.burnout)
         for habit in self.db.query("SELECT * FROM habits WHERE status = 'active'"):
             member = self.store.get_member(habit["member_id"])
             today = self._today(member).isoformat()  # F34j: their own day

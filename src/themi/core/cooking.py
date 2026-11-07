@@ -40,6 +40,7 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.step_card import StepCard
+from themi.core import keys
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.quantities import NeedsYield, describe, scale_for, scale_line
@@ -274,7 +275,7 @@ class Cooking:
 
     def install(self) -> None:
         s = self.services
-        s.cooking = self
+        s.provide(keys.cooking, self)
         s.button_handlers["cooking"] = self.on_button
         s.recipe_buttons["cook"] = self.on_cook_button
         s.text_handlers.append(self.on_text)
@@ -783,7 +784,7 @@ def and_words(parts: list[str]) -> str:
 
 
 def _cooking(ctx: ToolContext) -> Cooking:
-    cooking = ctx.services.cooking
+    cooking = ctx.services.maybe(keys.cooking)
     if cooking is None:
         raise ToolFailed("Cooking isn't set up.")
     return cooking

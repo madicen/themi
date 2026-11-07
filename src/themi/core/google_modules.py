@@ -42,7 +42,7 @@ class GoogleModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         store = ctx.services.store
         google = GoogleAccounts(store, GoogleOAuth(store.db, store.cipher, self.config))
-        ctx.services.google = ctx.provide(google)
+        ctx.provide(google)
         ctx.periodic(
             "google.forget_states", timedelta(days=1), as_job(google.oauth.forget_expired_states)
         )
@@ -57,7 +57,7 @@ class GmailModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         gmail = GmailSync(s.store, ctx.get(GoogleAccounts), s.outbox)
-        s.gmail = ctx.provide(gmail)
+        ctx.provide(gmail)
         install_executors(s.autonomy.executors, gmail)
         triage = ctx.provide(EmailTriage(s, gmail))
         triage.install()
@@ -85,11 +85,12 @@ class CalendarModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
         sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
-        s.calendar = ctx.provide(sync)
+        ctx.provide(sync)
         tasks = ctx.get(TaskBoard)
         ctx.provide(TaskCalendar(s, tasks, sync, ctx.scheduler)).install()
         busy = CalendarBusy(s.store, sync)
-        s.calendars = ctx.provide(busy)
+        ctx.provide(busy)
+        s.calendar_source = busy.context
         s.outbox.calendar_blocks = busy.blocks
         ctx.get(EnergyModel).calendar_blocks = busy.blocks
         events = ctx.provide(Events(s))

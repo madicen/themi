@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.accounts import Member
+from themi.core import keys
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
@@ -64,7 +65,7 @@ class Guides:
         self.db = services.store.db
 
     def install(self) -> None:
-        self.services.guides = self
+        self.services.provide(keys.guides, self)
         self.services.tools.register(save_guide)
         self.services.tools.register(look_up_guide)
         self.services.open_item_sources.append(self.open_items)
@@ -149,7 +150,7 @@ class Guides:
 
 
 def _guides(ctx: ToolContext) -> Guides:
-    guides = ctx.services.guides
+    guides = ctx.services.maybe(keys.guides)
     if guides is None:
         raise ToolFailed("Guides aren't set up.")
     return guides

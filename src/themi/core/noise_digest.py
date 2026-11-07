@@ -38,6 +38,7 @@ from themi.autonomy import Action, Decision
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gmail.parse import in_primary
+from themi.core import keys
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, tool
 from themi.localtime import to_utc_iso
@@ -83,7 +84,7 @@ class NoiseDigest:
         self.services.awaiting_sources.append(self.awaiting_items)
         self.services.open_item_sources.append(self.open_items)
         self.services.tools.register(archive_noise_emails)
-        self.services.noise = self
+        self.services.provide(keys.noise, self)
 
     # ----- what's waiting -------------------------------------------------------------
 
@@ -379,7 +380,7 @@ class NoiseDigest:
     },
 )
 async def archive_noise_emails(ctx: ToolContext, args: dict[str, Any]) -> str:
-    noise = ctx.services.noise
+    noise = ctx.services.maybe(keys.noise)
     if noise is None:
         raise ToolDeclined("No emails are waiting to be archived as noise.")
     if not noise.waiting(ctx.member):

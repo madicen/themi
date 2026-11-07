@@ -32,6 +32,7 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.step_card import StepCard
+from themi.core import keys
 from themi.core.body_double import KIND, OPEN_ENDED, SILENT, BodyDouble, Session
 from themi.core.body_double_scene import CHEER_FOR
 from themi.core.prompts import PHRASING_WORDS, as_data
@@ -187,7 +188,7 @@ class GuidedSteps:
     def _routine_items(self, session: Session) -> list[Any]:
         """F34h: the session's routine's items still open today (all of today's if every
         one is ticked already)."""
-        routines = self.services.routines
+        routines = self.services.maybe(keys.routines)
         routine_id = session.row.get("routine_id")
         if routines is None or routine_id is None:
             return []
@@ -198,7 +199,7 @@ class GuidedSteps:
 
     async def _tick_step(self, session: Session, n: int) -> None:
         """F34h: a routine's step done ticks its item (and the wall, through the listeners)."""
-        routines = self.services.routines
+        routines = self.services.maybe(keys.routines)
         routine_id = session.row.get("routine_id")
         steps = self.steps(session)
         if routines is None or routine_id is None or not 0 <= n < len(steps):
@@ -210,7 +211,7 @@ class GuidedSteps:
                 return
 
     def _task(self, session: Session) -> Any:
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if session.task_id is None or board is None:
             return None
         return board.get(session.task_id)
@@ -314,8 +315,8 @@ class GuidedSteps:
         member = self._owner(session)
         steps = self.steps(session)
         step = session.row["step"]
-        if action == "keep" and session.task_id is not None and self.services.taskboard:
-            await self.services.taskboard.update(session.task_id, member, steps=steps)
+        if action == "keep" and session.task_id is not None and self.services.maybe(keys.taskboard):
+            await self.services.get(keys.taskboard).update(session.task_id, member, steps=steps)
             action = "go"
         if action == "go":
             session = self._save(session, phase="work", step=0, step_since=clock.now())

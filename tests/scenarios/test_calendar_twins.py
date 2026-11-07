@@ -14,6 +14,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import local, on_primary
 from tests.scenarios.test_triage import ERIN, link
 from themi.accounts import SYSTEM
+from themi.core import keys
 
 VISIT = "Return Patient Visit with Thuc Quyen Nguyen, MD"
 WHERE = ["Keep on mine", "Keep on family", "Keep on both", "Your call", "Not the same"]
@@ -37,7 +38,7 @@ def family(scenario: Scenario, fake: FakeGcal) -> str:
         "INSERT INTO calendars (account_id, name, calendar_id) VALUES (?, 'Madicen Family', ?)",
         (account, calendar),
     )
-    calendars = scenario.app.services.calendars
+    calendars = scenario.app.services.maybe(keys.calendars)
     assert calendars is not None
     calendars.choose(account, [("primary", "primary"), (calendar, "Madicen Family")])
     return calendar

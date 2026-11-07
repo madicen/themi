@@ -9,6 +9,7 @@ from datetime import date, time, timedelta
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core import keys
 from themi.core.repeat import parse
 from themi.core.routines import Routines
 
@@ -16,8 +17,8 @@ WED = date(2026, 10, 21)
 
 
 def routines(scenario: Scenario) -> Routines:
-    assert scenario.app.services.routines is not None
-    return scenario.app.services.routines
+    assert scenario.app.services.maybe(keys.routines) is not None
+    return scenario.app.services.get(keys.routines)
 
 
 async def sync(scenario: Scenario) -> object:
@@ -198,7 +199,7 @@ async def test_only_themi_checks_the_routines(scenario: Scenario, fake_cozyla: F
 
 
 async def test_themis_check_ins_stay_c3s(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     run = await board.create(erin, "Go for a run", "physical", 2, assignee=erin, check_in=True)

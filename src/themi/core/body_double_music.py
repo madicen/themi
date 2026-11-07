@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from themi.accounts import Member
+from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.modules import Module, ModuleContext
 
@@ -173,7 +174,7 @@ class MusicOffers:
 
     async def _playlists(self, session: Any) -> list[dict[str, str]]:
         """F34i: their own playlists, read once for the session and kept on its row."""
-        music = self.services.music
+        music = self.services.maybe(keys.music)
         if music is None:
             return []
         member = self.services.store.get_member(session.member_id)
@@ -196,7 +197,7 @@ class MusicOffers:
         from themi.channels.events import Button
 
         chosen = self.choice(session)
-        spotify_gone = self.services.music is None
+        spotify_gone = self.services.maybe(keys.music) is None
         if chosen is not None and not chosen.music.startswith("builtin:") and spotify_gone:
             chosen = None  # Spotify isn't set up any more
         mine = await self._playlists(session)

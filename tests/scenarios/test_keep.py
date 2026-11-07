@@ -13,6 +13,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import Member
 from themi.connectors.gkeep import KeepError, KeepLogin
+from themi.core import keys
 from themi.core.groceries import GroceryList
 from themi.core.keep_groceries import KeepLinks, run_keep_link
 from themi.storage.secrets import Secret
@@ -32,8 +33,8 @@ def link(scenario: Scenario, fake: FakeKeep, member: Member, email: str) -> None
 
 
 def groceries(scenario: Scenario) -> GroceryList:
-    assert scenario.app.services.groceries is not None
-    return scenario.app.services.groceries
+    assert scenario.app.services.maybe(keys.groceries) is not None
+    return scenario.app.services.get(keys.groceries)
 
 
 async def sync(scenario: Scenario) -> object:

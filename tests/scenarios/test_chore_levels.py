@@ -4,6 +4,7 @@ the level that suits the day, in words."""
 import re
 
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 from themi.core.tasks import TaskBoard
 
 BATHROOM = [
@@ -16,8 +17,8 @@ BATHROOM = [
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def nudge_for(scenario: Scenario, level: str | None) -> str:

@@ -22,6 +22,7 @@ from themi.channels.pauses import (
     normalise_topic,
     parse_until,
 )
+from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
 from themi.localtime import to_local
@@ -180,7 +181,7 @@ class Commands:
         if kind not in ("gmail", "google", "email"):
             await self._reply(member, LINK_ONLY_GMAIL)
             return
-        google, base = self.services.google, self.services.site_url
+        google, base = self.services.maybe(keys.google), self.services.site_url
         if google is None or not base:
             await self._reply(member, LINK_NOT_SET_UP)
             return

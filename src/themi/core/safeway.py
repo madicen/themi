@@ -30,6 +30,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
@@ -147,7 +148,7 @@ class SafewayCart:
 
     def install(self) -> None:
         s = self.services
-        s.safeway = self
+        s.provide(keys.safeway, self)
         s.autonomy.executors.register(EXECUTOR)(self._execute)
         s.tools.register(fill_safeway_cart)
 
@@ -280,18 +281,18 @@ class SafewayCart:
     ) -> tuple[str, list[dict[str, Any]]]:
         """L2b: the open things to buy that usually come from Safeway, as cart items, and the
         list's name. Ones already among `taken` (the grocery items) aren't offered twice."""
-        buying = self.services.buying
+        buying = self.services.maybe(keys.buying)
         found = buying.from_store(member, "Safeway") if buying is not None else None
         if found is None:
             return "", []
         nl, names = found
-        keys = {name_key(i["name"]) for i in taken}
+        taken_keys = {name_key(i["name"]) for i in taken}
         items = []
         for raw in names:
             name, qty = list_entry(raw)
             key = name_key(name)
-            if key and key not in keys and len(taken) + len(items) < MAX_ITEMS:
-                keys.add(key)
+            if key and key not in taken_keys and len(taken) + len(items) < MAX_ITEMS:
+                taken_keys.add(key)
                 items.append({"name": name, "qty": qty})
         return nl.name, items
 
@@ -532,7 +533,7 @@ def result_text(results: dict[str, Any]) -> str:
     {},
 )
 async def fill_safeway_cart(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
-    safeway = ctx.services.safeway
+    safeway = ctx.services.maybe(keys.safeway)
     if safeway is None:
         raise ToolFailed("The Safeway cart isn't set up.")
     if safeway.open_job() is not None:

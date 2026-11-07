@@ -35,6 +35,7 @@ from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.connectors.gcal import CalendarNotFound, event_id
 from themi.connectors.gcal.busy import TASK_BLOCK
+from themi.core import keys
 from themi.core.events import When, _times
 from themi.localtime import to_utc_iso
 
@@ -88,10 +89,10 @@ class CalendarCopies:
 
     def install(self) -> None:
         s = self.services
-        s.calendar_copies = self
+        s.provide(keys.calendar_copies, self)
         s.autonomy.executors.register(SHOW)(self._execute_show)
-        if s.calendars is not None:
-            s.calendars.listeners.append(self.sync)
+        if s.maybe(keys.calendars) is not None:
+            s.get(keys.calendars).listeners.append(self.sync)
 
     # ----- rules ------------------------------------------------------------------------
 
@@ -186,7 +187,7 @@ class CalendarCopies:
         return changed
 
     async def _target(self) -> tuple[int, str] | None:
-        sync = self.services.calendar
+        sync = self.services.maybe(keys.calendar)
         if sync is None or sync.account() is None:
             return None
         target = await sync.target()
@@ -194,7 +195,7 @@ class CalendarCopies:
 
     async def _sync_rule(self, member: Member, rule: Rule) -> int:
         target = await self._target()
-        sync = self.services.calendar
+        sync = self.services.maybe(keys.calendar)
         if target is None or sync is None or target == (rule.account_id, rule.calendar_id):
             return 0
         member = self.services.store.get_member(member.id)
@@ -259,7 +260,7 @@ class CalendarCopies:
         return changed
 
     async def _delete(self, row: dict[str, Any]) -> None:
-        sync = self.services.calendar
+        sync = self.services.maybe(keys.calendar)
         if sync is not None and row["event_id"]:
             with contextlib.suppress(CalendarNotFound):  # gone already
                 await sync.client(row["account_id"]).delete_event(

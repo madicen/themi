@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
+from themi.core import keys
 from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
@@ -135,7 +136,7 @@ class Lists:
 
     def install(self) -> None:
         s = self.services
-        s.lists = self
+        s.provide(keys.lists, self)
         s.autonomy.executors.register(ADD_EXECUTOR)(self._execute_add)
         s.autonomy.executors.register(DELETE_EXECUTOR)(self._execute_delete)
         for t in (
@@ -502,7 +503,7 @@ def render(nl: NamedList, style: str = "dashes") -> str:
 
 
 def _lists(ctx: ToolContext) -> Lists:
-    lists = ctx.services.lists
+    lists = ctx.services.maybe(keys.lists)
     if lists is None:
         raise ToolFailed("Lists aren't set up.")
     return lists

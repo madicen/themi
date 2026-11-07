@@ -6,6 +6,7 @@ from datetime import date
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 
 async def test_erins_draining_note_routes_the_next_task_to_her_husband(
@@ -73,7 +74,7 @@ async def test_erins_draining_note_routes_the_next_task_to_her_husband(
 
 
 async def test_later_brings_a_task_back(scenario: Scenario) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     task = await board.create(erin, "Book the dentist", "errand", 1)
@@ -236,7 +237,7 @@ async def test_a_task_due_today_says_so(scenario: Scenario) -> None:
     """Erin's rule 6 asked for this; rules can't change nudge wording, so it's built in."""
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin, husband = scenario.member("Erin"), scenario.member("Husband")
     await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))  # today
@@ -256,7 +257,7 @@ async def test_a_task_due_today_says_so(scenario: Scenario) -> None:
 async def test_due_today_is_judged_when_the_nudge_goes_out(scenario: Scenario) -> None:
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     await scenario.advance(hours=13)  # 22:00 Wednesday: Erin's quiet hours
     await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 22))
@@ -294,7 +295,7 @@ async def test_a_task_isnt_prompted_before_its_day(scenario: Scenario) -> None:
     """Bug #14: "do not prompt tasks until they're due"."""
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     await board.create(erin, "Return the library books", "errand", 1, date(2026, 10, 23))
@@ -310,7 +311,7 @@ async def test_task_nudges_come_one_at_a_time(scenario: Scenario) -> None:
     """Idea #11: "only prompt one task at a time". Four nudges had landed together at 08:00."""
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     today = date(2026, 10, 21)
@@ -340,7 +341,7 @@ async def test_put_off_until_a_time_waits_for_that_time(scenario: Scenario) -> N
 
     pacific = ZoneInfo("America/Los_Angeles")
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         erin, "Mimi pill", "physical", 1, date(2026, 10, 21), assignee=erin, nudge=False
@@ -370,7 +371,7 @@ async def test_put_off_until_a_time_waits_for_that_time(scenario: Scenario) -> N
 
 async def test_put_off_without_a_time_is_a_few_hours(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Mimi pill", "physical", 1, assignee=erin, nudge=False)
     scenario.primary.queue_tool_call("snooze_task", {"task_id": task.id, "until": "", "day": ""})
@@ -399,7 +400,7 @@ async def test_one_of_us_goes_on_both_lists_and_urgent_is_high(scenario: Scenari
     )
     scenario.primary.queue_text("It's on both your lists.")
     await scenario.say("Erin", "Urgent: one of us needs to assemble a grocery order today")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     (task,) = [t for t in board.open_for(scenario.member("Erin")) if t.title.startswith("Assemble")]
     assert (task.either, task.shared, task.importance) == (True, True, "high")
@@ -411,7 +412,7 @@ async def test_one_of_us_goes_on_both_lists_and_urgent_is_high(scenario: Scenari
 
 async def test_making_a_task_both_of_ours_asks_each_once(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         erin, "Assemble grocery order", "errand", 2, date(2026, 10, 22), assignee=erin
@@ -440,7 +441,7 @@ async def test_done_somewhere_else_the_nudge_stops_asking(scenario: Scenario) ->
 
     from themi.core.repeat import parse
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     dentist = await board.create(erin, "Book the dentist", "errand", 1, date(2026, 10, 21))
@@ -464,7 +465,7 @@ async def test_done_somewhere_else_the_nudge_stops_asking(scenario: Scenario) ->
 async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     await board.create(scenario.member("Erin"), "Book the dentist", "errand", 1, date(2026, 10, 21))
     await scenario.advance(hours=1)
@@ -485,7 +486,7 @@ async def test_done_in_chat_says_a_warm_word_and_the_wall_doesnt(scenario: Scena
     with a brief 'good job!'". Done on the wall, nothing new is said."""
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     vet = await board.create(erin, "Call the vet", "call", 1, date(2026, 10, 21), nudge=False)
@@ -501,7 +502,7 @@ async def test_done_in_chat_says_a_warm_word_and_the_wall_doesnt(scenario: Scena
 async def test_the_warm_word_can_be_turned_off(scenario: Scenario) -> None:
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     scenario.app.store.update_settings(erin, erin.id, done_praise=False)
@@ -513,7 +514,7 @@ async def test_the_warm_word_can_be_turned_off(scenario: Scenario) -> None:
 
 async def test_a_reply_says_the_tasks_name_not_its_number(scenario: Scenario) -> None:
     # Bug #71: "Remove the refill water and food task" got "Task 50 is taken off the list."
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(scenario.member("Erin"), "Refill water and food bowls", "physical", 1)
     scenario.primary.queue_tool_call("cancel_task", {"task_id": task.id})
@@ -541,7 +542,7 @@ async def test_someone_else_is_the_other_partner(scenario: Scenario) -> None:
     )
     scenario.primary.queue_text("Passed on.")
     await scenario.say("Erin", "I'm exhausted. Can someone else deal with texting the plumber?")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     (task,) = board.open_for(scenario.member("Husband"))
     assert task.title == "Text the plumber"
@@ -578,7 +579,7 @@ async def test_having_the_partner_do_something_is_a_task_for_them(scenario: Scen
     )
     scenario.primary.queue_text("Okay, that's with him now.")
     await scenario.say("Erin", "Can you have Husband get the pacifier under the ottoman?")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     (task,) = board.open_for(scenario.member("Husband"))
     assert task.title == "Get the pacifier from under the ottoman"
@@ -610,7 +611,7 @@ async def test_a_handover_no_tool_made_isnt_claimed(scenario: Scenario) -> None:
     """Bug #97: "can you get Michael to unclog the vacuum tonight?" ran five task tools,
     none of which moved it, and the reply said "I've assigned it to Michael for tonight"."""
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
@@ -630,7 +631,7 @@ async def test_a_handover_no_tool_made_isnt_claimed(scenario: Scenario) -> None:
 
 async def test_a_handover_that_happened_is_said_as_it_was(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         erin, "Unclog the robot vacuum", "physical", 2, date(2026, 10, 21), assignee=erin
@@ -711,7 +712,7 @@ async def test_a_task_due_today_for_the_other_partner_goes_at_once(scenario: Sce
 async def test_a_renamed_task_is_nudged_by_its_new_name(scenario: Scenario) -> None:
     """F20c: "Put sheets back on bed" was renamed "Put sheets back on the bed" after its
     nudge was queued, and the nudge still had the old name."""
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     task = await board.create(erin, "Book dentist", "errand", 1, date(2026, 10, 22))

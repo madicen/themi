@@ -10,6 +10,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_lists import gift_list, items, packing_list
 from tests.scenarios.test_routines import add, routines
 from themi.ai.router import HEDGE_AFTER
+from themi.core import keys
 from themi.core.lists import ADD_CATEGORY
 from themi.core.timing import SLOW_AFTER, week_of_replies
 
@@ -61,7 +62,7 @@ async def test_an_add_the_model_inferred_still_gets_the_next_round(scenario: Sce
 async def test_a_failed_add_still_goes_back_to_the_model(scenario: Scenario) -> None:
     # It may try again with the item shortened; F21a's plain "too long" reply stays.
     await packing_list(scenario)
-    nl = scenario.app.services.lists.find(scenario.member("Erin"), "packing")  # type: ignore[union-attr]
+    nl = scenario.app.services.maybe(keys.lists).find(scenario.member("Erin"), "packing")  # type: ignore[union-attr]
     scenario.app.db.execute("UPDATE lists SET cozyla_list_id = 'wall-1' WHERE id = ?", (nl.id,))
     long = "the big blue cooler with the broken handle, " * 3
     scenario.primary.queue_tool_call("add_to_list", {"list": "packing", "items": [long]})

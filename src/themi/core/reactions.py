@@ -20,6 +20,7 @@ from typing import Any
 from themi import clock
 from themi.accounts import Member
 from themi.channels.events import InboundEvent
+from themi.core import keys
 from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
@@ -77,8 +78,9 @@ class Reactions:
         self.db = services.store.db
 
     def install(self) -> None:
+        self.services.lands_source = self.picture
         self.services.reaction_handlers.append(self.on_reaction)
-        self.services.reactions = self
+        self.services.provide(keys.reactions, self)
 
     async def on_reaction(self, event: InboundEvent) -> None:
         assert event.reaction is not None
