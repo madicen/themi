@@ -21,6 +21,7 @@ from themi.web.auth import COOKIE_NAME, SESSION_TTL, Session, WebAuth
 
 HERE = Path(__file__).parent
 FLASH_COOKIE = "themi_flash"
+SESSION_HEADER = "X-Themi-Session"
 
 
 @cache
@@ -89,7 +90,10 @@ class Kit:
     # ----- sessions and CSRF ------------------------------------------------------
 
     def current(self, request: Request) -> Session:
-        session = self.auth.session(request.cookies.get(COOKIE_NAME))
+        # The session page's header (bug 2026-11-07): Telegram's in-app browser may not keep
+        # cookies, so the page carries its session itself. A cross-site page can't set it.
+        token = request.cookies.get(COOKIE_NAME) or request.headers.get(SESSION_HEADER)
+        session = self.auth.session(token)
         if session is None:
             raise NotSignedIn
         return session
