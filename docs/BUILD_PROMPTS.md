@@ -237,7 +237,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34m | Idea: a recipe from a photo | Feedback | [x] 2026-11-07 |
 | F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [ ] |
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
-| F34o | Idea: a bug report with a photo | Feedback | [ ] |
+| F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12094,7 +12094,7 @@ Notes (2026-11-07):
 - Setup: none.
 
 ### F34o · Idea (2026-11-07): a bug report with a photo
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34l, F1
 Read first: F34l's notes; feedback.py's module notes (what a report's snapshot keeps);
 the plan's "Security and privacy" (secrets and what's kept at rest). From Michael
@@ -12129,6 +12129,25 @@ clean-up delete it; a picture with no report isn't kept; the cap of 3; `/bug` wi
 picture.
 Scenario: Michael sends a screenshot of a cut-off message with "/bug the end is missing",
 and `themi feedback` shows the report with the screenshot beside it.
+
+Notes (2026-11-07):
+- Michael chose the recommended way (kept, encrypted). The plan's "Security and privacy"
+  agrees: encrypted with the key kept outside the database, so a copy of it shows
+  nothing, and removing a member deletes theirs (`member_id ... ON DELETE CASCADE`).
+- Migration 0144 `feedback_pictures` (0138 to 0143 were taken by other prompts). Kept by
+  `FeedbackBook.attach` (at most 3, 5 MB each), with `Cipher.encrypt_bytes` as backups
+  use. Deleted by `mark_reviewed` (`themi feedback --done`) and by the daily
+  `feedback.forget_pictures` (60 days).
+- Which picture: the one sent with the report (a /bug or /idea caption, or a picture with
+  words that reach `log_feedback`), or, when the report's words point at it ("that",
+  "this", "the screenshot"), the one F34l keeps. The kept pictures moved from the agent
+  to `themi.core.kept_pictures` (`services.kept_pictures`) so the commands can see them;
+  `peek` doesn't use up a turn of one.
+- The reply: "... Your screenshot is saved with it." The report's Markdown says how many
+  and their file names. `themi feedback --pictures <folder>` writes the listed reports'
+  pictures there, decrypted (`report-<id>-<n>.png`). Nothing else ever decrypts them.
+- Setup: restart `themi run` (migration 0144). To see one: `themi feedback --pictures
+  ~/shots`, then copy the folder off the Pi (scp).
 
 ## Conversation mode
 
