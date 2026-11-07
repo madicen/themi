@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlencode
 
 import httpx
+import pytest
 
 from tests.fakes.telegram_api import BOT_TOKEN
 from tests.fixtures.web import csrf_of, sign_in
@@ -177,3 +178,52 @@ async def test_the_mini_app_works_when_the_webview_drops_cookies(scenario: Scena
         assert state.status_code == 200 and state.json()["active"] is True
         again = await site.get(f"/session?ticket={ticket}")  # a ticket works once
         assert "Opening your session" in again.text
+
+
+async def test_the_page_reports_its_own_problems_to_the_log(
+    scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    await sign_in(scenario, site, "Erin")
+    answer = await site.post("/session/report", content=b"tap 3/act answered 403" + b"x" * 900)
+    assert answer.status_code == 204
+    (record,) = [r for r in caplog.records if r.name == "themi.web.session_pages"]
+    assert "member 1" in record.getMessage() and "tap 3/act answered 403" in record.getMessage()
+    assert len(record.getMessage()) < 700  # short text only
+
+
+async def test_a_refused_page_tap_says_why_in_the_log(
+    scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("INFO", logger="themi.core.body_double")
+    csrf = await sign_in(scenario, site, "Erin")
+    session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SPRINT)
+    await site.post(f"/session/{session.id}/act",
+                    data={"csrf": csrf, "action": "stop", "seq": session.seq + 5})  # fmt: skip
+    assert any("refused: seq" in r.getMessage() for r in caplog.records)
+
+
+async def test_a_tap_works_beside_an_older_website_cookie(scenario: Scenario) -> None:
+    """Bug (2026-11-07, Michael on iPhone and Telegram Web): the in-app browser still held a
+    cookie from an earlier /site sign-in. The page's taps carried its own session in the
+    header and its own CSRF token, but the server took the old cookie's session, so every tap
+    failed the CSRF check, while the page's reads, needing none, kept working."""
+    from tests.fixtures.web import web_client
+
+    erin = scenario.member("Erin")
+    assert erin.telegram_user_id is not None
+    session, _, _ = await bd(scenario).start(erin, mode=SPRINT)
+    async with web_client(scenario) as site:
+        await sign_in(scenario, site, "Erin")  # the older website cookie
+        signed = await site.post("/session/telegram",
+                                 data={"init_data": init_data(erin.telegram_user_id)})  # fmt: skip
+        page = await site.get(f"/session?ticket={signed.json()['ticket']}")
+        token = re.search(r'data-session="([^"]+)"', page.text)
+        assert token is not None
+        csrf = csrf_of(page.text)
+        await sign_in(scenario, site, "Erin")  # the old cookie comes back, as in the webview
+        tapped = await site.post(
+            f"/session/{session.id}/act",
+            headers={"X-Themi-Session": token.group(1), "X-Requested-With": "fetch"},
+            data={"csrf": csrf, "action": "break", "seq": session.seq},
+        )
+        assert tapped.status_code == 200 and tapped.json()["phase"] == "break"

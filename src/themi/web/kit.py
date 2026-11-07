@@ -92,7 +92,9 @@ class Kit:
     def current(self, request: Request) -> Session:
         # The session page's header (bug 2026-11-07): Telegram's in-app browser may not keep
         # cookies, so the page carries its session itself. A cross-site page can't set it.
-        token = request.cookies.get(COOKIE_NAME) or request.headers.get(SESSION_HEADER)
+        # It comes first: the page's CSRF token is that session's, and an older cookie from a
+        # /site sign-in in the same browser must not stand in for it (every tap was refused).
+        token = request.headers.get(SESSION_HEADER) or request.cookies.get(COOKIE_NAME)
         session = self.auth.session(token)
         if session is None:
             raise NotSignedIn

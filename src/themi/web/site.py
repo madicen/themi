@@ -19,6 +19,7 @@ Security:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import time
 from typing import Any
@@ -40,6 +41,7 @@ from themi.web.task_pages import task_rows
 
 __all__ = ["SiteContext", "install_site"]
 
+log = logging.getLogger(__name__)
 HOME_TASKS = 5
 GROCERIES_ON_LISTS = "/lists?open=groceries#groceries"
 
@@ -170,6 +172,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
 
     @web.exception_handler(PermissionError)
     async def forbidden(request: Request, exc: PermissionError) -> Response:
+        log.info("Refused %s %s: %s", request.method, request.url.path, exc)
         return kit.page(
             request,
             "message.html",
