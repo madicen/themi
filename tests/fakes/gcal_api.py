@@ -136,6 +136,18 @@ class FakeGcal(Snapshots):
         cal.events[eid] = {**event, **extra}
         return eid
 
+    def move_event(
+        self, address: str, event_id: str, start: str, end: str, *, calendar: str = "primary"
+    ) -> None:
+        """Someone moved one of their events (F34f: its copy follows)."""
+        event = self._box(address)[calendar].events[event_id]
+        key = "date" if "date" in event["start"] else "dateTime"
+        event["start"], event["end"] = {key: start}, {key: end}
+
+    def delete_event(self, address: str, event_id: str, *, calendar: str = "primary") -> None:
+        """Someone deleted one of their events (Google keeps it as cancelled)."""
+        self._box(address)[calendar].events[event_id]["status"] = "cancelled"
+
     def fail(self, endpoint: str, status: int, *, times: int = 1) -> None:
         """The next `times` calls to `endpoint` fail.
 

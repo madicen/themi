@@ -245,6 +245,9 @@ class CalendarBusy:
             "ORDER BY starts_at, all_day DESC, id",
             (member.id, to_utc_iso(start), to_utc_iso(end)),
         )
+        own = {f"copy:{r['event_id']}" for r in rows}
+        # F34f: a copy of their own event on the family calendar is the same event
+        rows = [r for r in rows if r["source"] not in own]
         return [
             Entry(
                 r["member_id"],

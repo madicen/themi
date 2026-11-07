@@ -52,6 +52,7 @@ from themi.core.breaks import Breaks
 from themi.core.burnout import Burnout
 from themi.core.buying import ThingsToBuy
 from themi.core.calendar import TaskCalendar
+from themi.core.calendar_copies import CalendarCopies
 from themi.core.calendar_twins import CalendarTwins
 from themi.core.calls import VendorCalls
 from themi.core.checkin_reviews import CheckinReviews
@@ -282,6 +283,7 @@ def build_app(
         events = Events(services)
         events.install()
         CalendarTwins(services, events).install()  # F34e: the same event twice
+        CalendarCopies(services).install()  # F34f: a calendar shown on the family calendar
         task_blocks = TaskBlocks(services, tasks)
         task_blocks.install()
     WebSearch(services, search).install()  # F30d: says how to set it up without a key

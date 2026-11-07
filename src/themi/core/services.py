@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     from themi.core.breaks import Breaks
     from themi.core.burnout import Burnout
     from themi.core.buying import ThingsToBuy
+    from themi.core.calendar_copies import CalendarCopies
     from themi.core.calls import VendorCalls
     from themi.core.chore_chart import ChartQueue
     from themi.core.conversation_mode import ConversationMode
@@ -172,6 +173,7 @@ class Services:
     gmail: GmailSync | None = None
     calendar: CalendarSync | None = None
     calendars: CalendarBusy | None = None  # each person's own calendars, read (S2, K1)
+    calendar_copies: CalendarCopies | None = None  # F34f: a calendar shown on the family's
     day_summary: DaySummary | None = None  # what's on someone's day (K2)
     events: Events | None = None  # calendar events made and changed from chat (K3)
     travel: TravelHeadsUps | None = None  # travel times and "time to get ready" (K4)
