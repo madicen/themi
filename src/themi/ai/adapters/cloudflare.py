@@ -72,7 +72,9 @@ class CloudflareProvider:
         timeout: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
-        self.model = model
+        # A display name ("FLUX.1 schnell") isn't a route: Cloudflare answers 400 "No route for
+        # that URI" (bug 2026-11-07). Only a Workers AI model ID is used as given.
+        self.model = model if model.startswith(("@cf/", "@hf/")) else DEFAULT_IMAGE_MODEL
         self.capabilities = Capabilities(tools=False, structured=False, audio=False)
         self._base = account_url(address)
         self._token = api_token

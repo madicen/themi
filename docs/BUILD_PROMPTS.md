@@ -11754,6 +11754,23 @@ Notes (2026-11-06):
   (anyone else: 404).
 - Setup: restart `themi run` (migration 0131). Pictures need BD4a's setup (a key that can
   make them).
+- Fix (2026-11-07, Michael on the Pi: no pictures at all). The Cloudflare backend's model
+  was saved as "FLUX.1 schnell", a display name, so every call got 400 "No route for that
+  URI"; the Gemini fallback has no free picture quota (429). The Cloudflare adapter now runs
+  the default model for anything that isn't a Workers AI ID (`@cf/...`, `@hf/...`), and the
+  AI page says to leave the model blank. Checked on the Pi with the same account: pictures
+  come back.
+- Change (2026-11-07, Michael): the pictures show Themi, the session page's chameleon,
+  doing the step alongside them. Tried on the Pi with FLUX.1 schnell: the delimited-block
+  prompt drew its tags and the step as garbled captions ("the chore.", "Scrum the sink.")
+  and the scenes didn't show the chore. Now one sentence built in code ("A cosy cartoon
+  illustration of Themi, ..., busy with a household chore (scrub the sink), holding the
+  right tools in the room where it happens. Soft colours, simple shapes, clean flat art,
+  textless."), the step and redo words cleaned to plain lower-case phrases (no markup,
+  quotes or line breaks, 160 characters). Deviation from BD4a's delimited block, since a
+  picture model has no tools or instructions to take over and draws whatever it's sent. Six
+  test pictures (sink, mop, towels) came out text-free, with Themi doing each chore. A redo
+  is the step plus their words; the old prompt isn't stacked on.
 
 ### BD5a · Body double: built-in music
 Status: [x] 2026-11-06

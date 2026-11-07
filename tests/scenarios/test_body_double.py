@@ -428,9 +428,8 @@ async def test_step_twos_picture_is_redone_and_sent_when_asked(
     await scenario.say("Erin", "can you show step 2 from above?")
     await scenario.run_jobs()
     prompt = [r.prompt for r in scenario.primary.requests if r.op == "image"][-1]
-    assert '<data source="the step">\nLoad the dishwasher\n</data>' in prompt
-    assert '<data source="their words">\nshow it from above\n</data>' in prompt
-    assert '<data source="the earlier pictures prompt">' in prompt
+    assert "(load the dishwasher)" in prompt
+    assert "Shown this way: show it from above." in prompt
     assert (await site.get("/session/state")).json()["picture"]["url"] != first_url
 
     await site.post("/session/pictures/redo",

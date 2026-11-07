@@ -48,10 +48,8 @@ async def test_the_current_step_first_then_the_rest_in_order(scenario: Scenario)
     scenario.app.db.execute("UPDATE body_double_sessions SET step = 2 WHERE id = ?",
                             (session.id,))  # fmt: skip
     await scenario.run_jobs()
-    made = [
-        p.split('<data source="the step">\n')[1].split("\n")[0] for p in image_prompts(scenario)
-    ]
-    assert made == ["Wipe the stovetop", "Sweep", "Clear the counter", "Load the dishwasher"]
+    made = [p.split("chore (")[1].split(")")[0] for p in image_prompts(scenario)]
+    assert made == ["wipe the stovetop", "sweep", "clear the counter", "load the dishwasher"]
     row = pictures(scenario).row(session.id, 0)
     assert row is not None and row["status"] == "ready"
     path = pictures(scenario).path(row)
