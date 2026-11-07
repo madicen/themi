@@ -584,3 +584,41 @@ async def test_an_old_card_tapped_shows_where_the_session_is(scenario: Scenario)
     await scenario.app.channel.poll_once()
     assert session_row(scenario)["step"] == 1  # nothing moved
     assert scenario.edits("Erin")[-1]["text"] == "Step 2 of 6:\n> Load the dishwasher"
+
+
+async def test_body_doubling_a_partners_task_by_name_uses_its_own_steps(
+    scenario: Scenario,
+) -> None:
+    """F34h, bug #181: "clean the bird cage" came with task_id 0 every time, so the model
+    made up 12 steps while Erin's task had its own ten. The task is found by its name, even
+    a partner's, and finishing closes it."""
+    task = await kitchen(scenario)  # Erin's, with six steps
+    call = {"mode": "steps", "minutes": 0, "task_id": 0, "what": "clean the kitchen"}
+    scenario.primary.queue_tool_call("start_body_double", call)
+    replies = await scenario.say("Husband", "Can you body double the kitchen with me?")
+    assert replies == ["Step 1 of 6:\n> Clear the counter"]
+    assert session_row(scenario)["task_id"] == task.id
+
+
+async def test_body_doubling_my_evening_routine_goes_through_its_items(
+    scenario: Scenario,
+) -> None:
+    """F34h, bug #181: "body double my evening routine" got made-up steps ("Lock the front
+    door", "Set the alarm"), not the routine's items. Each step done ticks its item."""
+    routines = scenario.app.services.routines
+    assert routines is not None
+    erin = scenario.member("Erin")
+    evening = routines.find(erin, "Evening")
+    assert evening is not None
+    teeth = routines.add_item(evening, "Brush teeth")
+    routines.add_item(evening, "Feed the cats")
+    replies = await start(scenario, "body double my evening routine", what="my evening routine")
+    assert replies[-1].startswith("Step 1 of 2:\n> Brush teeth")
+    await scenario.tap("Erin", "Next")
+    assert routines.ticked(teeth, date(2026, 10, 21))
+    assert card(scenario) == "Step 2 of 2:\n> Feed the cats"
+    await scenario.tap("Erin", "All done")
+    assert [routines.ticked(i, date(2026, 10, 21)) for i in routines.items(evening)] == [
+        True,
+        True,
+    ]

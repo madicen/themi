@@ -26,6 +26,7 @@ energy, scores or how past sessions went.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -37,11 +38,13 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import BODY_DOUBLE_KIND, Priority
 from themi.core import praise
 from themi.core.body_double_scene import CHEER_FOR, pick_state
+from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
 
 if TYPE_CHECKING:
+    from themi.core.routines import Routine
     from themi.core.services import Services
     from themi.scheduler import Scheduler
 
@@ -312,6 +315,31 @@ class BodyDouble:
             raise ValueError(f"{task.title} is already settled")
         return task
 
+    def find_task(self, member: Member, what: str) -> Task | None:
+        """F34h, bug #181: the open task they named, theirs first, then anyone's (doing a
+        partner's chore is fine; whoever finishes it closes it)."""
+        board = self.services.taskboard
+        if board is None or not what.strip():
+            return None
+        from themi.core.events import title_matches
+
+        theirs = board.open_for(member)
+        rows = self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')")
+        others = [board.get(r["id"]) for r in rows if r["id"] not in {t.id for t in theirs}]
+        for task in (*theirs, *others):
+            if title_matches(what, task.title) or title_matches(task.title, what):
+                return task
+        return None
+
+    def find_routine(self, member: Member, what: str) -> Routine | None:
+        """F34h: "my evening routine", "the morning one"."""
+        routines = self.services.routines
+        if routines is None:
+            return None
+        said = re.sub(r"^(?:my|the|our)\s+", "", name_key(what))
+        said = re.sub(r"\s+(?:one|routine)$", "", said).strip()
+        return next((r for r in routines.of(member) if name_key(r.name) == said), None)
+
     async def start(
         self,
         member: Member,
@@ -320,19 +348,25 @@ class BodyDouble:
         minutes: int = 0,
         task: Task | None = None,
         label: str = "",
+        routine: Routine | None = None,
     ) -> tuple[Session, str, list[Button]]:
         """Start a session (ending any going on). Returns it with its first message and
-        buttons, for the caller to send or edit in."""
+        buttons, for the caller to send or edit in. With a routine (F34h), its open items
+        are the steps."""
         if mode and mode not in MODES:
             raise ValueError(f"the modes are {', '.join(MODES)}")
         if not 0 <= minutes <= MAX_MINUTES:
             raise ValueError(f"a session is up to {MAX_MINUTES // 60} hours")
+        if routine is not None:
+            label = f"{routine.name} routine"
         label = (task.title if task is not None else label.strip()) or "this"
         now = clock.now()
         energy = self.services.energy.suggested_level(member)
         category = None
         chosen = False  # Themi picked the mode: the start says so, as an offer (BD2)
-        if self.modes is not None:
+        if routine is not None:
+            category = "chores"  # F34h: a routine is household jobs; no call to ask
+        elif self.modes is not None:
             category = await self.modes.category(member, task, label)
         if not mode and self.modes is not None and category is not None:
             mode = self.modes.default_for(member, category) or ""
@@ -348,12 +382,13 @@ class BodyDouble:
         session_id = self.db.execute(
             "INSERT INTO body_double_sessions (member_id, task_id, label, category, mode, "
             "mode_chosen, started_at, planned_minutes, work_minutes, break_minutes, "
-            "hour_of_week, energy_level, phase, pause_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?)",
+            "hour_of_week, energy_level, phase, pause_id, routine_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'work', ?, ?)",
             (
                 member.id, task.id if task is not None else None, label, category, mode,
                 int(chosen), to_utc_iso(now), minutes or None, member.sprint_work_minutes,
                 member.sprint_break_minutes, self.hour_of_week(now), energy, pause.id,
+                routine.id if routine is not None else None,
             ),
         )  # fmt: skip
         session = self.get(session_id)
@@ -951,7 +986,8 @@ async def _send(
     "write'). It's a session, never a new task: 'pomodoro X' is a sprint on X. mode: '' "
     "unless they said one; 'quiet' (quiet company), 'sprint' (pomodoro: work and break "
     "blocks) or 'steps' (one step at a time). minutes: how long they said, or 0. task_id: "
-    "their open task it's for, or 0; what: their own words for it when it isn't a task.",
+    "their open task it's for, or 0; what: their own words for it ('the bird cage', 'my evening "
+    "routine'): a task or routine of theirs by that name is found, with its own steps.",
     {
         "mode": {"type": "string", "enum": ["", "quiet", "sprint", "steps"]},
         "minutes": {"type": "integer"},
@@ -968,19 +1004,26 @@ async def start_body_double(ctx: ToolContext, args: dict[str, Any]) -> str:
             "if they'd like; nothing to do is asked of them."
         )
     mode = _mode_arg(args.get("mode"))
-    task = None
+    task, routine = None, None
+    what = str(args.get("what") or "")
     if int(args.get("task_id") or 0):
         try:
             task = body_double.task_for(ctx.member, int(args["task_id"]))
         except ValueError as exc:
             raise ToolFailed(f"Not started: {exc}.") from exc
+    else:  # F34h, bug #181: the model left task_id 0 and made steps up
+        routine = body_double.find_routine(ctx.member, what)
+        task = None if routine is not None else body_double.find_task(ctx.member, what)
+    if routine is not None and not mode:
+        mode = GUIDED  # a routine is its items, one at a time
     try:
         session, text, buttons = await body_double.start(
             ctx.member,
             mode=mode,
             minutes=int(args.get("minutes") or 0),
             task=task,
-            label=str(args.get("what") or ""),
+            label=what,
+            routine=routine,
         )
     except ValueError as exc:
         raise ToolFailed(f"Not started: {exc}.") from exc
