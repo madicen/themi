@@ -42,7 +42,7 @@ from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.groceries import GroceryList
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
-from themi.core.laundry import Laundry
+from themi.core.laundry import Laundry, LaundrySettings
 from themi.core.litter_box import LitterBox
 from themi.core.music import Music
 from themi.core.pantry import Pantry
@@ -274,6 +274,7 @@ class ThinqModule(Module):
     """30: the washer and dryer, through LG ThinQ, and laundry that's waiting."""
 
     name = "thinq"
+    household = LaundrySettings
     settings = ThinqSettings
     requires = ("tasks",)
 

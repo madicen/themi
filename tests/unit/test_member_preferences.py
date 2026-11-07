@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.fixtures.family import SeededFamily, seed_family
+from tests.fixtures.family import SeededFamily
 from themi.accounts import AccountStore, InvalidValue
 from themi.accounts.store import PermissionDenied
 from themi.core.body_double import BodyDoublePreferences
@@ -70,11 +70,22 @@ def test_a_value_out_of_range_says_so_in_the_old_words(
         family.store.save_preferences(family.erin, family.erin.id, model, **change)
 
 
+def old_family(store: AccountStore) -> SeededFamily:
+    """A family as an older schema holds it: only what create_family and create_member
+    write (no module settings yet, their tables come later)."""
+    from themi.accounts import SYSTEM, Role
+
+    family = store.create_family("Household", "America/Los_Angeles")
+    erin = store.create_member(SYSTEM, "Erin", Role.ADMIN)
+    husband = store.create_member(SYSTEM, "Husband", Role.MEMBER)
+    return SeededFamily(store, family, erin, husband)
+
+
 def test_the_migration_copies_each_members_values(tmp_path: Path) -> None:
     db = Database(tmp_path / "old.db")
     before = [m for m in migrations.discover() if m.version < 145]
     migrations.apply(db, before)
-    family = seed_family(AccountStore(db, Cipher(generate_key())))
+    family = old_family(AccountStore(db, Cipher(generate_key())))
     db.execute(
         "UPDATE members SET sprint_work_minutes = 40, sprint_break_minutes = 8, "
         "body_double_sound = 'rain', body_double_volume = 20, break_extend_minutes = 30, "
@@ -111,7 +122,7 @@ def test_the_second_migration_copies_the_rest(tmp_path: Path) -> None:
 
     db = Database(tmp_path / "old.db")
     migrations.apply(db, [m for m in migrations.discover() if m.version < 146])
-    family = seed_family(AccountStore(db, Cipher(generate_key())))
+    family = old_family(AccountStore(db, Cipher(generate_key())))
     db.execute(
         "UPDATE members SET focus_count = 2, day_budget = 4, done_praise = 0, "
         "checkin_reviews = 0, calendar_details = 'partner', calendar_twins = 'guess', "

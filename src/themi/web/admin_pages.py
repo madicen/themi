@@ -18,6 +18,7 @@ from themi.autonomy import AutonomyError
 from themi.connectors.travel import TravelError
 from themi.core import keys
 from themi.core.rules import RuleError
+from themi.web.connection_pages import household_models, household_settings
 from themi.web.kit import Kit
 
 
@@ -30,9 +31,12 @@ def routes(kit: Kit) -> APIRouter:
 
     def family_values(**extra: Any) -> dict[str, Any]:
         family = store.get_family()
+        household = household_settings(app)  # CR7c: each loaded module's
+        spending = household.get("spending")
         return {
             "family": family,
-            "budget": f"{family.takeout_budget_cents / 100:.2f}" if family else "0.00",
+            "household": household,
+            "budget": f"{spending.takeout_budget_cents / 100:.2f}" if spending else "0.00",
             "members": store.list_members(),
             "home": app.services.maybe(keys.travel).home()
             if app.services.maybe(keys.travel)
@@ -67,15 +71,19 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/family")
     async def save_family(request: Request) -> Response:
         session, form = await kit.checked(request, admin=True)
-        staples = tuple(line.strip() for line in str(form.get("staples", "")).splitlines())
+        models = household_models(app)
         try:
             store.update_family(
                 session.member,
                 name=str(form.get("name", "")),
                 timezone=str(form.get("timezone", "")),
-                takeout_budget_cents=parse_money_to_cents(str(form.get("budget", "0"))),
-                staples=staples,
             )
+            if "spending" in models and "budget" in form:  # CR7c: the module's own
+                cents = parse_money_to_cents(str(form.get("budget", "0")))
+                store.save_household(session.member, models["spending"], takeout_budget_cents=cents)
+            if "pantry" in models and "staples" in form:
+                lines = tuple(str(form.get("staples", "")).splitlines())
+                store.save_household(session.member, models["pantry"], staples=lines)
         except AccountsError as exc:
             return kit.page(
                 request,

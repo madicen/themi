@@ -80,7 +80,8 @@ def run_init(
     )
 
     with store.db.transaction():
-        store.create_family(family_name, timezone, takeout_budget_cents=budget)
+        store.create_family(family_name, timezone)
+        store.set_household_value("spending", "takeout_budget_cents", budget)  # CR7c
         admin = store.create_member(SYSTEM, admin_name, Role.ADMIN)
         code = store.create_invite(SYSTEM, admin.id)
     say(pairing_instructions(admin, code, bot_username))

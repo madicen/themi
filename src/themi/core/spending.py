@@ -21,11 +21,14 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import InvalidValue, Member
+from themi.accounts.household import HouseholdSettings
 from themi.accounts.setup import parse_money_to_cents
 from themi.connectors.gmail.parse import web_link
 from themi.core import keys
@@ -83,6 +86,20 @@ def month_of(text: str, today: date) -> date:
 
 def _next_month(first: date) -> date:
     return (first + timedelta(days=32)).replace(day=1)
+
+
+class SpendingSettings(HouseholdSettings):
+    """CR7c: the household's monthly takeout budget (X1)."""
+
+    module: ClassVar[str] = "spending"
+    takeout_budget_cents: int = 0
+
+    @field_validator("takeout_budget_cents")
+    @classmethod
+    def _budget(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("the takeout budget can't be negative")
+        return value
 
 
 class Spending:
@@ -204,8 +221,7 @@ class Spending:
         """ "Takeout this month: $51.97 of the $300.00 budget ($248.03 left)." """
         first = (today or self.today()).replace(day=1)
         spent = sum(s.amount_cents for s in self.month(first, kind="takeout"))
-        family = self.store.get_family()
-        budget = family.takeout_budget_cents if family else 0
+        budget = self.store.household(SpendingSettings).takeout_budget_cents  # CR7c
         if not budget:
             return f"Takeout this month: {money(spent)} (no monthly budget is set)."
         left = budget - spent
@@ -361,6 +377,7 @@ class SpendingModule(Module):
     """X1: takeout, eating out and business expenses."""
 
     name = "spending"
+    household = SpendingSettings
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry

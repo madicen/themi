@@ -15,6 +15,7 @@ from themi.backup.job import BackupJob
 from themi.backup.s3 import S3Client
 from themi.backup.snapshots import Snapshot, to_prune
 from themi.cli import main
+from themi.core.pantry import PantrySettings
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, DecryptionError, Secret, generate_key
 
@@ -79,7 +80,7 @@ async def test_the_snapshot_has_no_plaintext(
     family: SeededFamily, backups: Backups, fake_s3: FakeS3
 ) -> None:
     seed_secrets(family)
-    family.store.update_family(family.erin, staples=("olive oil", "cardamom pods"))
+    family.store.save_household(family.erin, PantrySettings, staples=("olive oil", "cardamom pods"))
     snapshot = await backups.create(family.db)
     stored = fake_s3.objects[snapshot.key]
     for needle in (b"SQLite format 3", b"Erin", b"Husband", b"cardamom", b"erin@gmail.com"):

@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from themi.accounts import AccountStore, Member
+from themi.accounts.household import HouseholdSettings
 from themi.accounts.preferences import Preferences
 from themi.ai.router import AIRouter
 from themi.ai.settings import AISettingsStore
@@ -119,6 +120,8 @@ class Services(Registry):
     web_pages: list[WebPages] = field(default_factory=list)  # CR4: modules' pages
     # CR7a: each loaded module's per-member preferences, for the settings page.
     preference_models: list[type[Preferences]] = field(default_factory=list)
+    # CR7c: each loaded module's household settings, for the family and accounts pages.
+    household_models: list[type[HouseholdSettings]] = field(default_factory=list)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)

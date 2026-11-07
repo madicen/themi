@@ -252,7 +252,7 @@ def test_chat_and_sidecar_routes_start_from_what_members_use_now() -> None:
             "VALUES (1, ?, ?, ?, ?)",
             (task, position, backend_id, model),
         )
-    apply(db, known)
+    apply(db, [m for m in known if m.version < 148])  # CR7c's 0148 drops conversation_mode
     route = "SELECT position, backend_id, model FROM ai_routes WHERE task = ? ORDER BY position"
     assert db.query(route, ("chat",)) == db.query(route, ("conversation",))
     assert db.query(route, ("sidecar",)) == [{"position": 0, "backend_id": 2, "model": None}]

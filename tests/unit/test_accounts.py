@@ -14,38 +14,37 @@ from themi.accounts import (
     PermissionDenied,
     Role,
 )
+from themi.core.pantry import PantrySettings
+from themi.core.spending import SpendingSettings
 from themi.storage.secrets import Secret
 
 # ----- family ---------------------------------------------------------------
 
 
 def test_family_is_created_once(store: AccountStore) -> None:
-    family = store.create_family("Household", "America/Los_Angeles", 150_00, ("eggs",))
-    assert (family.name, family.timezone, family.takeout_budget_cents) == (
-        "Household",
-        "America/Los_Angeles",
-        150_00,
-    )
-    assert family.staples == ("eggs",)
+    family = store.create_family("Household", "America/Los_Angeles")
+    assert (family.name, family.timezone) == ("Household", "America/Los_Angeles")
+    assert store.household(SpendingSettings).takeout_budget_cents == 0  # CR7c: the default
+    assert store.household(PantrySettings).staples == ()
     with pytest.raises(AccountsError, match="already has a family"):
         store.create_family("Again", "UTC")
 
 
-@pytest.mark.parametrize(("tz", "budget"), [("Mars/Olympus_Mons", 0), ("UTC", -1)])
-def test_family_rejects_bad_values(store: AccountStore, tz: str, budget: int) -> None:
+def test_family_rejects_bad_values(store: AccountStore, family: SeededFamily) -> None:
     with pytest.raises(InvalidValue):
-        store.create_family("Household", tz, budget)
+        store.update_family(family.erin, timezone="Mars/Olympus_Mons")
+    with pytest.raises(InvalidValue, match="the takeout budget can't be negative"):
+        store.save_household(family.erin, SpendingSettings, takeout_budget_cents=-1)
 
 
 def test_only_admins_update_family(family: SeededFamily) -> None:
     store = family.store
     with pytest.raises(PermissionDenied):
-        store.update_family(family.husband, takeout_budget_cents=1)
-    updated = store.update_family(
-        family.erin, takeout_budget_cents=250_00, staples=(" rice ", "", "beans")
-    )
-    assert updated.takeout_budget_cents == 250_00
-    assert updated.staples == ("rice", "beans")
+        store.save_household(family.husband, SpendingSettings, takeout_budget_cents=1)
+    store.save_household(family.erin, SpendingSettings, takeout_budget_cents=250_00)
+    store.save_household(family.erin, PantrySettings, staples=(" rice ", "", "beans"))
+    assert store.household(SpendingSettings).takeout_budget_cents == 250_00
+    assert store.household(PantrySettings).staples == ("rice", "beans")
 
 
 # ----- members --------------------------------------------------------------
@@ -332,7 +331,7 @@ def test_seeded_family_is_realistic(family: SeededFamily) -> None:
     assert family.erin.telegram_user_id == ERIN_TELEGRAM_ID
     assert family.husband.telegram_user_id == HUSBAND_TELEGRAM_ID
     assert family.erin.recovery_hours > family.husband.recovery_hours
-    assert "cat food" in family.family.staples
+    assert "cat food" in family.store.household(PantrySettings).staples
 
 
 def test_permissions_use_current_role_not_a_stale_object(family: SeededFamily) -> None:

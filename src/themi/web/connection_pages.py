@@ -62,6 +62,7 @@ def _spotify(app: Any, member: Member) -> dict[str, Any] | None:
 def household_values(app: Any) -> dict[str, Any]:
     return {
         "family": app.store.get_family(),
+        "settings": household_settings(app),  # CR7c: each loaded module's
         "calendar": _calendar(app),
         "home_connect": _home_connect(app),
         "thinq": _thinq(app),
@@ -69,6 +70,15 @@ def household_values(app: Any) -> dict[str, Any]:
         "tuya": _tuya(app),
         "catgenie": _catgenie(app),
     }
+
+
+def household_models(app: Any) -> dict[str, Any]:
+    """CR7c: the loaded modules' household settings models, by module."""
+    return {model.module: model for model in app.services.household_models}
+
+
+def household_settings(app: Any) -> dict[str, Any]:
+    return {name: app.store.household(model) for name, model in household_models(app).items()}
 
 
 def _calendar(app: Any) -> dict[str, Any] | None:
@@ -390,9 +400,12 @@ def routes(kit: Kit) -> APIRouter:
             minutes = int(str(form.get("rinse_minutes", "")))
         except ValueError:
             return kit.redirect(to, "The fresh hours and rewash minutes are numbers.")
+        laundry = household_models(app).get("thinq")
+        if laundry is None:
+            return kit.redirect(to, "The washer and dryer aren't set up.")
         try:
-            store.update_family(
-                session.member, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes
+            store.save_household(
+                session.member, laundry, laundry_fresh_hours=hours, laundry_rinse_minutes=minutes
             )
         except AccountsError as exc:
             return kit.redirect(to, f"Not saved: {exc}.")

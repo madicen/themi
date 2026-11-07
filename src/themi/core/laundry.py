@@ -24,11 +24,14 @@ from __future__ import annotations
 import logging
 import secrets
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.household import HouseholdSettings
 from themi.channels.outbox import Button, Priority
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ApplianceEvent, ThinqWatcher
 from themi.core import keys
@@ -52,6 +55,29 @@ MOVED, LATER, REWASHED = "Moved it", "Later", "Rewash started"
 MOVE_AFTER = timedelta(minutes=30)  # the first nudge waits this long after the wash ends
 LATER_FOR = 60  # minutes: Later on a laundry nudge asks again in an hour
 RESCUE_LEAD = timedelta(minutes=30)  # a rewash suggestion goes out at most this long before
+
+
+class LaundrySettings(HouseholdSettings):
+    """CR7c: how long a wet load stays fresh, and how long a rewash takes (31). The thinq
+    module's."""
+
+    module: ClassVar[str] = "thinq"
+    laundry_fresh_hours: float = 8.0
+    laundry_rinse_minutes: int = 30
+
+    @field_validator("laundry_fresh_hours")
+    @classmethod
+    def _fresh(cls, value: float) -> float:
+        if not 1 <= value <= 48:
+            raise ValueError("a wet load stays fresh for 1 to 48 hours")
+        return value
+
+    @field_validator("laundry_rinse_minutes")
+    @classmethod
+    def _rinse(cls, value: int) -> int:
+        if not 5 <= value <= 180:
+            raise ValueError("a rewash takes 5 to 180 minutes")
+        return value
 
 
 class Laundry:
@@ -144,8 +170,7 @@ class Laundry:
     async def check_fresh(self) -> int:
         """Scheduler job: a wet load past the fresh hours is offered a rewash, once.
         Returns how many."""
-        family = self.store.get_family()
-        hours = family.laundry_fresh_hours if family else 8.0
+        hours = self.store.household(LaundrySettings).laundry_fresh_hours  # CR7c
         cutoff = to_utc_iso(clock.now() - timedelta(hours=hours))
         rows = self.db.query(
             "SELECT * FROM laundry_loads WHERE status = 'wet' AND rescue_at IS NULL "
@@ -171,8 +196,7 @@ class Laundry:
         """(start, finish) for a rewash that finishes as their next good window begins. When
         that start falls in quiet hours or a busy time, where no message can reach them, it
         starts as soon as one can and finishes that much into the window."""
-        family = self.store.get_family()
-        rinse = timedelta(minutes=family.laundry_rinse_minutes if family else 30)
+        rinse = timedelta(minutes=self.store.household(LaundrySettings).laundry_rinse_minutes)
         model = self.board.matcher.model
         ready = next_window(model, member, now + rinse)
         start = ready - rinse

@@ -18,10 +18,13 @@ import logging
 import statistics
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import AccountsError, InvalidValue, Member, Role
+from themi.accounts.household import HouseholdSettings
 from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
@@ -143,6 +146,18 @@ def probably_low(
 # ----- the pantry --------------------------------------------------------------------
 
 
+class PantrySettings(HouseholdSettings):
+    """CR7c: the household's staples, always kept in."""
+
+    module: ClassVar[str] = "pantry"
+    staples: tuple[str, ...] = ()
+
+    @field_validator("staples")
+    @classmethod
+    def _staples(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(s.strip() for s in value if s.strip())
+
+
 class Pantry:
     def __init__(self, services: Services, groceries: GroceryList) -> None:
         self.services = services
@@ -161,9 +176,8 @@ class Pantry:
     # ----- items --------------------------------------------------------------
 
     def staple_names(self) -> set[str]:
-        family = self.store.get_family()
         names = set()
-        for raw in family.staples if family else ():
+        for raw in self.store.household(PantrySettings).staples:  # CR7c
             try:
                 names.add(item_name(raw))
             except InvalidValue:
@@ -504,6 +518,7 @@ class PantryModule(Module):
     """What's in the pantry, and what's running low."""
 
     name = "pantry"
+    household = PantrySettings
     requires = ("groceries",)
     optional = ("gmail",)  # receipts read from email fill it in
 

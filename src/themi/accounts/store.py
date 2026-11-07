@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ValidationError
 
 from themi import clock
+from themi.accounts.household import HouseholdSettings
 from themi.accounts.models import (
     TRACKING_INPUTS,
     BusyTime,
@@ -191,6 +192,45 @@ class AccountStore:
     def cipher(self) -> Cipher:
         return self._cipher
 
+    # ----- household settings (CR7c) ---------------------------------------------
+
+    def household[H: HouseholdSettings](self, model: type[H]) -> H:
+        """The household's settings for one module: what an admin set, else the defaults."""
+        rows = self.db.query(
+            "SELECT key, value FROM household_settings WHERE module = ?", (model.module,)
+        )
+        stored = {r["key"]: json.loads(r["value"]) for r in rows if r["key"] in model.model_fields}
+        return model(**stored)
+
+    def save_household[H: HouseholdSettings](
+        self, actor: Actor, model: type[H], **changes: Any
+    ) -> H:
+        """Change some of the household's settings for a module: admins only. None leaves a
+        value as it is."""
+        self._require_admin(actor)
+        changes = {k: v for k, v in changes.items() if v is not None}
+        current = self.household(model)
+        try:
+            updated = model(**{**current.model_dump(), **changes})
+        except ValidationError as exc:
+            message = str(exc.errors()[0].get("msg", "")).removeprefix("Value error, ")
+            raise InvalidValue(message) from exc
+        dumped = updated.model_dump(mode="json")
+        with self.db.transaction():
+            for key in changes:
+                self.set_household_value(model.module, key, dumped[key])
+        return updated
+
+    def set_household_value(self, module: str, key: str, value: Any) -> None:
+        """One household setting, as it is (no checks): for first-run setup, which asks
+        for a module's setting before any module is loaded."""
+        self.db.execute(
+            "INSERT INTO household_settings (module, key, value, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (module, key) DO UPDATE SET value = excluded.value, "
+            "updated_at = excluded.updated_at",
+            (module, key, json.dumps(value), clock.now().isoformat()),
+        )
+
     # ----- module preferences (CR7a) ---------------------------------------------
 
     def preferences[P: Preferences](self, member_id: int, model: type[P]) -> P:
@@ -254,21 +294,15 @@ class AccountStore:
         return Family(
             name=row["name"],
             timezone=row["timezone"],
-            takeout_budget_cents=row["takeout_budget_cents"],
-            staples=tuple(json.loads(row["staples"])),
             created_at=_parse_dt(row["created_at"]),
             task_owners={k: int(v) for k, v in json.loads(row["task_owners"]).items()},
             handover_cost=float(row["handover_cost"]),
-            laundry_fresh_hours=float(row["laundry_fresh_hours"]),
-            laundry_rinse_minutes=int(row["laundry_rinse_minutes"]),
         )
 
     def create_family(
         self,
         name: str,
         timezone: str,
-        takeout_budget_cents: int = 0,
-        staples: tuple[str, ...] = (),
     ) -> Family:
         if self.get_family() is not None:
             raise AccountsError("this server already has a family")
@@ -276,13 +310,11 @@ class AccountStore:
         if not name:
             raise InvalidValue("the family needs a name")
         _validate_timezone(timezone)
-        if takeout_budget_cents < 0:
-            raise InvalidValue("the takeout budget can't be negative")
         now = _iso(clock.now())
         self.db.execute(
-            "INSERT INTO family (id, name, timezone, takeout_budget_cents, staples, created_at, "
-            "updated_at) VALUES (1, ?, ?, ?, ?, ?, ?)",
-            (name, timezone, takeout_budget_cents, json.dumps(list(staples)), now, now),
+            "INSERT INTO family (id, name, timezone, created_at, updated_at) "
+            "VALUES (1, ?, ?, ?, ?)",
+            (name, timezone, now, now),
         )
         family = self.get_family()
         assert family is not None
@@ -294,12 +326,8 @@ class AccountStore:
         *,
         name: str | None = None,
         timezone: str | None = None,
-        takeout_budget_cents: int | None = None,
-        staples: tuple[str, ...] | None = None,
         task_owners: dict[str, int | None] | None = None,
         handover_cost: float | None = None,
-        laundry_fresh_hours: float | None = None,
-        laundry_rinse_minutes: int | None = None,
     ) -> Family:
         self._require_admin(actor)
         if self.get_family() is None:
@@ -312,12 +340,6 @@ class AccountStore:
         if timezone is not None:
             _validate_timezone(timezone)
             changes["timezone"] = timezone
-        if takeout_budget_cents is not None:
-            if takeout_budget_cents < 0:
-                raise InvalidValue("the takeout budget can't be negative")
-            changes["takeout_budget_cents"] = takeout_budget_cents
-        if staples is not None:
-            changes["staples"] = json.dumps([s.strip() for s in staples if s.strip()])
         if task_owners is not None:
             owners = {}
             for kind, member_id in task_owners.items():
@@ -331,14 +353,6 @@ class AccountStore:
             if not 0 <= handover_cost <= 50:
                 raise InvalidValue("the hand-over cost must be between 0 and 50")
             changes["handover_cost"] = float(handover_cost)
-        if laundry_fresh_hours is not None:
-            if not 1 <= laundry_fresh_hours <= 48:
-                raise InvalidValue("a wet load stays fresh for 1 to 48 hours")
-            changes["laundry_fresh_hours"] = float(laundry_fresh_hours)
-        if laundry_rinse_minutes is not None:
-            if not 5 <= laundry_rinse_minutes <= 180:
-                raise InvalidValue("a rewash takes 5 to 180 minutes")
-            changes["laundry_rinse_minutes"] = int(laundry_rinse_minutes)
         if changes:
             changes["updated_at"] = _iso(clock.now())
             assignments = ", ".join(f"{column} = :{column}" for column in changes)

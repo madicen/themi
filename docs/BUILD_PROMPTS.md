@@ -288,7 +288,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR7a | Core refactor: per-member module preferences | Core refactor | [x] 2026-11-07 |
 | CR7b | Core refactor: the rest of the feature settings, and the settings page | Core refactor | split |
 | CR7b1 | Core refactor: the other per-member feature settings as preferences | Core refactor | [x] 2026-11-07 |
-| CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [ ] |
+| CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [x] 2026-11-07 |
 | CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [ ] |
 | CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | [ ] |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
@@ -14421,7 +14421,7 @@ Notes:
   use the Gmail and Calendar fakes so those rows are there.
 
 ### CR7c · Core refactor: household settings per module, and the old columns dropped
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR7b1
 - A household-level counterpart of preferences (`household_settings`: module, key, JSON
   value), with the store's read and save. Move the `Family` fields that belong to one
@@ -14430,6 +14430,26 @@ Depends on: CR7b1
   (`task_owners`, where it's feature-specific). Data migration and old messages.
 - A migration drops the `members` and `family` columns moved in CR7a, CR7b1 and here.
 Tests: as CR7a; an existing database keeps every value.
+
+Notes:
+- `themi.accounts.household.HouseholdSettings` and `AccountStore.household(Model)`,
+  `save_household(actor, Model, **changes)` (admins only), and `set_household_value(module,
+  key, value)` for first-run setup (it can't import a module). Core migration 0147 makes
+  `household_settings` and copies the family's values; 0148 drops the moved `members`
+  (21) and `family` (4) columns. `Module.household` declares a module's model;
+  `services.household_models` lists the loaded ones.
+- Moved: `SpendingSettings` (takeout budget), `PantrySettings` (staples),
+  `LaundrySettings` (fresh hours, rewash minutes; the thinq module's).
+- Deviation: `task_owners` and `handover_cost` stay on `Family`: the energy model's task
+  matching reads them, and energy is still core. They move when energy becomes a module.
+- `create_family(name, timezone)` no longer takes a budget or staples; `themi init` still
+  asks for the budget and saves it with `set_household_value`.
+- The family page shows the budget and staples only when spending and pantry are loaded;
+  the accounts page's laundry form reads `household.settings.thinq`.
+- Tests changed: the seeded family saves its budget and staples as household settings;
+  tests that set or read those, or the laundry times, use the household calls; the CM1a
+  migration test stops before 0148 (it read a column 0148 drops); the preference migration
+  tests build their old family without the seeded settings.
 
 ### CR7d · Core refactor: the settings page in sections from the modules
 Status: [ ]

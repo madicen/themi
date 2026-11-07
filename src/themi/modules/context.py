@@ -61,6 +61,8 @@ class ModuleContext:
                     apply_track(self.services.store.db, module.name, module.migrations)
                 if module.preferences is not None:  # CR7a: for the settings page
                     self.services.preference_models.append(module.preferences)
+                if module.household is not None:  # CR7c: for the family's pages
+                    self.services.household_models.append(module.household)
                 module.install(self)
             finally:
                 self._current = ""

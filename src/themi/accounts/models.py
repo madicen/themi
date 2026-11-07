@@ -23,13 +23,9 @@ TRACKING_INPUTS = ("text_notes", "message_timing", "device_activity", "calendar"
 class Family:
     name: str
     timezone: str
-    takeout_budget_cents: int
-    staples: tuple[str, ...]
     created_at: datetime
     task_owners: dict[str, int] = field(default_factory=dict, hash=False)  # kind -> member id
     handover_cost: float = 10.0
-    laundry_fresh_hours: float = 8.0  # a wet load past this needs a rewash (31)
-    laundry_rinse_minutes: int = 30  # how long the washer's rinse takes
 
 
 DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")

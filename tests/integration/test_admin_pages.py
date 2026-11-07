@@ -10,6 +10,8 @@ from tests.scenarios.harness import Scenario
 from themi.ai.settings import AITask
 from themi.autonomy import Tier
 from themi.core import keys
+from themi.core.pantry import PantrySettings
+from themi.core.spending import SpendingSettings
 from themi.storage.secrets import Secret
 
 GEMINI_KEY = "AIzaVeryDistinctiveTestKey000000000000000"
@@ -80,12 +82,10 @@ async def test_admins_edit_family_settings(scenario: Scenario, site: httpx.Async
     assert response.status_code == 303
     family = scenario.app.store.get_family()
     assert family is not None
-    assert (family.name, family.timezone, family.takeout_budget_cents) == (
-        "The Household",
-        "America/Denver",
-        250_00,
-    )
-    assert family.staples == ("eggs", "oat milk", "rice")
+    assert (family.name, family.timezone) == ("The Household", "America/Denver")
+    store = scenario.app.store  # CR7c: the modules' own
+    assert store.household(SpendingSettings).takeout_budget_cents == 250_00
+    assert store.household(PantrySettings).staples == ("eggs", "oat milk", "rice")
     bad = await site.post(
         "/family", data={"csrf": csrf, "name": "x", "timezone": "Moon/Base", "budget": "1"}
     )

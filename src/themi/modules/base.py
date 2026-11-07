@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, TypeVar
 
+from themi.accounts.household import HouseholdSettings
 from themi.accounts.preferences import Preferences
 from themi.modules.settings import ModuleSettings, read_settings
 
@@ -97,6 +98,7 @@ class Module:
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
     preferences: ClassVar[type[Preferences] | None] = None  # CR7a: per member
+    household: ClassVar[type[HouseholdSettings] | None] = None  # CR7c: per household
     # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
     migrations: ClassVar[str | Path | None] = None
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
