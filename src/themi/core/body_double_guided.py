@@ -191,7 +191,7 @@ class GuidedSteps:
         if routines is None or routine_id is None:
             return []
         routine = routines.get(routine_id)
-        today = routines.today()
+        today = routines.today(self._owner(session))
         items = routines.today_items(routine, today)
         return [i for i in items if not routines.ticked(i, today)] or items
 
@@ -202,7 +202,7 @@ class GuidedSteps:
         steps = self.steps(session)
         if routines is None or routine_id is None or not 0 <= n < len(steps):
             return
-        today = routines.today()
+        today = routines.today(self._owner(session))
         for item in routines.today_items(routines.get(routine_id), today):
             if item.title == steps[n] and not routines.ticked(item, today):
                 await routines.tick_now(item, today)

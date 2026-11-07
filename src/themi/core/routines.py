@@ -58,7 +58,7 @@ from themi.core.tools import (
     staged_tool,
     tool,
 )
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -336,7 +336,7 @@ class Routines:
                 end = self._end(routine, member, now)
                 if not end <= now < end + CHECK_LATE:
                     continue
-                today = now.date()
+                today = member_day(member, now, tz)  # F34j
                 if self.db.one(
                     "SELECT 1 FROM routine_day_checks WHERE routine_id = ? AND day = ?",
                     (routine.id, today.isoformat()),
@@ -467,7 +467,7 @@ class Routines:
     # ----- small things -------------------------------------------------------------------
 
     def describe(self, member: Member) -> str:
-        today = self.today()
+        today = self.today(member)
         lines = []
         for routine in self.of(member):
             items = [
@@ -490,7 +490,13 @@ class Routines:
             quiet += timedelta(days=1)
         return quiet - EVENING_BEFORE_QUIET
 
-    def today(self) -> date:
+    def owner(self, item: Item) -> Member:
+        return self.store.get_member(self.get(item.routine_id).member_id)
+
+    def today(self, member: Member | None = None) -> date:
+        """The family's date, or the day it is for `member` (F34j: their rollover)."""
+        if member is not None:
+            return member_day(member, clock.now(), self._tz())
         return clock.now().astimezone(self._tz()).date()
 
     def _tz(self) -> ZoneInfo:
@@ -640,7 +646,7 @@ async def add_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     if asked_to_remove(ctx.request_text):  # F33d
         already_there(title, routine.name, [i.title for i in routines.items(routine)])
     days = _days(list(args.get("days") or []))
-    only_on = routines.today() if args.get("just_today") else None
+    only_on = routines.today(member) if args.get("just_today") else None
     asked = member.id == ctx.member.id and in_their_words(ctx, title)
     when = (
         "just today"
@@ -723,7 +729,7 @@ async def remove_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
 async def tick_routine_item(ctx: ToolContext, args: dict[str, Any]) -> Done:
     routines = _routines(ctx)
     item, near = _item_for(ctx, str(args["title"]))
-    today = routines.today()
+    today = routines.today(routines.owner(item))
     await routines.tick_now(item, today)
     await routines.show_tick(item, today)
     said = f'Ticked "{item.title}" for today.'

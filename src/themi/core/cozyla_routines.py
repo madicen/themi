@@ -283,6 +283,7 @@ class CozylaRoutines:
                         date.fromisoformat(run["due_on"]),
                         datetime.fromisoformat(run["done_at"]),
                         self.board.get(link["task_id"]),
+                        self.store.get_member(run["done_by"]) if run["done_by"] else None,
                     )
                     await self.client.check_routine(link["routine_id"], day, True)
                     self._first_time(f"{link['routine_id']}_{day}")

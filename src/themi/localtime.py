@@ -7,7 +7,7 @@ Everything is stored in UTC; anything a person experiences (quiet hours,
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from themi.accounts.models import Member
@@ -25,6 +25,21 @@ def to_utc_iso(moment: datetime) -> str:
 def start_of_local_day(moment: datetime, timezone: str) -> datetime:
     local = to_local(moment, timezone)
     return local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def member_day(member: object, moment: datetime, timezone: str | ZoneInfo) -> date:
+    """F34j: the day it is for this person: the local date, still the day before until
+    their day ends (`Member.day_ends`, an hour after midnight; 0 is midnight)."""
+    zone = timezone if isinstance(timezone, ZoneInfo) else ZoneInfo(timezone)
+    hours = int(getattr(member, "day_ends", 0) or 0)
+    return (moment.astimezone(zone) - timedelta(hours=hours)).date()
+
+
+def member_day_start(member: object, day: date, timezone: str | ZoneInfo) -> datetime:
+    """When that day began for this person (midnight, or their rollover hour)."""
+    zone = timezone if isinstance(timezone, ZoneInfo) else ZoneInfo(timezone)
+    hours = int(getattr(member, "day_ends", 0) or 0)
+    return datetime(day.year, day.month, day.day, hours, tzinfo=zone)
 
 
 def _at(local_day: datetime, clock_time: time) -> datetime:

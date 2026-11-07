@@ -46,7 +46,7 @@ from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.energy.matching import Assignment, Matcher
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 
 log = logging.getLogger(__name__)
 
@@ -955,9 +955,20 @@ class TaskBoard:
 
     # ----- repeating chores (F6b) ------------------------------------------------
 
-    def _today(self) -> date:
+    def _today(self, member: Member | None = None) -> date:
+        """The family's date, or with `member`, the day it is for them (F34j: still the day
+        before until their day ends)."""
         family = self.store.get_family()
-        return clock.now().astimezone(ZoneInfo(family.timezone if family else "UTC")).date()
+        tz = ZoneInfo(family.timezone if family else "UTC")
+        if member is not None:
+            return member_day(member, clock.now(), tz)
+        return clock.now().astimezone(tz).date()
+
+    def _doer_today(self, task: Task) -> date:
+        """The day it is for whoever does the task (the family's for a shared one)."""
+        if task.assignee is None or task.shared:
+            return self._today()
+        return self._today(self.store.get_member(task.assignee))
 
     def _day_start(self, day: date) -> datetime:
         family = self.store.get_family()
@@ -1162,10 +1173,13 @@ class TaskBoard:
             return []
         return [task.due_on + timedelta(days=n) for n in range((end - task.due_on).days + 1)]
 
-    def done_day(self, due_on: date, done_at: datetime, task: Task) -> date:
+    def done_day(
+        self, due_on: date, done_at: datetime, task: Task, by: Member | None = None
+    ) -> date:
         """Which day a round's tick goes on: the day it was done, when that was one of the
-        round's days (Sunday for a weekend run done Sunday), else its due date."""
-        day = done_at.astimezone(self._tz()).date()
+        round's days (Sunday for a weekend run done Sunday), else its due date. `by`: who
+        did it, whose day it was (F34j)."""
+        day = member_day(by, done_at, self._tz()) if by else done_at.astimezone(self._tz()).date()
         end = round_end(task.repeat, due_on) if task.repeat is not None else due_on
         return day if due_on <= day <= end else due_on
 
@@ -1294,7 +1308,7 @@ class TaskBoard:
         if missed is not None:
             return self._fill_missed(task, by, missed)
         self.withdraw_prompt(task)  # before its prompt_outbox_id is cleared below
-        today = self._today()
+        today = self._today(by)  # F34j: after midnight and before their rollover, the day before
         day = min(on or today, today)
         end = self.round_end(task)
         on_time = end is None or day <= end
@@ -1368,7 +1382,7 @@ class TaskBoard:
         """An anchored round whose day has passed: roll on to the next date (recording a missed
         run), for catch-up chores leave it owed, or for next-day ones move it to tomorrow
         (F9a). Deadline chores follow their target."""
-        today = self._today()
+        today = self._doer_today(task)  # F34j: not missed until their day is over
         if task.due_before_task is not None:
             due = self._deadline_due(task)
             if (

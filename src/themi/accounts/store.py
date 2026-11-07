@@ -170,6 +170,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         list_style=row["list_style"],
         menu_bar=tuple(json.loads(row["menu_bar"])) if row["menu_bar"] else None,
         conversation_mode=bool(row["conversation_mode"]),
+        day_ends=row["day_ends"],
     )
 
 
@@ -434,6 +435,7 @@ class AccountStore:
         body_double_volume: int | None = None,
         noise_emails: str | None = None,  # one of NOISE_EMAILS
         conversation_mode: bool | None = None,  # CM1a
+        day_ends: int | None = None,  # F34j: 0 (midnight) to 4 am
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
         self._require_self(actor, member_id)
@@ -537,6 +539,10 @@ class AccountStore:
             changes["done_praise"] = int(done_praise)
         if listen_first is not None:
             changes["listen_first"] = int(listen_first)
+        if day_ends is not None:
+            if not 0 <= day_ends <= 4:
+                raise InvalidValue("a day ends at midnight or by 4 am")
+            changes["day_ends"] = day_ends
         if conversation_mode is not None:
             changes["conversation_mode"] = int(conversation_mode)
         if day_budget is not None:
