@@ -262,14 +262,20 @@ class TelegramChannel:
 
     async def _handle_batch(self, updates: tuple[Update, ...]) -> int:
         offset = self._offset()
-        for update in updates:
-            if offset is not None and update.update_id < offset:
-                continue
+        fresh = [u for u in updates if offset is None or u.update_id >= offset]
+        for group in _albums(fresh):
+            first, *rest = group
             try:
-                await self._process(update)
+                if rest:  # F34mb: an album's pictures, one update each, are one message
+                    assert first.message is not None
+                    await self._on_message(
+                        first.update_id, first.message, album=[u.message for u in rest]
+                    )
+                else:
+                    await self._process(first)
             except Exception:
-                log.exception("Failed handling Telegram update %s; skipping it", update.update_id)
-            self._save_offset(update.update_id + 1)
+                log.exception("Failed handling Telegram update %s; skipping it", first.update_id)
+            self._save_offset(group[-1].update_id + 1)
         return len(updates)
 
     def _offset(self) -> int | None:
@@ -293,7 +299,9 @@ class TelegramChannel:
         elif update.message_reaction is not None:
             await self._on_reaction(update.update_id, update.message_reaction)
 
-    async def _on_message(self, update_id: int, message: Message) -> None:
+    async def _on_message(
+        self, update_id: int, message: Message, album: Sequence[Message | None] = ()
+    ) -> None:
         user = message.from_user
         if user is None:
             return
@@ -325,9 +333,17 @@ class TelegramChannel:
                 voice=voice,
             )
         elif (picture := await self._download_picture(message)) is not None:
-            caption = (message.caption or "").strip()
+            others = [m for m in album if m is not None]
+            more = [p for m in others if (p := await self._download_picture(m)) is not None]
+            # An album has one caption, on whichever picture it was typed with.
+            caption = next((c for m in (message, *others) if (c := (m.caption or "").strip())), "")
             logged = f"{PICTURE_LOG} {caption}".strip()  # never the bytes
             self.store.log_message(member.id, "in", logged, "picture", message.message_id)
+            for other in others:  # each counts towards the daily cap (F34g)
+                self.store.log_message(member.id, "in", PICTURE_LOG, "picture", other.message_id)
+            replied = next(
+                (m.reply_to_message for m in (message, *others) if m.reply_to_message), None
+            )
             event = InboundEvent(
                 "picture",
                 member,
@@ -337,9 +353,9 @@ class TelegramChannel:
                 update_id,
                 text=caption,
                 picture=picture,
-                reply_to_message_id=(
-                    message.reply_to_message.message_id if message.reply_to_message else None
-                ),
+                more_pictures=tuple(more),
+                media_group=message.media_group_id or "",
+                reply_to_message_id=replied.message_id if replied else None,
             )
         elif text:
             self.store.log_message(member.id, "in", text, "chat", message.message_id)
@@ -803,3 +819,24 @@ def _seconds(value: Any) -> float:
     if isinstance(value, timedelta):
         return value.total_seconds()
     return float(value or 0)
+
+
+def _albums(updates: Sequence[Update]) -> list[list[Update]]:
+    """F34mb: updates in order, an album's pictures (the same `media_group_id` in one private
+    chat, one after another) grouped together; every other update alone."""
+    groups: list[list[Update]] = []
+    for update in updates:
+        message = update.message
+        album = message.media_group_id if message is not None else None
+        if album and groups:
+            last = groups[-1][-1].message
+            if (
+                last is not None
+                and last.media_group_id == album
+                and last.chat.id == message.chat.id  # type: ignore[union-attr]
+                and last.chat.type == ChatType.PRIVATE
+            ):
+                groups[-1].append(update)
+                continue
+        groups.append([update])
+    return groups

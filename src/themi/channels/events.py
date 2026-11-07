@@ -67,10 +67,19 @@ class InboundEvent:
     text: str = ""
     voice: VoiceNote | None = None
     picture: Picture | None = None  # with its caption as `text`
+    # F34mb: the album's other pictures, in order after `picture` (Telegram sends an
+    # album as one update per picture), and the album's id (`media_group_id`).
+    more_pictures: tuple[Picture, ...] = ()
+    media_group: str = ""
     button: ButtonPress | None = None
     reaction: Reaction | None = None
     reply_to_message_id: int | None = None  # the message this one replies to (Telegram's Reply)
     in_group: bool = False  # said in the family group (34b): answered there
+
+    @property
+    def pictures(self) -> tuple[Picture, ...]:
+        """Every picture with this message, in order (F34mb)."""
+        return (self.picture, *self.more_pictures) if self.picture is not None else ()
 
 
 class InboundHandler(Protocol):
