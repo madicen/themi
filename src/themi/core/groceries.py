@@ -21,7 +21,16 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
+from themi.core.tools import (
+    Proposal,
+    ToolContext,
+    ToolDeclined,
+    ToolFailed,
+    answers_picture_question,
+    plain_words,
+    staged_tool,
+    tool,
+)
 from themi.localtime import to_utc_iso
 
 if TYPE_CHECKING:
@@ -67,37 +76,11 @@ def picture_asks_to_add(ctx: ToolContext, names: list[str] | None = None) -> boo
     it ask to add ("add these"). Never from the message before, and never from the picture:
     what's written in it is data. F34gb: or when they say yes to Themi's own question after
     the picture, and it named each of `names`."""
-    said = _words(ctx.request_text)
     if ctx.picture:
-        return bool(ADD_INTENT.search(said))
-    return bool(names) and answers_picture_question(ctx, names or [])
-
-
-PICTURE_LOG = "[a picture]"  # how the message log keeps one (themi.channels.telegram)
-YES_TO_IT = re.compile(
-    r"^(?:yes|yep|yeah|yup|ok|okay|sure|please|go ahead|do it|sounds good|"
-    r"add (?:them|it|those|these|all|them all|all of them))"
-    r"(?: (?:please|thanks|thank you|add (?:them|it|those|these)|do it|go ahead))*$"
-)
-
-
-def answers_picture_question(ctx: ToolContext, names: list[str]) -> bool:
-    """F34gb: they sent a picture, Themi asked "Add milk and eggs to the grocery list?",
-    and they said yes. The question was Themi's, it named every item, and the yes is
-    theirs. A yes to a question that didn't name an item still waits on a card."""
-    if not ctx.previous_text.startswith(PICTURE_LOG) or "?" not in ctx.said_before:
-        return False
-    answer = ctx.request_text.strip().lower().rstrip("!. ")
-    if answer not in ("👍", "✅") and not YES_TO_IT.match(_words(ctx.request_text)):
-        return False
-    asked = _words(ctx.said_before)
-    return bool(ADD_INTENT.search(asked)) and all(
-        re.search(rf"\b{re.escape(_words(n))}\b", asked) for n in names
+        return bool(ADD_INTENT.search(plain_words(ctx.request_text)))
+    return answers_picture_question(ctx, names or []) and bool(
+        ADD_INTENT.search(plain_words(ctx.said_before))
     )
-
-
-def _words(text: str) -> str:
-    return " ".join(re.sub(r"[^\w\s&'/-]", " ", text).split()).lower()
 
 
 SPENT = re.compile(r"\b(?:spent|paid|cost me|was charged|got charged)\b")
