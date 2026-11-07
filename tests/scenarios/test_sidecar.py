@@ -65,8 +65,8 @@ async def test_a_task_said_in_passing_is_picked_out(scenario: Scenario) -> None:
     assert row["note"] == "Noted it." and row["telegram_message_id"]
     request = sidecar_requests(scenario)[0]
     assert {t.name for t in request.tools} <= {
-        "create_task", "complete_task", "cancel_task", "add_calendar_event", "remember_fact",
-        "start_burnout", "end_burnout", "pause_messages", "resume_messages",
+        "create_task", "complete_task", "cancel_task", "snooze_task", "add_calendar_event",
+        "remember_fact", "start_burnout", "end_burnout", "pause_messages", "resume_messages",
     }  # fmt: skip
     turn = request.messages[0].text
     assert "<data>" in turn and "Erin: ugh, I need to call the vet Thursday" in turn
@@ -97,6 +97,23 @@ async def test_only_a_task_it_was_shown_can_be_ticked(scenario: Scenario) -> Non
     )
     assert "Bins" not in open_titles(scenario)
     assert len(logged(scenario)) == 2
+
+
+async def test_a_put_off_said_in_passing_snoozes_a_task_it_was_shown(scenario: Scenario) -> None:
+    """F34a: the sidecar can put a task off, but only one it was shown."""
+    await chat_on(scenario)
+    await chat(scenario, "ugh, the bins", "Bins!", ("create_task", {"title": "Bins", **TASK}))
+    [task_id] = [
+        r["id"] for r in scenario.app.db.query("SELECT id FROM tasks WHERE title = 'Bins'")
+    ]
+    snooze = {"until": "", "day": "2026-10-22"}
+    await chat(scenario, "honestly, ugh", "Ugh.", ("snooze_task", {"task_id": 999, **snooze}))
+    assert len(logged(scenario)) == 1  # 999 dropped
+    await chat(scenario, "honestly, ugh", "Ugh.", ("snooze_task", {"task_id": task_id, **snooze}))
+    [row] = scenario.app.db.query(
+        "SELECT status, snoozed_until FROM tasks WHERE id = ?", (task_id,)
+    )
+    assert row["status"] == "snoozed" and row["snoozed_until"].startswith("2026-10-22")
 
 
 async def test_burnout_mode_from_a_partners_words_is_refused(scenario: Scenario) -> None:

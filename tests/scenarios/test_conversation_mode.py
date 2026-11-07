@@ -137,3 +137,25 @@ async def test_the_family_group_always_has_the_tool_agent(scenario: Scenario) ->
     erin = scenario.member("Erin")
     assert conversation.takes(erin, "long day", in_group=False)
     assert not conversation.takes(erin, "long day", in_group=True)
+
+
+async def test_no_run_today_goes_to_the_tools(scenario: Scenario) -> None:
+    """F34a, bug #178: with conversation mode on, "No run today ..." about her open run went
+    to the tool-less chat, which said "Got it", and the run stayed due."""
+    board = scenario.app.services.taskboard
+    assert board is not None
+    erin = scenario.member("Erin")
+    await board.create(erin, "Go for a run", "physical", 2, assignee=erin, check_in=True)
+    await chat_on(scenario)
+    scenario.primary.queue_text("Moved it.")
+    await scenario.say("Erin", "No run today. I plan to run 1.3 miles either tomorrow or Sunday")
+    assert scenario.primary.requests[0].tools
+    assert scenario.primary.requests[0].system != CHAT_SYSTEM
+
+
+async def test_can_we_body_double_goes_to_the_tools(scenario: Scenario) -> None:
+    """F34a, bug #179: "Can we body double the bird cage?" got a chat reply, no session."""
+    await chat_on(scenario)
+    scenario.primary.queue_text("Sure.")
+    await scenario.say("Erin", "Can we body double the bird cage?")
+    assert scenario.primary.requests[0].tools

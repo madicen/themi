@@ -9,7 +9,7 @@ approval cards, the twin check (F24a) and the naming check (P8a) all still apply
 spec's extraction schema maps onto them:
 
 - tasks_to_add → create_task
-- tasks_to_update → complete_task or cancel_task, only for a task among those it was
+- tasks_to_update → complete_task, cancel_task or snooze_task, only for a task among those it was
   shown (any other number is dropped and logged)
 - calendar_events → add_calendar_event (when Google is set up)
 - state_updates → remember_fact
@@ -57,6 +57,7 @@ SIDECAR_TOOLS = (
     "create_task",
     "complete_task",
     "cancel_task",
+    "snooze_task",  # F34a: a put-off said in passing ("no run today")
     "add_calendar_event",
     "remember_fact",
     "start_burnout",
@@ -64,7 +65,7 @@ SIDECAR_TOOLS = (
     "pause_messages",
     "resume_messages",
 )
-NEEDS_SHOWN_TASK = frozenset({"complete_task", "cancel_task"})
+NEEDS_SHOWN_TASK = frozenset({"complete_task", "cancel_task", "snooze_task"})
 SAYS_ITSELF = frozenset({"start_burnout", "end_burnout"})  # their message goes to the person
 REACTION = "✍"  # Telegram's reaction (no variation selector)
 HISTORY = 6
@@ -80,6 +81,7 @@ ITEM_LABELS = {
     "create_task": "New task",
     "complete_task": "Marked done",
     "cancel_task": "Cancelled",
+    "snooze_task": "Put off",
     "add_calendar_event": "For the calendar",
     "remember_fact": "Remembered",
     "start_burnout": "Burnout mode on",
@@ -107,6 +109,8 @@ Call a tool only when {name}'s own words in this turn say it:
   done, never something only Themi said, and never one already among the open tasks.
 - complete_task or cancel_task: only for one of the open tasks listed, by its number, when
   they say it's done or no longer needed.
+- snooze_task: only for one of the open tasks listed, by its number, when they say it
+  won't be today, or say when instead ("no run today, maybe tomorrow").
 - add_calendar_event: a plan with a day and a time ("dinner at Sam's Saturday at 7").
 - remember_fact: a lasting fact worth knowing later ("the vet is closed Mondays now").
 - start_burnout only when they ask for burnout mode themselves; end_burnout when they say

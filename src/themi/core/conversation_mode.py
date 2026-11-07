@@ -38,6 +38,7 @@ from themi.ai.types import Message
 from themi.channels.outbox import Priority
 from themi.core import listening
 from themi.core.agent import CLAIMS_DONE
+from themi.core.lists import name_key
 from themi.core.prompts import PHRASING_WORDS
 from themi.core.sidecar import Sidecar
 from themi.localtime import to_local
@@ -96,6 +97,56 @@ HOUSEHOLD = re.compile(
     r"|\bwhat(?:'s| is| do (?:i|we) have)\b[^.!?]*\b(?:today|tonight|tomorrow|this week)\b",
     re.IGNORECASE,
 )
+# F34a, bug #179: "can we body double the bird cage?" went to chat, and no session started.
+_TOGETHER = r"(?:(?:can|could|shall|should) we\s+|let'?s\s+)"
+TOGETHER = re.compile(rf"\b{_TOGETHER}(?:{DOING}|do|go|get|try|tackle|work on)\b", re.IGNORECASE)
+BODY_DOUBLE = re.compile(
+    r"\bbody[- ]?doubl\w*|\bsit with me\b|\bkeep me company\b|\bpomodoro\b"
+    r"|\bstep by step\b|\bdo (?:it|this|that) with me\b|\bwork with me\b",
+    re.IGNORECASE,
+)
+# A question about what Themi itself can do or see (reply 320: "Can you see the screenshot
+# I sent?") is answered by the tool agent, which knows what it has.
+ABILITY = re.compile(
+    r"\b(?:can|could) you (?:see|read|hear|open|look at|view|check)\b|\bare you able to\b",
+    re.IGNORECASE,
+)
+# An email or settings rule (reply 332: "Future emails like that are mostly noise" became a
+# remembered fact, not the sender's level).
+RULE = re.compile(
+    r"\bfrom now on\b|\b(?:in|for) (?:the )?future\b|\bfuture (?:e-?mails?|mail|messages)\b"
+    r"|\b(?:e-?mails?|mail) (?:like (?:that|this|those|these)|from)\b|\bgoing forward\b",
+    re.IGNORECASE,
+)
+# F34a, bug #178: "No run today. I plan to run ... tomorrow or Sunday" names an open task
+# and a change to it, so it goes to the tools; "the run was lovely" doesn't.
+CHANGE = re.compile(
+    r"\b(?:today|tomorrow|tonight|later|skip\w*|not|no|instead|move[ds]?|plan(?:ning)? to|"
+    r"weekend|next week|this week|(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b",
+    re.IGNORECASE,
+)
+TITLE_FILLER = frozenset(
+    "for the and with from away out off get put take make clean call check do set up go "
+    "into onto some our my your her his their".split()
+)
+
+
+def _title_words(title: str) -> list[str]:
+    return [w for w in name_key(title).split() if len(w) > 2 and w not in TITLE_FILLER]
+
+
+def names_open_task(text: str, titles: Sequence[str]) -> bool:
+    """Does the message name one of their open tasks or routine items, with a change to it?"""
+    if not titles or not CHANGE.search(text):
+        return False
+    words = name_key(text).split()
+    for title in titles:
+        for key in _title_words(title):  # "run" in "running", "laundry" in "laundry's"
+            if any(w.startswith(key) and len(w) - len(key) <= 3 for w in words):
+                return True
+    return False
+
+
 LIST_PREFIX = re.compile(r"^\s*([\w' ]{2,40})\s*[.:]\s+\S")  # F21a: "Groceries. milk"
 GROCERY_NAMES = ("groceries", "grocery", "grocery list", "shopping", "shopping list")
 
@@ -134,9 +185,11 @@ def offered(services: Services, member: Member) -> bool:
     return rollout == "on" or (rollout == "trial" and member.conversation_mode)
 
 
-def is_request(text: str, list_names: Sequence[str] = ()) -> bool:
+def is_request(text: str, list_names: Sequence[str] = (), open_titles: Sequence[str] = ()) -> bool:
     """Does the message ask Themi to do or look up something? Those go to the tool agent."""
-    if REQUEST.search(text):
+    if REQUEST.search(text) or TOGETHER.search(text) or BODY_DOUBLE.search(text):
+        return True
+    if ABILITY.search(text) or RULE.search(text) or names_open_task(text, open_titles):
         return True
     if HOUSEHOLD.search(text) and QUESTION.search(text):
         return True
@@ -241,7 +294,7 @@ class ConversationMode:
         """Does this message get the chat reply, rather than the tool agent?"""
         if in_group or not self.is_on(member):
             return False
-        return not is_request(text, self._list_names())
+        return not is_request(text, self._list_names(), self._open_titles(member))
 
     def after_reply(
         self,
@@ -253,6 +306,15 @@ class ConversationMode:
     ) -> None:
         """The sidecar's pass over a turn that got the chat reply (CM1b)."""
         self.sidecar.schedule(member, text, reply, message_id, history)
+
+    def _open_titles(self, member: Member) -> list[str]:
+        """Their open tasks' and routine items' titles (F34a)."""
+        s = self.services
+        titles = [t.title for t in s.taskboard.open_for(member)] if s.taskboard else []
+        if s.routines is not None:
+            for routine in s.routines.of(member):
+                titles += [i.title for i in s.routines.items(routine)]
+        return titles
 
     def _list_names(self) -> list[str]:
         rows = self.services.store.db.query("SELECT name FROM lists")
