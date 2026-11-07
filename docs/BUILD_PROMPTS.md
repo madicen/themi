@@ -225,7 +225,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
 | BD3b | Body double: Themi the chameleon | Body double | [~] |
-| BD4a | AI layer: image generation | Body double | [ ] |
+| BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [ ] |
 | BD5a | Body double: built-in music | Body double | [ ] |
 | BD5b | Spotify: playing their own music | Body double | [ ] |
@@ -11604,7 +11604,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0129).
 
 ### BD4a · AI layer: image generation
-Status: [ ]
+Status: [x] 2026-11-06
 Depends on: 06, F30d
 Read first: the plan's AI backend (providers, routing per task, retries); F30d's notes (the
 daily cap).
@@ -11621,6 +11621,38 @@ daily cap).
 - `tests/fakes`: a scripted image provider that returns a small fixed PNG.
 Tests: unit tests for routing, fallback, the cap, the prompt's delimiting; live smoke test
 (opt-in, `tests/live`) for each adapter.
+
+Notes (2026-11-06):
+- Models and prices, checked 2026-11-06 on Google's pricing page
+  (aistudio.google.com/docs/pricing): no Gemini image model has a free tier.
+  `gemini-3.1-flash-lite-image` is $0.0336 a 1K picture (the default; Google suggests it in
+  place of `gemini-2.5-flash-image`, $0.039, which shuts down 2027-03-15);
+  `gemini-3.1-flash-image` $0.067; `gemini-3-pro-image` $0.134. OpenAI: `gpt-image-2`,
+  billed by tokens; third-party figures put a low-quality 1024px picture at a few cents
+  (OpenAI's own page wasn't reached; check it before relying on that). `gpt-image-1` was
+  retired 2026-10-23. At the default cap (12 a day) Gemini is at most about $0.40 a day each.
+- So the open decision's default ("the person's Gemini key") needs billing turned on for
+  that key; the free-tier key the family uses for chat can't make pictures. Without it,
+  pictures fail and BD4b falls back to text, as it does past the cap.
+- `Provider.image(prompt, size) -> ImageResult` (bytes, mime type) on every adapter: Gemini
+  asks the route's model for an IMAGE response (1:1); OpenAI-compatible calls the images
+  API at low quality (Ollama and LM Studio say they can't); Claude says it can't.
+  `TaskClient.image` goes through the router like `chat` (per-member keys, retries, the
+  breaker, fallback, an `ai_calls` row).
+- AI task `step_image` (migration 0130 rebuilds `ai_routes`): each person's chain is their
+  quick-jobs chain, with Gemini's image model or `gpt-image-2` as the route's model. On
+  the AI page it's "Pictures for guided steps", with the cap beside it.
+- Cap: `members.image_daily_cap` (0-100, default 12; 0 turns pictures off), counted from
+  today's successful `step_image` calls in `ai_calls` (local midnight). Past it,
+  `ImageCapReached` and no model is called.
+- `themi.core.step_images.image_prompt(step, notes, earlier)`: a fixed style line (simple,
+  friendly, no text, no faces) and the step, the old prompt and their words each in a
+  delimited block.
+- Fakes: `ScriptedProvider.image` returns `TINY_PNG` unless something is queued
+  (`queue_image`, `queue_error(..., "image")`). Live: `tests/live/test_image_providers_live.py`
+  (`THEMI_LIVE_GEMINI_IMAGE_KEY`, `THEMI_LIVE_OPENAI_IMAGE_KEY`; a few cents each). Not run.
+- Setup: restart `themi run` (migration 0130); turn billing on for a Gemini key (or add an
+  OpenAI backend) and put it first in "Pictures for guided steps".
 
 ### BD4b · Body double: a picture for each step
 Status: [ ]
