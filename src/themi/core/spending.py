@@ -363,4 +363,18 @@ class SpendingModule(Module):
     name = "spending"
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, spending_pages
+
+        ctx.web(
+            spending_pages.routes,
+            MenuEntry(
+                "/spending",
+                "Spending",
+                "Takeout and business expenses",
+                "Household",
+                60,
+                icon=icons.SPENDING,
+            ),
+        )
         ctx.provide(Spending(ctx.services)).install()

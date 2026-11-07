@@ -819,6 +819,21 @@ class MaintenanceModule(Module):
     optional = ("calendar",)
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, maintenance_pages
+
+        ctx.web(
+            maintenance_pages.routes,
+            MenuEntry(
+                "/maintenance",
+                "Maintenance",
+                "Filters, gutters and other upkeep",
+                "Household",
+                50,
+                bar_label="Upkeep",
+                icon=icons.MAINTENANCE,
+            ),
+        )
         upkeep = ctx.provide(
             Maintenance(
                 ctx.services, ctx.get(TaskBoard), ctx.services.maybe(keys.calendar), ctx.scheduler

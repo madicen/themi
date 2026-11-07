@@ -14,8 +14,11 @@ from typing import TYPE_CHECKING, TypeVar
 from themi.modules.base import Module, ModuleError, PeriodicTask
 from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
+from themi.modules.web import MenuEntry, WebPages
 
 if TYPE_CHECKING:
+    from fastapi import APIRouter
+
     from themi.autonomy.engine import Executor
     from themi.core.services import (
         AwaitingSource,
@@ -28,6 +31,7 @@ if TYPE_CHECKING:
     )
     from themi.core.tools import Tool
     from themi.scheduler import Scheduler
+    from themi.web.kit import Kit
 
 T = TypeVar("T")
 
@@ -122,6 +126,10 @@ class ModuleContext:
 
     def open_item_source(self, source: OpenItemSource) -> None:
         self.services.open_item_sources.append(source)
+
+    def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
+        """CR4: the module's website pages, and where they go in the menu."""
+        self.services.web_pages.append(WebPages(routes, menu))
 
     def executor(self, name: str, fn: Executor) -> None:
         self.services.autonomy.executors.register(name)(fn)

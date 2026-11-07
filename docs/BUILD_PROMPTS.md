@@ -280,7 +280,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2c | Core refactor: connectors as modules, and the app built by a loop | Core refactor | [x] 2026-11-07 |
 | CR3 | Core refactor: a typed service registry | Core refactor | [x] 2026-11-07 |
-| CR4 | Core refactor: website pages from modules | Core refactor | [ ] |
+| CR4 | Core refactor: website pages from modules | Core refactor | [x] 2026-11-07 |
 | CR5 | Core refactor: themi.toml, templates and module settings | Core refactor | [ ] |
 | CR6 | Core refactor: migration tracks per module | Core refactor | [ ] |
 | CR7a | Core refactor: per-member module preferences | Core refactor | [ ] |
@@ -14143,7 +14143,7 @@ Notes:
 - Tests: the registry, and that every key finds its object in the full family app.
 
 ### CR4 · Core refactor: website pages from modules
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR3
 Read first: CR3's notes; `src/themi/web/site.py`; `src/themi/web/kit.py`; the templates'
 menu.
@@ -14158,6 +14158,29 @@ menu.
   Notes which ones should become module panels later.
 Tests: `routes.json` identical; a page from a module left out returns 404; the menu
 matches today's for the family.
+
+Notes:
+- `ctx.web(routes, *menu)` adds a module's router factory and `MenuEntry`s
+  (`themi.modules.web`) to `services.web_pages`. `install_site` includes the core shell's
+  routers, then each loaded module's.
+- Core shell pages: login, dashboard, settings, More (`core_routes`), admin (/family,
+  /tiers), connections, AI, dev, and the accounts page (`google_pages`). Deviation: the
+  accounts page stays core even though Google is a module: it's also where household
+  connections live, so a family without Google still needs it.
+- Module pages: memory (/knowledge), guides, recipes, tasks (/tasks and /week), lists,
+  spending, maintenance, safeway, gmail (/email/noise), body_double (/session).
+- The More page and bar come from `Menu` (`themi/web/site.py`), built from `CORE_MENU` and
+  the modules' entries; empty groups are left out, and the default bar is the "Main"
+  group's pages. Bar icons moved to `themi/web/icons.py` so modules can name theirs.
+- Test changed: `test_every_page_renders_in_the_new_shell` no longer opens /email/noise
+  (that scenario has no Gmail, so the page is now a 404, which it now checks);
+  `test_noise_digest.py` still renders it with Gmail.
+- Follow-up: the dashboard and settings pages in `site.py` still read features through
+  keys (taskboard, groceries, pantry, noise, appliances, body_double, music, conversation,
+  google, home_connect). They work when a module is absent (each is a `maybe`), but should
+  become module panels in a later prompt.
+- `tests/scenarios/test_menu.py`: the family's menu matches the old one exactly, and a
+  module left out takes its page (404) and menu entry with it.
 
 ### CR5 · Core refactor: themi.toml, templates and module settings
 Status: [ ]

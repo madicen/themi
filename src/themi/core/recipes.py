@@ -755,6 +755,19 @@ class RecipesModule(Module):
         self.config = config
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import recipe_pages
+
+        ctx.web(
+            recipe_pages.routes,
+            MenuEntry(
+                "/recipes",
+                "Recipes",
+                "The family cookbook, and cooking with Themi",
+                "Household",
+                30,
+            ),
+        )
         recipes = ctx.provide(Recipes(ctx.services, ctx.services.maybe(keys.google), self.config))
         recipes.install()
         ctx.periodic("recipes.sync", timedelta(minutes=15), recipes.sync)

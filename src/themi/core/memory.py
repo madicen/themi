@@ -293,6 +293,20 @@ class MemoryModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.core.rules import Rulebook  # at install: importing it at the top is a cycle
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, knowledge_pages
 
+        ctx.web(
+            knowledge_pages.routes,
+            MenuEntry(
+                "/knowledge",
+                "Rules & memory",
+                "What Themi keeps to and remembers",
+                "Household",
+                10,
+                bar_label="Rules",
+                icon=icons.KNOWLEDGE,
+            ),
+        )
         memory = ctx.provide(Memory(ctx.services.store.db, ctx.get(Rulebook)))
         ctx.services.facts_source = memory.prompt_facts

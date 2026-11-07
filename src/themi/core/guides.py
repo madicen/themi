@@ -205,4 +205,11 @@ class GuidesModule(Module):
     name = "guides"
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import guide_pages
+
+        ctx.web(
+            guide_pages.routes,
+            MenuEntry("/guides", "Guides", "Your own cooking charts and how-tos", "Household", 20),
+        )
         ctx.provide(Guides(ctx.services)).install()

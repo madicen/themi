@@ -22,6 +22,7 @@ from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 from themi.modules.registry import Registry
+from themi.modules.web import WebPages
 
 if TYPE_CHECKING:
     from themi.core.routing import EmbeddingRouter
@@ -114,6 +115,7 @@ class Services(Registry):
     # RC1b onwards: what each action on a "recipe" button does (show, cook, grocery card...).
     recipe_buttons: dict[str, EventHandler] = field(default_factory=dict)
     text_handlers: list[TextHandler] = field(default_factory=list)  # RC3a
+    web_pages: list[WebPages] = field(default_factory=list)  # CR4: modules' pages
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)

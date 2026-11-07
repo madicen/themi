@@ -32,6 +32,7 @@ CORE_FILES = (
     "updates.py",
 )
 CORE_IN_FEATURES = {
+    "themi.web.kit",  # the website's shell (CR4)
     "themi.core.kept_pictures",
     "themi.core.naming",
     "themi.core.prompts",

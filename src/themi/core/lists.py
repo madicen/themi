@@ -725,4 +725,13 @@ class ListsModule(Module):
     name = "lists"
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, list_pages
+
+        ctx.web(
+            list_pages.routes,
+            MenuEntry(
+                "/lists", "Lists", "Shopping and the other lists", "Main", 30, icon=icons.LISTS
+            ),
+        )
         ctx.provide(Lists(ctx.services)).install()

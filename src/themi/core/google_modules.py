@@ -68,6 +68,9 @@ class GmailModule(Module):
         expected.install()
         noise = ctx.provide(NoiseDigest(s, ctx.get(ApprovalsUI), gmail))
         noise.install()
+        from themi.web import email_pages
+
+        ctx.web(email_pages.routes)  # the noise digest's page
         ctx.periodic("gmail.poll", timedelta(minutes=1), gmail.poll_all)
         ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
         ctx.periodic("email.senders", timedelta(hours=6), senders.offer)

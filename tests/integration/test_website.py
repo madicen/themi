@@ -330,8 +330,7 @@ async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
         "/spending",
         "/maintenance",
         "/safeway",
-        "/email/noise",
-    )
+    )  # /email/noise is the gmail module's (CR4): test_noise_digest renders it with Gmail
     for name, extra in (("Husband", ()), ("Erin", ("/family", "/dev"))):
         async with web_client(scenario) as client:
             await sign_in(scenario, client, name)
@@ -339,6 +338,7 @@ async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
                 response = await client.get(path)
                 assert response.status_code == 200, path
                 assert 'class="tabs"' in response.text, path
+            assert (await client.get("/email/noise")).status_code == 404  # no Gmail here
 
 
 def test_a_row_opens_on_tap_and_shows_its_chips() -> None:

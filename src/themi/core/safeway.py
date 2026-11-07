@@ -571,6 +571,20 @@ class SafewayModule(Module):
         from themi.core.groceries import (
             GroceryList,  # at install: at the top it would be an import cycle
         )
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, safeway_pages
+
+        ctx.web(
+            safeway_pages.routes,
+            MenuEntry(
+                "/safeway",
+                "Safeway",
+                "The cart helper and remembered products",
+                "Household",
+                70,
+                icon=icons.SAFEWAY,
+            ),
+        )
 
         cart = ctx.provide(SafewayCart(ctx.services, ctx.get(GroceryList)))
         cart.install()

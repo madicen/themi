@@ -2700,6 +2700,25 @@ class TasksModule(Module):
     name = "tasks"
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.modules.web import MenuEntry
+        from themi.web import icons, task_pages, week_pages
+
+        ctx.web(
+            task_pages.routes,
+            MenuEntry("/tasks", "Tasks", "Everything to do", "Main", 20, icon=icons.TASKS),
+        )
+        ctx.web(
+            week_pages.routes,
+            MenuEntry(
+                "/week",
+                "My week",
+                "How Themi sees your week",
+                "You",
+                20,
+                bar_label="Week",
+                icon=icons.WEEK,
+            ),
+        )
         board = ctx.provide(
             TaskBoard(ctx.services, Matcher(ctx.services.store, ctx.get(EnergyModel)))
         )

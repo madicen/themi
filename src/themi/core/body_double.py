@@ -1168,6 +1168,9 @@ class BodyDoubleModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.core.body_double_music import LOOPS  # at install: a cycle at the top
+        from themi.web import session_pages
+
+        ctx.web(session_pages.routes)
 
         def sound(value: object) -> str | None:  # BD5a: the session page's built-in loops
             return None if value in LOOPS else f"the sounds are {', '.join(LOOPS)}"
