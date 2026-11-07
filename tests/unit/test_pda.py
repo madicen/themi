@@ -298,3 +298,21 @@ async def test_bug_160_a_rewrite_that_adds_a_name_or_number_is_refused(
     assert unfaithful(original, "It's Dr. Evans, at 650-555-0144.") == "added a number"
     assert unfaithful(original, "Maybe Dr. Evans knows; old emails might say.") == "added a name"
     assert unfaithful(original, "I don't know their name; old emails from the office may.") is None
+
+
+async def test_bug_179_a_short_rewrite_that_drops_the_step_and_the_verb_is_refused(
+    family: SeededFamily,
+) -> None:
+    """F34b, reply 351 (outbox 1482): "Step 1. Remove everything from the top tray." went out
+    as "The top tray empty." A short line may be reworded, but not lose its step number."""
+    from themi.channels.pda import unfaithful
+
+    original = "Step 1. Remove everything from the top tray."
+    assert unfaithful(original, "The top tray empty.") == "dropped a number"
+    assert (
+        unfaithful(original, "Step 1: everything out of the top tray, when you're ready.") is None
+    )
+    assert unfaithful("Move the laundry now.", "The washer's done.") is None  # still free
+    rewriter = FakeRewriter(Rewrite("The top tray empty."))
+    result = await PdaShield(rewriter).apply(original, family.erin)
+    assert result.method == "softened" and "remove everything from the top tray" in result.text

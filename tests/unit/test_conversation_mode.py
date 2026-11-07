@@ -98,6 +98,14 @@ def test_chat_says_when_it_doesnt_know() -> None:
     assert "say so" in CHAT_SYSTEM and "places they could look" in CHAT_SYSTEM
 
 
+def test_ideas_arent_places_to_look() -> None:
+    """F34b, bug #180: "Idk what to watch" got "One place to look: old emails." The list of
+    places to look is for a fact they've lost; ideas get ideas."""
+    assert "If they've lost a fact" in CHAT_SYSTEM
+    assert "When they want ideas (what to watch" in CHAT_SYSTEM
+    assert "Not a list of places to look." in CHAT_SYSTEM
+
+
 # F34a, bugs #178 and #179 (2026-11-06): these went to the tool-less chat, and nothing was
 # done. A word about an open task with a change in it, body doubling, a question about what
 # Themi can see, and an email rule all need the tools.
