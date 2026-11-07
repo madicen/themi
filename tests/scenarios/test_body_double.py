@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import date
 
 from tests.scenarios.harness import Scenario
+from themi.ai.errors import PermanentError
 from themi.core.tasks import Task, TaskBoard
 
 
@@ -152,3 +153,145 @@ async def test_the_sprint_lengths_are_theirs(scenario: Scenario) -> None:
                                        sprint_break_minutes=10)  # fmt: skip
     replies = await scenario.say("Erin", "/bodydouble pomodoro")
     assert replies == ["Sprint on: 50 minutes, then a 10-minute break. I'll say when."]
+
+
+# ----- BD1b: Guided Step-Through --------------------------------------------------------------
+
+KITCHEN = [
+    "Clear the counter",
+    "Load the dishwasher",
+    "Wipe the stovetop",
+    "Wipe the shelves (Optional/Bonus)",
+    "Sweep the floor",
+    "Take out the trash",
+]
+
+
+def card(scenario: Scenario) -> str:
+    return scenario.edits("Erin")[-1]["text"]
+
+
+def card_buttons(scenario: Scenario) -> list[str]:
+    markup = scenario.edits("Erin")[-1].get("reply_markup") or {}
+    return [b["text"] for row in markup.get("inline_keyboard", []) for b in row]
+
+
+async def kitchen(scenario: Scenario, steps: list[str] | None = KITCHEN) -> Task:
+    task = await board(scenario).create(scenario.member("Erin"), "Clean the kitchen",
+                                        "physical", 3)  # fmt: skip
+    if steps:
+        await board(scenario).update(task.id, scenario.member("Erin"), steps=steps)
+    return task
+
+
+async def test_a_six_step_chore_with_back_and_skip(scenario: Scenario) -> None:
+    task = await kitchen(scenario)
+    replies = await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    assert replies == ["Step 1 of 6:\n> Clear the counter"]
+    assert scenario.last_buttons("Erin") == ["Next", "Done"]
+    await scenario.tap("Erin", "Next")
+    assert card(scenario) == "Step 2 of 6:\n> Load the dishwasher"
+    assert card_buttons(scenario) == ["Back", "Next", "Done"]
+    await scenario.tap("Erin", "Back")
+    assert card(scenario) == "Step 1 of 6:\n> Clear the counter"
+    await scenario.tap("Erin", "Next")
+    await scenario.tap("Erin", "Next")
+    await scenario.tap("Erin", "Next")
+    assert card(scenario) == "Step 4 of 6 (optional):\n> Wipe the shelves (Optional/Bonus)"
+    assert card_buttons(scenario) == ["Back", "Skip", "Next", "Done"]
+    await scenario.tap("Erin", "Skip")
+    assert card(scenario) == "Step 5 of 6:\n> Sweep the floor"
+    replies = await scenario.say("Erin", "next")  # typed: a fresh card at the bottom
+    assert replies == ["Step 6 of 6:\n> Take out the trash"]
+    assert scenario.edits("Erin")[-1]["text"] == "(Carried on below.)"
+    await scenario.tap("Erin", "All done")
+    assert card(scenario).startswith("Marked done: Clean the kitchen.")
+    assert board(scenario).get(task.id).status == "done"
+    assert session_row(scenario)["outcome"] == "finished"
+
+
+async def test_a_task_without_steps_gets_proposed_ones_then_keeps_them(
+    scenario: Scenario,
+) -> None:
+    task = await kitchen(scenario, steps=None)
+    scenario.primary.queue_tool_call(
+        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": task.id, "what": ""}
+    )
+    scenario.primary.queue_structured(
+        {"steps": [{"text": "Clear the counter.", "optional": False},
+                   {"text": "Wipe the shelves", "optional": True},
+                   {"text": "Sweep the floor", "optional": False}]}
+    )  # fmt: skip
+    replies = await scenario.say("Erin", "walk me through cleaning the kitchen")
+    assert replies == [
+        "Here's how I'd break it up:\n> 1. Clear the counter\n"
+        "> 2. Wipe the shelves (Optional/Bonus)\n> 3. Sweep the floor"
+    ]
+    assert scenario.last_buttons("Erin") == ["Go", "Change them", "Keep these steps", "No steps"]
+    assert scenario.primary.requests[-1].prompt.count("<data source=") == 1
+    await scenario.tap("Erin", "Keep these steps")
+    assert card(scenario) == "Step 1 of 3:\n> Clear the counter"
+    assert board(scenario).get(task.id).steps == (
+        "Clear the counter", "Wipe the shelves (Optional/Bonus)", "Sweep the floor",
+    )  # fmt: skip
+
+
+async def test_proposed_steps_changed_in_their_words_arent_kept_unless_asked(
+    scenario: Scenario,
+) -> None:
+    scenario.primary.queue_error(PermanentError("no key"), op="structured")
+    scenario.fallback.queue_error(PermanentError("no key"), op="structured")
+    replies = await scenario.say("Erin", "/bodydouble steps")
+    assert replies[0].startswith("I couldn't break it up just now")  # no model: quiet instead
+    task = await kitchen(scenario, steps=None)
+    scenario.primary.queue_tool_call(
+        "start_body_double", {"mode": "steps", "minutes": 0, "task_id": task.id, "what": ""}
+    )
+    scenario.primary.queue_structured({"steps": [{"text": "Clear the counter", "optional": False}]})
+    await scenario.say("Erin", "step by step for the kitchen please")
+    await scenario.tap("Erin", "Change them")
+    assert card(scenario) == "How would you change them? Tell me in your own words."
+    scenario.primary.queue_structured(
+        {"steps": [{"text": "Put on music", "optional": False},
+                   {"text": "Clear the counter", "optional": False}]}
+    )  # fmt: skip
+    replies = await scenario.say("Erin", "start with putting music on")
+    assert replies == ["Here's how I'd break it up:\n> 1. Put on music\n> 2. Clear the counter"]
+    prompt = scenario.primary.requests[-1].prompt
+    assert '<data source="their words">\nstart with putting music on\n</data>' in prompt
+    await scenario.tap("Erin", "Go")
+    assert card(scenario) == "Step 1 of 2:\n> Put on music"
+    assert board(scenario).get(task.id).steps == ()  # Go doesn't keep them
+
+
+async def test_one_gentle_line_when_a_step_takes_a_while(scenario: Scenario) -> None:
+    task = await kitchen(scenario)
+    await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    await scenario.advance(minutes=20)
+    await scenario.run_jobs()
+    assert scenario.inbox("Erin")[-1] == "Still with you. Next step whenever you're ready."
+    await scenario.tap("Erin", "Next")
+    await scenario.advance(minutes=20)
+    await scenario.run_jobs()
+    lines = [t for t in scenario.inbox("Erin") if t.startswith("Still with you")]
+    assert len(lines) == 1  # never more than one
+
+
+async def test_no_gentle_line_on_an_optional_step(scenario: Scenario) -> None:
+    task = await kitchen(scenario, steps=["Wipe the shelves (Optional/Bonus)", "Sweep"])
+    await start(scenario, "walk me through the kitchen", mode="steps", task_id=task.id)
+    await scenario.advance(minutes=25)
+    await scenario.run_jobs()
+    assert not any(t.startswith("Still with you") for t in scenario.inbox("Erin"))
+
+
+async def test_switching_into_steps_keeps_the_time(scenario: Scenario) -> None:
+    task = await kitchen(scenario)
+    await start(scenario, "keep me company", mode="quiet", task_id=task.id)
+    first = session_row(scenario)
+    await scenario.advance(minutes=10)
+    scenario.primary.queue_tool_call("switch_body_double_mode", {"mode": "steps"})
+    replies = await scenario.say("Erin", "let's do it step by step instead")
+    assert replies == ["Step 1 of 6:\n> Clear the counter"]
+    row = session_row(scenario)
+    assert row["started_at"] == first["started_at"] and row["mode"] == "guided"
