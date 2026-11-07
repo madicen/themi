@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.connectors.search import SearchBackend, SearchError, SearchResult
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.connector_settings import SearchSettings
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -428,6 +428,7 @@ class WebSearchModule(Module):
     one up."""
 
     name = "web_search"
+    tool_groups = (groups.WEB,)
     settings = SearchSettings
 
     def __init__(self, backend: SearchBackend | None) -> None:

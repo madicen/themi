@@ -16,7 +16,7 @@ from themi.connectors.gcal.busy import CalendarBusy
 from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.gmail import GmailSync, install_executors
 from themi.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
-from themi.core import email_forward
+from themi.core import email_forward, groups
 from themi.core.approvals import ApprovalsUI
 from themi.core.calendar import TaskCalendar
 from themi.core.calendar_copies import CalendarCopies
@@ -61,6 +61,7 @@ class GmailModule(Module):
     """Gmail: mail read every minute, triaged, and the features that follow from it."""
 
     name = "gmail"
+    tool_groups = (groups.EMAIL,)
     preferences = NoisePreferences
     requires = ("google",)
 
@@ -107,6 +108,7 @@ class CalendarModule(Module):
     hold Themi's own messages."""
 
     name = "calendar"
+    tool_groups = (groups.CALENDAR,)
     preferences = CalendarPreferences
     requires = ("google", "tasks")
 

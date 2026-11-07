@@ -28,7 +28,7 @@ from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DOC_MIME, DocsClient, DocsError
 from themi.connectors.google import DRIVE_FILE_SCOPE, GoogleAccounts, OAuthError, TokenRevoked
 from themi.core import cookbook as book
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.cookbook import Line, ParsedRecipe
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
@@ -749,6 +749,7 @@ class RecipesModule(Module):
     """RC1a: the family cookbook, read from its Google Doc."""
 
     name = "recipes"
+    tool_groups = (groups.RECIPES,)
     optional = ("google",)
 
     def __init__(self, config: GoogleConfig | None = None) -> None:

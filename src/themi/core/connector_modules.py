@@ -21,6 +21,7 @@ from themi.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.travel import TravelClient
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
+from themi.core import groups
 from themi.core.agent import Agent
 from themi.core.chore_chart import ChartPreferences
 from themi.core.connector_settings import (
@@ -59,6 +60,7 @@ class EmailAuditModule(Module):
     """E2: the email audit, over Gmail."""
 
     name = "email_audit"
+    tool_groups = (groups.EMAIL,)
     requires = ("tasks", "gmail")
 
     def install(self, ctx: ModuleContext) -> None:
@@ -106,6 +108,7 @@ class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
     name = "travel"
+    tool_groups = (groups.CALENDAR,)
     preferences = TravelPreferences
     settings = TravelSettings
 
@@ -127,6 +130,7 @@ class SpotifyModule(Module):
     """BD5b: playing their own music, from Spotify."""
 
     name = "spotify"
+    tool_groups = (groups.MUSIC,)
     settings = SpotifySettings
 
     def __init__(self, client: SpotifyClient) -> None:
@@ -214,6 +218,10 @@ class CozylaTodosModule(Module):
     """The Cozyla wall's to-do list, kept in step with Themi's tasks."""
 
     name = "cozyla_todos"
+    tool_groups = (
+        groups.LISTS,
+        groups.WALL,
+    )
     settings = CozylaSettings
     requires = ("tasks",)
 
@@ -258,6 +266,7 @@ class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
     name = "cozyla_chores"
+    tool_groups = (groups.WALL,)
     preferences = ChartPreferences
     settings = CozylaSettings
     requires = ("tasks", "routines")

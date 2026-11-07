@@ -27,7 +27,7 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
-from themi.core import keys, naming, praise
+from themi.core import groups, keys, naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.praise import TasksPreferences
 from themi.core.progression import Progression, amount_said, parse_plan
@@ -2771,6 +2771,7 @@ class TasksModule(Module):
     """The task board: tasks, chores, schedules and check-ins."""
 
     name = "tasks"
+    tool_groups = (groups.SCHEDULES,)
     preferences = TasksPreferences
 
     def install(self, ctx: ModuleContext) -> None:

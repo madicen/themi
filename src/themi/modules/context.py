@@ -58,6 +58,8 @@ class ModuleContext:
         for module in ordered:
             self._current = module.name
             try:
+                for group in module.tool_groups:  # CR8b: the groups its tools are in
+                    self.services.tools.add_group(group)
                 if module.migrations is not None:  # CR6: its tables, before it installs
                     apply_track(self.services.store.db, module.name, module.migrations)
                 if module.preferences is not None:  # CR7a: for the settings page

@@ -31,7 +31,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.groceries import CATEGORY, EXECUTOR, and_list, item_name, list_summary
 from themi.core.lists import name_key
 from themi.core.prompts import as_data
@@ -661,6 +661,7 @@ class RecipeGroceriesModule(Module):
     """RC2a: a recipe's ingredients onto the grocery list."""
 
     name = "recipe_groceries"
+    tool_groups = (groups.RECIPES,)
     requires = ("recipes",)
 
     def install(self, ctx: ModuleContext) -> None:

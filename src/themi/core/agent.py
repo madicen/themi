@@ -42,7 +42,7 @@ from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
-from themi.core.tools import GROUPS, PICTURE_GROUPS, ToolContext, choose_groups, twins_text
+from themi.core.tools import PICTURE_GROUPS, ToolContext, twins_text
 from themi.energy.remarks import energy_remark
 from themi.localtime import start_of_local_day, to_local, to_utc_iso
 
@@ -649,7 +649,8 @@ class Agent:
         # P5's "all" routing sends every group.
         routing = services.tool_routing
         recent = [text, *(m.text for m in history[-4:])]
-        groups = set(GROUPS) if routing == "all" else choose_groups(recent)
+        tools = services.tools  # CR8b: the loaded modules' groups
+        groups = set(tools.group_names()) if routing == "all" else tools.choose_groups(recent)
         if shown:
             groups |= PICTURE_GROUPS  # F34l: "this" or no words picks no group
         for source in services.group_sources:  # BD1a: a session going on brings its tools
@@ -659,7 +660,7 @@ class Agent:
             # groups used lately, which short follow-ups lean on.
             theirs = [text, *[m.text for m in history if m.direction == "in"][-2:]]
             groups |= await services.group_router.choose(member.id, theirs)
-            groups |= recent_groups(services.store.db, member.id)
+            groups |= recent_groups(services.store.db, member.id, tools.group_of)
         ctx = ToolContext(
             member,
             services,

@@ -29,7 +29,7 @@ from themi import clock
 from themi.accounts import Member, NotFound
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.groceries import and_list
 from themi.core.services import Services
 from themi.core.tasks import IMPORTANCE, Task, TaskBoard, clock_words, day_arg
@@ -374,6 +374,7 @@ class RemindersModule(Module):
     """Reminders: a day's end and overdue tasks."""
 
     name = "reminders"
+    tool_groups = (groups.SCHEDULES,)
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

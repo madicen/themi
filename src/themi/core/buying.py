@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.autonomy import ExecutionContext
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.lists import ADD_CATEGORY, THINGS_TO_BUY, Lists, NamedList, name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
@@ -228,6 +228,7 @@ class BuyingModule(Module):
     """L2a: things to buy that aren't food, and their stores."""
 
     name = "buying"
+    tool_groups = (groups.LISTS,)
     requires = ("lists",)
 
     def install(self, ctx: ModuleContext) -> None:

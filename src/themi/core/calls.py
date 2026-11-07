@@ -25,7 +25,7 @@ from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.outbox import Priority
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.prompts import OpenItem, as_data
 from themi.core.services import Services
 from themi.core.tasks import Task, TaskBoard, TaskChange
@@ -291,6 +291,7 @@ class CallsModule(Module):
     """Calls to vendors, prepared for a person to make."""
 
     name = "calls"
+    tool_groups = (groups.CALLS,)
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

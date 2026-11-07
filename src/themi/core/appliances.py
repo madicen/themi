@@ -27,7 +27,7 @@ from themi.connectors.roborock.events import problems, state_word
 from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqError
 from themi.connectors.tuya import TuyaError
 from themi.connectors.tuya.events import state_word as feeder_words
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.services import Services
 from themi.core.tasks import clock_words
 from themi.core.tools import ToolContext, tool
@@ -295,6 +295,7 @@ class AppliancesModule(Module):
     """F20b: asked how the appliances are doing, it reads them."""
 
     name = "appliances"
+    tool_groups = (groups.DEVICES,)
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*PROMPT_RULES)

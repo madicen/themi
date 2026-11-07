@@ -35,7 +35,7 @@ from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import keys, praise
+from themi.core import groups, keys, praise
 from themi.core.cozyla_routines import (
     ALL_DONE_TEXT,
     CHECK_TEXT,
@@ -744,6 +744,7 @@ class RoutinesModule(Module):
     """Routines: morning, evening and the rest."""
 
     name = "routines"
+    tool_groups = (groups.WALL,)
 
     def install(self, ctx: ModuleContext) -> None:
         routines = ctx.provide(Routines(ctx.services))

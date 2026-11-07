@@ -290,9 +290,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR7b1 | Core refactor: the other per-member feature settings as preferences | Core refactor | [x] 2026-11-07 |
 | CR7c | Core refactor: household settings per module, and the old columns dropped | Core refactor | [x] 2026-11-07 |
 | CR7d | Core refactor: the settings page in sections from the modules | Core refactor | [x] 2026-11-07 |
-| CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | split |
+| CR8 | Core refactor: the prompt and tool groups from parts | Core refactor | split, [x] 2026-11-07 |
 | CR8a | Core refactor: the system prompt from template and module parts | Core refactor | [x] 2026-11-07 |
-| CR8b | Core refactor: tool groups from modules | Core refactor | [ ] |
+| CR8b | Core refactor: tool groups from modules | Core refactor | [x] 2026-11-07 |
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [ ] |
 | CR10 | Core refactor: workspace packages | Core refactor | [ ] |
 | CR11 | Core refactor: the setup wizard | Core refactor | [ ] |
@@ -14529,12 +14529,37 @@ Notes:
   `FAMILY_SYSTEM` (the golden file); the hello test compares with its app's own prompt.
 
 ### CR8b · Core refactor: tool groups from modules
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR8a
 - `ctx.tool_group(name, description, pattern)` and the group named with each tool replace
   the central `GROUPS` and `TOOL_GROUPS`; the router and registry read the registered ones.
 - `tools.json` stays identical and `make router-eval` scores the same (record both).
 Tests: golden files identical; a module left out drops its group; the router eval.
+
+Notes:
+- `ToolGroup(name, description, words, examples, tools, order)` in `core/tools.py`; the
+  registry has `add_group`, `groups()`, `group_names()`, `group_of(tool)`,
+  `choose_groups(texts)`, `examples()` and `more_tools_for(groups)`. `GROUPS`,
+  `TOOL_GROUPS`, `GROUP_EXAMPLES` and `choose_groups()` are gone.
+- The groups' data is in `core/groups.py` (feature side, like keys.py: CR10 splits it by
+  pack), checked equal to the old tables when it was generated. A module lists the groups
+  its tools are in (`Module.tool_groups`); the loader adds them before installing it.
+  Several modules may add one group (the wall's to-dos and chores, the routines). The
+  settings group is the core's (`tools.SETTINGS`), added by `build_app`; breaks, burnout
+  and commands add it too.
+- `more_tools` is built per call from the loaded groups, so an app offers only its own;
+  its registered spec has no enum (what a call is checked against). For the full family
+  its spec is unchanged (`tools.json`), and every tool is in the same group (the golden test
+  now asks the app's registry).
+- The embedding router takes its examples as a callable (the registry's), read after the
+  modules have added their groups. `recent_groups` takes `group_of`. Reviewing old replies
+  (`wrong_replies.decide`) uses the whole catalog, as those replies were offered then.
+- `make router-eval`: 138/156 (88%), as before the refactor.
+- Behaviour change: an app without a module isn't offered its group (no Gmail: no email
+  group in `more_tools`); "all" routing sends the loaded groups.
+- Tests changed: tests and evals that read the old tables use `tests/fakes/groups.py`
+  (rebuilt from the catalog); unit registries get `with_every_group`; two scenarios compare
+  with their app's loaded groups.
 
 ### CR9 · Core refactor: workspaces and template roles
 Status: [ ]

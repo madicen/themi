@@ -24,7 +24,7 @@ from themi.channels.pauses import (
 )
 from themi.core import keys
 from themi.core.services import Services
-from themi.core.tools import ToolContext, tool
+from themi.core.tools import SETTINGS, ToolContext, tool
 from themi.localtime import to_local
 from themi.modules import Module, ModuleContext
 from themi.web.auth import WebAuth
@@ -244,6 +244,7 @@ class CommandsModule(Module):
     """Themi's own commands (/help, /pause and the rest)."""
 
     name = "commands"
+    tool_groups = (SETTINGS,)
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(Commands(ctx.services)).install()

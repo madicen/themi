@@ -31,7 +31,7 @@ from themi.accounts.store import parse_hhmm
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import event_line
 from themi.connectors.gcal.preferences import CalendarPreferences
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.partner import named
 from themi.core.prompts import as_data
 from themi.core.tasks import Task, TaskBoard
@@ -311,6 +311,7 @@ class DaySummaryModule(Module):
     """K2: what's on someone's day, and the morning summary."""
 
     name = "day_summary"
+    tool_groups = (groups.CALENDAR,)
     preferences = DaySummaryPreferences
     requires = ("tasks",)
 

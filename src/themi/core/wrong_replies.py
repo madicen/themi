@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -30,9 +31,10 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.channels.events import InboundEvent
+from themi.core.groups import catalog_group_of
 from themi.core.reactions import CARDS
 from themi.core.services import Services
-from themi.core.tools import TOOL_GROUPS, TWINS
+from themi.core.tools import TWINS
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.storage.db import Database
@@ -94,22 +96,31 @@ class WrongReplies:
             )
 
 
-def was_sent(tool: str, groups: tuple[str, ...], added: tuple[str, ...] = ()) -> bool:
+def was_sent(
+    tool: str,
+    groups: tuple[str, ...],
+    added: tuple[str, ...] = (),
+    group_of: Callable[[str], str] = catalog_group_of,
+) -> bool:
     """Whether a reply that was offered these groups (and added these) had the tool. A twin
-    set travels whole (P6)."""
+    set travels whole (P6). `group_of`: the app's groups (CR8b), else every known group."""
     offered = {"core", *groups, *added}
-    if TOOL_GROUPS.get(tool, "core") in offered:
+    if group_of(tool) in offered:
         return True
     return any(
-        tool in twins.tools and any(TOOL_GROUPS.get(t, "core") in offered for t in twins.tools)
-        for twins in TWINS
+        tool in twins.tools and any(group_of(t) in offered for t in twins.tools) for twins in TWINS
     )
 
 
-def decide(tool: str, groups: tuple[str, ...], added: tuple[str, ...] = ()) -> Label:
+def decide(
+    tool: str,
+    groups: tuple[str, ...],
+    added: tuple[str, ...] = (),
+    group_of: Callable[[str], str] = catalog_group_of,
+) -> Label:
     if tool == NO_TOOL:
         return "no_tool_needed"
-    return "model_choice" if was_sent(tool, groups, added) else "router_miss"
+    return "model_choice" if was_sent(tool, groups, added, group_of) else "router_miss"
 
 
 @dataclass(frozen=True)
@@ -159,7 +170,7 @@ class ReplyReview:
         elif reply.groups is None:
             raise ReviewError(f"Reply {reply_id} is from before the groups were recorded.")
         else:
-            label = decide(tool, reply.groups, reply.groups_added)
+            label = decide(tool, reply.groups, reply.groups_added)  # the groups then: all known
         self.db.execute(
             "UPDATE replies SET label = ?, right_tool = ?, labelled_at = ? WHERE id = ?",
             (label, tool, to_utc_iso(clock.now()), reply_id),

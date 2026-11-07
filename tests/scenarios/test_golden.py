@@ -27,7 +27,6 @@ import pytest
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.app import App
-from themi.core.tools import TOOL_GROUPS
 from themi.web import HealthSources, create_app
 from themi.web.kit import SiteContext
 
@@ -62,7 +61,7 @@ def tools_of(app: App) -> dict[str, Any]:
             sort_keys=True,
         )
         out[spec.name] = {
-            "group": TOOL_GROUPS.get(spec.name, "core"),
+            "group": app.services.tools.group_of(spec.name),  # CR8b: as the modules registered
             "spec": hashlib.sha256(body.encode()).hexdigest()[:12],
         }
     return out

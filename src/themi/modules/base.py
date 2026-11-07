@@ -13,6 +13,7 @@ from themi.accounts.preferences import Preferences
 from themi.modules.settings import ModuleSettings, read_settings
 
 if TYPE_CHECKING:
+    from themi.core.tools import ToolGroup
     from themi.modules.context import ModuleContext
     from themi.settings import Settings
 
@@ -102,6 +103,7 @@ class Module:
     # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
     migrations: ClassVar[str | Path | None] = None
     setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
+    tool_groups: ClassVar[tuple[ToolGroup, ...]] = ()  # CR8b: the groups its tools are in
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:

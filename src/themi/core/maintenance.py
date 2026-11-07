@@ -41,7 +41,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarSync, event_id
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.events import title_matches
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
@@ -815,6 +815,7 @@ class MaintenanceModule(Module):
     """Home maintenance, offered when it comes due."""
 
     name = "maintenance"
+    tool_groups = (groups.MAINTENANCE,)
     requires = ("tasks",)
     optional = ("calendar",)
 

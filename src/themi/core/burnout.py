@@ -41,7 +41,7 @@ from themi.core.events import words_in_common
 from themi.core.habits import CATEGORY as HABIT_CATEGORY
 from themi.core.habits import EXECUTOR as HABIT_EXECUTOR
 from themi.core.tasks import Task, TaskBoard
-from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 
@@ -357,6 +357,7 @@ class BurnoutModule(Module):
     """Burnout: handing tasks over when someone's running low."""
 
     name = "burnout"
+    tool_groups = (SETTINGS,)
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

@@ -31,7 +31,7 @@ from themi.accounts import InvalidValue, Member
 from themi.accounts.household import HouseholdSettings
 from themi.accounts.setup import parse_money_to_cents
 from themi.connectors.gmail.parse import web_link
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
@@ -391,6 +391,7 @@ class SpendingModule(Module):
     """X1: takeout, eating out and business expenses."""
 
     name = "spending"
+    tool_groups = (groups.SPENDING,)
     household = SpendingSettings
 
     def install(self, ctx: ModuleContext) -> None:

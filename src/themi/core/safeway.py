@@ -30,7 +30,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.groceries import and_list
 from themi.core.lists import name_key
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
@@ -565,6 +565,7 @@ class SafewayModule(Module):
     """35c: the Safeway cart, filled by the helper extension."""
 
     name = "safeway"
+    tool_groups = (groups.PANTRY,)
     requires = ("groceries",)
 
     def install(self, ctx: ModuleContext) -> None:

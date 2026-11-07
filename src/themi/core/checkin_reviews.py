@@ -25,7 +25,7 @@ from themi.accounts import Member
 from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -273,6 +273,7 @@ class CheckinReviewsModule(Module):
     """Now and then, asking whether a check-in is helping."""
 
     name = "checkin_reviews"
+    tool_groups = (groups.SCHEDULES,)
     preferences = CheckinReviewsPreferences
 
     def install(self, ctx: ModuleContext) -> None:

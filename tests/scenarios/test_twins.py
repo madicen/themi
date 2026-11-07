@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from tests.evals.scoring import load_cases
+from tests.fakes.groups import with_every_group
 from tests.scenarios.harness import Scenario
 from themi.core.tools import TWINS, Tool, ToolContext, ToolRegistry, tool, twins_text
 
@@ -39,12 +40,14 @@ def stub(name: str) -> Tool:
 
 def test_a_twin_set_is_sent_whole_when_any_of_it_is() -> None:
     # create_task is core; set_task_schedule is in the schedules group.
-    registry = ToolRegistry([stub(n) for n in ("create_task", "set_task_schedule", "drive_time")])
+    registry = with_every_group(
+        ToolRegistry([stub(n) for n in ("create_task", "set_task_schedule", "drive_time")])
+    )
     assert [s.name for s in registry.specs(set())] == ["create_task", "set_task_schedule"]
 
 
 def test_a_twin_set_only_brings_tools_that_exist() -> None:
-    registry = ToolRegistry([stub("start_break")])
+    registry = with_every_group(ToolRegistry([stub("start_break")]))
     assert [s.name for s in registry.specs({"settings"})] == ["start_break"]
     assert registry.specs(set()) == []
 

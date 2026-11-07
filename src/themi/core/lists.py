@@ -24,7 +24,7 @@ from themi import clock
 from themi.accounts import InvalidValue, Member
 from themi.accounts.preferences import Preferences
 from themi.autonomy import ExecutionContext
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.groceries import and_list, asks_to_add, picture_asks_to_add, refuse_spending
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
@@ -756,6 +756,7 @@ class ListsModule(Module):
     """L1a: named lists Themi keeps."""
 
     name = "lists"
+    tool_groups = (groups.LISTS,)
     preferences = ListsPreferences
 
     def install(self, ctx: ModuleContext) -> None:

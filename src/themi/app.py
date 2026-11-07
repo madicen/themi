@@ -106,7 +106,7 @@ from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.step_images import StepPicturesModule
 from themi.core.taking import TakingModule
 from themi.core.tasks import TasksModule
-from themi.core.tools import ToolRegistry
+from themi.core.tools import SETTINGS, ToolRegistry
 from themi.core.web_recipes import WebRecipesModule
 from themi.core.web_search import WebSearchModule
 from themi.core.which_list import WhichListModule
@@ -283,17 +283,19 @@ def build_app(
     outbox = Outbox(store, channel, PdaShield(AIRewriter(router)), EnergyReceptivity(energy))
     outcomes = OutcomeTracker(store)
     outbox.sent_listeners.append(outcomes.on_sent)
+    tools = ToolRegistry(list(STARTER_TOOLS))
+    tools.add_group(SETTINGS)  # CR8b: the core's own; modules add theirs
     services = Services(
         tool_routing=tool_routing,
         conversation_rollout=conversation_mode,
-        group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db)),
+        group_router=EmbeddingRouter(RouterEmbedder(router), VectorCache(db), tools.examples),
         task_namer=TaskNamer(RouterEmbedder(router), VectorCache(db)),
         store=store,
         ai_settings=ai_settings,
         router=router,
         outbox=outbox,
         calibrator=PdaCalibrator(store),
-        tools=ToolRegistry(list(STARTER_TOOLS)),
+        tools=tools,
         autonomy=Autonomy(store, ExecutorRegistry()),
         energy=energy,
         outcomes=outcomes,

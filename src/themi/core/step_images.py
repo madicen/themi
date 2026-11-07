@@ -30,7 +30,7 @@ from themi.accounts import Member
 from themi.ai.errors import AIError, ImageCapReached
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
@@ -306,6 +306,7 @@ class StepPicturesModule(Module):
     """BD4b: a picture for each guided step."""
 
     name = "step_pictures"
+    tool_groups = (groups.BODY_DOUBLE,)
     requires = ("body_double", "guided_steps")
 
     def install(self, ctx: ModuleContext) -> None:

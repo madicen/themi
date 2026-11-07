@@ -40,7 +40,7 @@ from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.step_card import StepCard
-from themi.core import keys
+from themi.core import groups, keys
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
 from themi.core.quantities import NeedsYield, describe, scale_for, scale_line
@@ -844,6 +844,7 @@ class CookingModule(Module):
     """RC3a: cooking a recipe, prep first, then one step at a time."""
 
     name = "cooking"
+    tool_groups = (groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
 
     def install(self, ctx: ModuleContext) -> None:

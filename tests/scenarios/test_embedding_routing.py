@@ -6,10 +6,10 @@ from __future__ import annotations
 import pytest
 
 from tests.fakes.embedder import TopicEmbedder
+from tests.fakes.groups import GROUP_EXAMPLES, choose_groups
 from tests.scenarios.harness import Scenario
 from themi.ai.embeddings import VectorCache
 from themi.core.routing import EmbeddingRouter
-from themi.core.tools import GROUP_EXAMPLES, choose_groups
 from themi.storage.db import Database
 
 # The fake model's topics: the settings examples say "rest" or "break", the pantry ones
@@ -98,7 +98,8 @@ async def test_groups_used_lately_stay_for_a_short_follow_up(embedding: Scenario
 async def test_the_examples_are_embedded_once_and_kept_across_restarts(
     embedding: Scenario,
 ) -> None:
-    examples = {e for group in GROUP_EXAMPLES.values() for e in group}
+    loaded = embedding.app.services.tools.examples()  # CR8b: the loaded modules' groups
+    examples = {e for group in loaded.values() for e in group}
 
     def embedded() -> list[str]:
         return [t for r in embedding.primary.requests if r.op == "embed" for t in r.texts]
@@ -112,7 +113,7 @@ async def test_the_examples_are_embedded_once_and_kept_across_restarts(
     db: Database = embedding.app.db
     group_router = embedding.app.services.group_router
     assert group_router is not None
-    router = EmbeddingRouter(group_router.embedder, VectorCache(db))
+    router = EmbeddingRouter(group_router.embedder, VectorCache(db), loaded)
     before = len(embedded())
     assert await router.choose(embedding.member("Erin").id, ["Going to lie down"]) == {"settings"}
     assert embedded()[before:] == ["Going to lie down"]

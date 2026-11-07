@@ -27,7 +27,7 @@ from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 
@@ -65,6 +65,7 @@ class BreaksModule(Module):
     """B1: a rest mode that ends with a question."""
 
     name = "breaks"
+    tool_groups = (SETTINGS,)
     preferences = BreaksPreferences
 
     def install(self, ctx: ModuleContext) -> None:
