@@ -13,7 +13,7 @@ Tuesdays, Monday still has last week's amount.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -37,11 +37,33 @@ class Progression:
     weekday: int  # the day it steps up, 0 is Monday
     start: date  # the first week's step day
     up_to: float | None = None  # where it stops going up
+    # F34cb: one week's own amount ("keep 1.3 this week"), by that week's step day (ISO).
+    # The plan's next step is from the plan as stored, not from these.
+    weeks: tuple[tuple[str, float], ...] = ()
+
+    def week_of(self, day: date) -> date:
+        """The step day that starts the plan's week `day` is in."""
+        return self.start + timedelta(days=(day - self.start).days // 7 * 7)
+
+    def planned_on(self, day: date) -> float | None:
+        """The plan's own amount for that day's week, without one-week changes."""
+        return Progression(
+            self.unit, self.amounts, self.step, self.weekday, self.start, self.up_to
+        ).amount_on(day)
+
+    def for_week(self, day: date, amount: float | None) -> Progression:
+        """This plan with `day`'s week set to `amount` (None: back to the plan)."""
+        key = self.week_of(day).isoformat()
+        kept = tuple((k, a) for k, a in self.weeks if k != key)
+        return replace(self, weeks=kept if amount is None else (*kept, (key, amount)))
 
     def amount_on(self, day: date) -> float | None:
         """That day's week's amount, or None before the plan starts."""
         if day < self.start:
             return None
+        own = dict(self.weeks).get(self.week_of(day).isoformat())
+        if own is not None:
+            return round(own, 3)
         weeks = (day - self.start).days // 7
         if weeks < len(self.amounts):
             amount = self.amounts[weeks]
@@ -64,6 +86,7 @@ class Progression:
             "weekday": self.weekday,
             "start": self.start.isoformat(),
             "up_to": self.up_to,
+            **({"weeks": dict(self.weeks)} if self.weeks else {}),
         }
 
     @classmethod
@@ -75,6 +98,7 @@ class Progression:
             weekday=int(data["weekday"]),
             start=date.fromisoformat(data["start"]),
             up_to=data.get("up_to"),
+            weeks=tuple((k, float(a)) for k, a in (data.get("weeks") or {}).items()),
         )
 
 
@@ -133,6 +157,22 @@ def _start(words: str, today: date) -> date:
         return dateutil_parser.parse(words, default=default).date()
     except (ValueError, OverflowError) as exc:
         raise ProgressionError(f"'{words}' isn't a date. {EXAMPLE}") from exc
+
+
+UNIT_WORDS = {
+    "miles": r"mi(?:les?)?",
+    "mile": r"mi(?:les?)?",
+    "km": r"(?:km|kilometres?|kilometers?|k)",
+    "minutes": r"(?:min(?:ute)?s?)",
+    "laps": r"laps?",
+}
+
+
+def amount_said(text: str, unit: str) -> float | None:
+    """F34cb: an amount in the plan's unit in what they said ("1.3 miles"), else None."""
+    words = UNIT_WORDS.get(unit.casefold(), re.escape(unit.casefold()) + "s?")
+    m = re.search(rf"(?<![\d.]){_NUMBER}\s*{words}\b", text.casefold())
+    return float(m.group(1)) if m else None
 
 
 def _number(value: float) -> str:

@@ -9,6 +9,7 @@ from datetime import date
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.core.progression import parse_plan
 from themi.core.repeat import parse
 from themi.core.tasks import Task, TaskBoard
 
@@ -304,3 +305,103 @@ async def test_skipping_to_a_day_after_the_next_round_skips_this_round(
     replies = await scenario.say("Erin", "skip the run until Tuesday")
     assert due(scenario, run) == date(2026, 10, 27)
     assert replies[-1] == '"Go for a run" moved to Tue 27 Oct.'
+
+
+async def test_after_a_saturday_run_sunday_is_ticked_on_the_wall(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F9a's known gap (F34cb): a weekend run done on Saturday left Sunday unticked on the
+    wall, so the run looked undone on Sunday."""
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await board(scenario).set_schedule(run.id, erin, repeat=parse(RUNS, WED), missed="next_day")
+    await scenario.run_periodic("cozyla.routines")
+    routine = fake_cozyla.routine_named("Go for a run")
+    await at(scenario, date(2026, 10, 22), 15)
+    await done(scenario, run)
+    await at(scenario, date(2026, 10, 24), 15)
+    await done(scenario, run)  # Saturday's run, done in Themi
+    await scenario.run_periodic("cozyla.routines")
+    assert (routine["id"], "2026-10-24") in fake_cozyla.routine_ticks
+    await at(scenario, date(2026, 10, 25), 8)
+    await scenario.run_periodic("cozyla.routines")
+    assert (routine["id"], "2026-10-25") in fake_cozyla.routine_ticks
+    assert due(scenario, run) == date(2026, 10, 27)  # Sunday's tick isn't another run
+    assert len([r for r in board(scenario).runs(run.id) if not r.missed]) == 2
+
+
+async def test_a_saturday_tick_on_the_wall_ticks_sunday_too(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    erin = scenario.member("Erin")
+    run = await board(scenario).create(
+        erin, "Go for a run", "physical", 2, assignee=erin, check_in=True
+    )
+    await board(scenario).set_schedule(run.id, erin, repeat=parse(RUNS, WED), missed="next_day")
+    await scenario.run_periodic("cozyla.routines")
+    routine = fake_cozyla.routine_named("Go for a run")
+    await at(scenario, date(2026, 10, 22), 15)
+    await done(scenario, run)
+    saturday = date(2026, 10, 24)
+    await at(scenario, saturday, 15)
+    fake_cozyla.tick_routine(routine["id"], saturday)
+    await scenario.run_periodic("cozyla.routines")
+    await at(scenario, date(2026, 10, 25), 8)
+    await scenario.run_periodic("cozyla.routines")
+    assert (routine["id"], "2026-10-25") in fake_cozyla.routine_ticks
+    assert due(scenario, run) == date(2026, 10, 27)
+
+
+async def plan_week_of_nov_3(scenario: Scenario) -> Task:
+    """Erin's run with her plan, on Friday 6 November: this week's amount is 1.5 miles."""
+    run, _ = await runs(scenario)
+    board(scenario).set_progression(
+        run.id,
+        scenario.member("Erin"),
+        parse_plan("1.3 miles, then 1.5, then up 0.25 a week, on Tuesdays", WED),
+    )
+    await at(scenario, date(2026, 11, 6), 12)
+    return run
+
+
+async def test_a_distance_that_isnt_the_plans_is_asked_about(scenario: Scenario) -> None:
+    """F34c, bug #178: "I plan to run 1.3 miles either tomorrow or Sunday" when this week's
+    plan says 1.5. One choice, not a change."""
+    run = await plan_week_of_nov_3(scenario)
+    scenario.primary.queue_tool_call("skip_round", {"task_id": run.id, "day": ""})
+    replies = await scenario.say(
+        "Erin", "No run today. I plan to run 1.3 miles either tomorrow or Sunday"
+    )
+    assert "This week's plan says 1.5 miles. Keep 1.3 this week, or keep the plan?" in replies
+    assert scenario.last_buttons("Erin") == ["1.3 this week", "Keep the plan"]
+    plan = board(scenario).get(run.id).progression
+    assert plan is not None and plan.amount_on(date(2026, 11, 6)) == 1.5  # nothing changed yet
+
+    await scenario.tap("Erin", "1.3 this week")
+    plan = board(scenario).get(run.id).progression
+    assert plan is not None
+    assert plan.amount_on(date(2026, 11, 7)) == 1.3
+    assert plan.amount_on(date(2026, 11, 10)) == 1.75  # the next step is from the plan
+    (item,) = [
+        i.summary for i in board(scenario).open_items(scenario.member("Erin")) if "run" in i.summary
+    ]
+    assert "Plan: 1.3 miles from Tue 27 Oct" in item and "; 1.3 miles this week." in item
+
+
+async def test_keep_the_plan_changes_nothing(scenario: Scenario) -> None:
+    run = await plan_week_of_nov_3(scenario)
+    scenario.primary.queue_tool_call("skip_round", {"task_id": run.id, "day": ""})
+    await scenario.say("Erin", "No run today, I'll do 1.3 miles tomorrow")
+    replies = await scenario.tap("Erin", "Keep the plan")
+    assert any("1.5 miles" in r for r in [*replies, *[e["text"] for e in scenario.edits("Erin")]])
+    plan = board(scenario).get(run.id).progression
+    assert plan is not None and plan.amount_on(date(2026, 11, 7)) == 1.5
+
+
+async def test_the_plans_own_distance_isnt_asked_about(scenario: Scenario) -> None:
+    run = await plan_week_of_nov_3(scenario)
+    scenario.primary.queue_tool_call("skip_round", {"task_id": run.id, "day": ""})
+    replies = await scenario.say("Erin", "No run today, I'll do the 1.5 miles tomorrow")
+    assert not any("Keep" in r for r in replies)

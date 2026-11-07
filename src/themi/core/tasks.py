@@ -29,7 +29,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import naming, praise
 from themi.core.events import near_twin, title_matches, words_in_common
-from themi.core.progression import Progression, parse_plan
+from themi.core.progression import Progression, amount_said, parse_plan
 from themi.core.progression import read_back as plan_read_back
 from themi.core.prompts import OpenItem
 from themi.core.repeat import (
@@ -148,6 +148,10 @@ SETTLED_TEXT = "That one's already settled."
 CANCELLED_TEXT = "Taken off the list: {title}."
 RESCHEDULED_TEXT = "{title} is now due {due}."
 SKIPPED_TEXT = '"{title}" moved to {when}.'
+# F34cb: an amount they said that isn't this week's plan is a question, not a change.
+WEEK_AMOUNT_TEXT = "This week's plan says {planned}. Keep {said} this week, or keep the plan?"
+WEEK_AMOUNT_SET = "{said} this week. Next week goes back to the plan."
+WEEK_AMOUNT_KEPT = "Keeping the plan: {planned} this week."
 UNSCHEDULED_TEXT = "{title} no longer has a date."
 
 
@@ -1579,6 +1583,44 @@ class TaskBoard:
             return UNSCHEDULED_TEXT.format(title=task.title) + both
         return RESCHEDULED_TEXT.format(title=task.title, due=self.when_words(task)) + both
 
+    async def ask_week_amount(self, task: Task, member: Member, text: str) -> bool:
+        """F34cb, bug #178: "I plan to run 1.3 miles" when the plan says 1.5 this week. One
+        question with two buttons; nothing changes until they pick. False when there's
+        nothing to ask (no plan, no amount said, or the plan's own)."""
+        plan = task.progression
+        said = amount_said(text, plan.unit) if plan is not None else None
+        if plan is None or said is None:
+            return False
+        day = max(task.due_on or self._today(), self._today())
+        planned = plan.amount_on(day)
+        if planned is None or abs(planned - said) < 1e-9:
+            return False
+        payload = {"task": task.id, "day": day.isoformat()}
+        await self.outbox.send(
+            member,
+            WEEK_AMOUNT_TEXT.format(planned=f"{planned:g} {plan.unit}", said=f"{said:g}"),
+            priority=Priority.REPLY,
+            kind="task",
+            buttons=[
+                Button(
+                    f"{said:g} this week", "task", {**payload, "action": "week", "amount": said}
+                ),
+                Button("Keep the plan", "task", {**payload, "action": "plan"}),
+            ],
+        )
+        return True
+
+    def _week_amount(self, task_id: int, by: Member, day: date, amount: float | None) -> str:
+        task = self.get(task_id)
+        if task.progression is None:
+            return "That task has no plan any more."
+        task = self.set_progression(task_id, by, task.progression.for_week(day, amount))
+        assert task.progression is not None
+        now = f"{task.progression.amount_on(day):g} {task.progression.unit}"
+        if amount is None:
+            return WEEK_AMOUNT_KEPT.format(planned=now)
+        return WEEK_AMOUNT_SET.format(said=now[:1].upper() + now[1:])
+
     async def skip_round(
         self, task_id: int, by: Member, day: date | None = None, *, interactive: bool = False
     ) -> str:
@@ -1775,6 +1817,12 @@ class TaskBoard:
             )
         elif action == "not_sure":
             reply = NOT_SURE_TEXT  # Rx1: it stays open, and nothing is advised
+        elif action in ("week", "plan"):  # F34cb: this week's amount, or the plan's
+            amount = event.button.payload.get("amount") if action == "week" else None
+            day = date.fromisoformat(str(event.button.payload["day"]))
+            reply = self._week_amount(
+                task_id, event.member, day, float(amount) if amount is not None else None
+            )
         elif minutes := event.button.payload.get("minutes"):  # a nudge's own Later (laundry)
             until = clock.now() + timedelta(minutes=int(minutes))
             reply = self.snooze(task_id, until=until, by=event.member)
@@ -2528,9 +2576,15 @@ async def snooze_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         elif until <= now:
             raise ToolFailed("That time has passed; ask when they'd like it.")
     try:
-        return board.snooze(args["task_id"], until=until, by=ctx.member)
+        text = board.snooze(args["task_id"], until=until, by=ctx.member)
     except NotFound as exc:
         raise ToolFailed("There's no task with that number.") from exc
+    if await board.ask_week_amount(board.get(args["task_id"]), ctx.member, ctx.request_text):
+        text += (
+            " They named an amount that isn't this week's plan, and were asked which to keep "
+            "(buttons). Don't ask again or change the plan."
+        )
+    return text
 
 
 @tool(
@@ -2553,7 +2607,9 @@ async def skip_round(ctx: ToolContext, args: dict[str, Any]) -> DoneLine:
     except ValueError as exc:
         raise ToolFailed(f"Not moved: {exc}.") from exc
     ctx.tasks.append(int(args["task_id"]))
-    return DoneLine(text, asked=_named(ctx, board.get(int(args["task_id"])).title))
+    task = board.get(int(args["task_id"]))
+    asked = await board.ask_week_amount(task, ctx.member, ctx.request_text)
+    return DoneLine(text, asked=_named(ctx, task.title) and not asked)
 
 
 def _named(ctx: ToolContext, title: str) -> bool:
