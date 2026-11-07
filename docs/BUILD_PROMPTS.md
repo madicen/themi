@@ -233,7 +233,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34ja | Idea: when someone's day rolls over: the setting, tasks and routines | Feedback | [x] 2026-11-07 |
 | F34jb | Idea: when someone's day rolls over: the rest of core | Feedback | [x] 2026-11-07 |
 | F34k | Idea: a call before the business closes | Feedback | [x] 2026-11-07 |
-| F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [ ] |
+| F34l | Idea: a picture can start anything (the shared groundwork) | Feedback | [x] 2026-11-07 |
 | F34m | Idea: a recipe from a photo | Feedback | [ ] |
 | F34n | Idea: a calendar event from a photo | Feedback | [ ] |
 | F34o | Idea: a bug report with a photo | Feedback | [ ] |
@@ -11911,7 +11911,7 @@ Notes (2026-11-07):
   family home (F31c) for a search near home.
 
 ### F34l · Idea (2026-11-07): a picture can start anything (the shared groundwork)
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: F34gb, P1, P7b
 Read first: F34ga's and F34gb's notes; P1's notes (tool groups by words, `more_tools`). From
 Michael (2026-11-07): a photo is often where a request starts (a recipe to keep, a flyer
@@ -11952,6 +11952,29 @@ picture replaces the old; nothing about the picture is in the database; "/bug it
 cut off" with a screenshot reaches the bug command; F34gb's tests still pass.
 Scenario: Erin sends a flyer with no words, then "make it a reminder the day before
 instead" and the follow-up sees the flyer.
+
+Notes (2026-11-07):
+- Deviation (Michael, 2026-11-07): not every group. Every tool is about 56k characters
+  of tool list against about 28k for a usual turn, on each call of the turn, which eats
+  the free tier's token quota. A picture turn adds `PICTURE_GROUPS` (lists, calendar,
+  recipes; tools.py) to what its words chose. Guides, list adds and `log_feedback` are
+  core already; `more_tools` finds anything else. The timer's route note shows the
+  groups as offered, picture groups included, with no separate reason.
+- The kept picture: `Agent._pictures` (memory only), one per member, for their next two
+  messages that reach the tool agent within 30 minutes (`PICTURE_KEPT_FOR`,
+  `PICTURE_KEPT_TURNS`). Its data block says it was sent "a moment ago (not with this
+  message...)". A message with one kept goes to the tool agent even in conversation mode.
+  A command, a text handler (cooking's "next") or the yes/no fast path doesn't use it up.
+  `ToolContext.image` is the picture a turn can see (its own or the kept one);
+  `ToolContext.picture` is still only "sent with this message".
+- `answers_picture_question(ctx, words)`, `plain_words`, `PICTURE_LOG` and `YES_TO_IT`
+  moved to tools.py. The caller checks the question asked for its kind (lists: an add).
+  The yes also takes "save it" and "put it on the calendar".
+- A caption starting with /bug or /idea runs that command (`PICTURE_COMMANDS`); others
+  still go to the model as a picture. What's kept of the picture is F34o.
+- The data block's opening words list what a picture often starts.
+- The scenario (a follow-up seeing the flyer) is `test_the_picture_goes_with_the_next_two
+  _messages`; the reminder itself is F34n's.
 
 ### F34m · Idea (2026-11-07): a recipe from a photo
 Status: [ ]
