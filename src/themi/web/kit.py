@@ -13,6 +13,7 @@ from urllib.parse import quote, unquote
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 
 from themi.accounts import Member
 from themi.localtime import to_local
@@ -39,6 +40,16 @@ def clock(moment: time | None) -> str:
     return f"{hour}{minutes} {'am' if moment.hour < 12 else 'pm'}"
 
 
+@cache
+def inline_svg(name: str) -> Markup:
+    """A static SVG put into the page itself, so the stylesheet can colour and move its
+    parts (BD3b's chameleon). Only files that ship with Themi."""
+    path = (HERE / "static" / name).resolve()
+    if not path.is_relative_to((HERE / "static").resolve()) or path.suffix != ".svg":
+        raise ValueError(name)
+    return Markup(path.read_text())
+
+
 class NotSignedIn(Exception):
     pass
 
@@ -63,6 +74,7 @@ class Kit:
         self.templates.env.filters["local_time"] = self.local_time
         self.templates.env.filters["clock"] = clock
         self.templates.env.globals["asset"] = asset
+        self.templates.env.globals["inline_svg"] = inline_svg
 
     def timezone(self) -> str:
         family = self.app.store.get_family()

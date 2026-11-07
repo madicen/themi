@@ -54,7 +54,12 @@
       else if (state[f] !== undefined) fields[i].textContent = state[f];
     }
     var scene = document.querySelector(".session-scene");
-    if (scene) { scene.dataset.mode = state.mode; scene.dataset.phase = state.phase; }
+    if (scene) {
+      if (scene.dataset.mode !== state.mode) { location.reload(); return; }
+      scene.dataset.phase = state.phase;
+      scene.dataset.state = state.scene;
+    }
+    drawChat(state);
     var el = document.querySelector(".session-timer");
     if (el) {
       el.dataset.timer = state.timer.kind;
@@ -84,6 +89,46 @@
     tick();
   }
 
+  // BD3b: chat on the page during a sprint's break
+  function drawChat(state) {
+    var open = document.querySelector(".session-chat-open");
+    var panel = document.querySelector(".session-chat");
+    if (!open || !panel) return;
+    open.hidden = state.phase !== "break";
+    if (state.phase !== "break") { showChat(false); return; }
+    var list = panel.querySelector("ol");
+    list.textContent = "";
+    (state.chat || []).forEach(function (line) {
+      var li = document.createElement("li");
+      li.className = line.who;
+      li.textContent = line.text;
+      list.appendChild(li);
+    });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function showChat(on) {
+    var panel = document.querySelector(".session-chat");
+    if (!panel) return;
+    panel.hidden = !on;
+    body.classList.toggle("chatting", on);
+    if (on) { var input = panel.querySelector("input[name=text]"); if (input) input.focus(); }
+  }
+
+  function onChat(event) {
+    var form = event.target;
+    if (!form.closest || !form.closest(".session-chat")) return false;
+    event.preventDefault();
+    var data = new URLSearchParams(new FormData(form)).toString();
+    form.reset();
+    fetch(form.action, {
+      method: "POST", body: data, credentials: "same-origin",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" }
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (s) { if (s) redraw(s); }, function () {});
+    return true;
+  }
+
   function poll() {
     fetch("/session/state", { credentials: "same-origin", cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -91,6 +136,7 @@
   }
 
   function onSubmit(event) {
+    if (onChat(event)) return;
     var form = event.target;
     if (!form.closest || !form.closest(".session-moves")) return;
     event.preventDefault();
@@ -113,6 +159,11 @@
   var first = document.querySelector(".session-timer");
   if (first && first.dataset.now) offset = Date.parse(first.dataset.now) - Date.now();
   document.addEventListener("submit", onSubmit);
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (t.closest && t.closest(".session-chat-open")) showChat(true);
+    if (t.closest && t.closest(".session-chat-close")) showChat(false);
+  });
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
   tick();

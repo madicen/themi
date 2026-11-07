@@ -69,6 +69,19 @@ def routes(kit: Kit) -> APIRouter:
         state = bd.state(signed.member) if bd is not None else {"active": False}
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
 
+    @router.post("/session/chat")
+    async def session_chat(request: Request) -> Response:
+        """BD3b: chat on the page during a sprint's break, as their own chat with Themi."""
+        signed, form = await kit.checked(request)
+        bd = body_double()
+        event = bd.page_chat_event(signed.member, str(form.get("text", ""))) if bd else None
+        handler = getattr(app.channel, "handler", None)
+        if event is not None and handler is not None:
+            await handler.handle(event, app.channel)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return session_state(request)
+        return kit.redirect("/session")
+
     @router.post("/session/{session_id}/act")
     async def session_act(request: Request, session_id: int) -> Response:
         signed, form = await kit.checked(request)

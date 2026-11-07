@@ -1,0 +1,26 @@
+<svg class="cham" viewBox="0 0 140 110" role="img" aria-label="Themi the chameleon" xmlns="http://www.w3.org/2000/svg">
+  <!-- Themi the chameleon (BD3b): original art, drawn as named parts so CSS can move them.
+       Colours come from the site's tokens in themi.css; nothing here sets a style. -->
+  <g class="prop prop-blanket"><path d="M22 70 C 34 56, 92 52, 112 66 C 116 84, 104 96, 70 96 C 40 96, 20 88, 22 70 Z"/><path class="prop-line" d="M34 76 L 100 72 M38 86 L 98 82"/></g>
+  <g class="cham-tail"><path d="M36 74 C 18 76, 10 92, 22 100 C 32 106, 44 96, 37 88 C 32 82, 25 87, 29 92"/></g>
+  <g class="cham-foot"><path d="M48 82 C 46 90, 44 96, 40 98 M48 82 C 52 90, 54 96, 58 98"/></g>
+  <g class="cham-body">
+    <path class="cham-skin" d="M34 72 C 36 50, 66 42, 88 50 C 102 56, 106 72, 94 80 C 80 88, 46 88, 34 72 Z"/>
+    <path class="cham-belly" d="M44 80 C 58 86, 80 86, 94 79"/>
+    <path class="cham-spots" d="M52 60 a3 3 0 1 0 0.1 0 M66 56 a3 3 0 1 0 0.1 0 M78 60 a2.5 2.5 0 1 0 0.1 0 M60 70 a2 2 0 1 0 0.1 0"/>
+    <path class="cham-crest" d="M44 56 L 48 50 L 52 54 L 57 48 L 61 52 L 66 46 L 70 51 L 75 46 L 79 52"/>
+  </g>
+  <g class="cham-head">
+    <path class="cham-skin" d="M84 50 C 92 34, 118 34, 124 50 C 128 62, 114 70, 98 68 Z"/>
+    <path class="cham-mouth" d="M104 62 C 110 65, 117 64, 121 59"/>
+    <g class="cham-eye"><circle class="cham-eyeball" cx="108" cy="49" r="9"/><circle class="cham-pupil" cx="110" cy="49" r="3.4"/><path class="cham-lid" d="M99 49 C 103 41, 113 41, 117 49 C 113 45, 103 45, 99 49 Z"/></g>
+  </g>
+  <g class="cham-hand cham-hand-back"><path d="M66 82 C 64 90, 62 94, 58 96"/></g>
+  <g class="cham-hand cham-hand-front"><path d="M90 76 C 96 82, 100 84, 104 82"/></g>
+  <g class="prop prop-book"><path d="M94 74 L 112 70 L 114 84 L 96 88 Z"/><path class="prop-line" d="M104 72 L 105 86"/></g>
+  <g class="prop prop-mug"><rect x="120" y="86" width="10" height="12" rx="2"/><path class="prop-line" d="M130 89 C 135 90, 135 95, 130 96 M123 82 C 122 79, 125 78, 124 75"/></g>
+  <g class="prop prop-broom"><path class="prop-line" d="M104 60 L 84 102"/><path d="M78 98 L 92 104 L 86 110 L 72 106 Z"/></g>
+  <g class="prop prop-easel"><path class="prop-line" d="M118 60 L 112 104 M128 60 L 134 104 M123 56 L 123 104"/><rect x="110" y="58" width="26" height="22" rx="1"/><path class="prop-paint" d="M114 74 C 118 66, 124 72, 130 64"/><path class="prop-line" d="M104 78 L 112 70"/></g>
+  <g class="prop prop-pencil"><path class="prop-line" d="M100 84 L 114 72"/><path class="prop-paper" d="M98 90 L 126 86 L 128 98 L 100 102 Z"/><path class="prop-line" d="M104 94 C 108 90, 112 96, 118 92"/></g>
+  <g class="cham-zz"><path class="prop-line" d="M118 28 L 126 28 L 118 36 L 126 36 M128 16 L 134 16 L 128 22 L 134 22"/></g>
+</svg>

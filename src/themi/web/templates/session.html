@@ -8,7 +8,7 @@
   <script src="{{ asset('session.js') }}" defer></script>
 </head>
 <body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}">
-<main id="session" class="session" aria-live="polite">
+<main id="session" class="session" aria-live="polite"{% if state and state.active %} data-mode="{{ state.mode }}"{% endif %}>
 {% if not member %}
   <p class="session-label" id="signing-in">Opening your session…</p>
   <p class="muted" id="sign-in-help" hidden>Open this from the [Open] button in Telegram, or send /site to Themi for a sign-in link.</p>
@@ -18,8 +18,10 @@
 {% else %}
   <p class="session-mode" data-field="mode_name">{{ state.mode_name | capitalize }}</p>
   <h1 class="session-label" data-field="label">{{ state.label }}</h1>
-  <div class="session-scene" data-mode="{{ state.mode }}" data-phase="{{ state.phase }}">
-    <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">&nbsp;</p>
+  <div class="session-scene" data-mode="{{ state.mode }}" data-phase="{{ state.phase }}" data-state="{{ state.scene }}">
+    {{ inline_svg("chameleon/scenes.svg") }}
+    {{ inline_svg("chameleon/chameleon.svg") }}
+    <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">{{ state.timer.text }}</p>
   </div>
   {% if state.of %}<p class="muted" data-field="steps">Step {{ state.step }} of {{ state.of }}</p>{% endif %}
   <p class="session-line" data-field="line">{{ state.line }}</p>
@@ -34,6 +36,16 @@
     </form>
   {% endfor %}
   </div>
+  <button class="session-chat-open" type="button" {% if state.phase != "break" %}hidden{% endif %}>Chat</button>
+  <section class="session-chat" aria-label="Chat with Themi" hidden>
+    <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>
+    <form method="post" action="/session/chat">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input type="text" name="text" autocomplete="off" aria-label="Message" required>
+      <button class="primary">Send</button>
+    </form>
+    <button class="link session-chat-close" type="button">Back to the timer</button>
+  </section>
 {% endif %}
 </main>
 </body>

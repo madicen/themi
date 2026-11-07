@@ -33,6 +33,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.step_card import StepCard
 from themi.core.body_double import KIND, OPEN_ENDED, SILENT, BodyDouble, Session
+from themi.core.body_double_scene import CHEER_FOR
 from themi.core.prompts import PHRASING_WORDS, as_data
 from themi.core.tasks import clean_steps
 
@@ -275,9 +276,11 @@ class GuidedSteps:
         elif action == "no_steps":
             await self.bd.switch(member, SILENT)
             return NO_STEPS_TEXT, []
-        elif action in ("next", "skip"):
-            session = self._save(session, step=min(step + 1, len(steps) - 1),
-                                 step_since=clock.now())  # fmt: skip
+        elif action in ("next", "skip"):  # a step done: a moment's cheer on the page (BD3b)
+            session = self._save(
+                session, step=min(step + 1, len(steps) - 1), step_since=clock.now(),
+                cheer_until=clock.now() + CHEER_FOR,
+            )  # fmt: skip
         elif action == "back":
             session = self._save(session, step=max(step - 1, 0), step_since=clock.now())
         elif action == "all_done":

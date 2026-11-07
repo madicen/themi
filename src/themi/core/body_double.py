@@ -36,6 +36,7 @@ from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import BODY_DOUBLE_KIND, Priority
 from themi.core import praise
+from themi.core.body_double_scene import CHEER_FOR, pick_state
 from themi.core.tasks import NotFound, Task
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_local, to_utc_iso
@@ -150,6 +151,14 @@ def _session(row: dict[str, Any]) -> Session:
         outcome=row["outcome"],
         row=row,
     )
+
+
+def _span(delta: timedelta) -> str:
+    """ "24:59" or "1:05:00", as the page's timer shows it before its script runs."""
+    seconds = max(0, round(delta.total_seconds()))
+    hours, rest = divmod(seconds, 3600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
 
 
 def span_words(minutes: int) -> str:
@@ -416,8 +425,10 @@ class BodyDouble:
         over = (planned is not None and clock.now() >= planned - timedelta(seconds=30)) or (
             planned is None and elapsed >= OPEN_ENDED - timedelta(seconds=30)
         )
-        if session.mode == SPRINT:
-            session = self._set(session, blocks_done=session.blocks_done + 1)
+        if session.mode == SPRINT:  # a block done: the chameleon cheers for a moment (BD3b)
+            session = self._set(
+                session, blocks_done=session.blocks_done + 1, cheer_until=clock.now() + CHEER_FOR
+            )
         if session.mode == SPRINT and not over:
             await self._ask(session, "work_end")
         else:
@@ -708,15 +719,19 @@ class BodyDouble:
         if session is None:
             return {"active": False, "now": to_utc_iso(now)}
         if session.mode == SPRINT and session.phase in ("work", "break"):
-            timer = {"kind": "down", "to": to_utc_iso(session.phase_ends_at or now)}
+            ends = session.phase_ends_at or now
+            timer = {"kind": "down", "to": to_utc_iso(ends), "text": _span(ends - now)}
         else:
             timer = {"kind": "up", "from": to_utc_iso(session.started_at)}
+            timer["text"] = _span(now - session.started_at)
         steps: dict[str, Any] = {}
         if session.mode == GUIDED and self.guided is not None:
             all_steps = self.guided.steps(session)
             steps = {"step": session.row["step"] + 1, "of": len(all_steps)}
         return {
             "active": True,
+            "scene": self.scene(session),
+            "chat": self.page_chat(session) if session.phase == "break" else [],
             "id": session.id,
             "seq": session.seq,
             "mode": session.mode,
@@ -733,6 +748,62 @@ class BodyDouble:
                 for b in self.page_buttons(session)
             ],
         }  # fmt: skip
+
+    def scene(self, session: Session) -> str:
+        """The chameleon's animation state now (BD3b)."""
+        now = clock.now()
+        if session.phase in ("work", "break") and session.phase_ends_at is not None:
+            length = session.break_minutes if session.phase == "break" else session.work_minutes
+            started = session.phase_ends_at - timedelta(minutes=length)
+        else:
+            started = session.started_at
+        if session.mode == GUIDED and session.row.get("step_since"):
+            started = datetime.fromisoformat(session.row["step_since"])
+        return pick_state(
+            mode=session.mode,
+            category=session.category,
+            phase=session.phase,
+            now=now,
+            phase_started=started,
+            cheer_until=_when(session.row.get("cheer_until")),
+            chat_at=_when(session.row.get("chat_at")),
+        )
+
+    def page_chat(self, session: Session) -> list[dict[str, str]]:
+        """The conversation since the break began, as chat has it (BD3b's break chat)."""
+        if session.phase_ends_at is None:
+            return []
+        since = session.phase_ends_at - timedelta(minutes=session.break_minutes)
+        rows = self.db.query(  # message_log keeps the clock's own offset: compared as times
+            "SELECT direction, text, created_at FROM message_log WHERE member_id = ? "
+            "AND kind != ? ORDER BY id DESC LIMIT 40",
+            (session.member_id, KIND),
+        )
+        return [
+            {"who": "you" if r["direction"] == "in" else "themi", "text": r["text"]}
+            for r in reversed(rows)
+            if datetime.fromisoformat(r["created_at"]) >= since
+        ][-20:]
+
+    def page_chat_event(self, member: Member, text: str) -> Any:
+        """A message typed on the page during a break, as an inbound chat message for the
+        agent (the same path as Telegram, so replies go to Telegram and show on the page).
+        None when there's no break going on."""
+        from themi.channels.events import InboundEvent
+
+        session = self.current(member)
+        text = text.strip()[:4000]
+        if session is None or session.phase != "break" or not text:
+            return None
+        if member.telegram_user_id is None:
+            return None
+        now = clock.now()
+        self.db.execute(
+            "UPDATE body_double_sessions SET chat_at = ? WHERE id = ?",
+            (to_utc_iso(now), session.id),
+        )
+        self.store.log_message(member.id, "in", text, "chat", None)
+        return InboundEvent("text", member, member.telegram_user_id, None, now, 0, text=text)
 
     async def act_from_page(
         self, member: Member, session_id: int, action: str, seq: int, mode: str = ""
