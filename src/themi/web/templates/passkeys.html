@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Passkeys · Themi{% endblock %}
+{% block content %}
+<h1>Signing in</h1>
+<p>Family members sign in with the link Themi sends when they send /site. If you don't use
+Telegram, a passkey signs you in instead: your phone or computer's fingerprint, face or
+PIN. Keep a recovery code too, in case you lose the device.</p>
+
+<section class="card">
+  <h2>Your passkeys</h2>
+  {% if passkeys %}
+  <ul>
+    {% for key in passkeys %}
+    <li>{{ key.name }} <span class="muted">added {{ key.created_at | local_time }}{% if key.last_used_at %}, last used {{ key.last_used_at | local_time }}{% endif %}</span>
+      <form method="post" action="/passkeys/{{ key.id }}/remove" class="module-action">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button>Remove</button>
+      </form></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">None yet.</p>
+  {% endif %}
+  {% if secure %}
+  <div class="module-action">
+    <label>Name it <input id="passkey-name" placeholder="My phone"></label>
+    <button class="primary" data-passkey="add" data-csrf="{{ csrf }}">Add a passkey</button>
+  </div>
+  <p id="passkey-said" class="muted" role="status"></p>
+  {% else %}
+  <p class="muted">Passkeys need the site on HTTPS (or on localhost, on this computer).</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Recovery code</h2>
+  {% if has_code %}
+  <p>You have one. Making a new one stops the old one working.</p>
+  {% else %}
+  <p>You have none. Make one and keep it somewhere safe, away from your phone.</p>
+  {% endif %}
+  <form method="post" action="/passkeys/recovery-code">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button{% if not has_code %} class="primary"{% endif %}>Make a {{ "new " if has_code }}recovery code</button>
+  </form>
+</section>
+<script src="{{ asset('passkeys.js') }}" defer></script>
+{% endblock %}

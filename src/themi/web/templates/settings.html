@@ -19,6 +19,11 @@
   </div>
 </form>
 
+{% if member.is_admin %}
+<h2 id="signing-in">Signing in</h2>
+<p><a href="/passkeys">Passkeys and a recovery code</a>, for signing in without Telegram.</p>
+{% endif %}
+
 <h2 id="busy">Busy times</h2>
 <p class="muted">Themi holds anything that can wait until a busy time ends. Replies to you and
 urgent alerts still come through.</p>

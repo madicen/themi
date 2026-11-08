@@ -90,6 +90,8 @@ def routes(kit: Kit) -> APIRouter:
         session, _ = await kit.checked(request, admin=True)
         if claim.claimant() == session.member.id:
             claim.note_key_saved()
-        return kit.redirect("/", "Welcome to Themi. Start on the Modules page.")
+        return kit.redirect(  # SP7b: then a way to sign in again, without Telegram
+            "/passkeys", "Saved. Next, add a passkey so you can sign in again later."
+        )
 
     return router

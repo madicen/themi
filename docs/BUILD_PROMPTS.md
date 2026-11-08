@@ -333,9 +333,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP4 | Modules page, read only | Setup portal | [x] 2026-11-08 |
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [x] 2026-11-08 |
 | SP6 | Restart and apply from the Modules page | Setup portal | [x] 2026-11-08 |
-| SP7 | First visit | Setup portal | split |
+| SP7 | First visit | Setup portal | [x] 2026-11-08 (split) |
 | SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [x] 2026-11-08 |
-| SP7b | Passkeys for admins without Telegram | Setup portal | [ ] |
+| SP7b | Passkeys for admins without Telegram | Setup portal | [x] 2026-11-08 |
 | SP8 | Migration and retirement | Setup portal | split |
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [ ] |
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [ ] |
@@ -352,6 +352,9 @@ and record the change here.
   other OpenAI-compatible server via `base_url`).
 - Own REST clients over `httpx` for Google (OAuth, Gmail, Calendar) and Tuya, so they are easy
   to point at local HTTP fakes.
+- Passkeys (SP7b, 2026-11-08) use Duo Labs' `webauthn` (py_webauthn), pinned to 2.x
+  (`>=2.7,<3`): the WebAuthn checks (attestation, signatures, counters) are its, not
+  Themi's. It brings `cbor2` and `pyOpenSSL`; the tests' fake authenticator uses `cbor2` too.
 - CatGenie's client runs over `curl_cffi` instead, agreed with the user on 2026-11-04 (CG1a):
   PetNovations' cloud quietly drops requests whose TLS doesn't look like a phone's, which
   httpx's does. It has wheels for the Pi (aarch64) and `python:3.13-slim`. Tests and
@@ -15695,7 +15698,7 @@ Notes (2026-11-08):
 - Golden: routes.json gained the four claim routes.
 
 ### SP7b · Setup portal: passkeys for admins without Telegram
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP7a
 - WebAuthn passkeys for admins, with a printable recovery code. Offered after the claim and
   on the admin's settings. Admins with Telegram can keep using /site.
@@ -15703,6 +15706,28 @@ Depends on: SP7a
 - The library choice is a fixed technical choice: record it in "Fixed technical choices".
 Tests: registration and sign-in against a fake authenticator; the recovery code works once;
 a member who isn't an admin is never asked for a passkey.
+
+Notes (2026-11-08):
+- Library: `webauthn` 2.x (Duo Labs' py_webauthn, 2.8.0 installed), recorded in "Fixed
+  technical choices". `pip install -e '.[dev]'` picks it up; the Docker image reads it from
+  pyproject. Not 3.x: it's the newest major release, and nothing here needs it.
+- `themi/accounts/passkeys.py` (migration 0156): passkeys per member, one recovery code per
+  member (a hash; 16 characters in four groups; using it deletes it), and ceremony
+  challenges (5 minutes, found by an HttpOnly, SameSite=Strict cookie, used once).
+- `themi/web/passkey_pages.py` and `static/passkeys.js`: `/passkeys` for admins (add,
+  name and remove passkeys; make a recovery code, shown once); sign-in with a passkey or
+  `/recovery` from the signed-out page, which offers them only once some admin has a
+  passkey. A passkey or code of someone who's no longer an admin doesn't sign in.
+- The relying party is the site address's host name; the origin must match. Passkeys need
+  HTTPS, or `localhost`: the page says so on `http://127.0.0.1`, which `make dev` uses, so
+  try them there at `http://localhost:<port>`.
+- Offered after the claim (the key page leads to /passkeys), on the "Finish setting up"
+  card for an admin with no Telegram and no passkey, and on My settings for admins. Family
+  members see none of it; /site links work as before.
+- Tests: `tests/fakes/passkey.py` is a fake authenticator (a real P-256 key, "none"
+  attestation, ECDSA signatures); a wrong origin, a reused challenge, a used recovery code
+  and a family member are each refused.
+- Golden: routes.json gained the passkey and recovery routes.
 
 ### SP8 · Setup portal: migration and retirement
 Status: split into SP8a and SP8b.

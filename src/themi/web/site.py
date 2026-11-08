@@ -33,6 +33,7 @@ from fastapi.staticfiles import StaticFiles
 
 from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
+from themi.accounts.passkeys import Passkeys
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
@@ -144,6 +145,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         claim_pages,
         dev_pages,
         modules_page,
+        passkey_pages,
     )
 
     kit = Kit(ctx)
@@ -208,6 +210,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(dev_pages.routes(kit))
     web.include_router(modules_page.routes(kit))  # SP4
     web.include_router(claim_pages.routes(kit))  # SP7a
+    web.include_router(passkey_pages.routes(kit))  # SP7b
     for pages in modules_pages:  # CR4: each loaded module's pages
         web.include_router(pages.routes(kit))
 
@@ -250,6 +253,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             title="You're signed out",
             body="Sending /site to Themi in Telegram gets you a sign-in link.",
             offer_google=True,
+            offer_passkey=Passkeys(app.store).any(),  # SP7b
         )
 
     @router.post("/logout")
@@ -282,6 +286,14 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         report = app.services.start_report
         broken = [f"{s.name} couldn't start: {s.reason}" for s in report.failed()]
         setup_steps = finish_setting_up(report) if member.is_admin else []
+        if (
+            member.is_admin
+            and "telegram" not in member.channels
+            and not Passkeys(app.store).of(member)
+        ):  # SP7b: no /site link for them, so a passkey is their way back in
+            setup_steps.append(
+                ("Add a passkey, so you can sign in again without Telegram.", "/passkeys")
+            )
         if member.is_admin:
             # SP1: a module that couldn't start, said to admins (SP7a: the rest of what
             # SP1 said is on the "Finish setting up" card)
