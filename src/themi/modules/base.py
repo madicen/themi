@@ -61,7 +61,9 @@ class AccountNeed:
 
     what: str  # "a Google account"
     where: str  # "/accounts"
-    who: Literal["each person", "an admin"] = "each person"
+    who: Literal["each person", "an admin", "anyone"] = "each person"
+    # SP3b: a query that finds a row once it's linked (by anyone), for `accounts_linked`
+    linked_when: str = ""
 
 
 def as_job(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
@@ -149,8 +151,11 @@ class Module:
 
     def accounts_linked(self, services: Services) -> bool | None:
         """SP3a: whether what `needs_accounts` names is linked (by anyone, for a member's
-        account); None when it can't be told."""
-        return None
+        account); None when it can't be told. By default, from its `linked_when` query."""
+        need = type(self).needs_accounts
+        if need is None or not need.linked_when:
+            return None
+        return services.store.db.scalar(need.linked_when) is not None
 
     async def check(self) -> str | None:
         """CR11: try the module's settings against its service, through its own client:

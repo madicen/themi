@@ -845,6 +845,8 @@ class CookingModule(Module):
     """RC3a: cooking a recipe, prep first, then one step at a time."""
 
     name = "cooking"
+    title = "Cooking along"
+    summary = "Walks through a recipe: the prep first, then one step at a time."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
 

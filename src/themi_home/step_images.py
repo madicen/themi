@@ -307,6 +307,8 @@ class StepPicturesModule(Module):
     """BD4b: a picture for each guided step."""
 
     name = "step_pictures"
+    title = "Step pictures"
+    summary = "Makes a picture for each step of a guided task."
     tool_groups = (home_groups.BODY_DOUBLE,)
     requires = ("body_double", "guided_steps", "image_generation")  # CR19
 

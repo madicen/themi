@@ -519,6 +519,8 @@ class PantryModule(Module):
     """What's in the pantry, and what's running low."""
 
     name = "pantry"
+    title = "Pantry"
+    summary = "Keeps track of what's in the pantry and what's running low."
     tool_groups = (home_groups.PANTRY,)
     household = PantrySettings
     requires = ("groceries",)

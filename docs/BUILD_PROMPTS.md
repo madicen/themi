@@ -327,9 +327,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR21d | Round two: drop the columns the modules copied out | Core refactor | [x] 2026-11-08 |
 | SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [x] 2026-11-08 |
 | SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [x] 2026-11-08 |
-| SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | split |
+| SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | [x] 2026-11-08 (split) |
 | SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [x] 2026-11-08 |
-| SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [ ] |
+| SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [x] 2026-11-08 |
 | SP4 | Modules page, read only | Setup portal | [ ] |
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [ ] |
 | SP6 | Restart and apply from the Modules page | Setup portal | [ ] |
@@ -15500,7 +15500,7 @@ Notes (2026-11-08):
   the 49 pack modules SP3b does. An entry that's done fails until it's taken out.
 
 ### SP3b · Setup portal: module manifest, the packs
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP3a
 - Titles, summaries, guides and `needs_accounts` for `themi_google`, `themi_home` and
   `themi_cozyla`. Guides carry the real steps now in README and DEPLOY (Google OAuth client,
@@ -15509,6 +15509,20 @@ Depends on: SP3a
   line where it can't.
 - The lint's allowlist is empty at the end.
 Tests: the lint passes with an empty allowlist; each `needs_accounts` check against fakes.
+
+Notes (2026-11-08):
+- Titles and summaries for all 49 pack modules; `cost` where it helps someone choose
+  ("Unofficial: may stop working" for the reverse-engineered services).
+- Guides: Google (OAuth client, unverified publishing, the cookbook's picker), travel,
+  OurGroceries, Home Connect, Spotify, ThinQ, Roborock, Tuya, CatGenie, Keep, the cookbook,
+  and the two Cozyla modules. Redirect and origin addresses are written as `$SITE`; the
+  Modules page (SP4) puts the site's address in its place.
+- `AccountNeed.linked_when` is a query that finds a row once linked; the default
+  `accounts_linked` runs it. Set for google, spotify, keep, home_connect, thinq, roborock,
+  tuya, catgenie, and the cookbook ("anyone" picks it).
+- `Module.website` lines stay for now: `themi setup` still prints them. SP8a removes the
+  wizard, and they can go with it (or stay for what the page can't check, like Keep).
+- Google's picker key and project number got labels. `PENDING` in check_packs is empty.
 
 ### SP4 · Setup portal: Modules page, read only
 Status: [ ]

@@ -261,6 +261,8 @@ class CookbookSaveModule(Module):
     """RC5: saving a liked recipe to the cookbook."""
 
     name = "cookbook_save"
+    title = "Save to the cookbook"
+    summary = "Saves a recipe the family liked to the family cookbook."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
 

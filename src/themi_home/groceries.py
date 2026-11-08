@@ -248,6 +248,8 @@ class GroceriesModule(Module):
     """The grocery list."""
 
     name = "groceries"
+    title = "Grocery list"
+    summary = "The family's grocery list, kept from chat and shown on the website."
 
     def install(self, ctx: ModuleContext) -> None:
         from themi_home.web import grocery_pages  # CR10a: adding from the Lists page

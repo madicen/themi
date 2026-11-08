@@ -228,6 +228,8 @@ class BuyingModule(Module):
     """L2a: things to buy that aren't food, and their stores."""
 
     name = "buying"
+    title = "Things to buy"
+    summary = "Things to buy that aren't food, sorted by the store that has them."
     tool_groups = (groups.LISTS,)
     requires = ("lists",)
 

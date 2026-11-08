@@ -816,6 +816,8 @@ class MaintenanceModule(Module):
     """Home maintenance, offered when it comes due."""
 
     name = "maintenance"
+    title = "Home maintenance"
+    summary = "Offers upkeep like filters and gutters when it comes due."
     tool_groups = (home_groups.MAINTENANCE,)
     requires = ("tasks",)
     optional = ("calendar",)

@@ -1211,6 +1211,8 @@ class BodyDoubleModule(Module):
     """BD1a: body double sessions; block ends are scheduler jobs."""
 
     name = "body_double"
+    title = "Body double"
+    summary = "Keeps someone company through a task, in timed blocks."
     tool_groups = (home_groups.BODY_DOUBLE,)
     preferences = BodyDoublePreferences
 

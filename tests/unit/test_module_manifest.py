@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
+from tests.fixtures.family import SeededFamily
 from themi.config import available_modules
 from themi.modules import Module
 from themi.modules.guides import guide
@@ -119,3 +122,48 @@ def test_markdown_allows_no_html_and_no_strange_links() -> None:
     assert "<script>" not in html and "&lt;script&gt;" in html
     assert "href" not in html
     assert "<code>&lt;b&gt;</code>" in html
+
+
+# ----- SP3b: the packs -------------------------------------------------------------------
+
+
+def test_every_module_is_done_and_the_allowlist_is_empty() -> None:
+    assert frozenset() == check_packs.PENDING
+    for name, cls in available_modules().items():
+        assert cls.title and cls.summary, name
+
+
+def test_each_pack_guide_is_found() -> None:
+    known = available_modules()
+    for name in ("google", "travel", "ourgroceries", "home_connect", "spotify"):
+        assert guide(known[name]), name
+    assert guide(known["cozyla_todos"]) and guide(known["cozyla_chores"])
+
+
+def linked(cls: type[Module], services: object) -> bool | None:
+    return Module.accounts_linked(object.__new__(cls), services)  # type: ignore[arg-type]
+
+
+def test_each_account_check_reads_the_real_tables(family: SeededFamily) -> None:
+    services = SimpleNamespace(store=family.store)
+    needing = {n: c for n, c in available_modules().items() if c.needs_accounts is not None}
+    assert set(needing) >= {"google", "spotify", "home_connect", "thinq", "roborock"}
+    for name, cls in needing.items():
+        assert linked(cls, services) is False, name  # nothing linked yet, and the query runs
+
+
+def test_an_account_check_turns_true_once_linked(family: SeededFamily) -> None:
+    services = SimpleNamespace(store=family.store)
+    known = available_modules()
+    family.db.execute(
+        "INSERT INTO spotify_links (member_id, refresh_token, linked_at) VALUES (?, ?, ?)",
+        (family.erin.id, b"x", "2026-11-08T00:00:00+00:00"),
+    )
+    family.db.execute(
+        "INSERT INTO home_connect_account (id, refresh_token, linked_at) VALUES (1, ?, ?)",
+        (b"x", "2026-11-08T00:00:00+00:00"),
+    )
+    assert linked(known["spotify"], services) is True
+    assert linked(known["home_connect"], services) is True
+    assert linked(known["thinq"], services) is False
+    assert linked(known["tasks"], services) is None  # nothing to link

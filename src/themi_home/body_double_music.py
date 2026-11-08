@@ -290,6 +290,8 @@ class MusicOffersModule(Module):
     """BD5c: music that suits the task."""
 
     name = "music_offers"
+    title = "Music for tasks"
+    summary = "Offers music that suits the task during a body double session."
     requires = ("body_double",)
 
     def install(self, ctx: ModuleContext) -> None:

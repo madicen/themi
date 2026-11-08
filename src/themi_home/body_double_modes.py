@@ -386,6 +386,8 @@ class ModeChooserModule(Module):
     """BD2: choosing a session's mode, and learning from sessions."""
 
     name = "mode_chooser"
+    title = "Session modes"
+    summary = "Picks a body double session's style and learns what works."
     tool_groups = (home_groups.BODY_DOUBLE,)
     requires = ("body_double",)
 

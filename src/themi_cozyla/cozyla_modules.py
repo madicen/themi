@@ -35,6 +35,9 @@ class CozylaTodosModule(Module):
     """The Cozyla wall's to-do list, kept in step with Themi's tasks."""
 
     name = "cozyla_todos"
+    title = "Cozyla to-do lists"
+    summary = "Keeps the Cozyla wall's to-do lists in step with Themi's tasks."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     tool_groups = (
         groups.LISTS,
@@ -94,6 +97,9 @@ class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
     name = "cozyla_chores"
+    title = "Cozyla chores and routines"
+    summary = "Keeps the Cozyla wall's chore chart and routines in step with Themi's."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     tool_groups = (groups.WALL,)
     settings = CozylaSettings

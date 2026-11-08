@@ -296,6 +296,8 @@ class AppliancesModule(Module):
     """F20b: asked how the appliances are doing, it reads them."""
 
     name = "appliances"
+    title = "Appliances"
+    summary = "Answers how the washer, dryer, dishwasher and other appliances are doing."
     tool_groups = (home_groups.DEVICES,)
 
     def install(self, ctx: ModuleContext) -> None:

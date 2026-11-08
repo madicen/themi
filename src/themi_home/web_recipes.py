@@ -536,6 +536,8 @@ class WebRecipesModule(Module):
     """RC4a: recipes from links and from the web."""
 
     name = "web_recipes"
+    title = "Recipes from the web"
+    summary = "Reads recipes from links and finds new ones online."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
     optional = ("pictures",)  # CR19: reading a recipe from a picture, when it's there

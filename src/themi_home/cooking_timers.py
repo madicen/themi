@@ -300,6 +300,8 @@ class CookingTimersModule(Module):
     """RC3c: a step's timers, as scheduler jobs."""
 
     name = "cooking_timers"
+    title = "Cooking timers"
+    summary = "Sets the timers a recipe's steps call for."
     requires = ("cooking",)
 
     def install(self, ctx: ModuleContext) -> None:
