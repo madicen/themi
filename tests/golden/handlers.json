@@ -96,6 +96,7 @@
     "lists.add",
     "lists.delete",
     "maintenance.calendar_write",
+    "modules.test",
     "music.next",
     "music.pause",
     "music.play",

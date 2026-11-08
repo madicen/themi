@@ -12,8 +12,30 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
 {% endif %}
 
 {% if draft %}
-<p class="alert">Changes are waiting for a restart.</p>
+<section class="card">
+  <p class="summary">Changes are waiting for a restart.</p>
+  <ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
+  <form method="post" action="/modules/undo" class="module-action">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Undo them</button>
+  </form>
+</section>
 {% endif %}
+
+<details class="card">
+  <summary>Template: {{ template }}</summary>
+  <p class="muted">A template is a starting set of modules. Changing it turns off what the new
+  one doesn't have; you'll see the list before anything changes.</p>
+  <form method="post" action="/modules/template">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Template
+      <select name="template">
+        {% for name in templates %}<option{% if name == template %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button>Change template…</button>
+  </form>
+</details>
 
 <form method="get" action="/modules" class="module-search">
   <label>Find a module <input type="search" name="q" value="{{ q }}"></label>
@@ -36,4 +58,13 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
 {% else %}
 <p class="muted">No module matches that.</p>
 {% endfor %}
+
+{% if audit %}
+<details class="group">
+  <summary>Changes lately</summary>
+  <ul class="activity">
+    {% for row in audit %}<li><span class="when">{{ row.at | local_time }}</span> {{ row.name or "Someone" }} {{ row.what }}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
 {% endblock %}

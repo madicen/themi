@@ -386,3 +386,7 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 .settings-list dt { font-weight: 600; margin-top: var(--space-2); }
 .settings-list dd { margin: 0; }
 .module-guide h2:first-child { margin-top: 0; }
+.pending-bar { background: var(--info-bg); color: var(--info); margin: 0; padding: var(--space-2) var(--space-4); text-align: center; }
+.settings-form .field { display: flex; flex-direction: column; gap: var(--space-1); margin: var(--space-3) 0; }
+.settings-form .check { display: inline-flex; gap: var(--space-1); align-items: center; font-weight: normal; }
+.module-action { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-2) 0; }

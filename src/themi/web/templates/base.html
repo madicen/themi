@@ -31,6 +31,10 @@
     </details>
     {% endif %}
   </header>
+  {% if member and pending_changes is defined %}{% set pending_count = pending_changes(member) %}{% if pending_count %}
+  <p class="pending-bar" role="status">{{ pending_count }} {{ "change waits" if pending_count == 1 else "changes wait" }} for a restart.
+    <a href="/modules">Review</a></p>
+  {% endif %}{% endif %}
   <main>
     {% if flash %}<p class="flash" role="status">{{ flash }}</p>{% endif %}
     {% block content %}{% endblock %}

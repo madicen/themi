@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Change template · Modules · Themi{% endblock %}
+{% block content %}
+<h1>Change to the {{ switch.template }} template?</h1>
+{% if switch.off %}
+<p>These will be turned off, with what needs them:</p>
+<ul>
+  {% for name, goes in switch.off %}
+  <li><strong>{{ title(name) }}</strong>{% if goes %}, and with it: {% for n in goes %}{{ title(n) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</li>
+  {% endfor %}
+</ul>
+<p class="muted">Their data stays in Themi, so turning one back on later picks up where it left off.</p>
+{% else %}
+<p>Nothing will be turned off.</p>
+{% endif %}
+{% if switch.on %}
+<p>These will be turned on:</p>
+<ul>{% for name in switch.on %}<li>{{ title(name) }}</li>{% endfor %}</ul>
+{% endif %}
+<p class="muted">Nothing changes until Themi restarts.</p>
+<form method="post" action="/modules/template" class="module-action">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="template" value="{{ switch.template }}">
+  <input type="hidden" name="confirmed" value="1">
+  <button class="primary">Yes, change to {{ switch.template }}</button>
+</form>
+<a href="/modules">Leave it as it is</a>
+{% endblock %}

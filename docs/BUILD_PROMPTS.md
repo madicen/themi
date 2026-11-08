@@ -331,7 +331,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [x] 2026-11-08 |
 | SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [x] 2026-11-08 |
 | SP4 | Modules page, read only | Setup portal | [x] 2026-11-08 |
-| SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [ ] |
+| SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [x] 2026-11-08 |
 | SP6 | Restart and apply from the Modules page | Setup portal | [ ] |
 | SP7 | First visit | Setup portal | split |
 | SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [ ] |
@@ -15559,7 +15559,7 @@ Notes (2026-11-08):
 - The dashboard's module warnings now end with a link to Modules.
 
 ### SP5 · Setup portal: Modules page, editing
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP4
 - Switches: turning one on shows what it brings (its requirements, each with its badge);
   turning one off shows what goes with it. The change goes into the draft after the confirm.
@@ -15576,6 +15576,33 @@ Depends on: SP4
 Tests: turning on email triage drafts Gmail and Google; turning off Google lists its
 dependents; a template switch's confirm lists everything; a failing Test against a fake;
 a scenario: an admin turns on travel with a key, tests it, sees "waiting for restart".
+
+Notes (2026-11-08):
+- `themi/modules/planning.py` (`Planner`): the desired module list from the config and the
+  draft; `turn_on` (what it needs that isn't there), `turn_off` (what needs it),
+  `switch_template` (each module going, with what goes because it needs it), `apply` (a
+  switch back to how the base has it is dropped), `use_template`, and `as_config` (the
+  config the draft makes, for SP6). A template switch starts from the new template whole;
+  the config's own +/- changes don't carry over.
+- `themi/modules/portal.py` (`Portal`, on the services, made in `build_app`): saves into
+  the draft and the audit, checks settings with `read_settings` before keeping them (the
+  config's and draft's values, stored and draft secrets), and runs Test through the trust
+  tiers (`server_control`, executor `modules.test`) with a 20 second limit and 5 a minute
+  per admin. `Portal.builder` is the seam tests use to give Test a fake module.
+- Settings shared by several modules (the wall's two) are saved to each.
+- Problems show at the top of the form, not under each field: the model's messages ("set
+  both or neither") often name two fields. A number or choice that's wrong is said by its
+  label.
+- Recent sign-in (15 minutes, from `web_sessions.created_at`, now `Session.signed_in_at`)
+  for saving or clearing a secret, testing with a secret in the draft, and switching
+  template. The way to sign in again is still /site or Google; SP7b adds passkeys.
+- `config_audit` (migration 0153) and `ConfigAudit`: changes, tests (with their result) and
+  undo, shown under "Changes lately" on /modules. Never a secret's value.
+- The bar ("N changes wait for a restart. Review") is in base.html for admins, through a
+  `pending_changes` template global the Modules page's routes set.
+- `services.settings` is the app's `Settings` (set by `build_runtime`); Test builds with
+  it, or with just the environment when there's none (module builds read nothing else).
+- Golden: routes.json gained the five POSTs; handlers.json gained `modules.test`.
 
 ### SP6 · Setup portal: restart and apply
 Status: [ ]

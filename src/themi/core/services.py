@@ -163,6 +163,7 @@ class Services(Registry):
     # SP4: what the Modules page reads: the instance's config (a themi.config.InstanceConfig,
     # None when nothing was read) and the environment as read (never shown: it holds secrets)
     instance_config: Any = None
+    settings: Any = None  # SP5: the app's themi.settings.Settings, when it was run from them
     environment: dict[str, str] = field(default_factory=dict, repr=False)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
 

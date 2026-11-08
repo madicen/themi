@@ -46,6 +46,7 @@ from themi.energy import EnergyModel
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
 from themi.modules import Module, ModuleContext, PeriodicTask, StartReport, as_job
+from themi.modules.portal import Portal
 from themi.scheduler import Scheduler
 from themi.standard.ai_providers import AI_PROVIDERS
 from themi.standard.breaks import BreaksModule
@@ -397,6 +398,9 @@ def build_app(
     # ----- the core again: updates from the website, and backups -----------------------
     server = ServerControl(services, control_dir)
     server.install()
+    portal = Portal(services, cipher)  # SP5: what the Modules page does
+    portal.install()
+    services.provide(Portal, portal)
     if control_dir is not None:
         ctx.periodic("server.results", timedelta(minutes=1), server.check)
     if backup is not None:

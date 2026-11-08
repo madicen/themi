@@ -83,6 +83,12 @@ class Draft:
     secrets: dict[str, dict[str, str | None]] = field(default_factory=dict)
     log: list[dict[str, Any]] = field(default_factory=list)  # who changed what, when
 
+    def count(self) -> int:
+        """How many changes wait: the template, each module, each setting."""
+        fields = sum(len(v) for v in self.sections.values())
+        secrets = sum(len(v) for v in self.secrets.values())
+        return (1 if self.template else 0) + len(self.modules) + fields + secrets
+
     def is_empty(self) -> bool:
         return not (self.template or self.modules or self.sections or self.secrets)
 
@@ -129,3 +135,23 @@ class DraftStore:
 
     def discard(self) -> None:
         self._db.execute("DELETE FROM config_drafts WHERE id = 1")
+
+
+class ConfigAudit:
+    """SP5: who changed what on the Modules page, tested what, and restarted when."""
+
+    def __init__(self, db: Database) -> None:
+        self._db = db
+
+    def note(self, member_id: int | None, what: str) -> None:
+        self._db.execute(
+            "INSERT INTO config_audit (member_id, what, at) VALUES (?, ?, ?)",
+            (member_id, what, to_utc_iso(clock.now())),
+        )
+
+    def recent(self, limit: int = 20) -> list[dict[str, Any]]:
+        return self._db.query(
+            "SELECT a.what, a.at, m.name FROM config_audit a "
+            "LEFT JOIN members m ON m.id = a.member_id ORDER BY a.id DESC LIMIT ?",
+            (limit,),
+        )

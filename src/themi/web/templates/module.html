@@ -1,14 +1,32 @@
 {% extends "base.html" %}
 {% block title %}{{ card.title }} · Modules · Themi{% endblock %}
 {% macro badge(c) %}<span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span>{% endmacro %}
-{% macro field_value(f) %}
-  {% if f.source == "environment" %}<span class="muted">Set on the server, so it can't be changed here.</span>
-  {% elif f.spec.secret %}
-    {% if f.source == "stored" %}Saved, ends in …{{ f.ending }}{% else %}<span class="muted">Not set</span>{% endif %}
-  {% elif f.value in (None, "") %}<span class="muted">Not set</span>
-  {% elif f.spec.kind == "bool" %}{{ "Yes" if f.value else "No" }}
-  {% else %}{{ f.value }}{% endif %}
-  {% if f.waiting %} <span class="chip info">Waiting for restart</span>{% endif %}
+{% macro field_input(f) %}
+  {% set id = "field-" ~ f.spec.name %}
+  <div class="field">
+    <label for="{{ id }}">{{ f.spec.label }}</label>
+    {% if f.source == "environment" %}
+      <input id="{{ id }}" disabled value="{{ '' if f.spec.secret else f.value }}" placeholder="Set on the server">
+      <span class="muted">Set on the server, so it can't be changed here.</span>
+    {% elif f.spec.secret %}
+      <input id="{{ id }}" name="{{ f.spec.name }}" type="password" autocomplete="off"
+        placeholder="{{ 'Saved, ends in …' ~ f.ending if f.source == 'stored' else f.spec.placeholder }}">
+      {% if f.source == "stored" %}<span class="muted">Saved, ends in …{{ f.ending }}. Type a new one to replace it.</span>
+      <label class="check"><input type="checkbox" name="clear_{{ f.spec.name }}" value="1"> Clear it</label>{% endif %}
+    {% elif f.spec.kind == "bool" %}
+      <label class="check"><input id="{{ id }}" type="checkbox" name="{{ f.spec.name }}" value="on"{% if f.value %} checked{% endif %}> Yes</label>
+    {% elif f.spec.kind == "choice" %}
+      <select id="{{ id }}" name="{{ f.spec.name }}">
+        <option value="">(not set)</option>
+        {% for choice in f.spec.choices %}<option{% if f.value == choice %} selected{% endif %}>{{ choice }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input id="{{ id }}" name="{{ f.spec.name }}" type="{{ 'number' if f.spec.kind == 'number' else ('url' if f.spec.kind == 'url' else 'text') }}"
+        value="{{ '' if f.value is none else f.value }}" placeholder="{{ f.spec.placeholder }}">
+    {% endif %}
+    {% if f.waiting %}<span class="chip info">Waiting for restart</span>{% endif %}
+    {% if f.spec.hint %}<span class="muted">{{ f.spec.hint }}</span>{% endif %}
+  </div>
 {% endmacro %}
 {% block content %}
 <p><a href="/modules">All modules</a></p>
@@ -19,25 +37,41 @@
 
 <div class="module-detail">
   <section class="module-settings">
+    <form method="post" action="/modules/{{ card.name }}/switch" class="module-action">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if in_list %}
+      <input type="hidden" name="to" value="off">
+      <button>Turn off</button>
+      {% else %}
+      <input type="hidden" name="to" value="on">
+      <button class="primary">Turn on</button>
+      {% endif %}
+    </form>
+
+    {% if problems %}
+    <section class="alerts" role="alert">
+      {% for problem in problems %}<p class="alert">{{ problem }}</p>{% endfor %}
+    </section>
+    {% endif %}
+
     {% if fields or advanced %}
     <h2>Settings</h2>
-    <dl class="settings-list">
-      {% for f in fields %}
-      <dt>{{ f.spec.label }}</dt>
-      <dd>{{ field_value(f) }}{% if f.spec.hint %}<br><span class="muted">{{ f.spec.hint }}</span>{% endif %}</dd>
-      {% endfor %}
-    </dl>
-    {% if advanced %}
-    <details>
-      <summary>Advanced settings</summary>
-      <dl class="settings-list">
-        {% for f in advanced %}
-        <dt>{{ f.spec.label }}</dt>
-        <dd>{{ field_value(f) }}</dd>
-        {% endfor %}
-      </dl>
-    </details>
-    {% endif %}
+    <form method="post" action="/modules/{{ card.name }}/settings" class="settings-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for f in fields %}{{ field_input(f) }}{% endfor %}
+      {% if advanced %}
+      <details>
+        <summary>Advanced settings</summary>
+        {% for f in advanced %}{{ field_input(f) }}{% endfor %}
+      </details>
+      {% endif %}
+      <button class="primary">Save</button>
+    </form>
+    <form method="post" action="/modules/{{ card.name }}/test" class="module-action">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Test</button>
+      <span class="muted">Tries the settings as saved here, against the service.</span>
+    </form>
     {% else %}
     <p class="muted">Nothing to fill in here.</p>
     {% endif %}
