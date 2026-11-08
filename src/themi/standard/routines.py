@@ -9,14 +9,13 @@ one day, and are ticked once a day.
 The check (the `routines.check` job): once a routine's window ends, if any of
 today's items are open, one message lists them, with a button per item and
 "Skip today", as C3's checks. All done: nothing is sent. A tick made anywhere (the
-check's buttons, chat, the wall) changes the check: what's still open, or all done; a
+check's buttons, chat, a display) changes the check: what's still open, or all done; a
 check still waiting to go is written again as it goes (F23b). Each check feeds the
 energy model as device activity (a small lift or dip, in words), which each
 person can switch off.
 
 Changes to your own routines are done when asked. An item for someone else's
-routine goes through `routine_item_add`. The wall isn't touched yet (R1b): C3
-keeps checking the wall's routines as before.
+routine goes through `routine_item_add`. A display's own routines (C3) are its module's.
 """
 
 from __future__ import annotations
@@ -71,7 +70,7 @@ CHECK_KEY = re.compile(r"routine-r(\d+)-(\d{4}-\d{2}-\d{2})")  # Themi's own, no
 TICKED_TEXT = "Marked done: {title}. {praise}"  # a tick on the check, said with a warm word
 
 
-# CR10a: shared with the wall's routines (cozyla_routines), which import them from here.
+# CR10a: shared with a display's routines, which import them from here.
 EVENING_BEFORE_QUIET = timedelta(hours=1)
 CHECK_TEXT = "{part} routine, still open:\n{items}\nDone already?"  # a list (idea #46)
 ALL_DONE_TEXT = "{part} routine: all done."
@@ -161,7 +160,7 @@ class Routines:
         self.services = services
         self.store = services.store
         self.db = services.store.db
-        # Told of each tick made in Themi, so the wall shows it at once (R1b).
+        # Told of each tick made in Themi, so a display shows it at once (R1b).
         self.tick_listeners: list[Callable[[Item, date], Awaitable[None]]] = []
 
     def install(self) -> None:
@@ -300,29 +299,12 @@ class Routines:
                 log.warning("A routine tick listener failed for item %s", item.id, exc_info=True)
 
     def untick(self, item: Item, day: date) -> bool:
-        """Unticked away from Themi (the wall, F31a). True if there was a tick."""
+        """Unticked away from Themi (a display, F31a). True if there was a tick."""
         found = self.ticked(item, day)
         self.db.execute(
             "DELETE FROM routine_ticks WHERE item_id = ? AND day = ?", (item.id, day.isoformat())
         )
         return found
-
-    def mark_on_wall(self, item: Item, day: date) -> None:
-        """The wall has this tick now (seen there, or sent and taken)."""
-        self.db.execute(
-            "UPDATE routine_ticks SET on_wall_at = ? WHERE item_id = ? AND day = ? "
-            "AND on_wall_at IS NULL",
-            (to_utc_iso(clock.now()), item.id, day.isoformat()),
-        )
-
-    def on_wall(self, item: Item, day: date) -> bool:
-        return bool(
-            self.db.one(
-                "SELECT 1 FROM routine_ticks WHERE item_id = ? AND day = ? "
-                "AND on_wall_at IS NOT NULL",
-                (item.id, day.isoformat()),
-            )
-        )
 
     def ticked(self, item: Item, day: date) -> bool:
         return bool(
@@ -398,7 +380,7 @@ class Routines:
         return sent
 
     async def show_tick(self, item: Item, day: date) -> None:
-        """A tick made away from the check (the wall, chat): the check sent for that day
+        """A tick made away from the check (a display, chat): the check sent for that day
         shows what's still open, unless they skipped it (bug #129)."""
         routine = self.get(item.routine_id)
         row = self.db.one(
@@ -422,7 +404,7 @@ class Routines:
         self, member: Member, row: dict[str, Any]
     ) -> str | tuple[str, list[Button]] | None:
         """A held check, written again as it goes: ticks made since are left off, and with
-        nothing left it isn't sent. C3's checks of the wall go as they are."""
+        nothing left it isn't sent. A display's own checks go as they are."""
         key = str(row["dedupe_key"] or "")
         found = CHECK_KEY.fullmatch(key)
         if found is None:
@@ -584,8 +566,7 @@ ROUTINE_ARG = {"type": "string", "description": "The routine's name, e.g. 'Morni
 @tool(
     "show_routines",
     "Read this person's routines kept in Themi: each routine's name and window, and its "
-    "items (which are done today). Themi checks each one as its window ends. Not the "
-    "Cozyla wall's routines (show_routine).",
+    "items (which are done today). Themi checks each one as its window ends.",
     {},
 )
 async def show_routines(ctx: ToolContext, args: dict[str, Any]) -> str:
@@ -639,7 +620,7 @@ async def remove_routine(ctx: ToolContext, args: dict[str, Any]) -> str:
     "Add an item to a routine kept in Themi, theirs or someone else's ('add vitamins to my "
     "morning routine', 'put feed the birds on Michael's evening routine on weekdays'). "
     "days: day names, [] for every day. just_today: true for today only. person: '' for "
-    "them. Not the Cozyla wall's routines (add_to_wall_routine), a chore or a list.",
+    "them. Not a chore or a list.",
     {
         "routine": ROUTINE_ARG,
         "title": {"type": "string"},
@@ -765,7 +746,7 @@ class RoutinesModule(Module):
     """Routines: morning, evening and the rest."""
 
     name = "routines"
-    tool_groups = (groups.WALL,)
+    tool_groups = (groups.ROUTINES,)
 
     def install(self, ctx: ModuleContext) -> None:
         routines = ctx.provide(Routines(ctx.services))

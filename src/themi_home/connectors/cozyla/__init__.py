@@ -16,7 +16,11 @@ from themi_home.connectors.cozyla.client import (
     TodoList,
 )
 
+# CR21b: where the wall's ticks were made, for "Ticked off on the wall: ..."
+WALL_WHERE = "on the wall"
+
 __all__ = [
+    "WALL_WHERE",
     "Chore",
     "ChoreRecord",
     "CozylaClient",

@@ -106,3 +106,16 @@ admin = false
 modules = ["*"]
 
 [prompt]
+
+# CR21b: the standard routines' tools don't name the wall; the family's say which is which.
+[tools.show_routines]
+description = """Read this person's routines kept in Themi: each routine's name and window, \
+and its items (which are done today). Themi checks each one as its window ends. Not the \
+Cozyla wall's routines (show_routine)."""
+
+[tools.add_routine_item]
+description = """Add an item to a routine kept in Themi, theirs or someone else's ('add \
+vitamins to my morning routine', 'put feed the birds on Michael's evening routine on \
+weekdays'). days: day names, [] for every day. just_today: true for today only. person: '' \
+for them. Not the Cozyla wall's routines (add_to_wall_routine), a chore or a list."""
+

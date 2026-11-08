@@ -57,7 +57,14 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange
-from themi_home.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo, TodoList
+from themi_home.connectors.cozyla import (
+    WALL_WHERE,
+    CozylaClient,
+    CozylaError,
+    CozylaMember,
+    Todo,
+    TodoList,
+)
 from themi_home.cozyla_lists import WallLists
 
 if TYPE_CHECKING:
@@ -126,7 +133,7 @@ class CozylaTodos:
         self.board.change_listeners.append(self.on_task_changed)
         self.services.provide(keys.wall, self)
         self.services.tools.register(put_task_on_wall_list)
-        self.board.wall_notes.append(self.where)
+        self.board.display_notes.append(self.where)
         if self.services.maybe(keys.lists) is not None:
             self.wall_lists = WallLists(self.services, self.services.get(keys.lists), self.client)
             self.wall_lists.install()
@@ -294,7 +301,9 @@ class CozylaTodos:
             return
         if todo.completed and not before.completed:
             if task.status in ("open", "snoozed"):  # whose tick, when it's one person's
-                await self.board.complete(task.id, self._doer(task), wall=not task.shared)
+                await self.board.complete(
+                    task.id, self._doer(task), ticked_on=None if task.shared else WALL_WHERE
+                )
             return
         if before.completed and not todo.completed and task.status == "done":
             task = await self.board.reopen(task.id)

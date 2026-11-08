@@ -43,7 +43,7 @@ from themi.localtime import to_utc_iso
 from themi.standard.reminders import MEDICINE
 from themi.standard.tasks import Task, TaskBoard
 from themi_home.chore_chart import ChartQueue, day_words, is_routine
-from themi_home.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
+from themi_home.connectors.cozyla import WALL_WHERE, Chore, CozylaClient, CozylaError, WallSchedule
 from themi_home.connectors.cozyla.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
 from themi_home.connectors.cozyla.emoji import better_icon, chore_icon
 from themi_home.connectors.cozyla.schedule import from_wall, to_wall
@@ -92,7 +92,7 @@ class CozylaChores:
         self.queue.display_refreshes = True  # the sync brings chores up, as it always has
 
     def install(self) -> None:
-        self.board.wall_notes.append(self.where)
+        self.board.display_notes.append(self.where)
 
     def where(self, task: Task) -> str | None:
         """The day a task shows on the chart, for the model; None if it isn't for the chart."""
@@ -217,7 +217,9 @@ class CozylaChores:
                         continue
                     member_id = self._to_member.get(record.member)
                     doer = self.services.store.get_member(member_id) if member_id else self._admin()
-                    await self.board.complete(task.id, doer, wall=member_id is not None)
+                    await self.board.complete(
+                        task.id, doer, ticked_on=WALL_WHERE if member_id is not None else None
+                    )
                     self._caught_up(task.id)  # that run came from the wall: no tick back
                     closed.add(task.id)
                     break
@@ -278,7 +280,7 @@ class CozylaChores:
                 doer = self.queue.done_on_wall(task)
                 if doer is not None:  # deleted on the wall while up: done (C2d)
                     self.db.execute("DELETE FROM cozyla_chores WHERE task_id = ?", (task.id,))
-                    await self.board.complete(task.id, doer, wall=True)
+                    await self.board.complete(task.id, doer, ticked_on=WALL_WHERE)
                     self._caught_up(task.id)
                     continue
             off_wall = (self._waiting(task) and not self._wall_members(task)) or bool(

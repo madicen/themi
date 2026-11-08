@@ -13,8 +13,8 @@
   missed rounds roll on or move to the next day, and deadline chores, move by
   themselves instead.
 
-Importance is set with `set_task_importance`; medicine-like chores from the
-wall start as high.
+Importance is set with `set_task_importance`; medicine-like chores from a
+display start as high.
 """
 
 from __future__ import annotations

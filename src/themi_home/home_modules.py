@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import timedelta
+from pathlib import Path
 
 from themi.core import groups
 from themi.modules import Module, ModuleContext, ModuleSetup
@@ -183,6 +184,7 @@ class CozylaTodosModule(Module):
     )
     settings = CozylaSettings
     requires = ("tasks",)
+    migrations = Path(__file__).parent / "cozyla_todos_schema"  # CR21b: the wall's lists
 
     def __init__(self, client: CozylaClient) -> None:
         self.client = client
@@ -237,7 +239,10 @@ class CozylaChoresModule(Module):
     kind = "connector"
     tool_groups = (groups.WALL,)
     settings = CozylaSettings
-    requires = ("tasks", "routines", "chore_chart")  # CR21a: it shows the chart on the wall
+    requires = ("tasks", "routines", "chore_chart")
+    migrations = (
+        Path(__file__).parent / "cozyla_chores_schema"
+    )  # CR21b: what the wall saw  # CR21a: it shows the chart on the wall
 
     def __init__(self, client: CozylaClient) -> None:
         self.client = client

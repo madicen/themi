@@ -67,7 +67,7 @@ class TaskBlocks:
         s.tools.register(block_time_for_task)
         s.tools.register(find_time_for_task)
         self.board.holds.append(self.held)
-        self.board.wall_notes.append(self.note)
+        self.board.display_notes.append(self.note)
 
     # ----- the hold -------------------------------------------------------------------------
 

@@ -21,6 +21,7 @@ next minute.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -30,8 +31,9 @@ from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
 from themi.localtime import to_utc_iso
+from themi.modules.mirrors import Mirror
 from themi.standard.lists import Lists, list_key, name_key, named_in
-from themi_home.connectors.cozyla import CozylaClient, CozylaError, Todo, TodoList
+from themi_home.connectors.cozyla import WALL_WHERE, CozylaClient, CozylaError, Todo, TodoList
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -39,6 +41,13 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 PUT_CATEGORY, PUT_EXECUTOR = "wall_list_add", "cozyla.put_list"
+MAX_WALL_ITEM = 100  # what a list kept on the wall takes
+# CR21b: the wall, as the lists' mirror ("Ticked off on the wall", "(on the wall)").
+WALL = Mirror("cozyla", WALL_WHERE, item_limit=MAX_WALL_ITEM)
+LINKED_LISTS = (
+    "SELECT l.id, l.name, l.owner_id, w.cozyla_list_id AS wall_list, w.wall_name AS wall_list_name "
+    "FROM lists l JOIN wall_lists w ON w.list_id = l.id"
+)
 
 
 class WallLists:
@@ -51,6 +60,35 @@ class WallLists:
     def install(self) -> None:
         self.services.autonomy.executors.register(PUT_EXECUTOR)(self._execute_put)
         self.services.tools.register(put_list_on_wall)
+        mirrors = self.services.mirrors  # CR21b: the wall as the lists' mirror
+        mirrors.add(WALL)
+        mirrors.list_keepers.append(self._keeps)
+        mirrors.items_leaving.append(self._items_leaving)
+        mirrors.lists_leaving.append(self._list_leaving)
+        mirrors.items_reset.append(self._item_reset)
+
+    def _keeps(self, list_id: int) -> Mirror | None:
+        found = self.db.one("SELECT 1 FROM wall_lists WHERE list_id = ?", (list_id,))
+        return WALL if found else None
+
+    def _items_leaving(self, item_ids: Sequence[int]) -> None:
+        """Queue the wall's copies of these items for deletion."""
+        marks = ", ".join("?" * len(item_ids))
+        self.db.execute(
+            "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) SELECT 'todo', todo_id "
+            f"FROM wall_list_items WHERE item_id IN ({marks})",
+            tuple(item_ids),
+        )
+
+    def _list_leaving(self, list_id: int) -> None:
+        self.db.execute(
+            "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) SELECT 'list', "
+            "cozyla_list_id FROM wall_lists WHERE list_id = ?",
+            (list_id,),
+        )
+
+    def _item_reset(self, item_id: int) -> None:
+        self.db.execute("DELETE FROM wall_list_items WHERE item_id = ?", (item_id,))
 
     async def sync(
         self, wall_lists: Iterable[TodoList], todos: Iterable[Todo], skip: set[str], tasks: set[str]
@@ -61,8 +99,8 @@ class WallLists:
         current = {t.id: t for t in todos}
         await self._removals(wall, current)
         first = await self._link_lists(wall)
-        for row in self.db.query("SELECT * FROM lists WHERE cozyla_list_id IS NOT NULL"):
-            list_id = row["cozyla_list_id"]
+        for row in self.db.query(LINKED_LISTS):
+            list_id = row["wall_list"]
             here = [
                 t
                 for t in current.values()
@@ -96,10 +134,10 @@ class WallLists:
         """Follow renames (either side's) and deletions on the wall, and link or make a list
         for each new wall list. Returns the wall lists linked just now."""
         linked = {}
-        for row in self.db.query("SELECT * FROM lists WHERE cozyla_list_id IS NOT NULL"):
-            wall_list = wall.get(row["cozyla_list_id"])
+        for row in self.db.query(LINKED_LISTS):
+            wall_list = wall.get(row["wall_list"])
             if wall_list is None:  # deleted on the wall: kept here, no longer linked
-                log.info("Cozyla list %s is gone; list %s stays", row["cozyla_list_id"], row["id"])
+                log.info("Cozyla list %s is gone; list %s stays", row["wall_list"], row["id"])
                 self._unlink(row["id"])
             else:
                 linked[wall_list.id] = row
@@ -112,7 +150,8 @@ class WallLists:
                 (
                     r
                     for r in self.db.query(
-                        "SELECT * FROM lists WHERE owner_id IS NULL AND cozyla_list_id IS NULL"
+                        "SELECT * FROM lists WHERE owner_id IS NULL "
+                        "AND id NOT IN (SELECT list_id FROM wall_lists)"
                     )
                     if list_key(r["name"]) == list_key(wall_list.title)
                 ),
@@ -120,24 +159,26 @@ class WallLists:
             )
             if same is not None:
                 self.db.execute(  # the wall's spelling, from now on
-                    "UPDATE lists SET cozyla_list_id = ?, name = ?, wall_name = ? WHERE id = ?",
-                    (wall_id, wall_list.title, wall_list.title, same["id"]),
+                    "UPDATE lists SET name = ? WHERE id = ?", (wall_list.title, same["id"])
                 )
+                self._link(same["id"], wall_id, wall_list.title)
             else:
-                self.db.execute(
-                    "INSERT INTO lists (name, owner_id, created_by, created_at, cozyla_list_id, "
-                    "wall_name) VALUES (?, NULL, NULL, ?, ?, ?)",
-                    (wall_list.title, to_utc_iso(clock.now()), wall_id, wall_list.title),
+                list_id = self.db.execute(
+                    "INSERT INTO lists (name, owner_id, created_by, created_at) "
+                    "VALUES (?, NULL, NULL, ?)",
+                    (wall_list.title, to_utc_iso(clock.now())),
                 )
+                self._link(list_id, wall_id, wall_list.title)
             first.add(wall_id)
         return first
 
     async def _rename(self, row: dict[str, Any], wall_list: TodoList) -> None:
         """Renamed on the wall: renamed here. Renamed here since: renamed on the wall."""
         title = wall_list.title
-        if title.strip() and title != row["wall_name"]:
+        if title.strip() and title != row["wall_list_name"]:
+            self.db.execute("UPDATE lists SET name = ? WHERE id = ?", (title, row["id"]))
             self.db.execute(
-                "UPDATE lists SET name = ?, wall_name = ? WHERE id = ?", (title, title, row["id"])
+                "UPDATE wall_lists SET wall_name = ? WHERE list_id = ?", (title, row["id"])
             )
         elif row["name"] != title:
             try:
@@ -145,40 +186,49 @@ class WallLists:
             except CozylaError as exc:
                 log.warning("Renaming Cozyla list %s waits: %s", wall_list.id, exc)
                 return
-            self.db.execute("UPDATE lists SET wall_name = name WHERE id = ?", (row["id"],))
+            self.db.execute(
+                "UPDATE wall_lists SET wall_name = ? WHERE list_id = ?", (row["name"], row["id"])
+            )
+
+    def _link(self, list_id: int, wall_id: str, wall_name: str) -> None:
+        self.db.execute(
+            "INSERT INTO wall_lists (list_id, cozyla_list_id, wall_name) VALUES (?, ?, ?)",
+            (list_id, wall_id, wall_name),
+        )
 
     def _unlink(self, list_id: int) -> None:
+        self.db.execute("DELETE FROM wall_lists WHERE list_id = ?", (list_id,))
         self.db.execute(
-            "UPDATE lists SET cozyla_list_id = NULL, wall_name = NULL WHERE id = ?", (list_id,)
-        )
-        self.db.execute(
-            "UPDATE list_items SET cozyla_todo_id = NULL, wall_title = NULL, wall_done = NULL, "
-            "pending = 0 WHERE list_id = ?",
+            "DELETE FROM wall_list_items WHERE item_id IN "
+            "(SELECT id FROM list_items WHERE list_id = ?)",
             (list_id,),
         )
+        self.db.execute("UPDATE list_items SET pending = 0 WHERE list_id = ?", (list_id,))
 
     # ----- items ------------------------------------------------------------------------
 
     async def _items(self, list_id: int, wall_id: str, todos: list[Todo], *, first: bool) -> None:
         rows = self.db.query(  # sub-items stay off the wall, whose lists are flat (F29g)
-            "SELECT * FROM list_items WHERE list_id = ? AND parent_id IS NULL ORDER BY id",
+            "SELECT i.*, w.todo_id AS wall_todo, w.title AS wall_copy, w.done AS wall_copy_done "
+            "FROM list_items i LEFT JOIN wall_list_items w ON w.item_id = i.id "
+            "WHERE i.list_id = ? AND i.parent_id IS NULL ORDER BY i.id",
             (list_id,),
         )
-        by_todo = {r["cozyla_todo_id"]: r for r in rows if r["cozyla_todo_id"]}
-        unsent = [r for r in rows if not r["cozyla_todo_id"]]
+        by_todo = {r["wall_todo"]: r for r in rows if r["wall_todo"]}
+        unsent = [r for r in rows if not r["wall_todo"]]
         for todo in todos:
             row = by_todo.pop(todo.id, None)
             if row is None and first:  # the same item on both sides: one item
                 row = next((r for r in unsent if name_key(r["name"]) == name_key(todo.title)), None)
                 if row is not None:  # Themi's wording and tick go out
                     unsent.remove(row)
-                    row = {**row, "cozyla_todo_id": todo.id, "pending": 1}
+                    row = {**row, "wall_todo": todo.id, "pending": 1}
             if row is None:  # new on the wall; ticked ones Themi never saw are history
                 if not todo.completed and todo.title.strip():
                     self._bring_in(list_id, todo)
             elif row["pending"]:
                 await self._send(row, todo)
-            elif (todo.title, todo.completed) != (row["wall_title"], bool(row["wall_done"])):
+            elif (todo.title, todo.completed) != (row["wall_copy"], bool(row["wall_copy_done"])):
                 self._follow(row, todo)
         for row in by_todo.values():  # gone from the wall, or someone's job now
             self.db.execute("DELETE FROM list_items WHERE id = ?", (row["id"],))
@@ -186,20 +236,18 @@ class WallLists:
             await self._create(wall_id, row)
 
     def _bring_in(self, list_id: int, todo: Todo) -> None:
-        self.db.execute(
-            "INSERT INTO list_items (list_id, name, done, done_at, added_by, added_at, "
-            "cozyla_todo_id, wall_title, wall_done) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)",
+        item_id = self.db.execute(
+            "INSERT INTO list_items (list_id, name, done, done_at, added_by, added_at) "
+            "VALUES (?, ?, ?, ?, NULL, ?)",
             (
                 list_id,
                 todo.title.strip(),
                 int(todo.completed),
                 to_utc_iso(clock.now()) if todo.completed else None,
                 to_utc_iso(clock.now()),
-                todo.id,
-                todo.title,
-                int(todo.completed),
             ),
         )
+        self._seen(item_id, todo)
 
     def _follow(self, row: dict[str, Any], todo: Todo) -> None:
         """Changed on the wall: renamed, ticked or unticked."""
@@ -235,19 +283,21 @@ class WallLists:
         except CozylaError as exc:
             log.warning("Cozyla list item %s waits: %s", row["id"], exc)
             return
-        self.db.execute(
-            "UPDATE list_items SET cozyla_todo_id = ?, wall_title = ?, wall_done = ?, pending = 0 "
-            "WHERE id = ?",
-            (todo_id, row["name"], row["done"], row["id"]),
-        )
+        self._copy(row["id"], todo_id, row["name"], bool(row["done"]))
 
     def _seen(self, item_id: int, todo: Todo) -> None:
         """Remember how the wall has it now; nothing is waiting to go out."""
+        self._copy(item_id, todo.id, todo.title, todo.completed)
+
+    def _copy(self, item_id: int, todo_id: str, title: str, done: bool) -> None:
+        """CR21b: the wall's copy of an item, in the wall's own table."""
         self.db.execute(
-            "UPDATE list_items SET cozyla_todo_id = ?, wall_title = ?, wall_done = ?, pending = 0 "
-            "WHERE id = ?",
-            (todo.id, todo.title, int(todo.completed), item_id),
+            "INSERT INTO wall_list_items (item_id, todo_id, title, done) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (item_id) DO UPDATE SET todo_id = excluded.todo_id, "
+            "title = excluded.title, done = excluded.done",
+            (item_id, todo_id, title, int(done)),
         )
+        self.db.execute("UPDATE list_items SET pending = 0 WHERE id = ?", (item_id,))
 
     # ----- putting a list on the wall ----------------------------------------------------
 
@@ -255,12 +305,10 @@ class WallLists:
         nl = self.lists.get(int(payload["list_id"]), ctx.member)
         if nl is None:
             return "That list is gone, so nothing went on the wall."
-        if nl.wall_id is not None:
+        if nl.mirror is not None:
             return f"{nl.name} is on the wall already."
         wall_id = await self.client.create_list(nl.name)
-        self.db.execute(
-            "UPDATE lists SET cozyla_list_id = ?, wall_name = name WHERE id = ?", (wall_id, nl.id)
-        )
+        self._link(nl.id, wall_id, nl.name)
         return f"{nl.name} is going on the wall; its items follow within a minute."
 
 
@@ -276,7 +324,7 @@ async def put_list_on_wall(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     if lists is None:
         raise ToolFailed("Lists aren't set up.")
     nl = lists.find(ctx.member, args["list"])
-    if nl.wall_id is not None:
+    if nl.mirror is not None:
         raise ToolDeclined(f"{nl.name} is on the wall already.")
     proposal = Proposal(PUT_CATEGORY, f"{nl.name} on the wall", PUT_EXECUTOR, {"list_id": nl.id})
     return replace(proposal, requested=named_in(nl, args["list"], ctx.request_text))

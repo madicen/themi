@@ -399,7 +399,7 @@ class Vacuum:
         ):
             wait = AWAY_WAIT if row["problem"] == NOT_DOCKED else WAIT
             if datetime.fromisoformat(row["opened_at"]) + wait <= now:
-                await self.board.put_on_wall(int(row["task_id"]))
+                await self.board.put_on_displays(int(row["task_id"]))
                 put += 1
         return put
 

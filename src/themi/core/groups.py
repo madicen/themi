@@ -184,3 +184,7 @@ WALL = ToolGroup(
     ),
     order=60,
 )
+
+
+# CR21b: the routines' tools are in this group too; the standard modules call it this.
+ROUTINES = WALL

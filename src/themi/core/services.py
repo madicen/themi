@@ -25,6 +25,7 @@ from themi.channels.outbox import Outbox
 from themi.core.kept_pictures import KeptPictures
 from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
+from themi.modules.mirrors import Mirrors
 from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
 from themi.modules.web import AccountsSection, Panel, Waiting, WebPages
@@ -143,6 +144,8 @@ class Services(Registry):
     capabilities: set[str] = field(default_factory=set)
     # CR20b: the channels people talk to Themi on (channel modules add theirs).
     channels: ChannelSet = field(default_factory=ChannelSet)
+    # CR21b: displays and apps keeping lists, tasks or routines in step (the wall).
+    mirrors: Mirrors = field(default_factory=Mirrors)
     accounts_sections: list[AccountsSection] = field(default_factory=list)
     waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.

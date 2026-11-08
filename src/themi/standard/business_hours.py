@@ -225,7 +225,7 @@ class BusinessHours:
         s.provide(keys.business_hours, self)
         s.button_handlers[KIND] = self.on_button
         s.tools.register(set_business_hours)
-        self.board.wall_notes.append(self.note)
+        self.board.display_notes.append(self.note)
 
     def _tz(self) -> ZoneInfo:
         family = self.services.store.get_family()

@@ -30,11 +30,18 @@ from typing import Any
 from themi import clock
 from themi.accounts import Member
 from themi.core.services import Services
+from themi.localtime import to_utc_iso
 from themi.standard import praise
 from themi.standard.repeat import DAY_NAMES
 from themi.standard.routines import DEFAULTS, Item, Routines
 from themi.standard.routines import Routine as ThemiRoutine
-from themi_home.connectors.cozyla import CozylaClient, CozylaError, Routine, WallSchedule
+from themi_home.connectors.cozyla import (
+    WALL_WHERE,
+    CozylaClient,
+    CozylaError,
+    Routine,
+    WallSchedule,
+)
 from themi_home.cozyla_routines import CozylaRoutines, part_of_day
 from themi_home.cozyla_todos import backoff, member_map
 
@@ -76,6 +83,23 @@ class RoutinesWall:
         self._failures = 0
         self._wait_until: datetime | None = None
 
+    def _mark_seen(self, item: Item, day: date) -> None:
+        """The wall has this tick now (seen there, or sent and taken). CR21b: the wall's own
+        table; nothing when the tick isn't there any more."""
+        self.db.execute(
+            "INSERT OR IGNORE INTO wall_seen_ticks (item_id, day, seen_at) "
+            "SELECT item_id, day, ? FROM routine_ticks WHERE item_id = ? AND day = ?",
+            (to_utc_iso(clock.now()), item.id, day.isoformat()),
+        )
+
+    def _on_wall(self, item: Item, day: date) -> bool:
+        return bool(
+            self.db.one(
+                "SELECT 1 FROM wall_seen_ticks WHERE item_id = ? AND day = ?",
+                (item.id, day.isoformat()),
+            )
+        )
+
     def install(self) -> None:
         self.wall.checks_by_themi = True  # Themi's routines are checked by R1a now
         self.routines.tick_listeners.append(self.on_tick)
@@ -92,7 +116,7 @@ class RoutinesWall:
             except CozylaError as exc:  # the next sync carries it over
                 log.warning("Couldn't tick routine %s on the wall yet: %s", link["wall_id"], exc)
             else:
-                self.routines.mark_on_wall(item, day)
+                self._mark_seen(item, day)
 
     async def sync(self) -> int:
         """Scheduler job. Returns how many of Themi's changes were sent."""
@@ -238,19 +262,21 @@ class RoutinesWall:
             on_wall = link["wall_id"] in done_on_wall
             if on_wall and not ticked:
                 self.routines.tick(item, today)
-                self.routines.mark_on_wall(item, today)
+                self._mark_seen(item, today)
                 await self.routines.show_tick(item, today)  # bug #129: the check follows
                 member = self.store.get_member(self.routines.get(item.routine_id).member_id)
-                await praise.from_wall(self.services.outbox, member, item.title, f"r{item.id}")
+                await praise.ticked_there(
+                    self.services.outbox, member, item.title, f"r{item.id}", WALL_WHERE
+                )
             elif on_wall:
-                self.routines.mark_on_wall(item, today)
-            elif ticked and self.routines.on_wall(item, today):
+                self._mark_seen(item, today)
+            elif ticked and self._on_wall(item, today):
                 # F31a, bug #169: the wall had it, so it was unticked there. Not sent again.
                 self.routines.untick(item, today)
                 await self.routines.show_tick(item, today)
             elif ticked:  # Themi's tick hasn't reached the wall yet
                 await self.client.check_routine(link["wall_id"], today, True)
-                self.routines.mark_on_wall(item, today)
+                self._mark_seen(item, today)
 
     # ----- small things -------------------------------------------------------------------
 

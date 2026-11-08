@@ -199,7 +199,7 @@ class Task:
     from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
     progression: Progression | None = None  # an amount that steps up weekly (F9c)
     # CR21a: Themi's own (the email audit), or passing (the washer's): never on a shared
-    # display's lists (the wall's, today)
+    # display's lists
     off_displays: bool = False
     medicine: bool = False  # Rx1: "not sure" never makes it done
     # T2: this deadline chore holds its `due_before_task` back until it's done for that
@@ -298,9 +298,9 @@ class TaskBoard:
         # Tasks handed on for a while (F22d's burnout mode): their nudge says why, so
         # "Erin added this for you" would be wrong.
         self.handed_on: list[Callable[[Task], bool]] = []
-        # Where a task is on the Cozyla wall, for the model ("Shows on the wall's chore chart
+        # CR21b: where a task shows on a mirror, for the model ("Shows on the chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
-        self.wall_notes: list[Callable[[Task], str | None]] = []
+        self.display_notes: list[Callable[[Task], str | None]] = []
         # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
         self.holds: list[Callable[[Task, Member], bool]] = [self._waits]
         # Called each time a task is done (a repeating one, each round): (task, by whom,
@@ -458,13 +458,13 @@ class TaskBoard:
                     f" Waits until {' and '.join(h.title for h in waits)} is done first; "
                     "not raised with them before then."
                 )
-            wall = "".join(f" {note}" for source in self.wall_notes if (note := source(t)))
+            shown = "".join(f" {note}" for source in self.display_notes if (note := source(t)))
             matters = priority.words(t, today)  # T1: in words, never a score
             matters = f", {matters}" if matters else ""
             if t.medicine:
                 matters += ", medicine"
             items.append(
-                OpenItem(f"Task {t.id} ({whose}{due}{matters}): {t.title}.{schedule}{wall}{steps}")
+                OpenItem(f"Task {t.id} ({whose}{due}{matters}): {t.title}.{schedule}{shown}{steps}")
             )
         return items
 
@@ -713,7 +713,7 @@ class TaskBoard:
 
     async def _list_done(self, event: InboundEvent) -> None:
         """A tick on the morning list: that one's done, said so (bug #103: the line only went
-        away, and the wall was slow, so was it done?), and the list shows the rest."""
+        away, and a display was slow, so was it done?), and the list shows the rest."""
         assert event.button is not None
         task_id = int(event.button.payload["task"])
         ticked = await self.complete(
@@ -848,13 +848,14 @@ class TaskBoard:
         *,
         interactive: bool = False,
         tapped: int | None = None,
-        wall: bool = False,
+        ticked_on: str | None = None,
         on: date | None = None,
     ) -> str:
         """Mark it done (a repeating one: this round). `tapped`: the message whose Done
-        button did it, which the caller edits itself. `wall`: ticked on the wall by `by`
-        (the wall said who), who hears a warm word for it (F19b). `on`: an earlier day it
-        was done ("I ran yesterday"), which a repeating one's next round counts from."""
+        button did it, which the caller edits itself. `ticked_on`: ticked on a mirror
+        by `by` (it said who; "on ..."), who hears a warm word for it (F19b, CR21b).
+        `on`: an earlier day it was done ("I ran yesterday"), which a repeating one's next
+        round counts from."""
         task = self.get(task_id)
         if task.status in ("done", "cancelled"):
             return SETTLED_TEXT
@@ -879,8 +880,8 @@ class TaskBoard:
             and said.startswith(thanks)
         ):
             said = thanks.removesuffix("Thank you.") + _praise(task) + said.removeprefix(thanks)
-        if wall:
-            await praise.from_wall(self.outbox, by, task.title, str(task.id))
+        if ticked_on:
+            await praise.ticked_there(self.outbox, by, task.title, str(task.id), ticked_on)
         for hook in self.done_hooks:  # each time it's done, a repeating one's every round
             try:
                 await hook(task, by, interactive)
@@ -890,7 +891,7 @@ class TaskBoard:
 
     async def _settle_sent(self, task: Task, tapped: int | None) -> None:
         """Its nudges already sent stop asking once it's done some other way (bug #40: ticked
-        on the wall, the check-in kept its Done and Later buttons)."""
+        on a display, the check-in kept its Done and Later buttons)."""
         rows = self.db.query(
             "SELECT member_id, telegram_message_id FROM outbox WHERE status = 'sent' "
             "AND dedupe_key LIKE ? AND sent_at >= ? AND telegram_message_id IS NOT NULL",
@@ -1165,7 +1166,7 @@ class TaskBoard:
         return round_end(task.repeat, task.due_on)
 
     def round_days(self, task: Task) -> list[date]:
-        """The days the current round can be done on time, for ticks on the wall."""
+        """The days the current round can be done on time, for ticks on a display."""
         end = self.round_end(task)
         if task.due_on is None or end is None:
             return []
@@ -1354,7 +1355,7 @@ class TaskBoard:
 
     def _fill_missed(self, task: Task, by: Member, missed: dict[str, Any]) -> str:
         """Done a day late: the missed run becomes a late one and the next round stays. It's
-        a new run, not the old one changed, so the wall's sync ticks its day; added before
+        a new run, not the old one changed, so a display's sync ticks its day; added before
         the old one goes, as SQLite would give a newest run's id to the next one."""
         self.db.execute(
             "INSERT INTO task_runs (task_id, done_by, done_at, due_on, on_time) "
@@ -1682,8 +1683,8 @@ class TaskBoard:
             return f"{day}, {clock_words(task.from_time)}-{clock_words(task.due_time)}"
         return f"{day}, {clock_words(at)}" if at else day
 
-    async def put_on_wall(self, task_id: int) -> Task:
-        """A task made off the wall's lists goes on them now (F23d: a vacuum chore, once its
+    async def put_on_displays(self, task_id: int) -> Task:
+        """A task kept off shared displays goes on them now (F23d: a vacuum chore, once its
         nudge goes)."""
         self.db.execute("UPDATE tasks SET off_displays = 0 WHERE id = ?", (task_id,))
         task = self.get(task_id)
@@ -1727,7 +1728,7 @@ class TaskBoard:
 
     def _snooze_for(self, task: Task, by: Member, until: datetime, *, said: bool) -> str:
         """Erin's idea #86: "only snooze it for that user". Their nudges wait; the task stays
-        open, on the other's list and the wall as it was."""
+        open, on the other's list and on displays as it was."""
         self.db.execute(
             "INSERT INTO task_snoozes (task_id, member_id, until) VALUES (?, ?, ?) "
             "ON CONFLICT (task_id, member_id) DO UPDATE SET until = excluded.until",

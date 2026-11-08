@@ -6,9 +6,9 @@
   wrote go straight on; items the model inferred are staged (`list_add`) and wait for a
   yes. A whole list is deleted without asking only when they named it (`list_delete`).
 - Ticked items stay, crossed off, until someone clears them (the family's choice).
-- A list can be kept in step with a list on the Cozyla wall (L1b, `themi_home.cozyla_lists`):
-  the wall's own lists come in, and a list goes on the wall when someone asks. Changes made
-  here mark the item pending and removals are queued for the wall; the sync does the rest.
+- A list can be kept in step by a mirror, a display or app with lists of its own (L1b;
+  CR21b: `themi.modules.mirrors`). Changes made here mark the item pending, and items and
+  lists about to go are told to the mirrors; their syncs do the rest.
 """
 
 from __future__ import annotations
@@ -34,13 +34,13 @@ from themi.modules.prompt import PromptFragment
 
 if TYPE_CHECKING:
     from themi.core.services import Services
+    from themi.modules.mirrors import Mirror
 
 ADD_CATEGORY, ADD_EXECUTOR = "list_add", "lists.add"
 THINGS_TO_BUY = "things_to_buy"  # the household's list for what isn't food (L2a)
 DELETE_CATEGORY, DELETE_EXECUTOR = "list_delete", "lists.delete"
 MAX_NAME = 60
 MAX_ITEM = 500  # F21a, bug #117: a list of thoughts, not only things
-MAX_WALL_ITEM = 100  # what a list kept on the Cozyla wall takes
 SAID_BACK = 60  # characters: items up to this are named in the reply to an add
 # "Gift list. A scarf", "gift ideas: board games", "packing list - hats" (idea #115)
 OPENS_WITH_LIST = re.compile(r"\s*([^.:\n\u2013\u2014]{3,60}?)\s*(?:[.:\n\u2013\u2014]| - )\s*\S")
@@ -76,12 +76,15 @@ def without_verb(name: str, request_text: str) -> str:
 
 
 def item_limit(nl: NamedList) -> int:
-    return MAX_WALL_ITEM if nl.wall_id else MAX_ITEM
+    """The longest item: shorter when a mirror keeping the list takes less (CR21b)."""
+    mirror = nl.mirror
+    return mirror.item_limit if mirror and mirror.item_limit else MAX_ITEM
 
 
 def too_long(nl: NamedList) -> str:
-    wall = ", the most a list on the wall takes," if nl.wall_id else ","
-    return f"That one's over {item_limit(nl)} characters{wall} so it isn't on {nl.name} yet."
+    mirror = nl.mirror
+    where = f", the most a list {mirror.where} takes," if mirror and mirror.item_limit else ","
+    return f"That one's over {item_limit(nl)} characters{where} so it isn't on {nl.name} yet."
 
 
 def list_key(text: str) -> str:
@@ -112,7 +115,7 @@ class NamedList:
     name: str
     owner_id: int | None  # None: the household's
     items: tuple[ListItem, ...]
-    wall_id: str | None = None  # the Cozyla list it's kept in step with (L1b)
+    mirror: Mirror | None = None  # CR21b: what keeps it in step elsewhere (L1b), if anything
     purpose: str | None = None  # THINGS_TO_BUY, or None for an ordinary list
 
     @property
@@ -211,9 +214,8 @@ class Lists:
                 "SELECT * FROM list_items WHERE list_id = ? ORDER BY id", (row["id"],)
             )
         )
-        return NamedList(
-            row["id"], row["name"], row["owner_id"], items, row["cozyla_list_id"], row["purpose"]
-        )
+        mirror = self.services.mirrors.keeping_list(row["id"])
+        return NamedList(row["id"], row["name"], row["owner_id"], items, mirror, row["purpose"])
 
     # ----- changing -----------------------------------------------------------
 
@@ -246,7 +248,7 @@ class Lists:
         return found
 
     def rename(self, nl: NamedList, member: Member, name: str) -> NamedList:
-        """A new name; a list on the wall is renamed there at the next sync."""
+        """A new name; a mirror keeping the list renames it there at its next sync."""
         name = _clean(name, MAX_NAME, "list")
         for other in self.visible(member):
             if other.id != nl.id and list_key(other.name) == list_key(name):
@@ -336,16 +338,12 @@ class Lists:
 
     def move(self, nl: NamedList, item: ListItem, under: ListItem | None) -> None:
         """Put an item (with its sub-items) under another, or back at the top. Sub-items
-        stay off the wall, whose lists are flat."""
+        aren't a mirror's: their lists are flat."""
         if under is not None and (under.id == item.id or under in self.children(nl, item)):
             raise ToolFailed(f'"{item.name}" can\'t go under itself or one of its sub-items.')
         if under is not None:
-            self._off_the_wall("id = ?", (item.id,))
-            self.db.execute(
-                "UPDATE list_items SET cozyla_todo_id = NULL, wall_title = NULL, "
-                "wall_done = NULL WHERE id = ?",
-                (item.id,),
-            )
+            self.services.mirrors.leaving([item.id])
+            self.services.mirrors.reset(item.id)
         self.db.execute(
             "UPDATE list_items SET parent_id = ? WHERE id = ?",
             (under.id if under else None, item.id),
@@ -363,29 +361,18 @@ class Lists:
         )
 
     def remove(self, item: ListItem) -> None:
-        self._off_the_wall("id = ?", (item.id,))
+        self.services.mirrors.leaving([item.id])  # CR21b: their copies go too
         self.db.execute("DELETE FROM list_items WHERE id = ?", (item.id,))
 
     def clear_ticked(self, nl: NamedList) -> int:
-        self._off_the_wall("list_id = ? AND done = 1", (nl.id,))
+        self.services.mirrors.leaving([i.id for i in nl.ticked])
         return self.db.update("DELETE FROM list_items WHERE list_id = ? AND done = 1", (nl.id,))
 
     def delete(self, nl: NamedList) -> None:
-        """Delete a list, and its wall list too if it has one."""
-        if nl.wall_id is not None:
-            self.db.execute(
-                "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) VALUES ('list', ?)",
-                (nl.wall_id,),
-            )
+        """Delete a list, and a mirror's copy of it too."""
+        if nl.mirror is not None:
+            self.services.mirrors.list_leaving(nl.id)
         self.db.execute("DELETE FROM lists WHERE id = ?", (nl.id,))
-
-    def _off_the_wall(self, where: str, params: tuple[Any, ...]) -> None:
-        """Queue the wall's copies of these items for deletion."""
-        self.db.execute(
-            "INSERT OR IGNORE INTO list_wall_removals (kind, wall_id) SELECT 'todo', "
-            f"cozyla_todo_id FROM list_items WHERE cozyla_todo_id IS NOT NULL AND {where}",
-            params,
-        )
 
     def where(self, nl: NamedList, item: ListItem) -> str:
         """ "food (under cats)": an item, with its parent if it has one."""
@@ -443,7 +430,7 @@ class Lists:
             return []
         parts = [
             f'"{nl.name}"{" (theirs only)" if nl.personal else ""}'
-            + (" (on the wall)" if nl.wall_id else "")
+            + (f" ({nl.mirror.where})" if nl.mirror else "")
             + f": {len(nl.open_items)} to go"
             + (f", {len(nl.ticked)} ticked" if nl.ticked else "")
             for nl in lists
@@ -707,9 +694,9 @@ async def show_lists(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def delete_list(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
     nl = _lists(ctx).find(ctx.member, args["list"])
     named = named_in(nl, args["list"], ctx.request_text)
-    wall = ", on the wall too" if nl.wall_id else ""
+    there = f", {nl.mirror.where} too" if nl.mirror else ""
     proposal = Proposal(
-        DELETE_CATEGORY, f"Deleting the list {nl.name}{wall}", DELETE_EXECUTOR, {"list_id": nl.id}
+        DELETE_CATEGORY, f"Deleting the list {nl.name}{there}", DELETE_EXECUTOR, {"list_id": nl.id}
     )
     return replace(proposal, requested=named)
 

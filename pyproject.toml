@@ -145,6 +145,8 @@ where = ["src"]
 themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
+    "cozyla_chores_schema/*.sql",  # CR21b: the wall's own tables
+    "cozyla_todos_schema/*.sql",
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",

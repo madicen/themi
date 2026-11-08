@@ -20,6 +20,13 @@ def named(scenario: Scenario, name: str, who: str = "Erin") -> NamedList:
     return lists(scenario).find(scenario.member(who), name)
 
 
+def wall_id(scenario: Scenario, nl: NamedList) -> str | None:
+    """CR21b: the wall list it's kept with, from the wall's own table."""
+    return scenario.app.db.scalar(
+        "SELECT cozyla_list_id FROM wall_lists WHERE list_id = ?", (nl.id,)
+    )
+
+
 def items(scenario: Scenario, name: str) -> list[tuple[str, bool]]:
     return [(i.name, i.done) for i in named(scenario, name).items]
 
@@ -52,7 +59,7 @@ async def test_the_walls_lists_come_in(scenario: Scenario, fake_cozyla: FakeCozy
     await sync(scenario)
     await sync(scenario)  # the history stays behind on later syncs too (seen live)
     cooking = named(scenario, "things to cook", who="Husband")  # the household's
-    assert cooking.wall_id == str(cook) and not cooking.personal
+    assert wall_id(scenario, cooking) == str(cook) and not cooking.personal
     assert items(scenario, "things to cook") == [("Lasagna", False)]
     assert [nl.name for nl in lists(scenario).visible(scenario.member("Erin"))] == [
         "Things to Cook"
@@ -171,9 +178,9 @@ async def test_deleting_renaming_and_lists_gone_from_the_wall(
     fake_cozyla.lists[cook]["todoListTitle"] = "Dinners"  # renamed on the wall
     del fake_cozyla.lists[shop]  # deleted on the wall: kept in Themi, unlinked
     await sync(scenario)
-    assert named(scenario, "dinners").wall_id == str(cook)
+    assert wall_id(scenario, named(scenario, "dinners")) == str(cook)
     kept = named(scenario, "shopping")
-    assert kept.wall_id is None and [i.name for i in kept.items] == ["Light bulbs"]
+    assert wall_id(scenario, kept) is None and [i.name for i in kept.items] == ["Light bulbs"]
 
     replies = await say(scenario, "we don't need that one", "delete_list", {"list": "dinners"})
     assert replies[0] == "Deleting the list Dinners, on the wall too\nGo ahead, or not now?"

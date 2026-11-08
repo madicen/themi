@@ -1,7 +1,7 @@
 """Tasks of a partner's that someone could take on (F29f, bug #147).
 
 "What tasks from Erin could I take to make her day easier?" staged "Erin's tasks" as a
-morning routine on the wall. It's F22a's question about the partner, with a hand-over:
+morning routine on a display. It's F22a's question about the partner, with a hand-over:
 her open one-off tasks that someone else could do, each with a "Take it" button. A tap
 gives it to whoever asked, and Erin hears once, at a good moment, who took it.
 

@@ -101,3 +101,18 @@ def test_reading_settings_stays_light() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True, cwd=REPO_ROOT
     )
     assert result.stdout.strip() == "[]"
+
+
+# CR21b: displays (the Cozyla wall) are mirrors the standard modules know only through
+# themi.modules.mirrors; none names Cozyla or the wall ("wall-clock" is a time).
+def test_no_standard_module_names_cozyla_or_the_wall() -> None:
+    import re
+
+    named = re.compile(r"cozyla|\bwall(?!-clock)|wall_|_wall\b", re.IGNORECASE)
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}:{n}"
+        for path in sorted((SRC / "standard").rglob("*.py"))
+        for n, line in enumerate(path.read_text().splitlines(), 1)
+        if named.search(line)
+    ]
+    assert offenders == []

@@ -61,7 +61,13 @@ from themi.standard.routines import (  # CR10a: the routines' own; the wall's bu
 )
 from themi.standard.tasks import Task, TaskBoard
 from themi_google.events import title_matches
-from themi_home.connectors.cozyla import CozylaClient, CozylaError, Routine, RoutineRecord
+from themi_home.connectors.cozyla import (
+    WALL_WHERE,
+    CozylaClient,
+    CozylaError,
+    Routine,
+    RoutineRecord,
+)
 from themi_home.connectors.cozyla.emoji import better_icon, routine_icon
 from themi_home.connectors.cozyla.schedule import to_wall, wall_can_say, with_round_days
 from themi_home.cozyla_chores import LOOK_BACK, is_routine
@@ -271,7 +277,9 @@ class CozylaRoutines:
                     continue
                 doer = self.store.get_member(task.assignee) if task.assignee else self._admin()
                 await self.board.complete(
-                    task.id, doer, wall=bool(task.assignee) and not task.shared
+                    task.id,
+                    doer,
+                    ticked_on=WALL_WHERE if task.assignee and not task.shared else None,
                 )
                 self._caught_up(task.id)
                 break

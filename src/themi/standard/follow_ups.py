@@ -2,10 +2,10 @@
 
 "Immediately after I indicate that I cleaned the bird cage, remind me to refill the water
 and replace the food bowls" became a task due the next day. Now it's a follow-up of the
-bird cage: nothing until that's done (in chat, with a button, or ticked on the wall), then
+bird cage: nothing until that's done (in chat, with a button, or ticked on a display), then
 a task is made from it and nudged at once (straight away when they're in the chat, else
 inside quiet hours and the daily limit). A repeating task's follow-up comes back every
-round; a one-off's goes once. A follow-up is Themi's own reminder, so never on the wall.
+round; a one-off's goes once. A follow-up is Themi's own reminder, so never on a shared display.
 """
 
 from __future__ import annotations

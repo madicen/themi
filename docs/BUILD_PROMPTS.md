@@ -319,8 +319,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [x] 2026-11-08 |
 | CR20c | Gate: Discord and Slack channels | Core refactor | waiting (bot accounts, Michael's call) |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [x] 2026-11-08 |
-| CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [~] |
-| CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [ ] |
+| CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
+| CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [~] |
 
 ## Fixed technical choices
 
@@ -15240,7 +15240,7 @@ Notes (2026-11-08):
   - New: tests/scenarios/test_chore_chart_module.py. Golden identical.
 
 ### CR21b · Round two: a mirror seam for lists, tasks and routines
-Status: [~]
+Status: [x] 2026-11-08
 Depends on: CR21a
 - A `mirrors` seam in core: a display or app that keeps a list, a task list or a routine in
   step registers itself (its item limit, its ticks coming back, its "ticked there" praise).
@@ -15249,8 +15249,34 @@ Depends on: CR21a
 - No standard module names Cozyla or the wall afterwards (a check).
 Tests: lists, tasks and routines with no mirror; the wall's sync as before.
 
+Notes (2026-11-08):
+- `themi/modules/mirrors.py` (kernel level, by the layer rule): a `Mirror` (name, where
+  people see it, item limit) and `services.mirrors`. Lists ask `keeping_list` and tell
+  `items_leaving`, `lists_leaving`, `items_reset`. `ctx.mirror` registers one.
+- Renamed hooks: `TaskBoard.display_notes` (was wall_notes), `complete(ticked_on=...)`
+  (was `wall=True`), `put_on_displays` (was put_on_wall). Praise is
+  `praise.ticked_there(..., where)`, reading the place back from the queued text, so
+  "Ticked off on the wall: ..." reads exactly as before.
+- The wall's own tables, each in its module's track; the old columns stay, unread:
+  - `cozyla_todos`: `wall_lists`, `wall_list_items` (was lists.cozyla_list_id, wall_name,
+    list_items.cozyla_todo_id, wall_title, wall_done).
+  - `cozyla_chores`: `wall_seen_ticks` (was routine_ticks.on_wall_at; cascades from the
+    tick).
+  The list sync selects them under new names, so the old columns can't shadow them.
+- Wording: the standard modules' docstrings say "a display". Two routine tools lost
+  their wall sentence, and the family template rewords them back exactly, so golden files
+  are identical. The routine group is `groups.ROUTINES`, an alias of WALL ("wall" stays
+  its name in the golden files). The tracking label says "a display's routines" (on the
+  settings page too), a small wording change the family will see.
+- The check: test_architecture's `test_no_standard_module_names_cozyla_or_the_wall`.
+- Tests changed for moved wiring:
+  - test_wall_lists: a list's wall id is in the wall's table.
+  - test_lists and test_faster_replies: they fake a list on the wall with a mirror, not
+    the column.
+  - New: tests/scenarios/test_mirrors.py.
+
 ### CR21c · Round two: Cozyla as its own package that only syncs
-Status: [ ]
+Status: [~]
 Depends on: CR21b
 - `themi_cozyla`: the Cozyla connector and its modules (to-dos, lists, the chart's and
   routines' display), its settings, pages and templates. It may use home; home doesn't use

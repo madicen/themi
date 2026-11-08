@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         TextHandler,
     )
     from themi.core.tools import Tool
+    from themi.modules.mirrors import Mirror
     from themi.modules.prompt import PromptFragment
     from themi.scheduler import Scheduler
     from themi.web.kit import Kit
@@ -225,6 +226,10 @@ class ModuleContext:
     def channel(self, name: str, channel: Channel) -> None:
         """CR20b: a channel people talk to Themi on ("telegram", "web_chat")."""
         self.services.channels.add(name, channel)
+
+    def mirror(self, mirror: Mirror) -> None:
+        """CR21b: a display or app keeping lists, tasks or routines in step."""
+        self.services.mirrors.add(mirror)
 
     def capability(self, name: str) -> None:
         """CR19: something Themi can now do ("voice_notes", "pictures", "image_generation")."""

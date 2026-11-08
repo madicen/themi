@@ -429,7 +429,9 @@ class FeedbackChat:
         pauses = self.services.outbox.pauses.active(member)
         store = self.services.store  # CR7a, CR7b1: each module's own, or its defaults
         models = {m.module: m for m in self.services.preference_models}  # CR10a: no import
-        chart_model = models.get("cozyla_chores")  # the chore chart's, when the wall's loaded
+        chart_model = next(  # the chore chart's, when it's loaded (CR21b: found, not named)
+            (m for m in models.values() if "chart_limit" in m.model_fields), None
+        )
         chart: Any = store.preferences(member.id, chart_model) if chart_model else None
         reviews = store.preferences(member.id, CheckinReviewsPreferences)
         summary = store.preferences(member.id, DaySummaryPreferences)
