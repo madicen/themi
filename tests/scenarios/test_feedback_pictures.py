@@ -13,7 +13,7 @@ from themi import clock
 from themi.channels.events import Picture
 from themi.cli import main
 from themi.core import keys
-from themi.core.feedback import MAX_PICTURES, FeedbackBook
+from themi.standard.feedback import MAX_PICTURES, FeedbackBook
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 

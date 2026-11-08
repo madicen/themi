@@ -15,7 +15,7 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
 from themi.core import keys
-from themi.core.triage import ReceiptFound
+from themi_google.triage import ReceiptFound
 
 ERIN = "erin@gmail.com"
 
@@ -388,7 +388,7 @@ async def test_bug_164_a_nextdoor_post_isnt_a_tenant_emergency(
     assert not [t for t in scenario.inbox("Erin") if t.startswith("An email that looks urgent")]
     row = scenario.app.db.one("SELECT category, urgent_kind FROM emails")
     assert row is not None and (row["category"], row["urgent_kind"]) == ("urgent", "other")
-    from themi.core.triage import SYSTEM
+    from themi_google.triage import SYSTEM
 
     assert "never urgent" in SYSTEM  # the model is told, too
 

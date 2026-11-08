@@ -17,9 +17,9 @@ from tests.scenarios.harness import START, Scenario
 from themi import clock
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.laundry import RESCUE_TEXT, SUPERSEDED_TEXT, WASHED_TEXT, Laundry, LaundrySettings
-from themi.core.tasks import clock_words
 from themi.energy.windows import next_window
+from themi.standard.tasks import clock_words
+from themi_home.laundry import RESCUE_TEXT, SUPERSEDED_TEXT, WASHED_TEXT, Laundry, LaundrySettings
 
 WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 TZ = START.tzinfo

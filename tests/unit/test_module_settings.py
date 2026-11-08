@@ -11,13 +11,6 @@ from typing import Any
 import pytest
 
 from themi.core.connector_settings import SearchSettings
-from themi.core.google_settings import GoogleSettings
-from themi.core.home_settings import (
-    CozylaSettings,
-    HomeConnectSettings,
-    OurGroceriesSettings,
-    ThinqSettings,
-)
 from themi.modules.settings import (
     ModuleSettings,
     SettingsProblem,
@@ -26,6 +19,13 @@ from themi.modules.settings import (
     read_settings,
 )
 from themi.storage.secrets import Secret
+from themi_google.google_settings import GoogleSettings
+from themi_home.home_settings import (
+    CozylaSettings,
+    HomeConnectSettings,
+    OurGroceriesSettings,
+    ThinqSettings,
+)
 
 
 def read[S: ModuleSettings](model: type[S], section: dict[str, Any] | None = None, **env: str) -> S:

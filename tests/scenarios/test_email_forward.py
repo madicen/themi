@@ -11,7 +11,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi.ai.types import ToolResult
 from themi.autonomy import ExecutionContext
-from themi.connectors.gmail.executors import FORWARDED, MAX_ATTACHMENTS
+from themi_google.connectors.gmail.executors import FORWARDED, MAX_ATTACHMENTS
 
 __all__ = ["inbox"]
 

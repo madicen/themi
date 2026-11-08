@@ -8,7 +8,7 @@ import pytest
 
 from themi.accounts import Member
 from themi.accounts.models import Role
-from themi.core.conversation_mode import CHAT_SYSTEM, build_chat_turn, honest, is_request
+from themi.standard.conversation_mode import CHAT_SYSTEM, build_chat_turn, honest, is_request
 
 ERIN = Member(
     id=1, name="Erin", role=Role.ADMIN, telegram_user_id=1, quiet_start=time(22),
@@ -92,7 +92,7 @@ def test_the_chat_turn_has_no_energy_and_no_tools() -> None:
 
 def test_chat_says_when_it_doesnt_know() -> None:
     """F30b (#160): "The Redwood City dentist is Dr. Evans, 650-555-0144" was made up."""
-    from themi.core.conversation_mode import CHAT_SYSTEM
+    from themi.standard.conversation_mode import CHAT_SYSTEM
 
     assert "Never make up names, phone numbers, addresses" in CHAT_SYSTEM
     assert "say so" in CHAT_SYSTEM and "places they could look" in CHAT_SYSTEM

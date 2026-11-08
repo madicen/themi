@@ -17,7 +17,7 @@ from tests.scenarios.test_dishwasher import DISHWASHER, link
 from themi import clock
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.appliances import NONE_LINKED
+from themi_home.appliances import NONE_LINKED
 
 WASHER, DRYER = "lg-washer-1", "lg-dryer-1"
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from themi.core.journal import Entry, _clean
+from themi.standard.journal import Entry, _clean
 
 
 def test_an_entry_in_one_line() -> None:

@@ -11,9 +11,9 @@ from tests.fakes.spotify import FakeSpotify
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.connectors.spotify import pkce_pair
 from themi.core import keys
-from themi.core.music import NO_DEVICE_TEXT, Music
+from themi_home.connectors.spotify import pkce_pair
+from themi_home.music import NO_DEVICE_TEXT, Music
 
 
 def music(scenario: Scenario) -> Music:

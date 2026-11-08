@@ -12,8 +12,8 @@ import pytest
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.focus import SIGNAL, FocusPreferences, overwhelmed, partner_signal
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.focus import SIGNAL, FocusPreferences, overwhelmed, partner_signal
+from themi.standard.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)
 
@@ -262,7 +262,7 @@ async def test_left_as_they_are(scenario: Scenario) -> None:
 async def test_a_chore_goes_to_its_next_round_and_a_shared_one_stays_with_the_other(
     scenario: Scenario,
 ) -> None:
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     erin, husband = scenario.member("Erin"), scenario.member("Husband")
     scenario.app.store.save_preferences(erin, erin.id, FocusPreferences, day_budget=2)

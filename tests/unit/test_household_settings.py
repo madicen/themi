@@ -9,13 +9,13 @@ import pytest
 from tests.fixtures.family import SeededFamily
 from themi.accounts import AccountStore, InvalidValue
 from themi.accounts.store import PermissionDenied
-from themi.core.body_double import BodyDoublePreferences
-from themi.core.laundry import LaundrySettings
-from themi.core.pantry import PantrySettings
-from themi.core.spending import SpendingSettings
 from themi.storage import migrations
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, generate_key
+from themi_home.body_double import BodyDoublePreferences
+from themi_home.laundry import LaundrySettings
+from themi_home.pantry import PantrySettings
+from themi_home.spending import SpendingSettings
 
 
 def columns(db: Database, table: str) -> set[str]:

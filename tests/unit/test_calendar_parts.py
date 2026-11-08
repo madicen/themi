@@ -4,9 +4,9 @@ from datetime import date
 from hypothesis import given
 from hypothesis import strategies as st
 
-from themi.connectors.gcal import event_id
-from themi.core.calendar import event_body
-from themi.core.tasks import Task
+from themi.standard.tasks import Task
+from themi_google.calendar import event_body
+from themi_google.connectors.gcal import event_id
 
 # What Google accepts as an event id: base32hex (0-9, a-v), 5 to 1024 characters.
 GOOGLE_EVENT_ID = re.compile(r"[a-v0-9]{5,1024}")
@@ -41,7 +41,7 @@ def test_an_event_is_an_all_day_reminder() -> None:
 
 def test_an_event_named_only_as_the_time_to_fit_around_is_an_anchor() -> None:
     """Bug #73: "plenty of time before tutoring" named the tutoring, but not to move it."""
-    from themi.core.events import named_as_anchor
+    from themi_google.events import named_as_anchor
 
     title = "Tutor Gabriel (Illems)"
     said = "Let's move that up to 12pm so that there's plenty of time before tutoring"

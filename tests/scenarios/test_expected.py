@@ -16,7 +16,7 @@ from tests.scenarios.test_triage import ERIN, arrive, inbox, link, verdict
 from themi.accounts import PermissionDenied
 from themi.autonomy import Tier
 from themi.core import keys
-from themi.core.expected import ExpectedEmail, ExpectedEmails
+from themi_google.expected import ExpectedEmail, ExpectedEmails
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

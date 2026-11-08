@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.checkin_reviews import CheckinReviewsPreferences
-from themi.core.habits import HabitReserve
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.checkin_reviews import CheckinReviewsPreferences
+from themi.standard.habits import HabitReserve
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 ASK = 'Check-in review: is "Go for a run" helping?'
 

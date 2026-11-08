@@ -13,8 +13,8 @@ from themi import clock
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.day_summary import DaySummaryPreferences
-from themi.core.tasks import TaskBoard
+from themi.standard.day_summary import DaySummaryPreferences
+from themi.standard.tasks import TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 THURSDAY = date(2026, 10, 22)

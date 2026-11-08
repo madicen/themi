@@ -5,7 +5,7 @@ import httpx
 
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 BIRD_CAGE = ["Shake out the top tray", "Refill the water dispenser"]
 
@@ -185,7 +185,7 @@ async def test_a_chore_for_either_of_you_isnt_called_overdue(scenario) -> None: 
     model as "shared, overdue" on Monday."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     board = scenario.app.services.maybe(keys.taskboard)
     erin = scenario.member("Erin")

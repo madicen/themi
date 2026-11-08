@@ -15,7 +15,7 @@ from tests.scenarios.test_things_to_buy import inbox
 from tests.scenarios.test_triage import arrive, verdict
 from themi.core import keys
 from themi.core.agent import CLAIMS_DONE
-from themi.core.safeway import SafewayCart
+from themi_home.safeway import SafewayCart
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

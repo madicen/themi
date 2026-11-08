@@ -20,7 +20,7 @@ from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.body_double import GUIDED
+from themi_home.body_double import GUIDED
 
 # (the job, words that must come in this order, each found in some step)
 JOBS: list[tuple[str, tuple[str, ...]]] = [

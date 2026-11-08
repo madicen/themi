@@ -10,9 +10,9 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import SYSTEM
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
 from themi.localtime import member_day
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 WED, FRI, SAT = date(2026, 10, 21), date(2026, 10, 23), date(2026, 10, 24)

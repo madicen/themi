@@ -7,8 +7,8 @@ import pytest
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.chore_chart import ChartPreferences
-from themi.core.praise import TasksPreferences
+from themi.standard.praise import TasksPreferences
+from themi_home.chore_chart import ChartPreferences
 
 
 async def test_ticking_a_to_do_off_on_the_wall_stops_the_nudges(
@@ -42,7 +42,7 @@ async def test_a_chore_ticked_on_the_chart_isnt_asked_about(
     doesn't ask about it that evening."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
@@ -70,7 +70,7 @@ async def test_erin_sees_one_chore_at_a_time(scenario: Scenario, fake_cozyla: Fa
     waiting isn't in her evening list."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
@@ -118,7 +118,7 @@ async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCo
 
 
 def _praised(text: str, titles: str) -> bool:
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     return any(text == f"Ticked off on the wall: {titles}. {word}" for word in PRAISE)
 

@@ -7,7 +7,7 @@ import pytest
 from tests.fixtures.cookbook import load
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.recipe_ideas import covers
+from themi_home.recipe_ideas import covers
 
 CHANA_PANTRY = [
     "dried chickpeas", "oil", "onion", "bay leaf", "garlic", "tomatoes", "coriander powder",

@@ -7,7 +7,7 @@ from datetime import date
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.praise import TasksPreferences
+from themi.standard.praise import TasksPreferences
 
 
 async def test_erins_draining_note_routes_the_next_task_to_her_husband(
@@ -440,7 +440,7 @@ async def test_done_somewhere_else_the_nudge_stops_asking(scenario: Scenario) ->
     buttons, so it looked like Themi was still asking."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
@@ -477,7 +477,7 @@ async def test_tapping_done_edits_that_message_once(scenario: Scenario) -> None:
 
 def _praised(text: str, title: str) -> bool:
     """F19b (Erin's idea #102): "Marked done: X." and a short warm word from the set."""
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     return any(text == f"Marked done: {title}. {word}" for word in PRAISE)
 

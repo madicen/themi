@@ -6,7 +6,7 @@ import httpx
 
 from tests.scenarios.harness import Scenario
 from themi.channels.outbox import Priority
-from themi.core.commands import LINK_ONLY_GMAIL
+from themi.standard.commands import LINK_ONLY_GMAIL
 
 
 async def queue_meal_nudge(scenario: Scenario, text: str = "Lunch idea: soup?") -> None:

@@ -11,7 +11,7 @@ import pytest
 from tests.fakes.roborock import CODE, EMAIL, SECRET_TOKEN, FakeRoborock
 from tests.fixtures.family import SeededFamily
 from themi import clock
-from themi.connectors.roborock import (
+from themi_home.connectors.roborock import (
     JAMMED,
     PART,
     STUCK,

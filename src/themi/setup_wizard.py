@@ -15,11 +15,16 @@ import asyncio
 import json
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from themi.config import available_modules, load_config, load_template, resolve_modules
+from themi.config import (
+    available_modules,
+    load_config,
+    load_template,
+    resolve_modules,
+    template_packages,
+)
 from themi.modules import Module
 from themi.modules.settings import questions
 from themi.settings import Settings, SettingsError, read_dotenv
@@ -49,10 +54,7 @@ class Answers:
 
 
 def templates() -> list[str]:
-    folder = resources.files("themi.templates")
-    return sorted(
-        p.name.removesuffix(".toml") for p in folder.iterdir() if p.name.endswith(".toml")
-    )
+    return sorted(template_packages())
 
 
 def run_setup(

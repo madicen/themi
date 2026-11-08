@@ -11,7 +11,7 @@ from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 TOPICS = TopicEmbedder(
     {

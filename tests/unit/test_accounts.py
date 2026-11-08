@@ -14,9 +14,9 @@ from themi.accounts import (
     PermissionDenied,
     Role,
 )
-from themi.core.pantry import PantrySettings
-from themi.core.spending import SpendingSettings
 from themi.storage.secrets import Secret
+from themi_home.pantry import PantrySettings
+from themi_home.spending import SpendingSettings
 
 # ----- family ---------------------------------------------------------------
 

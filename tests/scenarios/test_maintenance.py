@@ -18,7 +18,7 @@ from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.autonomy import Decision
 from themi.core import keys
-from themi.core.maintenance import Item, Maintenance
+from themi_home.maintenance import Item, Maintenance
 
 FILTER_STEPS = ["Turn the furnace off", "Slide the old filter out", "Put the new one in, arrow up"]
 

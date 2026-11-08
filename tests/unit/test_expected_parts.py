@@ -4,8 +4,8 @@ import pytest
 
 from themi.accounts import InvalidValue, sender_matches, sender_pattern
 from themi.channels.pda import find_demands
-from themi.core import expected
-from themi.core.expected import (
+from themi_google import expected
+from themi_google.expected import (
     ExpectedEmail,
     cadence_words,
     dollars,

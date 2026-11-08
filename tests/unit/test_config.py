@@ -33,21 +33,21 @@ def settings(**env: str) -> Settings:
 def before_cr5a(s: Settings) -> list[str]:
     """The module list `build_runtime` gave before CR5a: its options, as it built them
     (CR5b: from the modules' settings, which hold what `Settings` held then)."""
-    from themi.connectors.catgenie import CatGenieConfig
-    from themi.connectors.cozyla import CozylaClient
-    from themi.connectors.gkeep import GKeepAccount
-    from themi.connectors.homeconnect import HomeConnectClient
-    from themi.connectors.ourgroceries import OurGroceriesClient
-    from themi.connectors.roborock import library as roborock_library
     from themi.connectors.search import choose as choose_search
-    from themi.connectors.spotify import SpotifyClient
-    from themi.connectors.thinq import mqtt as thinq_mqtt
     from themi.connectors.travel import TravelClient
-    from themi.connectors.tuya import TuyaConfig
     from themi.core import connector_settings as cs
-    from themi.core import google_settings as gs
-    from themi.core import home_settings as hs
     from themi.modules.settings import read_settings
+    from themi_google import google_settings as gs
+    from themi_home import home_settings as hs
+    from themi_home.connectors.catgenie import CatGenieConfig
+    from themi_home.connectors.cozyla import CozylaClient
+    from themi_home.connectors.gkeep import GKeepAccount
+    from themi_home.connectors.homeconnect import HomeConnectClient
+    from themi_home.connectors.ourgroceries import OurGroceriesClient
+    from themi_home.connectors.roborock import library as roborock_library
+    from themi_home.connectors.spotify import SpotifyClient
+    from themi_home.connectors.thinq import mqtt as thinq_mqtt
+    from themi_home.connectors.tuya import TuyaConfig
 
     def read(model: Any) -> Any:
         return read_settings(model, s.environment, {}, "x")

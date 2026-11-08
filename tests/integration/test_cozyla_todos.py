@@ -13,8 +13,8 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 LA = ZoneInfo("America/Los_Angeles")
 
@@ -374,7 +374,7 @@ async def test_a_due_date_changed_on_the_wall_is_logged(
         todo["todoId"],
         dueDateTime=int(datetime(2026, 10, 29, 23, 59, tzinfo=LA).timestamp() * 1000),
     )
-    with caplog.at_level(logging.INFO, logger="themi.core.cozyla_todos"):
+    with caplog.at_level(logging.INFO, logger="themi_home.cozyla_todos"):
         await sync(scenario)
     assert board(scenario).get(stamps.id).due_on == date(2026, 10, 29)
     assert (

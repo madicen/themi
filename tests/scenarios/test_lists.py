@@ -11,7 +11,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.lists import Lists, NamedList
+from themi.standard.lists import Lists, NamedList
 
 
 def lists(scenario: Scenario) -> Lists:

@@ -14,8 +14,8 @@ from tests.fakes.gtasks_api import FakeGtasks
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 FRI = date(2026, 10, 23)
 

@@ -18,7 +18,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
 from themi.core import keys
-from themi.core.vacuum import CATEGORY, DONE_CATEGORY, EXPIRED_TEXT
+from themi_home.vacuum import CATEGORY, DONE_CATEGORY, EXPIRED_TEXT
 
 ROBOT = "rr-duid-1"
 STUCK_IN_KITCHEN = (

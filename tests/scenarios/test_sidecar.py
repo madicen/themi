@@ -12,7 +12,7 @@ from tests.scenarios.test_calendar_events import dentist, linked, on_primary
 from tests.scenarios.test_conversation_mode import chat_on
 from tests.scenarios.test_twins import TASK
 from themi.core import keys
-from themi.core.sidecar import REACTION
+from themi.standard.sidecar import REACTION
 
 __all__ = ["linked"]  # the fixture, used by name
 

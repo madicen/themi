@@ -10,7 +10,7 @@ from themi import clock
 from themi.ai.errors import PermanentError
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.pantry import Pantry
+from themi_home.pantry import Pantry
 
 
 def pantry(scenario: Scenario) -> Pantry:

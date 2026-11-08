@@ -29,47 +29,72 @@ from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.channels.telegram import TelegramChannel
 from themi.config import Template, load_template
-from themi.connectors.catgenie import CatGenieConfig
-from themi.connectors.cozyla import CozylaClient
-from themi.connectors.gkeep import KeepFactory
-from themi.connectors.google import GoogleConfig
-from themi.connectors.homeconnect import HomeConnectClient
-from themi.connectors.ourgroceries import GroceryListClient
-from themi.connectors.recipe_page import PageReader
-from themi.connectors.roborock import RoborockLogin
 from themi.connectors.search import SearchBackend
-from themi.connectors.spotify import SpotifyClient
-from themi.connectors.thinq import ThinqConfig
 from themi.connectors.travel import TravelClient
-from themi.connectors.tuya import TuyaConfig
 from themi.core.agent import Agent
-from themi.core.appliances import AppliancesModule
 from themi.core.approvals import ApprovalsUI
-from themi.core.body_double import BodyDoubleModule
-from themi.core.body_double_guided import GuidedStepsModule
-from themi.core.body_double_modes import ModeChooserModule
-from themi.core.body_double_music import MusicOffersModule
-from themi.core.breaks import BreaksModule
-from themi.core.burnout import BurnoutModule
-from themi.core.business_hours import BusinessHoursModule
-from themi.core.buying import BuyingModule
-from themi.core.calls import CallsModule
-from themi.core.checkin_reviews import CheckinReviewsModule
-from themi.core.commands import CommandsModule
-from themi.core.connector_modules import EmailAuditModule, GoogleTasksModule, TravelModule
-from themi.core.conversation_mode import ConversationModeModule
-from themi.core.cookbook_save import CookbookSaveModule
-from themi.core.cooking import CookingModule
-from themi.core.cooking_timers import CookingTimersModule
-from themi.core.day_summary import DaySummaryModule
-from themi.core.feedback import FeedbackModule
-from themi.core.focus import FocusModule
-from themi.core.follow_ups import FollowUpsModule
-from themi.core.google_modules import CalendarModule, GmailModule, GoogleModule
-from themi.core.groceries import GroceriesModule
-from themi.core.guides import GuidesModule
-from themi.core.habits import HabitsModule
-from themi.core.home_modules import (
+from themi.core.prompts import CORE_RULES
+from themi.core.routing import EmbeddingRouter
+from themi.core.rules import Rulebook
+from themi.core.services import Services
+from themi.core.starter_tools import STARTER_TOOLS
+from themi.core.tools import SETTINGS, ToolRegistry
+from themi.core.which_task import TaskNamer
+from themi.energy import EnergyModel
+from themi.energy.outcomes import OutcomeTracker
+from themi.energy.windows import EnergyReceptivity
+from themi.modules import Module, ModuleContext, PeriodicTask, as_job
+from themi.scheduler import Scheduler
+from themi.standard.breaks import BreaksModule
+from themi.standard.burnout import BurnoutModule
+from themi.standard.business_hours import BusinessHoursModule
+from themi.standard.checkin_reviews import CheckinReviewsModule
+from themi.standard.commands import CommandsModule
+from themi.standard.conversation_mode import ConversationModeModule
+from themi.standard.day_summary import DaySummaryModule
+from themi.standard.feedback import FeedbackModule
+from themi.standard.focus import FocusModule
+from themi.standard.follow_ups import FollowUpsModule
+from themi.standard.guides import GuidesModule
+from themi.standard.habits import HabitsModule
+from themi.standard.journal import JournalModule
+from themi.standard.lists import ListsModule
+from themi.standard.memory import MemoryModule
+from themi.standard.reactions import ReactionsModule
+from themi.standard.reminders import RemindersModule
+from themi.standard.routines import RoutinesModule
+from themi.standard.taking import TakingModule
+from themi.standard.tasks import TasksModule
+from themi.standard.web_search import WebSearchModule
+from themi.standard.wrong_replies import WrongRepliesModule
+from themi.storage.db import Database
+from themi.storage.secrets import Cipher
+from themi.updates import ServerControl
+from themi_google.connector_modules import EmailAuditModule, GoogleTasksModule, TravelModule
+from themi_google.connectors.google import GoogleConfig
+from themi_google.google_modules import CalendarModule, GmailModule, GoogleModule
+from themi_home.appliances import AppliancesModule
+from themi_home.body_double import BodyDoubleModule
+from themi_home.body_double_guided import GuidedStepsModule
+from themi_home.body_double_modes import ModeChooserModule
+from themi_home.body_double_music import MusicOffersModule
+from themi_home.buying import BuyingModule
+from themi_home.calls import CallsModule
+from themi_home.connectors.catgenie import CatGenieConfig
+from themi_home.connectors.cozyla import CozylaClient
+from themi_home.connectors.gkeep import KeepFactory
+from themi_home.connectors.homeconnect import HomeConnectClient
+from themi_home.connectors.ourgroceries import GroceryListClient
+from themi_home.connectors.recipe_page import PageReader
+from themi_home.connectors.roborock import RoborockLogin
+from themi_home.connectors.spotify import SpotifyClient
+from themi_home.connectors.thinq import ThinqConfig
+from themi_home.connectors.tuya import TuyaConfig
+from themi_home.cookbook_save import CookbookSaveModule
+from themi_home.cooking import CookingModule
+from themi_home.cooking_timers import CookingTimersModule
+from themi_home.groceries import GroceriesModule
+from themi_home.home_modules import (
     CatGenieModule,
     CozylaChoresModule,
     CozylaTodosModule,
@@ -81,43 +106,18 @@ from themi.core.home_modules import (
     ThinqModule,
     TuyaModule,
 )
-from themi.core.journal import JournalModule
-from themi.core.liaison import LiaisonModule
-from themi.core.lists import ListsModule
-from themi.core.maintenance import MaintenanceModule
-from themi.core.meals import MealsModule
-from themi.core.memory import MemoryModule
-from themi.core.pantry import PantryModule
-from themi.core.prompts import CORE_RULES
-from themi.core.reactions import ReactionsModule
-from themi.core.recipe_groceries import RecipeGroceriesModule
-from themi.core.recipe_ideas import RecipeIdeasModule
-from themi.core.recipes import RecipesModule
-from themi.core.reminders import RemindersModule
-from themi.core.routines import RoutinesModule
-from themi.core.routing import EmbeddingRouter
-from themi.core.rules import Rulebook
-from themi.core.safeway import SafewayModule
-from themi.core.services import Services
-from themi.core.spending import SpendingModule
-from themi.core.starter_tools import STARTER_TOOLS
-from themi.core.step_images import StepPicturesModule
-from themi.core.taking import TakingModule
-from themi.core.tasks import TasksModule
-from themi.core.tools import SETTINGS, ToolRegistry
-from themi.core.web_recipes import WebRecipesModule
-from themi.core.web_search import WebSearchModule
-from themi.core.which_list import WhichListModule
-from themi.core.which_task import TaskNamer
-from themi.core.wrong_replies import WrongRepliesModule
-from themi.energy import EnergyModel
-from themi.energy.outcomes import OutcomeTracker
-from themi.energy.windows import EnergyReceptivity
-from themi.modules import Module, ModuleContext, PeriodicTask, as_job
-from themi.scheduler import Scheduler
-from themi.storage.db import Database
-from themi.storage.secrets import Cipher
-from themi.updates import ServerControl
+from themi_home.liaison import LiaisonModule
+from themi_home.maintenance import MaintenanceModule
+from themi_home.meals import MealsModule
+from themi_home.pantry import PantryModule
+from themi_home.recipe_groceries import RecipeGroceriesModule
+from themi_home.recipe_ideas import RecipeIdeasModule
+from themi_home.recipes import RecipesModule
+from themi_home.safeway import SafewayModule
+from themi_home.spending import SpendingModule
+from themi_home.step_images import StepPicturesModule
+from themi_home.web_recipes import WebRecipesModule
+from themi_home.which_list import WhichListModule
 
 ChannelFactory = Callable[[AccountStore], TelegramChannel]
 

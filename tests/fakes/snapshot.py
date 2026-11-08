@@ -21,7 +21,12 @@ from collections import Counter
 from datetime import date, datetime
 from typing import Any, ClassVar
 
-ALLOWED_MODULES = ("tests.fakes.", "themi.connectors.")
+ALLOWED_MODULES = (  # CR10b2: the packs have connectors too
+    "tests.fakes.",
+    "themi.connectors.",
+    "themi_google.connectors.",
+    "themi_home.connectors.",
+)
 TAG = "~"
 
 

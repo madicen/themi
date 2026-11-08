@@ -140,7 +140,7 @@ def test_rule_texts_pass_the_strictest_pda_check() -> None:
 
 
 def test_command_texts_pass_the_strictest_pda_check(family) -> None:
-    from themi.core import commands
+    from themi.standard import commands
 
     texts = [
         commands.PAUSE_HELP.format(topics="meals, laundry"),
@@ -267,7 +267,7 @@ def test_dates_carry_a_year_only_when_its_another_one() -> None:
     # Bug #70: "due Thu 29 Oct" was read back as "Thursday, October 29, 2020".
     from datetime import date
 
-    from themi.core.tasks import _day_words
+    from themi.standard.tasks import _day_words
 
     today = date(2026, 10, 28)
     assert _day_words(date(2026, 10, 29), today) == "Thu 29 Oct"
@@ -362,7 +362,7 @@ def test_a_reply_in_quotes_loses_them(said: str, sent: str) -> None:
 
 def test_the_warm_words_pass_the_strictest_pda_check() -> None:
     """F19b: praise for what's done, never a nudge for more."""
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     for word in PRAISE:
         assert find_demands(word, 3) == [], word
@@ -370,7 +370,7 @@ def test_the_warm_words_pass_the_strictest_pda_check() -> None:
 
 def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
     """F19c: the reply to a snooze of a task on both lists."""
-    from themi.core import tasks
+    from themi.standard import tasks
 
     for text in (tasks.YOURS_UNTIL_TEXT, tasks.YOURS_LATER_TEXT, tasks.STILL_ON_TEXT):
         said = text.format(title="Bring bins in", when="2 pm today", whose="Michael's")
@@ -379,7 +379,7 @@ def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
 
 def test_the_focus_words_pass_the_strictest_pda_check() -> None:
     """O1a: reassurance, never instruction."""
-    from themi.core import focus
+    from themi.standard import focus
 
     for text in (
         focus.FOCUS_TEXT.format(these="these", items="- Call the vet"),

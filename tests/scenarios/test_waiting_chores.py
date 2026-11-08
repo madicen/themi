@@ -13,9 +13,9 @@ from themi import clock
 from themi.ai.types import ToolResult
 from themi.channels.pda import MAX_STRENGTH, find_demands
 from themi.core import keys
-from themi.core.chore_chart import ChartPreferences
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
+from themi_home.chore_chart import ChartPreferences
 
 MESSAGE = (
     "Any time you are going to assign Erin to Clean the Kitchen, first send a task to Michael "

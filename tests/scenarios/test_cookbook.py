@@ -14,9 +14,9 @@ from tests.fixtures.cookbook import COOKBOOK_ID, LINK, TITLE, cookbook
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
-from themi.connectors.google import DRIVE_FILE_SCOPE
-from themi.connectors.google.oauth import LINK_SCOPES
 from themi.core import keys
+from themi_google.connectors.google import DRIVE_FILE_SCOPE
+from themi_google.connectors.google.oauth import LINK_SCOPES
 
 READ = (
     "I've read 13 recipes and 3 charts from the cookbook. 3 need a look: Bean Dip (headings typed "

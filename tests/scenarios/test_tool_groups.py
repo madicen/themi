@@ -7,7 +7,7 @@ from tests.fakes.groups import GROUPS, TOOL_GROUPS
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
-from themi.core.timing import Reply, router_numbers, week_of_replies
+from themi.standard.timing import Reply, router_numbers, week_of_replies
 
 
 def sent(scenario: Scenario, index: int = -1) -> set[str]:

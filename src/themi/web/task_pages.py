@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import Member, NotFound, PermissionDenied
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 from themi.web.kit import Kit
 
 

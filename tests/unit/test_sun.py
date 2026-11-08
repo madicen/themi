@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from themi.core.sun import sunset
+from themi.standard.sun import sunset
 
 LA = ZoneInfo("America/Los_Angeles")
 SF = (37.7749, -122.4194)

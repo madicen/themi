@@ -8,7 +8,7 @@ import pytest
 from tests.fixtures.cookbook import COOKBOOK_ID, load
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
-from themi.core.conversation_mode import is_request
+from themi.standard.conversation_mode import is_request
 
 
 @pytest.fixture

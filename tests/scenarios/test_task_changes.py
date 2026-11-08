@@ -9,7 +9,7 @@ from typing import Any
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 STEPS = [
     "Call Dr. Scheinbach to check if he's still practicing",

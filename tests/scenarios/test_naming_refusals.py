@@ -8,7 +8,7 @@ from themi import clock
 from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.naming import NamingRefusals, report
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:

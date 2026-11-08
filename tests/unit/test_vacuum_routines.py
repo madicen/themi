@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from themi.connectors.roborock import BIN, FAULT, JAMMED, NOT_DOCKED, PART, STUCK, WATER_EMPTY
-from themi.core.vacuum import about
+from themi_home.connectors.roborock import BIN, FAULT, JAMMED, NOT_DOCKED, PART, STUCK, WATER_EMPTY
+from themi_home.vacuum import about
 
 
 @pytest.mark.parametrize(

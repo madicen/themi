@@ -5,7 +5,7 @@ from datetime import date
 
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard, _label
+from themi.standard.tasks import Task, TaskBoard, _label
 
 
 def board(scenario: Scenario) -> TaskBoard:

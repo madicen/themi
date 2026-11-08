@@ -5,9 +5,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from themi.accounts import InvalidValue
-from themi.connectors.ourgroceries.mirror import backoff
-from themi.core.groceries import and_list, item_name
-from themi.core.pantry import probably_low, typical_interval
+from themi_home.connectors.ourgroceries.mirror import backoff
+from themi_home.groceries import and_list, item_name
+from themi_home.pantry import probably_low, typical_interval
 
 START = datetime(2026, 6, 1, 18, 0, tzinfo=UTC)
 

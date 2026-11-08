@@ -10,10 +10,10 @@ from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
 from themi.config import all_groups, any_group_of
 from themi.core import groups
-from themi.core.lists import ListsModule
-from themi.core.recipes import RecipesModule
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import SETTINGS, ToolRegistry
+from themi.standard.lists import ListsModule
+from themi_home.recipes import RecipesModule
 
 
 def more_tools_groups(registry: ToolRegistry) -> list[str]:

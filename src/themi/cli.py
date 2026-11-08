@@ -345,10 +345,16 @@ def _feedback(
 ) -> int:
     from pathlib import Path
 
-    from themi.core.feedback import FeedbackBook, picture_name
     from themi.core.naming import NamingRefusals
     from themi.core.naming import report as naming_report
-    from themi.core.wrong_replies import LABEL_WORDS, ReplyReview, ReviewError, report, stub_text
+    from themi.standard.feedback import FeedbackBook, picture_name
+    from themi.standard.wrong_replies import (
+        LABEL_WORDS,
+        ReplyReview,
+        ReviewError,
+        report,
+        stub_text,
+    )
 
     store = _store()
     book = FeedbackBook(store.db, store.cipher)
@@ -397,11 +403,11 @@ def _feedback(
 def _cozyla_check(titles: bool, fields: bool = False) -> int:
     import asyncio
 
-    from themi.connectors.cozyla import CozylaClient, CozylaError
-    from themi.connectors.cozyla.check import check
-    from themi.core.home_settings import CozylaSettings
     from themi.modules.settings import SettingsProblem, read_settings
     from themi.settings import Settings
+    from themi_home.connectors.cozyla import CozylaClient, CozylaError
+    from themi_home.connectors.cozyla.check import check
+    from themi_home.home_settings import CozylaSettings
 
     settings = Settings.load()
     try:
@@ -434,8 +440,8 @@ def _keep(command: str, name: str, list_name: str) -> int:
     from getpass import getpass
 
     from themi.accounts import AccountsError
-    from themi.connectors.gkeep import GKeepAccount, KeepError, exchange_token
-    from themi.core.keep_groceries import KeepLinks, run_keep_link
+    from themi_home.connectors.gkeep import GKeepAccount, KeepError, exchange_token
+    from themi_home.keep_groceries import KeepLinks, run_keep_link
 
     store = _store()
     member = store.member_by_name(name)
@@ -471,8 +477,8 @@ def _tuya_capture(out: str) -> int:
     import asyncio
     from pathlib import Path
 
-    from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
-    from themi.connectors.tuya.watch import write_captures
+    from themi_home.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
+    from themi_home.connectors.tuya.watch import write_captures
 
     store = _store()
     watcher = TuyaWatcher(store, TuyaAccount(store.db, store.cipher, TuyaConfig()))
@@ -503,13 +509,13 @@ def _catgenie_capture(out: str) -> int:
     import asyncio
     from pathlib import Path
 
-    from themi.connectors.catgenie import (
+    from themi_home.connectors.catgenie import (
         CatGenieAccount,
         CatGenieConfig,
         CatGenieError,
         CatGenieWatcher,
     )
-    from themi.connectors.catgenie.watch import write_captures
+    from themi_home.connectors.catgenie.watch import write_captures
 
     store = _store()
     watcher = CatGenieWatcher(store, CatGenieAccount(store.db, store.cipher, CatGenieConfig()))

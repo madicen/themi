@@ -23,8 +23,8 @@ import httpx
 import pytest
 
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.thinq import MqttLogin, ThinqConfig
-from themi.connectors.thinq.client import API_KEY
+from themi_home.connectors.thinq import MqttLogin, ThinqConfig
+from themi_home.connectors.thinq.client import API_KEY
 
 BASE_URL = "https://thinq.test"
 TOKEN = "thinqpat_family_token"

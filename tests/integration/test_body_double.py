@@ -11,7 +11,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.body_double import JOB, SILENT, SPRINT, BodyDouble
+from themi_home.body_double import JOB, SILENT, SPRINT, BodyDouble
 
 
 def bd(scenario: Scenario) -> BodyDouble:

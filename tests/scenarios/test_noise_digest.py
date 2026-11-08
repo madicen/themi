@@ -13,7 +13,7 @@ from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi import clock
 from themi.accounts.store import SYSTEM
 from themi.core import keys
-from themi.core.noise_digest import NoisePreferences
+from themi_google.noise_digest import NoisePreferences
 
 __all__ = ["inbox"]  # the fixture, from triage's scenarios
 

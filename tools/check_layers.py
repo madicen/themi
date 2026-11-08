@@ -39,7 +39,16 @@ CORE_IN_FEATURES = {
     "themi.core.services",
     "themi.core.tools",
 }
-OUTSIDE = ("themi.core", "themi.connectors", "themi.energy", "themi.web", "themi.app")
+OUTSIDE = (
+    "themi.core",
+    "themi.standard",
+    "themi.connectors",
+    "themi.energy",
+    "themi.web",
+    "themi.app",
+    "themi_google",
+    "themi_home",
+)
 
 # (file relative to the src root, imported module): the prompt that removes it.
 KNOWN: dict[tuple[str, str], str] = {}  # none left after CR5b

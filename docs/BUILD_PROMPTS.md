@@ -296,9 +296,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [x] 2026-11-07 |
 | CR10 | Core refactor: workspace packages | Core refactor | split |
 | CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
-| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | split |
+| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | split, [x] 2026-11-07 (CR10b3 deferred) |
 | CR10b1 | Core refactor: a Google pack the standard modules don't import | Core refactor | [x] 2026-11-07 |
-| CR10b2 | Core refactor: the module code out of the core folder, into its packs | Core refactor | [~] |
+| CR10b2 | Core refactor: the module code out of the core folder, into its packs | Core refactor | [x] 2026-11-07 |
 | CR10b3 | Core refactor: a distribution per pack | Core refactor | deferred |
 | CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
 | CR12 | Core refactor: the work template | Core refactor | [x] 2026-11-07 |
@@ -14721,7 +14721,7 @@ Notes:
 - Travel heads-ups are the Google pack's (they need calendar events).
 
 ### CR10b2 · Core refactor: the module code out of the core folder, into its packs
-Status: [~]
+Status: [x] 2026-11-07
 Depends on: CR10b1
 - `src/themi/core` keeps the core (agent, services, tools, prompts, rules, approvals,
   routing, naming, keys, wording...); the standard modules move to `src/themi/standard`;
@@ -14732,6 +14732,31 @@ Depends on: CR10b1
   own (family with home, work with the core).
 - A codemod moves the imports (src, tests, tools, entry points); the checks follow.
 Tests: everything, golden files identical.
+
+Notes:
+- Layout: `src/themi/core` keeps the core (agent, services, tools, prompts, rules,
+  approvals, routing, naming, keys, groups, wording, calendar_view, the shared settings);
+  `src/themi/standard` has the 30 standard modules; `src/themi_google` the Google pack
+  (features, `connectors/`, `web/email_pages.py`); `src/themi_home` the home pack (features,
+  `connectors/`, `web/` pages, `templates/family.toml`). Core connectors (search, travel's
+  TomTom client) stay in `themi.connectors`.
+- One distribution still: setuptools finds the three top-level packages; `make install`,
+  the Dockerfile and CI need no change. A clean install was checked to hold every package,
+  template, page template and migration, and all 61 modules' entry points.
+- Templates are found through the `themi.templates` entry points (name -> package):
+  family is the home pack's, work and empty the core's. `config.template_packages()`.
+- A codemod moved 112 files and rewrote 316 (imports, entry points, module-path strings);
+  `from themi.core import a, b` lines were split by where each name went.
+- The checks follow the packages: `check_packs.py` reads a file's pack from its top-level
+  package; `check_layers.py` counts `themi.standard`, `themi_google` and `themi_home` as
+  outside the core; `check_clock.py` scans every package. Coverage measures all three.
+- The website's page templates and static files are still in `themi/web/templates` and
+  `static`, home and Google pages' ones too: a pack bringing its own template folder is a
+  follow-up for CR10b3.
+- Setup the user may need: `make install` again (new packages and entry points). `make dev`
+  snapshots saved before this name the old connector modules; if one won't load, `make
+  dev-reset`.
+- `make router-eval`: 138/156, unchanged; golden files identical.
 
 ### CR10b3 · Core refactor: a distribution per pack
 Status: deferred (2026-11-07)

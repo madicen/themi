@@ -16,9 +16,9 @@ from themi.accounts import LinkedAccount, Member
 from themi.autonomy import ExecutionContext, ExecutorRegistry
 from themi.channels.outbox import Outbox
 from themi.channels.pda import PdaShield
-from themi.connectors.gmail import EmailReceived, GmailSync, install_executors
-from themi.connectors.gmail.sync import POLL_EVERY, RELINK_ALERT
-from themi.connectors.google import GoogleAccounts, GoogleOAuth
+from themi_google.connectors.gmail import EmailReceived, GmailSync, install_executors
+from themi_google.connectors.gmail.sync import POLL_EVERY, RELINK_ALERT
+from themi_google.connectors.google import GoogleAccounts, GoogleOAuth
 
 WEDNESDAY_10AM = datetime(2026, 10, 21, 17, 0, tzinfo=UTC)  # 10:00 Pacific
 BANK = "Bank <alerts@bank.example>"

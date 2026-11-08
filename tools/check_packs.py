@@ -24,45 +24,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-GOOGLE = {
-    *(f"themi.core.{m}" for m in (
-        "calendar", "calendar_copies", "calendar_twins", "connector_modules", "email_audit",
-        "email_forward", "events", "expected", "google_groups", "google_modules",
-        "google_settings", "google_tasks", "google_tasks_list", "noise_digest", "senders",
-        "task_blocks", "travel", "triage",
-    )),
-    *(f"themi.connectors.{m}" for m in ("gcal", "gdocs", "gmail", "google", "gtasks")),
-    "themi.web.email_pages",
-}  # fmt: skip
-HOME = {
-    *(f"themi.core.{m}" for m in (
-        "appliances", "body_double", "body_double_guided", "body_double_modes",
-        "body_double_music", "body_double_scene", "buying", "calls", "chore_chart", "cookbook",
-        "cookbook_save", "cooking", "cooking_timers", "cozyla_chores", "cozyla_lists",
-        "cozyla_routines", "cozyla_todos", "dishwasher", "feeders", "groceries", "home_groups",
-        "home_modules", "home_settings", "keep_groceries", "laundry", "liaison", "litter_box",
-        "maintenance", "meals", "music", "pantry", "quantities", "recipe_groceries",
-        "recipe_ideas", "recipes", "routines_wall", "safeway", "spending", "step_images",
-        "vacuum", "web_recipes", "which_list",
-    )),
-    *(f"themi.connectors.{m}" for m in (
-        "catgenie", "cozyla", "gkeep", "homeconnect", "ourgroceries", "recipe_page", "roborock",
-        "spotify", "thinq", "tuya",
-    )),
-    *(f"themi.web.{m}" for m in (
-        "grocery_pages", "maintenance_pages", "recipe_pages", "safeway_pages", "session_pages",
-        "spending_pages",
-    )),
-}  # fmt: skip
+# CR10b2: a pack is its own package.
+PACKAGES = {"themi_google": "google", "themi_home": "home"}
 EXEMPT = {"themi.app", "themi.cli", "themi.web.google_pages", "themi.web.connection_pages"}
 MAY_IMPORT = {"core": set(), "google": set(), "home": {"google"}}
 
 
 def pack_of(module: str) -> str:
-    for name, members in (("google", GOOGLE), ("home", HOME)):
-        if any(module == m or module.startswith(m + ".") for m in members):
-            return name
-    return "core"
+    return PACKAGES.get(module.split(".")[0], "core")
 
 
 def module_name(src: Path, path: Path) -> str:
@@ -84,7 +53,7 @@ def runtime_imports(path: Path) -> list[tuple[int, str]]:
         if id(node) in type_only:
             continue
         if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            if node.module in ("themi.core", "themi.web", "themi.connectors"):
+            if node.module in ("themi", "themi.core", "themi.web", "themi.connectors"):
                 found += [(node.lineno, f"{node.module}.{a.name}") for a in node.names]
             else:
                 found.append((node.lineno, node.module))
@@ -95,13 +64,14 @@ def runtime_imports(path: Path) -> list[tuple[int, str]]:
 
 def problems(src: Path) -> list[str]:
     out = []
-    for path in sorted((src / "themi").rglob("*.py")):
+    files = [p for top in ("themi", *PACKAGES) for p in sorted((src / top).rglob("*.py"))]
+    for path in files:
         name = module_name(src, path)
         if name in EXEMPT:
             continue
         mine = pack_of(name)
         for line, imported in runtime_imports(path):
-            if not imported.startswith("themi."):
+            if imported.split(".")[0] not in ("themi", *PACKAGES):
                 continue
             theirs = pack_of(imported)
             if theirs != mine and theirs != "core" and theirs not in MAY_IMPORT[mine]:

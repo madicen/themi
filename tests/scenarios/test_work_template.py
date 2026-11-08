@@ -10,9 +10,9 @@ from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from themi.accounts import SYSTEM, AccountStore, Role
 from themi.config import load_config, load_template, resolve_modules
-from themi.core.tasks import TaskBoard
 from themi.settings import Settings
 from themi.setup_wizard import run_setup
+from themi.standard.tasks import TaskBoard
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 

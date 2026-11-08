@@ -7,7 +7,7 @@ from datetime import date
 
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.praise import PRAISE
+from themi.standard.praise import PRAISE
 
 SAID = (
     "I vacuumed upstairs. And washed the sheets. Though Husband still needs to put the "

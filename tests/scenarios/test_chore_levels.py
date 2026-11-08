@@ -5,7 +5,7 @@ import re
 
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.tasks import TaskBoard
+from themi.standard.tasks import TaskBoard
 
 BATHROOM = [
     "(Low) Wipe sink/counter",

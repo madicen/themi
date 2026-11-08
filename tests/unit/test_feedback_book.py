@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from tests.fixtures.family import SeededFamily
-from themi.core.feedback import FeedbackBook
+from themi.standard.feedback import FeedbackBook
 
 CONTEXT = {
     "version": "0.1.0",

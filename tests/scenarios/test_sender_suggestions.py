@@ -7,7 +7,7 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi.core import keys
-from themi.core.email_audit import LEVELS_TEXT
+from themi_google.email_audit import LEVELS_TEXT
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

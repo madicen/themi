@@ -11,8 +11,8 @@ from tests.scenarios.test_lists import gift_list, items, packing_list
 from tests.scenarios.test_routines import add, routines
 from themi.ai.router import HEDGE_AFTER
 from themi.core import keys
-from themi.core.lists import ADD_CATEGORY
-from themi.core.timing import SLOW_AFTER, week_of_replies
+from themi.standard.lists import ADD_CATEGORY
+from themi.standard.timing import SLOW_AFTER, week_of_replies
 
 
 def chats(scenario: Scenario) -> int:

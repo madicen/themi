@@ -10,12 +10,12 @@ import pytest
 from tests.fixtures.family import SeededFamily
 from themi.accounts import AccountStore, InvalidValue
 from themi.accounts.store import PermissionDenied
-from themi.core.body_double import BodyDoublePreferences
-from themi.core.breaks import BreaksPreferences
-from themi.core.chore_chart import ChartPreferences
+from themi.standard.breaks import BreaksPreferences
 from themi.storage import migrations
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, generate_key
+from themi_home.body_double import BodyDoublePreferences
+from themi_home.chore_chart import ChartPreferences
 
 
 def test_a_member_who_never_set_them_gets_the_defaults(family: SeededFamily) -> None:
@@ -118,14 +118,14 @@ def test_the_second_migration_copies_the_rest(tmp_path: Path) -> None:
     from datetime import time
 
     from themi.core.calendar_view import CalendarPreferences
-    from themi.core.checkin_reviews import CheckinReviewsPreferences
-    from themi.core.conversation_mode import ConversationPreferences
-    from themi.core.day_summary import DaySummaryPreferences
-    from themi.core.focus import FocusPreferences
-    from themi.core.lists import ListsPreferences
-    from themi.core.noise_digest import NoisePreferences
-    from themi.core.praise import TasksPreferences
-    from themi.core.travel import TravelPreferences
+    from themi.standard.checkin_reviews import CheckinReviewsPreferences
+    from themi.standard.conversation_mode import ConversationPreferences
+    from themi.standard.day_summary import DaySummaryPreferences
+    from themi.standard.focus import FocusPreferences
+    from themi.standard.lists import ListsPreferences
+    from themi.standard.praise import TasksPreferences
+    from themi_google.noise_digest import NoisePreferences
+    from themi_google.travel import TravelPreferences
 
     db = Database(tmp_path / "old.db")
     migrations.apply(db, [m for m in migrations.discover() if m.version < 146])
@@ -164,7 +164,7 @@ def test_the_second_migration_copies_the_rest(tmp_path: Path) -> None:
 def test_a_morning_summary_saves_and_reads_back_and_blank_is_off(family: SeededFamily) -> None:
     from datetime import time
 
-    from themi.core.day_summary import DaySummaryPreferences
+    from themi.standard.day_summary import DaySummaryPreferences
 
     store, erin = family.store, family.erin
     store.save_preferences(erin, erin.id, DaySummaryPreferences, morning_summary="08:30")
@@ -176,8 +176,13 @@ def test_a_morning_summary_saves_and_reads_back_and_blank_is_off(family: SeededF
 @pytest.mark.parametrize(
     ("where", "name", "change", "words"),
     [
-        ("themi.core.focus", "FocusPreferences", {"focus_count": 0}, "things for now are"),
-        ("themi.core.focus", "FocusPreferences", {"day_budget": 21}, "a day's budget is between"),
+        ("themi.standard.focus", "FocusPreferences", {"focus_count": 0}, "things for now are"),
+        (
+            "themi.standard.focus",
+            "FocusPreferences",
+            {"day_budget": 21},
+            "a day's budget is between",
+        ),
         (
             "themi.core.calendar_view",
             "CalendarPreferences",
@@ -190,10 +195,25 @@ def test_a_morning_summary_saves_and_reads_back_and_blank_is_off(family: SeededF
             {"calendar_twins": "both"},
             "ask, guess or keep",
         ),
-        ("themi.core.travel", "TravelPreferences", {"getting_ready_minutes": 121}, "getting ready"),
-        ("themi.core.noise_digest", "NoisePreferences", {"noise_emails": "hourly"}, "noise emails"),
-        ("themi.core.lists", "ListsPreferences", {"list_style": "stars"}, "a list style is"),
-        ("themi.core.day_summary", "DaySummaryPreferences", {"morning_summary": "25:00"}, "time"),
+        (
+            "themi_google.travel",
+            "TravelPreferences",
+            {"getting_ready_minutes": 121},
+            "getting ready",
+        ),
+        (
+            "themi_google.noise_digest",
+            "NoisePreferences",
+            {"noise_emails": "hourly"},
+            "noise emails",
+        ),
+        ("themi.standard.lists", "ListsPreferences", {"list_style": "stars"}, "a list style is"),
+        (
+            "themi.standard.day_summary",
+            "DaySummaryPreferences",
+            {"morning_summary": "25:00"},
+            "time",
+        ),
     ],
 )
 def test_the_rest_keep_their_old_words(

@@ -12,8 +12,8 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fixtures.family import SeededFamily
 from tests.integration.test_grocery_mirror import finish, put
 from themi import clock
-from themi.connectors.ourgroceries import GroceryMirror
 from themi.localtime import to_utc_iso
+from themi_home.connectors.ourgroceries import GroceryMirror
 
 
 @pytest.fixture

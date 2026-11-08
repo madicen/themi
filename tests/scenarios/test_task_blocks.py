@@ -16,7 +16,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 WED = date(2026, 10, 21)
@@ -332,7 +332,7 @@ async def test_time_made_for_tasks_moves_their_due_date(
 async def test_a_repeating_chores_block_moves_this_round_only(
     scenario: Scenario, linked: FakeGcal
 ) -> None:
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
     task = await bathroom(scenario)
     erin = scenario.member("Erin")

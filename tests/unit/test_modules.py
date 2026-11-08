@@ -8,11 +8,11 @@ import pytest
 
 from tests.fakes.modules import bare_services
 from tests.fixtures.family import SeededFamily
-from themi.core.breaks import Breaks, BreaksModule
-from themi.core.reactions import Reactions, ReactionsModule
-from themi.core.wrong_replies import WrongReplies, WrongRepliesModule
 from themi.modules import Module, ModuleContext, ModuleError, order
 from themi.scheduler import Scheduler
+from themi.standard.breaks import Breaks, BreaksModule
+from themi.standard.reactions import Reactions, ReactionsModule
+from themi.standard.wrong_replies import WrongReplies, WrongRepliesModule
 
 
 def make(name: str, requires: tuple[str, ...] = (), optional: tuple[str, ...] = ()) -> Module:
@@ -185,7 +185,7 @@ def test_reactions_and_wrong_replies_install_alone(family: SeededFamily) -> None
 
 def test_services_files_objects_under_their_class_name(family: SeededFamily) -> None:
     from themi.core import keys
-    from themi.core.lists import Lists
+    from themi.standard.lists import Lists
 
     services = bare_services(family.store)
     lists = Lists(services)

@@ -9,7 +9,7 @@ import pytest
 from tests.fakes.thinq import TOKEN, FakeThinq, payload
 from tests.fixtures.family import SeededFamily
 from themi import clock
-from themi.connectors.thinq import (
+from themi_home.connectors.thinq import (
     FINISHED,
     RUNNING,
     ApplianceEvent,

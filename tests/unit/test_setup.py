@@ -10,7 +10,7 @@ from themi.accounts.setup import (
     run_invite,
     start_link,
 )
-from themi.core.spending import SpendingSettings
+from themi_home.spending import SpendingSettings
 
 
 def make_io(answers: list[str]):

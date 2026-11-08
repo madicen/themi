@@ -8,8 +8,8 @@ from typing import Any
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)  # the scenario clock's first day
 

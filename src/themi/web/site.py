@@ -34,8 +34,9 @@ from themi.accounts.models import DAY_NAMES
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
-from themi.core import conversation_mode, keys
+from themi.core import keys
 from themi.modules.web import GROUP_ORDER, MenuEntry
+from themi.standard import conversation_mode
 from themi.web import icons
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext

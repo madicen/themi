@@ -9,7 +9,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import CallKind
 from themi.core import keys
-from themi.core.conversation_mode import (
+from themi.standard.conversation_mode import (
     CHAT_SYSTEM,
     NOT_OFFERED_TEXT,
     OFF_TEXT,

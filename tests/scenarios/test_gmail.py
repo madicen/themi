@@ -9,9 +9,9 @@ import httpx
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
-from themi.connectors.gmail import EmailReceived
-from themi.connectors.gmail.sync import RELINK_ALERT
 from themi.core import keys
+from themi_google.connectors.gmail import EmailReceived
+from themi_google.connectors.gmail.sync import RELINK_ALERT
 
 
 async def link(

@@ -12,8 +12,8 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
 from themi.core import keys
-from themi.core.body_double import BodyDoublePreferences
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
+from themi_home.body_double import BodyDoublePreferences
 
 
 def board(scenario: Scenario) -> TaskBoard:

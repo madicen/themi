@@ -16,7 +16,7 @@ import pytest
 
 from tests.fakes.snapshot import Snapshots
 from themi import clock
-from themi.connectors.ourgroceries import MirrorError, RemoteItem
+from themi_home.connectors.ourgroceries import MirrorError, RemoteItem
 
 
 class FakeOurGroceries(Snapshots):

@@ -14,8 +14,8 @@ from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.dishwasher import CATEGORY
-from themi.core.tasks import TaskBoard
+from themi.standard.tasks import TaskBoard
+from themi_home.dishwasher import CATEGORY
 
 WED = date(2026, 10, 21)
 DISHWASHER = "BOSCH-SMV-1"

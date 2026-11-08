@@ -1,4 +1,4 @@
-"""CR10a: code outside the home pack doesn't import it at runtime."""
+"""CR10a, CR10b1, CR10b2: the core doesn't import a pack, and Google doesn't import home."""
 
 from __future__ import annotations
 
@@ -20,39 +20,38 @@ def test_the_real_code_keeps_to_it() -> None:
 
 
 def test_a_runtime_import_is_caught_wherever_it_is(tmp_path: Path) -> None:
-    plant(tmp_path, "themi/core/tasks.py", "from themi.core.pantry import Pantry\n")
+    plant(tmp_path, "themi/standard/tasks.py", "from themi_home.pantry import Pantry\n")
     plant(
         tmp_path,
-        "themi/core/lists.py",
-        "def f():\n    from themi.core.groceries import GroceryList\n",
+        "themi/standard/lists.py",
+        "def f():\n    from themi_home.groceries import GroceryList\n",
     )
-    plant(tmp_path, "themi/core/reminders.py", "from themi.core import recipes\n")
+    plant(tmp_path, "themi/core/agent.py", "import themi_google.events\n")
     found = problems(tmp_path)
     assert len(found) == 3
-    assert (
-        "themi/core/lists.py:2: the core code imports the home pack's themi.core.groceries"
-        in (found[0])
+    assert any(
+        "themi/standard/lists.py:2: the core code imports the home pack's themi_home.groceries" in f
+        for f in found
     )
 
 
-def test_a_type_only_import_the_home_pack_itself_and_the_root_are_fine(tmp_path: Path) -> None:
+def test_a_type_only_import_a_packs_own_code_and_the_root_are_fine(tmp_path: Path) -> None:
     plant(
         tmp_path,
         "themi/core/keys.py",
         "from typing import TYPE_CHECKING\n"
         "if TYPE_CHECKING:\n"
-        "    from themi.core.pantry import Pantry\n",
+        "    from themi_home.pantry import Pantry\n",
     )
-    plant(tmp_path, "themi/core/meals.py", "from themi.core.pantry import Pantry\n")
-    plant(tmp_path, "themi/app.py", "from themi.core.pantry import PantryModule\n")
+    plant(tmp_path, "themi_home/meals.py", "from themi_home.pantry import Pantry\n")
+    plant(tmp_path, "themi/app.py", "from themi_home.pantry import PantryModule\n")
     assert problems(tmp_path) == []
 
 
-def test_the_google_pack_is_kept_too(tmp_path: Path) -> None:
-    plant(tmp_path, "themi/core/tasks.py", "from themi.core.events import Events\n")
-    plant(tmp_path, "themi/core/triage.py", "from themi.core.pantry import Pantry\n")
-    plant(tmp_path, "themi/core/recipes.py", "from themi.connectors.google import GoogleAccounts\n")
+def test_home_may_use_google_and_google_may_not_use_home(tmp_path: Path) -> None:
+    plant(tmp_path, "themi_home/recipes.py", "from themi_google.connectors.google import X\n")
+    plant(tmp_path, "themi_google/triage.py", "from themi_home.pantry import Pantry\n")
     found = problems(tmp_path)
-    assert len(found) == 2  # home may use Google; core and Google may not reach further
-    assert any("the core code imports the google pack's themi.core.events" in f for f in found)
-    assert any("the google code imports the home pack's themi.core.pantry" in f for f in found)
+    assert found == [
+        "themi_google/triage.py:1: the google code imports the home pack's themi_home.pantry"
+    ]

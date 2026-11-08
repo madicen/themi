@@ -7,9 +7,9 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.search import FakeSearch
 from tests.fakes.travel import FakeTravel
 from tests.fakes.wiring import cozyla_client
-from themi.core.connector_modules import TravelModule
-from themi.core.home_modules import CozylaTodosModule, OurGroceriesModule
-from themi.core.web_search import WebSearchModule
+from themi.standard.web_search import WebSearchModule
+from themi_google.connector_modules import TravelModule
+from themi_home.home_modules import CozylaTodosModule, OurGroceriesModule
 
 
 async def test_ourgroceries_is_tried_and_a_failure_said(

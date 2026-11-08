@@ -17,7 +17,7 @@ from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences
-from themi.core.travel import TravelPreferences
+from themi_google.travel import TravelPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HOME = "12 Main St, Springfield"

@@ -12,7 +12,7 @@ from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
 from themi.core.prompts import build_system
-from themi.core.tasks import NOT_SURE_TEXT, TaskBoard, is_medicine
+from themi.standard.tasks import NOT_SURE_TEXT, TaskBoard, is_medicine
 
 
 def board(scenario: Scenario) -> TaskBoard:
@@ -91,7 +91,7 @@ def test_the_model_is_told_never_to_advise_on_doses() -> None:
 
 def test_the_medicine_texts_pass_the_strictest_pda_check() -> None:
     from themi.channels.pda import find_demands
-    from themi.core.tasks import MEDICINE_ASK
+    from themi.standard.tasks import MEDICINE_ASK
 
     for text in (NOT_SURE_TEXT, f"Due today: Take Wegovy. {MEDICINE_ASK}"):
         assert find_demands(text, 3) == [], text

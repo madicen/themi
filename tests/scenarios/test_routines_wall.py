@@ -10,8 +10,8 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.routines import Routines
+from themi.standard.repeat import parse
+from themi.standard.routines import Routines
 
 WED = date(2026, 10, 21)
 
@@ -174,7 +174,7 @@ async def test_a_tick_on_the_wall_at_night_gets_a_warm_word(
     the wall, after quiet hours have started."""
     from datetime import timedelta
 
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     pills = fake_cozyla.add_routine("m-erin", "Take meds", "Evening")
     await sync(scenario)

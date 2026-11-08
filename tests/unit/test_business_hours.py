@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import time
 
-from themi.core.business_hours import parse_hours, read_back
+from themi.standard.business_hours import parse_hours, read_back
 
 NINE_TO_FIVE = (time(8), time(17))
 

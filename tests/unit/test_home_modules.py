@@ -8,30 +8,30 @@ import pytest
 
 from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
-from themi.core.appliances import Appliances, AppliancesModule
-from themi.core.body_double import BodyDouble, BodyDoubleModule
-from themi.core.body_double_guided import GuidedSteps, GuidedStepsModule
-from themi.core.body_double_modes import ModeChooser, ModeChooserModule
-from themi.core.body_double_music import MusicOffers, MusicOffersModule
-from themi.core.buying import BuyingModule, ThingsToBuy
-from themi.core.calls import CallsModule, VendorCalls
-from themi.core.cookbook_save import CookbookSave, CookbookSaveModule
-from themi.core.cooking import Cooking, CookingModule
-from themi.core.cooking_timers import CookingTimers, CookingTimersModule
-from themi.core.groceries import GroceriesModule, GroceryList
-from themi.core.lists import ListsModule
-from themi.core.maintenance import Maintenance, MaintenanceModule
-from themi.core.meals import Meals, MealsModule
-from themi.core.pantry import Pantry, PantryModule
-from themi.core.recipe_groceries import RecipeGroceries, RecipeGroceriesModule
-from themi.core.recipe_ideas import RecipeIdeas, RecipeIdeasModule
-from themi.core.recipes import Recipes, RecipesModule
-from themi.core.safeway import SafewayCart, SafewayModule
-from themi.core.spending import Spending, SpendingModule
-from themi.core.step_images import StepPictures, StepPicturesModule
-from themi.core.tasks import TasksModule
-from themi.core.web_recipes import WebRecipes, WebRecipesModule
 from themi.modules import Module
+from themi.standard.lists import ListsModule
+from themi.standard.tasks import TasksModule
+from themi_home.appliances import Appliances, AppliancesModule
+from themi_home.body_double import BodyDouble, BodyDoubleModule
+from themi_home.body_double_guided import GuidedSteps, GuidedStepsModule
+from themi_home.body_double_modes import ModeChooser, ModeChooserModule
+from themi_home.body_double_music import MusicOffers, MusicOffersModule
+from themi_home.buying import BuyingModule, ThingsToBuy
+from themi_home.calls import CallsModule, VendorCalls
+from themi_home.cookbook_save import CookbookSave, CookbookSaveModule
+from themi_home.cooking import Cooking, CookingModule
+from themi_home.cooking_timers import CookingTimers, CookingTimersModule
+from themi_home.groceries import GroceriesModule, GroceryList
+from themi_home.maintenance import Maintenance, MaintenanceModule
+from themi_home.meals import Meals, MealsModule
+from themi_home.pantry import Pantry, PantryModule
+from themi_home.recipe_groceries import RecipeGroceries, RecipeGroceriesModule
+from themi_home.recipe_ideas import RecipeIdeas, RecipeIdeasModule
+from themi_home.recipes import Recipes, RecipesModule
+from themi_home.safeway import SafewayCart, SafewayModule
+from themi_home.spending import Spending, SpendingModule
+from themi_home.step_images import StepPictures, StepPicturesModule
+from themi_home.web_recipes import WebRecipes, WebRecipesModule
 
 RECIPES: list[Callable[[], Module]] = [RecipesModule, RecipeGroceriesModule]
 BODY: list[Callable[[], Module]] = [BodyDoubleModule]

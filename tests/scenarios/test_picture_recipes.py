@@ -16,7 +16,7 @@ from tests.scenarios.test_cookbook import choose
 from tests.scenarios.test_cookbook import linked as linked  # a fixture
 from themi import clock
 from themi.ai.types import ImageBlock, ToolResult
-from themi.core.web_recipes import PICTURE_NOTE, UNREADABLE, UNREADABLE_TOGETHER
+from themi_home.web_recipes import PICTURE_NOTE, UNREADABLE, UNREADABLE_TOGETHER
 
 PAGE = b"JPEG: a cookbook page, Lentil Soup"
 SOUP = {

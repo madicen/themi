@@ -50,12 +50,12 @@ from tests.fakes.tuya import SECRET as TUYA_SECRET
 from tests.fakes.tuya import FakeTuya
 from tests.fakes.wiring import connector_options, wall_list
 from themi.accounts import Member
-from themi.connectors.gkeep import KeepLogin
-from themi.connectors.google import GoogleAccounts
-from themi.connectors.homeconnect import HomeConnectAccount
 from themi.core import keys
-from themi.core.keep_groceries import KeepLinks, new_device_id
 from themi.storage.secrets import Secret
+from themi_google.connectors.google import GoogleAccounts
+from themi_home.connectors.gkeep import KeepLogin
+from themi_home.connectors.homeconnect import HomeConnectAccount
+from themi_home.keep_groceries import KeepLinks, new_device_id
 
 if TYPE_CHECKING:
     from themi.app import App

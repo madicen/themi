@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from themi.core.repeat import (
+from themi.standard.repeat import (
     Repeat,
     RepeatError,
     next_occurrences,
@@ -151,7 +151,7 @@ def test_either_days_and_rest_need_fixed_neighbouring_days(words: str) -> None:
 
 def test_titles_match_loosely() -> None:
     """Bug #20: event searches by the words people use."""
-    from themi.core.events import title_matches
+    from themi_google.events import title_matches
 
     assert title_matches("tutoring", "Tutor Gabriel (Illems)")
     assert title_matches("pediatrics", "Pediatrician: Rosie")
@@ -163,7 +163,7 @@ def test_titles_match_loosely() -> None:
 
 def test_a_date_in_a_past_year_is_this_years() -> None:
     """Bug #84: "Friday" became 2020-10-30."""
-    from themi.core.tasks import day_arg
+    from themi.standard.tasks import day_arg
 
     assert day_arg("2020-10-30", WED) == date(2026, 10, 30)
     assert day_arg("2025-01-04", WED) == date(2027, 1, 4)  # this year's has gone
@@ -172,7 +172,7 @@ def test_a_date_in_a_past_year_is_this_years() -> None:
 
 
 def test_words_in_common_with_a_title() -> None:
-    from themi.core.events import words_in_common
+    from themi_google.events import words_in_common
 
     title = "Contact Erin\u2019s parents about babysitting"
     assert words_in_common("We contacted Erin\u2019s parents", title) == 3
@@ -183,7 +183,7 @@ def test_words_in_common_with_a_title() -> None:
 
 def test_words_in_common_hears_other_forms_of_a_short_word() -> None:
     """Bug #119: "I ran this morning" didn't name "Go for a run"."""
-    from themi.core.events import words_in_common
+    from themi_google.events import words_in_common
 
     assert words_in_common("I ran this morning", "Go for a run") == 1
     assert words_in_common("went running earlier", "Go for a run") == 1

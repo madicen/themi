@@ -7,8 +7,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 
 from themi.core import keys
-from themi.core.guides import Guides
 from themi.core.tools import ToolFailed
+from themi.standard.guides import Guides
 from themi.web.kit import Kit
 
 

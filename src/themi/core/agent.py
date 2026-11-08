@@ -11,7 +11,7 @@ For each inbound event:
   (listing them) instead of guessing. Otherwise the model
   runs a tool loop (at most `max_steps` model calls, then one to say what was done)
   and the final text goes out through the outbox as a reply. That's timed (P2a,
-  `themi.core.timing`), and if it takes more than ten seconds a short "still coming"
+  `themi.standard.timing`), and if it takes more than ten seconds a short "still coming"
   message goes first.
 
 Failures are said plainly and briefly, never as error dumps.
@@ -36,15 +36,16 @@ from themi.ai.types import ImageBlock, Message, TextBlock
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
-from themi.core import focus, keys, listening, partner
+from themi.core import keys, listening, partner
 from themi.core.approvals import ASK_TEXT
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
-from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
 from themi.core.tools import PICTURE_GROUPS, ToolContext, twins_text
 from themi.energy.remarks import energy_remark
 from themi.localtime import start_of_local_day, to_local, to_utc_iso
+from themi.standard import focus
+from themi.standard.timing import SLOW_AFTER, ReplyTimer, pick_notice
 
 if TYPE_CHECKING:
     from themi.channels.telegram import TelegramChannel

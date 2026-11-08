@@ -8,7 +8,7 @@ from typing import Any
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.lists import Lists, NamedList
+from themi.standard.lists import Lists, NamedList
 
 
 def lists(scenario: Scenario) -> Lists:

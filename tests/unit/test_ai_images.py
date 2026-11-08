@@ -14,8 +14,8 @@ from themi import clock
 from themi.ai.errors import CapabilityError, ImageCapReached
 from themi.ai.router import AIRouter, Deferred
 from themi.ai.settings import AISettingsStore, AITask, RouteEntry
-from themi.core.step_images import STYLE, THEMI, image_prompt, plain
 from themi.storage.secrets import Cipher, Secret, generate_key
+from themi_home.step_images import STYLE, THEMI, image_prompt, plain
 
 
 @pytest.fixture

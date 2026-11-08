@@ -11,9 +11,9 @@ from typing import Any
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import TaskBoard
 from themi.core.wording import near_twin
+from themi.standard.repeat import parse
+from themi.standard.tasks import TaskBoard
 
 SAID = "Urgent for Husband: cat feeders need to be refilled"
 

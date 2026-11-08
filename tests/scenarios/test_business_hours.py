@@ -12,7 +12,7 @@ from tests.fakes.search import FakeSearch
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 WED, THU, SUN = date(2026, 10, 21), date(2026, 10, 22), date(2026, 10, 25)

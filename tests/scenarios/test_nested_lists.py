@@ -7,7 +7,7 @@ from typing import Any
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
-from themi.core.lists import ListsPreferences
+from themi.standard.lists import ListsPreferences
 
 
 def tool_result(scenario: Scenario) -> str:

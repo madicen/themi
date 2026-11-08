@@ -134,11 +134,20 @@ def available_modules() -> dict[str, type[Module]]:
     return found
 
 
+TEMPLATE_ENTRY_POINTS = "themi.templates"
+
+
+def template_packages() -> dict[str, str]:
+    """CR10b2: each installed template's package, by name: a pack ships its own (the
+    family's is the home pack's), through the `themi.templates` entry points."""
+    return {e.name: e.value for e in entry_points(group=TEMPLATE_ENTRY_POINTS)}
+
+
 def load_template(name: str) -> Template:
-    try:
-        text = resources.files("themi.templates").joinpath(f"{name}.toml").read_text()
-    except FileNotFoundError as exc:
-        raise SettingsError(f"Themi can't start:\n  - there's no template called {name}") from exc
+    package = template_packages().get(name)
+    if package is None:
+        raise SettingsError(f"Themi can't start:\n  - there's no template called {name}")
+    text = resources.files(package).joinpath(f"{name}.toml").read_text()
     data = tomllib.loads(text)
     return Template(
         data.get("name", name),

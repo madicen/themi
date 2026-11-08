@@ -6,8 +6,8 @@ from __future__ import annotations
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 REFILL = "Refill water and food bowls"
 

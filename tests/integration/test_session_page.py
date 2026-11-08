@@ -16,8 +16,8 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.mini_app import sign_init_data
 from themi.core import keys
-from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble, BodyDoublePreferences
 from themi.web.auth import COOKIE_NAME
+from themi_home.body_double import GUIDED, SILENT, SPRINT, BodyDouble, BodyDoublePreferences
 
 ENERGY_WORDS = ("energy", "capacity", "score", "low", "medium", "high")
 
@@ -191,7 +191,7 @@ async def test_the_page_reports_its_own_problems_to_the_log(
     await sign_in(scenario, site, "Erin")
     answer = await site.post("/session/report", content=b"tap 3/act answered 403" + b"x" * 900)
     assert answer.status_code == 204
-    (record,) = [r for r in caplog.records if r.name == "themi.web.session_pages"]
+    (record,) = [r for r in caplog.records if r.name == "themi_home.web.session_pages"]
     assert "member 1" in record.getMessage() and "tap 3/act answered 403" in record.getMessage()
     assert len(record.getMessage()) < 700  # short text only
 
@@ -199,7 +199,7 @@ async def test_the_page_reports_its_own_problems_to_the_log(
 async def test_a_refused_page_tap_says_why_in_the_log(
     scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
-    caplog.set_level("INFO", logger="themi.core.body_double")
+    caplog.set_level("INFO", logger="themi_home.body_double")
     csrf = await sign_in(scenario, site, "Erin")
     session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SPRINT)
     await site.post(f"/session/{session.id}/act",

@@ -15,8 +15,8 @@ from themi import clock
 from themi.accounts import Role
 from themi.autonomy import ExecutionContext
 from themi.core.calendar_view import CalendarPreferences
-from themi.core.chore_chart import ChartPreferences
 from themi.web.auth import COOKIE_NAME, WebAuth
+from themi_home.chore_chart import ChartPreferences
 
 # ----- signing in ---------------------------------------------------------------
 

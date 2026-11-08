@@ -5,8 +5,14 @@ from __future__ import annotations
 import pytest
 
 from tests.fakes.recipe_site import FakeRecipeSite, plain_page, recipe_page
-from themi.connectors.recipe_page import Blocked, PageError, check_url, page_text, schema_recipe
-from themi.core.web_recipes import _plain, flags, on_page
+from themi_home.connectors.recipe_page import (
+    Blocked,
+    PageError,
+    check_url,
+    page_text,
+    schema_recipe,
+)
+from themi_home.web_recipes import _plain, flags, on_page
 
 
 async def resolve(host: str) -> list[str]:

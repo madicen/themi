@@ -7,7 +7,7 @@ from typing import Any
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 FAMILY_UID = "m-madicen family"
 

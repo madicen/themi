@@ -15,7 +15,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import PACIFIC, local
 from tests.scenarios.test_triage import ERIN, link
 from themi.core import keys
-from themi.core.calendar_copies import CalendarCopies
+from themi_google.calendar_copies import CalendarCopies
 
 GUESTS = [{"email": ERIN, "self": True}, {"email": "boss@example.com"}]
 

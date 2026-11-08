@@ -4,9 +4,9 @@ AI rewrite (which costs a model call per approval, and quota)."""
 from datetime import date
 
 from themi.channels.pda import find_demands
-from themi.core.calendar import approval_summary
-from themi.core.groceries import proposal
-from themi.core.tasks import Task
+from themi.standard.tasks import Task
+from themi_google.calendar import approval_summary
+from themi_home.groceries import proposal
 
 
 def test_grocery_approvals_read_as_offers_not_orders() -> None:

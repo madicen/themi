@@ -12,9 +12,9 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import WED, board, task, tool_result, turn
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.burnout import ENDED_TEXT, HANDED_TEXT, LIGHTEST_TEXT, SIGNAL, STARTED_TEXTS
-from themi.core.focus import SIGNAL as FOCUS_SIGNAL
-from themi.core.habits import HabitReserve
+from themi.standard.burnout import ENDED_TEXT, HANDED_TEXT, LIGHTEST_TEXT, SIGNAL, STARTED_TEXTS
+from themi.standard.focus import SIGNAL as FOCUS_SIGNAL
+from themi.standard.habits import HabitReserve
 
 
 async def turn_on(scenario: Scenario, said: str = "Can you put me in burnout mode?") -> list[str]:

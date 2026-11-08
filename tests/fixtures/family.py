@@ -16,10 +16,10 @@ import pytest
 
 from tests.fixtures.db import migrated_db
 from themi.accounts import SYSTEM, AccountStore, Family, Member, Role
-from themi.core.pantry import PantrySettings
-from themi.core.spending import SpendingSettings
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, generate_key
+from themi_home.pantry import PantrySettings
+from themi_home.spending import SpendingSettings
 
 ERIN_TELEGRAM_ID = 1001
 HUSBAND_TELEGRAM_ID = 1002

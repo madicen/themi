@@ -13,8 +13,8 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_sender_suggestions import mail
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi.core import keys
-from themi.core.email_audit import EmailAudit
-from themi.core.tasks import TaskBoard
+from themi.standard.tasks import TaskBoard
+from themi_google.email_audit import EmailAudit
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

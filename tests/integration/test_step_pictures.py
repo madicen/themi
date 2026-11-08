@@ -11,9 +11,9 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
 from themi.core import keys
-from themi.core.body_double import GUIDED, BodyDouble
-from themi.core.step_images import CAPPED_TEXT, StepPictures
-from themi.core.tasks import Task
+from themi.standard.tasks import Task
+from themi_home.body_double import GUIDED, BodyDouble
+from themi_home.step_images import CAPPED_TEXT, StepPictures
 
 STEPS = ["Clear the counter", "Load the dishwasher", "Wipe the stovetop", "Sweep"]
 

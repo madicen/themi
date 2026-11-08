@@ -9,8 +9,8 @@ from datetime import date, timedelta
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.tasks import TaskBoard
 from themi.localtime import to_utc_iso
+from themi.standard.tasks import TaskBoard
 
 WED = date(2026, 10, 21)
 

@@ -20,8 +20,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from themi.core.tasks import meant_instead, names_task
 from themi.core.which_task import Said, texts_to_score, which
+from themi.standard.tasks import meant_instead, names_task
 
 NAMING_FILE = Path(__file__).parent / "naming_cases.json"
 KINDS = ("plain", "paraphrase", "short-answer", "all", "near-miss")

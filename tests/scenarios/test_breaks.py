@@ -10,8 +10,8 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.breaks import BreaksPreferences
-from themi.core.tasks import TaskBoard
+from themi.standard.breaks import BreaksPreferences
+from themi.standard.tasks import TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:

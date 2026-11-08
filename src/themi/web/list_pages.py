@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member
 from themi.core import keys
-from themi.core.lists import ListItem, Lists, NamedList
+from themi.standard.lists import ListItem, Lists, NamedList
 from themi.web.kit import Kit
 
 

@@ -11,9 +11,9 @@ from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi.accounts import InvalidValue
 from themi.core import keys
-from themi.core.chore_chart import ChartPreferences
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
+from themi_home.chore_chart import ChartPreferences
 
 WED = date(2026, 10, 21)  # the scenario clock's first day
 

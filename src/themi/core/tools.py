@@ -116,7 +116,7 @@ class Done:
 def in_their_words(ctx: ToolContext, title: str) -> bool:
     """Every word of the title (over two letters) is in what they wrote this turn: the
     tool did what they named, not what the model took them to mean."""
-    from themi.core.lists import name_key  # lists builds its tools from this module
+    from themi.standard.lists import name_key  # lists builds its tools from this module
 
     said = name_key(ctx.request_text)
     words = [w for w in name_key(title).split() if len(w) > 2] or [name_key(title)]

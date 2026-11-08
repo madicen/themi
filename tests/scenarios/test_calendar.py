@@ -17,9 +17,9 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.autonomy import Decision
-from themi.connectors.google import GMAIL_SCOPE
 from themi.core import keys
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
+from themi_google.connectors.google import GMAIL_SCOPE
 
 FRIDAY = date(2026, 10, 30)
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from tests.fixtures.cookbook import COOKBOOK_ID, LINK
-from themi.connectors.gdocs import doc_id_from
+from themi_google.connectors.gdocs import doc_id_from
 
 
 def test_doc_ids_from_links_and_ids() -> None:

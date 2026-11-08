@@ -11,8 +11,8 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import Member, NotFound, PermissionDenied
 from themi.core import keys
-from themi.core.memory import Fact, Memory
 from themi.core.rules import RuleError
+from themi.standard.memory import Fact, Memory
 from themi.web.kit import Kit
 
 

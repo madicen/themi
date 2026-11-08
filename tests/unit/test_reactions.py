@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from themi.core.reactions import _lean, length_word, verdict
+from themi.standard.reactions import _lean, length_word, verdict
 
 
 def test_which_reactions_count() -> None:

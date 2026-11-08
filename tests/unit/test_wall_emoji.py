@@ -2,7 +2,7 @@
 
 import pytest
 
-from themi.connectors.cozyla.emoji import better_icon, chore_icon, needs_icon, routine_icon
+from themi_home.connectors.cozyla.emoji import better_icon, chore_icon, needs_icon, routine_icon
 
 
 @pytest.mark.parametrize(

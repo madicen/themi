@@ -16,11 +16,11 @@ from tests.scenarios.harness import Scenario
 from themi.accounts import Member
 from themi.ai.adapters.gemini import DEFAULT_EMBEDDING_MODEL as GEMINI_EMBEDDING_MODEL
 from themi.ai.settings import AITask, RouteEntry
-from themi.connectors.google.oauth import LINK_SCOPES
 from themi.core import keys
-from themi.core.body_double import MODE_WORDS
-from themi.core.groceries import list_summary
 from themi.storage.secrets import Secret
+from themi_google.connectors.google.oauth import LINK_SCOPES
+from themi_home.body_double import MODE_WORDS
+from themi_home.groceries import list_summary
 
 
 def use_backend(scenario: Scenario, chosen: EvalBackend) -> None:

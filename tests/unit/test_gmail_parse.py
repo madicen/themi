@@ -1,7 +1,7 @@
 import base64
 from datetime import UTC, datetime
 
-from themi.connectors.gmail.parse import MAX_BODY, html_to_text, parse_message
+from themi_google.connectors.gmail.parse import MAX_BODY, html_to_text, parse_message
 
 
 def b64(text: str, encoding: str = "utf-8") -> str:

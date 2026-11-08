@@ -10,7 +10,7 @@ import pytest
 from themi.accounts import Member
 from themi.accounts.models import Role
 from themi.channels.outbox import Priority
-from themi.core.liaison import ASKS_TO_PASS_ON, delivery_text, timing
+from themi_home.liaison import ASKS_TO_PASS_ON, delivery_text, timing
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 TZ = "America/Los_Angeles"

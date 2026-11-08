@@ -8,20 +8,11 @@ from tests.fakes.modules import module_context
 from tests.fakes.prompt import FAMILY_SYSTEM
 from tests.fixtures.family import SeededFamily
 from themi.config import load_template
-from themi.core import (
-    appliances,
-    connector_modules,
-    follow_ups,
-    google_modules,
-    home_modules,
-    liaison,
-    lists,
-    memory,
-    spending,
-    tasks,
-)
 from themi.core.prompts import CORE_RULES
 from themi.modules.prompt import PromptFragment, compose_system
+from themi.standard import follow_ups, lists, memory, tasks
+from themi_google import connector_modules, google_modules
+from themi_home import appliances, home_modules, liaison, spending
 
 EVERY_MODULE_RULES = (
     *tasks.PROMPT_RULES,

@@ -49,8 +49,8 @@ async def test_the_chart_section_comes_with_the_wall(
 async def test_saving_the_form_saves_the_preferences(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    from themi.core.body_double import BodyDoublePreferences
-    from themi.core.breaks import BreaksPreferences
+    from themi.standard.breaks import BreaksPreferences
+    from themi_home.body_double import BodyDoublePreferences
 
     csrf = await sign_in(scenario, site, "Erin")
     form = {

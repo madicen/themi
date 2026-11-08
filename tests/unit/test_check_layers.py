@@ -20,13 +20,13 @@ def test_the_real_code_has_only_the_known_breaches() -> None:
 
 
 def test_a_planted_import_is_caught(tmp_path: Path) -> None:
-    plant(tmp_path, "themi/channels/outbox.py", "from themi.core.pantry import Pantry\n")
-    plant(tmp_path, "themi/accounts/store.py", "import themi.connectors.gmail\n")
+    plant(tmp_path, "themi/channels/outbox.py", "from themi_home.pantry import Pantry\n")
+    plant(tmp_path, "themi/accounts/store.py", "import themi_google.connectors.gmail\n")
     plant(tmp_path, "themi/clock.py", "from themi.web import site\n")
     found = {(rel, module) for rel, _, module in breaches(tmp_path)}
     assert found == {
-        ("themi/channels/outbox.py", "themi.core.pantry"),
-        ("themi/accounts/store.py", "themi.connectors.gmail"),
+        ("themi/channels/outbox.py", "themi_home.pantry"),
+        ("themi/accounts/store.py", "themi_google.connectors.gmail"),
         ("themi/clock.py", "themi.web"),
     }
     assert len(problems(tmp_path, known={})) == 3
@@ -39,8 +39,8 @@ def test_core_parts_still_in_themi_core_are_allowed(tmp_path: Path) -> None:
 
 
 def test_features_and_the_composition_root_are_not_checked(tmp_path: Path) -> None:
-    plant(tmp_path, "themi/core/pantry.py", "from themi.connectors.gmail import GmailSync\n")
-    plant(tmp_path, "themi/app.py", "from themi.core.pantry import Pantry\n")
+    plant(tmp_path, "themi/core/pantry.py", "from themi_google.connectors.gmail import GmailSync\n")
+    plant(tmp_path, "themi/app.py", "from themi_home.pantry import Pantry\n")
     assert breaches(tmp_path) == []
 
 

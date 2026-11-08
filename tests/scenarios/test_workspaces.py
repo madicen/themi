@@ -13,8 +13,8 @@ from themi.accounts import AccountStore
 from themi.ai.types import ToolCall
 from themi.app import family_modules
 from themi.config import RoleSpec, load_template
-from themi.core.tasks import TaskBoard
 from themi.core.tools import ToolContext
+from themi.standard.tasks import TaskBoard
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 

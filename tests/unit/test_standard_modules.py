@@ -8,28 +8,28 @@ import pytest
 
 from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
-from themi.core.burnout import Burnout, BurnoutModule
-from themi.core.business_hours import BusinessHours, BusinessHoursModule
-from themi.core.checkin_reviews import CheckinReviews, CheckinReviewsModule
-from themi.core.commands import Commands, CommandsModule
-from themi.core.conversation_mode import ConversationMode, ConversationModeModule
-from themi.core.day_summary import DaySummary, DaySummaryModule
-from themi.core.feedback import FeedbackChat, FeedbackModule
-from themi.core.focus import Focus, FocusModule
-from themi.core.follow_ups import FollowUps, FollowUpsModule
-from themi.core.guides import Guides, GuidesModule
-from themi.core.habits import HabitReserve, HabitsModule
-from themi.core.journal import Journal, JournalModule
-from themi.core.liaison import Liaison, LiaisonModule
-from themi.core.lists import Lists, ListsModule
-from themi.core.memory import Memory, MemoryModule
-from themi.core.reminders import Reminders, RemindersModule
-from themi.core.routines import Routines, RoutinesModule
-from themi.core.taking import Taking, TakingModule
-from themi.core.tasks import TaskBoard, TasksModule
-from themi.core.web_search import WebSearch, WebSearchModule
-from themi.core.which_list import WhichList, WhichListModule
 from themi.modules import Module, ModuleContext
+from themi.standard.burnout import Burnout, BurnoutModule
+from themi.standard.business_hours import BusinessHours, BusinessHoursModule
+from themi.standard.checkin_reviews import CheckinReviews, CheckinReviewsModule
+from themi.standard.commands import Commands, CommandsModule
+from themi.standard.conversation_mode import ConversationMode, ConversationModeModule
+from themi.standard.day_summary import DaySummary, DaySummaryModule
+from themi.standard.feedback import FeedbackChat, FeedbackModule
+from themi.standard.focus import Focus, FocusModule
+from themi.standard.follow_ups import FollowUps, FollowUpsModule
+from themi.standard.guides import Guides, GuidesModule
+from themi.standard.habits import HabitReserve, HabitsModule
+from themi.standard.journal import Journal, JournalModule
+from themi.standard.lists import Lists, ListsModule
+from themi.standard.memory import Memory, MemoryModule
+from themi.standard.reminders import Reminders, RemindersModule
+from themi.standard.routines import Routines, RoutinesModule
+from themi.standard.taking import Taking, TakingModule
+from themi.standard.tasks import TaskBoard, TasksModule
+from themi.standard.web_search import WebSearch, WebSearchModule
+from themi_home.liaison import Liaison, LiaisonModule
+from themi_home.which_list import WhichList, WhichListModule
 
 # module, what it provides, the modules it needs first, the jobs it adds
 CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[str]]] = [

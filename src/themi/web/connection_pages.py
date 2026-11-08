@@ -15,15 +15,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, Response
 
 from themi.accounts import AccountsError, Member
-from themi.connectors.catgenie import CatGenieError
-from themi.connectors.google import DRIVE_FILE_SCOPE, TASKS_SCOPE
-from themi.connectors.homeconnect import HomeConnectAccount, HomeConnectError
-from themi.connectors.roborock import RoborockError
-from themi.connectors.spotify import SpotifyError, SpotifyLinks
-from themi.connectors.thinq import ThinqError
-from themi.connectors.tuya import REGIONS, TuyaError
 from themi.core import keys
 from themi.web.kit import Kit
+from themi_google.connectors.google import DRIVE_FILE_SCOPE, TASKS_SCOPE
+from themi_home.connectors.catgenie import CatGenieError
+from themi_home.connectors.homeconnect import HomeConnectAccount, HomeConnectError
+from themi_home.connectors.roborock import RoborockError
+from themi_home.connectors.spotify import SpotifyError, SpotifyLinks
+from themi_home.connectors.thinq import ThinqError
+from themi_home.connectors.tuya import REGIONS, TuyaError
 
 
 def back(row: str) -> str:

@@ -15,7 +15,7 @@ from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.pda import find_demands
 from themi.core import keys
-from themi.core.habits import IDEAS, OFFER_TEXT, HabitReserve
+from themi.standard.habits import IDEAS, OFFER_TEXT, HabitReserve
 
 
 @pytest.fixture

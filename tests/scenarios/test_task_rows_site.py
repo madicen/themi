@@ -10,9 +10,9 @@ from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
-from themi.core.repeat import parse
-from themi.core.tasks import DONE_TEXT, SETTLED_TEXT, TaskBoard
 from themi.localtime import to_utc_iso
+from themi.standard.repeat import parse
+from themi.standard.tasks import DONE_TEXT, SETTLED_TEXT, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:

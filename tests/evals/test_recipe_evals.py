@@ -21,7 +21,7 @@ from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from themi.core import keys
-from themi.core.recipe_groceries import line_key
+from themi_home.recipe_groceries import line_key
 
 LINES: list[tuple[str, tuple[str, ...]]] = [
     ("1 Cup cashews, soaked in water for at least 10 minutes (130g)", ("cashews",)),

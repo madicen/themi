@@ -18,11 +18,11 @@ from themi import clock
 from themi.ai.types import ToolResult
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences
-from themi.core.chore_chart import ChartPreferences
-from themi.core.day_summary import DaySummaryPreferences
-from themi.core.progression import parse_plan
-from themi.core.repeat import parse
-from themi.core.tasks import TaskBoard
+from themi.standard.day_summary import DaySummaryPreferences
+from themi.standard.progression import parse_plan
+from themi.standard.repeat import parse
+from themi.standard.tasks import TaskBoard
+from themi_home.chore_chart import ChartPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HUSBAND = "him@gmail.com"

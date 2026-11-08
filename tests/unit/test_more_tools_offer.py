@@ -6,9 +6,9 @@ from typing import Any
 from tests.fakes.groups import GROUPS, with_every_group
 from tests.fixtures.family import SeededFamily
 from themi.ai.types import ToolCall, ToolSpec
-from themi.core.routines import remove_routine_item, show_routines
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolContext, ToolRegistry
+from themi.standard.routines import remove_routine_item, show_routines
 
 
 def offered(specs: list[ToolSpec]) -> list[str] | None:

@@ -9,7 +9,7 @@ from tests.fakes.search import FakeSearch
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.web_search import DAILY_CAP
+from themi.standard.web_search import DAILY_CAP
 
 BOARD = "https://dbc.example/license/12345"
 
@@ -128,7 +128,7 @@ async def search(scenario: Scenario, said: str, **args: object) -> str:
 
 
 def test_the_home_area_is_its_city_state_and_zip() -> None:
-    from themi.core.web_search import home_area
+    from themi.standard.web_search import home_area
 
     assert home_area(HOME) == "Mountain View, CA 94043"
     assert home_area("790 la para ave palo alto ca 94306 usa") == "Palo Alto, CA 94306"

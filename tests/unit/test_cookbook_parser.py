@@ -12,8 +12,8 @@ from tests.fixtures.cookbook import (
     document,
     recipe,
 )
-from themi.core import cookbook as book
-from themi.core.cookbook import Line
+from themi_home import cookbook as book
+from themi_home.cookbook import Line
 
 
 def parse(blocks: list | None = None) -> book.Cookbook:

@@ -26,8 +26,8 @@ from fastapi.responses import JSONResponse, Response
 
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
-from themi.connectors.gdocs import DOC_MIME
-from themi.connectors.google import GoogleConfig
+from themi_google.connectors.gdocs import DOC_MIME
+from themi_google.connectors.google import GoogleConfig
 
 STYLES = {
     "T": "TITLE",

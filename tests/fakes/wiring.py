@@ -28,9 +28,9 @@ from tests.fakes.spotify import FakeSpotify
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
-from themi.connectors.cozyla import CozylaClient, CozylaConfig
-from themi.connectors.google import GoogleConfig
 from themi.storage.secrets import Secret
+from themi_google.connectors.google import GoogleConfig
+from themi_home.connectors.cozyla import CozylaClient, CozylaConfig
 
 WALL_LIST = "Family"  # the Cozyla to-do list Themi syncs
 WALL_MEMBERS = ("Erin", "Husband")

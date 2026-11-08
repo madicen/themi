@@ -5,9 +5,15 @@ from __future__ import annotations
 import pytest
 
 from tests.fakes.thinq import payload
-from themi.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqDevice
-from themi.connectors.thinq.client import region_url
-from themi.connectors.thinq.events import minutes_left, parts, read_push, read_report, state_word
+from themi_home.connectors.thinq import FINISHED, IDLE, RUNNING, ThinqDevice
+from themi_home.connectors.thinq.client import region_url
+from themi_home.connectors.thinq.events import (
+    minutes_left,
+    parts,
+    read_push,
+    read_report,
+    state_word,
+)
 
 WASHER, DRYER, TOWER = "DEVICE_WASHER", "DEVICE_DRYER", "DEVICE_WASHTOWER"
 

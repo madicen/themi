@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from tests.fixtures.cookbook import document
-from themi.core import cookbook as book
-from themi.core.cooking_timers import Found, durations
+from themi_home import cookbook as book
+from themi_home.cooking_timers import Found, durations
 
 
 def test_a_plain_time() -> None:

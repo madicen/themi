@@ -16,9 +16,9 @@ from themi import clock
 from themi.ai.errors import PermanentError
 from themi.core import keys
 from themi.core.agent import WAITING_TEXT
-from themi.core.groceries import GroceryList
-from themi.core.pantry import Pantry
 from themi.localtime import to_utc_iso
+from themi_home.groceries import GroceryList
+from themi_home.pantry import Pantry
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

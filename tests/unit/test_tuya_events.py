@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from tests.fakes.tuya import payload
-from themi.connectors.tuya import FAULT, FOOD, JAMMED, LOW, OUT
-from themi.connectors.tuya import events as tuya_events
-from themi.connectors.tuya.client import sign, string_to_sign, url_for
-from themi.connectors.tuya.events import read_status, state_word, words
+from themi_home.connectors.tuya import FAULT, FOOD, JAMMED, LOW, OUT
+from themi_home.connectors.tuya import events as tuya_events
+from themi_home.connectors.tuya.client import sign, string_to_sign, url_for
+from themi_home.connectors.tuya.events import read_status, state_word, words
 
 # Tuya's worked examples (developer.tuya.com, "Signature algorithm", read 2026-11-04).
 ACCESS_ID = "1KAD46OrT9HafiKdsXeg"

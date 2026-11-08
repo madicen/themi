@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from themi.core.body_double_scene import FLAGS
+from themi_home.body_double_scene import FLAGS
 
 STATIC = Path(__file__).parents[2] / "src" / "themi" / "web" / "static"
 CSS = (STATIC / "themi.css").read_text()
@@ -50,7 +50,7 @@ AUDIO = STATIC / "audio"
 
 
 def test_every_loop_exists_small_and_licensed() -> None:
-    from themi.core.body_double_music import LOOPS
+    from themi_home.body_double_music import LOOPS
 
     licences = (AUDIO / "LICENCES.md").read_text()
     for loop in LOOPS.values():
@@ -62,7 +62,7 @@ def test_every_loop_exists_small_and_licensed() -> None:
 
 
 def test_the_loops_are_named_in_chat_words() -> None:
-    from themi.core.body_double_music import loop_for
+    from themi_home.body_double_music import loop_for
 
     assert loop_for("rain").key == "rain"  # type: ignore[union-attr]
     assert loop_for("the soft piano").key == "soft_piano"  # type: ignore[union-attr]

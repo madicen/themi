@@ -8,7 +8,7 @@ from itertools import pairwise
 from tests.scenarios.harness import Scenario
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
-from themi.core.timing import SLOW_AFTER, SLOW_NOTICES, medians, week_of_replies
+from themi.standard.timing import SLOW_AFTER, SLOW_NOTICES, medians, week_of_replies
 
 
 def notices(texts: list[str]) -> list[str]:

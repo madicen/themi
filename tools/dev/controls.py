@@ -32,13 +32,13 @@ from tests.fakes.tuya import ACCESS_ID as TUYA_ACCESS_ID
 from tests.fakes.tuya import SECRET as TUYA_SECRET
 from tests.fakes.wiring import wall_list
 from themi import clock
-from themi.connectors.catgenie.events import read_device as read_litter_box
-from themi.connectors.catgenie.events import state_word as litter_word
-from themi.connectors.roborock import RoborockError
-from themi.connectors.roborock.events import PARTS, problems, read_status, state_word
-from themi.connectors.tuya.events import read_status as read_feeder
-from themi.connectors.tuya.events import state_word as feeder_word
 from themi.core import keys
+from themi_home.connectors.catgenie.events import read_device as read_litter_box
+from themi_home.connectors.catgenie.events import state_word as litter_word
+from themi_home.connectors.roborock import RoborockError
+from themi_home.connectors.roborock.events import PARTS, problems, read_status, state_word
+from themi_home.connectors.tuya.events import read_status as read_feeder
+from themi_home.connectors.tuya.events import state_word as feeder_word
 from tools.dev.fakes import (
     ADDRESSES,
     DISHWASHER,

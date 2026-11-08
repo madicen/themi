@@ -10,8 +10,8 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.pauses import EVERYTHING
 from themi.core import keys
-from themi.core.praise import PRAISE, TasksPreferences
-from themi.core.routines import Routines
+from themi.standard.praise import PRAISE, TasksPreferences
+from themi.standard.routines import Routines
 
 WED = date(2026, 10, 21)
 

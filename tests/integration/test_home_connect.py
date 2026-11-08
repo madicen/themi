@@ -9,7 +9,7 @@ import pytest
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fixtures.family import SeededFamily
 from themi import clock
-from themi.connectors.homeconnect import (
+from themi_home.connectors.homeconnect import (
     ApplianceOffline,
     HomeConnectAccount,
     HomeConnectError,

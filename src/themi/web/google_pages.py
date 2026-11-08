@@ -18,13 +18,13 @@ from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError, LinkedAccount, Member
-from themi.connectors.gcal import CalendarError
-from themi.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
 from themi.core import keys
-from themi.core.expected import DEFAULT_CATEGORY
 from themi.web.auth import COOKIE_NAME
 from themi.web.connection_pages import accounts_values
 from themi.web.kit import Kit
+from themi_google.connectors.gcal import CalendarError
+from themi_google.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
+from themi_google.expected import DEFAULT_CATEGORY
 
 NOT_SET_UP = "Google sign-in isn't set up on this server. /site in Telegram sends a sign-in link."
 

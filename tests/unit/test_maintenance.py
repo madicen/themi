@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from themi.core.maintenance import (
+from themi_home.maintenance import (
     Item,
     due_on,
     every_words,

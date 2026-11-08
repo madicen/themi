@@ -3,7 +3,7 @@ short."""
 
 from __future__ import annotations
 
-from themi.core.timing import KEPT_CHARS, ToolNote
+from themi.standard.timing import KEPT_CHARS, ToolNote
 
 
 def test_a_tool_note_is_redacted_and_cut_short() -> None:

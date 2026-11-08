@@ -13,7 +13,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi.ai.types import ToolResult
 from themi.core import keys
-from themi.core.spending import Spending
+from themi_home.spending import Spending
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 

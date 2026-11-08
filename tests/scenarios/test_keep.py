@@ -12,11 +12,11 @@ from tests.fakes.keep import MASTER_TOKEN, FakeKeep
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import Member
-from themi.connectors.gkeep import KeepError, KeepLogin
 from themi.core import keys
-from themi.core.groceries import GroceryList
-from themi.core.keep_groceries import KeepLinks, run_keep_link
 from themi.storage.secrets import Secret
+from themi_home.connectors.gkeep import KeepError, KeepLogin
+from themi_home.groceries import GroceryList
+from themi_home.keep_groceries import KeepLinks, run_keep_link
 
 ERIN = "erin@example.com"
 HIM = "him@example.com"

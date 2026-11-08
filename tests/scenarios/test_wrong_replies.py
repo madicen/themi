@@ -15,7 +15,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.outbox import Priority
 from themi.core import keys
-from themi.core.wrong_replies import ReplyReview, decide, report
+from themi.standard.wrong_replies import ReplyReview, decide, report
 
 OLIVE_OIL = "remind me to buy olive oil tomorrow"
 

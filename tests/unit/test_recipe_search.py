@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from tests.fixtures.cookbook import document
-from themi.core import cookbook as book
-from themi.core.cookbook import Line
-from themi.core.recipes import Recipe, chart_row, clear_match, recipe_lines, search, stem
+from themi_home import cookbook as book
+from themi_home.cookbook import Line
+from themi_home.recipes import Recipe, chart_row, clear_match, recipe_lines, search, stem
 
 
 def recipes() -> list[Recipe]:
