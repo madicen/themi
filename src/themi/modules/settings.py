@@ -159,7 +159,7 @@ def value_sources(
     model: type[ModuleSettings],
     env: Mapping[str, str],
     section: Mapping[str, Any],
-    stored: Mapping[str, Secret] | None = None,
+    stored: Mapping[str, object] | None = None,
 ) -> dict[str, Source]:
     """SP2: where each field's value comes from, in the order `read_settings` reads them,
     for the Modules page (a field set in the environment is locked there)."""

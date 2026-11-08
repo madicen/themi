@@ -136,7 +136,7 @@ class PackStatic(StaticFiles):
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import accounts_page, admin_pages, ai_pages, dev_pages
+    from themi.web import accounts_page, admin_pages, ai_pages, dev_pages, modules_page
 
     kit = Kit(ctx)
     modules_pages = ctx.app.services.web_pages
@@ -198,6 +198,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(accounts_page.routes(kit))  # CR17a: made of the modules' sections
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
+    web.include_router(modules_page.routes(kit))  # SP4
     for pages in modules_pages:  # CR4: each loaded module's pages
         web.include_router(pages.routes(kit))
 
@@ -267,9 +268,10 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             (member.id,),
         )
         alerts = []
+        module_warnings = app.services.start_report.warnings() if member.is_admin else []
         if member.is_admin:
             # SP1: no AI provider, or a module that couldn't start, said to admins
-            alerts.extend(app.services.start_report.warnings())
+            alerts.extend(module_warnings)
             for category in autonomy.categories():
                 if category.escalated:
                     alerts.append(
@@ -292,6 +294,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
+            "modules_link": bool(module_warnings),  # SP4: those warnings link to Modules
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -514,6 +517,16 @@ CORE_MENU = (
         40,
         bar_label="Tiers",
         icon=icons.TIERS,
+    ),
+    MenuEntry(  # SP4: what this Themi is made of, and setting it up
+        "/modules",
+        "Modules",
+        "What Themi can do, and setting it up",
+        "Admin",
+        5,
+        admin_only=True,
+        bar_label="Modules",
+        icon=icons.MODULES,
     ),
     MenuEntry(
         "/dev",

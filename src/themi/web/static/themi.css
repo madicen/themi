@@ -375,3 +375,14 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 .session-music select { flex: 1 1 8rem; min-height: var(--tap); }
 .session-music input[type="range"] { flex: 1 1 6rem; min-width: 0; }
 .session-play { min-height: var(--tap); min-width: 5rem; }
+
+/* SP4: the Modules page */
+.module-search { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; margin: var(--space-2) 0; }
+.modules { list-style: none; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
+.module p { margin: var(--space-1) 0 0; }
+.module .chip { margin-left: var(--space-1); }
+.module-detail { display: grid; gap: var(--space-3); }
+@media (min-width: 52rem) { .module-detail { grid-template-columns: 1fr 1fr; align-items: start; } }
+.settings-list dt { font-weight: 600; margin-top: var(--space-2); }
+.settings-list dd { margin: 0; }
+.module-guide h2:first-child { margin-top: 0; }

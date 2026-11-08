@@ -45,7 +45,14 @@ ADMIN_GROUPS = [
             ("/safeway", "Safeway", "The cart helper and remembered products"),
         ],
     ),
-    ("Admin", [("/dev", "Development", "Update or restart the server")]),
+    (
+        "Admin",
+        [
+            # SP4: the Modules page joins the menu
+            ("/modules", "Modules", "What Themi can do, and setting it up"),
+            ("/dev", "Development", "Update or restart the server"),
+        ],
+    ),
 ]
 MEMBER_GROUPS = [
     (
@@ -85,6 +92,7 @@ BAR_LABELS = {
     "/maintenance": "Upkeep",
     "/family": "Family",
     "/dev": "Dev",
+    "/modules": "Modules",  # SP4
 }
 
 

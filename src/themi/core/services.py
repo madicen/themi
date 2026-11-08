@@ -160,6 +160,10 @@ class Services(Registry):
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
     # SP1: what happened to each module at start, for the Modules page and the dashboard
     start_report: StartReport = field(default_factory=StartReport)
+    # SP4: what the Modules page reads: the instance's config (a themi.config.InstanceConfig,
+    # None when nothing was read) and the environment as read (never shown: it holds secrets)
+    instance_config: Any = None
+    environment: dict[str, str] = field(default_factory=dict, repr=False)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:

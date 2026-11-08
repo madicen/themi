@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ card.title }} · Modules · Themi{% endblock %}
+{% macro badge(c) %}<span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span>{% endmacro %}
+{% macro field_value(f) %}
+  {% if f.source == "environment" %}<span class="muted">Set on the server, so it can't be changed here.</span>
+  {% elif f.spec.secret %}
+    {% if f.source == "stored" %}Saved, ends in …{{ f.ending }}{% else %}<span class="muted">Not set</span>{% endif %}
+  {% elif f.value in (None, "") %}<span class="muted">Not set</span>
+  {% elif f.spec.kind == "bool" %}{{ "Yes" if f.value else "No" }}
+  {% else %}{{ f.value }}{% endif %}
+  {% if f.waiting %} <span class="chip info">Waiting for restart</span>{% endif %}
+{% endmacro %}
+{% block content %}
+<p><a href="/modules">All modules</a></p>
+<h1>{{ card.title }} {{ badge(card) }}</h1>
+<p>{{ card.summary }}</p>
+{% if cls.cost %}<p class="muted">{{ cls.cost }}</p>{% endif %}
+{% if card.reason and card.badge != "on" %}<p class="alert">{{ card.reason }}</p>{% endif %}
+
+<div class="module-detail">
+  <section class="module-settings">
+    {% if fields or advanced %}
+    <h2>Settings</h2>
+    <dl class="settings-list">
+      {% for f in fields %}
+      <dt>{{ f.spec.label }}</dt>
+      <dd>{{ field_value(f) }}{% if f.spec.hint %}<br><span class="muted">{{ f.spec.hint }}</span>{% endif %}</dd>
+      {% endfor %}
+    </dl>
+    {% if advanced %}
+    <details>
+      <summary>Advanced settings</summary>
+      <dl class="settings-list">
+        {% for f in advanced %}
+        <dt>{{ f.spec.label }}</dt>
+        <dd>{{ field_value(f) }}</dd>
+        {% endfor %}
+      </dl>
+    </details>
+    {% endif %}
+    {% else %}
+    <p class="muted">Nothing to fill in here.</p>
+    {% endif %}
+
+    {% if need %}
+    <h2>After it's on</h2>
+    <p>{{ need.who | capitalize }} links {{ need.what }} on <a href="{{ need.where }}">{{ need.where.strip("/") | capitalize }}</a>.
+      {% if linked is true %}<span class="chip good">Linked</span>{% elif linked is false %}<span class="chip warn">Not linked yet</span>{% endif %}</p>
+    {% elif website %}
+    <h2>After it's on</h2>
+    <p>{{ website }}</p>
+    {% endif %}
+
+    <h2>Works with</h2>
+    {% if requires %}
+    <h3>It needs</h3>
+    <ul>{% for c in requires %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if required_by %}
+    <h3>These need it</h3>
+    <ul>{% for c in required_by %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if optional %}
+    <h3>It does more with</h3>
+    <ul>{% for c in optional %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if improves %}
+    <h3>It makes these better</h3>
+    <ul>{% for c in improves %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if not (requires or required_by or optional or improves) %}<p class="muted">It works on its own.</p>{% endif %}
+
+    {% if groups %}
+    <h2>What Themi can do with it</h2>
+    <ul>{% for g in groups %}<li>{{ g | capitalize }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  {% if guide %}
+  <section class="module-guide card">
+    {{ guide }}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@
 {% if alerts %}
 <section class="alerts">
   {% for alert in alerts %}<p class="alert">{{ alert }}</p>{% endfor %}
+  {% if modules_link %}<p><a href="/modules">Open Modules to sort it out</a></p>{% endif %}
 </section>
 {% endif %}
 

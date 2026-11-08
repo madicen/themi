@@ -20,6 +20,8 @@
   "GET /lists",
   "GET /login/{token}",
   "GET /maintenance",
+  "GET /modules",
+  "GET /modules/{name}",
   "GET /more",
   "GET /recipes",
   "GET /recipes/kitchen",

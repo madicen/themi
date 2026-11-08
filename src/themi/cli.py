@@ -221,6 +221,8 @@ def build_runtime(
         report=report,
         **options,
     )
+    app.services.instance_config = config  # SP4: for the Modules page
+    app.services.environment = dict(settings.environment)
     return Runtime(
         app,
         host=settings.http_host,

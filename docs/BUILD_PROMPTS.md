@@ -330,7 +330,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | [x] 2026-11-08 (split) |
 | SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [x] 2026-11-08 |
 | SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [x] 2026-11-08 |
-| SP4 | Modules page, read only | Setup portal | [ ] |
+| SP4 | Modules page, read only | Setup portal | [x] 2026-11-08 |
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [ ] |
 | SP6 | Restart and apply from the Modules page | Setup portal | [ ] |
 | SP7 | First visit | Setup portal | split |
@@ -15525,7 +15525,7 @@ Notes (2026-11-08):
 - Google's picker key and project number got labels. `PENDING` in check_packs is empty.
 
 ### SP4 · Setup portal: Modules page, read only
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP3b
 Read first: the plan's "The Modules page"; `themi/web/site.py`, `themi/web/kit.py`,
 `themi/web/admin_pages.py`.
@@ -15539,6 +15539,24 @@ Read first: the plan's "The Modules page"; `themi/web/site.py`, `themi/web/kit.p
 - The dashboard's admin warning from SP1 links here.
 Tests: badges match the report; dependents listed both ways; a secret's value never in the
 HTML; members who aren't admins get the site's usual admins-only answer.
+
+Notes (2026-11-08):
+- `themi/web/modules_page.py` with `modules.html` and `module.html`. `/modules` lists
+  every installed module by kind, a card each with a badge; `?q=` searches, `?only_on=1`
+  hides what's off. `/modules/<name>` shows the settings (plain values; secrets as "Saved,
+  ends in …" or "Set on the server"; advanced ones folded), what it needs, what needs it,
+  what it does more with, what it makes better, its tool groups, what's left after it's
+  on, and its guide with `$SITE` replaced by the site's address.
+- Badge order: waiting for restart (anything for it in the draft), couldn't start, needs
+  settings (`not_set_up`), needs an account linked (on, and `accounts_linked` is False),
+  on, off. A module not in the start report is off.
+- `services.instance_config` and `services.environment` (set by `build_runtime`) are what
+  the page reads for values and their sources; tests and a Themi with no config file get
+  `InstanceConfig()`.
+- Menu: "Modules" in the Admin group, before Development (icon `MODULES`).
+  `test_menu`'s expected Admin group and bar labels gained it. Golden: `routes.json` gained
+  `GET /modules` and `GET /modules/{name}`, nothing else.
+- The dashboard's module warnings now end with a link to Modules.
 
 ### SP5 · Setup portal: Modules page, editing
 Status: [ ]

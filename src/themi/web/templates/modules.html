@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Modules · Themi{% endblock %}
+{% block content %}
+<h1>Modules</h1>
+<p class="muted">What this Themi can do. Turn modules on or off, fill in what they need,
+and restart Themi to put changes in place. Started from the {{ template }} template.</p>
+
+{% if warnings %}
+<section class="alerts">
+  {% for warning in warnings %}<p class="alert">{{ warning }}</p>{% endfor %}
+</section>
+{% endif %}
+
+{% if draft %}
+<p class="alert">Changes are waiting for a restart.</p>
+{% endif %}
+
+<form method="get" action="/modules" class="module-search">
+  <label>Find a module <input type="search" name="q" value="{{ q }}"></label>
+  <label><input type="checkbox" name="only_on" value="1"{% if only_on %} checked{% endif %}> Only what's in use</label>
+  <button>Show</button>
+</form>
+
+{% for heading, cards in groups %}
+<h2>{{ heading }}</h2>
+<ul class="modules">
+  {% for card in cards %}
+  <li class="card module" id="module-{{ card.name }}">
+    <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+    <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+    <p class="muted">{{ card.summary }}</p>
+    {% if card.reason and card.badge in ("failed", "needs_settings") %}<p class="muted">{{ card.reason }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No module matches that.</p>
+{% endfor %}
+{% endblock %}
