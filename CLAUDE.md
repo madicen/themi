@@ -29,7 +29,8 @@ If a prompt is too large for one session, split it into `NNa`/`NNb` in the file 
 Works through the CR prompts in `docs/BUILD_PROMPTS.md` one after another, meant for auto
 mode with nobody watching.
 
-1. Take the first CR prompt that isn't `[x]` or split (resume a `[~]` from its Notes).
+1. Take the first CR prompt that isn't `[x]`, split or deferred (resume a `[~]` from its
+   Notes).
 2. Do steps 2 to 4 above for it, with the refactor doc as the design source. Read the doc's
    "Rules every refactor prompt keeps" before each prompt.
 3. Commit it (`jj commit`), then go straight on to the next CR prompt. Don't stop to report

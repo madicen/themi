@@ -296,10 +296,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [x] 2026-11-07 |
 | CR10 | Core refactor: workspace packages | Core refactor | split |
 | CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
-| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | [ ] |
+| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | deferred |
 | CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
 | CR12 | Core refactor: the work template | Core refactor | [x] 2026-11-07 |
-| CR13 | Gate: tutoring design | Core refactor | [ ] |
+| CR13 | Gate: tutoring design | Core refactor | [~] |
 | CR14 | Tutoring pack for one family | Core refactor | [ ] |
 | CR15a | Multi-family host: instance database and family registry | Core refactor | [ ] |
 | CR15b | Multi-family host: routing messages and the website | Core refactor | [ ] |
@@ -14665,10 +14665,21 @@ Notes:
 - Golden files identical.
 
 ### CR10b · Core refactor: workspace packages
-Status: [ ]
+Status: deferred (2026-11-07)
 Depends on: CR12 (moved after it on 2026-11-07: the work template runs from one package, and
 the physical split is the riskiest move left; CR10a leaves it a matter of moving files)
 Read first: CR10 above; CR10a's notes.
+
+Notes (2026-11-07, deferred during the auto run, a judgement call to confirm):
+- Not started. Two things still tie the packs together, so moving files now would give
+  packages that all depend on each other: (1) standard modules use connector code at
+  runtime (tasks imports calendar events, which import the Google Calendar connector);
+  (2) `core/keys.py` and `core/groups.py` name home types and groups for type checking.
+- Before the move: give the standard modules' calendar use a seam (the calendar module
+  provides what tasks needs), extend `tools/check_packs.py` to a connectors pack, and split
+  keys and groups by pack. Then the move is mechanical (a codemod over imports, as CR3's).
+- Nothing in the work template or tutoring's design needs it: an instance's modules come
+  from themi.toml, and the image can keep holding every pack.
 
 ### CR11 · Core refactor: the setup wizard
 Status: [x] 2026-11-07
@@ -14745,7 +14756,7 @@ Notes:
   and argument description); and runs the wizard for work.
 
 ### CR13 · Gate: tutoring design
-Status: [ ]
+Status: [~]
 Depends on: CR12
 Gate: stop here. This prompt is a conversation with Michael and the tutor, not code.
 - Settle: the roles and what each can see (especially what a parent sees of a student's
@@ -14753,6 +14764,23 @@ Gate: stop here. This prompt is a conversation with Michael and the tutor, not c
   tutoring template uses, what's new, and how families are invited.
 - Write the decisions into the refactor doc's Tutoring section, then replace CR14 below
   with prompts sized for one session each.
+
+Notes:
+- **Blocked:** a gate. The run stopped here on 2026-11-07, as planned. Questions for
+  Michael and the tutor:
+  1. Roles: who's in a tutoring workspace (the tutor, each parent, each student), and which
+     of them is an admin?
+  2. Privacy: what can a parent see of a student's conversations with Themi (nothing, a
+     summary, everything)? Students are minors, so this decides a lot.
+  3. What's a session, homework and progress to you: what does Themi keep, and who sees it?
+  4. Which existing modules fit (tasks, reminders, calendar, lists, focus, body double), and
+     what's new (a sessions module, homework, progress notes, invoices)?
+  5. How are families invited: by the tutor in chat, on the website, with codes?
+  6. For the later multi-family host: anything the tutor needs across families beyond
+     "what's on today"?
+- Ready for it: templates, roles with module limits (CR9; `Role` needs widening to the
+  template's role names), per-member preferences, migration tracks for new tables, the
+  setup wizard, and rewording for template-specific words.
 
 ### CR14 · Tutoring pack for one family
 Status: [ ]
