@@ -6,7 +6,8 @@ open connections aren't state, so they're left out and start empty.
 
 The JSON is tagged for what plain JSON can't hold: tuples, sets, Counters, `count()`s,
 datetimes, dicts with keys that aren't strings, and dataclasses. A dataclass comes back
-only if it lives in `tests.fakes` or `themi.connectors`, so the file can't name anything
+only if it lives in `tests.fakes` or a connector (`MOVED_MODULES` maps where
+connectors used to live), so the file can't name anything
 else to build (there's no pickle).
 """
 
@@ -28,6 +29,21 @@ ALLOWED_MODULES = (  # CR10b2: the packs have connectors too
     "themi_home.connectors.",
     "themi_cozyla.connector.",  # CR21c
 )
+# Where connectors used to live, for a fakes.json saved before they moved into the packs.
+MOVED_MODULES = {
+    "themi.connectors.catgenie.": "themi_home.connectors.catgenie.",  # CR10b2
+    "themi.connectors.gkeep.": "themi_home.connectors.gkeep.",
+    "themi.connectors.homeconnect.": "themi_home.connectors.homeconnect.",
+    "themi.connectors.ourgroceries.": "themi_home.connectors.ourgroceries.",
+    "themi.connectors.roborock.": "themi_home.connectors.roborock.",
+    "themi.connectors.thinq.": "themi_home.connectors.thinq.",
+    "themi.connectors.tuya.": "themi_home.connectors.tuya.",
+    "themi.connectors.gcal.": "themi_google.connectors.gcal.",
+    "themi.connectors.gmail.": "themi_google.connectors.gmail.",
+    "themi.connectors.google.": "themi_google.connectors.google.",
+    "themi.connectors.gtasks.": "themi_google.connectors.gtasks.",
+    "themi.connectors.cozyla.": "themi_cozyla.connector.",  # CR21c
+}
 TAG = "~"
 
 
@@ -42,10 +58,12 @@ class Snapshots:
         return {name: dump(getattr(self, name)) for name in self.SNAPSHOT}
 
     def restore(self, saved: dict[str, Any]) -> None:
-        """Put back what `snapshot` gave; attributes it didn't save keep their values."""
-        for name in self.SNAPSHOT:
-            if name in saved:
-                setattr(self, name, load(saved[name]))
+        """Put back what `snapshot` gave; attributes it didn't save keep their values.
+
+        All or nothing: if any of it can't be read, nothing is changed."""
+        loaded = {name: load(saved[name]) for name in self.SNAPSHOT if name in saved}
+        for name, value in loaded.items():
+            setattr(self, name, value)
 
 
 def dump(value: Any) -> Any:
@@ -115,9 +133,16 @@ def _dataclass(name: str) -> type:
     module_name, _, qualname = name.partition(":")
     if not module_name.startswith(ALLOWED_MODULES):
         raise SnapshotError(f"won't build {name}: not from the fakes or the connectors")
-    target: Any = importlib.import_module(module_name)
-    for part in qualname.split("."):
-        target = getattr(target, part)
+    for old, new in MOVED_MODULES.items():
+        if (module_name + ".").startswith(old):
+            module_name = (new + (module_name + ".").removeprefix(old)).rstrip(".")
+            break
+    try:
+        target: Any = importlib.import_module(module_name)
+        for part in qualname.split("."):
+            target = getattr(target, part)
+    except (ImportError, AttributeError) as e:
+        raise SnapshotError(f"can't find {name}: {e}") from e
     if not (isinstance(target, type) and dataclasses.is_dataclass(target)):
         raise SnapshotError(f"{name} isn't a dataclass")
     return target

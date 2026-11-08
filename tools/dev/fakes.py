@@ -41,7 +41,7 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.roborock import CODE as ROBOROCK_CODE
 from tests.fakes.roborock import EMAIL as ROBOROCK_EMAIL
 from tests.fakes.roborock import FakeRoborock
-from tests.fakes.snapshot import Snapshots
+from tests.fakes.snapshot import SnapshotError, Snapshots
 from tests.fakes.thinq import TOKEN as THINQ_TOKEN
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
@@ -88,6 +88,7 @@ class HelperSeat(Snapshots):
 class DevFakes:
     def __init__(self, path: Path) -> None:
         self.path = path
+        self.unrestored: list[str] = []  # fakes whose saved state couldn't be read
         self.google = FakeGoogle()
         self.gmail = FakeGmail(self.google)
         self.gcal = FakeGcal(self.google)
@@ -190,9 +191,14 @@ class DevFakes:
         if not self.path.exists():
             return False
         state = json.loads(self.path.read_text())
+        self.unrestored = []
         for name, fake in self.held().items():
             if name in state:
-                fake.restore(state[name])
+                try:
+                    fake.restore(state[name])
+                except SnapshotError as e:  # saved by an older Themi: start this one fresh
+                    self.unrestored.append(name)
+                    print(f"  dev fakes: {name} starts fresh, its saved state can't be read ({e})")
         return True
 
     async def _save_job(self) -> None:

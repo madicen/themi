@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -63,6 +65,41 @@ def test_only_the_fakes_and_connectors_dataclasses_are_built() -> None:
             load({"~dataclass": name, "fields": {}})
     with pytest.raises(SnapshotError, match="isn't a dataclass"):
         load({"~dataclass": "tests.fakes.keep:FakeKeep", "fields": {}})
+
+
+def test_a_dataclass_saved_before_its_connector_moved_comes_back() -> None:
+    """A fakes.json from before CR10b2/CR21c names the old `themi.connectors` places."""
+    from themi_home.connectors.ourgroceries.client import RemoteItem
+    from themi_home.connectors.roborock.client import VacuumDevice
+
+    for old, cls in (
+        ("themi.connectors.roborock.client:VacuumDevice", VacuumDevice),
+        ("themi.connectors.ourgroceries.client:RemoteItem", RemoteItem),
+    ):
+        saved = {"~dataclass": old, "fields": {f.name: None for f in dataclasses.fields(cls)}}
+        assert type(load(saved)) is cls
+
+
+def test_a_dataclass_that_cant_be_found_says_so() -> None:
+    for name in ("themi.connectors.gone.client:Thing", "tests.fakes.keep:Gone"):
+        with pytest.raises(SnapshotError, match="can't find"):
+            load({"~dataclass": name, "fields": {}})
+
+
+def test_dev_fakes_start_fresh_where_the_saved_file_cant_be_read(tmp_path: Path) -> None:
+    from tools.dev.fakes import DevFakes
+
+    saved = DevFakes(tmp_path / "fakes.json")
+    saved.save()
+    state = json.loads(saved.path.read_text())
+    state["roborock"]["token"] = "kept?"
+    state["roborock"]["robots"] = {"~dataclass": "themi.connectors.gone:X", "fields": {}}
+    saved.path.write_text(json.dumps(state))
+
+    fakes = DevFakes(saved.path)
+    assert fakes.load()
+    assert fakes.roborock.snapshot() == FakeRoborock().snapshot()  # none of it, not half
+    assert fakes.unrestored == ["roborock"]
 
 
 def test_what_cant_be_saved_says_so() -> None:
