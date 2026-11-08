@@ -31,7 +31,11 @@ restore=false
 
 set_version() {
     if grep -q '^THEMI_VERSION=' .env; then
-        sed -i "s/^THEMI_VERSION=.*/THEMI_VERSION=$1/" .env
+        # Not `sed -i`: BSD sed (macOS) reads its next argument as a backup suffix.
+        # Written back with cat so .env keeps its owner and mode.
+        sed "s/^THEMI_VERSION=.*/THEMI_VERSION=$1/" .env > .env.next
+        cat .env.next > .env
+        rm -f .env.next
     else
         echo "THEMI_VERSION=$1" >> .env
     fi
