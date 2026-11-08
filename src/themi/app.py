@@ -45,7 +45,7 @@ from themi.core.which_task import TaskNamer
 from themi.energy import EnergyModel
 from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
-from themi.modules import Module, ModuleContext, PeriodicTask, as_job
+from themi.modules import Module, ModuleContext, PeriodicTask, StartReport, as_job
 from themi.scheduler import Scheduler
 from themi.standard.ai_providers import AI_PROVIDERS
 from themi.standard.breaks import BreaksModule
@@ -299,9 +299,13 @@ def build_app(
     hedge_after: float | None = HEDGE_AFTER,
     modules: list[Module] | None = None,
     template: Template | None = None,
+    report: StartReport | None = None,
 ) -> App:
     """`modules`: the list to load instead of the family's (tests, and CR5's templates).
-    `template`: the persona and prompt rewordings (CR8a); the family's when None."""
+    `template`: the persona and prompt rewordings (CR8a); the family's when None.
+    `report`: what `resolve_start` found (SP1); given, a module whose install raises is
+    left out and noted in it, and Themi starts. Without it, every module is noted as on
+    and an install that raises stops the build, as before."""
     template = template or load_template("family")
     if modules is None:
         modules = family_modules(
@@ -379,7 +383,16 @@ def build_app(
     ctx.periodic("energy.expire_outcomes", timedelta(minutes=15), as_job(outcomes.expire))
 
     # ----- the modules ----------------------------------------------------------------
-    loaded = ctx.load(*modules)
+    loaded = ctx.load(*modules, tolerant=report is not None)
+    if report is None:
+        report = StartReport(template=template.name)
+        for module in loaded:
+            report.note(module.name, "on", type(module).kind)
+    for name, reason in ctx.failed.items():  # SP1: left out as they installed
+        state = "off" if reason.startswith("it needs") else "failed"
+        kind = next((type(m).kind for m in modules if m.name == name), "feature")
+        report.note(name, state, kind, reason)
+    services.start_report = report
 
     # ----- the core again: updates from the website, and backups -----------------------
     server = ServerControl(services, control_dir)

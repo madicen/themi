@@ -325,7 +325,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
 | CR21d | Round two: drop the columns the modules copied out | Core refactor | [x] 2026-11-08 |
-| SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [ ] |
+| SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [x] 2026-11-08 |
 | SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [ ] |
 | SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | split |
 | SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [ ] |
@@ -15365,7 +15365,7 @@ Read it with the Claude Docs tools, like the other plans. Its decisions (2026-11
   script, since it runs before any Themi exists.
 
 ### SP1 · Setup portal: tolerant start
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR21d
 Read first: the plan's "Restart and apply" (Change to how Themi starts); `themi/config.py`
 (`resolve_modules`); `themi/app.py`; `themi/cli.py` (`build_runtime`).
@@ -15387,6 +15387,32 @@ Read first: the plan's "Restart and apply" (Change to how Themi starts); `themi/
 Tests: a bad key leaves only that module and its dependents off and Themi starts; a
 corrupt `themi.toml` still stops; no AI provider starts with the warning; an install that
 raises leaves the module and its dependents out; a scenario where an admin sees the warning.
+
+Notes (2026-11-08):
+- `resolve_start` (config.py) is the tolerant resolver that `themi run`, `make dev` with a
+  config, and `themi config show` use. `resolve_modules` keeps its strict behaviour and
+  messages, so the wizard and its tests are unchanged. Both share `_resolve`. Strict mode
+  still lets a `build` that raises go up; tolerant mode records it as failed.
+- `StartReport` (`themi/modules/report.py`) per module: `on`, `off`, `not_set_up`,
+  `failed`, a kind, a reason, and `warn` for a module that isn't a failure but should be
+  said (Telegram with no token). `warnings()` is what admins see; `lines()` is for
+  `themi config show`. It's on `services.start_report`. `build_app` makes an all-on one
+  when given none (tests), and is tolerant only when given one.
+- Tolerant install: `ModuleContext.load(..., tolerant=True)` snapshots every list, dict
+  and set on the context, the services, the tool registry, the channel set, the mirrors and
+  the executors, plus the services' other attributes, and puts them back if `install`
+  raises. Something a module changed elsewhere before raising stays changed, and its
+  migrations stay applied. Modules needing a failed one are left out as `off`.
+- Telegram with no token no longer stops `themi run`: it's `not_set_up` with a warning. A
+  Themi whose channels don't poll (only the website's chat) used to shut down as soon as
+  it started, because the channels task returned; the runtime now keeps going.
+- Test changed on purpose: `test_run_requires_a_telegram_token` asserted the rule SP1
+  reverses. It's now `test_run_without_a_telegram_token_starts_and_says_what_telegram_needs`
+  (starts, answers /health, logs what Telegram needs).
+- Not covered: a member writing to a Themi with no AI provider gets whatever the router's
+  failure path says. SP7a's "Finish setting up" card is where that gets attention.
+- Local only: `tests/integration/test_deploy_scripts.py` fails 8 tests on macOS (BSD sed in
+  `update.sh`), the same on CR21d's commit. CI runs Linux.
 
 ### SP2 · Setup portal: settings store
 Status: [ ]

@@ -29,6 +29,7 @@ from themi.modules.base import (
 )
 from themi.modules.context import ModuleContext
 from themi.modules.loader import load, order
+from themi.modules.report import ModuleState, ModuleStatus, StartReport
 
 __all__ = [
     "KINDS",
@@ -37,8 +38,11 @@ __all__ = [
     "ModuleError",
     "ModuleKind",
     "ModuleSetup",
+    "ModuleState",
+    "ModuleStatus",
     "PeriodicTask",
     "SetupStep",
+    "StartReport",
     "as_job",
     "load",
     "order",

@@ -23,7 +23,7 @@ from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from themi.modules import Module, ModuleSetup
+from themi.modules import Module, ModuleSetup, StartReport
 from themi.modules.settings import SettingsProblem
 from themi.settings import Settings, SettingsError
 
@@ -175,9 +175,40 @@ def resolve_modules(
     anything of the template's that then lacks a module it requires: that's a connector
     nobody has configured. A module the file adds must be known and set up, and must have
     what it requires; a module the file removes mustn't be needed by another. Otherwise
-    Themi says so and stops.
+    Themi says so and stops. `themi run` uses `resolve_start` instead (SP1), which leaves
+    such a module off and starts.
     `given`: modules already built, by name (the simulator's, on its fakes); one not given
     isn't set up."""
+    modules, report = _resolve(config, settings, known, given, {}, tolerant=False)
+    if report.problems:
+        raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(report.problems))
+    return modules
+
+
+def resolve_start(
+    config: InstanceConfig,
+    settings: Settings,
+    known: dict[str, type[Module]] | None = None,
+    given: dict[str, Module] | None = None,
+    unavailable: dict[str, str] | None = None,
+) -> tuple[list[Module], StartReport]:
+    """SP1: as `resolve_modules`, but a module's problem leaves it (and what needs it) off
+    and is said in the report, and Themi starts. Only a problem with themi.toml itself (a
+    module or template that isn't installed, a section for nothing) still stops it.
+    `unavailable`: modules the runner knows can't run here, with why (Telegram with no
+    token)."""
+    return _resolve(config, settings, known, given, unavailable or {}, tolerant=True)
+
+
+def _resolve(
+    config: InstanceConfig,
+    settings: Settings,
+    known: dict[str, type[Module]] | None,
+    given: dict[str, Module] | None,
+    unavailable: dict[str, str],
+    *,
+    tolerant: bool,
+) -> tuple[list[Module], StartReport]:
     known = available_modules() if known is None else known
     template = load_template(config.template)
     problems = []
@@ -192,13 +223,26 @@ def resolve_modules(
             problems.append(f"[module.{name}]: there's no module called {name}")
         elif known[name].settings is None:
             problems.append(f"[module.{name}]: {name} has no settings of its own")
-    if problems:
+    if problems:  # themi.toml itself is wrong: that stops Themi either way
         raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(problems))
+    report = StartReport(
+        template=template.name,
+        ai_choices=tuple(sorted(n for n, cls in known.items() if cls.kind == "ai")),
+    )
+
+    def kind(name: str) -> str:
+        return known[name].kind if name in known else "feature"
+
+    for name in config.removed:
+        report.note(name, "off", kind(name), "removed in themi.toml")
     names = [n for n in template.modules if n not in config.removed]
     names += [n for n in config.added if n not in names]
     shared: dict[str, object] = {}  # one store of shared objects for every module
     built: dict[str, Module] = {}
     for name in names:
+        if name in unavailable:
+            report.note(name, "not_set_up", kind(name), unavailable[name], warn=True)
+            continue
         setup = ModuleSetup(
             settings, config.sections.get(name), shared, module=name, sections=config.sections
         )
@@ -206,11 +250,23 @@ def resolve_modules(
             # CR16: `given` is modules built already (the simulator's, on its fakes)
             module = given.get(name) if given is not None else known[name].build(setup)
         except SettingsProblem as exc:  # CR5b: its settings, in the person's words
-            problems.extend(exc.problems)
+            report.problems.extend(exc.problems)
+            report.note(name, "failed", kind(name), "; ".join(exc.problems))
             continue
-        if module is None and name in config.added:
-            problems.append(f"{name} is added in themi.toml, but its settings aren't there")
-        elif module is not None:
+        except Exception as exc:
+            if not tolerant:
+                raise
+            report.note(name, "failed", kind(name), f"it couldn't be set up: {exc}")
+            continue
+        if module is None:
+            if name in config.added:
+                report.problems.append(
+                    f"{name} is added in themi.toml, but its settings aren't there"
+                )
+                report.note(name, "not_set_up", kind(name), "added, but its settings aren't there")
+            else:
+                report.note(name, "not_set_up", kind(name), "its settings aren't there")
+        else:
             built[name] = module
     changed = True
     while changed:  # leave out what requires a module that isn't set up
@@ -221,20 +277,28 @@ def resolve_modules(
                 continue
             removed = [r for r in missing if r in config.removed]
             if removed:
-                problems.append(f"{name} needs {', '.join(removed)}, which themi.toml removes")
-            elif name in config.added:
-                problems.append(f"{name} needs {', '.join(missing)}, which isn't set up")
+                report.problems.append(
+                    f"{name} needs {', '.join(removed)}, which themi.toml removes"
+                )
+                reason = f"it needs {', '.join(removed)}, which themi.toml removes"
+            else:
+                if name in config.added:
+                    report.problems.append(f"{name} needs {', '.join(missing)}, which isn't set up")
+                reason = f"it needs {', '.join(missing)}, which isn't on"
+            report.note(name, "off", kind(name), reason)
             del built[name]
             changed = True
-    kinds = {name: (known[name] if name in known else type(m)).kind for name, m in built.items()}
-    if not problems and "ai" not in kinds.values():  # CR19
-        providers = sorted(n for n, cls in known.items() if cls.kind == "ai")
-        problems.append(
-            f"a Themi needs at least one AI provider: add one of {', '.join(providers)}"
-        )
-    if problems:
-        raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(sorted(set(problems))))
-    return [built[n] for n in names if n in built]
+    for name, module in built.items():
+        report.note(name, "on", known[name].kind if name in known else type(module).kind)
+    report.modules = {  # in the order considered: removed first, then the list's order
+        **{n: s for n, s in report.modules.items() if n in config.removed},
+        **{n: report.modules[n] for n in names if n in report.modules},
+    }
+    if not report.problems and not report.has_ai():  # CR19
+        providers = ", ".join(report.ai_choices)
+        report.problems.append(f"a Themi needs at least one AI provider: add one of {providers}")
+    report.problems = sorted(set(report.problems))
+    return [built[n] for n in names if n in built], report
 
 
 def all_groups(known: dict[str, type[Module]] | None = None) -> list[ToolGroup]:

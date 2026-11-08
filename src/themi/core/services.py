@@ -28,6 +28,7 @@ from themi.core.tools import ToolRegistry
 from themi.modules.mirrors import Mirrors
 from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
+from themi.modules.report import StartReport
 from themi.modules.web import AccountsSection, Panel, Waiting, WebPages
 
 if TYPE_CHECKING:
@@ -157,6 +158,8 @@ class Services(Registry):
     role_modules: dict[str, set[str] | None] = field(default_factory=dict)
     # F34l: each member's latest picture, in memory only, for a follow-up (and F34o's reports).
     kept_pictures: KeptPictures = field(default_factory=KeptPictures)
+    # SP1: what happened to each module at start, for the Modules page and the dashboard
+    start_report: StartReport = field(default_factory=StartReport)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
 
     def add_command(self, name: str, handler: CommandHandler, description: str) -> None:

@@ -103,10 +103,24 @@ class Runtime:
         log.info("Themi is running")
         try:
             stopper = asyncio.create_task(self.stop_event.wait())
-            done, _ = await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)
-            for task in done:
-                if task is not stopper and task.exception() is not None:
-                    log.error("%s stopped unexpectedly", task.get_name(), exc_info=task.exception())
+            waiting = {*tasks, stopper}
+            while waiting:
+                done, waiting = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+                stop = stopper in done
+                for task in done:
+                    if task is stopper:
+                        continue
+                    if task.exception() is not None:
+                        log.error(
+                            "%s stopped unexpectedly", task.get_name(), exc_info=task.exception()
+                        )
+                        stop = True
+                    elif task.get_name() != "telegram":
+                        stop = True
+                    # SP1: the channels finishing on their own (none of them polls, as in a
+                    # Themi with only the website's chat) isn't a reason to stop.
+                if stop:
+                    break
         finally:
             await self._shutdown(tasks)
 

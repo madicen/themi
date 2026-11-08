@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from themi.settings import Settings
+
+log = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -155,21 +158,29 @@ def build_runtime(
 
     modules = None
     template = None
+    report = None
     options: dict[str, Any] = {}
-    from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.config import config_path, load_config, load_template, resolve_start
 
+    # SP1: a module's problem leaves it off and Themi starts; Telegram with no token is
+    # one of those, said on the dashboard rather than stopping everything.
+    unavailable = {}
+    if settings.telegram_enabled and settings.telegram_bot_token is None:
+        unavailable["telegram"] = "it needs a bot token (TELEGRAM_BOT_TOKEN, from @BotFather)"
     if connectors is not None and config is None:  # `make dev`: the family, on the fakes
         options = dict(connectors)
     elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
         from themi.app import family_modules
 
         on_fakes = {m.name: m for m in family_modules(**connectors)}
-        modules = resolve_modules(config, settings, given=on_fakes)
+        modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
         template = load_template(config.template)
     else:  # CR5a: the modules themi.toml (or the family template) names
         config = config or load_config(config_path())
-        modules = resolve_modules(config, settings)
+        modules, report = resolve_start(config, settings, unavailable=unavailable)
         template = load_template(config.template)
+    for line in report.warnings() if report is not None else ():
+        log.warning("%s", line)
     # CR20b: Telegram's channel, when the setup has the telegram module (the family's
     # always does). The runner builds it, since only it knows the simulator's address.
     telegram = modules is None or any(m.name == "telegram" for m in modules)
@@ -198,6 +209,7 @@ def build_runtime(
         control_dir=settings.control_dir,
         modules=modules,
         template=template,
+        report=report,
         **options,
     )
     return Runtime(
@@ -212,24 +224,27 @@ def build_runtime(
 
 def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
     """`themi config show`: where the config came from, the template, and each module."""
-    from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.config import config_path, load_config, load_template, resolve_start
     from themi.modules.settings import plain_values, read_settings
 
     path = config_path(env)
     config = load_config(path)
-    modules = resolve_modules(config, settings)
+    modules, report = resolve_start(config, settings)  # SP1: what starts, and what doesn't
     template = load_template(config.template)
-    loaded = {m.name for m in modules}
     lines = [
         f"Config: {path if path else 'none (the family template, from the environment)'}",
         f"Template: {template.name}",
         f"Modules ({len(modules)}):",
         *(f"  {m.name}" for m in modules),
     ]
-    left_out = [n for n in (*template.modules, *config.added) if n not in loaded]
+    left_out = report.lines()
     if left_out:
-        lines.append("Left out (not set up, or removed):")
-        lines += [f"  {n}" for n in dict.fromkeys(left_out)]
+        lines.append("Left out:")
+        lines += left_out
+    warnings = report.warnings()
+    if warnings:
+        lines.append("To look at:")
+        lines += [f"  {w}" for w in warnings]
     for module in modules:  # CR5b: each module's settings, secrets left out
         model = type(module).settings
         if model is None:

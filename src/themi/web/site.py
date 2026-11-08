@@ -268,6 +268,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         )
         alerts = []
         if member.is_admin:
+            # SP1: no AI provider, or a module that couldn't start, said to admins
+            alerts.extend(app.services.start_report.warnings())
             for category in autonomy.categories():
                 if category.escalated:
                     alerts.append(

@@ -74,20 +74,47 @@ def test_missing_secret_key_gives_a_clear_error(tmp_path) -> None:
     assert "THEMI_SECRET_KEY" in result.stderr and "Traceback" not in result.stderr
 
 
-def test_run_requires_a_telegram_token(tmp_path) -> None:
-    env = _env(tmp_path)
+def test_run_without_a_telegram_token_starts_and_says_what_telegram_needs(tmp_path) -> None:
+    """SP1: Telegram with no token is left off, said in the log (and on the dashboard), and
+    Themi starts, so the rest can be set up on its website. (Before SP1 it stopped.)"""
+    import signal
+    import time
+    import urllib.error
+    import urllib.request
+
+    from tests.integration.test_runtime import free_port
+
+    port = free_port()
+    env = {**_env(tmp_path), "THEMI_HTTP_PORT": str(port)}
     env.pop("TELEGRAM_BOT_TOKEN", None)
     env.pop("THEMI_DISABLE_TELEGRAM", None)
-    result = subprocess.run(
+    process = subprocess.Popen(
         [sys.executable, "-m", "themi", "run"],
-        capture_output=True,
-        text=True,
         env=env,
         cwd=tmp_path,
-        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
-    assert result.returncode == 1
-    assert "TELEGRAM_BOT_TOKEN" in result.stderr and "Traceback" not in result.stderr
+    try:
+        deadline = time.monotonic() + 20
+        while True:
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as r:
+                    assert r.status == 200
+                    break
+            except (urllib.error.URLError, ConnectionError):
+                if time.monotonic() > deadline or process.poll() is not None:
+                    raise
+                time.sleep(0.2)
+        process.send_signal(signal.SIGTERM)
+        _, stderr = process.communicate(timeout=20)
+    finally:
+        if process.poll() is None:
+            process.kill()
+    assert process.returncode == 0, stderr
+    assert "Traceback" not in stderr
+    assert "telegram" in stderr and "bot token" in stderr
 
 
 def test_login_link_prints_a_working_url(tmp_path) -> None:
