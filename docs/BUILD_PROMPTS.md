@@ -149,7 +149,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [x] 2026-11-04 |
 | 34a | Liaison: relays between partners | 6 Liaison and food | [x] 2026-11-04 |
 | 34b | Liaison: family group and alignment prompts | 6 Liaison and food | [x] 2026-11-04 |
-| 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
+| 35a | Meal reminders and takeout rescue | 6 Liaison and food | [x] 2026-11-08 |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
 | 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [x] |
@@ -7068,7 +7068,7 @@ Notes (2026-11-04):
   (the default) the bot only sees commands, mentions and replies, which is all it needs.
 
 ### 35a · Meal reminders and takeout rescue
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: 27, 19
 Read first: "Module behaviour" → D; "Integrations" → Safeway/DoorDash row.
 Split from prompt 35 on 2026-10-30; the Safeway cart moved to 35b and 35c.
@@ -7091,6 +7091,47 @@ Tests:
 - Spending updates from receipts.
 
 Commit when done.
+
+Notes:
+- The plan (Build Plan V1) couldn't be read from this session (the Docs and Artifact tools
+  both refused it), so this follows the prompt and the earlier prompts' notes. Worth a
+  look against "Module behaviour" D when someone can open it.
+- Meal log: `log_meal` (pantry group; "ate", "eaten", "snack" added to its words), a
+  picked meal idea, and `Meals.log_eaten(member, what, at, source="device")`, the device
+  hook (nothing calls it yet). Tables `meals_eaten` and `meal_nudges`, in the meals
+  module's own track (`meals_schema`).
+- Gap: the median of same-day gaps over the last 30 days ×1.3, between 3 and 7 hours;
+  5 hours until there are 5 gaps. Overnight gaps don't count. The gap counts from the
+  last meal or the end of their quiet hours, whichever is later, so the morning's first
+  reminder comes a gap after they wake. No reminder for someone who hasn't logged a meal
+  in two days (nobody is reminded until they start logging). The `meals.nudges` job runs
+  every 15 minutes; a reminder carries two meal ideas (prompt 27), or a plain line when
+  the AI can't be reached. Kind `meal`, so "no meal reminders today" pauses it, and it
+  lapses after an hour rather than arriving late.
+- Takeout rescue is its own module, `takeout` (needs spending and meals), with its own
+  track (`takeout_schema`: `takeout_favourites`, `takeout_rescues`). Household settings
+  `TakeoutSettings`: dinner 17:00 to 19:30, at most $60 an order; admins change them on
+  the Takeout page. "Low" is `suggested_level == "low"` for every member (tracking off is
+  no read, so no rescue). Also held back by a takeout or eating-out spend already today.
+  The favourite chosen is within the cap and the budget left, offered longest ago, then
+  cheapest. No budget set: the cap alone.
+- The card goes through the existing `doordash_order` category (capped, always asks), to
+  an admin. Deviation: approvals gained `timely` (a set of categories whose card goes at
+  once, with a deadline of now). Otherwise a card waits for a good moment, and with
+  everyone low that doesn't come until after dinner. Pauses, quiet hours and busy times
+  still hold it. Going ahead edits the card to the store link and the items; the checkout
+  is the person's. Nothing is bought by Themi.
+- Spending from DoorDash receipts was already X1's (`Spending.from_receipt`); the budget
+  left reads it.
+- Website: `/takeout` (favourites: add, change, remove; admins: the dinner window and
+  cap), linked from Spending. No menu entry.
+- Tests changed for the new module, not loosened: the key count (65), takeout leaving with
+  spending in the planner and the menu test, and the meals module's job. Golden files:
+  the two jobs, the five routes, `log_meal`, the `takeout.order` executor.
+- Setup: restart `themi run` (the two new tracks), and save a favourite or two on the
+  Takeout page.
+- Also in this session: `deploy/update.sh` no longer uses `sed -i` (BSD sed on macOS took
+  `.env` as the backup suffix, so the deploy script tests failed locally).
 
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
 Status: [x] 2026-10-31
