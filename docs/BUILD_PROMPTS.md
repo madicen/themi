@@ -196,7 +196,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [x] 2026-11-03 |
 | F26a | Feedback: a one-off routine item already gone stopped the wall's routine sync | Feedback | [x] 2026-11-04 |
 | F26b | Idea: approvals from one email thread in one message | Feedback | [x] 2026-11-06 |
-| F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
+| F26c | Idea: a task's steps split into tasks of their own | Feedback | [x] 2026-11-08 |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
@@ -9576,7 +9576,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0119). Mark idea #137 reviewed once it's live.
 
 ### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: F6a, F4, O1a
 Read first: "Shadow Calendar" → Task matching, capacity; F6a (steps on tasks). From
 Michael's idea #142 (2026-11-04, 1:32 pm, "be able to take tasks that have multiple steps
@@ -9595,6 +9595,28 @@ at least do part of it"). For example task 10, Split Merlin's cat box, has three
 Tests: task 10 split three ways between Erin and Michael; each part on the right list and
 the wall; the parent done when the last part is. A part done counts as done in the
 summary. A repeating chore is refused.
+
+Notes:
+- `themi.standard.task_parts` (module `task_parts`, family template only: the work template
+  mustn't send "partner" or "chore" to the model). Core migration 0157 `task_parts` (part,
+  parent, position): a new core table, since the filter lives in core queries.
+- `split_task(task_id, parts)`: every step becomes a part, titled "<task>: <step>" so it
+  reads alone on the wall. Named steps go to 'me', 'partner' (a household of two) or
+  'either' (matching decides: whoever has room); the rest stay with the task's assignee.
+  Each part keeps the task's due date unless one is given, its kind and importance, and
+  effort/steps (at least 1). In the schedules tool group ("split", "step", "part", "break
+  it up" added to its words).
+- The parent stays open but is hidden: `NOT_SPLIT` in `open_for`, `added_by`, the naming
+  check, matching's task load, overdue reminders, and the dishwasher, vacuum and
+  body-double title matches; `off_displays` set, so it leaves the wall and other displays.
+  Its nudge is withdrawn.
+- Each part's line says "Part 2 of 3 of <task>; 1 of 3 parts done." (open items and the
+  website's task rows). Last part settled: the parent is done if any part was, cancelled if
+  all were.
+- Refused, changing nothing: a repeating chore, fewer than two steps, already split, a part
+  itself, a step number that isn't there.
+- Golden: `split_task`, and `more_tools` (the schedules group's description).
+- Setup: restart `themi run` (migration 0157). Mark #142 reviewed once live.
 
 ### F27 · Feedback (2026-11-04): the family group hears "Themi, ..." and says when Telegram hides messages
 Status: [x] (2026-11-04)
