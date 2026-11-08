@@ -220,7 +220,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
-| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
+| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [x] 2026-11-08 |
 | F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
@@ -10962,7 +10962,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0118). No new Google scope.
 
 ### F32a · Idea (2026-11-06): tasks on the website, grouped by due date and other ways
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: W2, T1
 Read first: W1's principles (collapsed rows, phone first, no new JS); W2's notes
 (`task_pages.task_rows`, `_task_row.html`); T1's `themi.core.priority` (urgent and
@@ -11006,6 +11006,21 @@ Scenario: Michael chooses "Urgency" on Tasks, sees "Urgent" with today's dentist
 it, comes back later and it's still grouped that way. Erin's page is still by due date.
 
 Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
+
+Notes:
+- Deviation: no `members.task_grouping` column. Since CR7a a member's feature setting is a
+  module preference, so it's `TasksPreferences.task_grouping` (default "due") in
+  `member_preferences`; no migration. It isn't on My settings, and saving that page leaves
+  it alone (tested).
+- `task_pages.group_tasks(tasks, by, today)` and `grouping_of` (anything unknown is "due").
+  "This week" runs to Sunday; on a Sunday, Monday is "Tomorrow" and the rest of that week
+  "Next week". Kind headings follow `TASK_KINDS` (an unknown kind reads "Around the
+  house"). Check-ins come before "Repeating chores" when a check-in repeats.
+- The chips are CSRF-checked POST buttons (`.group-by button.chip`), the current one green
+  with `aria-current`. Each group is an `<h2>` with its count; "None" is one list with no
+  heading. Home's panel is unchanged.
+- Golden: `POST /tasks/grouping`.
+- Setup: none beyond the usual restart. Mark #170 reviewed once live.
 
 ### F33a · Feedback (2026-11-06): a direct change made as asked ends the turn
 Status: [x] 2026-11-06

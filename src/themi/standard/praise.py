@@ -30,6 +30,9 @@ class TasksPreferences(Preferences):
 
     module: ClassVar[str] = "tasks"
     done_praise: bool = True
+    # F32a: how the website's Tasks page groups them (chosen on the page itself). A value
+    # the page doesn't know is read as "due".
+    task_grouping: str = "due"
 
 
 def word(seed: str) -> str:

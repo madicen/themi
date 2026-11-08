@@ -4,9 +4,24 @@
 <h1>Tasks</h1>
 
 <h2>On your list</h2>
-<div class="rows">
-  {% for task in mine %}{% include "_task_row.html" %}{% else %}<p class="empty muted">Nothing on your list.</p>{% endfor %}
+<div class="chips group-by" role="group" aria-label="Group by">
+  <span class="muted">Group by</span>
+  {% for key, label in groupings.items() %}
+  <form method="post" action="/tasks/grouping" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="group" value="{{ key }}">
+    <button class="chip{% if key == grouping %} good{% endif %}"{% if key == grouping %} aria-current="true"{% endif %}>{{ label }}</button>
+  </form>
+  {% endfor %}
 </div>
+{% for heading, tasks in groups %}
+{% if heading %}<h2>{{ heading }} ({{ tasks|length }})</h2>{% endif %}
+<div class="rows">
+  {% for task in tasks %}{% include "_task_row.html" %}{% endfor %}
+</div>
+{% else %}
+<div class="rows"><p class="empty muted">Nothing on your list.</p></div>
+{% endfor %}
 
 {% if added %}
 <details class="group">

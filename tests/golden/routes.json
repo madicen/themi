@@ -153,6 +153,7 @@
   "POST /takeout/settings",
   "POST /takeout/{favourite_id}",
   "POST /takeout/{favourite_id}/remove",
+  "POST /tasks/grouping",
   "POST /tasks/{task_id}/done",
   "POST /tasks/{task_id}/edit",
   "POST /tiers/{category}/{change}",

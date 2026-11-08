@@ -159,6 +159,9 @@ label > input[type=number], label > input[type=time] { display: inline-block; ma
 .chip.warn { background: var(--warn-bg); color: var(--warn); }
 .chip.bad { background: var(--bad-bg); color: var(--bad); }
 .chip.info { background: var(--info-bg); color: var(--info); }
+/* F32a: the Tasks page's "Group by" choices are chips that are buttons (no JS). */
+.group-by { align-items: center; margin-bottom: var(--space-3); }
+.group-by button.chip { border: 0; cursor: pointer; min-height: 32px; font: inherit; font-size: .78rem; font-weight: 600; }
 
 /* The More page: a list of links. */
 .menu-list { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
