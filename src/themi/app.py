@@ -140,6 +140,7 @@ class App:
     # Queued background work (the Runtime adds the periodic tasks to it too).
     scheduler: Scheduler | None = None
     server: ServerControl | None = None  # updates and restarts from the website (D3a)
+    modules: list[Module] = field(default_factory=list)  # CR16: what was loaded, in order
 
 
 def family_modules(
@@ -319,7 +320,7 @@ def build_app(
     ctx.periodic("energy.expire_outcomes", timedelta(minutes=15), as_job(outcomes.expire))
 
     # ----- the modules ----------------------------------------------------------------
-    ctx.load(*modules)
+    loaded = ctx.load(*modules)
 
     # ----- the core again: updates from the website, and backups -----------------------
     server = ServerControl(services, control_dir)
@@ -343,4 +344,5 @@ def build_app(
         ctx.jobs,
         scheduler,
         server,
+        modules=loaded,
     )

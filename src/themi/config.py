@@ -167,6 +167,7 @@ def resolve_modules(
     config: InstanceConfig,
     settings: Settings,
     known: dict[str, type[Module]] | None = None,
+    given: dict[str, Module] | None = None,
 ) -> list[Module]:
     """The template's modules with the file's changes, each built from the settings.
 
@@ -174,7 +175,9 @@ def resolve_modules(
     anything of the template's that then lacks a module it requires: that's a connector
     nobody has configured. A module the file adds must be known and set up, and must have
     what it requires; a module the file removes mustn't be needed by another. Otherwise
-    Themi says so and stops."""
+    Themi says so and stops.
+    `given`: modules already built, by name (the simulator's, on its fakes); one not given
+    isn't set up."""
     known = available_modules() if known is None else known
     template = load_template(config.template)
     problems = []
@@ -200,7 +203,8 @@ def resolve_modules(
             settings, config.sections.get(name), shared, module=name, sections=config.sections
         )
         try:
-            module = known[name].build(setup)
+            # CR16: `given` is modules built already (the simulator's, on its fakes)
+            module = given.get(name) if given is not None else known[name].build(setup)
         except SettingsProblem as exc:  # CR5b: its settings, in the person's words
             problems.extend(exc.problems)
             continue

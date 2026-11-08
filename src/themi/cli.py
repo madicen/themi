@@ -14,6 +14,7 @@ from themi.storage.secrets import generate_key
 if TYPE_CHECKING:
     from themi.accounts import AccountStore
     from themi.backup import Backups
+    from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from themi.settings import Settings
 
@@ -135,7 +136,11 @@ def _store() -> AccountStore:
 
 
 def build_runtime(
-    settings: Settings, *, connectors: Mapping[str, Any] | None = None, **runtime_options: Any
+    settings: Settings,
+    *,
+    connectors: Mapping[str, Any] | None = None,
+    config: InstanceConfig | None = None,
+    **runtime_options: Any,
 ) -> Runtime:
     """Wire Themi from its settings, as `themi run` (and `make dev`) runs it.
 
@@ -156,12 +161,18 @@ def build_runtime(
     modules = None
     template = None
     options: dict[str, Any] = {}
-    if connectors is not None:  # `make dev`: the fakes, as the family's connectors
-        options = dict(connectors)
-    else:  # CR5a: the modules themi.toml (or the family template) names
-        from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.config import config_path, load_config, load_template, resolve_modules
 
-        config = load_config(config_path())
+    if connectors is not None and config is None:  # `make dev`: the family, on the fakes
+        options = dict(connectors)
+    elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
+        from themi.app import family_modules
+
+        on_fakes = {m.name: m for m in family_modules(**connectors)}
+        modules = resolve_modules(config, settings, given=on_fakes)
+        template = load_template(config.template)
+    else:  # CR5a: the modules themi.toml (or the family template) names
+        config = config or load_config(config_path())
         modules = resolve_modules(config, settings)
         template = load_template(config.template)
     app = build_app(

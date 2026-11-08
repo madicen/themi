@@ -18,6 +18,12 @@ the first run and kept in `data/dev/fakes.json`. `make dev-prod` runs without th
     python -m tools.dev prod       # a fresh copy of the Pi's data, then run on it (D4)
     python -m tools.dev prod --from-backup latest   # ...from the encrypted backups instead
     python -m tools.dev prod --keep                 # run on the copy already there
+
+CR16: any module setup, on the same fakes, each with its own dev data:
+
+    python -m tools.dev --template work                 # data/dev-work
+    python -m tools.dev --modules=-safeway,+travel      # the family's, changed
+    python -m tools.dev --config path/to/themi.toml     # data/dev-<the file's name>
 """
 
 from __future__ import annotations
@@ -46,6 +52,7 @@ from themi.storage import open_database
 from themi.storage.secrets import Secret, generate_key
 
 if TYPE_CHECKING:
+    from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from tools.dev.fakes import DevFakes
     from tools.dev.simulator import Simulator
@@ -89,7 +96,7 @@ def _store(settings: Settings) -> AccountStore:
     return AccountStore(open_database(settings.db_path), settings.cipher())
 
 
-def seed(settings: Settings, gemini_key: str) -> SeedResult:
+def seed(settings: Settings, gemini_key: str, template: str = "family") -> SeedResult:
     """Ready the dev data for a run: the test family (made once, with the Gemini key on
     everyone's default backend), and no Telegram offset from the last run."""
     store = _store(settings)
@@ -100,6 +107,7 @@ def seed(settings: Settings, gemini_key: str) -> SeedResult:
         if store.get_family() is not None:
             return SeedResult(seeded=False, key_set=_has_key(store, settings))
         family = seed_family(store)
+        store.db.execute("UPDATE family SET template = ?", (template,))  # CR16
         ai = AISettingsStore(store.db, store.cipher)
         for member in (family.erin, family.husband):
             ai.ensure_defaults(member.id)
@@ -185,11 +193,55 @@ def invite(settings: Settings, name: str) -> str:
         store.db.close()
 
 
+@dataclass(frozen=True)
+class DevSetup:
+    """CR16: which modules this run has, and where its dev data lives."""
+
+    config: InstanceConfig | None  # None: the family's, as before CR16
+    name: str  # for the banner and the data folder
+    dev_dir: Path
+
+
+def dev_setup(template: str = "", modules: str = "", config: str = "") -> DevSetup:
+    """The setup asked for: a themi.toml, or a template with module changes ("-safeway,+x").
+    The family's with no changes runs in data/dev, as before; any other in its own folder."""
+    from themi.config import load_config, load_template, parse_config
+
+    if config:
+        path = Path(config)
+        if not path.exists():
+            raise SystemExit(f"There's no {path}.")
+        return DevSetup(load_config(path), path.stem, Path(f"data/dev-{_slug(path.stem)}"))
+    changes = [c.strip() for c in modules.split(",") if c.strip()]
+    if not template and not changes:
+        return DevSetup(None, "family", DEV_DIR)
+    name = template or "family"
+    found = parse_config({"template": name, "modules": changes})
+    load_template(name)  # an unknown template says so now, before anything starts
+    label = name + ("" if not changes else " " + ",".join(changes))
+    folder = Path(f"data/dev-{_slug(label)}")
+    return DevSetup(found, label, folder)
+
+
+def _slug(text: str) -> str:
+    return "".join(
+        c if c.isalnum() else "_" for c in text.replace("+", "plus_").replace("-", "minus_")
+    )
+
+
 def run(
-    dev_dir: Path = DEV_DIR, port: int = SIMULATOR_PORT, *, copy: bool = False, fakes: bool = True
+    dev_dir: Path = DEV_DIR,
+    port: int = SIMULATOR_PORT,
+    *,
+    copy: bool = False,
+    fakes: bool = True,
+    setup: DevSetup | None = None,
 ) -> None:
     """`copy`: dev_dir holds a copy of the family's data (D4), not the seeded test family.
-    `fakes`: the outside services are played by the test fakes (D5a; never with `copy`)."""
+    `fakes`: the outside services are played by the test fakes (D5a; never with `copy`).
+    `setup`: the modules to run with and their data folder (CR16); the family's if None."""
+    if setup is not None:
+        dev_dir = setup.dev_dir
     from themi.cli import build_runtime
     from themi.logs import configure_logging
     from tools.dev.simulator import Simulator
@@ -201,7 +253,8 @@ def run(
     try:
         settings = dev_settings(dev_dir, simulator.url, env)
         gemini_key = env.get("GEMINI_API_KEY", "").strip()
-        result = seed(settings, gemini_key)
+        template = setup.config.template if setup and setup.config else "family"
+        result = seed(settings, gemini_key, template)
         source = None
         if copy:
             from tools.dev import prod_copy
@@ -220,7 +273,12 @@ def run(
             simulator.controls_coming = True
             dev_fakes.start(site_urls(settings))
             connectors = dev_fakes.connectors(family_timezone(settings))
-        runtime = build_runtime(settings, scheduler_tick=SCHEDULER_TICK, connectors=connectors)
+        runtime = build_runtime(
+            settings,
+            scheduler_tick=SCHEDULER_TICK,
+            connectors=connectors,
+            config=setup.config if setup else None,
+        )
         simulator.login = lambda telegram_user_id: login_link(settings, telegram_user_id)
         simulator.energy_debug = lambda telegram_user_id: energy_numbers(runtime, telegram_user_id)
         link = login_link(settings) or ""
@@ -235,7 +293,12 @@ def run(
                     runtime.app, site_urls(settings)[0], runtime.scheduler, runtime.web
                 )
                 simulator.controls = ControlPanel(dev_fakes)
-            print(_banner(simulator.url, link, result, dev_dir, source, linked), flush=True)
+            modules = [m.name for m in runtime.app.modules]
+            label = setup.name if setup else "family"
+            print(
+                _banner(simulator.url, link, result, dev_dir, source, linked, (label, modules)),
+                flush=True,
+            )
             await runtime.run()
 
         asyncio.run(main())
@@ -271,6 +334,7 @@ def _banner(
     dev_dir: Path,
     copy: str | None = None,
     fakes: list[str] | None = None,
+    modules: tuple[str, list[str]] | None = None,
 ) -> str:
     lines = [
         "",
@@ -279,6 +343,11 @@ def _banner(
         f"  Website:  {link}  (Erin; later, use the chat page's Website link)",
         f"  Data:     {dev_dir}/ (make dev-reset starts over)",
     ]
+    if modules is not None:  # CR16
+        name, loaded = modules
+        lines.append(
+            f"  Setup:    {name}, {len(loaded)} modules (make dev TEMPLATE=... MODULES=...)"
+        )
     if copy:
         lines += [
             f"  A private copy of the family's data ({copy}): their messages and email.",
@@ -317,11 +386,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--no-fakes", action="store_true", help="run without the fakes for outside services"
     )
+    parser.add_argument("--template", default="", help="CR16: run another template (work)")
+    parser.add_argument(
+        "--modules", default="", help='CR16: change its modules, e.g. "-safeway,+travel"'
+    )
+    parser.add_argument("--config", default="", help="CR16: run the setup a themi.toml names")
     args = parser.parse_args(argv)
     if args.command == "reset":
-        for folder in (DEV_DIR, PROD_DIR):
+        others = sorted(Path("data").glob("dev-*")) if Path("data").exists() else []
+        for folder in (DEV_DIR, PROD_DIR, *others):
             shutil.rmtree(folder, ignore_errors=True)
-        print(f"Deleted {DEV_DIR} and {PROD_DIR}.")
+        print(f"Deleted {DEV_DIR}, {PROD_DIR} and each setup's (data/dev-*).")
     elif args.command == "prod":
         prod(args.from_backup, args.keep)
     elif args.command == "invite":
@@ -329,7 +404,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         code = invite(settings, args.name)
         print(f'In the simulator, pick "Someone new" and send:  /start {code}')
     else:
-        run(fakes=not args.no_fakes)
+        run(fakes=not args.no_fakes, setup=dev_setup(args.template, args.modules, args.config))
 
 
 def prod(backup: str | None, keep: bool) -> None:

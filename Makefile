@@ -65,8 +65,11 @@ cov:
 # Themi on this computer, chatting through the Telegram simulator at http://localhost:8090.
 # Dev data lives in data/dev/; see tools/dev/runner.py. Outside services are played by the
 # test fakes (D5a); FAKES=0 runs without them.
+# CR16: make dev TEMPLATE=work, MODULES="-safeway,+travel", or CONFIG=path/to/themi.toml
 dev:
-	$(PYTHON) -m tools.dev $(if $(filter 0,$(FAKES)),--no-fakes)
+	$(PYTHON) -m tools.dev $(if $(filter 0,$(FAKES)),--no-fakes) \
+		$(if $(TEMPLATE),--template $(TEMPLATE)) $(if $(MODULES),--modules="$(MODULES)") \
+		$(if $(CONFIG),--config $(CONFIG))
 
 dev-reset:
 	$(PYTHON) -m tools.dev reset

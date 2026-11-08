@@ -307,7 +307,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR15a | Multi-family host: instance database and family registry | Core refactor | waiting (tutoring spec) |
 | CR15b | Multi-family host: routing messages and the website | Core refactor | waiting (tutoring spec) |
 | CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | waiting (tutoring spec) |
-| CR16 | Round two: the simulator with any module setup | Core refactor | [~] |
+| CR16 | Round two: the simulator with any module setup | Core refactor | [x] 2026-11-08 |
 | CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [ ] |
 | CR17b | Round two: each pack's own page templates and static files | Core refactor | [ ] |
 | CR18a | Round two: Google permissions asked per module | Core refactor | [ ] |
@@ -14929,7 +14929,7 @@ is the refactor doc's "Round two" section. CR13 to CR15c (tutoring) still wait f
 so "run the core refactor track" goes on from CR16.
 
 ### CR16 · Round two: the simulator with any module setup
-Status: [~]
+Status: [x] 2026-11-08
 Depends on: CR12
 - `make dev TEMPLATE=work MODULES=-safeway,+travel`, or `make dev CONFIG=path/to/themi.toml`.
   The fakes stand in for the chosen connector modules (as `make dev` does today); a module
@@ -14940,6 +14940,22 @@ Depends on: CR12
   and its workspace is made from its template. The simulator page says which setup it is.
 Tests: resolving with given instances; the dev runner builds a work setup with the fakes
 (no network); `make dev` with no options is as before.
+
+Notes:
+- `make dev TEMPLATE=work`, `make dev MODULES="-safeway,+travel"` (the family's, changed) or
+  `make dev CONFIG=path/to/themi.toml`; `python -m tools.dev --template/--modules/--config`.
+  `make dev` with none is exactly as before (data/dev, the family's list).
+- `resolve_modules(..., given=)` takes modules built already: the dev runner builds the
+  family's on the fakes (`family_modules(**fakes)`) and resolves the chosen setup from
+  them, so requirements and leaving-out work as in `themi run`. `build_runtime(...,
+  config=)` passes the setup through; `App.modules` is what was loaded.
+- Each setup keeps its own data: `data/dev-work`, `data/dev-family_minus_safeway...`,
+  `data/dev-<the toml's name>`; its workspace gets its template; `make dev-reset` deletes
+  them all. The banner names the setup and how many modules it has.
+- Checked by running `python -m tools.dev --template work` for real: 19 modules, both
+  Google fakes linked.
+- Small follow-up: the banner's "Fakes:" line lists every fake that started (the wall,
+  OurGroceries, Keep), even when the setup doesn't load their modules.
 
 ### CR17a · Round two: the dashboard and Accounts page in module sections
 Status: [ ]
