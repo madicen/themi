@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -161,12 +162,15 @@ def build_runtime(
     report = None
     options: dict[str, Any] = {}
     from themi.config import config_path, load_config, load_template, resolve_start
+    from themi.modules.store import ModuleSecrets
 
     # SP1: a module's problem leaves it off and Themi starts; Telegram with no token is
     # one of those, said on the dashboard rather than stopping everything.
     unavailable = {}
     if settings.telegram_enabled and settings.telegram_bot_token is None:
         unavailable["telegram"] = "it needs a bot token (TELEGRAM_BOT_TOKEN, from @BotFather)"
+    db = open_database(settings.db_path)
+    stored = ModuleSecrets(db, settings.cipher()).all()  # SP2: set on the Modules page
     if connectors is not None and config is None:  # `make dev`: the family, on the fakes
         options = dict(connectors)
     elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
@@ -176,9 +180,14 @@ def build_runtime(
         modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
         template = load_template(config.template)
     else:  # CR5a: the modules themi.toml (or the family template) names
-        config = config or load_config(config_path())
-        modules, report = resolve_start(config, settings, unavailable=unavailable)
+        config = config or load_config(config_path(settings.environment or None))
+        modules, report = resolve_start(config, settings, unavailable=unavailable, stored=stored)
         template = load_template(config.template)
+    if config is not None and not settings.public_url and config.core.get("public_url"):
+        # SP2: the website's address, as set on the Modules page (the environment wins)
+        settings = settings.model_copy(
+            update={"public_url": str(config.core["public_url"]).rstrip("/")}
+        )
     for line in report.warnings() if report is not None else ():
         log.warning("%s", line)
     # CR20b: Telegram's channel, when the setup has the telegram module (the family's
@@ -190,7 +199,7 @@ def build_runtime(
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
     app = build_app(
-        open_database(settings.db_path),
+        db,
         settings.cipher(),
         (
             lambda store: TelegramChannel.from_token(
@@ -263,10 +272,13 @@ def _run() -> None:
     import asyncio
 
     from themi.logs import configure_logging
-    from themi.settings import Settings
+    from themi.settings import Settings, ensure_secret_key, read_dotenv
 
+    made = ensure_secret_key({**read_dotenv(Path(".env")), **os.environ})  # SP2
     settings = Settings.load()
     configure_logging(settings.log_level)
+    if made is not None:
+        log.warning("Made a new secret key at %s. Save a copy somewhere safe.", made)
     runtime = build_runtime(settings)
 
     async def main() -> None:

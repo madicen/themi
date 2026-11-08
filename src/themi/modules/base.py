@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from themi.core.tools import ToolGroup
     from themi.modules.context import ModuleContext
     from themi.settings import Settings
+    from themi.storage.secrets import Secret
 
 
 T = TypeVar("T")
@@ -73,12 +74,14 @@ class ModuleSetup:
         *,
         module: str = "",
         sections: dict[str, dict[str, object]] | None = None,
+        stored: dict[str, dict[str, Secret]] | None = None,
     ) -> None:
         self.settings = settings
         self.section = section or {}
         self._shared = {} if shared is None else shared
         self.module = module
         self.sections = sections or ({module: self.section} if module else {})
+        self.stored = stored or {}  # SP2: secrets kept on the Modules page, by module
 
     def shared(self, key: str, make: Callable[[], T]) -> T:
         if key not in self._shared:
@@ -93,7 +96,11 @@ class ModuleSetup:
         return self.shared(
             key,
             lambda: read_settings(
-                model, self.settings.environment, self.sections.get(name, {}), name
+                model,
+                self.settings.environment,
+                self.sections.get(name, {}),
+                name,
+                self.stored.get(name),
             ),
         )
 

@@ -4,15 +4,16 @@
         tomtom_api_key: Secret | None = env_field("TOMTOM_API_KEY", secret=True)
 
 Each field names the environment variable it has always been read from. A value in the
-environment wins; otherwise the module's `[module.<name>]` section; otherwise the
-default. A secret is read only from the environment (and .env), never from themi.toml.
+environment wins; otherwise, for a secret, the one stored on the Modules page (SP2,
+encrypted in the database); otherwise the module's `[module.<name>]` section; otherwise the
+default. A secret is never read from themi.toml.
 Problems come back as plain lines, like the core settings' ("set both or neither").
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.fields import FieldInfo
@@ -56,9 +57,18 @@ def is_secret(info: FieldInfo) -> bool:
     return bool(_extra(info).get("secret"))
 
 
+Source = Literal["environment", "stored", "file", "default"]
+
+
 def read_settings[S: ModuleSettings](
-    model: type[S], env: Mapping[str, str], section: Mapping[str, Any], module: str
+    model: type[S],
+    env: Mapping[str, str],
+    section: Mapping[str, Any],
+    module: str,
+    stored: Mapping[str, Secret] | None = None,
 ) -> S:
+    """`stored`: the module's secrets kept on the Modules page, by field (SP2)."""
+    stored = stored or {}
     problems = []
     values: dict[str, Any] = {}
     for key in section:
@@ -79,6 +89,8 @@ def read_settings[S: ModuleSettings](
                 values[name] = raw.lower() in TRUE
             else:
                 values[name] = raw
+        elif is_secret(info) and stored.get(name):
+            values[name] = stored[name]
         elif name in section:
             values[name] = section[name]
     if problems:
@@ -119,3 +131,26 @@ def plain_values(settings: ModuleSettings) -> dict[str, Any]:
         for name, info in type(settings).model_fields.items()
         if not is_secret(info)
     }
+
+
+def value_sources(
+    model: type[ModuleSettings],
+    env: Mapping[str, str],
+    section: Mapping[str, Any],
+    stored: Mapping[str, Secret] | None = None,
+) -> dict[str, Source]:
+    """SP2: where each field's value comes from, in the order `read_settings` reads them,
+    for the Modules page (a field set in the environment is locked there)."""
+    stored = stored or {}
+    out: dict[str, Source] = {}
+    for name, info in model.model_fields.items():
+        variable = env_name(info)
+        if variable and env.get(variable, "").strip():
+            out[name] = "environment"
+        elif is_secret(info) and stored.get(name):
+            out[name] = "stored"
+        elif name in section and not is_secret(info):
+            out[name] = "file"
+        else:
+            out[name] = "default"
+    return out

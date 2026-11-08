@@ -11,10 +11,17 @@ install changes nothing.
     name = "The Madicens"
 
     [module.gmail]                       # CR5b: a module's own settings
+
+    [core]                               # SP2: the core's settings the website sets
+    public_url = "https://themi.example.ts.net"
+
+SP2: Themi writes this file itself when an admin changes something on the Modules page
+(`write_config`), next to the database unless it was read from somewhere else.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from dataclasses import dataclass, field
@@ -29,9 +36,11 @@ from themi.settings import Settings, SettingsError
 
 if TYPE_CHECKING:
     from themi.core.tools import ToolGroup
+    from themi.storage.secrets import Secret
 
 ENTRY_POINTS = "themi.modules"
 DEFAULT_PATHS = (Path("/data/themi.toml"), Path("themi.toml"))
+CORE_KEYS = {"public_url"}  # SP2: the core settings themi.toml may hold
 
 
 @dataclass(frozen=True)
@@ -67,6 +76,7 @@ class InstanceConfig:
     workspace: dict[str, Any] = field(default_factory=dict)
     sections: dict[str, dict[str, Any]] = field(default_factory=dict)
     path: Path | None = None  # where it was read from; None for the default
+    core: dict[str, Any] = field(default_factory=dict)  # SP2: public_url
 
 
 def config_path(env: dict[str, str] | None = None) -> Path | None:
@@ -78,7 +88,70 @@ def config_path(env: dict[str, str] | None = None) -> Path | None:
                 f"Themi can't start:\n  - THEMI_CONFIG names {path}, which isn't there"
             )
         return path
-    return next((p for p in DEFAULT_PATHS if p.exists()), None)
+    beside = beside_database(env)
+    return next((p for p in (beside, *DEFAULT_PATHS) if p.exists()), None)
+
+
+def beside_database(env: dict[str, str] | None = None) -> Path:
+    """SP2: themi.toml next to the database (/data/themi.toml in the container), where
+    Themi writes it when nothing says otherwise."""
+    env = dict(os.environ) if env is None else env
+    return Path(env.get("THEMI_DB_PATH", "").strip() or "data/themi.db").parent / "themi.toml"
+
+
+def write_path(config: InstanceConfig, env: dict[str, str] | None = None) -> Path:
+    """Where the Modules page writes: where the config was read from, else next to the
+    database."""
+    return config.path or beside_database(env)
+
+
+def as_toml(config: InstanceConfig) -> str:
+    """The config as themi.toml, in the order people read it. Secrets are never here."""
+    lines = [
+        "# What this Themi is made of. Themi writes this file when an admin changes something",
+        "# on the Modules page; secrets are kept encrypted in the database instead.",
+        f"template = {json.dumps(config.template)}",
+    ]
+    changes = [f"+{n}" for n in config.added] + [f"-{n}" for n in config.removed]
+    if changes:
+        lines.append(f"modules = {json.dumps(changes)}")
+    for title, table in (("core", config.core), ("workspace", config.workspace)):
+        if table:
+            lines += ["", f"[{title}]"]
+            lines += [f"{key} = {_toml_value(value)}" for key, value in table.items()]
+    for name, values in config.sections.items():
+        if values:
+            lines += ["", f"[module.{name}]"]
+            lines += [f"{key} = {_toml_value(value)}" for key, value in values.items()]
+    return "\n".join(lines) + "\n"
+
+
+def _toml_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return repr(value)
+    if isinstance(value, list | tuple):
+        return "[" + ", ".join(_toml_value(v) for v in value) + "]"
+    return json.dumps(str(value))  # a TOML basic string is JSON's string
+
+
+def write_config(config: InstanceConfig, path: Path) -> None:
+    """Write themi.toml whole or not at all: a temporary file beside it, flushed to disk,
+    then renamed over it. A crash leaves the old file (and perhaps a stray temporary)."""
+    text = as_toml(config)
+    parse_config(tomllib.loads(text), path)  # never write a file Themi couldn't read back
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.tmp")
+    with open(temp, "w") as out:
+        out.write(text)
+        out.flush()
+        os.fsync(out.fileno())
+    try:
+        os.replace(temp, path)
+    except OSError:
+        temp.unlink(missing_ok=True)
+        raise
 
 
 def load_config(path: Path | None) -> InstanceConfig:
@@ -93,7 +166,7 @@ def load_config(path: Path | None) -> InstanceConfig:
 
 def parse_config(data: dict[str, Any], path: Path | None = None) -> InstanceConfig:
     problems = []
-    unknown = set(data) - {"template", "modules", "workspace", "module"}
+    unknown = set(data) - {"template", "modules", "workspace", "module", "core"}
     if unknown:
         problems.append(f"{', '.join(sorted(unknown))} isn't something themi.toml sets")
     template = data.get("template", "family")
@@ -117,10 +190,18 @@ def parse_config(data: dict[str, Any], path: Path | None = None) -> InstanceConf
             else:
                 problems.append(f"[module.{name}] is a section of settings")
     workspace = data.get("workspace", {})
+    core = data.get("core", {})
+    if not isinstance(core, dict):
+        problems.append("[core] is a section of settings")
+        core = {}
+    elif unknown_core := set(core) - CORE_KEYS:
+        problems.append(f"[core] has {', '.join(sorted(unknown_core))}, which it doesn't set")
     if problems:
         where = f" in {path}" if path else ""
         raise SettingsError(f"Themi can't start{where}:\n  - " + "\n  - ".join(problems))
-    return InstanceConfig(template, tuple(added), tuple(removed), dict(workspace), sections, path)
+    return InstanceConfig(
+        template, tuple(added), tuple(removed), dict(workspace), sections, path, dict(core)
+    )
 
 
 def available_modules() -> dict[str, type[Module]]:
@@ -168,6 +249,7 @@ def resolve_modules(
     settings: Settings,
     known: dict[str, type[Module]] | None = None,
     given: dict[str, Module] | None = None,
+    stored: dict[str, dict[str, Secret]] | None = None,
 ) -> list[Module]:
     """The template's modules with the file's changes, each built from the settings.
 
@@ -179,7 +261,7 @@ def resolve_modules(
     such a module off and starts.
     `given`: modules already built, by name (the simulator's, on its fakes); one not given
     isn't set up."""
-    modules, report = _resolve(config, settings, known, given, {}, tolerant=False)
+    modules, report = _resolve(config, settings, known, given, {}, stored, tolerant=False)
     if report.problems:
         raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(report.problems))
     return modules
@@ -191,13 +273,14 @@ def resolve_start(
     known: dict[str, type[Module]] | None = None,
     given: dict[str, Module] | None = None,
     unavailable: dict[str, str] | None = None,
+    stored: dict[str, dict[str, Secret]] | None = None,
 ) -> tuple[list[Module], StartReport]:
     """SP1: as `resolve_modules`, but a module's problem leaves it (and what needs it) off
     and is said in the report, and Themi starts. Only a problem with themi.toml itself (a
     module or template that isn't installed, a section for nothing) still stops it.
     `unavailable`: modules the runner knows can't run here, with why (Telegram with no
-    token)."""
-    return _resolve(config, settings, known, given, unavailable or {}, tolerant=True)
+    token). `stored`: the secrets kept on the Modules page, by module and field (SP2)."""
+    return _resolve(config, settings, known, given, unavailable or {}, stored, tolerant=True)
 
 
 def _resolve(
@@ -206,6 +289,7 @@ def _resolve(
     known: dict[str, type[Module]] | None,
     given: dict[str, Module] | None,
     unavailable: dict[str, str],
+    stored: dict[str, dict[str, Secret]] | None,
     *,
     tolerant: bool,
 ) -> tuple[list[Module], StartReport]:
@@ -244,7 +328,12 @@ def _resolve(
             report.note(name, "not_set_up", kind(name), unavailable[name], warn=True)
             continue
         setup = ModuleSetup(
-            settings, config.sections.get(name), shared, module=name, sections=config.sections
+            settings,
+            config.sections.get(name),
+            shared,
+            module=name,
+            sections=config.sections,
+            stored=stored,
         )
         try:
             # CR16: `given` is modules built already (the simulator's, on its fakes)

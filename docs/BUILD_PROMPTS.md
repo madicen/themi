@@ -326,7 +326,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
 | CR21d | Round two: drop the columns the modules copied out | Core refactor | [x] 2026-11-08 |
 | SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [x] 2026-11-08 |
-| SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [ ] |
+| SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [x] 2026-11-08 |
 | SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | split |
 | SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [ ] |
 | SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [ ] |
@@ -15415,7 +15415,7 @@ Notes (2026-11-08):
   `update.sh`), the same on CR21d's commit. CI runs Linux.
 
 ### SP2 · Setup portal: settings store
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP1
 Read first: the plan's "Settings store"; `themi/modules/settings.py`; `themi/settings.py`;
 `themi/storage/secrets.py`.
@@ -15436,6 +15436,28 @@ Read first: the plan's "Settings store"; `themi/modules/settings.py`; `themi/set
   the page, without the value for secrets.
 Tests: precedence each way; secrets never in the TOML; the writer survives a crash between
 write and rename; a key is made only for a new database; values' sources reported.
+
+Notes (2026-11-08):
+- Migration 0152: `module_secrets` (module, field, ciphertext, set_by, set_at) and
+  `config_drafts` (one row). `themi/modules/store.py`: `ModuleSecrets` (set, clear, all,
+  info without values but with the last four characters) and `DraftStore` with `Draft`
+  (template, modules on/off, plain sections, secrets as Fernet tokens or None to clear,
+  a log). `Draft.put_secret` encrypts as it's put; nothing is kept in the clear.
+- `read_settings(..., stored)`: environment, then a stored secret, then the TOML section,
+  then the default. `value_sources` says which for each field. `ModuleSetup.stored` and
+  `resolve_start/resolve_modules(..., stored=)` carry them. `build_runtime` opens the
+  database first and passes `ModuleSecrets.all()`.
+- themi.toml: `[core]` (only `public_url` for now; the environment's `THEMI_PUBLIC_URL`
+  wins). `config_path` now also looks next to the database first (`beside_database`),
+  then the old places. `write_path` is where the page writes: where it was read, else next
+  to the database. `write_config` writes a temp file, fsyncs, renames, and refuses to write
+  what `parse_config` can't read back. `as_toml` replaces the wizard's own writer later.
+- The key: `ensure_secret_key` (settings.py) makes `secret.key` next to the database,
+  mode 600, only when no key is set, none was made, and there's no database yet.
+  `themi run` calls it and logs where. `Settings.from_mapping` reads that file when no key
+  is set, so the other commands (login-link, backup) find it too.
+- The secret-in-TOML message still says to set the variable in .env; SP8a rewords it once
+  the page is the way to set secrets.
 
 ### SP3 · Setup portal: module manifest
 Status: split into SP3a and SP3b.
