@@ -20,6 +20,7 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from markupsafe import Markup
 
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.core import keys
@@ -33,6 +34,7 @@ from themi_google.connectors.google import (
     TASKS_SCOPE,
     GoogleAccounts,
     OAuthError,
+    ScopeNeed,
 )
 from themi_google.expected import DEFAULT_CATEGORY
 
@@ -54,7 +56,12 @@ def section_values(services: Any) -> Callable[[Member], dict[str, Any]]:
         accounts = services.store.linked_accounts(member.id)
         expected = services.maybe(keys.expected)
         recipes = services.maybe(keys.recipes)
+        google = services.maybe(keys.google)
+        needs = google.needs() if google is not None else []
         return {
+            # CR18a: what each account doesn't allow yet, of what the loaded modules need
+            "relink": {a.id: relink(google.missing(a)) for a in accounts} if google else {},
+            "needed": {n.what for n in needs},
             "accounts": accounts,
             "can_link": services.maybe(keys.google) is not None,
             "expected": {a.id: expected.for_account(a.id) for a in accounts} if expected else {},
@@ -65,6 +72,23 @@ def section_values(services: Any) -> Callable[[Member], dict[str, Any]]:
         }
 
     return values
+
+
+def relink(missing: list[ScopeNeed]) -> dict[str, Any] | None:
+    """CR18a: what an account linked before a module came says, and its button's words
+    ("Link again for Google Tasks and the cookbook")."""
+    if not missing:
+        return None
+    names = [n.what for n in missing]
+    label = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+    return {
+        # Markup: the sentences are the modules' own words, never anyone's input.
+        "sentences": [
+            Markup(n.missing or f"{n.what[:1].upper()}{n.what[1:]} isn't allowed yet.")
+            for n in missing
+        ],
+        "label": f"Link again for {label}",
+    }
 
 
 def calendar_values(services: Any) -> Callable[[Member], dict[str, Any]]:
@@ -174,7 +198,7 @@ def routes(kit: Kit) -> APIRouter:
         accounts = google()
         if accounts is None:
             return kit.redirect("/accounts", "Linking Gmail isn't set up on this server yet.")
-        url = accounts.oauth.authorization_url("link", redirect_uri(), session.member)
+        url = accounts.link_url(session.member, redirect_uri())
         return RedirectResponse(url, status_code=303)
 
     @router.post("/accounts/{account_id}/settings")

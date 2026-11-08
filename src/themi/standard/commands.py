@@ -185,7 +185,7 @@ class Commands:
         if google is None or not base:
             await self._reply(member, LINK_NOT_SET_UP)
             return
-        url = google.oauth.authorization_url("link", google.redirect_uri(base), member)
+        url = google.link_url(member, google.redirect_uri(base))
         linked = [a.address for a in self.services.store.linked_accounts(member.id)]
         already = f" Already linked: {', '.join(linked)}." if linked else ""
         await self._reply(

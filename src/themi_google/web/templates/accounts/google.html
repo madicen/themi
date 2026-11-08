@@ -24,19 +24,20 @@ and it only sends after you say yes.</p>
       <button>Save</button>
     </form>
     <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
-    {% if tasks_scope in account.scopes %}
+    {% if "Google Tasks" in needed and tasks_scope in account.scopes %}
     <p class="muted">Google Tasks: Themi takes what you add by voice to My Tasks, then clears it.</p>
-    {% else %}
-    <p class="muted">Google Tasks isn't allowed for this account yet. Linking it again lets Themi
-    take what you add to Google Tasks by voice.</p>
     {% endif %}
-    {% if cookbook is not none %}
-    {% if cookbook_scope in account.scopes %}
+    {% if cookbook is not none and cookbook_scope in account.scopes %}
     <p><a href="/accounts/{{ account.id }}/cookbook">{% if cookbook.doc_id and cookbook.account_id == account.id %}The family cookbook: {{ cookbook.title or "chosen" }}{% else %}Choose the family cookbook{% endif %}</a></p>
-    {% else %}
-    <p class="muted">Google Drive isn't allowed for this account yet. Linking it again lets you
-    pick the family's cookbook doc (Themi can open only the file you pick).</p>
     {% endif %}
+    {# CR18a: what the loaded modules need that this account doesn't allow yet #}
+    {% set again = relink.get(account.id) %}
+    {% if again %}
+    {% for sentence in again.sentences %}<p class="muted">{{ sentence }}</p>{% endfor %}
+    <form method="post" action="/accounts/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small">{{ again.label }}</button>
+    </form>
     {% endif %}
 
     <h3>Expected emails</h3>

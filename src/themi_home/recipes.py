@@ -36,6 +36,7 @@ from themi_google.connectors.google import (
     DRIVE_FILE_SCOPE,
     GoogleAccounts,
     OAuthError,
+    ScopeNeed,
     TokenRevoked,
 )
 from themi_home import cookbook as book
@@ -756,6 +757,14 @@ class RecipesModule(Module):
 
     name = "recipes"
     website = "Once Google is linked, pick the family cookbook on Accounts (/accounts)."
+    google_scopes = (  # CR18a: only the files picked or made (RC1a)
+        ScopeNeed(
+            "the cookbook",
+            (DRIVE_FILE_SCOPE,),
+            "Google Drive isn't allowed for this account yet. Linking it again lets you pick "
+            "the family's cookbook doc (Themi can open only the file you pick).",
+        ),
+    )
     tool_groups = (home_groups.RECIPES,)
     optional = ("google",)
 

@@ -16,7 +16,7 @@ from themi.modules import Module, ModuleContext, ModuleSetup
 from themi.modules.prompt import PromptFragment
 from themi.standard.tasks import TaskBoard
 from themi_google import google_groups
-from themi_google.connectors.google import GoogleAccounts
+from themi_google.connectors.google import TASKS_SCOPE, GoogleAccounts, ScopeNeed
 from themi_google.email_audit import EmailAudit
 from themi_google.google_settings import GoogleSettings, TravelSettings
 from themi_google.google_tasks import GoogleTasksInbox
@@ -40,6 +40,14 @@ class GoogleTasksModule(Module):
 
     name = "google_tasks"
     requires = ("google", "tasks")
+    google_scopes = (
+        ScopeNeed(
+            "Google Tasks",
+            (TASKS_SCOPE,),
+            "Google Tasks isn't allowed for this account yet. Linking it again lets Themi take "
+            "what you add to Google Tasks by voice.",
+        ),
+    )
 
     def __init__(self, tasks_url: str) -> None:
         self.tasks_url = tasks_url

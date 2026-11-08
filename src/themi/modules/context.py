@@ -47,6 +47,7 @@ class ModuleContext:
         self.services = services
         self._scheduler = scheduler
         self.installed: list[str] = []
+        self.modules: list[Module] = []  # CR18a: the installed modules themselves
         self.jobs: list[PeriodicTask] = []
         self._providers: dict[str, str] = {}  # class name -> the module that provided it
         self._current = ""  # the module installing now, for error messages
@@ -75,6 +76,7 @@ class ModuleContext:
                 self._current = ""
                 self.services.tools.installing = ""
             self.installed.append(module.name)
+            self.modules.append(module)
         return ordered
 
     def _web_folder(self, module: Module) -> None:

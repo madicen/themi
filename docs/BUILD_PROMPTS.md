@@ -310,8 +310,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR16 | Round two: the simulator with any module setup | Core refactor | [x] 2026-11-08 |
 | CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [x] 2026-11-08 |
 | CR17b | Round two: each pack's own page templates and static files | Core refactor | [x] 2026-11-08 |
-| CR18a | Round two: Google permissions asked per module | Core refactor | [ ] |
-| CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [ ] |
+| CR18a | Round two: Google permissions asked per module | Core refactor | [x] 2026-11-08 |
+| CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [~] |
 | CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [ ] |
 | CR20a | Round two: a channel seam, and channel identities for members | Core refactor | [ ] |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
@@ -15019,7 +15019,7 @@ Notes (2026-11-08):
   a pack's static files and the path check), and package data per pack.
 
 ### CR18a · Round two: Google permissions asked per module
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR17a
 - Each Google module declares the scopes it needs (`google_scopes`); linking asks for the
   loaded modules' scopes only. An account linked before a module was added shows "Link
@@ -15027,8 +15027,22 @@ Depends on: CR17a
 Tests: the work template asks for Gmail, Calendar and Tasks scopes and not Drive; adding the
 cookbook asks for Drive on the next link.
 
+Notes (2026-11-08):
+- `ScopeNeed(what, scopes, missing)` in the Google connector. A module declares
+  `google_scopes = (ScopeNeed(...),)`: gmail (Gmail), calendar (the calendar's three),
+  google_tasks (Tasks), recipes (Drive, for the cookbook). The google module reads them
+  from the installed modules (`ctx.modules`, new) when someone links.
+- `GoogleAccounts.link_url(member, redirect)` asks for "openid email" plus the loaded
+  modules' scopes, in the old order, so the family's request is unchanged. A
+  `GoogleAccounts` built without modules (unit tests) still asks for everything.
+- Gmail must be granted only when the gmail module is loaded.
+- Accounts: each linked account lists what it doesn't allow yet, in the module's words
+  (the Tasks and Drive sentences are the old ones), with a "Link again for <what>" button.
+  The "Google Tasks: Themi takes what you add by voice" line shows only with google_tasks.
+- Tests: tests/scenarios/test_google_scopes.py.
+
 ### CR18b · Round two: Gmail and Calendar split into base and feature modules
-Status: [ ]
+Status: [~]
 Depends on: CR18a
 - `gmail` keeps the sync and its tools; triage, forwarding, urgent senders, expected emails
   and the noise digest become modules requiring it. `calendar` keeps the sync and events;

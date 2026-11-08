@@ -24,11 +24,14 @@ from themi.accounts import SYSTEM, AccountStore, Actor, LinkedAccount, Member
 from themi.storage.secrets import Secret
 from themi_google.connectors.google.oauth import (
     GMAIL_SCOPE,
+    LINK_SCOPES,
     AccessToken,
     GoogleOAuth,
     Grant,
     OAuthError,
+    ScopeNeed,
     TokenRevoked,
+    link_scopes,
 )
 
 log = logging.getLogger(__name__)
@@ -50,6 +53,25 @@ class GoogleAccounts:
         self._tokens: dict[int, AccessToken] = {}
         # Called after a link succeeds: (account, newly linked rather than re-linked).
         self.link_listeners: list[Callable[[LinkedAccount, bool], Awaitable[None]]] = []
+        # CR18a: what the loaded modules need from an account (the google module sets it;
+        # unset, a link asks for everything, as before modules said what they need).
+        self.wants: Callable[[], list[ScopeNeed]] | None = None
+
+    def needs(self) -> list[ScopeNeed]:
+        return self.wants() if self.wants is not None else []
+
+    def link_scopes(self) -> tuple[str, ...]:
+        return link_scopes(self.wants()) if self.wants is not None else LINK_SCOPES
+
+    def link_url(self, member: Member, redirect_uri: str) -> str:
+        """Where linking an account starts: Google's consent page, asking for what the
+        loaded modules need."""
+        return self.oauth.authorization_url("link", redirect_uri, member, self.link_scopes())
+
+    def missing(self, account: LinkedAccount) -> list[ScopeNeed]:
+        """What the loaded modules need that this account doesn't allow yet (it was linked
+        before they came, or a box was unticked)."""
+        return [n for n in self.needs() if not account.allows(*n.scopes)]
 
     @staticmethod
     def redirect_uri(site_url: str) -> str:
@@ -75,7 +97,8 @@ class GoogleAccounts:
         if grant.purpose != "link" or grant.member_id is None:
             raise OAuthError("That wasn't a request to link an account.")
         member = self.store.get_member(grant.member_id)
-        if GMAIL_SCOPE not in grant.scopes or grant.refresh_token is None:
+        needs_gmail = GMAIL_SCOPE in self.link_scopes()  # CR18a: when Gmail is loaded
+        if (needs_gmail and GMAIL_SCOPE not in grant.scopes) or grant.refresh_token is None:
             if grant.refresh_token is not None:
                 await self.revoke_quietly(grant.refresh_token)
             raise OAuthError(

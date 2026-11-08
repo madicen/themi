@@ -19,6 +19,7 @@ import base64
 import hashlib
 import logging
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -50,6 +51,27 @@ TASKS_SCOPE = "https://www.googleapis.com/auth/tasks"
 DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 SIGNIN_SCOPES = ("openid", "email")
 LINK_SCOPES = ("openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES, TASKS_SCOPE, DRIVE_FILE_SCOPE)
+
+
+@dataclass(frozen=True)
+class ScopeNeed:
+    """CR18a: what a Google module needs from a linked account. A module declares its needs
+    as `google_scopes`; linking asks for the loaded modules' scopes only, and an account
+    linked before a module came shows "Link again for <what>" on Accounts."""
+
+    what: str  # "Google Tasks", "the cookbook": how Accounts names it
+    scopes: tuple[str, ...]
+    missing: str = ""  # what Accounts says when the account doesn't allow it yet
+
+
+def link_scopes(needs: Iterable[ScopeNeed]) -> tuple[str, ...]:
+    """The scopes a link asks for: always who it is, then each need's, in LINK_SCOPES'
+    order (so the family's request is as it always was), then any others."""
+    wanted = {"openid", "email"} | {s for need in needs for s in need.scopes}
+    known = [s for s in LINK_SCOPES if s in wanted]
+    return (*known, *sorted(wanted - set(known)))
+
+
 STATE_TTL = timedelta(minutes=10)
 TIMEOUT = 20.0
 
@@ -118,8 +140,14 @@ class GoogleOAuth:
     # ----- starting -----------------------------------------------------------
 
     def authorization_url(
-        self, purpose: Purpose, redirect_uri: str, member: Member | None = None
+        self,
+        purpose: Purpose,
+        redirect_uri: str,
+        member: Member | None = None,
+        scopes: tuple[str, ...] = LINK_SCOPES,
     ) -> str:
+        """`scopes`: what a link asks for (CR18a: the loaded modules'; all of them when not
+        said). A sign-in asks only who it is."""
         if purpose == "link" and member is None:
             raise ValueError("linking an account needs the member it's for")
         state = secrets.token_urlsafe(32)
@@ -142,7 +170,7 @@ class GoogleOAuth:
             "client_id": self.config.client_id,
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": " ".join(SIGNIN_SCOPES if purpose == "signin" else LINK_SCOPES),
+            "scope": " ".join(SIGNIN_SCOPES if purpose == "signin" else scopes),
             "state": state,
             "code_challenge": code_challenge(verifier),
             "code_challenge_method": "S256",

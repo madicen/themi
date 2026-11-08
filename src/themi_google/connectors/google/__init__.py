@@ -11,6 +11,7 @@ from themi_google.connectors.google.oauth import (
     GoogleOAuth,
     Grant,
     OAuthError,
+    ScopeNeed,
     TokenRevoked,
 )
 
@@ -26,6 +27,7 @@ __all__ = [
     "GoogleOAuth",
     "Grant",
     "OAuthError",
+    "ScopeNeed",
     "TokenRevoked",
     "Unlinked",
 ]

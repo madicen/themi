@@ -28,7 +28,14 @@ from themi_google.calendar_twins import CalendarTwins
 from themi_google.connectors.gcal import CalendarSync
 from themi_google.connectors.gcal.busy import CalendarBusy
 from themi_google.connectors.gmail import GmailSync, install_executors
-from themi_google.connectors.google import GoogleAccounts, GoogleConfig, GoogleOAuth
+from themi_google.connectors.google import (
+    CALENDAR_SCOPES,
+    GMAIL_SCOPE,
+    GoogleAccounts,
+    GoogleConfig,
+    GoogleOAuth,
+    ScopeNeed,
+)
 from themi_google.events import Events
 from themi_google.expected import ExpectedEmails
 from themi_google.google_settings import GoogleSettings
@@ -36,6 +43,12 @@ from themi_google.noise_digest import NoiseDigest, NoisePreferences
 from themi_google.senders import SenderSuggestions
 from themi_google.task_blocks import TaskBlocks
 from themi_google.triage import EmailTriage
+
+
+def needs_of(modules: list[Module]) -> list[ScopeNeed]:
+    """CR18a: what the loaded modules need from a Google account, each declaring it as
+    `google_scopes` (a tuple of ScopeNeed); a module without it needs nothing."""
+    return [need for m in modules for need in getattr(m, "google_scopes", ())]
 
 
 class GoogleModule(Module):
@@ -56,6 +69,7 @@ class GoogleModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         store = ctx.services.store
         google = GoogleAccounts(store, GoogleOAuth(store.db, store.cipher, self.config))
+        google.wants = lambda: needs_of(ctx.modules)  # CR18a: asked when linking
         ctx.provide(google)
         from themi_google.web import google_pages
 
@@ -72,6 +86,7 @@ class GmailModule(Module):
     """Gmail: mail read every minute, triaged, and the features that follow from it."""
 
     name = "gmail"
+    google_scopes = (ScopeNeed("Gmail", (GMAIL_SCOPE,)),)
     tool_groups = (google_groups.EMAIL,)
     preferences = NoisePreferences
     requires = ("google",)
@@ -137,6 +152,7 @@ class CalendarModule(Module):
     hold Themi's own messages."""
 
     name = "calendar"
+    google_scopes = (ScopeNeed("the calendar", CALENDAR_SCOPES),)
     tool_groups = (groups.CALENDAR,)
     preferences = CalendarPreferences
     requires = ("google", "tasks")
