@@ -2,9 +2,10 @@
 
 - `google`: linking Google accounts (OAuth), which Gmail, Calendar, Tasks and the
   cookbook all go through.
-- `gmail`: reading mail, with triage, forwarding, urgent-sender suggestions, expected
-  emails and the noise digest.
-- `calendar`: calendars read and written, busy times, events, twins, copies and blocks.
+- `gmail`: reading mail, and the email tools. CR18b: triage, forwarding, urgent senders,
+  expected emails and the noise digest are modules on top of it.
+- `calendar`: calendars read and written, events, and tasks on the family calendar.
+  CR18b: busy times, task blocks, twins and copies are modules on top of it.
 """
 
 from __future__ import annotations
@@ -83,38 +84,88 @@ class GoogleModule(Module):
 
 
 class GmailModule(Module):
-    """Gmail: mail read every minute, triaged, and the features that follow from it."""
+    """Gmail: mail read every minute, and the email tools. CR18b: what follows from the
+    mail (triage, forwarding, urgent senders, expected emails, the noise digest) is in
+    modules of its own that require this one."""
 
     name = "gmail"
     google_scopes = (ScopeNeed("Gmail", (GMAIL_SCOPE,)),)
     tool_groups = (google_groups.EMAIL,)
-    preferences = NoisePreferences
     requires = ("google",)
 
     def install(self, ctx: ModuleContext) -> None:
-        ctx.settings_section("settings/email.html", 70)
         s = ctx.services
         gmail = GmailSync(s.store, ctx.get(GoogleAccounts), s.outbox)
         ctx.provide(gmail)
         install_executors(s.autonomy.executors, gmail)
-        triage = ctx.provide(EmailTriage(s, gmail))
+        ctx.periodic("gmail.poll", timedelta(minutes=1), gmail.poll_all)
+
+
+class EmailTriageModule(Module):
+    """New mail sorted: what needs them now, what can wait, what's noise (CR18b)."""
+
+    name = "email_triage"
+    requires = ("gmail",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        triage = ctx.provide(EmailTriage(ctx.services, ctx.get(GmailSync)))
         triage.install()
-        email_forward.install(s)  # F31d
-        senders = ctx.provide(SenderSuggestions(s))
+        ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
+
+
+class EmailForwardingModule(Module):
+    """F31d: forwarding an email to someone, from chat (CR18b)."""
+
+    name = "email_forwarding"
+    requires = ("gmail",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        email_forward.install(ctx.services)
+
+
+class UrgentSendersModule(Module):
+    """Senders who always count as time-sensitive, and suggestions of new ones (CR18b)."""
+
+    name = "urgent_senders"
+    requires = ("gmail",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        senders = ctx.provide(SenderSuggestions(ctx.services))
         senders.install()
-        expected = ctx.provide(ExpectedEmails(s, gmail))
+        ctx.periodic("email.senders", timedelta(hours=6), senders.offer)
+
+
+class ExpectedEmailsModule(Module):
+    """Recurring mail that should arrive, and a word when it doesn't (CR18b). It sees mail
+    through triage."""
+
+    name = "expected_emails"
+    requires = ("gmail", "email_triage")
+
+    def install(self, ctx: ModuleContext) -> None:
+        expected = ctx.provide(ExpectedEmails(ctx.services, ctx.get(GmailSync)))
         expected.install()
-        noise = ctx.provide(NoiseDigest(s, ctx.get(ApprovalsUI), gmail))
+        ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
+
+
+class NoiseDigestModule(Module):
+    """F16b: emails that look like noise, offered for archiving all together (CR18b). Triage
+    finds them."""
+
+    name = "noise_digest"
+    preferences = NoisePreferences  # kept under "gmail", where they always were
+    requires = ("gmail", "email_triage")
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/email.html", 70)
+        s = ctx.services
+        noise = ctx.provide(NoiseDigest(s, ctx.get(ApprovalsUI), ctx.get(GmailSync)))
         noise.install()
         ctx.waiting_link(noise_link(noise))  # CR17a: one link on the dashboard, not a card each
         from themi_google.web import email_pages
 
         ctx.web(email_pages.routes)  # the noise digest's page
-        ctx.periodic("gmail.poll", timedelta(minutes=1), gmail.poll_all)
-        ctx.periodic("email.triage", timedelta(minutes=1), triage.run)
-        ctx.periodic("email.senders", timedelta(hours=6), senders.offer)
         ctx.periodic("email.noise", timedelta(minutes=5), noise.run)
-        ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
 
 
 def noise_link(noise: NoiseDigest) -> Callable[[Member], WaitingLink | None]:
@@ -148,8 +199,9 @@ CALENDAR_PROMPT_RULES = (
 
 
 class CalendarModule(Module):
-    """Google Calendar: each person's calendars, events made from chat, and busy times that
-    hold Themi's own messages."""
+    """Google Calendar: each person's calendars, events made from chat, and tasks with
+    dates on the family calendar. CR18b: busy times, task blocks, twins and copies are in
+    modules of their own that require this one."""
 
     name = "calendar"
     google_scopes = (ScopeNeed("the calendar", CALENDAR_SCOPES),)
@@ -171,18 +223,55 @@ class CalendarModule(Module):
         )
         sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
         ctx.provide(sync)
-        tasks = ctx.get(TaskBoard)
-        ctx.provide(TaskCalendar(s, tasks, sync, ctx.scheduler)).install()
-        busy = CalendarBusy(s.store, sync)
+        ctx.provide(TaskCalendar(s, ctx.get(TaskBoard), sync, ctx.scheduler)).install()
+        ctx.provide(Events(s)).install()
+
+
+class CalendarBusyModule(Module):
+    """Each person's calendars read every 15 minutes (CR18b): busy times hold Themi's own
+    messages and count against the day's energy, and the agent sees what's on."""
+
+    name = "calendar_busy"
+    requires = ("calendar",)
+
+    def install(self, ctx: ModuleContext) -> None:
+        s = ctx.services
+        busy = CalendarBusy(s.store, ctx.get(CalendarSync))
         ctx.provide(busy)
         s.calendar_source = busy.context
         s.outbox.calendar_blocks = busy.blocks
         ctx.get(EnergyModel).calendar_blocks = busy.blocks
-        events = ctx.provide(Events(s))
-        events.install()
-        ctx.provide(CalendarTwins(s, events)).install()  # F34e: the same event twice
-        ctx.provide(CalendarCopies(s)).install()  # F34f: a calendar on the family calendar
-        blocks = ctx.provide(TaskBlocks(s, tasks))
-        blocks.install()
         ctx.periodic("calendar.busy", timedelta(minutes=15), busy.refresh)
+
+
+class CalendarTwinsModule(Module):
+    """F34e: the same event on two calendars, asked about once (CR18b)."""
+
+    name = "calendar_twins"
+    requires = ("calendar", "calendar_busy")
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(CalendarTwins(ctx.services, ctx.get(Events))).install()
+
+
+class CalendarCopiesModule(Module):
+    """F34f: a calendar shown on the family calendar, as much of it as they choose (CR18b)."""
+
+    name = "calendar_copies"
+    requires = ("calendar", "calendar_busy")
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.provide(CalendarCopies(ctx.services)).install()
+
+
+class TaskBlocksModule(Module):
+    """Time held on the calendar for a task (CR18b)."""
+
+    name = "task_blocks"
+    requires = ("calendar",)
+    optional = ("calendar_busy",)  # windows outside busy times, when it's there
+
+    def install(self, ctx: ModuleContext) -> None:
+        blocks = ctx.provide(TaskBlocks(ctx.services, ctx.get(TaskBoard)))
+        blocks.install()
         ctx.periodic("blocks.tick", timedelta(minutes=5), blocks.tick)

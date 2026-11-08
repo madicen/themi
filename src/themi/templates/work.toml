@@ -8,6 +8,11 @@ modules = [
     "journal",
     "google",
     "gmail",
+    "email_triage",  # CR18b: Gmail's features
+    "email_forwarding",
+    "urgent_senders",
+    "expected_emails",
+    "noise_digest",
     "lists",
     "tasks",
     "follow_ups",
@@ -17,6 +22,10 @@ modules = [
     "day_summary",
     "focus",
     "calendar",
+    "calendar_busy",  # CR18b: the calendar's features
+    "calendar_twins",
+    "calendar_copies",
+    "task_blocks",
     "web_search",
     "reactions",
     "wrong_replies",

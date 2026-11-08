@@ -1,4 +1,4 @@
-{# CR7d: a section of the settings form, the gmail module's. #}
+{# CR7d: a section of the settings form, the noise digest module's (CR18b). #}
 {% from "_row.html" import row %}
   {% set noise_words = {"daily": "Once a day", "twice": "Twice a day", "every_other_day": "Every other day"} %}
   {% if prefs.gmail %}{% call(part) row("My email", meta="Noise emails: " ~ noise_words.get(prefs.gmail.noise_emails, prefs.gmail.noise_emails) | lower, id="email") %}{% if part == "body" %}

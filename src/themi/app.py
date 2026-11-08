@@ -72,7 +72,20 @@ from themi.storage.secrets import Cipher
 from themi.updates import ServerControl
 from themi_google.connector_modules import EmailAuditModule, GoogleTasksModule, TravelModule
 from themi_google.connectors.google import GoogleConfig
-from themi_google.google_modules import CalendarModule, GmailModule, GoogleModule
+from themi_google.google_modules import (
+    CalendarBusyModule,
+    CalendarCopiesModule,
+    CalendarModule,
+    CalendarTwinsModule,
+    EmailForwardingModule,
+    EmailTriageModule,
+    ExpectedEmailsModule,
+    GmailModule,
+    GoogleModule,
+    NoiseDigestModule,
+    TaskBlocksModule,
+    UrgentSendersModule,
+)
 from themi_home.appliances import AppliancesModule
 from themi_home.body_double import BodyDoubleModule
 from themi_home.body_double_guided import GuidedStepsModule
@@ -165,7 +178,19 @@ def family_modules(
     return [
         MemoryModule(),
         JournalModule(),
-        *([GoogleModule(google), GmailModule()] if google else []),
+        *(
+            [
+                GoogleModule(google),
+                GmailModule(),
+                EmailTriageModule(),  # CR18b: Gmail's features, each its own module
+                EmailForwardingModule(),
+                UrgentSendersModule(),
+                ExpectedEmailsModule(),
+                NoiseDigestModule(),
+            ]
+            if google
+            else []
+        ),
         GroceriesModule(),
         SafewayModule(),
         ListsModule(),
@@ -201,7 +226,17 @@ def family_modules(
         *([SpotifyModule(spotify)] if spotify else []),  # BD5b: their own music
         MusicOffersModule(),  # BD5c
         ModeChooserModule(),  # BD2
-        *([CalendarModule()] if google else []),
+        *(
+            [
+                CalendarModule(),
+                CalendarBusyModule(),  # CR18b: the calendar's features, each its own module
+                CalendarTwinsModule(),
+                CalendarCopiesModule(),
+                TaskBlocksModule(),
+            ]
+            if google
+            else []
+        ),
         WebSearchModule(search),  # F30d: says how to set it up without a key
         WebRecipesModule(recipe_pages),  # RC4a: recipes from links
         *([TravelModule(travel)] if travel else []),

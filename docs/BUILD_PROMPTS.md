@@ -311,7 +311,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [x] 2026-11-08 |
 | CR17b | Round two: each pack's own page templates and static files | Core refactor | [x] 2026-11-08 |
 | CR18a | Round two: Google permissions asked per module | Core refactor | [x] 2026-11-08 |
-| CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [~] |
+| CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [x] 2026-11-08 |
 | CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [ ] |
 | CR20a | Round two: a channel seam, and channel identities for members | Core refactor | [ ] |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
@@ -15042,13 +15042,29 @@ Notes (2026-11-08):
 - Tests: tests/scenarios/test_google_scopes.py.
 
 ### CR18b · Round two: Gmail and Calendar split into base and feature modules
-Status: [~]
+Status: [x] 2026-11-08
 Depends on: CR18a
 - `gmail` keeps the sync and its tools; triage, forwarding, urgent senders, expected emails
   and the noise digest become modules requiring it. `calendar` keeps the sync and events;
   busy times, task blocks, twins and copies become modules requiring it.
 - The family and work templates list them all; golden files identical.
 Tests: each feature module installs alone on its base; a base with no features works.
+
+Notes (2026-11-08):
+- Gmail: `gmail` (the sync, its executors, `gmail.poll`) plus `email_triage`,
+  `email_forwarding`, `urgent_senders`, `expected_emails` and `noise_digest`. Expected
+  emails and the noise digest require triage too: they see mail through its verdicts.
+  The email tools come with the features that use them (the base registers none).
+- Calendar: `calendar` (the sync, events, tasks on the family calendar) plus
+  `calendar_busy` (busy times, and what the agent sees of today), `calendar_twins` and
+  `calendar_copies` (both require busy times: they run when calendars are read) and
+  `task_blocks` (busy times optional).
+- The noise preference stays stored under "gmail" (no data moves); its settings section
+  and the dashboard's noise link are the noise digest's.
+- The family and work templates and `family_modules` list every feature in the old
+  install order, so the golden files are identical.
+- test_module_lists changed for moved wiring: its map of each module's jobs and what
+  needs what. New there: each feature installs alone on its base; the bases alone work.
 
 ### CR19 · Round two: module kinds, AI providers and capabilities as modules, setup by kind
 Status: [ ]
