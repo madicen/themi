@@ -98,6 +98,7 @@ from themi_home.body_double_modes import ModeChooserModule
 from themi_home.body_double_music import MusicOffersModule
 from themi_home.buying import BuyingModule
 from themi_home.calls import CallsModule
+from themi_home.chore_chart import ChoreChartModule
 from themi_home.connectors.catgenie import CatGenieConfig
 from themi_home.connectors.cozyla import CozylaClient
 from themi_home.connectors.gkeep import KeepFactory
@@ -211,6 +212,7 @@ def family_modules(
         BreaksModule(),
         PantryModule(),
         TasksModule(),
+        ChoreChartModule(),  # CR21a: the chart, with or without the wall
         FollowUpsModule(),
         *([EmailAuditModule()] if google else []),
         RemindersModule(),

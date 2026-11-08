@@ -37,11 +37,13 @@ async def test_the_family_form_is_as_it_was(scenario: Scenario, site: httpx.Asyn
     assert await form_fields(scenario, site) == BEFORE_CR7A
 
 
-async def test_the_chart_section_comes_with_the_wall(
+async def test_the_chart_section_comes_with_the_chore_chart_not_the_wall(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
+    """CR21a: the chart is its own module, so its section is there with no wall (the
+    chore_chart module left out takes it: tests/scenarios/test_chore_chart_module.py)."""
     fields = await form_fields(scenario, site)  # no Cozyla here
-    assert "chart_limit" not in fields and "chart_counts_shared" not in fields
+    assert "chart_limit" in fields and "chart_counts_shared" in fields
     assert {"break_extend_minutes", "sprint_work_minutes"} <= set(fields)
 
 
@@ -98,5 +100,5 @@ async def test_the_family_sections_keep_their_order(
 async def test_a_module_left_out_takes_its_section_with_it(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    found = await section_ids(scenario, site)  # no Cozyla, no Gmail
-    assert found == [s for s in SECTIONS if s not in ("chart", "email")]
+    found = await section_ids(scenario, site)  # no Gmail (CR21a: the chart needs no wall)
+    assert found == [s for s in SECTIONS if s != "email"]

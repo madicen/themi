@@ -166,7 +166,7 @@ class EmailAudit:
                 assignee=member,
                 importance="normal",
                 nudge=False,
-                off_wall=True,
+                off_displays=True,
             )
             self.db.execute(
                 "INSERT INTO email_audits (member_id, task_id) VALUES (?, ?) "

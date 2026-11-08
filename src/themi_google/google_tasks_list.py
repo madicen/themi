@@ -38,7 +38,7 @@ def _due(day: date | None) -> str | None:
 
 
 def on_the_list(task: Task) -> bool:
-    return task.status in ("open", "snoozed") and not task.repeats and not task.off_wall
+    return task.status in ("open", "snoozed") and not task.repeats and not task.off_displays
 
 
 class GoogleTaskList:

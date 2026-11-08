@@ -168,7 +168,7 @@ class Vacuum:
             "physical",
             1,
             nudge=False,
-            off_wall=True,  # it comes and goes with the robot; the wall's lists stay calm
+            off_displays=True,  # it comes and goes with the robot; the wall's lists stay calm
             assignment=assignment,
         )
         self.db.execute("UPDATE vacuum_problems SET task_id = ? WHERE id = ?", (task.id, row_id))
@@ -394,8 +394,8 @@ class Vacuum:
         now = clock.now()
         put = 0
         for row in self.db.query(
-            "SELECT p.*, t.off_wall FROM vacuum_problems p JOIN tasks t ON t.id = p.task_id "
-            "WHERE p.status = 'open' AND t.off_wall = 1 AND t.status IN ('open', 'snoozed')"
+            "SELECT p.*, t.off_displays FROM vacuum_problems p JOIN tasks t ON t.id = p.task_id "
+            "WHERE p.status = 'open' AND t.off_displays = 1 AND t.status IN ('open', 'snoozed')"
         ):
             wait = AWAY_WAIT if row["problem"] == NOT_DOCKED else WAIT
             if datetime.fromisoformat(row["opened_at"]) + wait <= now:

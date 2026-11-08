@@ -317,9 +317,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR20a1 | Round two: the Channel protocol | Core refactor | [x] 2026-11-08 |
 | CR20a2 | Round two: channel identities for members | Core refactor | [x] 2026-11-08 |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [x] 2026-11-08 |
-| CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
-| CR21a | Round two: the chore chart as its own household module | Core refactor | [ ] |
-| CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [ ] |
+| CR20c | Gate: Discord and Slack channels | Core refactor | waiting (bot accounts, Michael's call) |
+| CR21a | Round two: the chore chart as its own household module | Core refactor | [x] 2026-11-08 |
+| CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [~] |
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [ ] |
 
 ## Fixed technical choices
@@ -15195,13 +15195,19 @@ Notes (2026-11-08):
   test (a channel step now). New: tests/scenarios/test_web_chat.py. Golden identical.
 
 ### CR20c · Gate: Discord and Slack channels
-Status: [ ]
+Status: waiting (gate)
 Depends on: CR20b
 Gate: needs a Discord bot and a Slack app to test against, and Michael's call on which
 first.
 
+**Blocked:** (2026-11-08) needs a Discord bot and a Slack app to test against, and
+Michael's call on which comes first. The seam is ready: a channel module implements
+`themi.channels.base.Channel` and calls `ctx.channel(name, channel)`; members get an
+identity per channel (`store.set_identity`). CR21 doesn't depend on this, so the run
+went on to it.
+
 ### CR21a · Round two: the chore chart as its own household module
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR16
 - The chore chart (limits per person, which chores are up, "a different one") becomes a
   `chore_chart` module in the home pack, independent of any display: its table holds which
@@ -15210,8 +15216,31 @@ Depends on: CR16
 - `cozyla_chores` requires `chore_chart` and only shows it on the wall.
 Tests: the chart works with no wall; the family's golden files identical.
 
+Notes (2026-11-08):
+- `chore_chart` (home pack, `themi_home/chore_chart.py`) owns the chart. That covers the
+  queue, limits, "a different one", `put_task_on_chore_chart`, the chart's settings
+  section and a "Chore chart" dashboard panel (the chores up for them now).
+- Its own track (`chore_chart_schema`) has `chart_tasks`, copied from `tasks.on_chart`.
+  That column stays, unread, since the core's migrations run before a module's.
+  `Task.on_chart` and `TaskBoard.put_on_chart` are gone; ask the chart (`has`,
+  `on_chart`, `put_on`, `take_off`).
+- With no display, the chart brings chores up itself when a hold is checked, at most
+  every 5 minutes, so no new job is needed. A display that syncs it (the wall) sets
+  `display_refreshes` and keeps its own timing, so the wall behaves exactly as before.
+- `tasks.off_wall` is `off_displays` (core migration 0151 renames it).
+- `cozyla_chores` requires `chore_chart` and only shows it on the wall. The chart's
+  preferences stay stored under "cozyla_chores" (no data moves).
+- The chart's tool texts still say "the Cozyla wall's chore chart" (golden files
+  identical); CR21b/CR21c is where the words lose the wall.
+- Tests changed for moved wiring:
+  - test_chore_chart and test_cozyla_chores: putting a one-off on the chart is the
+    chart's now.
+  - test_email_audit: the column's new name.
+  - test_settings_form: the chart's section comes with chore_chart, not the wall.
+  - New: tests/scenarios/test_chore_chart_module.py. Golden identical.
+
 ### CR21b · Round two: a mirror seam for lists, tasks and routines
-Status: [ ]
+Status: [~]
 Depends on: CR21a
 - A `mirrors` seam in core: a display or app that keeps a list, a task list or a routine in
   step registers itself (its item limit, its ticks coming back, its "ticked there" praise).

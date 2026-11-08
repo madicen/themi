@@ -197,9 +197,10 @@ class Task:
     importance: str = "normal"  # low, normal or high: how often an overdue one is raised (C2c)
     due_time: time | None = None  # a time of day on the due date ("today around 2")
     from_time: time | None = None  # a window's start ("between 2 and 3"): the nudge comes then
-    on_chart: bool = False  # a one-off on the wall's chore chart, not its to-do list (C2b)
     progression: Progression | None = None  # an amount that steps up weekly (F9c)
-    off_wall: bool = False  # Themi's own (the email audit): never on the wall's to-do lists
+    # CR21a: Themi's own (the email audit), or passing (the washer's): never on a shared
+    # display's lists (the wall's, today)
+    off_displays: bool = False
     medicine: bool = False  # Rx1: "not sure" never makes it done
     # T2: this deadline chore holds its `due_before_task` back until it's done for that
     # round; `hold_once` for "next time" (it ends after one).
@@ -258,11 +259,10 @@ def _task_from_row(row: dict[str, Any]) -> Task:
         importance=row["importance"],
         due_time=time.fromisoformat(row["due_time"]) if row["due_time"] else None,
         from_time=time.fromisoformat(row["from_time"]) if row["from_time"] else None,
-        on_chart=bool(row["on_chart"]),
         progression=(
             Progression.from_json(json.loads(row["progression"])) if row["progression"] else None
         ),
-        off_wall=bool(row["off_wall"]),
+        off_displays=bool(row["off_displays"]),
         medicine=bool(row["medicine"]),
         holds_target=bool(row["holds_target"]),
         hold_once=bool(row["hold_once"]),
@@ -486,7 +486,7 @@ class TaskBoard:
         due_time: time | None = None,
         from_time: time | None = None,
         importance: str = "normal",
-        off_wall: bool = False,
+        off_displays: bool = False,
         assignment: Assignment | None = None,
     ) -> Task:
         """Add and assign a task. With `nudge=False` the caller sends `prompt()` itself
@@ -512,7 +512,7 @@ class TaskBoard:
         task_id = self.db.execute(
             "INSERT INTO tasks (title, kind, effort, created_by, default_owner, assignee, "
             "assign_reason, due_on, created_at, steps, check_in, due_time, from_time, "
-            "importance, off_wall, medicine) "
+            "importance, off_displays, medicine) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 title,
@@ -529,7 +529,7 @@ class TaskBoard:
                 due_time.strftime("%H:%M") if due_on and due_time else None,
                 from_time.strftime("%H:%M") if due_on and from_time else None,
                 importance,
-                int(off_wall),
+                int(off_displays),
                 int(is_medicine(title)),
             ),
         )
@@ -937,17 +937,6 @@ class TaskBoard:
         if task.assignee is None:
             return "nobody's list yet"
         return f"{self.store.get_member(task.assignee).name}'s list"
-
-    async def put_on_chart(self, task_id: int, by: Member, on: bool = True) -> Task:
-        """Put a one-off task on the wall's chore chart (or take it off, back to the to-do
-        list). Repeating chores are always on the chart."""
-        task = self.get(task_id)
-        if not self.can_edit(task, by):
-            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
-        self.db.execute("UPDATE tasks SET on_chart = ? WHERE id = ?", (int(on), task_id))
-        task = self.get(task_id)
-        await self._changed(task, "moved", True)
-        return task
 
     async def reopen(self, task_id: int) -> Task:
         """A one-off task marked done that turns out not to be: open again, and nudged."""
@@ -1696,7 +1685,7 @@ class TaskBoard:
     async def put_on_wall(self, task_id: int) -> Task:
         """A task made off the wall's lists goes on them now (F23d: a vacuum chore, once its
         nudge goes)."""
-        self.db.execute("UPDATE tasks SET off_wall = 0 WHERE id = ?", (task_id,))
+        self.db.execute("UPDATE tasks SET off_displays = 0 WHERE id = ?", (task_id,))
         task = self.get(task_id)
         await self._changed(task, "moved", False)
         return task

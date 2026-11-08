@@ -25,31 +25,34 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
 from pydantic import field_validator
 
 from themi import clock
-from themi.accounts import InvalidValue, Member, NotFound
+from themi.accounts import InvalidValue, Member, NotFound, PermissionDenied
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import MAX_CHART_LIMIT
 from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
+from themi.modules import Module, ModuleContext
 from themi.standard.tasks import Task, TaskBoard
 from themi_home.connectors.cozyla.schedule import wall_can_say
 
 log = logging.getLogger(__name__)
 
 RANK = {"low": 0, "normal": 1, "high": 2}
+REFRESH_EVERY = timedelta(minutes=5)  # as often as the wall's sync
 
 
-def on_chart(task: Task) -> bool:
-    """A chore, or a one-off someone put on the chart."""
-    return task.repeats or task.on_chart
+def day_words(day: date) -> str:
+    """ "Sunday 1 Nov": the day a chore shows on the chart, which is what people ask about."""
+    return f"{day:%A} {day.day} {day:%b}"
 
 
 def is_routine(task: Task) -> bool:
@@ -88,12 +91,47 @@ class ChartQueue:
         self.board = board
         self.store = services.store
         self.db = services.store.db
+        self._refreshed_at: datetime | None = None
+        # A display that keeps the chart (the wall) refreshes it in its own sync, at its
+        # moments; with none, the chart refreshes itself.
+        self.display_refreshes = False
 
     def install(self) -> None:
         self.services.provide(keys.chart_queue, self)
         self.board.holds.append(self.held)
+        self.services.tools.register(put_task_on_chore_chart)
         self.services.tools.register(set_chore_chart_limit)
         self.services.tools.register(change_chore_chart)
+
+    # ----- what's on the chart (CR21a: its own table, in place of tasks.on_chart) ---------
+
+    def has(self, task_id: int) -> bool:
+        """A one-off someone put on the chart."""
+        return bool(self.db.scalar("SELECT 1 FROM chart_tasks WHERE task_id = ?", (task_id,)))
+
+    def on_chart(self, task: Task) -> bool:
+        """A chore, or a one-off someone put on the chart."""
+        return task.repeats or self.has(task.id)
+
+    async def put_on(self, task_id: int, by: Member, on: bool = True) -> Task:
+        """Put a one-off task on the chore chart (or take it off, back to the to-do list).
+        Repeating chores are always on the chart."""
+        task = self.board.get(task_id)
+        if not self.board.can_edit(task, by):
+            raise PermissionDenied("only the person doing it, whoever added it, or an admin")
+        self.take_off(task_id)
+        if on:
+            self.db.execute(
+                "INSERT INTO chart_tasks (task_id, added_at) VALUES (?, ?)",
+                (task_id, to_utc_iso(clock.now())),
+            )
+        self._refreshed_at = None  # what's up may change now
+        task = self.board.get(task_id)
+        await self.board._changed(task, "moved", True)
+        return task
+
+    def take_off(self, task_id: int) -> None:
+        self.db.execute("DELETE FROM chart_tasks WHERE task_id = ?", (task_id,))
 
     # ----- what counts, and what's up ------------------------------------------------------
 
@@ -109,7 +147,7 @@ class ChartQueue:
         return (
             theirs
             and task.status in ("open", "snoozed")
-            and on_chart(task)
+            and self.on_chart(task)
             and not is_routine(task)
             and task.importance != "high"
         )
@@ -142,10 +180,34 @@ class ChartQueue:
     def is_up(self, task: Task, member: Member) -> bool:
         return any(p.task_id == task.id for p in self.picks(member))
 
+    def up_for(self, member: Member) -> list[Task]:
+        """CR21a: their chores up now: the picks when they have a limit, else their chart's
+        chores due today or before."""
+        if self.prefs(member).chart_limit > 0:
+            self._keep_fresh()
+            return [self.board.get(p.task_id) for p in self.picks(member)]
+        today = self._today()
+        return [
+            t
+            for t in self.board.open_for(member)
+            if self.on_chart(t) and not is_routine(t) and (t.due_on or today) <= today
+        ]
+
     def held(self, task: Task, member: Member) -> bool:
         """Waiting its turn: this person has a limit, it counts, and it isn't up."""
         limit = self.prefs(member).chart_limit
+        if limit > 0:
+            self._keep_fresh()
         return limit > 0 and self.counts(task, member) and not self.is_up(task, member)
+
+    def _keep_fresh(self) -> None:
+        """CR21a: chores come up with no wall too. A display's sync refreshes the chart
+        every few minutes; without one, it's refreshed here, as often."""
+        if self.display_refreshes:
+            return
+        now = clock.now()
+        if self._refreshed_at is None or now - self._refreshed_at >= REFRESH_EVERY:
+            self.refresh()
 
     def limited(self) -> list[Member]:
         return [m for m in self.store.list_members() if self.prefs(m).chart_limit > 0]
@@ -155,6 +217,7 @@ class ChartQueue:
     def refresh(self) -> list[tuple[Member, Task]]:
         """Drop picks whose round is over, fill each limited chart up to its limit, and keep
         waiting chores' nudges back. Returns the chores up that haven't had their nudge."""
+        self._refreshed_at = clock.now()
         unprompted = []
         today = self._today()
         for member in self.limited():
@@ -314,7 +377,7 @@ class ChartQueue:
         except NotFound as exc:
             raise ToolFailed("There's no task with that number.") from exc
         if not self.counts(task, member):
-            if task.importance == "high" and on_chart(task):
+            if task.importance == "high" and self.on_chart(task):
                 raise ToolFailed(f"{task.title} always shows on their chart (it's important).")
             raise ToolFailed(f"{task.title} isn't one of their chores for the chart.")
         return task
@@ -401,3 +464,45 @@ async def set_chore_chart_limit(ctx: ToolContext, args: dict[str, Any]) -> str:
 async def change_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
     member = ctx.services.store.get_member(ctx.member.id)
     return _queue(ctx).change(member, args["action"], args["task_id"])
+
+
+@tool(
+    "put_task_on_chore_chart",
+    "Put a one-off task on the Cozyla wall's chore chart instead of its to-do list ('move it "
+    "to chores'). Repeating chores are on the chart already; the chart isn't one of the to-do "
+    "lists. To take it back to the to-do list, use put_task_on_wall_list.",
+    {"task_id": {"type": "integer"}},
+)
+async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
+    board, chart = ctx.services.get(keys.taskboard), ctx.services.get(keys.chart_queue)
+    try:
+        task = await chart.put_on(args["task_id"], ctx.member)
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    except PermissionDenied as exc:
+        raise ToolFailed("That task isn't theirs to change.") from exc
+    day = day_words(task.due_on or board._today())
+    return (
+        f"Task {task.id} ({task.title}) is moving to the wall's chore chart, where it shows on "
+        f"{day} (its day). It's off the to-do list, and the chart has it within a few minutes. "
+        f"Tell them the day it shows."
+    )
+
+
+class ChoreChartModule(Module):
+    """C2b-C2d, CR21a: the chore chart, with or without a display: how many of each
+    person's chores are up at once, which come up, "a different one". A display (the
+    Cozyla wall) shows it; the dashboard does too."""
+
+    name = "chore_chart"
+    preferences = ChartPreferences  # stored under "cozyla_chores", where they always were
+    requires = ("tasks",)
+    migrations = Path(__file__).parent / "chore_chart_schema"
+
+    def install(self, ctx: ModuleContext) -> None:
+        ctx.settings_section("settings/chart.html", 50)
+        queue = ChartQueue(ctx.services, ctx.get(TaskBoard))
+        queue.install()
+        ctx.dashboard_panel(
+            "dashboard/chore_chart.html", 25, values=lambda member: {"chart": queue.up_for(member)}
+        )

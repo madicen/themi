@@ -33,18 +33,16 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime, timedelta
-from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
-from themi.accounts import Member, NotFound, PermissionDenied
+from themi.accounts import Member
 from themi.core import keys
 from themi.core.services import Services
-from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.standard.reminders import MEDICINE
 from themi.standard.tasks import Task, TaskBoard
-from themi_home.chore_chart import ChartQueue, is_routine, on_chart
+from themi_home.chore_chart import ChartQueue, day_words, is_routine
 from themi_home.connectors.cozyla import Chore, CozylaClient, CozylaError, WallSchedule
 from themi_home.connectors.cozyla.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
 from themi_home.connectors.cozyla.emoji import better_icon, chore_icon
@@ -57,15 +55,10 @@ CHORE_KIND, CHORE_EFFORT = "physical", 2
 LOOK_BACK = timedelta(days=7)  # how far back a round's tick on the wall is looked for
 REPEATS = (
     "(t.times_per_week IS NOT NULL OR t.repeat IS NOT NULL OR t.due_before_task IS NOT NULL "
-    "OR t.on_chart = 1)"
+    "OR t.id IN (SELECT task_id FROM chart_tasks))"
 )  # what belongs on the chart: chores, and one-offs put there
 SMALL_WORDS = frozenset({"the", "a", "an", "my", "our", "your"})
 Desired = tuple[str, list[str], str, WallSchedule]  # name, people, kind, schedule
-
-
-def day_words(day: date) -> str:
-    """ "Sunday 1 Nov": the day a chore shows on the wall, which is what people ask about."""
-    return f"{day:%A} {day.day} {day:%b}"
 
 
 def title_key(title: str) -> str:
@@ -85,30 +78,6 @@ def _same_schedule(a: WallSchedule, b: WallSchedule) -> bool:
     return same and (a.forever or a.end == b.end)  # a forever chore's end means nothing
 
 
-@tool(
-    "put_task_on_chore_chart",
-    "Put a one-off task on the Cozyla wall's chore chart instead of its to-do list ('move it "
-    "to chores'). Repeating chores are on the chart already; the chart isn't one of the to-do "
-    "lists. To take it back to the to-do list, use put_task_on_wall_list.",
-    {"task_id": {"type": "integer"}},
-)
-async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
-    board = ctx.services.maybe(keys.taskboard)
-    assert board is not None
-    try:
-        task = await board.put_on_chart(args["task_id"], ctx.member)
-    except NotFound as exc:
-        raise ToolFailed("There's no task with that number.") from exc
-    except PermissionDenied as exc:
-        raise ToolFailed("That task isn't theirs to change.") from exc
-    day = day_words(task.due_on or board._today())
-    return (
-        f"Task {task.id} ({task.title}) is moving to the wall's chore chart, where it shows on "
-        f"{day} (its day). It's off the to-do list, and the chart has it within a few minutes. "
-        f"Tell them the day it shows."
-    )
-
-
 class CozylaChores:
     def __init__(self, services: Services, board: TaskBoard, client: CozylaClient) -> None:
         self.services = services
@@ -119,16 +88,19 @@ class CozylaChores:
         self._read_after: datetime | None = None
         self._to_member: dict[str, int] = {}
         self._to_cozyla: dict[int, str] = {}
-        self.queue = ChartQueue(services, board)
+        self.queue: ChartQueue = services.get(keys.chart_queue)  # CR21a: the chart's own
+        self.queue.display_refreshes = True  # the sync brings chores up, as it always has
 
     def install(self) -> None:
-        self.services.tools.register(put_task_on_chore_chart)
         self.board.wall_notes.append(self.where)
-        self.queue.install()
 
     def where(self, task: Task) -> str | None:
         """The day a task shows on the chart, for the model; None if it isn't for the chart."""
-        if task.status not in ("open", "snoozed") or not on_chart(task) or is_routine(task):
+        if (
+            task.status not in ("open", "snoozed")
+            or not self.queue.on_chart(task)
+            or is_routine(task)
+        ):
             return None
         limited = [m for m in self.queue.limited() if self.queue.counts(task, m)]
         up = next((m for m in limited if self.queue.is_up(task, m)), None)
@@ -312,7 +284,12 @@ class CozylaChores:
             off_wall = (self._waiting(task) and not self._wall_members(task)) or bool(
                 self.board.waiting_on(task)
             )
-            if task.status == "cancelled" or not on_chart(task) or is_routine(task) or off_wall:
+            if (
+                task.status == "cancelled"
+                or not self.queue.on_chart(task)
+                or is_routine(task)
+                or off_wall
+            ):
                 # A check-in on fixed days is a routine on the wall (C3), not a chore; a chore
                 # waiting its turn for someone's chart is off the wall (C2d), and so is one
                 # waiting for another chore to be done first (T2).

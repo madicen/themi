@@ -242,11 +242,11 @@ async def test_one_already_on_the_wall_comes_off(
     await suggested(scenario, inbox)
     db = scenario.app.db
     (task_id,) = [r["task_id"] for r in db.query("SELECT task_id FROM email_audits")]
-    db.execute("UPDATE tasks SET off_wall = 0 WHERE id = ?", (task_id,))
+    db.execute("UPDATE tasks SET off_displays = 0 WHERE id = ?", (task_id,))
     db.execute("INSERT INTO cozyla_links (task_id) VALUES (?)", (task_id,))
     await scenario.run_periodic("cozyla.sync")
     assert len(fake_cozyla.in_list(scenario.cozyla_list)) == 1
-    db.execute("UPDATE tasks SET off_wall = 1 WHERE id = ?", (task_id,))
+    db.execute("UPDATE tasks SET off_displays = 1 WHERE id = ?", (task_id,))
     db.execute(
         "UPDATE cozyla_links SET state = 'pending', version = version + 1 WHERE task_id = ?",
         (task_id,),

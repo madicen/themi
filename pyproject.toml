@@ -60,6 +60,7 @@ calendar_twins = "themi_google.google_modules:CalendarTwinsModule"
 calls = "themi_home.calls:CallsModule"
 catgenie = "themi_home.home_modules:CatGenieModule"
 checkin_reviews = "themi.standard.checkin_reviews:CheckinReviewsModule"
+chore_chart = "themi_home.chore_chart:ChoreChartModule"
 claude = "themi.standard.ai_providers:ClaudeModule"
 cloudflare = "themi.standard.ai_providers:CloudflareModule"
 commands = "themi.standard.commands:CommandsModule"
@@ -143,6 +144,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
+    "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",

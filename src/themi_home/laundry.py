@@ -145,7 +145,7 @@ class Laundry:
             "physical",
             1,
             nudge=False,
-            off_wall=True,  # it comes and goes with the washer; the wall's lists stay calm
+            off_displays=True,  # it comes and goes with the washer; the wall's lists stay calm
             assignment=assignment,
         )
         self.db.execute("UPDATE laundry_loads SET task_id = ? WHERE id = ?", (task.id, load_id))

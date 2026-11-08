@@ -250,7 +250,7 @@ async def test_a_one_off_on_the_chart_done_in_themi_is_ticked_there(
     sheets = await board(scenario).create(
         erin, "Change the sheets", "physical", 2, WED, assignee=erin
     )
-    await board(scenario).put_on_chart(sheets.id, erin)
+    await scenario.app.services.get(keys.chart_queue).put_on(sheets.id, erin)  # CR21a
     await sync(scenario)
     uid = fake_cozyla.chore_named("Change the sheets")["choreUid"]
     await board(scenario).complete(sheets.id, erin)

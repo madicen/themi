@@ -46,7 +46,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
@@ -59,6 +59,9 @@ from themi.localtime import to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange
 from themi_home.connectors.cozyla import CozylaClient, CozylaError, CozylaMember, Todo, TodoList
 from themi_home.cozyla_lists import WallLists
+
+if TYPE_CHECKING:
+    from themi_home.chore_chart import ChartQueue
 
 log = logging.getLogger(__name__)
 
@@ -131,7 +134,11 @@ class CozylaTodos:
     def where(self, task: Task) -> str | None:
         """Which wall list a task is on, for the model."""
         link = self._link(task.id)
-        if link is None or _off_the_lists(task) or task.status not in ("open", "snoozed"):
+        if (
+            link is None
+            or _off_the_lists(task, self._chart())
+            or task.status not in ("open", "snoozed")
+        ):
             return None
         lists = self.lists()
         name = lists.get(link["list_id"] or "") or self.client.config.todo_list
@@ -142,7 +149,7 @@ class CozylaTodos:
     async def on_task_changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
         if self._applying:
             return
-        if _not_a_todo(task) and not self._link(task.id):
+        if _not_a_todo(task, self._chart()) and not self._link(task.id):
             return
         self._mark(task.id)
 
@@ -216,12 +223,17 @@ class CozylaTodos:
     def find_list(self, name: str) -> tuple[str, str] | None:
         return next(((i, t) for i, t in self.lists().items() if _same(t, name)), None)
 
+    def _chart(self) -> ChartQueue | None:
+        return self.services.maybe(keys.chart_queue)  # CR21a
+
     def default_list(self) -> str | None:
         found = self.find_list(self.client.config.todo_list)
         return found[0] if found else None
 
     def put_on(self, task_id: int, list_id: str) -> None:
-        self.db.execute("UPDATE tasks SET on_chart = 0 WHERE id = ?", (task_id,))  # off the chart
+        chart = self._chart()
+        if chart is not None:  # off the chart
+            chart.take_off(task_id)
         self.db.execute(
             "INSERT INTO cozyla_links (task_id, list_id) VALUES (?, ?) ON CONFLICT(task_id) "
             "DO UPDATE SET list_id = excluded.list_id, state = 'pending', "
@@ -252,7 +264,9 @@ class CozylaTodos:
             for row in self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')"):
                 task = self.board.get(row["id"])
                 link = self._link(task.id)
-                if not _not_a_todo(task) and (link is None or link["todo_id"] is None):
+                if not _not_a_todo(task, self._chart()) and (
+                    link is None or link["todo_id"] is None
+                ):
                     self._mark(task.id)
 
     async def _maybe_bring_in(self, todo: Todo, before: Seen | None, *, first: bool) -> None:
@@ -364,7 +378,7 @@ class CozylaTodos:
                 log.warning("Cozyla sync of task %s waits: %s", task.id, exc)
                 self._failed(link, str(exc))
                 continue
-            if _off_the_lists(task):
+            if _off_the_lists(task, self._chart()):
                 self.db.execute(
                     "DELETE FROM cozyla_links WHERE task_id = ? AND version = ?",
                     (task.id, link["version"]),
@@ -382,7 +396,7 @@ class CozylaTodos:
         self, link: dict[str, Any], task: Task, todo: Todo | None, current: dict[str, Todo]
     ) -> str | None:
         """Make the wall match the task; returns its to-do's id, if it still has one."""
-        if task.status == "cancelled" or _off_the_lists(task):
+        if task.status == "cancelled" or _off_the_lists(task, self._chart()):
             if todo is not None:  # gone, or a chore, on the chart, or Themi's own: off the lists
                 await self.client.delete(todo.id)
                 del current[todo.id]
@@ -470,7 +484,7 @@ class CozylaTodos:
         ):
             if _same(row["title"], title):
                 task = self.board.get(row["id"])
-                if not _not_a_todo(task):
+                if not _not_a_todo(task, self._chart()):
                     return task
         return None
 
@@ -594,16 +608,16 @@ async def put_task_on_wall_list(ctx: ToolContext, args: dict[str, Any]) -> str:
     return f"Task {task.id} ({task.title}) will be on {title} on the wall within a minute."
 
 
-def _not_a_todo(task: Task) -> bool:
+def _not_a_todo(task: Task, chart: ChartQueue | None) -> bool:
     """Chores live on the chart, and a check-in is Themi's own question (bug #41: an extra
     water check-in went on the to-do list)."""
-    return _off_the_lists(task) or task.check_in
+    return _off_the_lists(task, chart) or task.check_in
 
 
-def _off_the_lists(task: Task) -> bool:
-    """Taken off the wall's to-do lists if it was on one: a chore, on the chart, or Themi's
-    own (E2b's email audit)."""
-    return task.repeats or task.on_chart or task.off_wall
+def _off_the_lists(task: Task, chart: ChartQueue | None) -> bool:
+    """Taken off the wall's to-do lists if it was on one: a chore, on the chart (CR21a: the
+    chore chart's, when it's loaded), or kept off shared displays (E2b's email audit)."""
+    return task.repeats or (chart is not None and chart.has(task.id)) or task.off_displays
 
 
 IMPORTANCE_RANK = {"high": 0, "normal": 1, "low": 2}

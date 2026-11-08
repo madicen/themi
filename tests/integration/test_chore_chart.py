@@ -43,7 +43,8 @@ async def chore(scenario: Scenario, title: str, phrase: str, who: str = "Erin", 
 async def one_off(scenario: Scenario, title: str, due: date, who: str = "Erin") -> Task:
     member = scenario.member(who)
     task = await board(scenario).create(member, title, "physical", 2, due, assignee=member)
-    return await board(scenario).put_on_chart(task.id, member)
+    chart = scenario.app.services.get(keys.chart_queue)  # CR21a: the chart's own
+    return await chart.put_on(task.id, member)
 
 
 def on_wall(fake: FakeCozyla) -> dict[str, list[str]]:

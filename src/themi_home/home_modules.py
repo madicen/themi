@@ -20,7 +20,6 @@ from themi.modules.prompt import PromptFragment
 from themi.standard.routines import Routines
 from themi.standard.tasks import TaskBoard
 from themi_home import home_groups
-from themi_home.chore_chart import ChartPreferences
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
 from themi_home.connectors.cozyla import CozylaClient
 from themi_home.connectors.gkeep import KeepFactory
@@ -237,9 +236,8 @@ class CozylaChoresModule(Module):
     name = "cozyla_chores"
     kind = "connector"
     tool_groups = (groups.WALL,)
-    preferences = ChartPreferences
     settings = CozylaSettings
-    requires = ("tasks", "routines")
+    requires = ("tasks", "routines", "chore_chart")  # CR21a: it shows the chart on the wall
 
     def __init__(self, client: CozylaClient) -> None:
         self.client = client
@@ -260,7 +258,6 @@ class CozylaChoresModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*CHORE_PROMPT_RULES)
-        ctx.settings_section("settings/chart.html", 50)
         _wall_in_family_time(ctx, self.client)
         s, tasks = ctx.services, ctx.get(TaskBoard)
         chart = ctx.provide(CozylaChores(s, tasks, self.client))

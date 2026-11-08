@@ -98,7 +98,7 @@ class FollowUps:
                 assignee=member,
                 steps=json.loads(row["steps"]),
                 nudge=False,
-                off_wall=True,  # Themi's own reminder, like a check-in (bug #41)
+                off_displays=True,  # Themi's own reminder, like a check-in (bug #41)
             )
             self.db.execute(
                 "UPDATE task_follow_ups SET last_task = ? WHERE id = ?", (made.id, row["id"])
