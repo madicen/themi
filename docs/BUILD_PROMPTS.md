@@ -246,6 +246,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
+| F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
+| F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12312,6 +12314,137 @@ chosen pronoun; "just the name" leaves no pronoun in the templates; the default 
 for a household that hasn't chosen.
 Scenario: Erin sets they/them on the website, and Michael's next relay from Themi uses it.
 Data: mark #176 reviewed once live.
+
+### F36a · Feedback (2026-11-08): in conversation mode, an add to a list and a correction to a draft rule go to the tools
+Status: [ ]
+Depends on: CM1a, CM1b, F34a, L2a
+Read first: F34a's notes (`is_request` and what it already sends to the tool agent); CM1b's
+notes (`SIDECAR_TOOLS`); F34b's notes (`honest`). From Erin's ideas #185 (2026-11-08,
+9:22 am, "yeah so make sure it actually understood this") and #186 (9:57 am, "confirm it
+actually stored those things in an appropriate location. Why did it not do the little
+writing emoji on my messages?").
+
+What the Pi shows: Erin has conversation mode on. Replies 383 to 386 have no tool groups
+recorded, so each went to `_chat`, which has no tools, and `sidecar_log` has nothing after
+7 Nov:
+- Sun 9:21 am: "That rule is too general. Specifically for purchases that require research
+  or are for "someday", track which user added them and only prompt that user..." got
+  "That makes sense. For research or someday purchases, track who added them...". Draft
+  rule 29 kept its first, broader wording ("Track who added items to Things to Buy and
+  prompt only that person"). `is_request` has nothing for a correction to a draft, and the
+  sidecar can't touch rules.
+- Sun 9:54 am, twice: "Things to research buy. VNS device" and "Things to research buy.
+  Washable dog bed" each got "Got it." Neither is on any list. `LIST_PREFIX` matched
+  "Things to research buy", but that isn't a list's name ("Things to Buy" is), so it went
+  to chat. The sidecar has no list tools, so no ✍ (`sidecar.REACTION` goes on a message
+  only when something was logged). "Got it." is `honest`'s fallback when it cut the whole
+  reply, so it sounded like a yes.
+- Sun 9:55 am: "What are the things I need to research buy?" got "The VNS device and the
+  washable dog bed." from the chat history, not the list. `HOUSEHOLD` has no buying words,
+  so the question stayed chat.
+
+Build:
+- `is_request` also sends to the tool agent:
+  - A list prefix that is near one of their lists' names: every word of the list's name
+    over two letters is in the prefix, with words between allowed ("Things to research
+    buy", "things to maybe buy" both name Things to Buy). The words "research", "someday"
+    and "later" in such a prefix are kept for F36b to read, not dropped.
+  - "buy", "to buy", "purchase", "things to get" in a question about the household
+    (`HOUSEHOLD`), so "what do I need to buy?" reads the list.
+  - A message while they have an open draft rule (the chat turn already loads their open
+    items) that corrects it: "rule", "too general", "too broad", "specifically", "only
+    for", "instead", "not quite", "that's not what I meant". It goes to the tool agent,
+    whose `propose_rule` with `rule_id` rewords the draft (the card is replaced, not a
+    second one sent).
+- The sidecar gets `add_to_list` and `add_to_things_to_buy`, for an add said in passing that
+  the routing still misses. Both are staged under `list_add` as now, so an item the model
+  only inferred still asks first.
+- `honest`'s fallback, when it has cut every sentence, says nothing was done: "I haven't
+  put that anywhere yet. Want me to?" rather than "Got it." (said only where the message
+  looked like something to keep; otherwise the reply is a plain acknowledgement that
+  claims nothing, such as "Mm, I hear you.").
+- A test file of real turns: every message above, plus CM1c's and F34a's eval cases kept
+  passing ("I'd love to buy a boat someday" with no list named stays chat).
+
+Tests: each a failing test first. "Things to research buy. VNS device" goes to the tool
+agent, and with the fake provider the VNS device is on Things to Buy, added by Erin. "What
+are the things I need to research buy?" goes to the tool agent. With draft rule 29 open,
+the 9:21 am message goes to the tool agent and the fake provider's `propose_rule` rewords
+rule 29 (still one draft, card replaced). With no draft open, "that's too general" stays
+chat. The sidecar can add to a list, and its ✍ goes on the message. A chat reply cut to
+nothing doesn't say "Got it.".
+Scenario: Erin, conversation mode on, says "Things to research buy. Washable dog bed": it's
+on Things to Buy, her message gets ✍ or Themi says it's added, and "what's on Things to
+Buy?" names it.
+
+Data: rule 29 is still a draft on the Pi; Erin is setting it aside (only she can, as the
+person it affects), since F36b builds what she asked for. Re-add the VNS device and the
+washable dog bed once F36b is live, as hers and for research. Mark #185 and #186 reviewed
+once live (with F36b).
+
+### F36b · Idea (2026-11-08): someday and research buys on Things to Buy, for the person who added them
+Status: [ ]
+Depends on: F36a, L2a, L2b
+Read first: L2a's and L2b's notes (Things to Buy, `item_homes`, `ThingsToBuy.from_store`);
+F30d's notes (looking things up online); the plan's PDA phrasing rules. From Erin's idea
+#185 and the turn before it (2026-11-08, 9:19 am): "Let's go ahead and put things like that
+on the things to buy list. But keep track of who added them and only prompt that person to
+buy those things, unless there's a reason to do otherwise", then (9:21 am) "Specifically
+for purchases that require research or are for "someday", track which user added them and
+only prompt that user to research/purchase those items, unless otherwise specified".
+
+What the Pi shows: Things to Buy is list 1 (`purpose` things_to_buy), and `list_items`
+already keeps `added_by`. Today nothing reminds anyone about Things to Buy. Its items only
+come up when asked, on the wall, and in the Safeway cart offer (L2b), which offers every
+Safeway item to whoever the cart is for. There's no way to mark an item as "someday" or
+"needs research". Erin's draft rule 29 is the wrong tool for this: a rule tells Themi how
+to behave, but this needs a kind of item.
+
+Decide before building (Erin): how often a someday item comes up, and whether research and
+someday are one kind or two. Until she says, assume one kind, "someday" (research
+included), and a nudge about one of her own someday items at most once a week, at a good
+moment, never in burnout mode or while messages are paused.
+
+Build:
+- A someday flag on a Things to Buy item (migration: `list_items.someday`, 0 or 1). Who
+  added it is `added_by`, as now. `add_to_things_to_buy` takes `someday` per item. It's set
+  when their words say so ("research", "someday", "eventually", "look into", "one day", "to
+  research buy", F36a's kept prefix words), and is never inferred from the item alone. A
+  someday item can be made ordinary ("let's just get the dog bed") and back again
+  (`set_someday`), and the Lists page has a toggle per item.
+- Someday items stay on the list and on the wall, as Erin chose ("put things like that on
+  the things to buy list"). `describe` and `show_lists` keep them apart: "Things to Buy:
+  anywhere: batteries. Someday (Erin's): VNS device, washable dog bed." On the wall, the
+  item keeps its name (the Cozyla list has no tags; say so in Notes if one is found).
+- Only the person who added it is prompted about it:
+  - The Safeway cart (L2b) leaves someday items out, unless the person the cart is for
+    added them.
+  - A weekly nudge to the adder about one of their someday items (the one asked about
+    least recently), sent at low priority so it waits for a good moment. It offers three
+    choices: look into it now (a web search through `search_web` (F30d), with the results kept as
+    data in a delimited block), keep it for someday, or it's not needed (taken off). The
+    wording is invitational, never a demand ("The washable dog bed is still on your
+    someday list, if you feel like looking into it."), and never shows energy scores.
+  - "unless there's a reason to do otherwise": the partner hears about it only when that
+    person asks ("tell Michael about the dog bed"), or when it's going into a cart they
+    approve. Nobody else is ever nudged about it.
+  - Answering a nudge records when they were asked, so the next one is a different item.
+- When their research ends in a decision ("I'll get the Furhaven one"), the item becomes
+  ordinary (someday off), named as they said it, with a usual store if they gave one.
+- A prompt line: someday buys go on Things to Buy with someday set, and stay theirs.
+
+Tests: an add from "Things to research buy. VNS device" is someday and Erin's; "we need
+batteries" isn't someday; the cart for Michael leaves out Erin's someday items, and the
+cart for Erin keeps them; the weekly nudge goes to Erin only, about her least recently
+asked item, at low priority, and none is sent in burnout mode or while paused; "not needed"
+takes it off the list; making it ordinary drops it from the nudges; `describe` lists
+someday items apart, with whose they are.
+Scenario: Erin adds "someday: washable dog bed"; a week later (frozen clock advanced), she
+gets one gentle nudge about it and Michael gets nothing; she taps "look into it now" and
+gets a short list of options from the fake web search.
+
+Data: once live, set aside or retire Erin's rule 29 if it's still there, and re-add the VNS
+device and the washable dog bed as her someday items. Mark #185 reviewed once live.
 
 ## Conversation mode
 
