@@ -1,0 +1,121 @@
+# The family template (CR5a): a household of partners and their home.
+#
+# `modules` is the install order, which is the order of Telegram's command menu and of
+# each hook list. A connector's module that isn't set up is left out, with what requires
+# it. themi.toml can add (`+name`) or remove (`-name`) modules.
+
+name = "family"
+modules = [
+    "telegram",  # CR20b: how they talk to Themi (web_chat adds a chat on the website)
+    # CR19: the AI providers and capabilities (a Themi needs at least one provider)
+    "claude",
+    "gemini",
+    "openai_compatible",
+    "cloudflare",
+    "voice_notes",
+    "pictures",
+    "image_generation",
+    "memory",
+    "journal",
+    "google",
+    "gmail",
+    "email_triage",  # CR18b: Gmail's features
+    "email_forwarding",
+    "urgent_senders",
+    "expected_emails",
+    "noise_digest",
+    "groceries",
+    "safeway",
+    "lists",
+    "buying",
+    "which_list",
+    "spending",
+    "liaison",
+    "breaks",
+    "pantry",
+    "tasks",
+    "chore_chart",  # CR21a
+    "follow_ups",
+    "email_audit",
+    "reminders",
+    "business_hours",
+    "day_summary",
+    "focus",
+    "taking",
+    "guides",
+    "recipes",
+    "cookbook_save",
+    "recipe_groceries",
+    "recipe_ideas",
+    "cooking",
+    "burnout",
+    "conversation_mode",
+    "checkin_reviews",
+    "meals",
+    "calls",
+    "cooking_timers",
+    "body_double",
+    "guided_steps",
+    "step_pictures",
+    "spotify",
+    "music_offers",
+    "mode_chooser",
+    "calendar",
+    "calendar_busy",  # CR18b: the calendar's features
+    "calendar_twins",
+    "calendar_copies",
+    "task_blocks",
+    "web_search",
+    "web_recipes",
+    "travel",
+    "maintenance",
+    "routines",
+    "habits",
+    "reactions",
+    "wrong_replies",
+    "commands",
+    "feedback",
+    "google_tasks",
+    "ourgroceries",
+    "keep",
+    "cozyla_todos",
+    "cozyla_chores",
+    "home_connect",
+    "thinq",
+    "roborock",
+    "tuya",
+    "catgenie",
+    "appliances",
+]
+
+# Who Themi is, for whom: the system prompt's opening (CR8a). The rules after it come from
+# the core and the modules; [prompt] rewords one by its key ("" leaves it out).
+persona = """
+You are Themi, a household assistant for one family, talking with them over Telegram.
+Your job is to take administrative load off them: laundry timing, groceries and
+pantry, email, maintenance, meals and passing notes between partners."""
+
+# CR9: the roles a member can have. Both of the family's may use every module; an admin
+# also manages the household (members, connections, household settings).
+[roles.admin]
+admin = true
+modules = ["*"]
+
+[roles.member]
+admin = false
+modules = ["*"]
+
+[prompt]
+
+# CR21b: the standard routines' tools don't name the wall; the family's say which is which.
+[tools.show_routines]
+description = """Read this person's routines kept in Themi: each routine's name and window, \
+and its items (which are done today). Themi checks each one as its window ends. Not the \
+Cozyla wall's routines (show_routine)."""
+
+[tools.add_routine_item]
+description = """Add an item to a routine kept in Themi, theirs or someone else's ('add \
+vitamins to my morning routine', 'put feed the birds on Michael's evening routine on \
+weekdays'). days: day names, [] for every day. just_today: true for today only. person: '' \
+for them. Not the Cozyla wall's routines (add_to_wall_routine), a chore or a list."""
+

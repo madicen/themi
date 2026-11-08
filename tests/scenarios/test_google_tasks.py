@@ -16,8 +16,9 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
-from themi.connectors.google import TASKS_SCOPE
-from themi.connectors.google.oauth import LINK_SCOPES
+from themi.core import keys
+from themi_google.connectors.google import TASKS_SCOPE
+from themi_google.connectors.google.oauth import LINK_SCOPES
 
 
 @pytest.fixture
@@ -36,7 +37,7 @@ async def run(scenario: Scenario) -> object:
 
 
 def on_list(scenario: Scenario) -> list[str]:
-    groceries = scenario.app.services.groceries
+    groceries = scenario.app.services.maybe(keys.groceries)
     assert groceries is not None
     return [i.name for i in groceries.needed()]
 

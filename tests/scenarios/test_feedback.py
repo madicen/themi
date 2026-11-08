@@ -3,8 +3,8 @@
 import logging
 
 from tests.scenarios.harness import Scenario
-from themi.core.feedback import HOW_TO, THANKS, FeedbackBook
 from themi.logs import recent_logs
+from themi.standard.feedback import HOW_TO, THANKS, FeedbackBook
 
 SECRET_LINE = "odd reply with key AIza" + "y" * 35
 

@@ -12,7 +12,8 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.events import Picture
 from themi.cli import main
-from themi.core.feedback import MAX_PICTURES, FeedbackBook
+from themi.core import keys
+from themi.standard.feedback import MAX_PICTURES, FeedbackBook
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 
@@ -20,7 +21,7 @@ SCREENSHOT = b"PNG: Themi's message, cut off after 'and then'"
 
 
 def book(scenario: Scenario) -> FeedbackBook:
-    feedback = scenario.app.services.feedback
+    feedback = scenario.app.services.maybe(keys.feedback)
     assert feedback is not None
     return feedback.book
 
@@ -90,7 +91,7 @@ async def test_reviewed_reports_and_old_pictures_are_deleted(scenario: Scenario)
 
 async def test_at_most_three_pictures_a_report(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    feedback = scenario.app.services.feedback
+    feedback = scenario.app.services.maybe(keys.feedback)
     assert feedback is not None
     pictures = [Picture(f"PNG {n}".encode(), "image/png") for n in range(5)]
     item = feedback.record(erin, "bug", "lots", "/bug", pictures=pictures)

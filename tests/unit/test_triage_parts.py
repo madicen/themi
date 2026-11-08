@@ -5,9 +5,9 @@ import pytest
 from tests.fixtures.family import SeededFamily
 from themi.accounts import SYSTEM, InvalidValue
 from themi.channels.pda import PdaShield, find_demands, join_quotes, split_quotes
-from themi.core import triage
-from themi.core.triage import _verdicts, email_prompt
 from themi.storage.secrets import Secret
+from themi_google import triage
+from themi_google.triage import _verdicts, email_prompt
 
 
 def row(email_id: int, account_id: int, body: str = "Hello", **extra) -> dict:

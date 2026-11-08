@@ -8,7 +8,8 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, arrive, inbox, verdict
 from themi.ai.types import ToolResult
-from themi.core.email_audit import LEVELS_TEXT
+from themi.core import keys
+from themi_google.email_audit import LEVELS_TEXT
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
@@ -72,7 +73,7 @@ async def test_medium_urgency_and_importance_in_her_words(
     account = scenario.app.store.linked_account_by_address("gmail", ERIN)
     assert account is not None
     assert account.urgent_senders == ("donotreply.myhealth@stanfordhealthcare.org",)
-    audit = scenario.app.services.email_audit
+    audit = scenario.app.services.maybe(keys.email_audit)
     assert audit is not None
     assert audit.sender_levels(account.id, "donotreply.myhealth@stanfordhealthcare.org") == (1, 1)
 

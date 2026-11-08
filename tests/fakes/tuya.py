@@ -27,7 +27,7 @@ import httpx
 import pytest
 
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.tuya import TuyaConfig
+from themi_home.connectors.tuya import TuyaConfig
 
 BASE_URL = "https://tuya.test"
 ACCESS_ID = "p9xq7acc3ss1d000"

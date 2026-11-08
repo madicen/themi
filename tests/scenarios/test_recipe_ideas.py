@@ -6,7 +6,8 @@ import pytest
 
 from tests.fixtures.cookbook import load
 from tests.scenarios.harness import Scenario
-from themi.core.recipe_ideas import covers
+from themi.core import keys
+from themi_home.recipe_ideas import covers
 
 CHANA_PANTRY = [
     "dried chickpeas", "oil", "onion", "bay leaf", "garlic", "tomatoes", "coriander powder",
@@ -23,7 +24,7 @@ MEALS = {
 @pytest.fixture
 def stocked(scenario: Scenario) -> Scenario:
     load(scenario.app.services)
-    pantry = scenario.app.services.pantry
+    pantry = scenario.app.services.maybe(keys.pantry)
     assert pantry is not None
     for name in CHANA_PANTRY:
         pantry.set_status(name, "plenty", source="said")
@@ -31,7 +32,7 @@ def stocked(scenario: Scenario) -> Scenario:
 
 
 def ideas(scenario: Scenario) -> list[str]:
-    found = scenario.app.services.recipe_ideas
+    found = scenario.app.services.maybe(keys.recipe_ideas)
     assert found is not None
     return [i.recipe.name for i in found.pick(scenario.member("Erin"), limit=5)]
 
@@ -57,7 +58,7 @@ async def test_meal_ideas_offer_the_chana_masala(stocked: Scenario) -> None:
 
 
 async def test_the_main_item_missing_rules_it_out(stocked: Scenario) -> None:
-    pantry = stocked.app.services.pantry
+    pantry = stocked.app.services.maybe(keys.pantry)
     assert pantry is not None
     pantry.set_status("dried chickpeas", "out", source="said")
     assert "Chana Masala" not in ideas(stocked)
@@ -76,7 +77,7 @@ async def test_not_one_cooked_this_week(stocked: Scenario) -> None:
 
     from themi import clock
 
-    recipes = stocked.app.services.recipes
+    recipes = stocked.app.services.maybe(keys.recipes)
     assert recipes is not None
     chana = next(r for r in recipes.all() if r.name == "Chana Masala")
     stocked.app.db.execute(

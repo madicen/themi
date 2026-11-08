@@ -10,12 +10,13 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.body_double import JOB, SILENT, SPRINT, BodyDouble
+from themi.core import keys
+from themi_home.body_double import JOB, SILENT, SPRINT, BodyDouble
 
 
 def bd(scenario: Scenario) -> BodyDouble:
-    assert scenario.app.services.body_double is not None
-    return scenario.app.services.body_double
+    assert scenario.app.services.maybe(keys.body_double) is not None
+    return scenario.app.services.get(keys.body_double)
 
 
 def held(scenario: Scenario) -> list[str]:
@@ -71,7 +72,7 @@ async def test_an_old_job_is_stale_after_a_change(scenario: Scenario) -> None:
 
 async def test_a_switch_keeps_the_start_and_the_task(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Write the essay", "text", 4)
     first, _, _ = await bd(scenario).start(erin, mode=SILENT, task=task)
@@ -95,8 +96,8 @@ async def test_a_new_session_ends_the_old(scenario: Scenario) -> None:
 async def test_burnout_mode_ends_a_session(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
     first, _, _ = await bd(scenario).start(erin, mode=SILENT)
-    assert scenario.app.services.burnout is not None
-    await scenario.app.services.burnout.start(erin)
+    assert scenario.app.services.maybe(keys.burnout) is not None
+    await scenario.app.services.get(keys.burnout).start(erin)
     old = bd(scenario).get(first.id)
     assert old is not None and old.outcome == "stopped"
     assert "body_double" not in held(scenario)
@@ -124,7 +125,7 @@ async def test_their_own_default_always_wins(scenario: Scenario) -> None:
 
 async def test_a_tasks_category_is_kept_and_can_be_corrected(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Walk the dog", "physical", 3)
     scenario.primary.queue_structured({"category": "chores"})

@@ -1,9 +1,11 @@
 """Conversations end to end: Telegram in, agent and tools, outbox and Telegram out."""
 
+from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.events import Button
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.agent import (
     BUSY_TEXT,
     DECLINED_TEXT,
@@ -11,7 +13,6 @@ from themi.core.agent import (
     TANGLED_TEXT,
     VOICE_FAILED_TEXT,
 )
-from themi.core.prompts import STABLE_SYSTEM
 from themi.core.services import AwaitingItem
 
 
@@ -20,7 +21,7 @@ async def test_hello_gets_a_reply(scenario: Scenario) -> None:
     assert await scenario.say("Erin", "hello") == ["Hi Erin! Quiet morning so far."]
 
     request = scenario.primary.last_request
-    assert request.system.startswith(STABLE_SYSTEM)
+    assert request.system.startswith(scenario.app.services.system_text())  # CR8a: its modules'
     turn = request.messages[0].text
     assert "Talking with: Erin (admin)" in turn
     assert "Local time: Wednesday 21 October 2026, 9:00 AM (America/Los_Angeles)" in turn
@@ -223,7 +224,7 @@ async def test_plan_scenario_5_a_forgotten_fact_is_pinned_and_used(scenario: Sce
     scenario.primary.queue_text("Morning!")
     await scenario.say("Erin", "good morning")
     assert "The cat's vet appointments are on Tuesdays." in scenario.primary.last_request.system
-    (repair,) = scenario.app.services.memory.repairs()  # type: ignore[union-attr]
+    (repair,) = scenario.app.services.maybe(keys.memory).repairs()  # type: ignore[union-attr]
     assert repair["diagnosis"] == "never_stored"
 
 
@@ -243,12 +244,12 @@ async def test_a_question_about_a_suggestion_isnt_a_forgotten_fact(scenario: Sce
     )
     result = scenario.primary.last_request.messages[2].content[0]
     assert isinstance(result, ToolResult) and result.is_error
-    assert scenario.app.services.memory.repairs() == []  # type: ignore[union-attr]
+    assert scenario.app.services.maybe(keys.memory).repairs() == []  # type: ignore[union-attr]
     assert scenario.app.db.scalar("SELECT COUNT(*) FROM facts") == 0
 
 
 async def test_ignored_twice_becomes_a_standing_rule(scenario: Scenario) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     memory.remember(scenario.member("Erin"), "vet", "The cat's vet is on Tuesdays.", pinned=True)
     scenario.primary.queue_tool_call(
@@ -323,7 +324,6 @@ def test_a_busy_reply_doesnt_promise_a_retry() -> None:
     # Bug #77's thread: "Will you retry automatically?" got "Yes, I will retry that
     # automatically as soon as the service is clear." Nothing retries it.
     assert "I won't retry it on my own" in BUSY_TEXT
-    from themi.core.prompts import STABLE_SYSTEM
 
     assert "isn't retried by Themi" in STABLE_SYSTEM
 
@@ -331,7 +331,7 @@ def test_a_busy_reply_doesnt_promise_a_retry() -> None:
 async def test_a_reply_in_quotes_is_sent_without_them(scenario: Scenario) -> None:
     """Bugs #98 and #100 ("why are there quotes around the whole thing?")."""
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Refill whoosh litter", "errand", 1, assignee=erin)
     scenario.primary.queue_text(f"'Task {task.id} is set up for both of you.'")
@@ -343,7 +343,7 @@ async def test_a_reply_opening_with_a_tasks_title_keeps_it_in_quotes(scenario: S
     """The evals of 2026-10-31: '"Renew the car registration is on both lists..."' lost its
     quotes (#98), and the title then read as a command to renew it."""
     erin = scenario.member("Erin")
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Renew the car registration", "errand", 1, assignee=erin)
     scenario.primary.queue_tool_call("complete_task", {"task_id": task.id})

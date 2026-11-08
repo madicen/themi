@@ -14,7 +14,8 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.errors import PermanentError
-from themi.core.triage import ReceiptFound
+from themi.core import keys
+from themi_google.triage import ReceiptFound
 
 ERIN = "erin@gmail.com"
 
@@ -72,8 +73,8 @@ async def test_each_category_gets_its_action(scenario: Scenario, inbox: FakeGmai
     async def on_receipt(found: ReceiptFound) -> None:
         receipts.append(found)
 
-    assert scenario.app.services.triage is not None
-    scenario.app.services.triage.receipt_listeners.append(on_receipt)
+    assert scenario.app.services.maybe(keys.triage) is not None
+    scenario.app.services.get(keys.triage).receipt_listeners.append(on_receipt)
     ids = await arrive(
         scenario,
         inbox,
@@ -387,7 +388,7 @@ async def test_bug_164_a_nextdoor_post_isnt_a_tenant_emergency(
     assert not [t for t in scenario.inbox("Erin") if t.startswith("An email that looks urgent")]
     row = scenario.app.db.one("SELECT category, urgent_kind FROM emails")
     assert row is not None and (row["category"], row["urgent_kind"]) == ("urgent", "other")
-    from themi.core.triage import SYSTEM
+    from themi_google.triage import SYSTEM
 
     assert "never urgent" in SYSTEM  # the model is told, too
 

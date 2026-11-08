@@ -13,14 +13,14 @@ import pytest
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fixtures.family import SeededFamily
 from themi import clock
-from themi.connectors.ourgroceries import (
+from themi.localtime import to_utc_iso
+from themi.storage.secrets import Secret
+from themi_home.connectors.ourgroceries import (
     GroceryMirror,
     MirrorError,
     OurGroceriesClient,
     OurGroceriesConfig,
 )
-from themi.localtime import to_utc_iso
-from themi.storage.secrets import Secret
 
 
 def put(family: SeededFamily, name: str, status: str = "needed") -> int:

@@ -32,8 +32,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 from tests.fakes._server import BackgroundServer
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.google.oauth import GoogleConfig
 from themi.storage.secrets import Secret
+from themi_google.connectors.google.oauth import GoogleConfig
 
 CLIENT_ID = "themi-test.apps.googleusercontent.com"
 CLIENT_SECRET = "fake-google-client-secret"

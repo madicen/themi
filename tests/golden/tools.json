@@ -1,0 +1,498 @@
+{
+  "add_calendar_event": {
+    "group": "calendar",
+    "spec": "002b728fa7ec"
+  },
+  "add_follow_up": {
+    "group": "core",
+    "spec": "a6019865cefe"
+  },
+  "add_recipe_to_grocery_list": {
+    "group": "recipes",
+    "spec": "6c1e3f9bc3f9"
+  },
+  "add_reminder": {
+    "group": "core",
+    "spec": "c7372a373016"
+  },
+  "add_routine_item": {
+    "group": "wall",
+    "spec": "9fc1e69a50e2"
+  },
+  "add_to_grocery_list": {
+    "group": "core",
+    "spec": "c4b7664f178d"
+  },
+  "add_to_list": {
+    "group": "lists",
+    "spec": "669da174de18"
+  },
+  "add_to_things_to_buy": {
+    "group": "core",
+    "spec": "a2c91c4604b3"
+  },
+  "add_to_wall_routine": {
+    "group": "wall",
+    "spec": "9b3eaf006c5d"
+  },
+  "answer_waiting_item": {
+    "group": "core",
+    "spec": "9660f98c7c4f"
+  },
+  "appliance_status": {
+    "group": "devices",
+    "spec": "c76c48dea818"
+  },
+  "archive_noise_emails": {
+    "group": "email",
+    "spec": "0b2b4167ed93"
+  },
+  "ask_which_list": {
+    "group": "core",
+    "spec": "a52eb77aa893"
+  },
+  "block_time_for_task": {
+    "group": "calendar",
+    "spec": "1c4fff0daf62"
+  },
+  "burnout_task": {
+    "group": "core",
+    "spec": "deaeccbb1fc3"
+  },
+  "cancel_task": {
+    "group": "core",
+    "spec": "7cf278c08a14"
+  },
+  "change_calendar_event": {
+    "group": "calendar",
+    "spec": "367d55c63909"
+  },
+  "change_chore_chart": {
+    "group": "wall",
+    "spec": "3b0f1bac2b57"
+  },
+  "choose_session_sound": {
+    "group": "body_double",
+    "spec": "a263c17250fb"
+  },
+  "complete_task": {
+    "group": "core",
+    "spec": "05d8381db79d"
+  },
+  "cookbook_recipes_we_can_make": {
+    "group": "recipes",
+    "spec": "174d70331869"
+  },
+  "create_list": {
+    "group": "lists",
+    "spec": "4dad5761a278"
+  },
+  "create_task": {
+    "group": "core",
+    "spec": "bffdac639aca"
+  },
+  "day_summary": {
+    "group": "calendar",
+    "spec": "00ec0403089e"
+  },
+  "delete_calendar_event": {
+    "group": "calendar",
+    "spec": "5eacffcbd24c"
+  },
+  "delete_list": {
+    "group": "lists",
+    "spec": "4928d3bd1a70"
+  },
+  "draft_vendor_call": {
+    "group": "calls",
+    "spec": "19e3cf0c3b03"
+  },
+  "drive_time": {
+    "group": "calendar",
+    "spec": "3f3ef516ab38"
+  },
+  "end_body_double": {
+    "group": "body_double",
+    "spec": "295277142b96"
+  },
+  "end_break": {
+    "group": "settings",
+    "spec": "188adb89d766"
+  },
+  "end_burnout": {
+    "group": "core",
+    "spec": "ca445108637c"
+  },
+  "expect_email": {
+    "group": "email",
+    "spec": "edf54ccbaf4b"
+  },
+  "fill_safeway_cart": {
+    "group": "pantry",
+    "spec": "1a0b134907eb"
+  },
+  "find_recipe": {
+    "group": "recipes",
+    "spec": "66f1951cb6e8"
+  },
+  "find_time_for_task": {
+    "group": "calendar",
+    "spec": "74efb691161d"
+  },
+  "find_web_recipe": {
+    "group": "recipes",
+    "spec": "00e68d2da9c3"
+  },
+  "flag_expectation_conflict": {
+    "group": "core",
+    "spec": "c5f5d9fa11a9"
+  },
+  "focus_now": {
+    "group": "core",
+    "spec": "5ab8c26b8c91"
+  },
+  "forget_expected_email": {
+    "group": "email",
+    "spec": "5b536c86fb40"
+  },
+  "forward_email": {
+    "group": "email",
+    "spec": "3adeccc06083"
+  },
+  "get_maintenance_guide": {
+    "group": "maintenance",
+    "spec": "998dce8da9fe"
+  },
+  "inbox_setup": {
+    "group": "email",
+    "spec": "6f2bc486592f"
+  },
+  "keep_email": {
+    "group": "email",
+    "spec": "b3c2ad397879"
+  },
+  "list_expected_emails": {
+    "group": "email",
+    "spec": "6103dd172cd8"
+  },
+  "list_open_items": {
+    "group": "core",
+    "spec": "ccaacd72c828"
+  },
+  "log_call_outcome": {
+    "group": "calls",
+    "spec": "1f43204b26b1"
+  },
+  "log_energy_level": {
+    "group": "core",
+    "spec": "4663211dde8d"
+  },
+  "log_energy_note": {
+    "group": "core",
+    "spec": "48105af4a4a6"
+  },
+  "log_feedback": {
+    "group": "core",
+    "spec": "3aba8d6ce774"
+  },
+  "log_maintenance": {
+    "group": "maintenance",
+    "spec": "500dc8b1a70b"
+  },
+  "log_spending": {
+    "group": "spending",
+    "spec": "4e9c6309e4c6"
+  },
+  "look_up_guide": {
+    "group": "core",
+    "spec": "7e337da5fd34"
+  },
+  "mark_business_expense": {
+    "group": "spending",
+    "spec": "1211298076cc"
+  },
+  "merge_calendar_events": {
+    "group": "calendar",
+    "spec": "3f5863713d3e"
+  },
+  "more_tools": {
+    "group": "core",
+    "spec": "4f00c5305642"
+  },
+  "move_list_item": {
+    "group": "core",
+    "spec": "96728c58869f"
+  },
+  "pause_messages": {
+    "group": "settings",
+    "spec": "1f64f388d033"
+  },
+  "pause_music": {
+    "group": "music",
+    "spec": "a3bfa9d737a7"
+  },
+  "play_music": {
+    "group": "music",
+    "spec": "2ec65d259338"
+  },
+  "propose_rule": {
+    "group": "core",
+    "spec": "7c3fea3908ae"
+  },
+  "put_list_on_wall": {
+    "group": "lists",
+    "spec": "849519f508b9"
+  },
+  "put_task_on_chore_chart": {
+    "group": "wall",
+    "spec": "bf52c6a5e0fd"
+  },
+  "put_task_on_wall_list": {
+    "group": "wall",
+    "spec": "9abb10926e84"
+  },
+  "read_web_page": {
+    "group": "web",
+    "spec": "53565590807c"
+  },
+  "recipe_from_link": {
+    "group": "recipes",
+    "spec": "473463d87db1"
+  },
+  "recipe_from_picture": {
+    "group": "recipes",
+    "spec": "dab418422fb3"
+  },
+  "redo_step_picture": {
+    "group": "body_double",
+    "spec": "d0adc2025d7b"
+  },
+  "relay_to_partner": {
+    "group": "core",
+    "spec": "147586d396d4"
+  },
+  "remember_fact": {
+    "group": "core",
+    "spec": "3dc5ff951902"
+  },
+  "remove_follow_up": {
+    "group": "core",
+    "spec": "3738f64ddad8"
+  },
+  "remove_from_list": {
+    "group": "lists",
+    "spec": "2a812cbcb7cc"
+  },
+  "remove_maintenance": {
+    "group": "maintenance",
+    "spec": "2b1bb42357de"
+  },
+  "remove_routine": {
+    "group": "wall",
+    "spec": "b0d8f44f4701"
+  },
+  "remove_routine_item": {
+    "group": "wall",
+    "spec": "b857771ec80b"
+  },
+  "remove_spending": {
+    "group": "spending",
+    "spec": "8882ea36b4d8"
+  },
+  "report_forgotten_context": {
+    "group": "core",
+    "spec": "646d9d66634a"
+  },
+  "reschedule_task": {
+    "group": "core",
+    "spec": "aba910755b88"
+  },
+  "resume_messages": {
+    "group": "settings",
+    "spec": "755a6c1965a4"
+  },
+  "save_guide": {
+    "group": "core",
+    "spec": "002a598c21dd"
+  },
+  "save_recipe_to_cookbook": {
+    "group": "recipes",
+    "spec": "fc6e1f159deb"
+  },
+  "search_journal": {
+    "group": "core",
+    "spec": "2d64b9a7e7e7"
+  },
+  "search_web": {
+    "group": "web",
+    "spec": "95c8809db2f4"
+  },
+  "send_step_picture": {
+    "group": "body_double",
+    "spec": "fb190e49bee3"
+  },
+  "set_aside_draft_rule": {
+    "group": "core",
+    "spec": "b1cf39cf2ee5"
+  },
+  "set_body_double_default": {
+    "group": "body_double",
+    "spec": "133d7e950593"
+  },
+  "set_burnout_check_in": {
+    "group": "settings",
+    "spec": "a7c5fc4f00c2"
+  },
+  "set_business_hours": {
+    "group": "core",
+    "spec": "4f38fcbc18e9"
+  },
+  "set_check_in_reviews": {
+    "group": "schedules",
+    "spec": "eeedb6a7c684"
+  },
+  "set_chore_chart_limit": {
+    "group": "wall",
+    "spec": "255ee6473cb5"
+  },
+  "set_inbox_watched": {
+    "group": "email",
+    "spec": "fdcc488ae466"
+  },
+  "set_job_category": {
+    "group": "body_double",
+    "spec": "f2cc9d58ead2"
+  },
+  "set_maintenance": {
+    "group": "maintenance",
+    "spec": "fc94054ece2a"
+  },
+  "set_phrasing": {
+    "group": "settings",
+    "spec": "e18fbc46d7dc"
+  },
+  "set_recipe_yield": {
+    "group": "recipes",
+    "spec": "599662c3c881"
+  },
+  "set_routine": {
+    "group": "wall",
+    "spec": "247609c777c5"
+  },
+  "set_sender_levels": {
+    "group": "email",
+    "spec": "ba497fbe6207"
+  },
+  "set_task_importance": {
+    "group": "schedules",
+    "spec": "faba579abf48"
+  },
+  "set_task_medicine": {
+    "group": "schedules",
+    "spec": "16ddfb4b4c97"
+  },
+  "set_task_plan": {
+    "group": "schedules",
+    "spec": "869cca873606"
+  },
+  "set_task_schedule": {
+    "group": "schedules",
+    "spec": "ae223ff614a9"
+  },
+  "set_urgent_senders": {
+    "group": "email",
+    "spec": "fbedfea5573d"
+  },
+  "set_usual_store": {
+    "group": "lists",
+    "spec": "947b01c2f27c"
+  },
+  "show_grocery_list": {
+    "group": "core",
+    "spec": "d1da5f123c21"
+  },
+  "show_lists": {
+    "group": "lists",
+    "spec": "446e8ef63dae"
+  },
+  "show_pantry": {
+    "group": "pantry",
+    "spec": "23a78e94c869"
+  },
+  "show_recipe": {
+    "group": "recipes",
+    "spec": "c805135e97bc"
+  },
+  "show_routine": {
+    "group": "wall",
+    "spec": "979877164756"
+  },
+  "show_routines": {
+    "group": "wall",
+    "spec": "a6c12cb4a1d0"
+  },
+  "skip_round": {
+    "group": "core",
+    "spec": "e4389017e9db"
+  },
+  "snooze_task": {
+    "group": "core",
+    "spec": "570be71fb137"
+  },
+  "spending_summary": {
+    "group": "spending",
+    "spec": "2fb4e80890c5"
+  },
+  "start_body_double": {
+    "group": "body_double",
+    "spec": "a6e428ec71c6"
+  },
+  "start_break": {
+    "group": "settings",
+    "spec": "4bb983400251"
+  },
+  "start_burnout": {
+    "group": "core",
+    "spec": "7c2817ad6803"
+  },
+  "start_cooking": {
+    "group": "recipes",
+    "spec": "c0be3e19e544"
+  },
+  "start_email_audit": {
+    "group": "email",
+    "spec": "0339bcfe6d1f"
+  },
+  "stop_cooking": {
+    "group": "recipes",
+    "spec": "b8d5e4818167"
+  },
+  "suggest_meals": {
+    "group": "pantry",
+    "spec": "d26fbec380f2"
+  },
+  "switch_body_double_mode": {
+    "group": "body_double",
+    "spec": "e1c0a319520c"
+  },
+  "tasks_i_could_take": {
+    "group": "core",
+    "spec": "b788b23eca95"
+  },
+  "tick_list_items": {
+    "group": "lists",
+    "spec": "5dd30a6dae31"
+  },
+  "tick_routine_item": {
+    "group": "wall",
+    "spec": "62be20cc8d2d"
+  },
+  "update_pantry": {
+    "group": "pantry",
+    "spec": "edfa33ccb622"
+  },
+  "update_task": {
+    "group": "core",
+    "spec": "313c2d5bdd14"
+  }
+}

@@ -24,7 +24,7 @@ import httpx
 import pytest
 
 from themi import clock
-from themi.connectors.spotify import SCOPES, SpotifyClient, SpotifyConfig
+from themi_home.connectors.spotify import SCOPES, SpotifyClient, SpotifyConfig
 
 ACCOUNTS_URL = "https://accounts.spotify.test"
 API_URL = "https://api.spotify.test/v1"

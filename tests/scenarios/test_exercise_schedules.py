@@ -9,17 +9,18 @@ from datetime import date
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.progression import parse_plan
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.progression import parse_plan
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 RUNS = "every Tue, Thu and Sat or Sun at 2pm, never two days in a row"
 WED = date(2026, 10, 21)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def runs(scenario: Scenario) -> tuple[Task, list[str]]:

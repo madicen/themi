@@ -10,6 +10,7 @@ from themi.accounts.setup import (
     run_invite,
     start_link,
 )
+from themi_home.spending import SpendingSettings
 
 
 def make_io(answers: list[str]):
@@ -42,11 +43,8 @@ def test_init_creates_family_admin_and_invite(store: AccountStore) -> None:
     admin, code = run_init(store, ask, say)
     family = store.get_family()
     assert family is not None
-    assert (family.name, family.timezone, family.takeout_budget_cents) == (
-        "The Household",
-        "America/Los_Angeles",
-        200_00,
-    )
+    assert (family.name, family.timezone) == ("The Household", "America/Los_Angeles")
+    assert store.household(SpendingSettings).takeout_budget_cents == 200_00  # CR7c
     assert admin.name == "Erin" and admin.role is Role.ADMIN
     assert any(f"/start {code}" in line for line in said)
     assert store.redeem_invite(code, 1001).id == admin.id

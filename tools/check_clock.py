@@ -4,7 +4,7 @@ Flags calls such as `datetime.now()`, `datetime.utcnow()`, `date.today()`,
 `datetime.datetime.now()` and `time.time()`. `time.monotonic()` stays allowed
 for measuring durations.
 
-Usage: python tools/check_clock.py [paths...]   (defaults to src/themi)
+Usage: python tools/check_clock.py [paths...]   (defaults to every package in src)
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def find_violations(paths: Iterable[Path], allowed: set[Path] | None = None) -> 
 
 
 def main(argv: list[str]) -> int:
-    paths = [Path(a) for a in argv] or [REPO_ROOT / "src/themi"]
+    paths = [Path(a) for a in argv] or [REPO_ROOT / "src"]
     problems = find_violations(paths)
     for problem in problems:
         print(problem)

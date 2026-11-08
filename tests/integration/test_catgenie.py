@@ -14,7 +14,7 @@ from tests.fakes.catgenie import CODE, PHONE, FakeCatGenie
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.cli import main
-from themi.connectors.catgenie import (
+from themi_home.connectors.catgenie import (
     ALERT,
     ERROR,
     LOW,
@@ -26,8 +26,8 @@ from themi.connectors.catgenie import (
     CatGenieWatcher,
     LitterBoxEvent,
 )
-from themi.connectors.catgenie.client import normal_phone
-from themi.connectors.catgenie.watch import write_captures
+from themi_home.connectors.catgenie.client import normal_phone
+from themi_home.connectors.catgenie.watch import write_captures
 
 pytestmark = pytest.mark.usefixtures("frozen_clock")
 

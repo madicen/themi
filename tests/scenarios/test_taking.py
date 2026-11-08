@@ -7,6 +7,7 @@ from datetime import date
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -19,7 +20,7 @@ def tool_result(scenario: Scenario) -> str:
 
 
 async def erins_tasks(scenario: Scenario) -> dict[str, int]:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     made = {}
@@ -47,7 +48,7 @@ async def test_bug_147_what_could_i_take_offers_her_tasks(scenario: Scenario) ->
     ]
     replies = await scenario.tap("Husband", "Take: Put the laundry away")
     assert "Put the laundry away is yours now. Thanks for taking it." in replies
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     husband = scenario.member("Husband")
     assert board.get(made["Put the laundry away"]).assignee == husband.id
@@ -62,7 +63,7 @@ async def test_bug_147_what_could_i_take_offers_her_tasks(scenario: Scenario) ->
 
 async def test_a_routine_for_her_tasks_is_refused(scenario: Scenario, fake_cozyla: object) -> None:
     """Reply 249: add_to_wall_routine "Erin's tasks", Morning, every day, task 0."""
-    assert scenario.app.services.wall_routines is not None
+    assert scenario.app.services.maybe(keys.wall_routines) is not None
     scenario.primary.queue_tool_call(
         "add_to_wall_routine",
         {"repeat": "", "title": "Erin's tasks", "part": "Morning", "position": "end",

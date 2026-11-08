@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import dataclasses
 import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from themi import __version__
@@ -14,6 +14,7 @@ from themi.storage.secrets import generate_key
 if TYPE_CHECKING:
     from themi.accounts import AccountStore
     from themi.backup import Backups
+    from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from themi.settings import Settings
 
@@ -32,6 +33,16 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
+    setup = commands.add_parser(
+        "setup", help="make themi.toml and .env for a new Themi: template, modules, settings"
+    )
+    setup.add_argument("--dir", default=".", help="where to write them (default: here)")
+    setup.add_argument("--check", action="store_true", help="try an existing setup's modules again")
+    config = commands.add_parser("config", help="what this Themi is made of (themi.toml)")
+    config_commands = config.add_subparsers(dest="config_command", required=True)
+    config_commands.add_parser(
+        "show", help="the template, the modules that will load, and their settings sections"
+    )
     login = commands.add_parser(
         "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
     )
@@ -125,69 +136,68 @@ def _store() -> AccountStore:
 
 
 def build_runtime(
-    settings: Settings, *, connectors: Mapping[str, Any] | None = None, **runtime_options: Any
+    settings: Settings,
+    *,
+    connectors: Mapping[str, Any] | None = None,
+    config: InstanceConfig | None = None,
+    **runtime_options: Any,
 ) -> Runtime:
     """Wire Themi from its settings, as `themi run` (and `make dev`) runs it.
 
-    `connectors` replaces `build_app`'s connector arguments that settings would give
-    (`make dev` passes the fakes this way, D5a)."""
+    The modules come from themi.toml, or the family template (CR5a). `connectors` instead
+    gives the family's modules these connectors (`make dev` passes the fakes, D5a)."""
     from themi.app import build_app
     from themi.channels.telegram import TelegramChannel
-    from themi.connectors.catgenie import CatGenieConfig
-    from themi.connectors.cozyla import CozylaClient
-    from themi.connectors.gkeep import GKeepAccount
-    from themi.connectors.homeconnect import HomeConnectClient
-    from themi.connectors.ourgroceries import OurGroceriesClient
-    from themi.connectors.roborock import library as roborock_library
-    from themi.connectors.search import choose as choose_search
-    from themi.connectors.spotify import SpotifyClient
-    from themi.connectors.thinq import mqtt as thinq_mqtt
-    from themi.connectors.travel import TravelClient
-    from themi.connectors.tuya import TuyaConfig
     from themi.runtime import Runtime
     from themi.settings import SettingsError
     from themi.storage import open_database
     from themi.storage.secrets import Secret
 
-    if settings.telegram_enabled and settings.telegram_bot_token is None:
+    modules = None
+    template = None
+    options: dict[str, Any] = {}
+    from themi.config import config_path, load_config, load_template, resolve_modules
+
+    if connectors is not None and config is None:  # `make dev`: the family, on the fakes
+        options = dict(connectors)
+    elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
+        from themi.app import family_modules
+
+        on_fakes = {m.name: m for m in family_modules(**connectors)}
+        modules = resolve_modules(config, settings, given=on_fakes)
+        template = load_template(config.template)
+    else:  # CR5a: the modules themi.toml (or the family template) names
+        config = config or load_config(config_path())
+        modules = resolve_modules(config, settings)
+        template = load_template(config.template)
+    # CR20b: Telegram's channel, when the setup has the telegram module (the family's
+    # always does). The runner builds it, since only it knows the simulator's address.
+    telegram = modules is None or any(m.name == "telegram" for m in modules)
+    if telegram and settings.telegram_enabled and settings.telegram_bot_token is None:
         raise SettingsError("TELEGRAM_BOT_TOKEN is required to run Themi (get one from @BotFather)")
     # With Telegram disabled the channel is never started; sends simply queue.
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
-    options: dict[str, Any] = {
-        "google": settings.google(),
-        "grocery_list": (
-            OurGroceriesClient(grocery) if (grocery := settings.ourgroceries()) else None
-        ),
-        "cozyla": CozylaClient(wall) if (wall := settings.cozyla()) else None,
-        "travel": TravelClient(settings.tomtom_api_key),
-        "search": choose_search(
-            settings.search_backend, settings.tavily_api_key, settings.firecrawl_api_key
-        ),
-        "home_connect": HomeConnectClient(hc) if (hc := settings.home_connect()) else None,
-        "spotify": SpotifyClient(sp) if (sp := settings.spotify()) else None,  # BD5b
-        "thinq": dataclasses.replace(settings.thinq(), mqtt=thinq_mqtt.available()),
-        "roborock": roborock_library.available(),
-        "tuya": TuyaConfig(),
-        "catgenie": CatGenieConfig(),
-        "keep": GKeepAccount,
-    }
-    if connectors is not None:
-        options.update(connectors)
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
-        lambda store: TelegramChannel.from_token(
-            token,
-            store,
-            None,
-            base_url=f"{api}/bot" if api else None,
-            base_file_url=f"{api}/file/bot" if api else None,
-        ),
+        (
+            lambda store: TelegramChannel.from_token(
+                token,
+                store,
+                None,
+                base_url=f"{api}/bot" if api else None,
+                base_file_url=f"{api}/file/bot" if api else None,
+            )
+        )
+        if telegram
+        else None,
         backup=settings.backup,
         tool_routing=settings.tool_routing,
         conversation_mode=settings.conversation_mode,
         control_dir=settings.control_dir,
+        modules=modules,
+        template=template,
         **options,
     )
     return Runtime(
@@ -198,6 +208,40 @@ def build_runtime(
         public_url=settings.public_url,
         **runtime_options,
     )
+
+
+def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
+    """`themi config show`: where the config came from, the template, and each module."""
+    from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.modules.settings import plain_values, read_settings
+
+    path = config_path(env)
+    config = load_config(path)
+    modules = resolve_modules(config, settings)
+    template = load_template(config.template)
+    loaded = {m.name for m in modules}
+    lines = [
+        f"Config: {path if path else 'none (the family template, from the environment)'}",
+        f"Template: {template.name}",
+        f"Modules ({len(modules)}):",
+        *(f"  {m.name}" for m in modules),
+    ]
+    left_out = [n for n in (*template.modules, *config.added) if n not in loaded]
+    if left_out:
+        lines.append("Left out (not set up, or removed):")
+        lines += [f"  {n}" for n in dict.fromkeys(left_out)]
+    for module in modules:  # CR5b: each module's settings, secrets left out
+        model = type(module).settings
+        if model is None:
+            continue
+        values = plain_values(
+            read_settings(
+                model, settings.environment, config.sections.get(module.name, {}), module.name
+            )
+        )
+        lines.append(f"[module.{module.name}]")
+        lines += [f"  {key} = {value!r}" for key, value in values.items()]
+    return "\n".join(lines)
 
 
 def _run() -> None:
@@ -319,10 +363,16 @@ def _feedback(
 ) -> int:
     from pathlib import Path
 
-    from themi.core.feedback import FeedbackBook, picture_name
     from themi.core.naming import NamingRefusals
     from themi.core.naming import report as naming_report
-    from themi.core.wrong_replies import LABEL_WORDS, ReplyReview, ReviewError, report, stub_text
+    from themi.standard.feedback import FeedbackBook, picture_name
+    from themi.standard.wrong_replies import (
+        LABEL_WORDS,
+        ReplyReview,
+        ReviewError,
+        report,
+        stub_text,
+    )
 
     store = _store()
     book = FeedbackBook(store.db, store.cipher)
@@ -371,12 +421,18 @@ def _feedback(
 def _cozyla_check(titles: bool, fields: bool = False) -> int:
     import asyncio
 
-    from themi.connectors.cozyla import CozylaClient, CozylaError
-    from themi.connectors.cozyla.check import check
+    from themi.modules.settings import SettingsProblem, read_settings
     from themi.settings import Settings
+    from themi_cozyla.connector import CozylaClient, CozylaError
+    from themi_cozyla.connector.check import check
+    from themi_cozyla.settings import CozylaSettings
 
     settings = Settings.load()
-    config = settings.cozyla()
+    try:
+        config = read_settings(CozylaSettings, settings.environment, {}, "cozyla_todos").config()
+    except SettingsProblem as exc:
+        print("; ".join(exc.problems), file=sys.stderr)
+        return 1
     if config is None:
         print("Set COZYLA_EMAIL and COZYLA_PASSWORD in .env first.", file=sys.stderr)
         return 1
@@ -402,8 +458,8 @@ def _keep(command: str, name: str, list_name: str) -> int:
     from getpass import getpass
 
     from themi.accounts import AccountsError
-    from themi.connectors.gkeep import GKeepAccount, KeepError, exchange_token
-    from themi.core.keep_groceries import KeepLinks, run_keep_link
+    from themi_home.connectors.gkeep import GKeepAccount, KeepError, exchange_token
+    from themi_home.keep_groceries import KeepLinks, run_keep_link
 
     store = _store()
     member = store.member_by_name(name)
@@ -439,8 +495,8 @@ def _tuya_capture(out: str) -> int:
     import asyncio
     from pathlib import Path
 
-    from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
-    from themi.connectors.tuya.watch import write_captures
+    from themi_home.connectors.tuya import TuyaAccount, TuyaConfig, TuyaError, TuyaWatcher
+    from themi_home.connectors.tuya.watch import write_captures
 
     store = _store()
     watcher = TuyaWatcher(store, TuyaAccount(store.db, store.cipher, TuyaConfig()))
@@ -471,13 +527,13 @@ def _catgenie_capture(out: str) -> int:
     import asyncio
     from pathlib import Path
 
-    from themi.connectors.catgenie import (
+    from themi_home.connectors.catgenie import (
         CatGenieAccount,
         CatGenieConfig,
         CatGenieError,
         CatGenieWatcher,
     )
-    from themi.connectors.catgenie.watch import write_captures
+    from themi_home.connectors.catgenie.watch import write_captures
 
     store = _store()
     watcher = CatGenieWatcher(store, CatGenieAccount(store.db, store.cipher, CatGenieConfig()))
@@ -500,6 +556,21 @@ def _catgenie_capture(out: str) -> int:
     return 0
 
 
+def _setup(out_dir: Path, check: bool) -> int:
+    """CR11: `themi setup` and `themi setup --check`."""
+    import getpass
+
+    from themi.setup_wizard import SetupCancelled, check_setup, run_setup
+
+    if check:
+        return 1 if check_setup(out_dir, print) else 0
+    try:
+        run_setup(_ask, lambda q: getpass.getpass(f"{q} (hidden): "), print, out_dir)
+    except SetupCancelled:
+        return 1
+    return 0
+
+
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -509,7 +580,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     from themi.accounts import AccountsError, Role
     from themi.accounts.setup import pairing_instructions, run_init, run_invite
     from themi.backup import BackupError, S3Error
-    from themi.settings import SettingsError
+    from themi.settings import Settings, SettingsError
     from themi.storage.secrets import DecryptionError
 
     parser = build_parser()
@@ -525,6 +596,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(pairing_instructions(member, code, _bot_username()))
         elif args.command == "run":
             _run()
+        elif args.command == "setup":
+            return _setup(Path(args.dir), args.check)
+        elif args.command == "config":
+            print(config_report(Settings.load()))
         elif args.command == "login-link":
             print(_login_link(args.name))
         elif args.command == "feedback":

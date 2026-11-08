@@ -12,15 +12,16 @@ import pytest
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 LA = ZoneInfo("America/Los_Angeles")
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def sync(scenario: Scenario) -> Any:
@@ -263,7 +264,9 @@ async def test_to_dos_sent_at_midnight_are_moved_to_the_end_of_the_day(
     fake_cozyla.edit(todo["todoId"], dueDateTime=int(midnight.timestamp() * 1000))
     await sync(scenario)  # a due time change alone on the wall isn't Themi's to undo...
     (fix,) = [m for m in discover() if m.name == "cozyla_due_end_of_day"]
-    for statement in split_statements(fix.sql):  # ...but the migration marks them again
+    # CR21d: today's schema keeps what's on the chart in chart_tasks, not tasks.on_chart
+    sql = fix.sql.replace("on_chart = 0", "id NOT IN (SELECT task_id FROM chart_tasks)")
+    for statement in split_statements(sql):  # ...but the migration marks them again
         scenario.app.db.execute(statement)
     await sync(scenario)
     due = datetime.fromtimestamp(
@@ -373,7 +376,7 @@ async def test_a_due_date_changed_on_the_wall_is_logged(
         todo["todoId"],
         dueDateTime=int(datetime(2026, 10, 29, 23, 59, tzinfo=LA).timestamp() * 1000),
     )
-    with caplog.at_level(logging.INFO, logger="themi.core.cozyla_todos"):
+    with caplog.at_level(logging.INFO, logger="themi_cozyla.cozyla_todos"):
         await sync(scenario)
     assert board(scenario).get(stamps.id).due_on == date(2026, 10, 29)
     assert (

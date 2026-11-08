@@ -8,7 +8,7 @@ import pytest
 
 from themi.accounts import Member
 from themi.accounts.models import LoggedMessage, Role
-from themi.core.sidecar import UNDO, build_turn, shown_tasks
+from themi.standard.sidecar import UNDO, build_turn, shown_tasks
 
 ERIN = Member(
     id=1, name="Erin", role=Role.ADMIN, telegram_user_id=1, quiet_start=time(22),

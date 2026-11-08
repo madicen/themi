@@ -14,22 +14,23 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi import clock
 from themi.ai.errors import PermanentError
+from themi.core import keys
 from themi.core.agent import WAITING_TEXT
-from themi.core.groceries import GroceryList
-from themi.core.pantry import Pantry
 from themi.localtime import to_utc_iso
+from themi_home.groceries import GroceryList
+from themi_home.pantry import Pantry
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
 
 def pantry(scenario: Scenario) -> Pantry:
-    assert scenario.app.services.pantry is not None
-    return scenario.app.services.pantry
+    assert scenario.app.services.maybe(keys.pantry) is not None
+    return scenario.app.services.get(keys.pantry)
 
 
 def groceries(scenario: Scenario) -> GroceryList:
-    assert scenario.app.services.groceries is not None
-    return scenario.app.services.groceries
+    assert scenario.app.services.maybe(keys.groceries) is not None
+    return scenario.app.services.get(keys.groceries)
 
 
 def on_list(scenario: Scenario) -> list[str]:

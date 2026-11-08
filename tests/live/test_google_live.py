@@ -13,10 +13,10 @@ import os
 import pytest
 
 from tests.fixtures.family import SeededFamily
-from themi.connectors.gcal import CalendarClient
-from themi.connectors.gmail import GmailClient
-from themi.connectors.google import GoogleConfig, GoogleOAuth
 from themi.storage.secrets import Secret
+from themi_google.connectors.gcal import CalendarClient
+from themi_google.connectors.gmail import GmailClient
+from themi_google.connectors.google import GoogleConfig, GoogleOAuth
 
 NAMES = (
     "THEMI_LIVE_GOOGLE_CLIENT_ID",
@@ -71,8 +71,8 @@ async def test_calendar_list(token: Secret) -> None:
 async def test_the_real_cookbook_reads(token: Secret) -> None:
     """RC1a: the family's real cookbook parses with the counts read on 2026-11-06 (132
     entries). The test account must have picked the doc in Google's file picker."""
-    from themi.connectors.gdocs import DocsClient
-    from themi.core import cookbook as book
+    from themi_google.connectors.gdocs import DocsClient
+    from themi_home import cookbook as book
 
     async def source() -> Secret:
         return token

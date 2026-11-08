@@ -9,6 +9,7 @@ from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fixtures.cookbook import load
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 BIRYANI = [
     ("shallots", False), ("garlic", False), ("ginger", False), ("cardamom", False),
@@ -34,7 +35,7 @@ def cookbook(scenario: Scenario) -> Scenario:
 
 
 def on_list(scenario: Scenario) -> list[str]:
-    groceries = scenario.app.services.groceries
+    groceries = scenario.app.services.maybe(keys.groceries)
     assert groceries is not None
     return sorted(i.name for i in groceries.needed())
 
@@ -93,7 +94,7 @@ async def test_no_model_reads_by_rule(cookbook: Scenario) -> None:
 
 
 async def test_the_pantry_has_plenty(cookbook: Scenario) -> None:
-    pantry = cookbook.app.services.pantry
+    pantry = cookbook.app.services.maybe(keys.pantry)
     assert pantry is not None
     pantry.set_status("garlic", "plenty", source="said")
     cookbook.primary.queue_tool_call(
@@ -140,7 +141,7 @@ async def test_a_base_recipe_in_the_cookbook_is_offered(cookbook: Scenario) -> N
 
 
 async def test_already_on_the_list(cookbook: Scenario) -> None:
-    groceries = cookbook.app.services.groceries
+    groceries = cookbook.app.services.maybe(keys.groceries)
     assert groceries is not None
     cookbook.primary.queue_tool_call("add_to_grocery_list", {"items": ["garlic"]})
     cookbook.primary.queue_text("Added.")

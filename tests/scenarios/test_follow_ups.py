@@ -5,15 +5,16 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 REFILL = "Refill water and food bowls"
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def nudges(scenario: Scenario, title: str) -> list[str]:
@@ -89,7 +90,7 @@ async def test_a_wall_tick_counts_and_it_stays_off_the_wall(scenario: Scenario) 
     await board(scenario).complete(task.id, scenario.member("Erin"))  # as the wall's sync does
     await scenario.app.outbox.flush()
     (refill,) = [t for t in board(scenario).open_for(scenario.member("Erin")) if t.title == REFILL]
-    assert refill.off_wall and refill.steps == ("Refill the water", "Replace the food bowls")
+    assert refill.off_displays and refill.steps == ("Refill the water", "Replace the food bowls")
     assert nudges(scenario, REFILL)
 
 

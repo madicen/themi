@@ -6,7 +6,7 @@ import pytest
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.accounts import Member
-from themi.core.memory import Memory, similarity, terms
+from themi.standard.memory import Memory, similarity, terms
 from themi.storage import migrations
 from themi.storage.db import Database
 

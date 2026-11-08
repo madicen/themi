@@ -7,15 +7,17 @@ medicine tasks are marked from the title or when said."""
 
 from __future__ import annotations
 
+from tests.fakes.prompt import FAMILY_SYSTEM
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 from themi.core.prompts import build_system
-from themi.core.tasks import NOT_SURE_TEXT, TaskBoard, is_medicine
+from themi.standard.tasks import NOT_SURE_TEXT, TaskBoard, is_medicine
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -82,14 +84,14 @@ async def test_marking_a_task_as_medicine_when_said(scenario: Scenario) -> None:
 
 
 def test_the_model_is_told_never_to_advise_on_doses() -> None:
-    system = build_system()
+    system = build_system(base=FAMILY_SYSTEM)  # CR8a: the tasks module's rule
     assert "Never tell anyone to take a dose" in system
     assert "check with your doctor or pharmacist" in system
 
 
 def test_the_medicine_texts_pass_the_strictest_pda_check() -> None:
     from themi.channels.pda import find_demands
-    from themi.core.tasks import MEDICINE_ASK
+    from themi.standard.tasks import MEDICINE_ASK
 
     for text in (NOT_SURE_TEXT, f"Due today: Take Wegovy. {MEDICINE_ASK}"):
         assert find_demands(text, 3) == [], text

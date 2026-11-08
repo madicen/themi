@@ -1,0 +1,29 @@
+{% from "_row.html" import row %}
+{# CR17a: the calendar module's row: the family calendar #}
+{% set calendar = household.calendar %}
+{% if calendar %}
+{% if calendar.problem %}{% set chips = [("Needs attention", "bad")] %}
+{% elif calendar.using %}{% set chips = [("Writing", "good")] %}
+{% else %}{% set chips = [("Not set up", "")] %}{% endif %}
+{% call(part) row("Family calendar", meta=('"' ~ calendar.name ~ '" on ' ~ calendar.using) if calendar.using else "Google Calendar, for the wall", chips=chips, id="family-calendar", open=opened == "family-calendar") %}
+{% if part == "body" %}
+  <p class="muted">Tasks with dates go on this Google calendar (once someone says yes), so
+  Cozyla shows them. Themi finds the calendar by name, or makes it.</p>
+  {% if calendar.problem %}<p class="alert">{{ calendar.problem }}</p>
+  {% elif calendar.using %}<p>Writing to "{{ calendar.name }}" on {{ calendar.using }}.</p>{% endif %}
+  <form method="post" action="/family/calendar">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Account
+      <select name="account">
+        <option value="" {% if calendar.chosen is none %}selected{% endif %}>The first admin's account that allows it</option>
+        {% for account in calendar.accounts %}
+        <option value="{{ account.id }}" {% if calendar.chosen == account.id %}selected{% endif %}>{{ account.address }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Calendar name <input name="name" value="{{ calendar.name }}"></label>
+    <button>Save</button>
+  </form>
+{% endif %}
+{% endcall %}
+{% endif %}

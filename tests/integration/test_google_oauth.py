@@ -12,7 +12,7 @@ from tests.fakes.google_oauth import CLIENT_ID, REDIRECT_URI, FakeGoogle
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.accounts import SYSTEM, PermissionDenied
-from themi.connectors.google import (
+from themi_google.connectors.google import (
     CALENDAR_SCOPE,
     CALENDAR_SCOPES,
     GMAIL_SCOPE,
@@ -22,7 +22,7 @@ from themi.connectors.google import (
     OAuthError,
     TokenRevoked,
 )
-from themi.connectors.google.oauth import code_challenge
+from themi_google.connectors.google.oauth import code_challenge
 
 
 @pytest.fixture

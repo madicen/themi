@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fakes.roborock import payload
-from themi.connectors.roborock.events import (
+from themi_home.connectors.roborock.events import (
     BIN,
     FAULT,
     JAMMED,

@@ -22,7 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tests.evals.scoring import Case, load_cases
-from themi.core.tools import TOOL_GROUPS, ToolRegistry, choose_groups
+from tests.fakes.groups import TOOL_GROUPS, choose_groups
+from themi.core.tools import ToolRegistry
 
 Router = Callable[[Sequence[str]], set[str]]
 ROUTING_FILE = Path(__file__).parent / "routing_cases.json"

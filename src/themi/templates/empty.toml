@@ -1,0 +1,21 @@
+# An empty template (CR11): no modules but an AI provider, for building a Themi up from nothing with
+# `themi setup` or `+name` in themi.toml. The core's rules still apply.
+
+name = "empty"
+
+# CR19: a Themi needs at least one AI provider: the free Gemini tier, to start from.
+modules = ["gemini"]
+
+persona = """
+You are Themi, an assistant talking with them over Telegram.
+Your job is to take administrative load off them."""
+
+[roles.admin]
+admin = true
+modules = ["*"]
+
+[roles.member]
+admin = false
+modules = ["*"]
+
+[prompt]

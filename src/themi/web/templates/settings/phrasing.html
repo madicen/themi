@@ -1,0 +1,21 @@
+{# CR7d: a section of the settings form, the core's. #}
+{% from "_row.html" import row %}
+  {% call(part) row("How Themi says things", meta=("Plain: say it straight" if member.phrasing == "plain" else "Gentle: indirect and low-key"), id="phrasing") %}{% if part == "body" %}
+    <label>Style
+      <select name="phrasing">
+        <option value="plain" {% if member.phrasing == "plain" %}selected{% endif %}>Plain: say it straight (what, when, which)</option>
+        <option value="gentle" {% if member.phrasing == "gentle" %}selected{% endif %}>Gentle: indirect and low-key</option>
+      </select>
+    </label>
+    {% if prefs.checkin_reviews %}<label class="check"><input type="checkbox" name="checkin_reviews" {% if prefs.checkin_reviews.checkin_reviews %}checked{% endif %}> Now and then, ask whether a check-in is helping</label>{% endif %}
+    {% if prefs.tasks %}<label class="check"><input type="checkbox" name="done_praise" {% if prefs.tasks.done_praise %}checked{% endif %}> A short "nice work" when I mark something done</label>{% endif %}
+    <label class="check"><input type="checkbox" name="listen_first" {% if member.listen_first %}checked{% endif %}> When I share how I feel, listen first, and ask before suggesting fixes</label>
+    {% if conversation_offered %}<label class="check"><input type="checkbox" name="conversation_mode" {% if prefs.conversation_mode and prefs.conversation_mode.conversation_mode %}checked{% endif %}> Conversation mode: just chat with me, and pick out anything to do in the background <span class="muted">(asking me to add or check something works as usual)</span></label>
+    {% if picked_out %}<p class="muted">Picked out lately (say "that wasn't a task" in chat to take the latest back):</p>
+    <ul class="muted">{% for turn in picked_out %}<li>{{ turn.when }}: {{ turn.lines | join("; ") }}{% if turn.status == "missed" %} (taken back or reported){% endif %}</li>{% endfor %}</ul>{% endif %}{% endif %}
+    {% if prefs.focus %}<label>When it's too much, just <input type="number" name="focus_count" min="1" max="10" value="{{ prefs.focus.focus_count }}"> things for now</label>
+    <label>When it's too much and the rest is spread out, at most <input type="number" name="day_budget" min="0" max="20" value="{{ prefs.focus.day_budget }}"> things on a day <span class="muted">(0: what I usually get done)</span></label>{% endif %}
+    <label>Your own notes on phrasing
+      <textarea name="phrasing_notes" maxlength="500" rows="3" placeholder="For example: questions are fine; never say &quot;should&quot;">{{ member.phrasing_notes }}</textarea>
+    </label>
+  {% endif %}{% endcall %}

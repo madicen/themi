@@ -19,7 +19,8 @@ from tests.evals.runner import use_backend
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
-from themi.core.body_double import GUIDED
+from themi.core import keys
+from themi_home.body_double import GUIDED
 
 # (the job, words that must come in this order, each found in some step)
 JOBS: list[tuple[str, tuple[str, ...]]] = [
@@ -62,7 +63,7 @@ async def test_body_double_steps(
     await scenario.start()
     misses = []
     try:
-        body_double = scenario.app.services.body_double
+        body_double = scenario.app.services.maybe(keys.body_double)
         assert body_double is not None
         erin = scenario.member("Erin")
         for job, order in JOBS:
@@ -129,7 +130,7 @@ async def test_body_double_categories(
     await scenario.start()
     misses = []
     try:
-        body_double = scenario.app.services.body_double
+        body_double = scenario.app.services.maybe(keys.body_double)
         assert body_double is not None and body_double.modes is not None
         erin = scenario.member("Erin")
         for title, accepted in CATEGORY_CASES:

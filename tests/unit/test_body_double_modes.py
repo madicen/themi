@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from themi.core.body_double import GUIDED, SILENT, SPRINT
-from themi.core.body_double_modes import (
+from themi_home.body_double import GUIDED, SILENT, SPRINT
+from themi_home.body_double_modes import (
     ADMIN,
     CHORES,
     DEEP_WORK,
@@ -110,7 +110,7 @@ def played(n: int, music: str, *, outcome: str = "finished", category: str = "de
 
 
 def test_the_pick_needs_two_finished_sessions() -> None:
-    from themi.core.body_double_music import Pick, pick
+    from themi_home.body_double_music import Pick, pick
 
     one = [played(1, "builtin:rain", name="Rain")]
     assert pick(one, "deep_work", "morning") == Pick("builtin:lofi", "lofi", False)  # default
@@ -124,7 +124,7 @@ def test_the_pick_needs_two_finished_sessions() -> None:
 
 
 def test_the_most_played_wins_and_the_latest_breaks_a_tie() -> None:
-    from themi.core.body_double_music import pick
+    from themi_home.body_double_music import pick
 
     rows = [played(1, "a"), played(2, "a"), played(3, "b"), played(4, "b")]
     assert pick(rows, "deep_work", "morning").music == "b"  # type: ignore[union-attr]
@@ -133,7 +133,7 @@ def test_the_most_played_wins_and_the_latest_breaks_a_tie() -> None:
 
 
 def test_the_offer_says_nothing_about_how_sessions_went() -> None:
-    from themi.core.body_double_music import Pick, offer_text
+    from themi_home.body_double_music import Pick, offer_text
 
     for text in (offer_text(Pick("x", "rain", True)), offer_text(Pick("y", "lofi", False))):
         words = ("energy", "score", "usually", "fail", "finished", "better", "percent")

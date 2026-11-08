@@ -1,0 +1,6 @@
+{# CR7d: a section of the settings form, the breaks module's. #}
+{% from "_row.html" import row %}
+  {% if prefs.breaks %}{% call(part) row("Breaks", meta="Offer " ~ prefs.breaks.break_extend_minutes ~ " minutes more", id="breaks") %}{% if part == "body" %}
+    <label>When a break is up, offer to extend it by <input type="number" name="break_extend_minutes" min="5" max="120" value="{{ prefs.breaks.break_extend_minutes }}" required> minutes</label>
+    <p class="muted">Say "I'm taking a break" (or /break 30) and task nudges and check-ins wait until it's over.</p>
+  {% endif %}{% endcall %}{% endif %}

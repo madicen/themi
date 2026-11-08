@@ -8,15 +8,16 @@ from datetime import date, timedelta
 
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.tasks import TaskBoard
+from themi.core import keys
 from themi.localtime import to_utc_iso
+from themi.standard.tasks import TaskBoard
 
 WED = date(2026, 10, 21)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def nudged(scenario: Scenario) -> list[str]:

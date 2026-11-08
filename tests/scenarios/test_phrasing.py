@@ -12,6 +12,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import CallKind
 from themi.channels.pda import AIRewriter, PdaShield, find_demands
+from themi.core import keys
 
 
 def gentle(scenario: Scenario, name: str, notes: str | None = None) -> None:
@@ -20,7 +21,7 @@ def gentle(scenario: Scenario, name: str, notes: str | None = None) -> None:
 
 
 async def nudge(scenario: Scenario, title: str) -> str:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     await board.create(erin, title, "errand", 1, assignee=erin)

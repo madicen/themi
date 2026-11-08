@@ -9,12 +9,13 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
 from themi.channels.outbox import Priority
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.tasks import Task, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def chore(scenario: Scenario, title: str) -> Task:

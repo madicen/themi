@@ -16,9 +16,13 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.ai.types import ToolResult
-from themi.core.progression import parse_plan
-from themi.core.repeat import parse
-from themi.core.tasks import TaskBoard
+from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
+from themi.standard.day_summary import DaySummaryPreferences
+from themi.standard.progression import parse_plan
+from themi.standard.repeat import parse
+from themi.standard.tasks import TaskBoard
+from themi_home.chore_chart import ChartPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HUSBAND = "him@gmail.com"
@@ -38,8 +42,8 @@ def local(hour: int, minute: int = 0, day: int = 21) -> str:
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -145,12 +149,12 @@ async def test_a_chore_waiting_for_the_chart_is_in_tomorrows_summary(
     """Idea #19: Erin's bird cage, her one chart chore, was missing from tomorrow's list,
     because today it's still waiting its turn."""
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=1)
     cage = await board(scenario).create(
         erin, "Clean the bird cage", "physical", 2, assignee=erin, nudge=False
     )
     await board(scenario).set_schedule(cage.id, erin, repeat=parse("every Thursday", WED))
-    summary = scenario.app.services.day_summary
+    summary = scenario.app.services.maybe(keys.day_summary)
     assert summary is not None
     assert summary.text(erin, date(2026, 10, 22)) == "Thu 22 Oct:\n- Clean the bird cage"
 
@@ -170,14 +174,18 @@ async def test_the_partners_events_only_when_they_share(
 
     assert "Haircut" not in await ask()
     husband = scenario.member("Husband")
-    scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
+    scenario.app.store.save_preferences(
+        husband, husband.id, CalendarPreferences, calendar_details="partner"
+    )
     assert "3-4 pm: Haircut (Husband)" in await ask()
 
 
 async def test_the_morning_summary(scenario: Scenario, linked: FakeGcal) -> None:
     await erins_day(scenario, linked)
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, morning_summary="08:30")
+    scenario.app.store.save_preferences(
+        erin, erin.id, DaySummaryPreferences, morning_summary="08:30"
+    )
     await scenario.run_periodic("calendar.morning")  # 9 am: today's is due, and goes
     summaries = [t for t in scenario.inbox("Erin") if t.startswith("Wed 21 Oct:")]
     assert summaries == [TODAY]
@@ -189,12 +197,16 @@ async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
     scenario: Scenario,
 ) -> None:
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, morning_summary="06:00")
+    scenario.app.store.save_preferences(
+        erin, erin.id, DaySummaryPreferences, morning_summary="06:00"
+    )
     clock.advance(timedelta(hours=21))  # Thursday 6 am, in her quiet hours; nothing on
     await scenario.run_periodic("calendar.morning")
     assert scenario.app.db.query("SELECT 1 FROM outbox WHERE kind = 'summary'") == []
 
-    scenario.app.store.update_settings(erin, erin.id, morning_summary_empty=True)
+    scenario.app.store.save_preferences(
+        erin, erin.id, DaySummaryPreferences, morning_summary_empty=True
+    )
     clock.advance(timedelta(days=1))  # Friday 6 am
     await scenario.run_periodic("calendar.morning")
     (row,) = scenario.app.db.query(
@@ -220,10 +232,17 @@ async def test_the_settings_page(scenario: Scenario, site: httpx.AsyncClient) ->
     assert 'name="morning_summary"' in page
     await site.post("/settings", data=form)
     erin = scenario.member("Erin")
-    assert erin.morning_summary is not None and erin.morning_summary.strftime("%H:%M") == "07:45"
-    assert erin.morning_summary_empty
+    summary = scenario.app.store.preferences(erin.id, DaySummaryPreferences)
+    assert summary.morning_summary is not None
+    assert summary.morning_summary.strftime("%H:%M") == "07:45"
+    assert summary.morning_summary_empty
     await site.post("/settings", data={**form, "morning_summary": ""})
-    assert scenario.member("Erin").morning_summary is None  # blank: off
+    assert (
+        scenario.app.store.preferences(
+            scenario.member("Erin").id, DaySummaryPreferences
+        ).morning_summary
+        is None
+    )  # blank: off
 
 
 async def test_whose_events_are_whose(
@@ -233,7 +252,9 @@ async def test_whose_events_are_whose(
     as Michael's: both of them read it) and Michael's own Tea Time."""
     await link(scenario, site, fake_google, "Husband", HUSBAND)
     husband = scenario.member("Husband")
-    scenario.app.store.update_settings(husband, husband.id, calendar_details="partner")
+    scenario.app.store.save_preferences(
+        husband, husband.id, CalendarPreferences, calendar_details="partner"
+    )
     linked.add_event(HUSBAND, local(16, 30), local(17), summary="Tea Time!")
     await scenario.run_periodic("calendar.busy")
     db = scenario.app.db
@@ -289,7 +310,9 @@ async def test_whats_on_her_plate(scenario: Scenario, linked: FakeGcal) -> None:
     assert "keeps calendar details private" in tool_result(scenario)
     assert "Never say Erin has no events." in tool_result(scenario)
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, calendar_details="partner")
+    scenario.app.store.save_preferences(
+        erin, erin.id, CalendarPreferences, calendar_details="partner"
+    )
     assert (await ask("Not for me, for Erin")).startswith(
         "Erin, Wed 21 Oct:\n- 10-11 am: Dentist (at Smile Dental)\n"
     )

@@ -14,6 +14,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
+from themi.core.calendar_view import CalendarPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HUSBAND = "him@gmail.com"
@@ -87,7 +88,9 @@ async def test_the_model_sees_them_as_data_and_only_where_allowed(
 
     assert "Dentist" not in await prompt_for(scenario, "Husband")  # just hers, by default
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, calendar_details="partner")
+    scenario.app.store.save_preferences(
+        erin, erin.id, CalendarPreferences, calendar_details="partner"
+    )
     assert "Erin · Wed 21 Oct, 10-11 am: Dentist" in await prompt_for(scenario, "Husband")
 
 

@@ -7,7 +7,7 @@ PARALLEL ?= -n auto --dist loadfile
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
+.PHONY: golden venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -24,6 +24,8 @@ lint:
 	$(PYTHON) -m ruff check .
 	$(PYTHON) -m pyright --pythonpath "$$($(PYTHON) -c 'import sys; print(sys.executable)')"
 	$(PYTHON) tools/check_clock.py
+	$(PYTHON) tools/check_layers.py
+	$(PYTHON) tools/check_packs.py
 
 test:
 	$(PYTEST) $(PARALLEL) tests/unit
@@ -63,8 +65,11 @@ cov:
 # Themi on this computer, chatting through the Telegram simulator at http://localhost:8090.
 # Dev data lives in data/dev/; see tools/dev/runner.py. Outside services are played by the
 # test fakes (D5a); FAKES=0 runs without them.
+# CR16: make dev TEMPLATE=work, MODULES="-safeway,+travel", or CONFIG=path/to/themi.toml
 dev:
-	$(PYTHON) -m tools.dev $(if $(filter 0,$(FAKES)),--no-fakes)
+	$(PYTHON) -m tools.dev $(if $(filter 0,$(FAKES)),--no-fakes) \
+		$(if $(TEMPLATE),--template $(TEMPLATE)) $(if $(MODULES),--modules="$(MODULES)") \
+		$(if $(CONFIG),--config $(CONFIG))
 
 dev-reset:
 	$(PYTHON) -m tools.dev reset
@@ -78,3 +83,7 @@ dev-prod:
 dev-invite:
 	$(PYTHON) -m tools.dev invite "$(NAME)"
 
+
+# CR1: write the golden files again (tests/golden); say why in the commit.
+golden:
+	THEMI_WRITE_GOLDEN=1 $(PYTEST) tests/scenarios/test_golden.py -q

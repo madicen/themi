@@ -6,12 +6,15 @@ import pytest
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
+from themi.core import keys
+from themi.standard.praise import TasksPreferences
+from themi_home.chore_chart import ChartPreferences
 
 
 async def test_ticking_a_to_do_off_on_the_wall_stops_the_nudges(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     vet = await board.create(erin, "Call the vet", "call", 2, assignee=erin)
@@ -39,9 +42,9 @@ async def test_a_chore_ticked_on_the_chart_isnt_asked_about(
     doesn't ask about it that evening."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     kitchen = await board.create(erin, "Clean the kitchen", "physical", 2, assignee=erin)
@@ -67,12 +70,12 @@ async def test_erin_sees_one_chore_at_a_time(scenario: Scenario, fake_cozyla: Fa
     waiting isn't in her evening list."""
     from datetime import date
 
-    from themi.core.repeat import parse
+    from themi.standard.repeat import parse
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=1)
     titles = ("Clean the kitchen", "Clean upstairs", "Clean the bathroom")
     for title in titles:
         task = await board.create(erin, title, "physical", 2, assignee=erin)
@@ -102,7 +105,7 @@ async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCo
     to-do list. Check-ins are Themi's to ask; jobs still go up."""
     from datetime import date, time
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     await board.create(
@@ -115,7 +118,7 @@ async def test_a_check_in_stays_in_themi(scenario: Scenario, fake_cozyla: FakeCo
 
 
 def _praised(text: str, titles: str) -> bool:
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     return any(text == f"Ticked off on the wall: {titles}. {word}" for word in PRAISE)
 
@@ -124,7 +127,7 @@ async def test_ticks_on_the_wall_get_a_warm_word_together(
     scenario: Scenario, fake_cozyla: FakeCozyla
 ) -> None:
     """F19b, the family's answer: "Ticks on the wall should get a nice work message"."""
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     for title in ("Call the vet", "Book the dentist"):
@@ -144,12 +147,12 @@ async def test_ticks_on_the_wall_get_a_warm_word_together(
 async def test_no_warm_word_when_its_off_or_whose_tick_is_unknown(
     scenario: Scenario, fake_cozyla: FakeCozyla, case: str
 ) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     task = await board.create(erin, "Bring bins in", "errand", 1, assignee=erin, nudge=False)
     if case == "off":
-        scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+        scenario.app.store.save_preferences(erin, erin.id, TasksPreferences, done_praise=False)
     else:
         await board.make_either(task.id)  # either of them could have ticked it
     await scenario.run_periodic("cozyla.sync")
@@ -169,7 +172,7 @@ async def test_a_task_moved_into_saturdays_block_is_still_due_saturday_next_morn
     Saturday's 1-5 pm block, twice; each morning they were due Thursday again."""
     from datetime import date
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     husband = scenario.member("Husband")
     box = await board.create(

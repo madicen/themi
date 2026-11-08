@@ -14,11 +14,11 @@ from tests.evals.scoring import Case, load_cases
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
+from tests.fakes.groups import GROUP_EXAMPLES, GROUPS, TOOL_GROUPS
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.spotify import FakeSpotify
 from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
-from themi.core.tools import GROUP_EXAMPLES, GROUPS, TOOL_GROUPS
 
 # choose_groups: 11/12 on 2026-10-29 (P3's Notes); 21/25 once P6 added the twins cases;
 # 95/109 once P7a added the routing cases (74/84 of those; paraphrases miss most).

@@ -13,6 +13,7 @@ import pytest
 
 from tests.fakes.telegram_api import FakeTelegram
 from themi.cli import build_runtime
+from themi.config import InstanceConfig
 from themi.runtime import Runtime
 from tools.dev import runner
 from tools.dev.controls import ControlPanel
@@ -30,7 +31,7 @@ class DevRun:
         return int(self.runtime.app.db.scalar(sql) or 0)
 
 
-Boot = Callable[[], Awaitable[DevRun]]
+Boot = Callable[..., Awaitable[DevRun]]
 
 
 @pytest.fixture
@@ -49,16 +50,17 @@ async def boot(
             last.runtime.app.db.close()
             last.fakes.app = None
 
-    async def start() -> DevRun:
+    async def start(config: InstanceConfig | None = None) -> DevRun:
+        """`config`: another module setup (CR16); the family's when None."""
         finish()
         settings = runner.dev_settings(
             tmp_path, fake_telegram.base_url.removesuffix("/bot"), {"THEMI_DEV_HTTP_PORT": "8081"}
         )
-        runner.seed(settings, "")
+        runner.seed(settings, "", config.template if config else "family")
         fakes = DevFakes(tmp_path / FAKES_FILE)
         fakes.start(runner.site_urls(settings))
         runtime = build_runtime(
-            settings, connectors=fakes.connectors(runner.family_timezone(settings))
+            settings, connectors=fakes.connectors(runner.family_timezone(settings)), config=config
         )
         linked = await fakes.bind(
             runtime.app, runner.site_urls(settings)[0], runtime.scheduler, runtime.web

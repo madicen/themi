@@ -1,0 +1,9 @@
+{# CR21a: the chore_chart module's panel: the chores up for them now #}
+{% if chart %}
+<section>
+  <h2>Chore chart</h2>
+  <div class="rows">
+    {% for task in chart %}<p class="row-plain">{{ task.title }}</p>{% endfor %}
+  </div>
+</section>
+{% endif %}

@@ -13,8 +13,9 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_things_to_buy import inbox
 from tests.scenarios.test_triage import arrive, verdict
+from themi.core import keys
 from themi.core.agent import CLAIMS_DONE
-from themi.core.safeway import SafewayCart
+from themi_home.safeway import SafewayCart
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
@@ -22,13 +23,13 @@ CARD = "Eggs, 2 oat milk and bananas for the Safeway cart\nGo ahead, or not now?
 
 
 def safeway(scenario: Scenario) -> SafewayCart:
-    assert scenario.app.services.safeway is not None
-    return scenario.app.services.safeway
+    assert scenario.app.services.maybe(keys.safeway) is not None
+    return scenario.app.services.get(keys.safeway)
 
 
 def on_the_list(scenario: Scenario, *names: str) -> None:
-    assert scenario.app.services.groceries is not None
-    scenario.app.services.groceries.add(list(names), by=scenario.member("Erin"))
+    assert scenario.app.services.maybe(keys.groceries) is not None
+    scenario.app.services.get(keys.groceries).add(list(names), by=scenario.member("Erin"))
 
 
 async def connect(scenario: Scenario, site: httpx.AsyncClient, name: str = "Erin") -> str:
@@ -311,7 +312,7 @@ async def test_a_safeway_receipt_teaches_search_words(scenario: Scenario, inbox:
 
 def to_buy(scenario: Scenario, **stores: str) -> None:
     """Things to Buy, each item with the store it usually comes from ("" for none)."""
-    buying = scenario.app.services.buying
+    buying = scenario.app.services.maybe(keys.buying)
     assert buying is not None
     erin = scenario.member("Erin")
     buying.lists.add(buying.lists.things_to_buy(erin), list(stores), erin)

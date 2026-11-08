@@ -12,8 +12,9 @@ from tests.fakes.gmail_api import FakeGmail
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_sender_suggestions import mail
 from tests.scenarios.test_triage import arrive, inbox, verdict
-from themi.core.email_audit import EmailAudit
-from themi.core.tasks import TaskBoard
+from themi.core import keys
+from themi.standard.tasks import TaskBoard
+from themi_google.email_audit import EmailAudit
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
@@ -39,13 +40,13 @@ def masked(texts: list[str]) -> list[str]:
 
 
 def audit(scenario: Scenario) -> EmailAudit:
-    assert scenario.app.services.email_audit is not None
-    return scenario.app.services.email_audit
+    assert scenario.app.services.maybe(keys.email_audit) is not None
+    return scenario.app.services.get(keys.email_audit)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def audit_titles(scenario: Scenario) -> list[str]:
@@ -241,11 +242,11 @@ async def test_one_already_on_the_wall_comes_off(
     await suggested(scenario, inbox)
     db = scenario.app.db
     (task_id,) = [r["task_id"] for r in db.query("SELECT task_id FROM email_audits")]
-    db.execute("UPDATE tasks SET off_wall = 0 WHERE id = ?", (task_id,))
+    db.execute("UPDATE tasks SET off_displays = 0 WHERE id = ?", (task_id,))
     db.execute("INSERT INTO cozyla_links (task_id) VALUES (?)", (task_id,))
     await scenario.run_periodic("cozyla.sync")
     assert len(fake_cozyla.in_list(scenario.cozyla_list)) == 1
-    db.execute("UPDATE tasks SET off_wall = 1 WHERE id = ?", (task_id,))
+    db.execute("UPDATE tasks SET off_displays = 1 WHERE id = ?", (task_id,))
     db.execute(
         "UPDATE cozyla_links SET state = 'pending', version = version + 1 WHERE task_id = ?",
         (task_id,),

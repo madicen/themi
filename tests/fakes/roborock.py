@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.roborock import (
+from themi_home.connectors.roborock import (
     BadCode,
     LoginExpired,
     RobotOffline,

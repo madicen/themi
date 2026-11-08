@@ -9,6 +9,7 @@ import pytest
 from tests.fixtures.cookbook import load
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
+from themi.core import keys
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ async def test_the_kitchen_view_moves_the_chat_card(
     view = await site.get("/recipes/kitchen")
     assert "What it uses" not in view.text and "1 package silken tofu (12.3oz) firm" in view.text
     assert scenario.inbox("Erin")[-1].startswith("Cooking Silken Tofu Ranch Dressing. What it uses")
-    session = scenario.app.services.cooking.current(scenario.member("Erin"))  # type: ignore[union-attr]
+    session = scenario.app.services.maybe(keys.cooking).current(scenario.member("Erin"))  # type: ignore[union-attr]
     assert session is not None
     scenario.primary.queue_structured({"jobs": []})
     moved = await site.post(
@@ -101,9 +102,9 @@ async def test_the_diet_setting(
     scenario: Scenario, site: httpx.AsyncClient, signed_in: str
 ) -> None:
     await site.post("/recipes/diet", data={"csrf": signed_in})
-    assert scenario.app.services.recipes.diet() == ""  # type: ignore[union-attr]
+    assert scenario.app.services.maybe(keys.recipes).diet() == ""  # type: ignore[union-attr]
     await site.post("/recipes/diet", data={"csrf": signed_in, "vegan": "on"})
-    assert scenario.app.services.recipes.diet() == "vegan"  # type: ignore[union-attr]
+    assert scenario.app.services.maybe(keys.recipes).diet() == "vegan"  # type: ignore[union-attr]
 
 
 async def test_it_is_on_the_more_page(

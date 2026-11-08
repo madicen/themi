@@ -20,16 +20,19 @@ TRACKING_INPUTS = ("text_notes", "message_timing", "device_activity", "calendar"
 
 
 @dataclass(frozen=True)
-class Family:
+class Workspace:
+    """CR9: what a Themi serves: a family, a person's work, a tutoring family. Its template
+    says which modules, roles and persona it has."""
+
     name: str
     timezone: str
-    takeout_budget_cents: int
-    staples: tuple[str, ...]
     created_at: datetime
     task_owners: dict[str, int] = field(default_factory=dict, hash=False)  # kind -> member id
     handover_cost: float = 10.0
-    laundry_fresh_hours: float = 8.0  # a wet load past this needs a rewash (31)
-    laundry_rinse_minutes: int = 30  # how long the washer's rinse takes
+    template: str = "family"
+
+
+Family = Workspace  # CR9: the name every caller used; a family is a workspace
 
 
 DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -74,32 +77,18 @@ class Member:
     busy_times: tuple[BusyTime, ...] = ()
     phrasing: str = "plain"  # plain (say it straight) or gentle (indirect, low-key), idea #12
     phrasing_notes: str = ""  # their own words on how they like things said
-    checkin_reviews: bool = True  # now and then, ask whether a check-in is helping (idea #13)
-    done_praise: bool = True  # a short warm word when they mark a task done (idea #102)
     listen_first: bool = True  # feelings get listening; ask before problem-solving (F22e)
-    focus_count: int = 3  # things "for now" when it's too much (O1a)
-    day_budget: int = 0  # at most this many on a day when the rest is spread (O1b); 0: usual
-    chart_limit: int = 0  # chores on the wall's chart at a time; 0 is no limit (C2d)
-    break_extend_minutes: int = 15  # what a break's "Extend" button offers (B1)
-    sprint_work_minutes: int = 25  # a body double sprint's work block (BD1a)
-    sprint_break_minutes: int = 5  # and its break
-    body_double_sound: str = "lofi"  # the session page's built-in loop (BD5a)
-    body_double_volume: int = 50  # 0-100
-    chart_counts_shared: bool = True  # chores for either of you count toward that limit
-    calendar_details: str = "me"  # who sees their events' details: "me" or "partner" (K1)
     day_ends: int = 0  # F34j: their day rolls over at this hour after midnight (0 to 4)
-    calendar_twins: str = "ask"  # F34e: the same event on two calendars: ask, guess or keep
-    morning_summary: time | None = None  # a summary of the day at this time; None: off (K2)
-    morning_summary_empty: bool = False  # sent on days with nothing on, too
-    getting_ready_minutes: int = 15  # before leaving for an event with a place (K4)
-    leave_heads_up: bool = True  # "time to get ready" for events with a place
-    setup_note: bool = True  # F29a: an earlier start is noted as set-up time on the event
-    list_style: str = "dashes"  # F29g: how a list's levels show: dashes, bullets or numbers
-    noise_emails: str = "daily"  # when noise emails are offered for archiving, together (F16b)
     # The website's menu bar, in order (F28c): paths, at most MENU_BAR_MAX; None: the usual.
     menu_bar: tuple[str, ...] | None = None
     # CM1a: talk with a plain chat model; a background pass picks out tasks (CM1b).
-    conversation_mode: bool = False
+    # CR20b: the channels they're on ("telegram", "web_chat"), from member_identities.
+    channels: tuple[str, ...] = ()
+
+    @property
+    def reachable(self) -> bool:
+        """Themi can write to them on some channel (CR20b; Telegram only, before)."""
+        return bool(self.channels)
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

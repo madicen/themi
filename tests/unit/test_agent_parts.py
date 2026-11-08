@@ -3,12 +3,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
 from tests.fixtures.family import SeededFamily
 from themi.accounts.models import LoggedMessage
 from themi.ai.types import ToolCall
 from themi.channels.pda import find_demands
 from themi.core import agent as agent_module
-from themi.core.prompts import STABLE_SYSTEM, OpenItem, as_data, build_system, build_turn
+from themi.core.prompts import OpenItem, as_data, build_system, build_turn
 from themi.core.starter_tools import STARTER_TOOLS
 from themi.core.tools import ToolContext, ToolRegistry, tool
 
@@ -16,8 +17,10 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def test_system_prompt_is_stable_and_puts_rules_and_facts_after_the_core() -> None:
-    assert build_system() == STABLE_SYSTEM
-    system = build_system(["Archive store promotions."], ["The vet is on Tuesdays."])
+    assert build_system(base=STABLE_SYSTEM) == STABLE_SYSTEM  # CR8a: the composed prompt
+    system = build_system(
+        ["Archive store promotions."], ["The vet is on Tuesdays."], base=STABLE_SYSTEM
+    )
     assert system.startswith(STABLE_SYSTEM)
     assert system.index("Locked household rules") < system.index("Things to keep in mind")
     assert build_system(["a"], ["b"]) == build_system(["a"], ["b"])  # no clocks or ids inside
@@ -137,7 +140,7 @@ def test_rule_texts_pass_the_strictest_pda_check() -> None:
 
 
 def test_command_texts_pass_the_strictest_pda_check(family) -> None:
-    from themi.core import commands
+    from themi.standard import commands
 
     texts = [
         commands.PAUSE_HELP.format(topics="meals, laundry"),
@@ -155,11 +158,15 @@ def test_command_texts_pass_the_strictest_pda_check(family) -> None:
 
 
 def test_the_model_is_told_how_rules_are_scoped() -> None:
+    from tests.fakes.prompt import FAMILY_SYSTEM
     from themi.core.prompts import build_system
     from themi.core.rules import propose_rule
 
     system = build_system(
-        rules=["Bins go out on Tuesdays."], personal_rules=["No chores at work."], owner="Erin"
+        rules=["Bins go out on Tuesdays."],
+        personal_rules=["No chores at work."],
+        owner="Erin",
+        base=FAMILY_SYSTEM,
     )
     assert "Locked household rules (they apply to everyone in the family):" in system
     assert (
@@ -177,8 +184,9 @@ def test_the_turn_says_when_themi_holds_its_messages(family) -> None:
     from datetime import datetime, time
     from zoneinfo import ZoneInfo
 
+    from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
     from themi.accounts import SYSTEM, BusyTime
-    from themi.core.prompts import STABLE_SYSTEM, build_turn
+    from themi.core.prompts import build_turn
 
     erin = family.store.update_settings(
         SYSTEM, family.erin.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))]
@@ -215,7 +223,7 @@ def test_rules_are_for_how_themi_behaves_and_chores_are_tasks() -> None:
 def test_parts_the_tools_couldnt_hold_are_said_and_kept_as_notes() -> None:
     """Idea #8: Erin was told her runs had "rest days in between" when the schedule held
     only Tue, Thu and Sat; the rest wasn't saved anywhere."""
-    from themi.core.prompts import STABLE_SYSTEM
+    from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
 
     assert "Only say what a tool's result shows was saved" in STABLE_SYSTEM
     assert "remember_fact" in STABLE_SYSTEM
@@ -259,7 +267,7 @@ def test_dates_carry_a_year_only_when_its_another_one() -> None:
     # Bug #70: "due Thu 29 Oct" was read back as "Thursday, October 29, 2020".
     from datetime import date
 
-    from themi.core.tasks import _day_words
+    from themi.standard.tasks import _day_words
 
     today = date(2026, 10, 28)
     assert _day_words(date(2026, 10, 29), today) == "Thu 29 Oct"
@@ -354,7 +362,7 @@ def test_a_reply_in_quotes_loses_them(said: str, sent: str) -> None:
 
 def test_the_warm_words_pass_the_strictest_pda_check() -> None:
     """F19b: praise for what's done, never a nudge for more."""
-    from themi.core.praise import PRAISE
+    from themi.standard.praise import PRAISE
 
     for word in PRAISE:
         assert find_demands(word, 3) == [], word
@@ -362,7 +370,7 @@ def test_the_warm_words_pass_the_strictest_pda_check() -> None:
 
 def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
     """F19c: the reply to a snooze of a task on both lists."""
-    from themi.core import tasks
+    from themi.standard import tasks
 
     for text in (tasks.YOURS_UNTIL_TEXT, tasks.YOURS_LATER_TEXT, tasks.STILL_ON_TEXT):
         said = text.format(title="Bring bins in", when="2 pm today", whose="Michael's")
@@ -371,7 +379,7 @@ def test_a_shared_tasks_put_off_words_pass_the_strictest_pda_check() -> None:
 
 def test_the_focus_words_pass_the_strictest_pda_check() -> None:
     """O1a: reassurance, never instruction."""
-    from themi.core import focus
+    from themi.standard import focus
 
     for text in (
         focus.FOCUS_TEXT.format(these="these", items="- Call the vet"),

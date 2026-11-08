@@ -11,8 +11,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from themi.core.timing import hedges, medians, router_numbers, week_of_replies
-from themi.core.wrong_replies import LABEL_WORDS, ReplyReview
+from themi.standard.timing import hedges, medians, router_numbers, week_of_replies
+from themi.standard.wrong_replies import LABEL_WORDS, ReplyReview
 from themi.updates import ControlError
 from themi.web.kit import Kit
 

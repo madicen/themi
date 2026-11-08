@@ -50,11 +50,12 @@ from tests.fakes.tuya import SECRET as TUYA_SECRET
 from tests.fakes.tuya import FakeTuya
 from tests.fakes.wiring import connector_options, wall_list
 from themi.accounts import Member
-from themi.connectors.gkeep import KeepLogin
-from themi.connectors.google import GoogleAccounts
-from themi.connectors.homeconnect import HomeConnectAccount
-from themi.core.keep_groceries import KeepLinks, new_device_id
+from themi.core import keys
 from themi.storage.secrets import Secret
+from themi_google.connectors.google import GoogleAccounts
+from themi_home.connectors.gkeep import KeepLogin
+from themi_home.connectors.homeconnect import HomeConnectAccount
+from themi_home.keep_groceries import KeepLinks, new_device_id
 
 if TYPE_CHECKING:
     from themi.app import App
@@ -272,33 +273,45 @@ class DevFakes:
             if member is None:
                 continue
             google_linked = store.linked_account_by_address("gmail", address) is not None
-            if services.google is not None and not google_linked:
+            if services.maybe(keys.google) is not None and not google_linked:
                 await self._link_google(app, member, address, site_url)
             if not any(k.member_id == member.id for k in keep.all()):
                 login = KeepLogin(address, Secret(MASTER_TOKEN), new_device_id())
                 keep.link(member, login, "Shopping list")
         if admin is None:
             return
-        if services.thinq is not None and not services.thinq.account.linked():
-            await services.thinq.link(admin, THINQ_TOKEN, "US")
-        if services.roborock is not None and not services.roborock.account.linked():
-            await services.roborock.send_code(ROBOROCK_EMAIL)
-            await services.roborock.link(admin, ROBOROCK_EMAIL, ROBOROCK_CODE)
-        if services.tuya is not None and not services.tuya.account.linked():
-            await services.tuya.link(admin, TUYA_ACCESS_ID, TUYA_SECRET, "us")
-        if services.catgenie is not None and not services.catgenie.account.linked():
-            await services.catgenie.send_code(CATGENIE_PHONE)
-            await services.catgenie.link(admin, CATGENIE_PHONE, CATGENIE_CODE)
-        if services.home_connect is not None and not services.home_connect.linked():
+        if services.maybe(keys.thinq) is not None and not services.get(keys.thinq).account.linked():
+            await services.get(keys.thinq).link(admin, THINQ_TOKEN, "US")
+        if (
+            services.maybe(keys.roborock) is not None
+            and not services.get(keys.roborock).account.linked()
+        ):
+            await services.get(keys.roborock).send_code(ROBOROCK_EMAIL)
+            await services.get(keys.roborock).link(admin, ROBOROCK_EMAIL, ROBOROCK_CODE)
+        if services.maybe(keys.tuya) is not None and not services.get(keys.tuya).account.linked():
+            await services.get(keys.tuya).link(admin, TUYA_ACCESS_ID, TUYA_SECRET, "us")
+        if (
+            services.maybe(keys.catgenie) is not None
+            and not services.get(keys.catgenie).account.linked()
+        ):
+            await services.get(keys.catgenie).send_code(CATGENIE_PHONE)
+            await services.get(keys.catgenie).link(admin, CATGENIE_PHONE, CATGENIE_CODE)
+        if (
+            services.maybe(keys.home_connect) is not None
+            and not services.get(keys.home_connect).linked()
+        ):
             await self.link_home_connect(app, admin, site_url)
-        safeway = services.safeway
+        safeway = services.maybe(keys.safeway)
         if safeway is not None and safeway.helper_for(self.safeway.token) is None:
             self.safeway.token = safeway.connect(admin)  # as Connect on the Safeway page does
 
     async def link_home_connect(self, app: App, by: Member, site_url: str) -> None:
         """Home Connect's OAuth, with its fake saying yes (its sign-in page is at an address
         a browser can't open, so the website's link can't be finished by hand)."""
-        account, dishwasher = app.services.home_connect, app.services.dishwasher
+        account, dishwasher = (
+            app.services.maybe(keys.home_connect),
+            app.services.maybe(keys.dishwasher),
+        )
         if account is None or dishwasher is None:
             return
         redirect = HomeConnectAccount.redirect_uri(site_url)
@@ -309,7 +322,7 @@ class DevFakes:
     async def _link_google(self, app: App, member: Member, address: str, site_url: str) -> None:
         """As if they linked Google from the website and tapped "Watch it": the inbox is
         watched from the start, without the setup question in the chat."""
-        google = app.services.google
+        google = app.services.maybe(keys.google)
         assert google is not None
         redirect = GoogleAccounts.redirect_uri(site_url)
         url = google.oauth.authorization_url("link", redirect, member)
@@ -339,7 +352,7 @@ class DevFakes:
             found.append("Keep")
         found += ["the wall", "OurGroceries"]
         found += [d.name for d in store.list_devices()]
-        if app.services.safeway is not None and self.safeway.token:
+        if app.services.maybe(keys.safeway) is not None and self.safeway.token:
             found.append("the Safeway helper")
         return found
 

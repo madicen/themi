@@ -13,6 +13,7 @@ from tests.fakes.roborock import CODE, EMAIL
 from tests.fixtures.dev import Panel
 from themi import clock
 from themi.connectors.travel import TravelError
+from themi.core import keys
 from tools.dev import controls
 from tools.dev.controls import SECTIONS, Values
 from tools.dev.scenes import SCENES, At, Do, Scene, Wait
@@ -59,7 +60,7 @@ async def test_lg_turning_the_token_down_and_working_again(panel: Panel) -> None
 
 async def test_roborock_signed_out_says_link_it_again_and_relinks(panel: Panel) -> None:
     await panel.ok("vacuum", "fault", fault="The sign-in expires")
-    watcher = panel.run.runtime.app.services.roborock
+    watcher = panel.run.runtime.app.services.maybe(keys.roborock)
     assert watcher is not None and watcher.account.problem()  # the "Link it again" chip
     admin = panel.run.runtime.app.store.member_by_name("Erin")
     assert admin is not None
@@ -74,7 +75,7 @@ async def test_tuya_lapsing_tells_the_admins_and_working_again_relinks(panel: Pa
     await panel.ok("feeders", "fault", fault="The cat feeder goes offline")
     assert panel.device_state("Cat Feeder") == "offline"
     await panel.ok("feeders", "fault", fault="The free plan lapses")
-    watcher = panel.run.runtime.app.services.tuya
+    watcher = panel.run.runtime.app.services.maybe(keys.tuya)
     assert watcher is not None and watcher.account.problem()  # the "Link it again" chip
     told = panel.rows("SELECT text FROM outbox WHERE kind = 'feeder'")
     assert len(told) == 1 and told[0]["text"].startswith("Tuya stopped answering")
@@ -92,7 +93,7 @@ async def test_catgenie_refusing_the_sign_in_tells_the_admins_and_working_again_
     await panel.ok("litter_box", "fault", fault="The next read comes back empty")
     assert panel.device_state("CatGenie") == "offline"  # as it was, not emptied
     await panel.ok("litter_box", "fault", fault="The sign-in is refused")
-    watcher = panel.run.runtime.app.services.catgenie
+    watcher = panel.run.runtime.app.services.maybe(keys.catgenie)
     assert watcher is not None and watcher.account.problem()  # the "Link it again" chip
     told = panel.rows("SELECT text FROM outbox WHERE kind = 'litter_box'")
     assert len(told) == 1 and told[0]["text"].startswith("CatGenie stopped answering")
@@ -139,11 +140,11 @@ async def test_keep_losing_a_save_sends_it_again_once(panel: Panel) -> None:
 
 async def test_a_cart_job_answered_from_the_panel_lands_in_its_results(panel: Panel) -> None:
     app = panel.run.runtime.app
-    assert app.services.safeway is not None
+    assert app.services.maybe(keys.safeway) is not None
     erin = app.store.member_by_name("Erin")
     assert erin is not None
     items = [{"name": "milk", "qty": 1}, {"name": "eggs", "qty": 2}]
-    app.services.safeway.queue(erin, items, None)
+    app.services.get(keys.safeway).queue(erin, items, None)
     state = (await panel.client.get("/control/state")).json()["safeway"]
     assert state == ["Helper: connected", "Job 1 (queued): milk, eggs"]
 
@@ -159,7 +160,7 @@ async def test_a_cart_job_answered_from_the_panel_lands_in_its_results(panel: Pa
 
 
 async def test_a_revoked_helper_is_told_to_pair_again(panel: Panel) -> None:
-    safeway = panel.run.runtime.app.services.safeway
+    safeway = panel.run.runtime.app.services.maybe(keys.safeway)
     assert safeway is not None
     for helper in safeway.helpers():
         safeway.revoke(helper.id)  # Disconnect, on the Safeway page

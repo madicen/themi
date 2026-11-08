@@ -1,0 +1,8 @@
+{% if around_the_house is not none %}
+<section>
+  <h2>Around the house</h2>
+  <div class="rows">
+    {% for line in around_the_house %}<p class="row-plain">{{ line }}</p>{% else %}<p class="empty muted">Nothing's running.</p>{% endfor %}
+  </div>
+</section>
+{% endif %}

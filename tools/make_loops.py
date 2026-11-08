@@ -1,7 +1,7 @@
 """Make the session page's built-in loops (BD5a) with ffmpeg alone: original sounds,
 synthesised from code, so they're ours to give away (CC0, see static/audio/LICENCES.md).
 
-    python3 tools/make_loops.py   # writes src/themi/web/static/audio/*.m4a
+    python3 tools/make_loops.py   # writes src/themi_home/web/static/audio/*.m4a
 
 Each is mono AAC (plays on every phone browser), about a minute, slow (60-90 BPM) and
 made to loop: chord loops are whole bars, noise loops have nothing to line up.
@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-OUT = Path(__file__).parents[1] / "src" / "themi" / "web" / "static" / "audio"
+OUT = Path(__file__).parents[1] / "src" / "themi_home" / "web" / "static" / "audio"
 RATE = 48000
 MIX = "[0]lowpass=f=2600[a];[1]highpass=f=3000[c];[a][c]amix=inputs=2:normalize=0"
 

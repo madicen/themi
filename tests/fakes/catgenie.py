@@ -29,8 +29,8 @@ import pytest
 
 from tests.fakes.snapshot import Snapshots
 from themi import clock
-from themi.connectors.catgenie import CatGenieConfig
-from themi.connectors.catgenie.client import render_path, unaes
+from themi_home.connectors.catgenie import CatGenieConfig
+from themi_home.connectors.catgenie.client import render_path, unaes
 
 BASE_URL = "https://catgenie.test"
 PHONE = "+15550100123"

@@ -7,13 +7,13 @@ import json
 from datetime import UTC, datetime
 
 from tests.fakes.catgenie import payload
-from themi.connectors.catgenie.client import (
+from themi_home.connectors.catgenie.client import (
     phone_field,
     render_path,
     time_field,
     unaes,
 )
-from themi.connectors.catgenie.events import (
+from themi_home.connectors.catgenie.events import (
     ERROR,
     LOW,
     OUT,

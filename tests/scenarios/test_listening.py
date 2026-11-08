@@ -7,8 +7,8 @@ import pytest
 
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import a_full_day, tool_result, turn
-from themi.core.focus import SIGNAL as FOCUS_SIGNAL
 from themi.core.listening import LISTEN_SIGNAL, SHORT_SIGNAL, sentences
+from themi.standard.focus import SIGNAL as FOCUS_SIGNAL
 
 STRESSED = (
     "I'm so stressed today. Work was a lot and the baby didn't sleep. "

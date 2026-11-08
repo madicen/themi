@@ -1,0 +1,102 @@
+{% from "_row.html" import row %}
+{# CR17a: the google module's: the member's own Google accounts #}
+<h2>My Google accounts</h2>
+<p class="muted">Gmail accounts Themi can read, label and archive for you. It never deletes mail,
+and it only sends after you say yes.</p>
+<div class="rows">
+  {% for account in accounts %}
+  {% set waiting_for = expected.get(account.id, []) %}
+  {% if not account.enabled %}{% set chips = [("Needs relinking", "bad")] %}
+  {% elif account.watched %}{% set chips = [("Watching", "good")] %}
+  {% else %}{% set chips = [("Not watched", "")] %}{% endif %}
+  {% set meta = (waiting_for|length ~ " expected email" ~ ("" if waiting_for|length == 1 else "s")) if waiting_for else "" %}
+  {% call(part) row(account.address, meta=meta, chips=chips, id="account-" ~ account.id, open=opened == "account-" ~ account.id) %}
+  {% if part == "body" %}
+    {% if not account.enabled %}
+    <p class="alert">Google stopped accepting this link. Linking it again fixes it.</p>
+    {% endif %}
+    <form method="post" action="/accounts/{{ account.id }}/settings">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="check"><input type="checkbox" name="watched" {% if account.watched %}checked{% endif %}> Themi watches this inbox</label>
+      <label>Senders that always count as time-sensitive (one per line: an address, or @domain)
+        <textarea name="urgent_senders" rows="3">{{ account.urgent_senders | join("\n") }}</textarea>
+      </label>
+      <button>Save</button>
+    </form>
+    <p><a href="/accounts/{{ account.id }}/calendars">Calendars Themi reads</a></p>
+    {% if "Google Tasks" in needed and tasks_scope in account.scopes %}
+    <p class="muted">Google Tasks: Themi takes what you add by voice to My Tasks, then clears it.</p>
+    {% endif %}
+    {% if cookbook is not none and cookbook_scope in account.scopes %}
+    <p><a href="/accounts/{{ account.id }}/cookbook">{% if cookbook.doc_id and cookbook.account_id == account.id %}The family cookbook: {{ cookbook.title or "chosen" }}{% else %}Choose the family cookbook{% endif %}</a></p>
+    {% endif %}
+    {# CR18a: what the loaded modules need that this account doesn't allow yet #}
+    {% set again = relink.get(account.id) %}
+    {% if again %}
+    {% for sentence in again.sentences %}<p class="muted">{{ sentence }}</p>{% endfor %}
+    <form method="post" action="/accounts/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="small">{{ again.label }}</button>
+    </form>
+    {% endif %}
+
+    <h3>Expected emails</h3>
+    <p class="muted">Recurring mail, like a bill confirmation. If one doesn't arrive on time,
+    Themi says so, and anything automatic it protects goes back to asking first.</p>
+    <div class="rows">
+      {% for item in waiting_for %}
+      <form method="post" action="/accounts/{{ account.id }}/expected/{{ item.id }}/remove" class="row-plain">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <span class="row-main"><span class="row-title">{{ item.name }}</span>
+          <span class="row-meta">From {{ item.sender_pattern }}{% if item.subject_pattern %}, subject has "{{ item.subject_pattern }}"{% endif %},
+          every {{ item.cadence_days }} days ({{ item.grace_days }} days' grace).
+          {% if item.last_seen_at %}Last seen {{ item.last_seen_at.date().isoformat() }}.{% else %}Not seen yet.{% endif %}</span></span>
+        <button class="small quiet">Stop watching</button>
+      </form>
+      {% endfor %}
+      <details class="add">
+        <summary>Add an expected email</summary>
+        <form method="post" action="/accounts/{{ account.id }}/expected">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <label>What it is <input name="name" placeholder="the PG&amp;E confirmation" required></label>
+          <label>From (an address, or @domain) <input name="sender" required></label>
+          <label>Subject has (optional) <input name="subject"></label>
+          <label>Comes every <input name="cadence_days" type="number" min="1" max="400" value="30"> days</label>
+          <label>Grace <input name="grace_days" type="number" min="0" max="60" value="3"> days</label>
+          <label>Protects
+            <select name="category">
+              {% for category in protectable %}
+              <option value="{{ category.name }}" {% if category.name == "email_mark_read" %}selected{% endif %}>{{ category.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button>Add</button>
+        </form>
+      </details>
+    </div>
+
+    <div class="danger-zone">
+      <form method="post" action="/accounts/{{ account.id }}/unlink">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Unlink {{ account.address }}</button>
+      </form>
+    </div>
+  {% endif %}
+  {% endcall %}
+  {% endfor %}
+  {% if can_link %}
+  <details class="add"{% if not accounts %} open{% endif %}>
+    <summary>Link a Gmail account</summary>
+    <form method="post" action="/accounts/link">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <p class="muted">Google will show a warning that the app isn't verified: Themi is your
+      family's own server, so that's expected. "Advanced", then "Go to Themi", continues.</p>
+      <button class="primary">Link a Gmail account</button>
+    </form>
+  </details>
+  {% elif not accounts %}
+  <p class="empty muted">No accounts linked yet. Linking Gmail isn't set up on this server yet.</p>
+  {% else %}
+  <p class="empty muted">Linking Gmail isn't set up on this server yet.</p>
+  {% endif %}
+</div>

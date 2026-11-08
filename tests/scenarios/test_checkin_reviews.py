@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
-from themi.core.habits import HabitReserve
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.checkin_reviews import CheckinReviewsPreferences
+from themi.standard.habits import HabitReserve
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 ASK = 'Check-in review: is "Go for a run" helping?'
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def run_check_in(scenario: Scenario) -> Task:
@@ -111,7 +113,9 @@ async def test_stop_asking_for_one_or_for_all(scenario: Scenario) -> None:
     )
     scenario.primary.queue_text("No more check-in reviews.")
     await scenario.say("Erin", "please stop asking whether check-ins help")
-    assert not scenario.member("Erin").checkin_reviews
+    assert not scenario.app.store.preferences(
+        scenario.member("Erin").id, CheckinReviewsPreferences
+    ).checkin_reviews
 
 
 async def test_a_check_in_can_ask_sooner_and_habits_count(scenario: Scenario) -> None:

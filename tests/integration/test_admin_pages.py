@@ -9,7 +9,10 @@ from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import Scenario
 from themi.ai.settings import AITask
 from themi.autonomy import Tier
+from themi.core import keys
 from themi.storage.secrets import Secret
+from themi_home.pantry import PantrySettings
+from themi_home.spending import SpendingSettings
 
 GEMINI_KEY = "AIzaVeryDistinctiveTestKey000000000000000"
 
@@ -79,12 +82,10 @@ async def test_admins_edit_family_settings(scenario: Scenario, site: httpx.Async
     assert response.status_code == 303
     family = scenario.app.store.get_family()
     assert family is not None
-    assert (family.name, family.timezone, family.takeout_budget_cents) == (
-        "The Household",
-        "America/Denver",
-        250_00,
-    )
-    assert family.staples == ("eggs", "oat milk", "rice")
+    assert (family.name, family.timezone) == ("The Household", "America/Denver")
+    store = scenario.app.store  # CR7c: the modules' own
+    assert store.household(SpendingSettings).takeout_budget_cents == 250_00
+    assert store.household(PantrySettings).staples == ("eggs", "oat milk", "rice")
     bad = await site.post(
         "/family", data={"csrf": csrf, "name": "x", "timezone": "Moon/Base", "budget": "1"}
     )
@@ -217,7 +218,7 @@ async def test_escalated_categories_can_be_resumed(
 async def test_facts_show_household_and_your_own_only(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     memory.remember(scenario.member("Erin"), "bins", "Bins go out Wednesday mornings.")
     his = memory.remember(
@@ -234,7 +235,7 @@ async def test_facts_show_household_and_your_own_only(
 async def test_pinning_editing_and_forgetting_facts(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     fact = memory.remember(scenario.member("Erin"), "vet", "Vet on Mondays.")
     csrf = await sign_in(scenario, site, "Husband")  # household facts: anyone may edit

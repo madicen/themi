@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from themi.core.safeway import (
+from themi_home.safeway import (
     InvalidResults,
     Job,
     check_results,

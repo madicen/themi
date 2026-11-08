@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from themi.connectors.recipe_page import PageReader
+from themi_home.connectors.recipe_page import PageReader
 
 PUBLIC = "93.184.216.34"
 

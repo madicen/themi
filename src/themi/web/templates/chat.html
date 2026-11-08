@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Chat · Themi{% endblock %}
+{% block content %}
+{# CR20b: the web_chat module's page: talking with Themi on the website #}
+<h1>Chat</h1>
+<div class="chat">
+  {% for message in messages %}
+  <div class="chat-message chat-{{ message.direction }}" {% if loop.last %}id="latest"{% endif %}>
+    <p>{{ message.text }}</p>
+    {% if message.buttons %}
+    <div class="buttons">
+      {% for label in message.buttons %}
+      <form method="post" action="/chat/{{ message.id }}/{{ loop.index0 }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="small">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="muted">Nothing yet. Write to Themi as you would in a chat app.</p>
+  {% endfor %}
+</div>
+<form method="post" action="/chat" class="chat-say">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Message <textarea name="text" rows="2" required></textarea></label>
+  <button class="primary">Send</button>
+</form>
+{% endblock %}

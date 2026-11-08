@@ -9,10 +9,10 @@ from urllib.parse import urlencode
 import pytest
 
 from themi.channels.mini_app import check_init_data, sign_init_data
-from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble, parse_command, span_words
-from themi.core.body_double_guided import is_optional, proposed_steps
-from themi.core.body_double_scene import FLAGS, pick_state
-from themi.core.tasks import Task
+from themi.standard.tasks import Task
+from themi_home.body_double import GUIDED, SILENT, SPRINT, BodyDouble, parse_command, span_words
+from themi_home.body_double_guided import is_optional, proposed_steps
+from themi_home.body_double_scene import FLAGS, pick_state
 
 
 def test_span_words() -> None:

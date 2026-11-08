@@ -28,7 +28,7 @@ from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.snapshot import Snapshots
 from themi import clock
-from themi.connectors.google import GoogleConfig
+from themi_google.connectors.google import GoogleConfig
 
 DEFAULT = "My Tasks"
 

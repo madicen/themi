@@ -6,13 +6,14 @@ from datetime import timedelta
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.outbox import Priority
+from themi.core import keys
 from themi.core.naming import NamingRefusals, report
-from themi.core.tasks import Task, TaskBoard
+from themi.standard.tasks import Task, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 def refusals(scenario: Scenario) -> list[dict]:

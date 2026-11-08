@@ -1,10 +1,10 @@
 from datetime import UTC, date, datetime
 
 from themi.channels.pda import find_demands, split_quotes
-from themi.core import calls, meals
-from themi.core.calls import script_text
-from themi.core.meals import pantry_lines
-from themi.core.pantry import PantryItem
+from themi_home import calls, meals
+from themi_home.calls import script_text
+from themi_home.meals import pantry_lines
+from themi_home.pantry import PantryItem
 
 TODAY = date(2026, 10, 21)
 NOW = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)

@@ -7,6 +7,7 @@ from typing import Any
 
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.standard.lists import ListsPreferences
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -87,9 +88,9 @@ async def test_the_style_is_theirs(scenario: Scenario) -> None:
     await make(scenario, "Pets")
     await add(scenario, "Add cats to pets", ["cats"], name="Pets")
     await add(scenario, "Add food under cats", ["food"], "cats", "Pets")
-    scenario.app.store.update_settings(erin, erin.id, list_style="numbers")
+    scenario.app.store.save_preferences(erin, erin.id, ListsPreferences, list_style="numbers")
     assert await show(scenario, "Pets") == ["Pets\n1. cats\n1.1. food"]
-    scenario.app.store.update_settings(erin, erin.id, list_style="bullets")
+    scenario.app.store.save_preferences(erin, erin.id, ListsPreferences, list_style="bullets")
     assert await show(scenario, "Pets") == ["Pets\n• cats\n  • food"]
 
 

@@ -17,7 +17,8 @@ from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_appliance_status import ask, tool_names
 from themi import clock
-from themi.core.vacuum import CATEGORY, DONE_CATEGORY, EXPIRED_TEXT
+from themi.core import keys
+from themi_home.vacuum import CATEGORY, DONE_CATEGORY, EXPIRED_TEXT
 
 ROBOT = "rr-duid-1"
 STUCK_IN_KITCHEN = (
@@ -30,7 +31,7 @@ async def robot(scenario: Scenario, fake_roborock: FakeRoborock) -> FakeRoborock
     """The vacuum, linked and read once (the starting point: on its dock)."""
     fake_roborock.add_robot(ROBOT, "Robbie")
     fake_roborock.rooms[ROBOT] = "Kitchen"
-    watcher = scenario.app.services.roborock
+    watcher = scenario.app.services.maybe(keys.roborock)
     assert watcher is not None
     await watcher.send_code(EMAIL)
     await watcher.link(scenario.member("Erin"), EMAIL, CODE)
@@ -354,7 +355,7 @@ async def test_a_routine_item_about_it_is_checked_off_when_its_sorted(
     tired(scenario)
     await seen(scenario, robot, "clean_water_empty")
     await scenario.advance(minutes=5)
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task_id = scenario.app.db.scalar("SELECT id FROM tasks")
     await board.cancel(task_id, scenario.member("Husband"))  # it's the routine item now
@@ -393,7 +394,7 @@ async def test_a_chore_made_by_hand_about_it_is_checked_off_when_its_sorted(
     tired(scenario)
     await seen(scenario, robot, "clean_water_empty")
     await scenario.advance(minutes=5)
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     robots = scenario.app.db.scalar("SELECT id FROM tasks")
     await board.cancel(robots, husband)  # into his routine, just for today
@@ -420,7 +421,7 @@ async def test_with_the_rule_on_a_chore_made_by_hand_is_done_without_asking(
     scenario.app.services.autonomy.grant_tier2(
         DONE_CATEGORY, via_rule_id=1, by=scenario.member("Erin")
     )
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     own = await board.create(

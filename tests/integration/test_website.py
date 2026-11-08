@@ -14,7 +14,9 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import Role
 from themi.autonomy import ExecutionContext
+from themi.core.calendar_view import CalendarPreferences
 from themi.web.auth import COOKIE_NAME, WebAuth
+from themi_home.chore_chart import ChartPreferences
 
 # ----- signing in ---------------------------------------------------------------
 
@@ -100,6 +102,7 @@ async def test_the_csrf_header_works_for_htmx(scenario: Scenario, site: httpx.As
 # ----- settings -------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("fake_cozyla", "fake_gmail", "fake_gcal")  # CR7a/b1: their rows
 async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -> None:
     csrf = await sign_in(scenario, site, "Erin")
     form = {
@@ -122,8 +125,11 @@ async def test_settings_are_saved(scenario: Scenario, site: httpx.AsyncClient) -
         "07:45",
     )
     assert (erin.daily_limit, erin.pda_enabled, erin.pda_strength) == (3, True, 3)
-    assert erin.chart_limit == 1 and not erin.chart_counts_shared  # left unticked
-    assert erin.calendar_twins == "guess"  # F34e
+    chart = scenario.app.store.preferences(erin.id, ChartPreferences)  # CR7a
+    assert chart.chart_limit == 1 and not chart.chart_counts_shared  # left unticked
+    assert (
+        scenario.app.store.preferences(erin.id, CalendarPreferences).calendar_twins == "guess"
+    )  # F34e
     assert erin.tracks("text_notes") and not erin.tracks("message_timing")
     page = await site.get("/settings")
     assert "Saved." in page.text and 'value="22:15"' in page.text
@@ -330,8 +336,7 @@ async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
         "/spending",
         "/maintenance",
         "/safeway",
-        "/email/noise",
-    )
+    )  # /email/noise is the gmail module's (CR4): test_noise_digest renders it with Gmail
     for name, extra in (("Husband", ()), ("Erin", ("/family", "/dev"))):
         async with web_client(scenario) as client:
             await sign_in(scenario, client, name)
@@ -339,6 +344,7 @@ async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
                 response = await client.get(path)
                 assert response.status_code == 200, path
                 assert 'class="tabs"' in response.text, path
+            assert (await client.get("/email/noise")).status_code == 404  # no Gmail here
 
 
 def test_a_row_opens_on_tap_and_shows_its_chips() -> None:
@@ -395,6 +401,7 @@ async def test_each_settings_section_says_what_its_set_to(
     assert "Summary of my day at 7:15 am" in page and "Plain: say it straight</span>" in page
 
 
+@pytest.mark.usefixtures("fake_cozyla", "fake_gmail", "fake_gcal")  # CR7a/b1: their rows
 async def test_one_save_bar_saves_every_section(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:

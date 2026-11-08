@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 from themi import clock
 from themi.ai.embeddings import Embedder, Vector, VectorCache, similarity, unit
-from themi.core.events import words_in_common
+from themi.core.wording import words_in_common
 
 log = logging.getLogger(__name__)
 

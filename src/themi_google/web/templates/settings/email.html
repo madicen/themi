@@ -1,0 +1,13 @@
+{# CR7d: a section of the settings form, the noise digest module's (CR18b). #}
+{% from "_row.html" import row %}
+  {% set noise_words = {"daily": "Once a day", "twice": "Twice a day", "every_other_day": "Every other day"} %}
+  {% if prefs.gmail %}{% call(part) row("My email", meta="Noise emails: " ~ noise_words.get(prefs.gmail.noise_emails, prefs.gmail.noise_emails) | lower, id="email") %}{% if part == "body" %}
+    <label>Ask me about emails that look like noise, all together,
+      <select name="noise_emails">
+        <option value="daily" {% if prefs.gmail.noise_emails == "daily" %}selected{% endif %}>once a day (6 pm)</option>
+        <option value="twice" {% if prefs.gmail.noise_emails == "twice" %}selected{% endif %}>twice a day (noon and 6 pm)</option>
+        <option value="every_other_day" {% if prefs.gmail.noise_emails == "every_other_day" %}selected{% endif %}>every other day (6 pm)</option>
+      </select>
+    </label>
+    <p class="muted">One message lists them, with a button to archive them all. You can also pick on <a href="/email/noise">Emails to archive</a>. Emails you've already moved out of your inbox are left out.</p>
+  {% endif %}{% endcall %}{% endif %}

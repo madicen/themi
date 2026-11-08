@@ -5,6 +5,7 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
+from themi.core import keys
 
 BIRD_CAGE = [
     "Remove everything from the top tray; throw out dirty or destroyed cardboard",
@@ -42,7 +43,7 @@ async def test_a_chore_keeps_its_steps(scenario: Scenario) -> None:
     scenario.primary.queue_text("Added, with the steps.")
     await scenario.say("Erin", "add the bird cage, here's what cleaning it involves...")
 
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     (task,) = board.open_for(scenario.member("Erin"))
     assert task.steps == tuple(BIRD_CAGE)
@@ -61,7 +62,7 @@ async def test_a_chore_keeps_its_steps(scenario: Scenario) -> None:
 
 
 async def test_steps_can_be_edited_and_the_title_tidied(scenario: Scenario) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     task = await board.create(
@@ -101,7 +102,7 @@ async def test_steps_can_be_edited_and_the_title_tidied(scenario: Scenario) -> N
 
 
 async def test_only_the_people_involved_can_edit_a_task(scenario: Scenario) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         scenario.member("Erin"), "Book the dentist", "errand", 1, assignee=scenario.member("Erin")
@@ -119,7 +120,7 @@ async def test_only_the_people_involved_can_edit_a_task(scenario: Scenario) -> N
 async def test_the_tasks_page_shows_and_edits_steps(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(
         scenario.member("Erin"), "Clean the bird cage", "physical", 2, steps=BIRD_CAGE

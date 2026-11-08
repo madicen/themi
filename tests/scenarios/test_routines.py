@@ -9,15 +9,16 @@ from datetime import date, time, timedelta
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.pauses import EVERYTHING
-from themi.core.praise import PRAISE
-from themi.core.routines import Routines
+from themi.core import keys
+from themi.standard.praise import PRAISE, TasksPreferences
+from themi.standard.routines import Routines
 
 WED = date(2026, 10, 21)
 
 
 def routines(scenario: Scenario) -> Routines:
-    assert scenario.app.services.routines is not None
-    return scenario.app.services.routines
+    assert scenario.app.services.maybe(keys.routines) is not None
+    return scenario.app.services.get(keys.routines)
 
 
 async def at(scenario: Scenario, day: date, hour: int, minute: int = 0) -> None:
@@ -101,7 +102,7 @@ async def test_the_check_comes_as_the_window_ends_and_ticks_from_buttons(
 
 async def test_no_warm_word_for_a_routine_tick_when_its_off(scenario: Scenario) -> None:
     erin = scenario.member("Erin")
-    scenario.app.store.update_settings(erin, erin.id, done_praise=False)
+    scenario.app.store.save_preferences(erin, erin.id, TasksPreferences, done_praise=False)
     add(scenario, "Erin", "Morning", "Vitamins")
     await at(scenario, WED, 12, 0)
     await scenario.tap("Erin", "✓ Vitamins")

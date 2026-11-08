@@ -5,7 +5,7 @@ Erin said yes to the water check-in in words, but it stayed waiting: only a tap 
 message says so; it can't say yes for them."""
 
 from tests.scenarios.harness import Scenario
-from themi.core.habits import CATEGORY, EXECUTOR, HabitReserve
+from themi.standard.habits import CATEGORY, EXECUTOR, HabitReserve
 
 
 async def water_offer(scenario: Scenario) -> int:

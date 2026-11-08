@@ -10,6 +10,7 @@ from themi import clock
 from themi.accounts import SYSTEM, Member
 from themi.ai.types import ToolResult
 from themi.channels.outbox import Priority
+from themi.core import keys
 
 
 class Until:
@@ -141,7 +142,7 @@ async def test_a_nickname_the_notes_explain_finds_them(scenario: Scenario) -> No
     """Found reading the reports of 2026-10-27: "can you tell Hundo 'I Wuv U'?" was saved as
     a note and answered "I've saved that for her"."""
     hold_until(scenario, START)
-    memory = scenario.app.services.memory
+    memory = scenario.app.services.maybe(keys.memory)
     assert memory is not None
     memory.remember(
         scenario.member("Husband"), "nickname", 'Husband calls Erin "Hundo".', scope="family"
@@ -242,7 +243,7 @@ async def test_the_button_goes_once_the_note_has_gone(scenario: Scenario) -> Non
 async def test_no_send_now_in_burnout_mode(scenario: Scenario) -> None:
     hold_until(scenario, START + timedelta(hours=3))
     services = scenario.app.services
-    assert services.burnout is not None
-    await services.burnout.start(scenario.member("Erin"))
+    assert services.maybe(keys.burnout) is not None
+    await services.get(keys.burnout).start(scenario.member("Erin"))
     await held(scenario, "Let Erin know the dog's been fed", "The dog's been fed.")
     assert scenario.app.db.scalar("SELECT card_outbox_id FROM liaison_items") is None

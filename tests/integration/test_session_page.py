@@ -15,15 +15,16 @@ from tests.fixtures.web import csrf_of, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.channels.mini_app import sign_init_data
-from themi.core.body_double import GUIDED, SILENT, SPRINT, BodyDouble
+from themi.core import keys
 from themi.web.auth import COOKIE_NAME
+from themi_home.body_double import GUIDED, SILENT, SPRINT, BodyDouble, BodyDoublePreferences
 
 ENERGY_WORDS = ("energy", "capacity", "score", "low", "medium", "high")
 
 
 def bd(scenario: Scenario) -> BodyDouble:
-    assert scenario.app.services.body_double is not None
-    return scenario.app.services.body_double
+    assert scenario.app.services.maybe(keys.body_double) is not None
+    return scenario.app.services.get(keys.body_double)
 
 
 def init_data(user_id: int, *, token: str = BOT_TOKEN, ago: int = 0) -> str:
@@ -82,7 +83,7 @@ async def test_the_state_per_mode(scenario: Scenario, site: httpx.AsyncClient) -
     state = (await site.get("/session/state")).json()
     assert state["timer"] == {"kind": "down", "to": "2026-10-21T16:25:00+00:00", "text": "25:00"}
     assert [b["label"] for b in state["buttons"]] == ["Break", "Stop here"]
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     task = await board.create(erin, "Clean the kitchen", "physical", 3)
     await board.update(task.id, erin, steps=["Clear the counter", "Sweep"])
@@ -131,11 +132,12 @@ async def test_a_page_tap_with_an_old_seq_does_nothing(
 async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.AsyncClient) -> None:
     csrf = await sign_in(scenario, site, "Erin")
     erin = scenario.member("Erin")
-    assert (erin.body_double_sound, erin.body_double_volume) == ("lofi", 50)
+    prefs = scenario.app.store.preferences(erin.id, BodyDoublePreferences)
+    assert (prefs.body_double_sound, prefs.body_double_volume) == ("lofi", 50)
     await bd(scenario).start(erin, mode=SILENT)
     page = (await site.get("/session")).text
     assert 'class="session-music"' in page and "autoplay" not in page
-    assert '<audio loop preload="none" src="/static/audio/lofi.m4a?v=' in page
+    assert '<audio loop preload="none" src="/static/home/audio/lofi.m4a?v=' in page
     saved = await site.post("/session/music", data={"csrf": csrf, "sound": "rain", "volume": "30"})
     assert saved.status_code == 204
     music = (await site.get("/session/state")).json()["music"]
@@ -144,8 +146,8 @@ async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.Asyn
     assert bad.status_code == 400
     bad = await site.post("/session/music", data={"csrf": csrf, "sound": "", "volume": "101"})
     assert bad.status_code == 400
-    assert scenario.member("Erin").body_double_sound == "rain"
-    audio = await site.get("/static/audio/rain.m4a")
+    assert sound(scenario) == "rain"
+    audio = await site.get("/static/home/audio/rain.m4a")  # CR17b: the home pack's
     assert audio.status_code == 200 and len(audio.content) > 10_000
 
 
@@ -153,7 +155,7 @@ async def test_play_rain_in_chat_sets_the_page(scenario: Scenario) -> None:
     scenario.primary.queue_tool_call("choose_session_sound", {"sound": "rain"})
     scenario.primary.queue_text("Rain it is; tap play on the session page.")
     await scenario.say("Erin", "play rain")
-    assert scenario.member("Erin").body_double_sound == "rain"
+    assert sound(scenario) == "rain"
 
 
 async def test_the_mini_app_works_when_the_webview_drops_cookies(scenario: Scenario) -> None:
@@ -189,7 +191,7 @@ async def test_the_page_reports_its_own_problems_to_the_log(
     await sign_in(scenario, site, "Erin")
     answer = await site.post("/session/report", content=b"tap 3/act answered 403" + b"x" * 900)
     assert answer.status_code == 204
-    (record,) = [r for r in caplog.records if r.name == "themi.web.session_pages"]
+    (record,) = [r for r in caplog.records if r.name == "themi_home.web.session_pages"]
     assert "member 1" in record.getMessage() and "tap 3/act answered 403" in record.getMessage()
     assert len(record.getMessage()) < 700  # short text only
 
@@ -197,7 +199,7 @@ async def test_the_page_reports_its_own_problems_to_the_log(
 async def test_a_refused_page_tap_says_why_in_the_log(
     scenario: Scenario, site: httpx.AsyncClient, caplog: pytest.LogCaptureFixture
 ) -> None:
-    caplog.set_level("INFO", logger="themi.core.body_double")
+    caplog.set_level("INFO", logger="themi_home.body_double")
     csrf = await sign_in(scenario, site, "Erin")
     session, _, _ = await bd(scenario).start(scenario.member("Erin"), mode=SPRINT)
     await site.post(f"/session/{session.id}/act",
@@ -230,3 +232,8 @@ async def test_a_tap_works_beside_an_older_website_cookie(scenario: Scenario) ->
             data={"csrf": csrf, "action": "break", "seq": session.seq},
         )
         assert tapped.status_code == 200 and tapped.json()["phase"] == "break"
+
+
+def sound(scenario: Scenario) -> str:
+    erin = scenario.member("Erin")
+    return scenario.app.store.preferences(erin.id, BodyDoublePreferences).body_double_sound

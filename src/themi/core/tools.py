@@ -116,7 +116,7 @@ class Done:
 def in_their_words(ctx: ToolContext, title: str) -> bool:
     """Every word of the title (over two letters) is in what they wrote this turn: the
     tool did what they named, not what the model took them to mean."""
-    from themi.core.lists import name_key  # lists builds its tools from this module
+    from themi.standard.lists import name_key  # lists builds its tools from this module
 
     said = name_key(ctx.request_text)
     words = [w for w in name_key(title).split() if len(w) > 2] or [name_key(title)]
@@ -185,311 +185,32 @@ def staged_tool(
 #
 # Every message sent all the tools' schemas, about 8,000 tokens (bug #29). A core set always
 # goes; the rest go by group when the message or the last few messages call for them, and
-# `more_tools` adds a group mid-turn. A tool not in TOOL_GROUPS is core, so a new tool is
-# never hidden by accident.
+# `more_tools` adds a group mid-turn. A tool in no group is core, so a new tool is never
+# hidden by accident. CR8b: modules register their groups (themi.core.groups).
 
-GROUPS: dict[str, tuple[str, str]] = {  # name: (what it's for, words that call for it)
-    "schedules": (
-        "repeating chores, plans, importance, check-in reviews",
-        r"every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?|"
-        r"twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remind|"
-        r"(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|weekends",
+
+@dataclass(frozen=True)
+class ToolGroup:
+    """CR8b: tools that go together, the words that call for them, and examples for the
+    embedding router. Modules register the groups their tools are in."""
+
+    name: str
+    description: str  # what it's for, in more_tools' description
+    words: str  # a regex: words in a message that call for it
+    examples: tuple[str, ...]  # for the embedding router (P7a)
+    tools: tuple[str, ...]
+    order: int  # the order groups are offered in
+
+
+SETTINGS = ToolGroup(  # CR8b: the core's own group; the breaks and burnout modules add to it
+    name="settings",
+    description="pausing messages, breaks, phrasing, quiet hours",
+    words=(
+        "pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gen"
+        "tle|plain|pushy|too many|limit|break\\b|\\brest\\b|i'?m back|burnout|check-?ins"
+        "?\\b"
     ),
-    "calendar": (
-        "calendar events, day summaries, drive times, blocking time",
-        r"calendar|appointment|meeting|event|today|tomorrow|tonight|yesterday|"
-        r"(?:morning|afternoon|evening)(?!s?\s+routines?)|day look|what'?s on|monday|"
-        r"tuesday|wednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|"
-        r"block|time for|find (?:me )?time|summary",
-    ),
-    "web": (  # F30d: looking things up online
-        "searching the web, reading a web page",
-        r"look (?:it |that |this )?up|search|google|online|on the web|internet|website|"
-        r"find out|still (?:open|practi[cs]ing|in business|working)|phone number|"
-        r"opening hours|reviews?",
-    ),
-    "recipes": (  # RC1b: the family cookbook
-        "the family cookbook: finding and showing recipes",
-        r"recipes?|cookbook|cook|bak(?:e|ing)|ingredients?|how (?:do|to) (?:i |we |you )?make|"
-        r"roast|instant pot|dressing|sauce|desserts?|soup|pancakes?|lasagna|masala|"
-        r"what (?:we|i) (?:would |will |'d |'ll )?need for|shop(?:ping)? for|"
-        r"double (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\d|"
-        r"walk (?:me|us) through|let'?s make|step by step|cooking|"
-        r"https?://\S*(?:recipe|food|kitchen|cook|bak|eat|vegan)|"
-        r"what (?:can|could) (?:i|we) make|with what (?:we|i) have",
-    ),
-    "lists": (
-        "named lists, the wall's lists, usual stores",
-        r"list|packing|ideas|tick|cross|check off|clear|things to cook|store|amazon|"
-        r"target|costco|home depot",
-    ),
-    "wall": (
-        "the Cozyla wall: chore chart, routines, to-do lists",
-        r"wall|cozyla|chart|chore|routine",
-    ),
-    "email": (
-        "inboxes, expected emails, time-sensitive and important senders, the email audit",
-        r"e-?mail|inbox|gmail|sender|expect|bill|statement|confirmation|unsubscribe|audit|"
-        r"time.sensitive|archive|noise|junk|spam|mark(?:ed)? (?:as )?read|forward",
-    ),
-    "pantry": (
-        "the pantry and meal ideas",
-        r"pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
-        r"running low|ran out|leftover|used (?:up|the last)|last of|finished the|picked up|"
-        r"bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go(?:es)? off|"
-        r"went off|safeway|\bcart\b|weekly shop",
-    ),
-    "calls": ("phone calls to make for them", r"call|phone|ring|vendor|script"),
-    "devices": (
-        "the washer, dryer, dishwasher, robot vacuum, pet feeders and litter box: running, "
-        "done, time left, stuck, food left, last fed, sani-solution, errors",
-        r"wash(?:er|ing)?\b|dryer|drying|dishwasher|laundry|cycle|load\b|appliance|"
-        r"how (?:much )?longer|time left|still running|is it done|"
-        r"robot|roborock|the vacuum\b|vacuum'?s\b|"
-        r"feeders?\b|kibble|been fed|fed the (?:cat|dog)s?|pet food|cat food|dog food|"
-        r"litter|cat ?genie|sani.?solution|cartridge|granules?\b",
-    ),
-    "maintenance": (
-        "seasonal and long-term upkeep: filters, gutters, fertilizing, their guides and notes",
-        r"maintenance|upkeep|filters?\b|gutters?|fertili[sz]|furnace|hvac|air con|"
-        r"smoke (?:alarm|detector)|water heater|water softener|descal|sprinklers?|winteri[sz]|"
-        r"chimney|septic|dryer vent|caulk|seal(?:ant|ing)? the|oil change|"
-        r"tyres?\b|tires?\b|last time we|how do (?:i|we) (?:change|clean|service)",
-    ),
-    "spending": (
-        "money spent: takeout, eating out, business expenses",
-        r"spent|spend|paid|\$|expense|budget|takeout|take-out|doordash|door dash|uber eats|"
-        r"eating out|ate out|restaurant|receipt|cost",
-    ),
-    "music": (  # BD5b: their own Spotify
-        "their own music on Spotify: playing and pausing",
-        r"spotify|playlist|\bsong|\balbum|\bmusic\b|play (?:some|my|the)\b|pause (?:the|my) "
-        r"(?:music|spotify|song)|put on (?:some|my)",
-    ),
-    "body_double": (  # BD1a: company while they work
-        "body double sessions: quiet company, sprints, step by step",
-        r"body.?doubl|sit with me|keep me company|company while|pomodoro|sprints?\b|"
-        r"work (?:alongside|with me)|stay with me while|focus session|while i (?:work|do)|"
-        r"quiet instead|step by step instead|always use (?:pomodoro|sprints|quiet)|"
-        r"\blofi\b|lo-fi|brown noise|play (?:some )?(?:rain|piano)",
-    ),
-    "settings": (
-        "pausing messages, breaks, phrasing, quiet hours",
-        r"pause|mute|quiet|stop (?:sending|messaging)|resume|phrasing|wording|tone|gentle|"
-        r"plain|pushy|too many|limit|break\b|\brest\b|i'?m back|burnout|check-?ins?\b",
-    ),
-}
-# P7a: plain examples of what calls for each group, for an embedding router (P7b) to
-# compare messages with. They ship with Themi, so they're written fresh: never a routing case
-# (tests/evals/routing_cases.json) and never the family's own words.
-GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
-    "schedules": (
-        "Make this chore repeat every Monday",
-        "The gutters need doing twice a year",
-        "Change the dishes task to every other day",
-        "Stop repeating the lawn task",
-        "Mowing the lawn is a weekly thing",
-        "That bill is important, there's a penalty if it's late",
-        "This task matters more than the others",
-        "Raise the importance of filing the taxes",
-        "Increase my run by half a mile each week",
-        "Start at ten push-ups and add two a week",
-        "Check in with me about the garden every few days",
-        "Make it repeat on the first of the month",
-    ),
-    "calendar": (
-        "What's on my calendar today?",
-        "Do I have anything Friday afternoon?",
-        "Give me a rundown of my day",
-        "What got done yesterday?",
-        "Add a doctor's visit next Tuesday at ten",
-        "Put the school concert on the family calendar",
-        "Push the meeting back an hour",
-        "Remove the dinner reservation from the calendar",
-        "How long would it take to drive to the airport?",
-        "When should I leave to get there by noon?",
-        "Find me a free hour this week for the taxes",
-        "Set aside Sunday afternoon for meal prep",
-        "What's coming up next week?",
-    ),
-    "web": (  # F30d
-        "Can you look up whether Dr. Scheinbach is still practicing?",
-        "Search online for the vet's opening hours",
-        "What's the phone number for Contemporary Dental in San Mateo?",
-        "Find out if the farmers market is open on Sundays",
-        "Google the reviews for that plumber",
-        "Is the Thai place on El Camino still in business?",
-        "Look up how long to cook farro",
-        "Check the website for the library's holiday hours",
-        "Search for kid-friendly hikes near Mountain View",
-        "Can you find the recall notice for our car seat online?",
-        "What does the internet say about rosemary for cats?",
-        "Look it up: when does daylight saving end this year?",
-    ),
-    "recipes": (  # RC1b
-        "Can you pull up the alfredo sauce recipe?",
-        "Show me the ranch dressing from our cookbook",
-        "What's in the chana masala?",
-        "Find something with chickpeas in the cookbook",
-        "Do we have a recipe for pancakes?",
-        "What desserts are in our cookbook?",
-        "How long do I roast carrots for?",
-        "Send me the lasagna recipe",
-        "How do I make the simple parmesan?",
-        "What ingredients does the biryani need?",
-        "I'd like to bake snickerdoodles, what's the recipe?",
-        "Pull up a soup from the recipes",
-    ),
-    "lists": (
-        "Make a list for the camping trip",
-        "What lists do I have?",
-        "Add a tent to the camping list",
-        "Cross the batteries off the list",
-        "Clear the finished items off my to-read list",
-        "Remove the lantern from the camping list",
-        "Get rid of the holiday list",
-        "Show the camping list on the wall screen",
-        "We usually buy printer ink from the office supply store",
-        "Start a list of birthday gift ideas",
-        "Tick off everything I already packed",
-        "What's on my wish list?",
-    ),
-    "wall": (
-        "Put flossing in my night routine",
-        "What's in my morning routine?",
-        "Add feeding the fish to the afternoon routine",
-        "Show the dusting task on the chore chart",
-        "Put the trash task on the wall's to-do list",
-        "How many chores show on the chart at once?",
-        "Show two chores at a time on the board",
-        "Swap today's chore for another one",
-        "I don't want that chore today, pick a different one",
-        "Is laundry on the chore chart?",
-        "Take the mirror cleaning off the board",
-        "What's on the wall today?",
-    ),
-    "email": (
-        "Is there anything in my inbox I should see?",
-        "Archive the promotional emails",
-        "Get rid of the newsletters in my inbox",
-        "Mail from my accountant is always urgent",
-        "Treat the store emails as low priority",
-        "Don't archive that email from the landlord",
-        "I'm waiting for a package tracking email",
-        "Which emails are you watching for?",
-        "Forget about the receipt email, it came",
-        "Start watching my personal inbox too",
-        "Let's sort out which senders matter",
-        "Any unread emails that need a reply?",
-        "Forward that email to Erin",  # F31d (idea #168)
-        "Send this email to jenn@example.com",
-        "Can Michael see the email from the HOA?",
-    ),
-    "pantry": (
-        "We ran out of flour",
-        "Running low on olive oil",
-        "Picked up apples and bread today",
-        "The chicken needs using by Wednesday",
-        "What do we have in the fridge?",
-        "Is there any pasta left?",
-        "What should we cook tonight?",
-        "Give me a dinner idea with what we have",
-        "Something easy for lunch?",
-        "Finished the cereal this morning",
-        "The milk went off",
-        "Got more coffee beans",
-        "Load up the online grocery cart from the list",
-    ),
-    "calls": (
-        "Write me a script for calling the landlord",
-        "What do I say when I phone the pharmacy about a refill?",
-        "Help me call the electric company about the bill",
-        "I need to ring the garage about the car",
-        "The phone company said they'd credit the account",
-        "Called the school, they'll call back Monday",
-        "Prepare me for a call with the bank",
-        "Log that the vendor agreed to come Thursday",
-        "Draft what to say to the moving company",
-        "The plumber said next week",
-        "I have to phone the clinic, can you help?",
-        "Make me notes for calling customer service",
-    ),
-    "devices": (
-        "How much longer on the wash?",
-        "Is the dryer done yet?",
-        "Is the dishwasher still running?",
-        "How long is left on the laundry?",
-        "Has the washer finished?",
-        "Is anything running right now?",
-        "When will the dryer be done?",
-        "Is the dishwasher finished?",
-        "What's the dryer at?",
-        "Is the load of towels still going?",
-        "How far along is the dishwasher?",
-        "Is the robot vacuum still cleaning?",
-        "Where's the vacuum stuck?",
-        "Has the cat been fed this morning?",
-        "How much food is left in the feeder?",
-        "Is the litter box working?",
-        "How much sani-solution is left?",
-    ),
-    "maintenance": (
-        "The furnace filter wants changing every three months",
-        "Add clearing the gutters to the maintenance list, spring and autumn",
-        "We fertilize the fruit trees every six weeks from March to September",
-        "Changed the fridge water filter today",
-        "Cleaned the dryer vent, it was full of lint",
-        "How do I flush the water heater again?",
-        "What did we use on the lawn last time?",
-        "When's the smoke alarm test next due?",
-        "Take the pool cover off the upkeep list",
-        "The sprinkler blowout is done in October only",
-        "What maintenance is coming up?",
-        "Add a step to the AC service: check the drain line",
-    ),
-    "spending": (
-        "We spent $30 on burgers",
-        "Got takeout tonight, $45",
-        "How much have we spent eating out?",
-        "What's our takeout total this month?",
-        "That dinner was a work expense",
-        "Mark the coffee as business",
-        "Delete the pizza from spending",
-        "That charge was logged twice",
-        "Paid $18 for delivery",
-        "Are we over our eating out budget?",
-        "Lunch out with a client, $60",
-        "Show me what we spent this week",
-    ),
-    "music": (  # BD5b
-        "Play my focus playlist on Spotify",
-        "Put on some jazz",
-        "Pause the music",
-        "Play the Abbey Road album",
-        "Can you play my running playlist?",
-        "Stop the song",
-        "Put on something calm on Spotify",
-        "Play some instrumental music",
-        "Start my morning playlist",
-        "Pause Spotify for a minute",
-        "Play that new Taylor Swift album",
-        "Music please, something upbeat",
-    ),
-    "body_double": (  # BD1a
-        "Can you sit with me while I sort the paperwork?",
-        "Body double me through the dishes",
-        "Pomodoro the garage clean-out",
-        "Keep me company while I write the report",
-        "I need some company while I study",
-        "Let's do sprints on the inbox",
-        "Stay with me while I fold the clothes",
-        "Work alongside me for an hour on the essay",
-        "Quiet company for 45 minutes please",
-        "Switch to sprints",
-        "Quiet instead",
-        "Start a focus session on the budget",
-    ),
-    "settings": (
+    examples=(
         "I'm going to rest for twenty minutes",
         "Taking five",
         "I'm done with my break",
@@ -503,125 +224,16 @@ GROUP_EXAMPLES: dict[str, tuple[str, ...]] = {
         "Can you phrase things more softly?",
         "Too many messages today",
     ),
-}
-TOOL_GROUPS: dict[str, str] = {
-    **dict.fromkeys(
-        (
-            "find_recipe",
-            "show_recipe",
-            "add_recipe_to_grocery_list",
-            "set_recipe_yield",
-            "start_cooking",
-            "stop_cooking",
-            "recipe_from_link",
-            "recipe_from_picture",
-            "find_web_recipe",
-            "save_recipe_to_cookbook",
-            "cookbook_recipes_we_can_make",
-        ),
-        "recipes",
-    ),  # RC1b, RC2a, RC2b, RC3a
-    **dict.fromkeys(("search_web", "read_web_page"), "web"),
-    **dict.fromkeys(("play_music", "pause_music"), "music"),  # BD5b
-    **dict.fromkeys(
-        (
-            "start_body_double",
-            "switch_body_double_mode",
-            "end_body_double",
-            "set_body_double_default",
-            "set_job_category",
-            "redo_step_picture",  # BD4b
-            "send_step_picture",
-            "choose_session_sound",  # BD5a
-        ),
-        "body_double",
+    tools=(
+        "start_break",
+        "end_break",
+        "set_burnout_check_in",
+        "pause_messages",
+        "resume_messages",
+        "set_phrasing",
     ),
-    **dict.fromkeys(("start_break", "end_break", "set_burnout_check_in"), "settings"),
-    **dict.fromkeys(
-        ("log_spending", "spending_summary", "mark_business_expense", "remove_spending"),
-        "spending",
-    ),
-    **dict.fromkeys(
-        (
-            "set_task_schedule",
-            "set_task_plan",
-            "set_task_importance",
-            "set_check_in_reviews",
-            "set_task_medicine",
-        ),
-        "schedules",
-    ),
-    **dict.fromkeys(
-        (
-            "add_calendar_event",
-            "change_calendar_event",
-            "delete_calendar_event",
-            "merge_calendar_events",
-            "day_summary",
-            "drive_time",
-            "block_time_for_task",
-            "find_time_for_task",
-        ),
-        "calendar",
-    ),
-    **dict.fromkeys(
-        (
-            "create_list",
-            "add_to_list",
-            "tick_list_items",
-            "remove_from_list",
-            "show_lists",
-            "delete_list",
-            "put_list_on_wall",
-            "set_usual_store",
-        ),
-        "lists",
-    ),
-    **dict.fromkeys(
-        (
-            "put_task_on_wall_list",
-            "put_task_on_chore_chart",
-            "set_chore_chart_limit",
-            "change_chore_chart",
-            "add_to_wall_routine",
-            "show_routine",
-            # R1a: Themi's own routines, called for by the same words
-            "show_routines",
-            "set_routine",
-            "remove_routine",
-            "add_routine_item",
-            "remove_routine_item",
-            "tick_routine_item",
-        ),
-        "wall",
-    ),
-    **dict.fromkeys(
-        (
-            "expect_email",
-            "list_expected_emails",
-            "forget_expected_email",
-            "set_urgent_senders",
-            "set_inbox_watched",
-            "inbox_setup",
-            "keep_email",
-            "start_email_audit",
-            "set_sender_levels",
-            "archive_noise_emails",
-            "forward_email",
-        ),
-        "email",
-    ),
-    **dict.fromkeys(
-        ("update_pantry", "show_pantry", "suggest_meals", "fill_safeway_cart"), "pantry"
-    ),
-    **dict.fromkeys(("draft_vendor_call", "log_call_outcome"), "calls"),
-    "appliance_status": "devices",
-    **dict.fromkeys(
-        ("set_maintenance", "remove_maintenance", "get_maintenance_guide", "log_maintenance"),
-        "maintenance",
-    ),
-    **dict.fromkeys(("pause_messages", "resume_messages", "set_phrasing"), "settings"),
-}
+    order=150,
+)
 
 
 # ----- near-twin tools (P6) --------------------------------------------------------------
@@ -695,11 +307,6 @@ def twins_text(names: Iterable[str]) -> str:
     return "\n\n".join(t.text for t in TWINS if sent & set(t.tools))
 
 
-_GROUP_WORDS = {
-    name: re.compile(rf"\b(?:{words})", re.IGNORECASE) for name, (_, words) in GROUPS.items()
-}
-
-
 # F34l: a picture turn gets the groups a picture usually starts (a list's items, an event, a
 # recipe), whatever its words; guides and bug reports are core already. Not every group:
 # that would double the prompt (about 28k characters to 56k), and `more_tools` is there.
@@ -731,12 +338,6 @@ def answers_picture_question(ctx: ToolContext, words: Sequence[str]) -> bool:
     return all(re.search(rf"\b{re.escape(plain_words(w))}\b", asked) for w in words)
 
 
-def choose_groups(texts: Sequence[str]) -> set[str]:
-    """The groups these messages call for (this one and the last few)."""
-    joined = " ".join(texts)
-    return {name for name, pattern in _GROUP_WORDS.items() if pattern.search(joined)}
-
-
 # Old tool names still answered for one release (a model or a saved turn may use them):
 # the call goes to the new tool, its new fields empty (F29a).
 ALIASES = {"move_calendar_event": "change_calendar_event"}
@@ -745,8 +346,87 @@ ALIASES = {"move_calendar_event": "change_calendar_event"}
 class ToolRegistry:
     def __init__(self, tools: list[Tool] | None = None) -> None:
         self._tools: dict[str, Tool] = {}
+        self._groups: dict[str, ToolGroup] = {}
+        self._words: dict[str, re.Pattern[str]] | None = None
+        self._owners: dict[str, str] = {}  # CR9: tool -> the module that registered it
+        # CR12: the template's wording for tools and groups, in what the model is sent.
+        self._tool_words: dict[str, dict[str, Any]] = {}
+        self._group_words: dict[str, str] = {}
+        self.installing = ""  # set by the module loader while a module installs
         for t in tools or []:
             self.register(t)
+
+    # ----- groups (CR8b) ------------------------------------------------------------------
+
+    def add_group(self, group: ToolGroup) -> None:
+        """A module's group. Two modules may add the same one (the wall's to-do lists and
+        chores share "wall"); two different groups with one name are refused."""
+        found = self._groups.get(group.name)
+        if found is not None and found != group:
+            raise ValueError(f"two different tool groups are called {group.name}")
+        self._groups[group.name] = group
+        self._words = None
+
+    def reword(self, tools: dict[str, dict[str, Any]], groups: dict[str, str]) -> None:
+        """CR12: a template's own words for some tools (`description`, and `fields` for its
+        arguments' descriptions) and groups. Only what's sent changes; calls are checked
+        against the tools' own specs."""
+        self._tool_words = {k: dict(v) for k, v in tools.items()}
+        self._group_words = dict(groups)
+
+    def _worded(self, spec: ToolSpec) -> ToolSpec:
+        words = self._tool_words.get(spec.name)
+        if not words:
+            return spec
+        schema_ = spec.input_schema
+        fields = words.get("fields", {})
+        if fields:
+            props = {
+                k: {**p, "description": fields[k]} if k in fields else p
+                for k, p in schema_.get("properties", {}).items()
+            }
+            schema_ = {**schema_, "properties": props}
+        return replace(
+            spec, description=words.get("description", spec.description), input_schema=schema_
+        )
+
+    def groups(self) -> list[ToolGroup]:
+        """The groups modules added, in the order they're offered, in the template's words."""
+        found = sorted(self._groups.values(), key=lambda g: g.order)
+        return [
+            replace(g, description=self._group_words[g.name]) if g.name in self._group_words else g
+            for g in found
+        ]
+
+    def group_names(self) -> list[str]:
+        return [g.name for g in self.groups()]
+
+    def group_of(self, tool: str) -> str:
+        """The group a tool is in, or "core" (always sent)."""
+        return next((g.name for g in self.groups() if tool in g.tools), "core")
+
+    def choose_groups(self, texts: Sequence[str]) -> set[str]:
+        """The groups these messages call for (this one and the last few)."""
+        if self._words is None:
+            self._words = {
+                g.name: re.compile(rf"\b(?:{g.words})", re.IGNORECASE) for g in self.groups()
+            }
+        joined = " ".join(texts)
+        return {name for name, pattern in self._words.items() if pattern.search(joined)}
+
+    def examples(self) -> dict[str, tuple[str, ...]]:
+        """P7a: each group's examples, for the embedding router."""
+        return {g.name: g.examples for g in self.groups()}
+
+    def more_tools_for(self, groups: set[str]) -> ToolSpec | None:
+        """F33b: more_tools as one turn gets it, offering only the groups it doesn't have yet
+        (29 of 41 calls in a week asked for ones already sent). None when every group is in."""
+        missing = [g for g in self.groups() if g.name not in groups]
+        if not missing:
+            return None
+        return ToolSpec(
+            more_tools.spec.name, _more_tools_text(missing), schema(_more_tools_args(missing))
+        )
 
     def register(self, t: Tool) -> None:
         if t.spec.name in self._tools:
@@ -757,6 +437,11 @@ class ToolRegistry:
                 "so they go through the trust tiers"
             )
         self._tools[t.spec.name] = t
+        self._owners[t.spec.name] = self.installing or "core"
+
+    def module_of(self, tool: str) -> str:
+        """CR9: the module that registered this tool, or "core"."""
+        return self._owners.get(tool, "core")
 
     def specs(self, groups: set[str] | None = None) -> list[ToolSpec]:
         """Every tool, or (P1) the core and these groups', with any twin set (P6) they
@@ -764,26 +449,34 @@ class ToolRegistry:
         chosen = {
             name
             for name in self._tools
-            if groups is None or TOOL_GROUPS.get(name, "core") in groups | {"core"}
+            if groups is None or self.group_of(name) in groups | {"core"}
         }
         for twins in TWINS:  # P6: a twin set goes whole
             if chosen & set(twins.tools):
                 chosen |= set(twins.tools) & self._tools.keys()
-        specs = [self._tools[name].spec for name in sorted(chosen)]
-        if groups is None:
-            return specs
-        offer = more_tools_for(groups)  # F33b: only what this turn doesn't have
+        specs = [self._worded(self._tools[name].spec) for name in sorted(chosen)]
+        if groups is None:  # every tool: more_tools offers every group
+            full = self.more_tools_for(set())
+            return [full if s.name == more_tools.spec.name and full else s for s in specs]
+        offer = self.more_tools_for(groups)  # F33b: only what this turn doesn't have
         rest = [spec for spec in specs if spec.name != more_tools.spec.name]
         if offer is None or len(rest) == len(specs):
             return rest
         return sorted([*rest, offer], key=lambda spec: spec.name)
 
-    def specs_for(self, groups: set[str], routing: str = "groups") -> list[ToolSpec]:
+    def specs_for(
+        self, groups: set[str], routing: str = "groups", allowed: set[str] | None = None
+    ) -> list[ToolSpec]:
         """The tools one model call gets. P5's "all" is every tool but more_tools, which
-        would have nothing to add."""
+        would have nothing to add. `allowed`: the modules this person's role may use (CR9);
+        None is all of them, and the core's tools always go."""
         if routing == "all":
-            return [spec for spec in self.specs() if spec.name != more_tools.spec.name]
-        return self.specs(groups)
+            specs = [spec for spec in self.specs() if spec.name != more_tools.spec.name]
+        else:
+            specs = self.specs(groups)
+        if allowed is None:
+            return specs
+        return [s for s in specs if self.module_of(s.name) in allowed | {"core"}]
 
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
@@ -795,6 +488,11 @@ class ToolRegistry:
             call = replace(call, arguments={**empty, **call.arguments})
         if t is None:
             return ToolResult(call.id, f"There's no tool called {call.name}.", is_error=True)
+        may_use = getattr(ctx.services, "may_use", None)  # a test's stand-in may not have it
+        if may_use is not None and not may_use(ctx.member, t.spec.name):  # CR9: their role's
+            return ToolResult(
+                call.id, f"{ctx.member.name} can't use {t.spec.name} here.", is_error=True
+            )
         result, outcome = await self._run(t, call, ctx)
         ctx.outcomes.append(outcome)
         ctx.calls.append((call.name, outcome, result.content))
@@ -907,42 +605,40 @@ def dumps(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
-def _more_tools_text(groups: Sequence[str]) -> str:
+def _more_tools_text(groups: Sequence[ToolGroup]) -> str:
     return (
         "Bring in more of Themi's tools for this conversation, when what they ask needs ones "
         "you don't have yet. groups: "
-        + "; ".join(f"'{name}' ({GROUPS[name][0]})" for name in groups)
+        + "; ".join(f"'{g.name}' ({g.description})" for g in groups)
         + "."
     )
 
 
-def _more_tools_args(groups: Sequence[str]) -> dict[str, Any]:
-    return {"groups": {"type": "array", "items": {"type": "string", "enum": list(groups)}}}
+def _more_tools_args(groups: Sequence[ToolGroup]) -> dict[str, Any]:
+    names = [g.name for g in groups]
+    return {"groups": {"type": "array", "items": {"type": "string", "enum": names}}}
 
 
-@tool("more_tools", _more_tools_text(list(GROUPS)), _more_tools_args(list(GROUPS)))
+# CR8b: the groups come from the loaded modules, so what's sent to the model is built by
+# the registry (`more_tools_for`); this spec is what a call is checked against.
+@tool(
+    "more_tools",
+    _more_tools_text([]),
+    {"groups": {"type": "array", "items": {"type": "string"}}},
+)
 async def more_tools(ctx: ToolContext, args: dict[str, Any]) -> str:
-    added = [g for g in args["groups"] if g in GROUPS and g not in ctx.groups]
+    known = set(ctx.services.tools.group_names())
+    added = [g for g in args["groups"] if g in known and g not in ctx.groups]
     ctx.groups.update(added)
     if added:
         return f"Added the {', '.join(added)} tools; use them now."
     # F33b: only groups not sent are offered, so this is an old list or a muddle; say
     # what's here instead of a bare "here already" (reply 237 wandered for three rounds).
-    here = [g for g in dict.fromkeys(args["groups"]) if g in GROUPS]
-    names = sorted(n for n, g in TOOL_GROUPS.items() if g in here and ctx.services.tools.get(n))
+    here = [g for g in dict.fromkeys(args["groups"]) if g in known]
+    tools = ctx.services.tools
+    names = sorted(n for g in tools.groups() if g.name in here for n in g.tools if tools.get(n))
     if not names:
         return "Those tools are here already."
     return (
         f"The {' and '.join(here)} tools are here already: {', '.join(names)}. Use one of them now."
-    )
-
-
-def more_tools_for(groups: set[str]) -> ToolSpec | None:
-    """F33b: more_tools as one turn gets it, offering only the groups it doesn't have yet
-    (29 of 41 calls in a week asked for ones already sent). None when every group is in."""
-    missing = [g for g in GROUPS if g not in groups]
-    if not missing:
-        return None
-    return ToolSpec(
-        more_tools.spec.name, _more_tools_text(missing), schema(_more_tools_args(missing))
     )

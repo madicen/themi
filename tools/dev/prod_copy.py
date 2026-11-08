@@ -131,9 +131,13 @@ def _tables(db: sqlite3.Connection) -> list[str]:
 
 def _pair_with_the_simulator(db: sqlite3.Connection) -> None:
     ids = [r[0] for r in db.execute("SELECT id FROM members ORDER BY id").fetchall()]
-    db.execute("UPDATE members SET telegram_user_id = NULL")
+    db.execute("DELETE FROM member_identities WHERE channel = 'telegram'")  # CR20a2
     for member_id, telegram_id in zip(ids, (ERIN_TELEGRAM_ID, HUSBAND_TELEGRAM_ID), strict=False):
-        db.execute("UPDATE members SET telegram_user_id = ? WHERE id = ?", (telegram_id, member_id))
+        db.execute(
+            "INSERT INTO member_identities (member_id, channel, external_id, created_at) "
+            "VALUES (?, 'telegram', ?, ?)",
+            (member_id, str(telegram_id), clock.now().isoformat()),
+        )
 
 
 def put_dev_key(settings: Settings, gemini_key: str) -> int:

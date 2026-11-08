@@ -9,14 +9,15 @@ import httpx
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.repeat import parse
-from themi.core.tasks import DONE_TEXT, SETTLED_TEXT, TaskBoard
+from themi.core import keys
 from themi.localtime import to_utc_iso
+from themi.standard.repeat import parse
+from themi.standard.tasks import DONE_TEXT, SETTLED_TEXT, TaskBoard
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def done(site: httpx.AsyncClient, task_id: int, **headers: str) -> httpx.Response:

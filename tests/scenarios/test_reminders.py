@@ -12,16 +12,17 @@ from zoneinfo import ZoneInfo
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.types import ToolResult
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)
 PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def task(

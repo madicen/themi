@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from themi.core.quantities import NeedsYield, fraction, number, scale_for, scale_line
+from themi_home.quantities import NeedsYield, fraction, number, scale_for, scale_line
 
 
 @pytest.mark.parametrize(

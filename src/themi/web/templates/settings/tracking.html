@@ -1,0 +1,9 @@
+{# CR7d: a section of the settings form, the core's. #}
+{% from "_row.html" import row %}
+  {% set noticing = tracking | selectattr(2) | list | length %}
+  {% call(part) row("What Themi notices about you", meta=noticing ~ " of " ~ tracking | length ~ " on", id="tracking") %}{% if part == "body" %}
+    {% for name, words, on in tracking %}
+    <label class="check"><input type="checkbox" name="track_{{ name }}" {% if on %}checked{% endif %}> {{ words }}</label>
+    {% endfor %}
+    <p class="muted">Only you see these. Your partner never sees what's noticed about you.</p>
+  {% endif %}{% endcall %}

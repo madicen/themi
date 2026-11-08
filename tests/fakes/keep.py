@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 import pytest
 
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.gkeep import KeepError, KeepItem, KeepLogin
 from themi.storage.secrets import Secret
+from themi_home.connectors.gkeep import KeepError, KeepItem, KeepLogin
 
 MASTER_TOKEN = "aas_et/fake-master-token"
 

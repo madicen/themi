@@ -12,15 +12,16 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import arrive, inbox, verdict
 from themi.ai.types import ToolResult
-from themi.core.buying import ThingsToBuy
-from themi.core.lists import NamedList
+from themi.core import keys
+from themi.standard.lists import NamedList
+from themi_home.buying import ThingsToBuy
 
 __all__ = ["inbox"]  # the fixture, shared with the triage scenarios
 
 
 def buying(scenario: Scenario) -> ThingsToBuy:
-    assert scenario.app.services.buying is not None
-    return scenario.app.services.buying
+    assert scenario.app.services.maybe(keys.buying) is not None
+    return scenario.app.services.get(keys.buying)
 
 
 def to_buy(scenario: Scenario) -> NamedList:
@@ -32,8 +33,8 @@ def on_it(scenario: Scenario) -> list[tuple[str, bool]]:
 
 
 def groceries(scenario: Scenario) -> list[str]:
-    assert scenario.app.services.groceries is not None
-    return [i.name for i in scenario.app.services.groceries.needed()]
+    assert scenario.app.services.maybe(keys.groceries) is not None
+    return [i.name for i in scenario.app.services.get(keys.groceries).needed()]
 
 
 def tool_result(scenario: Scenario) -> str:

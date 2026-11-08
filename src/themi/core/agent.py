@@ -11,7 +11,7 @@ For each inbound event:
   (listing them) instead of guessing. Otherwise the model
   runs a tool loop (at most `max_steps` model calls, then one to say what was done)
   and the final text goes out through the outbox as a reply. That's timed (P2a,
-  `themi.core.timing`), and if it takes more than ten seconds a short "still coming"
+  `themi.standard.timing`), and if it takes more than ten seconds a short "still coming"
   message goes first.
 
 Failures are said plainly and briefly, never as error dumps.
@@ -36,18 +36,20 @@ from themi.ai.types import ImageBlock, Message, TextBlock
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
-from themi.core import focus, listening, partner
+from themi.core import keys, listening, partner
 from themi.core.approvals import ASK_TEXT
+from themi.core.capabilities import PICTURES, VOICE_NOTES
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
-from themi.core.timing import SLOW_AFTER, ReplyTimer, pick_notice
-from themi.core.tools import GROUPS, PICTURE_GROUPS, ToolContext, choose_groups, twins_text
+from themi.core.tools import PICTURE_GROUPS, ToolContext, twins_text
 from themi.energy.remarks import energy_remark
 from themi.localtime import start_of_local_day, to_local, to_utc_iso
+from themi.standard import focus
+from themi.standard.timing import SLOW_AFTER, ReplyTimer, pick_notice
 
 if TYPE_CHECKING:
-    from themi.channels.telegram import TelegramChannel
+    from themi.channels.base import Channel
 
 log = logging.getLogger(__name__)
 
@@ -261,6 +263,9 @@ LAST_WORD = (
 )
 SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
+# CR19: a Themi set up without the voice notes or pictures capability.
+VOICE_OFF_TEXT = "I can't listen to voice notes here. A typed message works."
+PICTURES_OFF_TEXT = "I can't look at pictures here. Telling me what's in it works."
 # F34g: past their daily cap (members.picture_daily_cap), a picture isn't looked at.
 PICTURE_CAP_TEXT = (
     "I've looked at as many pictures as I can today. Tomorrow works, or type out what's in it."
@@ -312,7 +317,7 @@ class Agent:
         self.history = history
         self._rng = rng or random.Random()
 
-    async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+    async def handle(self, event: InboundEvent, channel: Channel) -> None:
         """Something said in the family group (34b) is answered there: the outbox sends
         this person's replies to the group while it's handled."""
         if not event.in_group:
@@ -324,7 +329,7 @@ class Agent:
         finally:
             group_replies.reset(token)
 
-    async def _handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+    async def _handle(self, event: InboundEvent, channel: Channel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
         if self.services.outcomes is not None:
             self.services.outcomes.observe(member, event)
@@ -345,6 +350,9 @@ class Agent:
                 return
             text = str(event.button.payload.get("text", event.button.label))
         elif event.kind == "voice" and event.voice is not None:
+            if VOICE_NOTES not in self.services.capabilities:  # CR19: not this Themi's
+                await self._reply(member, VOICE_OFF_TEXT)
+                return
             async with channel.typing(member):
                 transcript = await self._transcribe(member, event)
             if transcript is None:
@@ -352,6 +360,9 @@ class Agent:
                 return
             text = transcript
         elif event.kind == "picture" and event.picture is not None:
+            if PICTURES not in self.services.capabilities:  # CR19: not this Themi's
+                await self._reply(member, PICTURES_OFF_TEXT)
+                return
             if self._pictures_today(member) > self._picture_cap(member):
                 await self._reply(member, PICTURE_CAP_TEXT)
                 return
@@ -387,7 +398,7 @@ class Agent:
         energy_mark = self.services.store.db.scalar(
             "SELECT COALESCE(MAX(id), 0) FROM energy_signals"
         )
-        conversation = self.services.conversation
+        conversation = self.services.maybe(keys.conversation)
         if (
             conversation is not None
             and conversation.is_on(member)
@@ -552,7 +563,7 @@ class Agent:
             for n, o, r in ctx.calls
             if n == "create_task" and o == "ok" and (m := MADE_TASK.match(r))
         ]
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if not (failed and made and UPDATED.search(reply)) or board is None:
             return reply
         lines = []
@@ -606,16 +617,22 @@ class Agent:
         earlier: tuple[Picture, ...] = (),
     ) -> str:
         services = self.services
-        if services.calendars is not None and JUST_ADDED.search(text):
+        if services.maybe(keys.calendars) is not None and JUST_ADDED.search(text):
             try:  # F34d, bug #174: an event they've just added isn't read yet
-                await services.calendars.refresh(member)
+                await services.get(keys.calendars).refresh(member)
             except Exception:
                 log.warning("Couldn't read member %s's calendar again", member.id, exc_info=True)
         family = services.store.get_family()
         timezone = family.timezone if family else "UTC"
         pinned, notes = services.facts_for(member, text)
         household, personal = services.rules(member)
-        system = build_system(household, pinned, personal_rules=personal, owner=member.name)
+        system = build_system(
+            household,
+            pinned,
+            personal_rules=personal,
+            owner=member.name,
+            base=services.system_text(),
+        )
         history = self._history(member, event)
         turn = build_turn(
             member,
@@ -643,7 +660,8 @@ class Agent:
         # P5's "all" routing sends every group.
         routing = services.tool_routing
         recent = [text, *(m.text for m in history[-4:])]
-        groups = set(GROUPS) if routing == "all" else choose_groups(recent)
+        tools = services.tools  # CR8b: the loaded modules' groups
+        groups = set(tools.group_names()) if routing == "all" else tools.choose_groups(recent)
         if shown:
             groups |= PICTURE_GROUPS  # F34l: "this" or no words picks no group
         for source in services.group_sources:  # BD1a: a session going on brings its tools
@@ -653,7 +671,7 @@ class Agent:
             # groups used lately, which short follow-ups lean on.
             theirs = [text, *[m.text for m in history if m.direction == "in"][-2:]]
             groups |= await services.group_router.choose(member.id, theirs)
-            groups |= recent_groups(services.store.db, member.id)
+            groups |= recent_groups(services.store.db, member.id, tools.group_of)
         ctx = ToolContext(
             member,
             services,
@@ -668,14 +686,15 @@ class Agent:
         )
         quiet = event.picture is not None and not event.text.strip()
         offered = frozenset(groups)  # P3: what the words chose, before more_tools adds any
-        timer.route(offered, len(services.tools.specs_for(groups, routing)))
+        allowed = services.allowed_modules(member)  # CR9: their role's
+        timer.route(offered, len(services.tools.specs_for(groups, routing, allowed)))
         # Approvals made this turn, by any path (a staged tool, the pantry, the calendar...).
         mark = services.store.db.scalar("SELECT COALESCE(MAX(id), 0) FROM pending_actions")
         used_tools = False
         try:
             for step in range(1, self.max_steps + 2):
                 # F34gb: a picture with no words is only described, and asked about.
-                tools = [] if quiet else services.tools.specs_for(ctx.groups, routing)
+                tools = [] if quiet else services.tools.specs_for(ctx.groups, routing, allowed)
                 twins = twins_text(spec.name for spec in tools)  # P6: which twin is which
                 call_system = f"{system}\n\n{twins}" if twins else system
                 if step > self.max_steps:
@@ -741,9 +760,9 @@ class Agent:
 
     async def _chat(self, member: Member, text: str, history: list) -> str:
         """Conversation mode's reply (CM1a): one model call with no tools."""
-        assert self.services.conversation is not None
+        assert self.services.maybe(keys.conversation) is not None
         try:
-            return await self.services.conversation.reply(member, text, history)
+            return await self.services.get(keys.conversation).reply(member, text, history)
         except RefusalError:
             return DECLINED_TEXT
         except AllProvidersFailed as exc:
@@ -755,7 +774,11 @@ class Agent:
         listening first (F22e), or a few things for now when it's too much (O1a). In
         burnout mode (F22d) its own line replaces both: focus_now would be a demand."""
         found = listening.signals(text, member)
-        held = self.services.burnout.signals(member) if self.services.burnout else []
+        held = (
+            self.services.get(keys.burnout).signals(member)
+            if self.services.maybe(keys.burnout)
+            else []
+        )
         if held:
             return held + [s for s in found if s != listening.LISTEN_SIGNAL]
         if listening.holds_off_solving(text, member):
@@ -796,7 +819,7 @@ class Agent:
         """A line that opens with the title of a task the turn touched has it in quotes: a
         title is often an order ("Renew the car registration is on both lists"), and the
         PDA shield would take it for one (the evals of 2026-10-31, once #98's quotes went)."""
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None or not ctx.tasks:
             return reply
         titles = sorted({board.get(i).title for i in ctx.tasks}, key=len, reverse=True)
@@ -812,7 +835,7 @@ class Agent:
     def _whole_truth(self, reply: str, ctx: ToolContext) -> str:
         """Each sentence saying a task went to someone is kept only if one of the tasks it
         names in quotes (or else, that the turn touched) is that person's alone."""
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         if board is None:
             return reply
         members = self.services.store.list_members()
@@ -845,7 +868,7 @@ class Agent:
         return f"{text}\n{said}" if "\n" in text else f"{text} {said}".strip()
 
     def _open_titled(self, titles: list[str]) -> list:
-        board = self.services.taskboard
+        board = self.services.maybe(keys.taskboard)
         assert board is not None
         rows = [
             self.services.store.db.one(

@@ -74,7 +74,7 @@ def test_reading_ai_settings_doesnt_load_any_provider_sdk() -> None:
     import sys
 
     code = (
-        "import sys, themi.ai.settings, themi.core.feedback;"
+        "import sys, themi.ai.settings, themi.standard.feedback;"
         "print(sorted(m for m in ('anthropic', 'openai', 'google.genai') if m in sys.modules))"
     )
     result = subprocess.run(

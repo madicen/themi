@@ -13,8 +13,9 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.gtasks_api import FakeGtasks
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 FRI = date(2026, 10, 23)
 
@@ -28,8 +29,8 @@ async def tasks_linked(
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def run(scenario: Scenario) -> object:

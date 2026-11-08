@@ -4,7 +4,7 @@ With `THEMI_TOOL_ROUTING=embeddings` the word lists (`choose_groups`) still run,
 things add to what they pick:
 
 - `EmbeddingRouter.choose`: the message (and the person's last two) become vectors, and
-  every group with an example (`GROUP_EXAMPLES`) at least `THRESHOLD` similar is sent. No
+  every group with an example (each group's `examples`) at least `THRESHOLD` similar is sent. No
   training: nearest neighbours. Every group above the line, not just the best, and each
   clause of a message is embedded too, since a vector of "need a nap, then what's for
   dinner?" sits between the two: two asks bring two groups. The examples' vectors are
@@ -21,11 +21,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from themi import clock
 from themi.ai.embeddings import Embedder, Vector, VectorCache, similarity, unit
-from themi.core.tools import GROUP_EXAMPLES, TOOL_GROUPS, more_tools
+from themi.core.tools import more_tools
 from themi.storage.db import Database
 
 log = logging.getLogger(__name__)
@@ -50,14 +50,16 @@ class EmbeddingRouter:
         self,
         embedder: Embedder,
         cache: VectorCache,
-        examples: Mapping[str, Sequence[str]] = GROUP_EXAMPLES,
+        examples: Mapping[str, Sequence[str]] | Callable[[], Mapping[str, Sequence[str]]],
         *,
         threshold: float = THRESHOLD,
         timeout: float = TIMEOUT,
     ) -> None:
         self.embedder = embedder
         self.cache = cache
-        self.examples = {group: tuple(texts) for group, texts in examples.items()}
+        # CR8b: the loaded modules' groups' examples; a callable is read when first needed,
+        # after the modules have added their groups.
+        self._example_source = examples
         self.threshold = threshold
         self.timeout = timeout
         self._vectors: dict[str, dict[str, tuple[Vector, ...]]] = {}  # model: group: vectors
@@ -65,6 +67,12 @@ class EmbeddingRouter:
         self._running: set[asyncio.Task[set[str]]] = set()
         self._model = ""  # the model the last message was embedded with
         self._recent: dict[tuple[str, str], Vector] = {}  # (model, text): vector
+
+    @property
+    def examples(self) -> dict[str, tuple[str, ...]]:
+        source = self._example_source
+        found = source() if callable(source) else source
+        return {group: tuple(texts) for group, texts in found.items()}
 
     async def choose(self, member_id: int, texts: Sequence[str]) -> set[str]:
         """The groups these texts are close to, or none if that can't be known in time."""
@@ -152,15 +160,17 @@ def pieces(texts: Sequence[str]) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def recent_groups(db: Database, member_id: int, replies: int = STICKY_REPLIES) -> set[str]:
+def recent_groups(
+    db: Database,
+    member_id: int,
+    group_of: Callable[[str], str],
+    replies: int = STICKY_REPLIES,
+) -> set[str]:
     """The groups whose tools ran in this person's last few replies."""
     rows = db.query(
         "SELECT DISTINCT t.name FROM reply_tools t WHERE t.reply_id IN "
         "(SELECT id FROM replies WHERE member_id = ? ORDER BY id DESC LIMIT ?)",
         (member_id, replies),
     )
-    return {
-        TOOL_GROUPS[r["name"]]
-        for r in rows
-        if r["name"] in TOOL_GROUPS and r["name"] != more_tools.spec.name
-    }
+    found = {group_of(r["name"]) for r in rows if r["name"] != more_tools.spec.name}
+    return found - {"core"}

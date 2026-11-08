@@ -10,12 +10,13 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import ToolResult
-from themi.core.lists import Lists, NamedList
+from themi.core import keys
+from themi.standard.lists import Lists, NamedList
 
 
 def lists(scenario: Scenario) -> Lists:
-    assert scenario.app.services.lists is not None
-    return scenario.app.services.lists
+    assert scenario.app.services.maybe(keys.lists) is not None
+    return scenario.app.services.get(keys.lists)
 
 
 def tool_result(scenario: Scenario) -> str:
@@ -273,7 +274,13 @@ async def test_a_long_item_on_a_list_off_the_wall(scenario: Scenario) -> None:
 async def test_a_long_item_on_a_wall_list_says_why(scenario: Scenario) -> None:
     await packing_list(scenario)
     nl = named(scenario, "Erin", "packing")
-    lists(scenario).db.execute("UPDATE lists SET cozyla_list_id = 'wall-1' WHERE id = ?", (nl.id,))
+    # CR21b: a mirror that keeps the list, taking items of 100 characters at most
+    from themi.modules.mirrors import Mirror
+
+    wall = Mirror("wall", "on the wall", item_limit=100)
+    scenario.app.services.mirrors.list_keepers.append(
+        lambda list_id: wall if list_id == nl.id else None
+    )
     long = "the big blue cooler with the broken handle, " * 3
     assert len(long.strip()) > 100
     replies = await call(

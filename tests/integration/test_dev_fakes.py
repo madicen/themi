@@ -99,8 +99,11 @@ def test_the_banner_lists_the_fakes(tmp_path: Path) -> None:
 
 
 def test_no_fakes_runs_without_them(monkeypatch: pytest.MonkeyPatch) -> None:
-    runs: list[bool] = []
-    monkeypatch.setattr(runner, "run", lambda *, fakes=True: runs.append(fakes))
+    runs: list[tuple[bool, str]] = []
+    monkeypatch.setattr(  # CR16: run takes the setup too
+        runner, "run", lambda *, fakes=True, setup: runs.append((fakes, setup.name))
+    )
     runner.main([])
     runner.main(["--no-fakes"])
-    assert runs == [True, False]
+    runner.main(["--template", "work"])
+    assert runs == [(True, "family"), (False, "family"), (True, "work")]

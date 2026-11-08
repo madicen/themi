@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from themi.core.progression import (
+from themi.standard.progression import (
     Progression,
     ProgressionError,
     amount_said,

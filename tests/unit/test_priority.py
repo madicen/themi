@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime, timedelta
 
-from themi.core.priority import rank, words
-from themi.core.tasks import Task
+from themi.standard.priority import rank, words
+from themi.standard.tasks import Task
 
 TODAY = date(2026, 10, 21)
 NOW = datetime(2026, 10, 21, 16, 0, tzinfo=UTC)

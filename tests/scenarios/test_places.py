@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from tests.scenarios.harness import Scenario
 from themi import clock
-from themi.core.places import Named, named_place
 from themi.localtime import to_utc_iso
+from themi.standard.places import Named, named_place
 
 
 def remember(scenario: Scenario, fact: str, member: str | None = None) -> None:

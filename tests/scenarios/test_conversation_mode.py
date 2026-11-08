@@ -8,12 +8,14 @@ import httpx
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi.ai.types import CallKind
-from themi.core.conversation_mode import (
+from themi.core import keys
+from themi.standard.conversation_mode import (
     CHAT_SYSTEM,
     NOT_OFFERED_TEXT,
     OFF_TEXT,
     ON_TEXT,
     STATUS_TEXT,
+    ConversationPreferences,
 )
 
 
@@ -29,11 +31,17 @@ def queue_nothing_picked_out(scenario: Scenario) -> None:
 async def test_chat_on_and_off(scenario: Scenario) -> None:
     assert await scenario.say("Erin", "/chat") == [STATUS_TEXT[False]]
     await chat_on(scenario)
-    assert scenario.member("Erin").conversation_mode
-    assert not scenario.member("Husband").conversation_mode  # theirs alone
+    assert scenario.app.store.preferences(
+        scenario.member("Erin").id, ConversationPreferences
+    ).conversation_mode
+    assert not scenario.app.store.preferences(
+        scenario.member("Husband").id, ConversationPreferences
+    ).conversation_mode  # theirs alone
     assert await scenario.say("Erin", "/chat") == [STATUS_TEXT[True]]
     assert await scenario.say("Erin", "/chat off") == [OFF_TEXT]
-    assert not scenario.member("Erin").conversation_mode
+    assert not scenario.app.store.preferences(
+        scenario.member("Erin").id, ConversationPreferences
+    ).conversation_mode
 
 
 async def test_a_remark_gets_one_call_with_no_tools(scenario: Scenario) -> None:
@@ -107,7 +115,9 @@ async def test_the_switch_shows_in_a_trial_only_once_its_on(
     page = await site.get("/settings")
     assert 'name="conversation_mode" checked' in page.text
     await site.post("/settings", data={"csrf": csrf, "pda_enabled": "on"})  # unticked
-    assert not scenario.member("Erin").conversation_mode
+    assert not scenario.app.store.preferences(
+        scenario.member("Erin").id, ConversationPreferences
+    ).conversation_mode
 
 
 async def test_with_the_rollout_on_everyone_sees_the_switch(
@@ -117,8 +127,12 @@ async def test_with_the_rollout_on_everyone_sees_the_switch(
     csrf = await sign_in(scenario, site, "Husband")
     assert 'name="conversation_mode"' in (await site.get("/settings")).text
     await site.post("/settings", data={"csrf": csrf, "conversation_mode": "on"})
-    assert scenario.member("Husband").conversation_mode
-    assert not scenario.member("Erin").conversation_mode
+    assert scenario.app.store.preferences(
+        scenario.member("Husband").id, ConversationPreferences
+    ).conversation_mode
+    assert not scenario.app.store.preferences(
+        scenario.member("Erin").id, ConversationPreferences
+    ).conversation_mode
 
 
 async def test_the_ai_page_has_the_two_new_routes(
@@ -132,7 +146,7 @@ async def test_the_ai_page_has_the_two_new_routes(
 
 async def test_the_family_group_always_has_the_tool_agent(scenario: Scenario) -> None:
     await chat_on(scenario)
-    conversation = scenario.app.services.conversation
+    conversation = scenario.app.services.maybe(keys.conversation)
     assert conversation is not None
     erin = scenario.member("Erin")
     assert conversation.takes(erin, "long day", in_group=False)
@@ -142,7 +156,7 @@ async def test_the_family_group_always_has_the_tool_agent(scenario: Scenario) ->
 async def test_no_run_today_goes_to_the_tools(scenario: Scenario) -> None:
     """F34a, bug #178: with conversation mode on, "No run today ..." about her open run went
     to the tool-less chat, which said "Got it", and the run stayed due."""
-    board = scenario.app.services.taskboard
+    board = scenario.app.services.maybe(keys.taskboard)
     assert board is not None
     erin = scenario.member("Erin")
     await board.create(erin, "Go for a run", "physical", 2, assignee=erin, check_in=True)

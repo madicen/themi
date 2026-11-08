@@ -17,14 +17,15 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.autonomy import Decision
-from themi.core.maintenance import Item, Maintenance
+from themi.core import keys
+from themi_home.maintenance import Item, Maintenance
 
 FILTER_STEPS = ["Turn the furnace off", "Slide the old filter out", "Put the new one in, arrow up"]
 
 
 def maintenance(scenario: Scenario) -> Maintenance:
-    assert scenario.app.services.maintenance is not None
-    return scenario.app.services.maintenance
+    assert scenario.app.services.maybe(keys.maintenance) is not None
+    return scenario.app.services.get(keys.maintenance)
 
 
 async def add(
@@ -186,8 +187,8 @@ async def test_taken_off_the_list_its_offered_again_in_a_week(scenario: Scenario
     await add(scenario, owner="Erin")
     await offer(scenario)
     task_id = scenario.app.db.scalar("SELECT id FROM tasks")
-    assert scenario.app.services.taskboard is not None
-    await scenario.app.services.taskboard.cancel(task_id, scenario.member("Erin"))
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    await scenario.app.services.get(keys.taskboard).cancel(task_id, scenario.member("Erin"))
     item = maintenance(scenario).items()[0]
     assert item.task_id is None and item.skip_until == date(2026, 10, 28)
     clock.advance(timedelta(days=6))

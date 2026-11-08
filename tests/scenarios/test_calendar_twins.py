@@ -14,6 +14,8 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import local, on_primary
 from tests.scenarios.test_triage import ERIN, link
 from themi.accounts import SYSTEM
+from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 
 VISIT = "Return Patient Visit with Thuc Quyen Nguyen, MD"
 WHERE = ["Keep on mine", "Keep on family", "Keep on both", "Your call", "Not the same"]
@@ -37,7 +39,7 @@ def family(scenario: Scenario, fake: FakeGcal) -> str:
         "INSERT INTO calendars (account_id, name, calendar_id) VALUES (?, 'Madicen Family', ?)",
         (account, calendar),
     )
-    calendars = scenario.app.services.calendars
+    calendars = scenario.app.services.maybe(keys.calendars)
     assert calendars is not None
     calendars.choose(account, [("primary", "primary"), (calendar, "Madicen Family")])
     return calendar
@@ -129,7 +131,9 @@ async def test_meetings_series_and_unrelated_events_are_left_alone(
 
 
 async def test_keep_both_as_the_setting_asks_nothing(scenario: Scenario, linked: FakeGcal) -> None:
-    scenario.app.store.update_settings(SYSTEM, scenario.member("Erin").id, calendar_twins="keep")
+    scenario.app.store.save_preferences(
+        SYSTEM, scenario.member("Erin").id, CalendarPreferences, calendar_twins="keep"
+    )
     await placeholder_and_visit(scenario, linked)
     assert await read(scenario) == []
     assert len(linked.events(ERIN, "Madicen Family")) == 1
@@ -138,7 +142,9 @@ async def test_keep_both_as_the_setting_asks_nothing(scenario: Scenario, linked:
 async def test_best_guess_merges_says_where_and_can_be_undone(
     scenario: Scenario, linked: FakeGcal
 ) -> None:
-    scenario.app.store.update_settings(SYSTEM, scenario.member("Erin").id, calendar_twins="guess")
+    scenario.app.store.save_preferences(
+        SYSTEM, scenario.member("Erin").id, CalendarPreferences, calendar_twins="guess"
+    )
     await placeholder_and_visit(scenario, linked)
     (sent,) = await read(scenario)
     assert sent.startswith(f"Merged ND psych in person into {VISIT}, Wed 28 Oct, 1-1:30 pm")

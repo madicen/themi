@@ -10,48 +10,20 @@
 
 <section>
   <h2>Waiting on you</h2>
-  {% if noise_count %}
-  <p><a href="/email/noise">{{ noise_count }} email{% if noise_count != 1 %}s{% endif %} that look like noise, to archive or keep</a></p>
-  {% endif %}
+  {% for link in waiting %}
+  <p><a href="{{ link.href }}">{{ link.text }}</a></p>
+  {% endfor %}
   {% for action in actions %}
     {% include "_action_card.html" %}
   {% else %}
-    {% if not noise_count %}<p class="muted">Nothing is waiting on you at the moment.</p>{% endif %}
+    {% if not waiting %}<p class="muted">Nothing is waiting on you at the moment.</p>{% endif %}
   {% endfor %}
 </section>
 
-<section>
-  <h2>On your list</h2>
-  {% set back = "home" %}
-  <div class="rows">
-    {% for task in mine %}{% include "_task_row.html" %}{% else %}<p class="empty muted">Nothing on your list.</p>{% endfor %}
-  </div>
-  {% if more_tasks %}<p><a href="/tasks">All {{ more_tasks }} tasks</a></p>{% endif %}
-</section>
-
-{% if around_the_house is not none %}
-<section>
-  <h2>Around the house</h2>
-  <div class="rows">
-    {% for line in around_the_house %}<p class="row-plain">{{ line }}</p>{% else %}<p class="empty muted">Nothing's running.</p>{% endfor %}
-  </div>
-</section>
-{% endif %}
-
-<section>
-  <h2>Grocery list</h2>
-  <div class="rows">
-  {% for item in groceries %}
-  <form method="post" action="/groceries/{{ item.id }}/bought" class="row-plain">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <span>{{ item.name }}</span>
-    <button class="small quiet">Got it</button>
-  </form>
-  {% else %}
-  <p class="empty muted">The list is empty.</p>
-  {% endfor %}
-  </div>
-</section>
+{# CR17a: the modules' panels (tasks, around the house, the grocery list...) #}
+{% for panel in panels %}
+{% include panel %}
+{% endfor %}
 
 <details class="group">
   <summary>Recently</summary>

@@ -7,15 +7,16 @@ from typing import Any
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.scenarios.harness import Scenario
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
 
 WED = date(2026, 10, 21)  # the scenario clock's first day
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def sync(scenario: Scenario) -> Any:
@@ -249,7 +250,7 @@ async def test_a_one_off_on_the_chart_done_in_themi_is_ticked_there(
     sheets = await board(scenario).create(
         erin, "Change the sheets", "physical", 2, WED, assignee=erin
     )
-    await board(scenario).put_on_chart(sheets.id, erin)
+    await scenario.app.services.get(keys.chart_queue).put_on(sheets.id, erin)  # CR21a
     await sync(scenario)
     uid = fake_cozyla.chore_named("Change the sheets")["choreUid"]
     await board(scenario).complete(sheets.id, erin)

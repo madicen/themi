@@ -27,7 +27,9 @@ def prod_database(path: Path) -> None:
     store = AccountStore(open_database(path), cipher)
     family = seed_family(store)
     db = store.db
-    db.execute("UPDATE members SET telegram_user_id = telegram_user_id + 7000000")
+    db.execute(  # CR20a2: Telegram ids are in member_identities
+        "UPDATE member_identities SET external_id = CAST(external_id + 7000000 AS TEXT)"
+    )
     account = store.add_linked_account(
         SYSTEM, family.erin.id, "gmail", "erin@gmail.com", Secret("1//real-refresh")
     )
@@ -72,10 +74,11 @@ def test_the_copy_keeps_the_familys_data_and_nothing_that_reaches_them(tmp_path:
     prod_database(path)
     prod_copy.clean(path)
 
-    assert rows(path, "SELECT name, telegram_user_id FROM members ORDER BY id") == [
-        ("Erin", ERIN_TELEGRAM_ID),
-        ("Husband", HUSBAND_TELEGRAM_ID),
-    ]
+    assert rows(
+        path,
+        "SELECT m.name, CAST(i.external_id AS INTEGER) FROM members m "
+        "JOIN member_identities i ON i.member_id = m.id AND i.channel = 'telegram' ORDER BY m.id",
+    ) == [("Erin", ERIN_TELEGRAM_ID), ("Husband", HUSBAND_TELEGRAM_ID)]
     assert rows(path, "SELECT refresh_token, enabled, watched FROM linked_accounts") == [
         (b"", 0, 0)
     ]

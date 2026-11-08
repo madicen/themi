@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from themi.core.calendar_twins import alike, appointment_like, overlap
-from themi.core.events import Found, When
+from themi_google.calendar_twins import alike, appointment_like, overlap
+from themi_google.events import Found, When
 
 
 def event(title: str, start: int = 13, end: int = 14) -> Found:

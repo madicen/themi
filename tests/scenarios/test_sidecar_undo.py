@@ -9,7 +9,7 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_conversation_mode import chat_on
 from tests.scenarios.test_sidecar import chat, logged, open_titles
 from tests.scenarios.test_twins import TASK
-from themi.core.sidecar import NOTHING_TO_UNDO_TEXT
+from themi.standard.sidecar import NOTHING_TO_UNDO_TEXT
 
 
 async def made_a_vet_task(scenario: Scenario) -> None:

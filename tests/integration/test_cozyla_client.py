@@ -10,8 +10,8 @@ import pytest
 
 from tests.fakes.cozyla import EMAIL, PASSWORD, FakeCozyla
 from themi import clock
-from themi.connectors.cozyla import CozylaClient, CozylaConfig, CozylaError
 from themi.storage.secrets import Secret
+from themi_cozyla.connector import CozylaClient, CozylaConfig, CozylaError
 
 
 def client_for(
@@ -131,7 +131,7 @@ async def test_to_dos_are_read_and_changed(fake_cozyla: FakeCozyla) -> None:
 async def test_the_check_shows_what_is_there_without_titles_or_changes(
     fake_cozyla: FakeCozyla,
 ) -> None:
-    from themi.connectors.cozyla.check import check
+    from themi_cozyla.connector.check import check
 
     fake_cozyla.add_member("Erin")
     fake_cozyla.add_member("Michael")
@@ -165,7 +165,7 @@ async def test_the_check_shows_what_is_there_without_titles_or_changes(
 
 
 async def test_the_check_says_when_the_list_is_missing_or_unset(fake_cozyla: FakeCozyla) -> None:
-    from themi.connectors.cozyla.check import check
+    from themi_cozyla.connector.check import check
 
     fake_cozyla.add_list("Family")
     unset = client_for(fake_cozyla, todo_list="")
@@ -181,7 +181,7 @@ async def test_chores_round_trip_every_field(fake_cozyla: FakeCozyla) -> None:
     """C2a: update/v1 keeps nothing that isn't sent, so every field goes each time."""
     from datetime import date
 
-    from themi.connectors.cozyla import WallSchedule
+    from themi_cozyla.connector import WallSchedule
 
     clock.freeze(datetime(2026, 10, 21, 16, tzinfo=UTC))
     fake_cozyla.add_member("Erin")
@@ -207,7 +207,7 @@ async def test_chores_round_trip_every_field(fake_cozyla: FakeCozyla) -> None:
 async def test_routines_and_their_records(fake_cozyla: FakeCozyla) -> None:
     from datetime import date
 
-    from themi.connectors.cozyla import WallSchedule
+    from themi_cozyla.connector import WallSchedule
 
     clock.freeze(datetime(2026, 10, 21, 16, tzinfo=UTC))
     client = client_for(fake_cozyla)

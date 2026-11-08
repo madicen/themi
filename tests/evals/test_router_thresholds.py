@@ -22,6 +22,7 @@ from tests.evals.scoring import load_cases
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
+from tests.fakes.groups import GROUP_EXAMPLES, choose_groups
 from tests.fakes.ourgroceries import FakeOurGroceries
 from tests.fakes.travel import FakeTravel
 from tests.scenarios.harness import Scenario
@@ -30,7 +31,6 @@ from themi.ai.embeddings import VectorCache, similarity
 from themi.ai.errors import RetryableError
 from themi.ai.types import Embeddings
 from themi.core.routing import THRESHOLD, EmbeddingRouter, pieces
-from themi.core.tools import GROUP_EXAMPLES, choose_groups
 from themi.storage import open_database
 
 CACHE = Path(__file__).parent / "results" / "embeddings.db"
@@ -80,7 +80,7 @@ async def test_thresholds(
     cache = VectorCache(open_database(CACHE))
     gemini = GeminiProvider(eval_backend.api_key, DEFAULT_EMBEDDING_MODEL, timeout=60)
     embedder = CachedGemini(gemini, cache)
-    router = EmbeddingRouter(embedder, cache)
+    router = EmbeddingRouter(embedder, cache, GROUP_EXAMPLES)
     cases: list[Routable] = [*map(from_case, load_cases()), *load_routing_cases()]
     every = [p for c in cases for p in pieces(c.texts)]
     await embedder.embed(0, every)  # all the cases' texts, in a few requests

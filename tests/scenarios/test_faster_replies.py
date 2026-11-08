@@ -10,8 +10,9 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_lists import gift_list, items, packing_list
 from tests.scenarios.test_routines import add, routines
 from themi.ai.router import HEDGE_AFTER
-from themi.core.lists import ADD_CATEGORY
-from themi.core.timing import SLOW_AFTER, week_of_replies
+from themi.core import keys
+from themi.standard.lists import ADD_CATEGORY
+from themi.standard.timing import SLOW_AFTER, week_of_replies
 
 
 def chats(scenario: Scenario) -> int:
@@ -61,8 +62,14 @@ async def test_an_add_the_model_inferred_still_gets_the_next_round(scenario: Sce
 async def test_a_failed_add_still_goes_back_to_the_model(scenario: Scenario) -> None:
     # It may try again with the item shortened; F21a's plain "too long" reply stays.
     await packing_list(scenario)
-    nl = scenario.app.services.lists.find(scenario.member("Erin"), "packing")  # type: ignore[union-attr]
-    scenario.app.db.execute("UPDATE lists SET cozyla_list_id = 'wall-1' WHERE id = ?", (nl.id,))
+    nl = scenario.app.services.maybe(keys.lists).find(scenario.member("Erin"), "packing")  # type: ignore[union-attr]
+    # CR21b: a mirror that keeps the list, taking items of 100 characters at most
+    from themi.modules.mirrors import Mirror
+
+    wall = Mirror("wall", "on the wall", item_limit=100)
+    scenario.app.services.mirrors.list_keepers.append(
+        lambda list_id: wall if list_id == nl.id else None
+    )
     long = "the big blue cooler with the broken handle, " * 3
     scenario.primary.queue_tool_call("add_to_list", {"list": "packing", "items": [long]})
     scenario.primary.queue_text("Too long, sorry.")

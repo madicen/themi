@@ -4,6 +4,11 @@ Files live in `src/themi/storage/schema/` as `NNNN_short_name.sql`. Each
 runs in its own transaction and is recorded in `schema_version`. A database
 written by newer code (a version we don't know) is refused rather than
 risking a downgrade.
+
+CR6: migrations come in tracks. The core's are track "core" (the 144 files above, frozen
+as the baseline: new feature tables don't go there). A module with tables has its own
+track, named after it and numbered from 0001, applied after the core's in load order. A
+module turned off keeps its tables; turned on again, its track carries on.
 """
 
 from __future__ import annotations
@@ -73,16 +78,36 @@ def split_statements(script: str) -> list[str]:
     return statements
 
 
+CORE = "core"
+
+VERSION_TABLE = (
+    "CREATE TABLE {name} (track TEXT NOT NULL DEFAULT 'core', version INTEGER NOT NULL, "
+    "name TEXT NOT NULL, applied_at TEXT NOT NULL, PRIMARY KEY (track, version))"
+)
+
+
 def _ensure_version_table(db: Database) -> None:
-    db.execute(
-        "CREATE TABLE IF NOT EXISTS schema_version ("
-        "version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)"
-    )
+    """The version table, with its `track` column (CR6). A database from before CR6 has
+    the table without it: its rows are all the core's, so they move over as track core."""
+    columns = [r["name"] for r in db.query("PRAGMA table_info(schema_version)")]
+    if not columns:
+        db.execute(VERSION_TABLE.format(name="schema_version"))
+    elif "track" not in columns:
+        with db.transaction():
+            db.execute(VERSION_TABLE.format(name="schema_version_tracks"))
+            db.execute(
+                "INSERT INTO schema_version_tracks (track, version, name, applied_at) "
+                "SELECT 'core', version, name, applied_at FROM schema_version"
+            )
+            db.execute("DROP TABLE schema_version")
+            db.execute("ALTER TABLE schema_version_tracks RENAME TO schema_version")
 
 
-def current_version(db: Database) -> int:
+def current_version(db: Database, track: str = CORE) -> int:
     _ensure_version_table(db)
-    return db.scalar("SELECT COALESCE(MAX(version), 0) FROM schema_version")
+    return db.scalar(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_version WHERE track = ?", (track,)
+    )
 
 
 def latest_version() -> int:
@@ -91,14 +116,15 @@ def latest_version() -> int:
     return migrations[-1].version if migrations else 0
 
 
-def apply(db: Database, migrations: list[Migration] | None = None) -> list[int]:
-    """Apply pending migrations in order. Returns the versions applied."""
+def apply(db: Database, migrations: list[Migration] | None = None, track: str = CORE) -> list[int]:
+    """Apply a track's pending migrations in order. Returns the versions applied."""
     migrations = discover() if migrations is None else migrations
     latest_known = migrations[-1].version if migrations else 0
-    current = current_version(db)
+    current = current_version(db, track)
     if current > latest_known:
+        what = "schema version" if track == CORE else f"{track}'s schema version"
         raise DatabaseTooNewError(
-            f"database is at schema version {current}, but this Themi only knows up to "
+            f"database is at {what} {current}, but this Themi only knows up to "
             f"{latest_known}; upgrade Themi before using this database"
         )
     applied = []
@@ -110,12 +136,26 @@ def apply(db: Database, migrations: list[Migration] | None = None) -> list[int]:
                 for statement in split_statements(migration.sql):
                     db.execute(statement)
                 db.execute(
-                    "INSERT INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)",
-                    (migration.version, migration.name, clock.now().isoformat()),
+                    "INSERT INTO schema_version (track, version, name, applied_at) "
+                    "VALUES (?, ?, ?, ?)",
+                    (track, migration.version, migration.name, clock.now().isoformat()),
                 )
         except sqlite3.Error as exc:
+            where = "" if track == CORE else f"{track} "
             raise MigrationError(
-                f"migration {migration.version:04d}_{migration.name} failed: {exc}"
+                f"{where}migration {migration.version:04d}_{migration.name} failed: {exc}"
             ) from exc
         applied.append(migration.version)
     return applied
+
+
+def module_folder(migrations: str | Path) -> Path | Traversable:
+    """A module's migrations: a package of SQL files ("themi_work.schema"), or a folder."""
+    return migrations if isinstance(migrations, Path) else resources.files(migrations)
+
+
+def apply_track(db: Database, track: str, migrations: str | Path) -> list[int]:
+    """CR6: a module's own track, after the core's."""
+    if track == CORE:
+        raise MigrationError("a module can't use the core's track")
+    return apply(db, discover(module_folder(migrations)), track)

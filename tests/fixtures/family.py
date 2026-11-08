@@ -18,6 +18,8 @@ from tests.fixtures.db import migrated_db
 from themi.accounts import SYSTEM, AccountStore, Family, Member, Role
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, generate_key
+from themi_home.pantry import PantrySettings
+from themi_home.spending import SpendingSettings
 
 ERIN_TELEGRAM_ID = 1001
 HUSBAND_TELEGRAM_ID = 1002
@@ -45,11 +47,10 @@ class SeededFamily:
 
 
 def seed_family(store: AccountStore) -> SeededFamily:
-    family = store.create_family(
-        "Household",
-        "America/Los_Angeles",
-        takeout_budget_cents=200_00,
-        staples=("olive oil", "eggs", "rice", "coffee", "cat food"),
+    family = store.create_family("Household", "America/Los_Angeles")
+    store.save_household(SYSTEM, SpendingSettings, takeout_budget_cents=200_00)  # CR7c
+    store.save_household(
+        SYSTEM, PantrySettings, staples=("olive oil", "eggs", "rice", "coffee", "cat food")
     )
     erin = store.create_member(SYSTEM, "Erin", Role.ADMIN)
     husband = store.create_member(SYSTEM, "Husband", Role.MEMBER)

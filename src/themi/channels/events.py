@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from themi.accounts.models import Member
 
 if TYPE_CHECKING:
+    from themi.channels.base import Channel
     from themi.channels.outbox import Outbox
-    from themi.channels.telegram import TelegramChannel
 
 EventKind = Literal["text", "voice", "picture", "button", "reaction"]
 
@@ -83,7 +83,7 @@ class InboundEvent:
 
 
 class InboundHandler(Protocol):
-    async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None: ...
+    async def handle(self, event: InboundEvent, channel: Channel) -> None: ...
 
 
 class EchoHandler:
@@ -92,7 +92,7 @@ class EchoHandler:
     def __init__(self, outbox: Outbox) -> None:
         self.outbox = outbox
 
-    async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+    async def handle(self, event: InboundEvent, channel: Channel) -> None:
         from themi.channels.outbox import Priority
 
         if event.kind == "text":

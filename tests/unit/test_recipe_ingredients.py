@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from themi.core.recipe_groceries import _from_model, line_key, read_line, words_in_line
+from themi_home.recipe_groceries import _from_model, line_key, read_line, words_in_line
 
 
 @pytest.mark.parametrize(

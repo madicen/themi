@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from themi.core.cookbook import Line
-from themi.core.cooking import Ahead, _names_line, _rule_jobs, ahead_of_time
-from themi.core.recipe_groceries import read_line
-from themi.core.recipes import Recipe
+from themi_home.cookbook import Line
+from themi_home.cooking import Ahead, _names_line, _rule_jobs, ahead_of_time
+from themi_home.recipe_groceries import read_line
+from themi_home.recipes import Recipe
 
 
 def recipe(lines: list[str], steps: list[str]) -> tuple[Recipe, list]:
@@ -70,7 +70,7 @@ def test_prep_jobs_by_rule_and_the_line_check() -> None:
 
 
 def test_a_long_step_splits_at_sentence_ends() -> None:
-    from themi.core.cooking import step_parts
+    from themi_home.cooking import step_parts
 
     long = "Stir the pot slowly. " * 30
     made, _ = recipe([], ["Short.", long.strip()])

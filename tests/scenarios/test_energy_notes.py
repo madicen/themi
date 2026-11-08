@@ -62,7 +62,7 @@ async def test_the_privacy_switch_is_respected(scenario: Scenario) -> None:
 
 
 def test_the_prompt_asks_for_energy_remarks() -> None:
-    from themi.core.prompts import STABLE_SYSTEM
+    from tests.fakes.prompt import FAMILY_SYSTEM as STABLE_SYSTEM
 
     assert "log_energy_note" in STABLE_SYSTEM and "log_energy_level" in STABLE_SYSTEM
 

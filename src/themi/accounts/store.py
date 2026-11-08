@@ -20,7 +20,10 @@ from datetime import datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from pydantic import ValidationError
+
 from themi import clock
+from themi.accounts.household import HouseholdSettings
 from themi.accounts.models import (
     TRACKING_INPUTS,
     BusyTime,
@@ -31,7 +34,9 @@ from themi.accounts.models import (
     LoggedMessage,
     Member,
     Role,
+    Workspace,
 )
+from themi.accounts.preferences import Preferences
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher, Secret
 
@@ -87,7 +92,7 @@ def _parse_dt(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
-def _parse_hhmm(value: str | time) -> time:
+def parse_hhmm(value: str | time) -> time:
     if isinstance(value, time):
         return value.replace(second=0, microsecond=0)
     try:
@@ -125,14 +130,24 @@ def _hash_code(code: str) -> str:
     return hashlib.sha256(normalised.encode()).hexdigest()
 
 
+# CR20a2: a member with their Telegram id, which is kept in member_identities.
+MEMBERS = (
+    "SELECT m.*, (SELECT i.external_id FROM member_identities i WHERE i.member_id = m.id "
+    "AND i.channel = 'telegram') AS telegram_id, (SELECT group_concat(i.channel) FROM "
+    "member_identities i WHERE i.member_id = m.id) AS channel_names FROM members m"
+)
+TELEGRAM = "telegram"
+
+
 def _member_from_row(row: dict[str, Any]) -> Member:
     return Member(
         id=row["id"],
         name=row["name"],
         role=Role(row["role"]),
-        telegram_user_id=row["telegram_user_id"],
-        quiet_start=_parse_hhmm(row["quiet_start"]),
-        quiet_end=_parse_hhmm(row["quiet_end"]),
+        telegram_user_id=int(row["telegram_id"]) if row["telegram_id"] is not None else None,
+        channels=tuple(sorted(row["channel_names"].split(","))) if row["channel_names"] else (),
+        quiet_start=parse_hhmm(row["quiet_start"]),
+        quiet_end=parse_hhmm(row["quiet_end"]),
         daily_limit=row["daily_limit"],
         pda_enabled=bool(row["pda_enabled"]),
         pda_strength=row["pda_strength"],
@@ -142,34 +157,13 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         kind_costs={k: float(v) for k, v in json.loads(row["kind_costs"]).items()},
         email=row["email"],
         busy_times=tuple(
-            BusyTime(tuple(b["days"]), _parse_hhmm(b["start"]), _parse_hhmm(b["end"]))
+            BusyTime(tuple(b["days"]), parse_hhmm(b["start"]), parse_hhmm(b["end"]))
             for b in json.loads(row["busy_times"])
         ),
         phrasing=row["phrasing"],
         phrasing_notes=row["phrasing_notes"],
-        checkin_reviews=bool(row["checkin_reviews"]),
-        done_praise=bool(row["done_praise"]),
         listen_first=bool(row["listen_first"]),
-        day_budget=row["day_budget"],
-        focus_count=row["focus_count"],
-        chart_limit=row["chart_limit"],
-        break_extend_minutes=row["break_extend_minutes"],
-        sprint_work_minutes=row["sprint_work_minutes"],
-        sprint_break_minutes=row["sprint_break_minutes"],
-        body_double_sound=row["body_double_sound"],
-        body_double_volume=row["body_double_volume"],
-        chart_counts_shared=bool(row["chart_counts_shared"]),
-        calendar_details=row["calendar_details"],
-        calendar_twins=row["calendar_twins"],
-        morning_summary=_parse_hhmm(row["morning_summary"]) if row["morning_summary"] else None,
-        morning_summary_empty=bool(row["morning_summary_empty"]),
-        noise_emails=row["noise_emails"],
-        getting_ready_minutes=row["getting_ready_minutes"],
-        leave_heads_up=bool(row["leave_heads_up"]),
-        setup_note=bool(row["setup_note"]),
-        list_style=row["list_style"],
         menu_bar=tuple(json.loads(row["menu_bar"])) if row["menu_bar"] else None,
-        conversation_mode=bool(row["conversation_mode"]),
         day_ends=row["day_ends"],
     )
 
@@ -209,6 +203,82 @@ class AccountStore:
     def cipher(self) -> Cipher:
         return self._cipher
 
+    # ----- household settings (CR7c) ---------------------------------------------
+
+    def household[H: HouseholdSettings](self, model: type[H]) -> H:
+        """The household's settings for one module: what an admin set, else the defaults."""
+        rows = self.db.query(
+            "SELECT key, value FROM household_settings WHERE module = ?", (model.module,)
+        )
+        stored = {r["key"]: json.loads(r["value"]) for r in rows if r["key"] in model.model_fields}
+        return model(**stored)
+
+    def save_household[H: HouseholdSettings](
+        self, actor: Actor, model: type[H], **changes: Any
+    ) -> H:
+        """Change some of the household's settings for a module: admins only. None leaves a
+        value as it is."""
+        self._require_admin(actor)
+        changes = {k: v for k, v in changes.items() if v is not None}
+        current = self.household(model)
+        try:
+            updated = model(**{**current.model_dump(), **changes})
+        except ValidationError as exc:
+            message = str(exc.errors()[0].get("msg", "")).removeprefix("Value error, ")
+            raise InvalidValue(message) from exc
+        dumped = updated.model_dump(mode="json")
+        with self.db.transaction():
+            for key in changes:
+                self.set_household_value(model.module, key, dumped[key])
+        return updated
+
+    def set_household_value(self, module: str, key: str, value: Any) -> None:
+        """One household setting, as it is (no checks): for first-run setup, which asks
+        for a module's setting before any module is loaded."""
+        self.db.execute(
+            "INSERT INTO household_settings (module, key, value, updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (module, key) DO UPDATE SET value = excluded.value, "
+            "updated_at = excluded.updated_at",
+            (module, key, json.dumps(value), clock.now().isoformat()),
+        )
+
+    # ----- module preferences (CR7a) ---------------------------------------------
+
+    def preferences[P: Preferences](self, member_id: int, model: type[P]) -> P:
+        """This member's preferences for one module: what they set, else the defaults."""
+        rows = self.db.query(
+            "SELECT key, value FROM member_preferences WHERE member_id = ? AND module = ?",
+            (member_id, model.module),
+        )
+        stored = {r["key"]: json.loads(r["value"]) for r in rows if r["key"] in model.model_fields}
+        return model(**stored)
+
+    def save_preferences[P: Preferences](
+        self, actor: Actor, member_id: int, model: type[P], **changes: Any
+    ) -> P:
+        """Change some of this member's preferences for a module: only the member themselves
+        (or SYSTEM), as with their other settings. A None value is left as it is."""
+        self._require_self(actor, member_id)
+        self.get_member(member_id)
+        changes = {k: v for k, v in changes.items() if v is not None}
+        current = self.preferences(member_id, model)
+        try:
+            updated = model(**{**current.model_dump(), **changes})
+        except ValidationError as exc:
+            message = str(exc.errors()[0].get("msg", "")).removeprefix("Value error, ")
+            raise InvalidValue(message) from exc
+        now = clock.now().isoformat()
+        dumped = updated.model_dump(mode="json")  # a time as "07:15:00"
+        with self.db.transaction():
+            for key in changes:
+                self.db.execute(
+                    "INSERT INTO member_preferences (member_id, module, key, value, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?) ON CONFLICT (member_id, module, key) "
+                    "DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
+                    (member_id, model.module, key, json.dumps(dumped[key]), now),
+                )
+        return updated
+
     # ----- permission helpers -------------------------------------------------
 
     def _require_admin(self, actor: Actor) -> None:
@@ -228,42 +298,36 @@ class AccountStore:
 
     # ----- family -------------------------------------------------------------
 
-    def get_family(self) -> Family | None:
+    def get_workspace(self) -> Workspace | None:
+        """CR9: the workspace this database is (one per database; row 1)."""
         row = self.db.one("SELECT * FROM family WHERE id = 1")
         if row is None:
             return None
-        return Family(
+        return Workspace(
             name=row["name"],
             timezone=row["timezone"],
-            takeout_budget_cents=row["takeout_budget_cents"],
-            staples=tuple(json.loads(row["staples"])),
             created_at=_parse_dt(row["created_at"]),
             task_owners={k: int(v) for k, v in json.loads(row["task_owners"]).items()},
             handover_cost=float(row["handover_cost"]),
-            laundry_fresh_hours=float(row["laundry_fresh_hours"]),
-            laundry_rinse_minutes=int(row["laundry_rinse_minutes"]),
+            template=row.get("template", "family"),  # a schema from before CR9: the family
         )
 
-    def create_family(
-        self,
-        name: str,
-        timezone: str,
-        takeout_budget_cents: int = 0,
-        staples: tuple[str, ...] = (),
-    ) -> Family:
+    def get_family(self) -> Family | None:
+        """The family template's name for `get_workspace` (CR9): its callers stay."""
+        return self.get_workspace()
+
+    def create_family(self, name: str, timezone: str, template: str = "family") -> Family:
         if self.get_family() is not None:
             raise AccountsError("this server already has a family")
         name = name.strip()
         if not name:
             raise InvalidValue("the family needs a name")
         _validate_timezone(timezone)
-        if takeout_budget_cents < 0:
-            raise InvalidValue("the takeout budget can't be negative")
         now = _iso(clock.now())
         self.db.execute(
-            "INSERT INTO family (id, name, timezone, takeout_budget_cents, staples, created_at, "
-            "updated_at) VALUES (1, ?, ?, ?, ?, ?, ?)",
-            (name, timezone, takeout_budget_cents, json.dumps(list(staples)), now, now),
+            "INSERT INTO family (id, name, timezone, template, created_at, updated_at) "
+            "VALUES (1, ?, ?, ?, ?, ?)",
+            (name, timezone, template, now, now),
         )
         family = self.get_family()
         assert family is not None
@@ -275,12 +339,8 @@ class AccountStore:
         *,
         name: str | None = None,
         timezone: str | None = None,
-        takeout_budget_cents: int | None = None,
-        staples: tuple[str, ...] | None = None,
         task_owners: dict[str, int | None] | None = None,
         handover_cost: float | None = None,
-        laundry_fresh_hours: float | None = None,
-        laundry_rinse_minutes: int | None = None,
     ) -> Family:
         self._require_admin(actor)
         if self.get_family() is None:
@@ -293,12 +353,6 @@ class AccountStore:
         if timezone is not None:
             _validate_timezone(timezone)
             changes["timezone"] = timezone
-        if takeout_budget_cents is not None:
-            if takeout_budget_cents < 0:
-                raise InvalidValue("the takeout budget can't be negative")
-            changes["takeout_budget_cents"] = takeout_budget_cents
-        if staples is not None:
-            changes["staples"] = json.dumps([s.strip() for s in staples if s.strip()])
         if task_owners is not None:
             owners = {}
             for kind, member_id in task_owners.items():
@@ -312,14 +366,6 @@ class AccountStore:
             if not 0 <= handover_cost <= 50:
                 raise InvalidValue("the hand-over cost must be between 0 and 50")
             changes["handover_cost"] = float(handover_cost)
-        if laundry_fresh_hours is not None:
-            if not 1 <= laundry_fresh_hours <= 48:
-                raise InvalidValue("a wet load stays fresh for 1 to 48 hours")
-            changes["laundry_fresh_hours"] = float(laundry_fresh_hours)
-        if laundry_rinse_minutes is not None:
-            if not 5 <= laundry_rinse_minutes <= 180:
-                raise InvalidValue("a rewash takes 5 to 180 minutes")
-            changes["laundry_rinse_minutes"] = int(laundry_rinse_minutes)
         if changes:
             changes["updated_at"] = _iso(clock.now())
             assignments = ", ".join(f"{column} = :{column}" for column in changes)
@@ -331,24 +377,56 @@ class AccountStore:
     # ----- members ------------------------------------------------------------
 
     def list_members(self) -> list[Member]:
-        return [_member_from_row(r) for r in self.db.query("SELECT * FROM members ORDER BY id")]
+        return [_member_from_row(r) for r in self.db.query(f"{MEMBERS} ORDER BY m.id")]
 
     def get_member(self, member_id: int) -> Member:
-        row = self.db.one("SELECT * FROM members WHERE id = ?", (member_id,))
+        row = self.db.one(f"{MEMBERS} WHERE m.id = ?", (member_id,))
         if row is None:
             raise NotFound(f"no member with id {member_id}")
         return _member_from_row(row)
 
     def member_by_name(self, name: str) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE name = ?", (name.strip(),))
+        row = self.db.one(f"{MEMBERS} WHERE m.name = ?", (name.strip(),))
         return _member_from_row(row) if row else None
 
     def member_by_telegram(self, telegram_user_id: int) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE telegram_user_id = ?", (telegram_user_id,))
-        return _member_from_row(row) if row else None
+        return self.member_by_identity(TELEGRAM, str(telegram_user_id))
+
+    # ----- channel identities (CR20a2) ---------------------------------------------------
+
+    def member_by_identity(self, channel: str, external_id: str) -> Member | None:
+        """Who this is on that channel ("telegram", their user id), if anyone."""
+        row = self.db.one(
+            "SELECT member_id FROM member_identities WHERE channel = ? AND external_id = ?",
+            (channel, external_id),
+        )
+        return self.get_member(row["member_id"]) if row is not None else None
+
+    def identity(self, member_id: int, channel: str) -> str | None:
+        """The member's id on that channel, if they're on it."""
+        return self.db.scalar(
+            "SELECT external_id FROM member_identities WHERE member_id = ? AND channel = ?",
+            (member_id, channel),
+        )
+
+    def identities(self, member_id: int) -> dict[str, str]:
+        rows = self.db.query(
+            "SELECT channel, external_id FROM member_identities WHERE member_id = ?",
+            (member_id,),
+        )
+        return {r["channel"]: r["external_id"] for r in rows}
+
+    def set_identity(self, member_id: int, channel: str, external_id: str) -> None:
+        """Pairs the member with an account on a channel (their old one there goes)."""
+        self.db.execute(
+            "INSERT INTO member_identities (member_id, channel, external_id, created_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT (member_id, channel) DO UPDATE SET "
+            "external_id = excluded.external_id, created_at = excluded.created_at",
+            (member_id, channel, external_id, _iso(clock.now())),
+        )
 
     def member_by_email(self, email: str) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE lower(email) = ?", (email.strip().lower(),))
+        row = self.db.one(f"{MEMBERS} WHERE lower(m.email) = ?", (email.strip().lower(),))
         return _member_from_row(row) if row else None
 
     def set_email(self, actor: Actor, member_id: int, email: str | None) -> Member:
@@ -413,28 +491,7 @@ class AccountStore:
         busy_times: Sequence[BusyTime] | None = None,
         phrasing: str | None = None,
         phrasing_notes: str | None = None,
-        checkin_reviews: bool | None = None,
-        done_praise: bool | None = None,
         listen_first: bool | None = None,
-        day_budget: int | None = None,
-        focus_count: int | None = None,
-        chart_limit: int | None = None,
-        chart_counts_shared: bool | None = None,
-        calendar_details: str | None = None,
-        calendar_twins: str | None = None,  # F34e: "ask", "guess" or "keep"
-        morning_summary: str | None = None,  # "HH:MM", or "" for off
-        morning_summary_empty: bool | None = None,
-        getting_ready_minutes: int | None = None,
-        leave_heads_up: bool | None = None,
-        setup_note: bool | None = None,
-        list_style: str | None = None,  # F29g: "dashes", "bullets" or "numbers"
-        break_extend_minutes: int | None = None,
-        sprint_work_minutes: int | None = None,  # BD1a
-        sprint_break_minutes: int | None = None,
-        body_double_sound: str | None = None,  # BD5a
-        body_double_volume: int | None = None,
-        noise_emails: str | None = None,  # one of NOISE_EMAILS
-        conversation_mode: bool | None = None,  # CM1a
         day_ends: int | None = None,  # F34j: 0 (midnight) to 4 am
     ) -> Member:
         """Personal settings: only the member themselves (or SYSTEM) may change them."""
@@ -442,9 +499,9 @@ class AccountStore:
         member = self.get_member(member_id)
         changes: dict[str, Any] = {}
         if quiet_start is not None:
-            changes["quiet_start"] = _parse_hhmm(quiet_start).strftime("%H:%M")
+            changes["quiet_start"] = parse_hhmm(quiet_start).strftime("%H:%M")
         if quiet_end is not None:
-            changes["quiet_end"] = _parse_hhmm(quiet_end).strftime("%H:%M")
+            changes["quiet_end"] = parse_hhmm(quiet_end).strftime("%H:%M")
         if daily_limit is not None:
             if not 0 <= daily_limit <= 50:
                 raise InvalidValue("the daily message limit must be between 0 and 50")
@@ -479,84 +536,12 @@ class AccountStore:
             if len(phrasing_notes) > MAX_PHRASING_NOTES:
                 raise InvalidValue(f"phrasing notes are at most {MAX_PHRASING_NOTES} characters")
             changes["phrasing_notes"] = phrasing_notes.strip()
-        if checkin_reviews is not None:
-            changes["checkin_reviews"] = int(checkin_reviews)
-        if chart_limit is not None:
-            if not 0 <= chart_limit <= MAX_CHART_LIMIT:
-                raise InvalidValue(f"chores at a time is between 0 and {MAX_CHART_LIMIT}")
-            changes["chart_limit"] = chart_limit
-        if break_extend_minutes is not None:
-            if not 5 <= break_extend_minutes <= 120:
-                raise InvalidValue("a break's extension is between 5 and 120 minutes")
-            changes["break_extend_minutes"] = break_extend_minutes
-        if sprint_work_minutes is not None:
-            if not 5 <= sprint_work_minutes <= 90:
-                raise InvalidValue("a sprint's work block is between 5 and 90 minutes")
-            changes["sprint_work_minutes"] = sprint_work_minutes
-        if sprint_break_minutes is not None:
-            if not 1 <= sprint_break_minutes <= 30:
-                raise InvalidValue("a sprint's break is between 1 and 30 minutes")
-            changes["sprint_break_minutes"] = sprint_break_minutes
-        if body_double_sound is not None:
-            from themi.core.body_double_music import LOOPS
-
-            if body_double_sound not in LOOPS:
-                raise InvalidValue(f"the sounds are {', '.join(LOOPS)}")
-            changes["body_double_sound"] = body_double_sound
-        if body_double_volume is not None:
-            if not 0 <= body_double_volume <= 100:
-                raise InvalidValue("the volume is between 0 and 100")
-            changes["body_double_volume"] = body_double_volume
-        if chart_counts_shared is not None:
-            changes["chart_counts_shared"] = int(chart_counts_shared)
-        if calendar_details is not None:
-            if calendar_details not in ("me", "partner"):
-                raise InvalidValue("calendar details are for 'me' or 'partner'")
-            changes["calendar_details"] = calendar_details
-        if calendar_twins is not None:
-            if calendar_twins not in ("ask", "guess", "keep"):
-                raise InvalidValue("the same event on two calendars is ask, guess or keep")
-            changes["calendar_twins"] = calendar_twins
-        if morning_summary is not None:
-            changes["morning_summary"] = (
-                _parse_hhmm(morning_summary).strftime("%H:%M") if morning_summary else None
-            )
-        if morning_summary_empty is not None:
-            changes["morning_summary_empty"] = int(morning_summary_empty)
-        if getting_ready_minutes is not None:
-            if not 0 <= getting_ready_minutes <= 120:
-                raise InvalidValue("getting ready takes between 0 and 120 minutes")
-            changes["getting_ready_minutes"] = getting_ready_minutes
-        if leave_heads_up is not None:
-            changes["leave_heads_up"] = int(leave_heads_up)
-        if setup_note is not None:
-            changes["setup_note"] = int(setup_note)
-        if list_style is not None:
-            if list_style not in ("dashes", "bullets", "numbers"):
-                raise InvalidValue("a list style is dashes, bullets or numbers")
-            changes["list_style"] = list_style
-        if done_praise is not None:
-            changes["done_praise"] = int(done_praise)
         if listen_first is not None:
             changes["listen_first"] = int(listen_first)
         if day_ends is not None:
             if not 0 <= day_ends <= 4:
                 raise InvalidValue("a day ends at midnight or by 4 am")
             changes["day_ends"] = day_ends
-        if conversation_mode is not None:
-            changes["conversation_mode"] = int(conversation_mode)
-        if day_budget is not None:
-            if not 0 <= day_budget <= MAX_DAY_BUDGET:
-                raise InvalidValue(f"a day's budget is between 0 and {MAX_DAY_BUDGET}")
-            changes["day_budget"] = day_budget
-        if focus_count is not None:
-            if not 1 <= focus_count <= MAX_FOCUS_COUNT:
-                raise InvalidValue(f"things for now are between 1 and {MAX_FOCUS_COUNT}")
-            changes["focus_count"] = focus_count
-        if noise_emails is not None:
-            if noise_emails not in NOISE_EMAILS:
-                raise InvalidValue("noise emails come once a day, twice a day or every other day")
-            changes["noise_emails"] = noise_emails
         if busy_times is not None:
             changes["busy_times"] = json.dumps([_busy_json(b) for b in busy_times])
             if len(busy_times) > MAX_BUSY_TIMES:
@@ -646,9 +631,9 @@ class AccountStore:
             self.db.execute(
                 "UPDATE invites SET used_at = ? WHERE code_hash = ?", (_iso(now), row["code_hash"])
             )
+            self.set_identity(row["member_id"], TELEGRAM, str(telegram_user_id))  # CR20a2
             self.db.execute(
-                "UPDATE members SET telegram_user_id = ?, updated_at = ? WHERE id = ?",
-                (telegram_user_id, _iso(now), row["member_id"]),
+                "UPDATE members SET updated_at = ? WHERE id = ?", (_iso(now), row["member_id"])
             )
         return self.get_member(row["member_id"])
 

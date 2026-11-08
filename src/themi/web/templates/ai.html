@@ -12,7 +12,7 @@ nobody else (admins included) can see or change them. Keys are never shown again
 
 <h2>Where each job goes</h2>
 <div class="rows">
-{% for task, slots in chains.items() %}
+{% for task, slots in chains.items() if task in task_labels %}
 {% set names = [] %}
 {% for backend_id, _model in slots %}{% if backend_id %}{% set _ = names.append(labels.get(backend_id, "a removed backend")) %}{% endif %}{% endfor %}
 {% call(part) row(task_labels[task], meta=names | join(" → ") if names else "", chips=[] if names else [("Not set", "warn")], id="job-" ~ task.value) %}

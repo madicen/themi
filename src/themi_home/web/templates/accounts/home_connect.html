@@ -1,0 +1,30 @@
+{% from "_row.html" import row %}
+{# CR17a: the home_connect module's row under Household connections #}
+{% set hc = household.home_connect %}
+{% if hc %}
+{% set chips = [("Linked · " ~ hc.devices|length ~ (" appliance" if hc.devices|length == 1 else " appliances"), "good")] if hc.linked else [("Not linked", "")] %}
+{% call(part) row("Dishwasher", meta="Home Connect (Bosch)", chips=chips, id="home-connect", open=opened == "home-connect") %}
+{% if part == "body" %}
+  <p class="muted">Themi reads whether the dishwasher is running from Home Connect, the Bosch
+  app, and nothing else. A cycle starting checks off the dishwasher on the wall's routines.</p>
+  {% if hc.linked %}
+  {% for device, state in hc.devices %}
+  <p>{{ device.name }}{% if device.appliance %} · {{ device.appliance }}{% endif %}{% if state %} · {{ state | lower }}{% endif %}</p>
+  {% else %}
+  <p>Linked, but no appliances were found.</p>
+  {% endfor %}
+  <div class="danger-zone">
+    <form method="post" action="/family/home-connect/unlink">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="danger">Unlink Home Connect</button>
+    </form>
+  </div>
+  {% else %}
+  <form method="post" action="/family/home-connect/link">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="primary">Link Home Connect</button>
+  </form>
+  {% endif %}
+{% endif %}
+{% endcall %}
+{% endif %}

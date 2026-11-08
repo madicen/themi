@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi.accounts import InvalidValue, Member, NotFound, PermissionDenied
 from themi.ai.settings import ADAPTER_KINDS, AITask, RouteEntry
+from themi.core.capabilities import IMAGE_GENERATION, VOICE_NOTES
 from themi.storage.secrets import Secret
 from themi.web.kit import Kit
 
@@ -42,6 +43,9 @@ KIND_LABELS = {
 }
 
 
+# CR19: tasks that only run when a capability is loaded.
+TASK_CAPABILITY = {AITask.TRANSCRIPTION: VOICE_NOTES, AITask.STEP_IMAGE: IMAGE_GENERATION}
+
 MAX_IMAGE_CAP = 100
 MAX_PICTURE_CAP = 500  # F34gb: pictures sent in chat
 
@@ -50,6 +54,11 @@ def routes(kit: Kit) -> APIRouter:
     router = APIRouter()
     app = kit.app
     ai = app.ai_settings
+
+    def shown(task: AITask) -> bool:
+        """CR19: a task whose capability isn't loaded has nothing to set up."""
+        needs = TASK_CAPABILITY.get(task)
+        return needs is None or needs in app.services.capabilities
 
     def values(member: Member, **extra: Any) -> dict[str, Any]:
         ai.ensure_defaults(member.id)
@@ -60,11 +69,12 @@ def routes(kit: Kit) -> APIRouter:
             slots = [(e.backend_id, e.model or "") for e in entries]
             slots += [(None, "")] * (MAX_CHAIN - len(slots))
             chains[task] = slots[:MAX_CHAIN]
+        loaded = app.services.ai_adapters  # CR19: the AI provider modules' kinds only
         return {
             "backends": backends,
             "chains": chains,
-            "task_labels": TASK_LABELS,
-            "kinds": [(k, KIND_LABELS[k]) for k in ADAPTER_KINDS],
+            "task_labels": {t: w for t, w in TASK_LABELS.items() if shown(t)},
+            "kinds": [(k, KIND_LABELS[k]) for k in ADAPTER_KINDS if not loaded or k in loaded],
             "kind_labels": KIND_LABELS,
             "image_cap": app.services.router.image_cap(member.id),  # BD4a
             "picture_cap": picture_cap(member.id),  # F34gb

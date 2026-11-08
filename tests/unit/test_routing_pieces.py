@@ -18,7 +18,7 @@ def test_one_clause_and_short_bits_stay_whole() -> None:
 
 def test_forwarding_an_email_reaches_the_email_tools() -> None:
     """F31d (idea #168): "Can you forward that email to Erin?" got "I can't forward emails"."""
-    from themi.core.tools import choose_groups
+    from tests.fakes.groups import choose_groups
 
     for said in (
         "Can you forward that email to Erin?",

@@ -27,7 +27,7 @@ from fastapi.responses import JSONResponse, Response
 from tests.fakes._server import BackgroundServer
 from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.snapshot import Snapshots
-from themi.connectors.google import GoogleConfig
+from themi_google.connectors.google import GoogleConfig
 
 EVENT_ID = re.compile(r"[a-v0-9]{5,1024}")
 

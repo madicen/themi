@@ -18,8 +18,8 @@ import pytest
 from themi.ai import CallKind, call_with_retry
 from themi.ai.adapters import AdapterConfig, AdapterKind, build_provider
 from themi.ai.adapters.defaults import GEMINI_DEFAULT_IMAGE_MODEL, OPENAI_DEFAULT_IMAGE_MODEL
-from themi.core.step_images import image_prompt
 from themi.storage.secrets import Secret
+from themi_home.step_images import image_prompt
 
 
 def _providers() -> list[Any]:

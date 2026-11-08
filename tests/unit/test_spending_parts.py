@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 
-from themi.core.spending import money, month_of
 from themi.core.tools import ToolFailed
+from themi_home.spending import money, month_of
 
 
 def test_money_reads_as_dollars() -> None:

@@ -23,9 +23,9 @@ import pytest
 
 from tests.fakes.snapshot import Snapshots
 from themi import clock
-from themi.connectors.homeconnect import HomeConnectClient, HomeConnectConfig
-from themi.connectors.homeconnect.client import OPERATION_STATE, REMAINING_TIME, STATE_PREFIX
 from themi.storage.secrets import Secret
+from themi_home.connectors.homeconnect import HomeConnectClient, HomeConnectConfig
+from themi_home.connectors.homeconnect.client import OPERATION_STATE, REMAINING_TIME, STATE_PREFIX
 
 BASE_URL = "https://home-connect.test"
 CLIENT_ID = "themi-home-connect"

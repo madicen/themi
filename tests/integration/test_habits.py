@@ -14,7 +14,8 @@ from themi.autonomy import Decision
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Priority
 from themi.channels.pda import find_demands
-from themi.core.habits import IDEAS, OFFER_TEXT, HabitReserve
+from themi.core import keys
+from themi.standard.habits import IDEAS, OFFER_TEXT, HabitReserve
 
 
 @pytest.fixture
@@ -29,7 +30,7 @@ def erin(scenario: Scenario) -> Member:
 
 @pytest.fixture
 def reserve(scenario: Scenario) -> HabitReserve:
-    habits = scenario.app.services.habits
+    habits = scenario.app.services.maybe(keys.habits)
     assert habits is not None
     return habits
 

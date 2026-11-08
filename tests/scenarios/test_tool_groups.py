@@ -3,11 +3,11 @@ when the model finds it needs one."""
 
 from __future__ import annotations
 
+from tests.fakes.groups import GROUPS, TOOL_GROUPS
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
-from themi.core.timing import Reply, router_numbers, week_of_replies
-from themi.core.tools import GROUPS, TOOL_GROUPS
+from themi.standard.timing import Reply, router_numbers, week_of_replies
 
 
 def sent(scenario: Scenario, index: int = -1) -> set[str]:
@@ -124,6 +124,7 @@ async def test_every_tool_routing_sends_all_but_more_tools(
         everything = {spec.name for spec in scenario.app.services.tools.specs()}
         assert sent(scenario) == everything - {"more_tools"}
         (reply,) = week_of_replies(scenario.app.db)  # P3 sees every group sent
-        assert reply.groups == tuple(sorted(GROUPS)) and reply.tools_sent == len(everything) - 1
+        loaded = scenario.app.services.tools.group_names()  # CR8b: its modules' groups
+        assert reply.groups == tuple(sorted(loaded)) and reply.tools_sent == len(everything) - 1
     finally:
         await scenario.stop()

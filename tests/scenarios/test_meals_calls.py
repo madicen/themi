@@ -9,12 +9,13 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.errors import PermanentError
 from themi.ai.types import ToolResult
-from themi.core.pantry import Pantry
+from themi.core import keys
+from themi_home.pantry import Pantry
 
 
 def pantry(scenario: Scenario) -> Pantry:
-    assert scenario.app.services.pantry is not None
-    return scenario.app.services.pantry
+    assert scenario.app.services.maybe(keys.pantry) is not None
+    return scenario.app.services.get(keys.pantry)
 
 
 def tool_results(scenario: Scenario) -> list[str]:

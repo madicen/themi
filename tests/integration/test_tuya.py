@@ -12,7 +12,7 @@ from tests.fakes.tuya import ACCESS_ID, SECRET, FakeTuya
 from tests.fixtures.family import SeededFamily
 from themi import clock
 from themi.cli import main
-from themi.connectors.tuya import (
+from themi_home.connectors.tuya import (
     FOOD,
     LOW,
     OUT,
@@ -23,7 +23,7 @@ from themi.connectors.tuya import (
     TuyaError,
     TuyaWatcher,
 )
-from themi.connectors.tuya.watch import write_captures
+from themi_home.connectors.tuya.watch import write_captures
 
 pytestmark = pytest.mark.usefixtures("frozen_clock")
 

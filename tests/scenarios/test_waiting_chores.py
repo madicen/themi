@@ -12,8 +12,10 @@ from tests.scenarios.harness import START, Scenario
 from themi import clock
 from themi.ai.types import ToolResult
 from themi.channels.pda import MAX_STRENGTH, find_demands
-from themi.core.repeat import parse
-from themi.core.tasks import Task, TaskBoard
+from themi.core import keys
+from themi.standard.repeat import parse
+from themi.standard.tasks import Task, TaskBoard
+from themi_home.chore_chart import ChartPreferences
 
 MESSAGE = (
     "Any time you are going to assign Erin to Clean the Kitchen, first send a task to Michael "
@@ -23,8 +25,8 @@ MESSAGE = (
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def until(scenario: Scenario, day: date, hour: int = 10) -> None:
@@ -207,7 +209,7 @@ async def test_a_waiting_chore_doesnt_take_the_charts_one_place(
         upstairs.id, erin, repeat=parse("every Wednesday", scenario.today())
     )
     await board(scenario).complete(upstairs.id, erin)
-    scenario.app.store.update_settings(erin, erin.id, chart_limit=1)
+    scenario.app.store.save_preferences(erin, erin.id, ChartPreferences, chart_limit=1)
     await until(scenario, date(2026, 10, 28))
     await scenario.run_periodic("cozyla.chores")
     names = [c["choreName"] for c in fake_cozyla.chores.values()]

@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from themi.connectors.gkeep import GKeepAccount, KeepError, KeepLogin, exchange_token
 from themi.storage.secrets import Secret
+from themi_home.connectors.gkeep import GKeepAccount, KeepError, KeepLogin, exchange_token
 
 LOGIN = KeepLogin("erin@example.com", Secret("aas_et/master"), "0123456789abcdef")
 

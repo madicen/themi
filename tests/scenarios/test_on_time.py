@@ -12,15 +12,17 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
-from themi.core.tasks import TaskBoard
+from themi.core import keys
+from themi.standard.day_summary import DaySummaryPreferences
+from themi.standard.tasks import TaskBoard
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 THURSDAY = date(2026, 10, 22)
 
 
 def board(scenario: Scenario) -> TaskBoard:
-    assert scenario.app.services.taskboard is not None
-    return scenario.app.services.taskboard
+    assert scenario.app.services.maybe(keys.taskboard) is not None
+    return scenario.app.services.get(keys.taskboard)
 
 
 async def until(scenario: Scenario, day: date, hour: int, minute: int = 0) -> list[str]:
@@ -52,7 +54,9 @@ async def test_the_summary_comes_at_its_time_past_the_daily_limit(scenario: Scen
     """Bug #57: Michael's 9 am summary waited for the next morning, behind his daily limit,
     still headed with the day before."""
     husband = scenario.member("Husband")
-    scenario.app.store.update_settings(husband, husband.id, morning_summary="10:00")
+    scenario.app.store.save_preferences(
+        husband, husband.id, DaySummaryPreferences, morning_summary="10:00"
+    )
     await board(scenario).create(
         husband, "Bring the bins in", "physical", 1, date(2026, 10, 21), assignee=husband
     )

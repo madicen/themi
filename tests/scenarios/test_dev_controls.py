@@ -19,8 +19,8 @@ from tests.integration.test_cozyla_chores import board, chore
 from tests.scenarios.harness import START, Scenario
 from tests.scenarios.test_triage import verdict
 from themi import clock
-from themi.core.laundry import WASHED_TEXT
-from themi.core.tasks import clock_words
+from themi.standard.tasks import clock_words
+from themi_home.laundry import WASHED_TEXT
 from tools.dev.controls import ControlPanel
 from tools.dev.fakes import DevFakes
 
