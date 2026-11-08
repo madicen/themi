@@ -54,7 +54,9 @@ from themi.ai.router import ProviderFactory
 from themi.ai.settings import AITask, RouteEntry
 from themi.app import App, build_app
 from themi.channels.telegram import TelegramChannel
+from themi.config import Template
 from themi.core import keys
+from themi.modules import Module
 from themi.storage.secrets import Secret
 
 START = datetime(2026, 10, 21, 9, 0, tzinfo=ZoneInfo("America/Los_Angeles"))
@@ -111,6 +113,8 @@ class Scenario:
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
         hedge_after: float | None = None,
+        modules: list[Module] | None = None,  # CR12: another template's modules
+        template: Template | None = None,
     ) -> None:
         """`real_models`: the router builds real adapters from each member's AI settings and
         retries with real waits (the evals); otherwise every model is a ScriptedProvider.
@@ -139,6 +143,8 @@ class Scenario:
             tool_routing=tool_routing,
             control_dir=runner.folder if runner else None,
             hedge_after=hedge_after,
+            modules=modules,
+            template=template,
             **connector_options(
                 google=google,
                 gmail=gmail,
@@ -160,7 +166,7 @@ class Scenario:
             ),
         )
         if not real_models:
-            for member in (family.erin, family.husband):
+            for member in {m.id: m for m in (family.erin, family.husband)}.values():
                 self.use_scripted_models(member)
         self.app.services.site_url = "http://themi.test"
 

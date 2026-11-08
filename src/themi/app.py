@@ -283,6 +283,7 @@ def build_app(
     outbox.sent_listeners.append(outcomes.on_sent)
     tools = ToolRegistry(list(STARTER_TOOLS))
     tools.add_group(SETTINGS)  # CR8b: the core's own; modules add theirs
+    tools.reword(template.tools, template.groups)  # CR12: the template's own words
     services = Services(
         tool_routing=tool_routing,
         conversation_rollout=conversation_mode,

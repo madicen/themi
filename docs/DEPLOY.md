@@ -369,3 +369,31 @@ look around the website at `http://localhost:8080`.
 | `restore` says `wrong THEMI_SECRET_KEY` | The key isn't the one the snapshot was made with. Use the copy from your password manager. |
 | The server is very slow, or out of memory | `free -h`. Make sure the swap file is on. An e2-micro can't run a local model; run Ollama at home and reach it over Tailscale. |
 | A surprise cloud bill | Look in Google Cloud billing for a *balanced* disk, a reserved static IP that isn't in use, or egress over 1 GB. |
+
+## 12. A second Themi next to the family's (work, tutoring)
+
+Each Themi is the same image with its own choices (CR12): its own folder, `.env`, bot and
+database. On the same server:
+
+```sh
+mkdir ~/themi-work && cd ~/themi-work
+cp ~/themi/compose.yml .                      # the family's compose file, as it is
+docker run --rm -it --user "$(id -u)" -v "$PWD:/setup" ghcr.io/you/themi:latest setup --dir /setup
+```
+
+`themi setup` asks for the template (`work`), its modules and their settings, and writes
+`themi.toml` (choices) and `.env` (secrets: a **new** bot from @BotFather, a **new**
+secret key) into the folder. Then, in the new folder:
+
+1. Add `THEMI_IMAGE` and `THEMI_VERSION` to the new `.env`, as in the family's.
+2. Give it its own port: in `compose.yml`, `"127.0.0.1:8081:8080"`.
+3. Give it its config: add `- ./themi.toml:/data/themi.toml:ro` under `volumes`.
+   (Themi reads `/data/themi.toml`; with none it's the family template.)
+4. `docker compose up -d`. The folder's name keeps its volume apart from the family's
+   (`themi-work_themi-data`), so the two databases never mix.
+5. Publish it on its own Funnel port (section 6, with `--https=8443` and port 8081) and set
+   `THEMI_PUBLIC_URL` to that address.
+6. `docker compose run --rm themi init`, then pair from Telegram with the new bot.
+
+`docker compose run --rm themi config show` prints what it's made of;
+`themi setup --check --dir .` tries its services again.

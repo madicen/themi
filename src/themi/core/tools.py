@@ -349,6 +349,9 @@ class ToolRegistry:
         self._groups: dict[str, ToolGroup] = {}
         self._words: dict[str, re.Pattern[str]] | None = None
         self._owners: dict[str, str] = {}  # CR9: tool -> the module that registered it
+        # CR12: the template's wording for tools and groups, in what the model is sent.
+        self._tool_words: dict[str, dict[str, Any]] = {}
+        self._group_words: dict[str, str] = {}
         self.installing = ""  # set by the module loader while a module installs
         for t in tools or []:
             self.register(t)
@@ -364,9 +367,36 @@ class ToolRegistry:
         self._groups[group.name] = group
         self._words = None
 
+    def reword(self, tools: dict[str, dict[str, Any]], groups: dict[str, str]) -> None:
+        """CR12: a template's own words for some tools (`description`, and `fields` for its
+        arguments' descriptions) and groups. Only what's sent changes; calls are checked
+        against the tools' own specs."""
+        self._tool_words = {k: dict(v) for k, v in tools.items()}
+        self._group_words = dict(groups)
+
+    def _worded(self, spec: ToolSpec) -> ToolSpec:
+        words = self._tool_words.get(spec.name)
+        if not words:
+            return spec
+        schema_ = spec.input_schema
+        fields = words.get("fields", {})
+        if fields:
+            props = {
+                k: {**p, "description": fields[k]} if k in fields else p
+                for k, p in schema_.get("properties", {}).items()
+            }
+            schema_ = {**schema_, "properties": props}
+        return replace(
+            spec, description=words.get("description", spec.description), input_schema=schema_
+        )
+
     def groups(self) -> list[ToolGroup]:
-        """The groups modules added, in the order they're offered."""
-        return sorted(self._groups.values(), key=lambda g: g.order)
+        """The groups modules added, in the order they're offered, in the template's words."""
+        found = sorted(self._groups.values(), key=lambda g: g.order)
+        return [
+            replace(g, description=self._group_words[g.name]) if g.name in self._group_words else g
+            for g in found
+        ]
 
     def group_names(self) -> list[str]:
         return [g.name for g in self.groups()]
@@ -424,7 +454,7 @@ class ToolRegistry:
         for twins in TWINS:  # P6: a twin set goes whole
             if chosen & set(twins.tools):
                 chosen |= set(twins.tools) & self._tools.keys()
-        specs = [self._tools[name].spec for name in sorted(chosen)]
+        specs = [self._worded(self._tools[name].spec) for name in sorted(chosen)]
         if groups is None:  # every tool: more_tools offers every group
             full = self.more_tools_for(set())
             return [full if s.name == more_tools.spec.name and full else s for s in specs]

@@ -298,7 +298,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
 | CR10b | Core refactor: workspace packages (after CR12) | Core refactor | [ ] |
 | CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
-| CR12 | Core refactor: the work template | Core refactor | [ ] |
+| CR12 | Core refactor: the work template | Core refactor | [x] 2026-11-07 |
 | CR13 | Gate: tutoring design | Core refactor | [ ] |
 | CR14 | Tutoring pack for one family | Core refactor | [ ] |
 | CR15a | Multi-family host: instance database and family registry | Core refactor | [ ] |
@@ -14706,7 +14706,7 @@ Notes:
   the wall asked once; each check against its fake.
 
 ### CR12 · Core refactor: the work template
-Status: [ ]
+Status: [x] 2026-11-07
 Depends on: CR11
 Read first: CR11's notes.
 - `themi_work/templates/work.toml`: one member as admin; modules tasks, reminders,
@@ -14722,6 +14722,27 @@ Read first: CR11's notes.
 - DEPLOY.md: running a second instance next to the family one (its own data volume, bot
   token and port).
 Tests: the scenario; the household-words test; the setup wizard's work run.
+
+Notes:
+- `themi/templates/work.toml` (in the core package for now; CR10b moves it to the work
+  pack): memory, journal, google, gmail, lists, tasks, follow_ups, email_audit, reminders,
+  business_hours, day_summary, focus, calendar, web_search, reactions, wrong_replies,
+  commands, feedback, google_tasks; a work persona; admin and member roles with every
+  module. The phrasing shield and energy model stay on; members default to plain phrasing.
+- Templates can now reword tools as well as rules: `[tools.<name>]` (`description`, and
+  `fields` for argument descriptions) and `[groups.<name>] description`
+  (`ToolRegistry.reword`). Only what's sent changes; calls are checked against the real
+  specs. The work template rewords 4 rules, the schedules group and 15 tools that talked
+  about a family, partners, chores or the family calendar.
+- Not reworded yet: `build_system`'s header over locked rules ("Locked household rules
+  (they apply to everyone in the family)") shows once a work rule is locked; a small
+  follow-up (it takes the template's word for the rules' scope).
+- `docs/DEPLOY.md` section 12: a second Themi next to the family's (own folder, bot,
+  secret key, port, volume, Funnel port).
+- `Scenario(..., modules=, template=)` runs another template's app; `test_work_template.py`
+  boots work from a themi.toml, pairs Michael, adds a task with a due time, gets its nudge
+  and marks it done; checks no household word is sent to the model (prompt and every tool
+  and argument description); and runs the wizard for work.
 
 ### CR13 · Gate: tutoring design
 Status: [ ]

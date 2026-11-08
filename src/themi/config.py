@@ -52,6 +52,8 @@ class Template:
     persona: str = ""  # CR8a: the system prompt's opening
     prompt: dict[str, str] = field(default_factory=dict)  # rewordings by fragment key
     roles: dict[str, RoleSpec] = field(default_factory=dict)  # CR9: by role name
+    tools: dict[str, dict[str, Any]] = field(default_factory=dict)  # CR12: tool rewordings
+    groups: dict[str, str] = field(default_factory=dict)  # CR12: group descriptions
 
 
 @dataclass(frozen=True)
@@ -144,6 +146,8 @@ def load_template(name: str) -> Template:
             role: RoleSpec(role, bool(spec.get("admin", False)), tuple(spec.get("modules", ["*"])))
             for role, spec in data.get("roles", {}).items()
         },
+        dict(data.get("tools", {})),
+        {name: str(g.get("description", "")) for name, g in data.get("groups", {}).items()},
     )
 
 
