@@ -308,7 +308,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR15b | Multi-family host: routing messages and the website | Core refactor | waiting (tutoring spec) |
 | CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | waiting (tutoring spec) |
 | CR16 | Round two: the simulator with any module setup | Core refactor | [x] 2026-11-08 |
-| CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [ ] |
+| CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [x] 2026-11-08 |
 | CR17b | Round two: each pack's own page templates and static files | Core refactor | [ ] |
 | CR18a | Round two: Google permissions asked per module | Core refactor | [ ] |
 | CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [ ] |
@@ -14958,7 +14958,7 @@ Notes:
   OurGroceries, Keep), even when the setup doesn't load their modules.
 
 ### CR17a · Round two: the dashboard and Accounts page in module sections
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR16
 - `ctx.dashboard_panel(template, order, values=)` and `ctx.accounts_section(template,
   order, values=, routes=)`, like CR7d's settings sections. Today's panels and the Accounts
@@ -14966,6 +14966,30 @@ Depends on: CR16
 - The pack check's exemptions for `google_pages` and `connection_pages` go.
 Tests: the family's dashboard and Accounts page show the same sections in the same order;
 a module left out takes its section with it.
+
+Notes (2026-11-08):
+- `ctx.dashboard_panel`, `ctx.accounts_section` (with `household=True` for the rows under
+  "Household connections") and `ctx.waiting_link` (a line in "Waiting on you" standing for
+  some actions: the noise digest's emails). A section whose `values` gives None isn't shown.
+- Dashboard: the core keeps alerts, "Waiting on you" and "Recently"; tasks (20), around the
+  house (30, appliances) and the grocery list (40, groceries) are panels under
+  `templates/dashboard/`. "Got it" (`/groceries/{id}/bought`) moved to the groceries pages.
+- Accounts: `themi/web/accounts_page.py` is the core page. `google_pages` moved to
+  `themi_google/web/` (the google module registers it with its section); the family
+  calendar row is the calendar module's; `connection_pages` became
+  `themi_home/web/device_pages.py`, one row and router per device module, and Spotify's.
+  Safeway's pointer line is the safeway module's. Templates are under `templates/accounts/`.
+- Without the google module, the commands module shows "Linking Gmail isn't set up on this
+  server yet" on Accounts (what `/link gmail` says), so the old test keeps passing.
+- The cookbook line stays inside each Google account's row (it's per account), read
+  through `keys.recipes`; a per-row hook wasn't worth it.
+- Deviation: with the tasks or groceries module left out, their panel goes; before, an
+  empty "On your list" and "Grocery list" showed.
+- The pack check has no exemptions left but `themi.app` and `themi.cli`. Golden files are
+  unchanged. Tests: `tests/scenarios/test_module_sections.py`.
+- Still core: the CSP's form targets read Google, Home Connect and Spotify through keys
+  (a follow-up could make it a module hook). Pack templates still live in the core's
+  template folder: CR17b.
 
 ### CR17b · Round two: each pack's own page templates and static files
 Status: [ ]

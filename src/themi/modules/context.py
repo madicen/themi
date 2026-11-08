@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, TypeVar
 from themi.modules.base import Module, ModuleError, PeriodicTask
 from themi.modules.loader import order
 from themi.modules.registry import Key, name_of
-from themi.modules.web import MenuEntry, WebPages
+from themi.modules.web import AccountsSection, MenuEntry, Panel, Values, Waiting, WebPages
 from themi.storage.migrations import apply_track
 
 if TYPE_CHECKING:
@@ -170,6 +170,31 @@ class ModuleContext:
     def web(self, routes: Callable[[Kit], APIRouter], *menu: MenuEntry) -> None:
         """CR4: the module's website pages, and where they go in the menu."""
         self.services.web_pages.append(WebPages(routes, menu))
+
+    def dashboard_panel(self, template: str, order: int, *, values: Values | None = None) -> None:
+        """CR17a: a panel on the dashboard, placed among the modules' by `order` (tasks 20,
+        around the house 30, the grocery list 40), between "Waiting on you" and "Recently"."""
+        self.services.dashboard_panels.append(Panel(order, template, values))
+
+    def accounts_section(
+        self,
+        template: str,
+        order: int,
+        *,
+        values: Values | None = None,
+        routes: Callable[[Kit], APIRouter] | None = None,
+        household: bool = False,
+    ) -> None:
+        """CR17a: a part of the Accounts page and the routes its forms post to. A member's
+        own sections come first by `order`; `household` rows go under "Household
+        connections", for admins only. A section whose `values` gives None isn't shown."""
+        self.services.accounts_sections.append(AccountsSection(order, template, values, household))
+        if routes is not None:
+            self.web(routes)
+
+    def waiting_link(self, link: Waiting) -> None:
+        """CR17a: a line in "Waiting on you" standing for some waiting actions."""
+        self.services.waiting_links.append(link)
 
     def executor(self, name: str, fn: Executor) -> None:
         self.services.autonomy.executors.register(name)(fn)

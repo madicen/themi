@@ -248,3 +248,9 @@ class CommandsModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(Commands(ctx.services)).install()
+        s = ctx.services
+        ctx.accounts_section(  # CR17a: what /link says, on Accounts, when there's no Google
+            "accounts/google_not_set_up.html",
+            10,
+            values=lambda _member: None if s.maybe(keys.google) is not None else {},
+        )

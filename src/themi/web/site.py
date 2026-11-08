@@ -8,7 +8,7 @@ without JavaScript; HTMX just swaps a card in place instead of reloading.
 
 Security:
 - Sign-in by one-time link from the bot, or with Google for members' addresses
-  (google_pages).
+  (the google module's pages).
 - Sessions are server-side; the cookie is HttpOnly and SameSite=Lax, and
   Secure when the site is on HTTPS.
 - Every POST needs the session's CSRF token (form field or X-CSRF-Token header).
@@ -40,13 +40,10 @@ from themi.standard import conversation_mode
 from themi.web import icons
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
-from themi.web.task_pages import task_rows
 
 __all__ = ["SiteContext", "install_site"]
 
 log = logging.getLogger(__name__)
-HOME_TASKS = 5
-GROCERIES_ON_LISTS = "/lists?open=groceries#groceries"
 
 TRACKING_LABELS = {
     "text_notes": 'Notes about how you\'re doing ("that call took a lot out of me")',
@@ -117,7 +114,7 @@ def security_headers(response: Response, form_targets: str = "") -> None:
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import admin_pages, ai_pages, connection_pages, dev_pages, google_pages
+    from themi.web import accounts_page, admin_pages, ai_pages, dev_pages
 
     kit = Kit(ctx)
     modules_pages = ctx.app.services.web_pages
@@ -176,10 +173,9 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
 
     web.include_router(core_routes(kit, menu))
     web.include_router(admin_pages.routes(kit))
-    web.include_router(connection_pages.routes(kit))
+    web.include_router(accounts_page.routes(kit))  # CR17a: made of the modules' sections
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
-    web.include_router(google_pages.routes(kit))  # the accounts page: Google and the house's
     for pages in modules_pages:  # CR4: each loaded module's pages
         web.include_router(pages.routes(kit))
 
@@ -235,10 +231,10 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
     def dashboard_values(member: Member) -> dict[str, Any]:
         autonomy = app.services.autonomy
         actions = autonomy.open_for(member)
-        noise = (
-            app.services.maybe(keys.noise).waiting(member) if app.services.maybe(keys.noise) else []
-        )
-        held = {a.id for a in noise}  # F16b: one link to their own page, not a card each
+        # CR17a: a module's line stands for some of these (F16b: the noise digest's emails
+        # are one link to their own page, not a card each).
+        waiting = [link for fn in app.services.waiting_links if (link := fn(member))]
+        held = {i for link in waiting for i in link.held}
         actions = [a for a in actions if a.id not in held]
         activity = app.db.query(
             "SELECT a.event, a.created_at, p.summary FROM action_audit a "
@@ -258,24 +254,20 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         failed = [a for a in actions if a.status == "failed"]
         if failed:
             alerts.append(f"{len(failed)} action(s) didn't go through and can be tried again.")
-        tasks: dict[str, Any] = {"mine": [], "more_tasks": 0}
-        if app.services.maybe(keys.taskboard) is not None:  # W2: the first few, with Done
-            tasks = task_rows(app, member, limit=HOME_TASKS)
-            total = len(app.services.maybe(keys.taskboard).open_for(member))
-            tasks["more_tasks"] = total if total > HOME_TASKS else 0
-        appliances = app.services.maybe(keys.appliances)
+        panels: list[str] = []  # CR17a: the modules' panels, in their order
+        values: dict[str, Any] = {}
+        for panel in sorted(app.services.dashboard_panels, key=lambda p: p.order):
+            panels.append(panel.template)
+            values.update((panel.values(member) or {}) if panel.values else {})
         return {
-            **tasks,
-            "around_the_house": appliances.at_a_glance() if appliances else None,
+            **values,
+            "panels": panels,
             "actions": actions,
+            "waiting": waiting,
             "activity": [
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
-            "noise_count": len(noise),
-            "groceries": app.services.maybe(keys.groceries).needed()
-            if app.services.maybe(keys.groceries)
-            else [],
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -284,20 +276,6 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         return kit.with_flash(
             request, "dashboard.html", session, **dashboard_values(session.member)
         )
-
-    @router.post("/groceries/{item_id}/bought")
-    async def grocery_bought(request: Request, item_id: int) -> Response:
-        _, form = await kit.checked(request)
-        back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"
-        groceries, pantry = app.services.maybe(keys.groceries), app.services.maybe(keys.pantry)
-        item = groceries.get(item_id) if groceries else None
-        if item is None or item.status != "needed" or groceries is None:
-            return kit.redirect(back, "That one is already off the list.")
-        if pantry is not None:
-            pantry.set_status(item.name, "plenty", source="list")  # takes it off the list too
-        else:
-            groceries.finish(item.name)
-        return kit.redirect(back, f"Took {item.name} off the list.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:

@@ -72,6 +72,27 @@ class SpotifyModule(Module):
         store = ctx.services.store
         links = SpotifyLinks(store.db, store.cipher, self.client)
         ctx.provide(Music(ctx.services, links)).install()
+        from themi_home.web import device_pages
+
+        ctx.accounts_section(  # CR17a: their own, after their Google accounts
+            "accounts/spotify.html",
+            20,
+            values=device_pages.spotify_values(ctx.services),
+            routes=device_pages.spotify_routes,
+        )
+
+
+def _row(ctx: ModuleContext, name: str, template: str, order: int) -> None:
+    """CR17a: a device's row under Household connections, with the routes behind it."""
+    from themi_home.web import device_pages
+
+    ctx.accounts_section(
+        template,
+        order,
+        values=device_pages.row_values(ctx.services, name),
+        routes=getattr(device_pages, f"{name}_routes"),
+        household=True,
+    )
 
 
 def _bought(ctx: ModuleContext) -> Callable[[str], object]:
@@ -272,6 +293,7 @@ class HomeConnectModule(Module):
         dishwasher.install()
         ctx.periodic("devices.dishwasher", timedelta(minutes=5), dishwasher.poll)
         ctx.periodic("devices.dishwasher_pace", timedelta(hours=1), dishwasher.pace)
+        _row(ctx, "home_connect", "accounts/home_connect.html", 10)  # CR17a
 
 
 class ThinqModule(Module):
@@ -305,6 +327,7 @@ class ThinqModule(Module):
         laundry = ctx.provide(Laundry(s, ctx.get(TaskBoard), watcher))
         laundry.install()
         ctx.periodic("laundry.fresh", timedelta(minutes=15), laundry.check_fresh)
+        _row(ctx, "thinq", "accounts/thinq.html", 20)  # CR17a
 
 
 class RoborockModule(Module):
@@ -332,6 +355,7 @@ class RoborockModule(Module):
         vacuum = ctx.provide(Vacuum(s, ctx.get(TaskBoard), watcher))
         vacuum.install()
         ctx.periodic("vacuum.wall", timedelta(minutes=1), vacuum.onto_wall)
+        _row(ctx, "roborock", "accounts/roborock.html", 30)  # CR17a
 
 
 class TuyaModule(Module):
@@ -354,6 +378,7 @@ class TuyaModule(Module):
         ctx.provide(watcher)
         ctx.periodic("devices.feeders", timedelta(minutes=10), watcher.poll)
         ctx.provide(Feeders(s, ctx.get(TaskBoard), watcher)).install()
+        _row(ctx, "tuya", "accounts/tuya.html", 40)  # CR17a
 
 
 class CatGenieModule(Module):
@@ -377,3 +402,4 @@ class CatGenieModule(Module):
         ctx.provide(watcher)
         ctx.periodic("devices.litter_box", timedelta(minutes=10), watcher.poll)
         ctx.provide(LitterBox(s, ctx.get(TaskBoard), watcher)).install()
+        _row(ctx, "catgenie", "accounts/catgenie.html", 50)  # CR17a

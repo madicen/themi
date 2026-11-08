@@ -1,10 +1,13 @@
-"""Google on the website: "Sign in with Google", and the My accounts page.
+"""Google on the website: "Sign in with Google", and the Google parts of Accounts.
+
+CR17a: the google module's pages, moved out of the core's with it; the Accounts page itself
+is the core's, made of the modules' sections.
 
 - `/auth/google` starts a sign-in. Only `openid email` is asked for, and only
   a member's sign-in address gets in.
-- `/accounts` lists the signed-in member's linked Gmail accounts, with a
-  button to link another (a POST, so it's CSRF-checked) and one to unlink each.
-  Admins also see the household's connections there (connection_pages, W3).
+- The "My Google accounts" section lists the signed-in member's linked Gmail accounts, with
+  a button to link another (a POST, so it's CSRF-checked) and one to unlink each.
+- The calendar module's "Family calendar" row, for admins (26).
 - `/auth/google/callback` finishes both. A linking flow started from Telegram
   (`/link gmail`) lands here too, possibly in a browser that isn't signed in:
   the state carries the member, so it works either way.
@@ -12,18 +15,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from themi.accounts import AccountsError, LinkedAccount, Member
 from themi.core import keys
+from themi.web.accounts_page import back
 from themi.web.auth import COOKIE_NAME
-from themi.web.connection_pages import accounts_values
 from themi.web.kit import Kit
 from themi_google.connectors.gcal import CalendarError
-from themi_google.connectors.google import CALENDAR_SCOPE, GoogleAccounts, OAuthError
+from themi_google.connectors.google import (
+    CALENDAR_SCOPE,
+    DRIVE_FILE_SCOPE,
+    TASKS_SCOPE,
+    GoogleAccounts,
+    OAuthError,
+)
 from themi_google.expected import DEFAULT_CATEGORY
 
 NOT_SET_UP = "Google sign-in isn't set up on this server. /site in Telegram sends a sign-in link."
@@ -34,6 +44,68 @@ def _sentence(text: str) -> str:
     if text.startswith("invalid literal for int"):
         return "How often and the grace period are whole numbers of days."
     return text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")
+
+
+def section_values(services: Any) -> Callable[[Member], dict[str, Any]]:
+    """The "My Google accounts" section: their accounts, and what each can do (the
+    expected emails, Google Tasks, the cookbook, when those modules are loaded)."""
+
+    def values(member: Member) -> dict[str, Any]:
+        accounts = services.store.linked_accounts(member.id)
+        expected = services.maybe(keys.expected)
+        recipes = services.maybe(keys.recipes)
+        return {
+            "accounts": accounts,
+            "can_link": services.maybe(keys.google) is not None,
+            "expected": {a.id: expected.for_account(a.id) for a in accounts} if expected else {},
+            "protectable": [c for c in services.autonomy.categories() if not c.capped],
+            "tasks_scope": TASKS_SCOPE,
+            "cookbook_scope": DRIVE_FILE_SCOPE,  # RC1a
+            "cookbook": recipes.settings() if recipes is not None and recipes.ready() else None,
+        }
+
+    return values
+
+
+def calendar_values(services: Any) -> Callable[[Member], dict[str, Any]]:
+    """The "Family calendar" row (26): where tasks with dates are written."""
+
+    def values(_member: Member) -> dict[str, Any]:
+        calendar = services.get(keys.calendar)
+        chosen, name = calendar.settings()
+        account = calendar.account()
+        return {
+            "calendar": {
+                "accounts": calendar.eligible_accounts(),
+                "chosen": chosen,
+                "name": name,
+                "using": account.address if account else None,
+                "problem": calendar.problem(),
+            }
+        }
+
+    return values
+
+
+def calendar_routes(kit: Kit) -> APIRouter:
+    router = APIRouter()
+    app = kit.app
+
+    @router.post("/family/calendar")
+    async def save_calendar(request: Request) -> Response:
+        _session, form = await kit.checked(request, admin=True)
+        calendar = app.services.maybe(keys.calendar)
+        to = back("family-calendar")
+        if calendar is None:
+            return kit.redirect(to, "Google isn't set up on this server yet.")
+        account = str(form.get("account", ""))
+        try:
+            calendar.choose(int(account) if account.isdigit() else None, str(form.get("name", "")))
+        except ValueError as exc:
+            return kit.redirect(to, f"Not saved: {exc}.")
+        return kit.redirect(to, "Saved the calendar settings.")
+
+    return router
 
 
 def routes(kit: Kit) -> APIRouter:
@@ -95,13 +167,6 @@ def routes(kit: Kit) -> APIRouter:
         )
 
     # ----- My accounts ----------------------------------------------------------
-
-    @router.get("/accounts", response_class=HTMLResponse)
-    def accounts_page(request: Request, opened: str = Query("", alias="open")) -> HTMLResponse:
-        session = kit.current(request)
-        return kit.with_flash(
-            request, "accounts.html", session, **accounts_values(app, session.member, opened=opened)
-        )
 
     @router.post("/accounts/link")
     async def link(request: Request) -> Response:

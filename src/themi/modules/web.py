@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from fastapi import APIRouter
 
+    from themi.accounts import Member
     from themi.web.kit import Kit
 
 # The More page's groups, in the order they're shown. "Main" is the bar's own three.
@@ -34,3 +35,43 @@ class WebPages:
 
     routes: Callable[[Kit], APIRouter]
     menu: tuple[MenuEntry, ...] = ()
+
+
+# ----- CR17a: the dashboard's panels and the Accounts page's sections, from modules -----
+
+Values = Callable[["Member"], "dict[str, object] | None"]
+
+
+@dataclass(frozen=True)
+class Panel:
+    """A panel on the dashboard (a template under the site's templates), placed by `order`
+    between "Waiting on you" and "Recently". `values` adds what its template shows."""
+
+    order: int
+    template: str
+    values: Values | None = None
+
+
+@dataclass(frozen=True)
+class AccountsSection:
+    """A part of the Accounts page. A member's own (Google accounts, music) come first;
+    `household` ones are rows under "Household connections", shown to admins only.
+    `values` adds what its template shows; when it gives None, the section isn't shown."""
+
+    order: int
+    template: str
+    values: Values | None = None
+    household: bool = False
+
+
+@dataclass(frozen=True)
+class WaitingLink:
+    """A line in "Waiting on you" that stands for some of the member's waiting actions (the
+    noise digest's emails), which then don't get a card each."""
+
+    href: str
+    text: str
+    held: frozenset[int] = frozenset()  # the actions it stands for
+
+
+Waiting = Callable[["Member"], "WaitingLink | None"]

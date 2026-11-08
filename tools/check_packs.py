@@ -10,8 +10,7 @@ Packs, and what each may import at runtime:
 
 A type-only import (inside `if TYPE_CHECKING:`) is allowed: `keys.py` names every pack's
 types. The composition root (`themi.app`, and `themi.cli`'s commands for each service) is
-exempt, and so are the two Accounts pages (`google_pages`, `connection_pages`), which show
-each pack's connections until they're in sections of their own.
+exempt. CR17a: the Accounts page is made of the modules' sections, so it needs no exemption.
 
 Usage: python tools/check_packs.py [src root]   (defaults to src)
 """
@@ -26,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # CR10b2: a pack is its own package.
 PACKAGES = {"themi_google": "google", "themi_home": "home"}
-EXEMPT = {"themi.app", "themi.cli", "themi.web.google_pages", "themi.web.connection_pages"}
+EXEMPT = {"themi.app", "themi.cli"}
 MAY_IMPORT = {"core": set(), "google": set(), "home": {"google"}}
 
 

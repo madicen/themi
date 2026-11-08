@@ -8,7 +8,9 @@ admin), and goes the same way as Done in chat or on the wall (W2).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
+from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -19,6 +21,20 @@ from themi.accounts import Member, NotFound, PermissionDenied
 from themi.core import keys
 from themi.standard.tasks import Task, TaskBoard
 from themi.web.kit import Kit
+
+HOME_TASKS = 5  # W2: the dashboard shows the first few, with Done
+
+
+def home_panel(services: Any) -> Callable[[Member], dict[str, Any]]:
+    """CR17a: the dashboard's "On your list" panel: the first few, and how many there are."""
+    app = SimpleNamespace(services=services, store=services.store)
+
+    def values(member: Member) -> dict[str, Any]:
+        rows = task_rows(app, member, limit=HOME_TASKS)
+        total = len(services.get(keys.taskboard).open_for(member))
+        return {**rows, "more_tasks": total if total > HOME_TASKS else 0}
+
+    return values
 
 
 def task_rows(app: Any, member: Member, limit: int | None = None) -> dict[str, Any]:

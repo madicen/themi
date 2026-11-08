@@ -300,4 +300,10 @@ class AppliancesModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*PROMPT_RULES)
-        ctx.provide(Appliances(ctx.services)).install()
+        appliances = ctx.provide(Appliances(ctx.services))
+        appliances.install()
+        ctx.dashboard_panel(  # CR17a: what's running, when anything is linked
+            "dashboard/around_the_house.html",
+            30,
+            values=lambda _member: {"around_the_house": appliances.at_a_glance()},
+        )

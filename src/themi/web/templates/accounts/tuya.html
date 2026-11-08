@@ -1,0 +1,65 @@
+{% from "_row.html" import row %}
+{# CR17a: the tuya module's row #}
+{% set tuya = household.tuya %}
+{% if tuya %}
+{% if tuya.linked and tuya.problem %}{% set chips = [("Link it again", "bad")] %}
+{% elif tuya.linked %}{% set chips = [("Linked · " ~ tuya.devices|length ~ (" device" if tuya.devices|length == 1 else " devices"), "good")] %}
+{% else %}{% set chips = [("Not linked", "")] %}{% endif %}
+{% call(part) row("Pet feeders", meta="SmartLife · Tuya", chips=chips, id="tuya", open=opened == "tuya") %}
+{% if part == "body" %}
+  <p class="muted">Themi reads the SmartLife feeders through a Tuya cloud project: their food
+  level, anything stuck or wrong, and when they fed. When one runs low or needs a hand,
+  whoever has more room gets a nudge. It never feeds or changes a feeder.</p>
+  {% if tuya.linked %}
+  {% if tuya.problem %}<p class="error">{{ tuya.problem }}</p>{% endif %}
+  {% for device, state, raw in tuya.devices %}
+  <form method="post" action="/family/tuya/devices/{{ device.id }}" class="buttons">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <span>{{ device.name }}{% if state %} · {{ state }}{% endif %}</span>
+    <select name="appliance" aria-label="What {{ device.name }} is">
+      <option value="feeder" {% if device.appliance == "feeder" %}selected{% endif %}>Feeder</option>
+      <option value="" {% if not device.appliance %}selected{% endif %}>Not used</option>
+    </select>
+    <button class="small">Save</button>
+  </form>
+  {% if raw and raw.status %}
+  <details>
+    <summary class="muted">Its data points ({{ raw.product_name or raw.category }}{% if raw.product_id %}, {{ raw.product_id }}{% endif %})</summary>
+    <ul class="muted">
+      {% for point in raw.status %}<li><code>{{ point.code }}</code>: {{ point.value }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+  {% else %}
+  <p>Linked, but no devices were found. Link the SmartLife app account to the cloud project
+  (Devices, Link App Account), then link here again.</p>
+  {% endfor %}
+  <p class="muted">Checked every 10 minutes. Project {{ tuya.access_id }}.</p>
+  {% endif %}
+  {% if not tuya.linked or tuya.problem %}
+  <form method="post" action="/family/tuya/link">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">Make a cloud project on Tuya's IoT platform (Smart Home), link the
+    SmartLife app account to it by its QR code, and paste the project's Access ID and
+    Access Secret here.</p>
+    <label>Access ID <input name="access_id" value="{{ tuya.access_id }}" autocomplete="off" required></label>
+    <label>Access Secret <input name="secret" type="password" autocomplete="off" required></label>
+    <label>Data centre
+      <select name="region">
+        {% for key, name in tuya.regions %}<option value="{{ key }}" {% if key == tuya.region %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="primary">Link Tuya</button>
+  </form>
+  {% endif %}
+  {% if tuya.linked %}
+  <div class="danger-zone">
+    <form method="post" action="/family/tuya/unlink">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="danger">Unlink Tuya</button>
+    </form>
+  </div>
+  {% endif %}
+{% endif %}
+{% endcall %}
+{% endif %}

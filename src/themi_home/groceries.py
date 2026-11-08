@@ -253,4 +253,8 @@ class GroceriesModule(Module):
         from themi_home.web import grocery_pages  # CR10a: adding from the Lists page
 
         ctx.web(grocery_pages.routes)
-        ctx.provide(GroceryList(ctx.services)).install()
+        groceries = ctx.provide(GroceryList(ctx.services))
+        groceries.install()
+        ctx.dashboard_panel(  # CR17a: with "Got it" on each
+            "dashboard/groceries.html", 40, values=lambda _member: {"groceries": groceries.needed()}
+        )

@@ -25,7 +25,7 @@ from themi.core.prompts import OpenItem
 from themi.core.tools import ToolRegistry
 from themi.modules.prompt import PromptFragment, compose_system
 from themi.modules.registry import Registry
-from themi.modules.web import WebPages
+from themi.modules.web import AccountsSection, Panel, Waiting, WebPages
 
 if TYPE_CHECKING:
     from themi.core.routing import EmbeddingRouter
@@ -129,6 +129,11 @@ class Services(Registry):
     # saves those (the body double's mode for each kind of job).
     settings_values: list[Callable[[Member], dict[str, Any]]] = field(default_factory=list)
     settings_savers: list[Callable[[Member, Any], None]] = field(default_factory=list)
+    # CR17a: the dashboard's panels, the Accounts page's sections, and links in "Waiting
+    # on you", from modules.
+    dashboard_panels: list[Panel] = field(default_factory=list)
+    accounts_sections: list[AccountsSection] = field(default_factory=list)
+    waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.
     persona: str = ""
     prompt_fragments: list[PromptFragment] = field(default_factory=list)

@@ -12,6 +12,8 @@ from themi.core.wording import item_name
 from themi.web.kit import Kit
 from themi_home.groceries import CATEGORY, EXECUTOR, list_summary
 
+GROCERIES_ON_LISTS = "/lists?open=groceries#groceries"
+
 
 def routes(kit: Kit) -> APIRouter:
     router = APIRouter()
@@ -38,5 +40,19 @@ def routes(kit: Kit) -> APIRouter:
             requested=True,
         )  # fmt: skip
         return kit.redirect(to, outcome.message)
+
+    @router.post("/groceries/{item_id}/bought")  # CR17a: from the dashboard and Lists
+    async def grocery_bought(request: Request, item_id: int) -> Response:
+        _, form = await kit.checked(request)
+        back = GROCERIES_ON_LISTS if form.get("back") == "lists" else "/"
+        groceries, pantry = app.services.maybe(keys.groceries), app.services.maybe(keys.pantry)
+        item = groceries.get(item_id) if groceries else None
+        if item is None or item.status != "needed" or groceries is None:
+            return kit.redirect(back, "That one is already off the list.")
+        if pantry is not None:
+            pantry.set_status(item.name, "plenty", source="list")  # takes it off the list too
+        else:
+            groceries.finish(item.name)
+        return kit.redirect(back, f"Took {item.name} off the list.")
 
     return router

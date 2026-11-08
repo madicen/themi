@@ -2780,6 +2780,7 @@ class TasksModule(Module):
         from themi.web import icons, task_pages, week_pages
 
         ctx.prompt(*PROMPT_RULES)
+        ctx.dashboard_panel("dashboard/tasks.html", 20, values=task_pages.home_panel(ctx.services))
         ctx.web(
             task_pages.routes,
             MenuEntry("/tasks", "Tasks", "Everything to do", "Main", 20, icon=icons.TASKS),

@@ -589,6 +589,7 @@ class SafewayModule(Module):
             ),
         )
 
+        ctx.accounts_section("accounts/safeway.html", 70, household=True)  # CR17a: a pointer
         cart = ctx.provide(SafewayCart(ctx.services, ctx.get(GroceryList)))
         cart.install()
         ctx.periodic("safeway.expire", timedelta(minutes=5), cart.expire_stale)

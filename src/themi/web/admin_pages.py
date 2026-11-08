@@ -18,7 +18,7 @@ from themi.autonomy import AutonomyError
 from themi.connectors.travel import TravelError
 from themi.core import keys
 from themi.core.rules import RuleError
-from themi.web.connection_pages import household_models, household_settings
+from themi.web.accounts_page import household_models, household_settings
 from themi.web.kit import Kit
 
 

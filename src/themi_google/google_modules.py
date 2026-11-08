@@ -9,14 +9,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import timedelta
 
+from themi.accounts import Member
 from themi.core import groups
 from themi.core.approvals import ApprovalsUI
 from themi.core.calendar_view import CalendarPreferences
 from themi.energy import EnergyModel
 from themi.modules import Module, ModuleContext, ModuleSetup, as_job
 from themi.modules.prompt import PromptFragment
+from themi.modules.web import WaitingLink
 from themi.standard.tasks import TaskBoard
 from themi_google import email_forward, google_groups
 from themi_google.calendar import TaskCalendar
@@ -54,6 +57,12 @@ class GoogleModule(Module):
         store = ctx.services.store
         google = GoogleAccounts(store, GoogleOAuth(store.db, store.cipher, self.config))
         ctx.provide(google)
+        from themi_google.web import google_pages
+
+        ctx.web(google_pages.routes)  # sign in with Google, and linking accounts
+        ctx.accounts_section(  # CR17a: first on Accounts
+            "accounts/google.html", 10, values=google_pages.section_values(ctx.services)
+        )
         ctx.periodic(
             "google.forget_states", timedelta(days=1), as_job(google.oauth.forget_expired_states)
         )
@@ -82,6 +91,7 @@ class GmailModule(Module):
         expected.install()
         noise = ctx.provide(NoiseDigest(s, ctx.get(ApprovalsUI), gmail))
         noise.install()
+        ctx.waiting_link(noise_link(noise))  # CR17a: one link on the dashboard, not a card each
         from themi_google.web import email_pages
 
         ctx.web(email_pages.routes)  # the noise digest's page
@@ -90,6 +100,23 @@ class GmailModule(Module):
         ctx.periodic("email.senders", timedelta(hours=6), senders.offer)
         ctx.periodic("email.noise", timedelta(minutes=5), noise.run)
         ctx.periodic("email.expected", timedelta(hours=1), expected.check_overdue)
+
+
+def noise_link(noise: NoiseDigest) -> Callable[[Member], WaitingLink | None]:
+    """F16b: the emails that look like noise, as one line in "Waiting on you"."""
+
+    def link(member: Member) -> WaitingLink | None:
+        waiting = noise.waiting(member)
+        if not waiting:
+            return None
+        n = len(waiting)
+        return WaitingLink(
+            "/email/noise",
+            f"{n} email{'' if n == 1 else 's'} that look like noise, to archive or keep",
+            frozenset(a.id for a in waiting),
+        )
+
+    return link
 
 
 # CR8a: the system prompt's rules about this module's feature.
@@ -117,6 +144,15 @@ class CalendarModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*CALENDAR_PROMPT_RULES)
         s = ctx.services
+        from themi_google.web import google_pages
+
+        ctx.accounts_section(  # CR17a: the family calendar, under Household connections
+            "accounts/family_calendar.html",
+            60,
+            values=google_pages.calendar_values(s),
+            routes=google_pages.calendar_routes,
+            household=True,
+        )
         sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
         ctx.provide(sync)
         tasks = ctx.get(TaskBoard)

@@ -1,0 +1,51 @@
+{% from "_row.html" import row %}
+{# CR17a: the roborock module's row #}
+{% set roborock = household.roborock %}
+{% if roborock %}
+{% if roborock.linked and roborock.problem %}{% set chips = [("Link it again", "bad")] %}
+{% elif roborock.linked %}{% set chips = [("Linked", "good")] %}
+{% else %}{% set chips = [("Not linked", "")] %}{% endif %}
+{% call(part) row("Robot vacuum", meta="Roborock", chips=chips, id="roborock", open=opened == "roborock" or roborock_code_sent) %}
+{% if part == "body" %}
+  <p class="muted">Themi reads the Roborock vacuum's state, alerts and parts. When it needs a
+  hand (stuck, a jam, the dock's water, a worn part) whoever has more room gets a nudge, with
+  the room it's in when the map says. With a yes (or a rule), Themi can clear its alert and
+  send it back to its dock; it doesn't start cleans.</p>
+  {% if roborock.linked %}
+  {% if roborock.problem %}<p class="error">{{ roborock.problem }} Link it again below.</p>{% endif %}
+  {% for device, state in roborock.devices %}
+  <p>{{ device.name }}{% if state %} · {{ state }}{% endif %}</p>
+  {% else %}
+  <p>Linked, but no vacuum was found.</p>
+  {% endfor %}
+  <p class="muted">Signed in as {{ roborock.email }}.</p>
+  {% endif %}
+  {% if not roborock.linked or roborock.problem %}
+  {% if roborock_code_sent %}
+  <form method="post" action="/family/roborock/link">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="email" value="{{ roborock_code_sent }}">
+    <label>The code Roborock emailed to {{ roborock_code_sent }}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+    <button class="primary">Link Roborock</button>
+  </form>
+  {% else %}
+  <form method="post" action="/family/roborock/code">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <p class="muted">The email the Roborock app signs in with. Roborock emails a code to it.</p>
+    <label>Email <input name="email" type="email" value="{{ roborock.email }}" autocomplete="off" required></label>
+    <button class="primary">Send code</button>
+  </form>
+  {% endif %}
+  {% endif %}
+  {% if roborock.linked %}
+  <div class="danger-zone">
+    <form method="post" action="/family/roborock/unlink">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="danger">Unlink Roborock</button>
+    </form>
+  </div>
+  {% endif %}
+{% endif %}
+{% endcall %}
+{% endif %}
