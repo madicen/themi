@@ -711,6 +711,9 @@ def _item_for(ctx: ToolContext, title: str, routine: Routine | None = None) -> t
     raise ToolFailed(" ".join([miss, *parts]))
 
 
+item_for = _item_for  # F32b: the chore chart finds a routine item the same way
+
+
 @tool(
     "remove_routine_item",
     "Remove an item from one of this person's routines in Themi. routine: '' to look in all.",

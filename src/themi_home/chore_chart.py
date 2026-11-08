@@ -39,6 +39,7 @@ from themi.accounts.store import MAX_CHART_LIMIT
 from themi.core import keys
 from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.wording import and_list
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.repeat import fixed_days
@@ -469,12 +470,18 @@ async def change_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
 @tool(
     "put_task_on_chore_chart",
     "Put a one-off task on the Cozyla wall's chore chart instead of its to-do list ('move it "
-    "to chores'). Repeating chores are on the chart already; the chart isn't one of the to-do "
-    "lists. To take it back to the to-do list, use put_task_on_wall_list.",
-    {"task_id": {"type": "integer"}},
+    "to chores', 'my chores' is the chart). Repeating chores are on the chart already; the "
+    "chart isn't one of the to-do lists. To take it back to the to-do list, use "
+    "put_task_on_wall_list. routine_item: an item on one of their routines to move to the "
+    "chart instead ('move the vacuum water item to my chore chart'), with task_id 0; it "
+    "comes off the routine and becomes a chore, in one call. Otherwise ''.",
+    {"task_id": {"type": "integer"}, "routine_item": {"type": "string"}},
 )
 async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str:
     board, chart = ctx.services.get(keys.taskboard), ctx.services.get(keys.chart_queue)
+    item = " ".join(str(args.get("routine_item") or "").split())
+    if item and not int(args.get("task_id") or 0):
+        return await _routine_item_to_chart(ctx, item)
     try:
         task = await chart.put_on(args["task_id"], ctx.member)
     except NotFound as exc:
@@ -486,6 +493,45 @@ async def put_task_on_chore_chart(ctx: ToolContext, args: dict[str, Any]) -> str
         f"Task {task.id} ({task.title}) is moving to the wall's chore chart, where it shows on "
         f"{day} (its day). It's off the to-do list, and the chart has it within a few minutes. "
         f"Tell them the day it shows."
+    )
+
+
+async def _routine_item_to_chart(ctx: ToolContext, title: str) -> str:
+    """F32b (bug #171): a routine item becomes a chore on the chart, in one call. Just for
+    one day, it's a one-off due that day; otherwise a repeating chore on the item's days."""
+    from themi.standard.repeat import parse
+    from themi.standard.routines import DAY_NAMES, item_for
+
+    routines = ctx.services.maybe(keys.routines)
+    if routines is None:
+        raise ToolFailed("Routines aren't set up, so there's no routine item to move.")
+    board, chart = ctx.services.get(keys.taskboard), ctx.services.get(keys.chart_queue)
+    item, _ = item_for(ctx, title)
+    routine, owner = routines.get(item.routine_id), routines.owner(item)
+    name = routine.name.lower()
+    where = (
+        f"from your {name} routine"
+        if owner.id == ctx.member.id
+        else (f"from {owner.name}'s {name} routine")
+    )
+    whose = "your" if owner.id == ctx.member.id else f"{owner.name}'s"
+    routines.remove_item(item)  # the wall's routine follows at its next sync
+    task = await board.create(
+        ctx.member, item.title, "physical", 1, item.only_on, interactive=True, assignee=owner
+    )
+    if item.only_on is not None:
+        await chart.put_on(task.id, ctx.member)
+        day = "today" if item.only_on == board._today() else day_words(item.only_on)
+        return f"Moved {item.title} {where} to the chore chart, for {day}. Say it in a line."
+    days = and_list([DAY_NAMES[d] for d in item.days])
+    phrase = f"every {days}" if item.days else "every day"
+    await board.set_schedule(task.id, ctx.member, repeat=parse(phrase, board._today()))
+    when = (
+        "every day" if not item.days else "on " + and_list([DAY_NAMES[d] + "s" for d in item.days])
+    )
+    return (
+        f"{item.title} is a chore now, {when}, on {whose} column of the chart. It's off the "
+        f"{name} routine. Say it in a line."
     )
 
 

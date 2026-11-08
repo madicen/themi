@@ -169,6 +169,8 @@ WALL = ToolGroup(
         "Is laundry on the chore chart?",
         "Take the mirror cleaning off the board",
         "What's on the wall today?",
+        "Move the vacuum water item to my chore chart",  # F32b: an item onto the chart
+        "Can you move it to my chores?",
     ),
     tools=(
         "put_task_on_wall_list",

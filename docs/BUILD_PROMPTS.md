@@ -221,7 +221,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
 | F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [x] 2026-11-08 |
-| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
+| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [x] 2026-11-08 |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
@@ -11211,7 +11211,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F32b · Feedback (2026-11-06): "my chores" is the chore chart, and a routine item moves there in one go
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: C2b, R1a, F23e, F29d
 Read first: C2b's notes (the chore chart, `put_task_on_chore_chart`); R1a's and R1b's notes
 (routine items, just-for-today ones); F23e's notes (a task moved into a routine becomes
@@ -11279,6 +11279,31 @@ off the routine. No card, nothing snoozed.
 Data (Michael decides): decline actions 512 and 513 on the Pi (snoozed cards that would
 add "replace vacuum water" to the evening routine), or they'll come back. Task 81 is right
 as it is. Mark #171 reviewed once live.
+
+Notes:
+- `put_task_on_chore_chart(task_id, routine_item)`: with task_id 0 and an item, the item is
+  found as `remove_routine_item` finds it (`routines.item_for`, so a near name works and a
+  miss says what's there), taken off its routine (the wall follows at its sync), made a
+  task for the routine's owner, and put on the chart. A just-for-one-day item is a one-off
+  due that day; otherwise a repeating chore on the item's days (every day if none). No
+  card, one line back. Every call must now send `routine_item` ('' when not used), as the
+  tools are strict: two integration tests send it.
+- `add_to_wall_routine` refuses (ToolDeclined, nothing staged) when the message names the
+  chart, chores or the chore list and no routine word, naming both ways onto the chart.
+  It also refuses a new item like one on that routine (the wall's and Themi's; for a
+  just-today add, Themi's items for today): the same words, `title_matches`, or two words
+  of three letters or more in common. A task moved into a routine (task_id) isn't checked.
+- Test changed: F33d's `test_a_swap_still_adds` added "Refill cat feeders" while that very
+  item was on the routine, and expected a card. F32b refuses that duplicate, so the test
+  now expects the refusal, and checks the swap with a new item ("Brush teeth") instead,
+  plus that a swap isn't read as a removal. The two prompts disagree on this one case; the
+  later one is followed.
+- Every category (in `Autonomy.stage`): a card staged while an identical one (same
+  category, person and payload) is pending or snoozed withdraws the old one ("Replaced by
+  the newer card.", declined by `system`). A snoozed card's message was already edited when
+  it was snoozed, so only its status changes; it doesn't come back.
+- Routing examples added to the wall group. Golden: `put_task_on_chore_chart`'s spec.
+- Data (Michael decides, as above): actions 512 and 513 on the Pi.
 
 ### F34a · Feedback (2026-11-07): in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools
 Status: [x] 2026-11-07

@@ -53,6 +53,9 @@ class AutonomyError(Exception):
     pass
 
 
+REPLACED_TEXT = "Replaced by the newer card."  # F32b: an identical card staged again
+
+
 class CappedCategory(AutonomyError):
     """This category can never be automatic."""
 
@@ -357,6 +360,7 @@ class Autonomy:
             ),
         )
         self._audit(action_id, category, member.id, "staged", member, summary)
+        await self._replace_twins(action_id, category, member, payload)
         if asked:
             self._audit(action_id, category, member.id, "requested", member, "asked in chat")
             return await self._execute(action_id, member)
@@ -370,6 +374,20 @@ class Autonomy:
             return Outcome(pending, f"Waiting on your yes: {summary}")
         self._audit(action_id, category, member.id, "auto_approved", "system", "Tier 2")
         return await self._execute(action_id, member)
+
+    async def _replace_twins(
+        self, action_id: int, category: str, member: Member, payload: dict[str, Any]
+    ) -> None:
+        """F32b (bug #171): the same action, still waiting for the same person (pending or
+        snoozed), gives way to the new one, so the old card doesn't come back as well.
+        F29d's rule for calendar cards, for every category."""
+        for row in self.db.query(
+            "SELECT id, payload FROM pending_actions WHERE category = ? AND member_id = ? "
+            "AND status IN ('pending', 'snoozed') AND id != ? ORDER BY id",
+            (category, member.id, action_id),
+        ):
+            if json.loads(row["payload"]) == payload:
+                await self.withdraw(row["id"], REPLACED_TEXT)
 
     async def resolve(
         self,

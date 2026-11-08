@@ -228,7 +228,9 @@ async def test_a_one_off_task_can_go_on_the_chore_chart(
     await scenario.run_periodic("cozyla.sync")
     assert any(t["todoTitle"] == "Vacuum upstairs bedroom" for t in fake_cozyla.todos.values())
 
-    scenario.primary.queue_tool_call("put_task_on_chore_chart", {"task_id": vacuum.id})
+    scenario.primary.queue_tool_call(
+        "put_task_on_chore_chart", {"task_id": vacuum.id, "routine_item": ""}
+    )
     scenario.primary.queue_text("It's on the chore chart now.")
     await scenario.say("Erin", "Can you move vacuum upstairs bedroom to chores in Cozyla?")
     await scenario.run_periodic("cozyla.sync")
@@ -270,7 +272,9 @@ async def test_themi_knows_which_day_a_task_shows_on_the_chart(
     vacuum = await board(scenario).create(
         erin, "Vacuum upstairs bedroom", "physical", 2, sunday, assignee=erin
     )
-    scenario.primary.queue_tool_call("put_task_on_chore_chart", {"task_id": vacuum.id})
+    scenario.primary.queue_tool_call(
+        "put_task_on_chore_chart", {"task_id": vacuum.id, "routine_item": ""}
+    )
     scenario.primary.queue_text("Done.")
     await scenario.say("Erin", "move vacuum upstairs bedroom to chores")
     result = str(scenario.primary.last_request.messages[-1].content[0])
