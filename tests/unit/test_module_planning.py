@@ -46,7 +46,8 @@ def test_the_draft_becomes_a_config() -> None:
     p.draft.sections["web_search"] = {"backend": ""}  # back to the default
     p.draft.sections["travel"] = {}
     config = p.as_config()
-    assert config.removed == ("spending",) and config.added == ()
+    # 35a: takeout needs spending, so it goes with it
+    assert config.removed == ("spending", "takeout") and config.added == ()
     assert "web_search" not in config.sections
 
 

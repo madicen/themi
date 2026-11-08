@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_row.html" import row %}
+{% block title %}Takeout · Themi{% endblock %}
+{% macro fields(f=None, amount="") %}
+    <label>Name <input type="text" name="name" maxlength="80" value="{{ f.name if f else '' }}" required></label>
+    <label>DoorDash store link <input type="url" name="store_url" value="{{ f.store_url if f else '' }}" placeholder="https://www.doordash.com/store/..." required></label>
+    <label>What to order, one a line <textarea name="items" rows="4">{{ f.items | join("\n") if f else "" }}</textarea></label>
+    <label>About what it comes to, fees and tip in ($) <input type="text" name="amount" inputmode="decimal" value="{{ amount }}" required></label>
+{% endmacro %}
+{% block content %}
+<h1>Takeout</h1>
+<p class="muted">On a night when you're both worn out and nobody has eaten, Themi may offer one of
+these at dinner time, if it fits what's left of the month's takeout budget. Saying yes sends the
+store link and what to order; the checkout on DoorDash is yours.</p>
+{% if left is not none %}<p>Left in this month's takeout budget: {{ left }}.</p>{% endif %}
+
+<div class="rows">
+  {% for r in favourites %}
+  {% call(part) row(r.f.name, meta=r.money, id="favourite-" ~ r.f.id) %}
+  {% if part == "body" %}
+    {% if r.f.items %}
+    <ul class="items">{% for item in r.f.items %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% endif %}
+    <p><a href="{{ r.f.store_url }}" rel="noopener noreferrer" target="_blank">The store on DoorDash</a></p>
+    <details class="more">
+      <summary>Change it</summary>
+      <form method="post" action="/takeout/{{ r.f.id }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {{ fields(r.f, r.amount) }}
+        <button class="primary">Save</button>
+      </form>
+    </details>
+    <div class="danger-zone buttons">
+      <form method="post" action="/takeout/{{ r.f.id }}/remove">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="danger">Remove {{ r.f.name }}</button>
+      </form>
+    </div>
+  {% endif %}
+  {% endcall %}
+  {% else %}
+  <p class="empty muted">No favourites saved yet.</p>
+  {% endfor %}
+  <details class="add">
+    <summary>A new favourite</summary>
+    <form method="post" action="/takeout">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {{ fields() }}
+      <button class="primary">Add it</button>
+    </form>
+  </details>
+</div>
+
+{% if member.is_admin %}
+<h2>When it's offered</h2>
+<form method="post" action="/takeout/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Dinner time from <input type="time" name="dinner_from" value="{{ settings.dinner_from }}" required></label>
+  <label>until <input type="time" name="dinner_until" value="{{ settings.dinner_until }}" required></label>
+  <label>The most one order may cost ($) <input type="text" name="cap" inputmode="decimal" value="{{ cap }}" required></label>
+  <button class="primary">Save</button>
+</form>
+{% endif %}
+{% endblock %}

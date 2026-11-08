@@ -59,6 +59,7 @@ def routes(kit: Kit) -> APIRouter:
             if first == spending().today().replace(day=1)
             else "",
             business_total=money(sum(s.amount_cents for s in spends if s.business)),
+            takeout_page=app.services.maybe(keys.takeout) is not None,  # 35a
         )
 
     @router.get("/spending/business.csv")

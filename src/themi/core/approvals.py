@@ -81,6 +81,9 @@ class ApprovalsUI:
         self.db = autonomy.db
         self.ttl = ttl
         self.held: set[str] = set()  # categories asked about elsewhere, together
+        # 35a: categories whose card is about right now (dinner tonight): it goes at once,
+        # not at a good moment, though a pause, quiet hours and busy times still hold it.
+        self.timely: set[str] = set()
         self.services: Services | None = None
         self.groups = ApprovalGroups(self)
 
@@ -113,7 +116,9 @@ class ApprovalsUI:
             priority=priority,
             buttons=buttons_for(action),
             kind="approval",
-            deadline=clock.now() + CARD_WITHIN,  # the daily limit doesn't hold it to tomorrow
+            # the daily limit doesn't hold it to tomorrow; a timely one goes now
+            deadline=clock.now()
+            + (timedelta(0) if action.category in self.timely else CARD_WITHIN),
             expires=action.expires_at,
         )
         if result.outbox_id is not None:

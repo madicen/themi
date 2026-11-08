@@ -75,6 +75,7 @@ if TYPE_CHECKING:
     from themi_home.recipes import Recipes
     from themi_home.safeway import SafewayCart
     from themi_home.spending import Spending
+    from themi_home.takeout import Takeout
     from themi_home.vacuum import Vacuum
     from themi_home.web_recipes import WebRecipes
     from themi_home.which_list import WhichList
@@ -107,6 +108,7 @@ chart_queue: Key[ChartQueue] = Key("ChartQueue")
 lists: Key[Lists] = Key("Lists")
 buying: Key[ThingsToBuy] = Key("ThingsToBuy")
 spending: Key[Spending] = Key("Spending")
+takeout: Key[Takeout] = Key("Takeout")  # 35a
 safeway: Key[SafewayCart] = Key("SafewayCart")
 breaks: Key[Breaks] = Key("Breaks")
 body_double: Key[BodyDouble] = Key("BodyDouble")

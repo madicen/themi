@@ -128,7 +128,8 @@ def site(app: App) -> httpx.AsyncClient:
 async def test_a_module_left_out_takes_its_page_and_menu_entry_with_it(
     family: SeededFamily, fake_telegram: FakeTelegram
 ) -> None:
-    modules = [m for m in family_modules() if m.name not in ("safeway", "spending")]
+    # takeout (35a) needs spending, so it's left out with it
+    modules = [m for m in family_modules() if m.name not in ("safeway", "spending", "takeout")]
     app = build(family, fake_telegram, modules)
     async with site(app) as client:
         token = WebAuth(app.store).create_link_token(family.erin)

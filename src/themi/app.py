@@ -135,6 +135,7 @@ from themi_home.recipes import RecipesModule
 from themi_home.safeway import SafewayModule
 from themi_home.spending import SpendingModule
 from themi_home.step_images import StepPicturesModule
+from themi_home.takeout import TakeoutModule
 from themi_home.web_recipes import WebRecipesModule
 from themi_home.which_list import WhichListModule
 
@@ -230,6 +231,7 @@ def family_modules(
         ConversationModeModule(),
         CheckinReviewsModule(),
         MealsModule(),
+        TakeoutModule(),  # 35a: after spending and meals
         CallsModule(),
         CookingTimersModule(),  # RC3c: timers are scheduler jobs
         BodyDoubleModule(),  # BD1a: block ends are scheduler jobs

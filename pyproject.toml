@@ -113,6 +113,7 @@ roborock = "themi_home.home_modules:RoborockModule"
 routines = "themi.standard.routines:RoutinesModule"
 safeway = "themi_home.safeway:SafewayModule"
 spending = "themi_home.spending:SpendingModule"
+takeout = "themi_home.takeout:TakeoutModule"
 spotify = "themi_home.home_modules:SpotifyModule"
 step_pictures = "themi_home.step_images:StepPicturesModule"
 taking = "themi.standard.taking:TakingModule"
@@ -148,6 +149,8 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
     "setup/*.md",  # SP3b: the modules' setup guides
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
+    "meals_schema/*.sql",  # 35a: the meal log
+    "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",

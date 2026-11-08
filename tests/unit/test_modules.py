@@ -226,7 +226,7 @@ def test_every_key_names_a_class_the_full_app_provides() -> None:
     from themi.modules.registry import Key
 
     found = {name: k for name, k in vars(keys).items() if isinstance(k, Key)}
-    assert len(found) == 64
+    assert len(found) == 65  # 35a: takeout
     source = inspect.getsource(keys)
     for attr, key in found.items():
         assert f"import {key.name}\n" in source, f"keys.{attr} names {key.name}, never imported"
