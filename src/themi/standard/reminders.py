@@ -190,7 +190,7 @@ class Reminders:
         raised = 0
         for row in self.db.query(
             "SELECT * FROM tasks WHERE status = 'open' AND due_on IS NOT NULL AND due_on < ? "
-            "AND id NOT IN (SELECT parent_id FROM task_parts)",  # F26c: its parts are raised
+            f"AND {self.board.shown()}",  # F26c: a split task's parts are raised, not it
             (today.isoformat(),),
         ):
             task = self.board.get(row["id"])

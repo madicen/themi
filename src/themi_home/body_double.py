@@ -373,8 +373,7 @@ class BodyDouble:
 
         theirs = board.open_for(member)
         rows = self.db.query(  # F26c: a split task's parts, not the task
-            "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') "
-            "AND id NOT IN (SELECT parent_id FROM task_parts)"
+            f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {board.shown()}"
         )
         others = [board.get(r["id"]) for r in rows if r["id"] not in {t.id for t in theirs}]
         for task in (*theirs, *others):

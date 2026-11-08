@@ -9,7 +9,8 @@ each part keeps the task's.
 - Each part is a task in its own right: on the lists and displays, nudged, counted for
   capacity and in "too much today" (O1a), so a low-energy day can offer just one part.
 - The original stays as the parent, off every list and display while its parts stand in
-  for it (`NOT_SPLIT` in the task queries, and `off_displays`). Each part says where it
+  for it (set aside on the task board, so every query of open tasks leaves it out, and
+  `off_displays`). Each part says where it
   stands ("part 2 of 3 of Split Merlin's cat box; 1 of 3 parts done").
 - When the last part is settled, the parent is checked off on its own: done if any part
   was done, taken off the list if every part was.
@@ -21,6 +22,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 from themi import clock
@@ -34,6 +36,7 @@ from themi.standard.tasks import Task, TaskBoard, TaskChange
 log = logging.getLogger(__name__)
 
 MAX_TITLE = 120
+SPLIT = "SELECT parent_id FROM task_parts"  # tasks whose parts stand in for them
 WHO = ("me", "partner", "either", "")
 
 
@@ -65,6 +68,7 @@ class TaskParts:
         self.services.provide(keys.task_parts, self)
         self.board.change_listeners.append(self._changed)
         self.board.display_notes.append(self.note)
+        self.board.set_aside.append(SPLIT)  # the parts stand in for it
 
     # ----- reading ------------------------------------------------------------------
 
@@ -260,6 +264,7 @@ class TaskPartsModule(Module):
     title = "Task parts"
     summary = "Splits a task's steps into tasks of their own, to share or spread out."
     requires = ("tasks",)
+    migrations = Path(__file__).parent / "task_parts_schema"
     tool_groups = (groups.SCHEDULES,)
 
     def install(self, ctx: ModuleContext) -> None:

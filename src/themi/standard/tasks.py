@@ -35,7 +35,7 @@ from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
 from themi.core.wording import near_twin, title_matches, words_in_common
 from themi.energy import EnergyModel
-from themi.energy.matching import Assignment, Matcher
+from themi.energy.matching import Assignment, Matcher, not_set_aside
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
@@ -271,10 +271,6 @@ def _task_from_row(row: dict[str, Any]) -> Task:
 
 
 MAX_STEPS = 30
-# F26c: a task split into parts is off the lists while its parts stand in for it. Every
-# query of open tasks someone could be asked about leaves it out (`t.` when aliased).
-NOT_SPLIT = "id NOT IN (SELECT parent_id FROM task_parts)"
-T_NOT_SPLIT = "t.id NOT IN (SELECT parent_id FROM task_parts)"
 MAX_STEP_LENGTH = 200
 
 
@@ -297,6 +293,10 @@ class TaskBoard:
         self.store = services.store
         self.db = services.store.db
         self.change_listeners: list[TaskListener] = []
+        # Tasks set aside while others stand in for them (F26c's split tasks), as subqueries
+        # of task ids a module adds; every query of open tasks someone could be asked about
+        # leaves them out (`shown`). Shared with the matcher, which counts the load.
+        self.set_aside: list[str] = matcher.set_aside
         self.details: list[TaskDetails] = [self._clears_the_way]  # after _steps_for's steps
         self.own_nudges: list[OwnNudge] = []
         # Tasks handed on for a while (F22d's burnout mode): their nudge says why, so
@@ -381,10 +381,14 @@ class TaskBoard:
             raise NotFound(f"no task with id {task_id}")
         return _task_from_row(row)
 
+    def shown(self, column: str = "id") -> str:
+        """SQL for "AND ..." in a query of open tasks: leaves out the ones set aside."""
+        return not_set_aside(self.set_aside, column)
+
     def open_for(self, member: Member) -> list[Task]:
         rows = self.db.query(  # shared (escalated to both) chores come first, for everyone
             "SELECT * FROM tasks WHERE (assignee = ? OR shared = 1) "
-            f"AND status IN ('open', 'snoozed') AND {NOT_SPLIT} "
+            f"AND status IN ('open', 'snoozed') AND {self.shown()} "
             "ORDER BY shared DESC, due_on IS NULL, due_on, id",
             (member.id,),
         )
@@ -425,7 +429,7 @@ class TaskBoard:
         """Open tasks this member added, whoever is doing them."""
         rows = self.db.query(
             "SELECT * FROM tasks WHERE created_by = ? AND status IN ('open', 'snoozed') "
-            f"AND {NOT_SPLIT} ORDER BY due_on IS NULL, due_on, id",
+            f"AND {self.shown()} ORDER BY due_on IS NULL, due_on, id",
             (member.id,),
         )
         return [_task_from_row(r) for r in rows]
@@ -2418,7 +2422,7 @@ async def _check_meant(
     change only must not name another one."""
     board = _board(ctx)
     rows = board.db.query(
-        f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {NOT_SPLIT} AND id != ?",
+        f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {board.shown()} AND id != ?",
         (task.id,),
     )
     others = [board.get(r["id"]) for r in rows]

@@ -9637,17 +9637,21 @@ summary. A repeating chore is refused.
 
 Notes:
 - `themi.standard.task_parts` (module `task_parts`, family template only: the work template
-  mustn't send "partner" or "chore" to the model). Core migration 0157 `task_parts` (part,
-  parent, position): a new core table, since the filter lives in core queries.
+  mustn't send "partner" or "chore" to the model). Its own migration track,
+  `task_parts_schema/0001_task_parts.sql` (part, parent, position). First written as core
+  migration 0157, moved before it was pushed (2026-11-08): a feature table belongs to its
+  module (CR6), and the work template runs without it.
 - `split_task(task_id, parts)`: every step becomes a part, titled "<task>: <step>" so it
   reads alone on the wall. Named steps go to 'me', 'partner' (a household of two) or
   'either' (matching decides: whoever has room); the rest stay with the task's assignee.
   Each part keeps the task's due date unless one is given, its kind and importance, and
   effort/steps (at least 1). In the schedules tool group ("split", "step", "part", "break
   it up" added to its words).
-- The parent stays open but is hidden: `NOT_SPLIT` in `open_for`, `added_by`, the naming
-  check, matching's task load, overdue reminders, and the dishwasher, vacuum and
-  body-double title matches; `off_displays` set, so it leaves the wall and other displays.
+- The parent stays open but is hidden. The task board has a `set_aside` list (subqueries
+  of task ids, shared with the matcher) that a module adds to; `board.shown()` is the SQL
+  that leaves them out. Task parts adds its parents. Used by `open_for`, `added_by`, the
+  naming check, matching's task load, overdue reminders, and the dishwasher, vacuum and
+  body-double title matches, so none of them names the parts' table; `off_displays` set, so it leaves the wall and other displays.
   Its nudge is withdrawn.
 - Each part's line says "Part 2 of 3 of <task>; 1 of 3 parts done." (open items and the
   website's task rows). Last part settled: the parent is done if any part was, cancelled if
@@ -9655,7 +9659,7 @@ Notes:
 - Refused, changing nothing: a repeating chore, fewer than two steps, already split, a part
   itself, a step number that isn't there.
 - Golden: `split_task`, and `more_tools` (the schedules group's description).
-- Setup: restart `themi run` (migration 0157). Mark #142 reviewed once live.
+- Setup: restart `themi run` (the task_parts track's 0001). Mark #142 reviewed once live.
 
 ### F27 · Feedback (2026-11-04): the family group hears "Themi, ..." and says when Telegram hides messages
 Status: [x] (2026-11-04)

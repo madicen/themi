@@ -179,7 +179,7 @@ class Dishwasher:
                 )
         rows = self.db.query(
             "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') "
-            "AND id NOT IN (SELECT parent_id FROM task_parts) "  # F26c
+            f"AND {self.board.shown()} "  # F26c: a split task's parts, not it
             "AND (due_on IS NULL OR due_on <= ?)",
             (today.isoformat(),),
         )

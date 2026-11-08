@@ -241,7 +241,7 @@ class Vacuum:
         for row in self.db.query(
             "SELECT id, title, assignee FROM tasks WHERE status IN ('open', 'snoozed') "
             "AND id NOT IN (SELECT task_id FROM vacuum_problems WHERE task_id IS NOT NULL) "
-            "AND id NOT IN (SELECT parent_id FROM task_parts) "  # F26c
+            f"AND {self.board.shown()} "  # F26c: a split task's parts, not it
             "ORDER BY id"
         ):
             if not about(event.kind, event.detail, row["title"], device.name):

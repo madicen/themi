@@ -167,6 +167,7 @@ themi = [
     "storage/schema/*.sql",
     "standard/setup/*.md",  # SP3a: the modules' setup guides
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
+    "standard/task_parts_schema/*.sql",  # F26c: task parts' own track
     "templates/*.toml",
     "web/templates/*.html",
     "web/templates/*/*.html",
