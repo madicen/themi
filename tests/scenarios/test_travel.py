@@ -15,8 +15,8 @@ from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 from themi.core.travel import TravelPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")

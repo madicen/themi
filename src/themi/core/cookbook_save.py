@@ -28,7 +28,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DocsConflict, DocsError
 from themi.core import cookbook as book
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -260,7 +260,7 @@ class CookbookSaveModule(Module):
     """RC5: saving a liked recipe to the cookbook."""
 
     name = "cookbook_save"
-    tool_groups = (groups.RECIPES,)
+    tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
 
     def install(self, ctx: ModuleContext) -> None:

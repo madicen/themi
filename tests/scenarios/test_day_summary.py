@@ -16,8 +16,8 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.ai.types import ToolResult
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 from themi.core.chore_chart import ChartPreferences
 from themi.core.day_summary import DaySummaryPreferences
 from themi.core.progression import parse_plan

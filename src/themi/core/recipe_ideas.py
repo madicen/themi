@@ -26,7 +26,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.cooking import ahead_of_time
 from themi.core.groceries import CATEGORY, EXECUTOR, and_list, list_summary
 from themi.core.lists import name_key
@@ -208,7 +208,7 @@ class RecipeIdeasModule(Module):
     """RC7: cookbook recipes in meal ideas."""
 
     name = "recipe_ideas"
-    tool_groups = (groups.RECIPES,)
+    tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
 
     def install(self, ctx: ModuleContext) -> None:

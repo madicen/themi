@@ -23,21 +23,21 @@ from themi.connectors.roborock import RoborockAccount, RoborockLogin, RoborockWa
 from themi.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
-from themi.core import groups
+from themi.core import groups, home_groups
 from themi.core.chore_chart import ChartPreferences
-from themi.core.connector_settings import (
-    CozylaSettings,
-    HomeConnectSettings,
-    OurGroceriesSettings,
-    SpotifySettings,
-    ThinqSettings,
-)
 from themi.core.cozyla_chores import CozylaChores
 from themi.core.cozyla_routines import CozylaRoutines
 from themi.core.cozyla_todos import CozylaTodos
 from themi.core.dishwasher import Dishwasher
 from themi.core.feeders import Feeders
 from themi.core.groceries import GroceryList
+from themi.core.home_settings import (
+    CozylaSettings,
+    HomeConnectSettings,
+    OurGroceriesSettings,
+    SpotifySettings,
+    ThinqSettings,
+)
 from themi.core.keep_groceries import KeepGroceries, KeepLinks
 from themi.core.laundry import Laundry, LaundrySettings
 from themi.core.litter_box import LitterBox
@@ -56,7 +56,7 @@ class SpotifyModule(Module):
 
     name = "spotify"
     website = "Each person who wants it links Spotify on Accounts (/accounts)."
-    tool_groups = (groups.MUSIC,)
+    tool_groups = (home_groups.MUSIC,)
     settings = SpotifySettings
 
     def __init__(self, client: SpotifyClient) -> None:

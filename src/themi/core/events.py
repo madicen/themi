@@ -35,11 +35,10 @@ from themi.accounts import LinkedAccount, Member
 from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Priority
 from themi.connectors.gcal import CalendarError, CalendarNotFound, event_id
-from themi.connectors.gcal.busy import TASK_BLOCK, Entry, event_line
-from themi.connectors.gcal.preferences import CalendarPreferences
+from themi.connectors.gcal.busy import TASK_BLOCK
 from themi.connectors.google import CALENDAR_SCOPE
 from themi.core import keys
-from themi.core.lists import name_key
+from themi.core.calendar_view import CalendarPreferences, Entry, event_line
 from themi.core.rules import RuleError
 from themi.core.tools import (
     PICTURE_LOG,
@@ -49,6 +48,14 @@ from themi.core.tools import (
     ToolFailed,
     answers_picture_question,
     staged_tool,
+)
+from themi.core.wording import (  # CR10b1: the matching helpers live there
+    FILLER,
+    STOPWORDS,
+    _same_word,
+    name_key,
+    title_matches,
+    words_in_common,
 )
 from themi.localtime import to_utc_iso
 
@@ -70,7 +77,6 @@ OFFER_AFTER = 3  # email events approved in a row before offering to make them a
 EXAMPLE = "Try a date like 2026-11-03 and times like 15:00 (empty for an all-day event)."
 MAX_TITLE = 120
 INTENT = re.compile(r"\b(?:calendars?|schedule|book|booked)\b")
-STOPWORDS = {"the", "a", "an", "my", "our", "to", "with", "for", "at", "on", "and", "of"}
 # A meal with no time is at its usual one, not all day (bug #35); the card reads it back.
 MEALS = {"breakfast": "08:00", "brunch": "10:30", "lunch": "12:00", "dinner": "18:00",
          "supper": "18:00"}  # fmt: skip
@@ -139,99 +145,6 @@ def _time(text: str) -> time:
     if hour > 23 or minute > 59:
         raise ToolFailed(f"'{text}' isn't a time. {EXAMPLE}")
     return time(hour, minute)
-
-
-FILLER = STOPWORDS | {"appointment", "appt", "event", "next", "this", "her", "his", "their"}
-
-
-# Bug #119: "I ran this morning" didn't name "Go for a run". Past forms that share no start.
-IRREGULAR = {
-    "ran": "run",
-    "swam": "swim",
-    "ate": "eat",
-    "took": "take",
-    "taken": "take",
-    "fed": "feed",
-    "made": "make",
-    "did": "do",
-    "done": "do",
-    "bought": "buy",
-    "drove": "drive",
-    "driven": "drive",
-    "rode": "ride",
-    "wrote": "write",
-    "gave": "give",
-    "got": "get",
-    "sent": "send",
-    "brought": "bring",
-    "paid": "pay",
-    "threw": "throw",
-    "thrown": "throw",
-    "hung": "hang",
-    "swept": "sweep",
-    "sold": "sell",
-    "told": "tell",
-    "spoke": "speak",
-    "met": "meet",
-    "found": "find",
-    "caught": "catch",
-    "built": "build",
-    "won": "win",
-}
-ENDINGS = ("ing", "ed", "es", "s")
-
-
-def _stem(word: str) -> str:
-    """ "running" → "run", "walked" → "walk", "baking" → "bak" (with "bake" → "bak" too)."""
-    if word in IRREGULAR:
-        return _stem(IRREGULAR[word])
-    for ending in ENDINGS:
-        if ending == "s" and word.endswith("ss"):
-            break  # "kiss", "glass"
-        if word.endswith(ending) and len(word) - len(ending) >= 3:
-            word = word[: -len(ending)]
-            if len(word) > 3 and word[-1] == word[-2] and word[-1] not in "lsz":
-                word = word[:-1]  # "running", "mopped"
-            return word
-    return word[:-1] if len(word) > 3 and word.endswith("e") else word
-
-
-def _same_word(a: str, b: str) -> bool:
-    """The same word, or one a form of the other ("tutoring" and "tutor", "pediatrics" and
-    "pediatrician"): a shared start of five letters or more, most of the shorter word; or
-    the same word under a regular ending or an irregular past ("walked", "ran") (bug #119)."""
-    if a == b or _stem(a) == _stem(b):
-        return True
-    shared = next(
-        (i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b))
-    )
-    return shared >= 5 and shared >= 0.6 * min(len(a), len(b))
-
-
-def title_matches(words: str, title: str) -> bool:
-    """Every word they used (bar fillers like "the" or "appointment") is in the title, give
-    or take its ending (bug #20)."""
-    wanted = [w for w in name_key(words).split() if w not in FILLER]
-    have = name_key(title).split()
-    return bool(wanted) and all(any(_same_word(w, h) for h in have) for w in wanted)
-
-
-def near_twin(words: str, title: str) -> bool:
-    """Most likely the same job under other words ("Refill cat feeders" and "Refill auto
-    feeders", bug #132): two or more words in common, and every word of the longer title
-    but one."""
-    wanted = [w for w in name_key(words).split() if len(w) > 2 and w not in FILLER]
-    have = [w for w in name_key(title).split() if len(w) > 2 and w not in FILLER]
-    shared = sum(any(_same_word(w, h) for h in have) for w in wanted)
-    return shared >= 2 and shared >= max(len(wanted), len(have)) - 1
-
-
-def words_in_common(said: str, title: str) -> int:
-    """How many of the title's words (bar fillers and scraps like "s") they used, give or
-    take endings ("contacted" and "contact")."""
-    heard = name_key(said).split()
-    words = {w for w in name_key(title).split() if len(w) > 2 and w not in FILLER}
-    return sum(any(_same_word(w, h) for h in heard) for w in words)
 
 
 def named_as_anchor(title: str, request_text: str) -> bool:

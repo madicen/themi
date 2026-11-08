@@ -8,6 +8,7 @@ import pytest
 
 from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
+from themi.config import all_groups, any_group_of
 from themi.core import groups
 from themi.core.lists import ListsModule
 from themi.core.recipes import RecipesModule
@@ -46,10 +47,10 @@ def test_two_modules_may_add_one_group_but_not_two_groups_with_one_name() -> Non
 
 
 def test_the_catalog_has_every_group_once_in_order() -> None:
-    names = [g.name for g in groups.CATALOG]
+    names = [g.name for g in all_groups()]
     assert len(names) == len(set(names)) == 15
-    assert [g.order for g in groups.CATALOG] == sorted(g.order for g in groups.CATALOG)
-    tools = [t for g in groups.CATALOG for t in g.tools]
+    assert [g.order for g in all_groups()] == sorted(g.order for g in all_groups())
+    tools = [t for g in all_groups() for t in g.tools]
     assert len(tools) == len(set(tools))  # a tool is in one group
-    assert groups.catalog_group_of("find_recipe") == "recipes"
-    assert groups.catalog_group_of("create_task") == "core"
+    assert any_group_of("find_recipe") == "recipes"
+    assert any_group_of("create_task") == "core"

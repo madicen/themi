@@ -21,11 +21,14 @@ from dataclasses import dataclass, field
 from importlib import resources
 from importlib.metadata import entry_points
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from themi.modules import Module, ModuleSetup
 from themi.modules.settings import SettingsProblem
 from themi.settings import Settings, SettingsError
+
+if TYPE_CHECKING:
+    from themi.core.tools import ToolGroup
 
 ENTRY_POINTS = "themi.modules"
 DEFAULT_PATHS = (Path("/data/themi.toml"), Path("themi.toml"))
@@ -213,3 +216,21 @@ def resolve_modules(
     if problems:
         raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(sorted(set(problems))))
     return [built[n] for n in names if n in built]
+
+
+def all_groups(known: dict[str, type[Module]] | None = None) -> list[ToolGroup]:
+    """CR10b1: every tool group the installed modules know, the core's settings group with
+    them, in the order they're offered: for reading old replies, which were offered these."""
+    from themi.core.tools import SETTINGS
+
+    known = available_modules() if known is None else known
+    found = {SETTINGS.name: SETTINGS}
+    for cls in known.values():
+        for group in cls.tool_groups:
+            found.setdefault(group.name, group)
+    return sorted(found.values(), key=lambda g: g.order)
+
+
+def any_group_of(tool: str) -> str:
+    """The group a tool is in among every known group, or "core"."""
+    return next((g.name for g in all_groups() if tool in g.tools), "core")

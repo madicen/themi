@@ -29,9 +29,8 @@ from themi.accounts import Member
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import parse_hhmm
 from themi.channels.outbox import Priority
-from themi.connectors.gcal.busy import event_line
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import groups, keys
+from themi.core.calendar_view import CalendarPreferences, event_line
 from themi.core.partner import named
 from themi.core.prompts import as_data
 from themi.core.tasks import Task, TaskBoard

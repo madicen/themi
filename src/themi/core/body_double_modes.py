@@ -31,7 +31,7 @@ from themi.accounts import Member
 from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.body_double import GUIDED, MODE_WORDS, MODES, SILENT, SPRINT, BodyDouble
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
@@ -385,7 +385,7 @@ class ModeChooserModule(Module):
     """BD2: choosing a session's mode, and learning from sessions."""
 
     name = "mode_chooser"
-    tool_groups = (groups.BODY_DOUBLE,)
+    tool_groups = (home_groups.BODY_DOUBLE,)
     requires = ("body_double",)
 
     def install(self, ctx: ModuleContext) -> None:

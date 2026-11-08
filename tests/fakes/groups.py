@@ -1,12 +1,14 @@
 """CR8b: the tool groups as the tables they were before modules registered them, built from
-every known group (`themi.core.groups.CATALOG`), for tests and evals that read them so."""
+every known group (the installed modules', CR10b1), for tests and evals that read them so."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
-from themi.core.groups import CATALOG
+from themi.config import all_groups
 from themi.core.tools import ToolRegistry
+
+CATALOG = all_groups()
 
 GROUPS: dict[str, tuple[str, str]] = {g.name: (g.description, g.words) for g in CATALOG}
 TOOL_GROUPS: dict[str, str] = {tool: g.name for g in CATALOG for tool in g.tools}

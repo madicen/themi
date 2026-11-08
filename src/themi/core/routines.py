@@ -36,7 +36,6 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import groups, keys, praise
-from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.lists import name_key
 from themi.core.praise import TasksPreferences
 from themi.core.services import Services
@@ -50,7 +49,7 @@ from themi.core.tools import (
     staged_tool,
     tool,
 )
-from themi.core.wording import and_list
+from themi.core.wording import and_list, near_twin, title_matches, words_in_common
 from themi.localtime import member_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 

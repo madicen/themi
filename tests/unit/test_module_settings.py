@@ -10,12 +10,12 @@ from typing import Any
 
 import pytest
 
-from themi.core.connector_settings import (
+from themi.core.connector_settings import SearchSettings
+from themi.core.google_settings import GoogleSettings
+from themi.core.home_settings import (
     CozylaSettings,
-    GoogleSettings,
     HomeConnectSettings,
     OurGroceriesSettings,
-    SearchSettings,
     ThinqSettings,
 )
 from themi.modules.settings import (

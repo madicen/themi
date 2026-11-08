@@ -30,8 +30,6 @@ from themi import clock
 from themi.accounts import Member
 from themi.accounts.preferences import Preferences
 from themi.channels.outbox import Priority
-from themi.connectors.gcal.busy import Entry
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.travel import (
     Place,
     Route,
@@ -41,6 +39,7 @@ from themi.connectors.travel import (
     estimate,
 )
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences, Entry
 from themi.core.events import When, title_matches, when_words
 from themi.core.lists import name_key
 from themi.core.places import NOT_SURE_TEXT, named_place

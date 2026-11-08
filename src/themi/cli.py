@@ -399,7 +399,7 @@ def _cozyla_check(titles: bool, fields: bool = False) -> int:
 
     from themi.connectors.cozyla import CozylaClient, CozylaError
     from themi.connectors.cozyla.check import check
-    from themi.core.connector_settings import CozylaSettings
+    from themi.core.home_settings import CozylaSettings
     from themi.modules.settings import SettingsProblem, read_settings
     from themi.settings import Settings
 

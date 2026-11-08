@@ -296,7 +296,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR9 | Core refactor: workspaces and template roles | Core refactor | [x] 2026-11-07 |
 | CR10 | Core refactor: workspace packages | Core refactor | split |
 | CR10a | Core refactor: the standard modules stop importing home code | Core refactor | [x] 2026-11-07 |
-| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | deferred |
+| CR10b | Core refactor: workspace packages (after CR12) | Core refactor | split |
+| CR10b1 | Core refactor: a Google pack the standard modules don't import | Core refactor | [x] 2026-11-07 |
+| CR10b2 | Core refactor: the module code out of the core folder, into its packs | Core refactor | [~] |
+| CR10b3 | Core refactor: a distribution per pack | Core refactor | deferred |
 | CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
 | CR12 | Core refactor: the work template | Core refactor | [x] 2026-11-07 |
 | CR13 | Gate: tutoring design | Core refactor | [~] |
@@ -14665,7 +14668,7 @@ Notes:
 - Golden files identical.
 
 ### CR10b · Core refactor: workspace packages
-Status: deferred (2026-11-07)
+Status: split into CR10b1, CR10b2 and CR10b3 (2026-11-07, un-deferred at Michael's ask)
 Depends on: CR12 (moved after it on 2026-11-07: the work template runs from one package, and
 the physical split is the riskiest move left; CR10a leaves it a matter of moving files)
 Read first: CR10 above; CR10a's notes.
@@ -14680,6 +14683,60 @@ Notes (2026-11-07, deferred during the auto run, a judgement call to confirm):
   keys and groups by pack. Then the move is mechanical (a codemod over imports, as CR3's).
 - Nothing in the work template or tutoring's design needs it: an instance's modules come
   from themi.toml, and the image can keep holding every pack.
+
+### CR10b1 · Core refactor: a Google pack the standard modules don't import
+Status: [x] 2026-11-07
+Depends on: CR12
+- The Google pack: Gmail and its email features, Calendar and events, Google Tasks, travel
+  heads-ups, and the Google connectors. `tools/check_packs.py` checks it too: the core and
+  standard modules import neither pack at runtime; the Google pack doesn't import home.
+- Seams: the matching helpers (`title_matches`, `near_twin`, `words_in_common`) move to
+  `core/wording.py`; a calendar's neutral shapes (`Entry`, `event_line`) and
+  `CalendarPreferences` move to `core/calendar_view.py`; the feedback snapshot finds the
+  calendar's, email's and travel's settings by module; connector settings split by pack.
+- "Every known group" comes from the installed modules' `tool_groups`, not one catalog, so
+  each pack's groups can live with it. `keys.py` stays core: its keys are names with
+  type-only imports.
+Tests: the pack check, with planted imports; golden files identical.
+
+Notes:
+- `tools/check_packs.py` now knows three packs: core (with the standard modules), Google
+  and home. Core imports neither at runtime; Google doesn't import home; home may use Google
+  (the cookbook). Type-only imports are allowed; `themi.app`, `themi.cli` and the two
+  Accounts pages (`google_pages`, `connection_pages`) are exempt until those pages get
+  sections per pack.
+- Seams: `title_matches`, `near_twin`, `words_in_common` and `name_key` live in
+  `core/wording.py` (events, tasks, routines, burnout and which_task use them there);
+  `core/calendar_view.py` holds `Entry`, `event_line` and `CalendarPreferences` (the
+  calendar connector imports them); the feedback snapshot reads email's and travel's
+  settings by module name.
+- Settings by pack: `connector_settings.py` (search, and the shared checks),
+  `google_settings.py` (Google, travel), `home_settings.py` (OurGroceries, Cozyla, Spotify,
+  Home Connect, ThinQ). Groups by pack: `groups.py` keeps the ones standard modules use
+  (schedules, calendar, web, lists, wall), `google_groups.py` has email, `home_groups.py`
+  the other eight. The wall group stays core because the routines module's tools are in it;
+  its description still names the Cozyla wall.
+- `config.all_groups()` and `any_group_of(tool)` gather every group from the installed
+  modules (reviewing old replies, and the test tables); the single catalog is gone.
+- Travel heads-ups are the Google pack's (they need calendar events).
+
+### CR10b2 · Core refactor: the module code out of the core folder, into its packs
+Status: [~]
+Depends on: CR10b1
+- `src/themi/core` keeps the core (agent, services, tools, prompts, rules, approvals,
+  routing, naming, keys, wording...); the standard modules move to `src/themi/standard`;
+  the Google pack to `src/themi_google`, the home pack to `src/themi_home` (their features,
+  connectors, website pages and templates). One distribution still: the image holds every
+  pack, and themi.toml picks.
+- Templates are found through a `themi.templates` entry point group, so each pack ships its
+  own (family with home, work with the core).
+- A codemod moves the imports (src, tests, tools, entry points); the checks follow.
+Tests: everything, golden files identical.
+
+### CR10b3 · Core refactor: a distribution per pack
+Status: deferred (2026-11-07)
+- Separate installable distributions (`themi-core`, `themi-google`, `themi-home`), so an
+  image can leave a pack out. Worth it once an image without the home pack is wanted.
 
 ### CR11 · Core refactor: the setup wizard
 Status: [x] 2026-11-07

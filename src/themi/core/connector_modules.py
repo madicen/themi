@@ -11,13 +11,10 @@ from datetime import timedelta
 
 from themi.connectors.google import GoogleAccounts
 from themi.connectors.travel import TravelClient
-from themi.core import groups
+from themi.core import google_groups, groups
 from themi.core.agent import Agent
-from themi.core.connector_settings import (
-    GoogleSettings,
-    TravelSettings,
-)
 from themi.core.email_audit import EmailAudit
+from themi.core.google_settings import GoogleSettings, TravelSettings
 from themi.core.google_tasks import GoogleTasksInbox
 from themi.core.google_tasks_list import GoogleTaskList
 from themi.core.tasks import TaskBoard
@@ -30,7 +27,7 @@ class EmailAuditModule(Module):
     """E2: the email audit, over Gmail."""
 
     name = "email_audit"
-    tool_groups = (groups.EMAIL,)
+    tool_groups = (google_groups.EMAIL,)
     requires = ("tasks", "gmail")
 
     def install(self, ctx: ModuleContext) -> None:

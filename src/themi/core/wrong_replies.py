@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.channels.events import InboundEvent
-from themi.core.groups import catalog_group_of
+from themi.config import any_group_of
 from themi.core.reactions import CARDS
 from themi.core.services import Services
 from themi.core.tools import TWINS
@@ -100,7 +100,7 @@ def was_sent(
     tool: str,
     groups: tuple[str, ...],
     added: tuple[str, ...] = (),
-    group_of: Callable[[str], str] = catalog_group_of,
+    group_of: Callable[[str], str] = any_group_of,
 ) -> bool:
     """Whether a reply that was offered these groups (and added these) had the tool. A twin
     set travels whole (P6). `group_of`: the app's groups (CR8b), else every known group."""
@@ -116,7 +116,7 @@ def decide(
     tool: str,
     groups: tuple[str, ...],
     added: tuple[str, ...] = (),
-    group_of: Callable[[str], str] = catalog_group_of,
+    group_of: Callable[[str], str] = any_group_of,
 ) -> Label:
     if tool == NO_TOOL:
         return "no_tool_needed"

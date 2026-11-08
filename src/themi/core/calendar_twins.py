@@ -33,8 +33,8 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.connectors.gcal.busy import TASK_BLOCK
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 from themi.core.events import MERGE, Events, Found, When, title_matches
 from themi.core.lists import name_key
 from themi.localtime import to_utc_iso

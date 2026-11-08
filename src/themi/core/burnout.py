@@ -37,11 +37,11 @@ from themi import clock
 from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.core import keys, partner
-from themi.core.events import words_in_common
 from themi.core.habits import CATEGORY as HABIT_CATEGORY
 from themi.core.habits import EXECUTOR as HABIT_EXECUTOR
 from themi.core.tasks import Task, TaskBoard
 from themi.core.tools import SETTINGS, ToolContext, ToolDeclined, ToolFailed, tool
+from themi.core.wording import words_in_common
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 

@@ -14,7 +14,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import Role
 from themi.autonomy import ExecutionContext
-from themi.connectors.gcal.preferences import CalendarPreferences
+from themi.core.calendar_view import CalendarPreferences
 from themi.core.chore_chart import ChartPreferences
 from themi.web.auth import COOKIE_NAME, WebAuth
 

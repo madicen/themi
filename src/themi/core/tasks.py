@@ -28,7 +28,6 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import groups, keys, naming, praise
-from themi.core.events import near_twin, title_matches, words_in_common
 from themi.core.praise import TasksPreferences
 from themi.core.progression import Progression, amount_said, parse_plan
 from themi.core.progression import read_back as plan_read_back
@@ -46,6 +45,7 @@ from themi.core.sun import sunset
 from themi.core.tools import Done as DoneLine
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.core.which_task import ALL_OF_THEM, SHORT_ANSWER, Said
+from themi.core.wording import near_twin, title_matches, words_in_common
 from themi.energy import EnergyModel
 from themi.energy.matching import Assignment, Matcher
 from themi.localtime import member_day, to_utc_iso

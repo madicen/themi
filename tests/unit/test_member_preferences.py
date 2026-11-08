@@ -117,7 +117,7 @@ def test_the_migration_copies_each_members_values(tmp_path: Path) -> None:
 def test_the_second_migration_copies_the_rest(tmp_path: Path) -> None:
     from datetime import time
 
-    from themi.connectors.gcal.preferences import CalendarPreferences
+    from themi.core.calendar_view import CalendarPreferences
     from themi.core.checkin_reviews import CheckinReviewsPreferences
     from themi.core.conversation_mode import ConversationPreferences
     from themi.core.day_summary import DaySummaryPreferences
@@ -179,13 +179,13 @@ def test_a_morning_summary_saves_and_reads_back_and_blank_is_off(family: SeededF
         ("themi.core.focus", "FocusPreferences", {"focus_count": 0}, "things for now are"),
         ("themi.core.focus", "FocusPreferences", {"day_budget": 21}, "a day's budget is between"),
         (
-            "themi.connectors.gcal.preferences",
+            "themi.core.calendar_view",
             "CalendarPreferences",
             {"calendar_details": "all"},
             "calendar details are for 'me' or 'partner'",
         ),
         (
-            "themi.connectors.gcal.preferences",
+            "themi.core.calendar_view",
             "CalendarPreferences",
             {"calendar_twins": "both"},
             "ask, guess or keep",

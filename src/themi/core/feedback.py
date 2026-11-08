@@ -30,13 +30,11 @@ from themi.accounts import Member
 from themi.ai.settings import AITask
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.outbox import Priority
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 from themi.core.checkin_reviews import CheckinReviewsPreferences
 from themi.core.day_summary import DaySummaryPreferences
-from themi.core.noise_digest import NoisePreferences
 from themi.core.tools import ToolContext, tool
-from themi.core.travel import TravelPreferences
 from themi.core.wrong_replies import ReplyReview, reply_for_message
 from themi.localtime import to_local, to_utc_iso
 from themi.logs import recent_logs, redact
@@ -435,8 +433,8 @@ class FeedbackChat:
         chart: Any = store.preferences(member.id, chart_model) if chart_model else None
         reviews = store.preferences(member.id, CheckinReviewsPreferences)
         summary = store.preferences(member.id, DaySummaryPreferences)
-        noise = store.preferences(member.id, NoisePreferences)
-        travel = store.preferences(member.id, TravelPreferences)
+        noise: Any = store.preferences(member.id, models["gmail"]) if "gmail" in models else None
+        travel: Any = store.preferences(member.id, models["travel"]) if "travel" in models else None
         calendar = store.preferences(member.id, CalendarPreferences)
         return {
             "quiet hours": f"{member.quiet_start:%H:%M}-{member.quiet_end:%H:%M}",
@@ -454,9 +452,9 @@ class FeedbackChat:
             "morning summary": summary.morning_summary.strftime("%H:%M")
             if summary.morning_summary
             else "off",
-            "noise emails": noise.noise_emails.replace("_", " "),
+            "noise emails": noise.noise_emails.replace("_", " ") if noise else "no email",
             "leave heads-up": f"on, {travel.getting_ready_minutes} min to get ready"
-            if travel.leave_heads_up
+            if travel and travel.leave_heads_up
             else "off",
             "set-up notes on events": "on" if calendar.setup_note else "off",
             "calendar details seen by": "them only"

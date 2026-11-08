@@ -20,7 +20,7 @@ from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.pantry import Pantry, PantryItem
 from themi.core.services import Services
 from themi.core.tools import ToolContext, tool
@@ -214,7 +214,7 @@ class MealsModule(Module):
     """Meal ideas from what the pantry has."""
 
     name = "meals"
-    tool_groups = (groups.PANTRY,)
+    tool_groups = (home_groups.PANTRY,)
     requires = ("pantry",)
 
     def install(self, ctx: ModuleContext) -> None:

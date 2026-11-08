@@ -29,7 +29,7 @@ from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
 from themi.autonomy import Outcome
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.groceries import (
     CATEGORY,
     EXECUTOR,
@@ -518,7 +518,7 @@ class PantryModule(Module):
     """What's in the pantry, and what's running low."""
 
     name = "pantry"
-    tool_groups = (groups.PANTRY,)
+    tool_groups = (home_groups.PANTRY,)
     household = PantrySettings
     requires = ("groceries",)
     optional = ("gmail",)  # receipts read from email fill it in

@@ -28,7 +28,7 @@ from themi.channels.outbox import Priority
 from themi.connectors.gdocs import DOC_MIME, DocsClient, DocsError
 from themi.connectors.google import DRIVE_FILE_SCOPE, GoogleAccounts, OAuthError, TokenRevoked
 from themi.core import cookbook as book
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.cookbook import Line, ParsedRecipe
 from themi.core.lists import name_key
 from themi.core.prompts import OpenItem, as_data
@@ -750,7 +750,7 @@ class RecipesModule(Module):
 
     name = "recipes"
     website = "Once Google is linked, pick the family cookbook on Accounts (/accounts)."
-    tool_groups = (groups.RECIPES,)
+    tool_groups = (home_groups.RECIPES,)
     optional = ("google",)
 
     def __init__(self, config: GoogleConfig | None = None) -> None:
@@ -758,7 +758,7 @@ class RecipesModule(Module):
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
-        from themi.core.connector_settings import GoogleSettings
+        from themi.core.google_settings import GoogleSettings
 
         return cls(setup.read(GoogleSettings, "google").config())
 

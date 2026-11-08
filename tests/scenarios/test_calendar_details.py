@@ -14,7 +14,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link
-from themi.connectors.gcal.preferences import CalendarPreferences
+from themi.core.calendar_view import CalendarPreferences
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 HUSBAND = "him@gmail.com"

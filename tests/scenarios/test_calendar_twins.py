@@ -14,8 +14,8 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import local, on_primary
 from tests.scenarios.test_triage import ERIN, link
 from themi.accounts import SYSTEM
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core import keys
+from themi.core.calendar_view import CalendarPreferences
 
 VISIT = "Return Patient Visit with Thuc Quyen Nguyen, MD"
 WHERE = ["Keep on mine", "Keep on family", "Keep on both", "Your call", "Not the same"]

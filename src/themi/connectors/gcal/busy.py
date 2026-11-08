@@ -26,16 +26,19 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import AccountStore, Member
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.connectors.gcal.sync import CalendarSync
 from themi.connectors.google import CALENDAR_SCOPE
+from themi.core.calendar_view import (  # CR10b1: the shapes everyone shares
+    CalendarPreferences,
+    Entry,
+    event_line,
+)
 from themi.core.prompts import as_data
 from themi.localtime import to_utc_iso
 
@@ -47,20 +50,6 @@ CONTEXT_DAYS = 2  # today and tomorrow, for the model
 TASK_BLOCK = "task-block:"  # K5: time Themi blocked for a task; never busy
 MAX_TEXT = 200
 VIDEO = re.compile(r"https?://\S*(?:zoom\.us|meet\.google\.com|teams\.microsoft\.com)", re.I)
-
-
-@dataclass(frozen=True)
-class Entry:
-    member_id: int
-    title: str
-    location: str
-    starts_at: datetime
-    ends_at: datetime
-    all_day: bool
-    video: bool
-    source: str | None  # set for Themi's own events ("task:12")
-    calendar_id: str = ""
-    event_id: str = ""  # with calendar_id: the same event, read through two accounts
 
 
 def _when(value: dict[str, Any], tz: ZoneInfo) -> tuple[datetime, bool] | None:
@@ -292,25 +281,3 @@ class CalendarBusy:
     def _tz(self) -> ZoneInfo:
         family = self.store.get_family()
         return ZoneInfo(family.timezone if family else "UTC")
-
-
-def _clock(moment: datetime) -> str:
-    return moment.strftime("%I:%M %p").lstrip("0").replace(":00 ", " ").lower()
-
-
-def event_line(entry: Entry, tz: ZoneInfo) -> str:
-    begins = entry.starts_at.astimezone(tz)
-    if entry.all_day:
-        when = f"{begins:%a %d %b}, all day"
-    else:
-        ends = entry.ends_at.astimezone(tz)
-        first = _clock(begins)
-        if first[-2:] == _clock(ends)[-2:]:  # "10-11 am", not "10 am-11 am"
-            first = first[:-3]
-        when = f"{begins:%a %d %b}, {first}-{_clock(ends)}"
-    text = f"{when}: {entry.title}"
-    if entry.video:
-        text += " (video call)"
-    elif entry.location:
-        text += f" (at {entry.location})"
-    return text

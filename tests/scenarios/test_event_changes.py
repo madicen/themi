@@ -13,8 +13,8 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_calendar_events import dentist, local, on_primary, say, tool_result
 from tests.scenarios.test_triage import ERIN, link
-from themi.connectors.gcal.preferences import CalendarPreferences
 from themi.core.agent import FAILED_TEXT, NOTHING_CHANGED_TEXT
+from themi.core.calendar_view import CalendarPreferences
 
 
 @pytest.fixture

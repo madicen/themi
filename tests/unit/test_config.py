@@ -45,6 +45,8 @@ def before_cr5a(s: Settings) -> list[str]:
     from themi.connectors.travel import TravelClient
     from themi.connectors.tuya import TuyaConfig
     from themi.core import connector_settings as cs
+    from themi.core import google_settings as gs
+    from themi.core import home_settings as hs
     from themi.modules.settings import read_settings
 
     def read(model: Any) -> Any:
@@ -52,18 +54,18 @@ def before_cr5a(s: Settings) -> list[str]:
 
     search = read(cs.SearchSettings)
     options: dict[str, Any] = {
-        "google": read(cs.GoogleSettings).config(),
+        "google": read(gs.GoogleSettings).config(),
         "grocery_list": OurGroceriesClient(g)
-        if (g := read(cs.OurGroceriesSettings).config())
+        if (g := read(hs.OurGroceriesSettings).config())
         else None,
-        "cozyla": CozylaClient(w) if (w := read(cs.CozylaSettings).config()) else None,
-        "travel": TravelClient(read(cs.TravelSettings).tomtom_api_key),
+        "cozyla": CozylaClient(w) if (w := read(hs.CozylaSettings).config()) else None,
+        "travel": TravelClient(read(gs.TravelSettings).tomtom_api_key),
         "search": choose_search(search.backend, search.tavily_api_key, search.firecrawl_api_key),
         "home_connect": HomeConnectClient(h)
-        if (h := read(cs.HomeConnectSettings).config())
+        if (h := read(hs.HomeConnectSettings).config())
         else None,
-        "spotify": SpotifyClient(sp) if (sp := read(cs.SpotifySettings).config()) else None,
-        "thinq": dataclasses.replace(read(cs.ThinqSettings).config(), mqtt=thinq_mqtt.available()),
+        "spotify": SpotifyClient(sp) if (sp := read(hs.SpotifySettings).config()) else None,
+        "thinq": dataclasses.replace(read(hs.ThinqSettings).config(), mqtt=thinq_mqtt.available()),
         "roborock": roborock_library.available(),
         "tuya": TuyaConfig(),
         "catgenie": CatGenieConfig(),

@@ -64,8 +64,7 @@ def test_the_work_template_says_nothing_about_a_household(
 
 
 def test_every_rewording_names_something_that_exists() -> None:
-    from themi.config import available_modules
-    from themi.core import groups
+    from themi.config import all_groups, available_modules
     from themi.core.prompts import CORE_RULES
 
     template = load_template("work")
@@ -78,8 +77,8 @@ def test_every_rewording_names_something_that_exists() -> None:
             if isinstance(value, tuple) and value and hasattr(value[0], "key"):
                 keys |= {f.key for f in value}
     assert set(template.prompt) <= keys
-    assert set(template.groups) <= {g.name for g in groups.CATALOG}
-    every_tool = {t for g in groups.CATALOG for t in g.tools} | {
+    assert set(template.groups) <= {g.name for g in all_groups()}
+    every_tool = {t for g in all_groups() for t in g.tools} | {
         "create_task", "update_task", "propose_rule", "remember_fact", "reschedule_task",
         "skip_round", "snooze_task",
     }  # fmt: skip

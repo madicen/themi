@@ -27,7 +27,7 @@ from themi.autonomy import ExecutionContext
 from themi.core import groups, keys
 from themi.core.prompts import OpenItem
 from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool, tool
-from themi.core.wording import and_list, asks_to_add, picture_asks_to_add, refuse_spending
+from themi.core.wording import and_list, asks_to_add, name_key, picture_asks_to_add, refuse_spending
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
@@ -82,11 +82,6 @@ def item_limit(nl: NamedList) -> int:
 def too_long(nl: NamedList) -> str:
     wall = ", the most a list on the wall takes," if nl.wall_id else ","
     return f"That one's over {item_limit(nl)} characters{wall} so it isn't on {nl.name} yet."
-
-
-def name_key(text: str) -> str:
-    """For comparing names: lowercase words, no punctuation."""
-    return " ".join(re.sub(r"[^\w\s&'/-]", " ", text.lower()).split())
 
 
 def list_key(text: str) -> str:

@@ -42,7 +42,7 @@ from themi.connectors.recipe_page import (
     schema_recipe,
 )
 from themi.connectors.search import SearchError
-from themi.core import groups, keys
+from themi.core import home_groups, keys
 from themi.core.kept_pictures import MOST_TOGETHER
 from themi.core.prompts import as_data
 from themi.core.recipes import PICTURE_SOURCE, Recipe, Recipes, site_name
@@ -533,7 +533,7 @@ class WebRecipesModule(Module):
     """RC4a: recipes from links and from the web."""
 
     name = "web_recipes"
-    tool_groups = (groups.RECIPES,)
+    tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
 
     def __init__(self, reader: PageReader | None = None) -> None:

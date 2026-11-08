@@ -40,7 +40,7 @@ from themi.accounts import Member
 from themi.accounts.preferences import Preferences
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import BODY_DOUBLE_KIND, Priority
-from themi.core import groups, keys, praise
+from themi.core import home_groups, keys, praise
 from themi.core.body_double_scene import CHEER_FOR, pick_state
 from themi.core.lists import name_key
 from themi.core.tasks import NotFound, Task
@@ -1209,7 +1209,7 @@ class BodyDoubleModule(Module):
     """BD1a: body double sessions; block ends are scheduler jobs."""
 
     name = "body_double"
-    tool_groups = (groups.BODY_DOUBLE,)
+    tool_groups = (home_groups.BODY_DOUBLE,)
     preferences = BodyDoublePreferences
 
     def install(self, ctx: ModuleContext) -> None:
