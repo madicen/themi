@@ -428,6 +428,7 @@ class WebSearchModule(Module):
     one up."""
 
     name = "web_search"
+    kind = "connector"  # CR19: a search service, when one is set up
     tool_groups = (groups.WEB,)
     settings = SearchSettings
 

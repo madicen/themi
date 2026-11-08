@@ -15,11 +15,12 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
 from themi.accounts import AccountStore
 from themi.ai.embeddings import RouterEmbedder, VectorCache
 from themi.ai.retry import Sleep
-from themi.ai.router import HEDGE_AFTER, AIRouter, ProviderFactory
+from themi.ai.router import HEDGE_AFTER, AIRouter, ProviderFactory, module_factory
 from themi.ai.settings import AISettingsStore
 from themi.autonomy import Autonomy, ExecutorRegistry
 from themi.backup import BackupConfig, Backups
@@ -45,9 +46,11 @@ from themi.energy.outcomes import OutcomeTracker
 from themi.energy.windows import EnergyReceptivity
 from themi.modules import Module, ModuleContext, PeriodicTask, as_job
 from themi.scheduler import Scheduler
+from themi.standard.ai_providers import AI_PROVIDERS
 from themi.standard.breaks import BreaksModule
 from themi.standard.burnout import BurnoutModule
 from themi.standard.business_hours import BusinessHoursModule
+from themi.standard.capabilities import ImageGenerationModule, PicturesModule, VoiceNotesModule
 from themi.standard.checkin_reviews import CheckinReviewsModule
 from themi.standard.commands import CommandsModule
 from themi.standard.conversation_mode import ConversationModeModule
@@ -176,6 +179,10 @@ def family_modules(
     (see the module docstring); CR5 turns this into the family template."""
 
     return [
+        *(provider() for provider in AI_PROVIDERS),  # CR19: every provider and capability
+        VoiceNotesModule(),
+        PicturesModule(),
+        ImageGenerationModule(),
         MemoryModule(),
         JournalModule(),
         *(
@@ -311,7 +318,14 @@ def build_app(
     # ----- the core -------------------------------------------------------------------
     store = AccountStore(db, cipher)
     ai_settings = AISettingsStore(db, cipher)
-    router = AIRouter(ai_settings, factory=provider_factory, sleep=sleep, hedge_after=hedge_after)
+    # CR19: backends are built with the loaded AI provider modules' adapters.
+    adapters: dict[str, Any] = {}
+    router = AIRouter(
+        ai_settings,
+        factory=provider_factory or module_factory(adapters),
+        sleep=sleep,
+        hedge_after=hedge_after,
+    )
     channel = make_channel(store)
     energy = EnergyModel(store)
     outbox = Outbox(store, channel, PdaShield(AIRewriter(router)), EnergyReceptivity(energy))
@@ -327,6 +341,7 @@ def build_app(
         task_namer=TaskNamer(RouterEmbedder(router), VectorCache(db)),
         store=store,
         ai_settings=ai_settings,
+        ai_adapters=adapters,
         router=router,
         outbox=outbox,
         calibrator=PdaCalibrator(store),

@@ -226,6 +226,12 @@ def resolve_modules(
                 problems.append(f"{name} needs {', '.join(missing)}, which isn't set up")
             del built[name]
             changed = True
+    kinds = {name: (known[name] if name in known else type(m)).kind for name, m in built.items()}
+    if not problems and "ai" not in kinds.values():  # CR19
+        providers = sorted(n for n, cls in known.items() if cls.kind == "ai")
+        problems.append(
+            f"a Themi needs at least one AI provider: add one of {', '.join(providers)}"
+        )
     if problems:
         raise SettingsError("Themi can't start:\n  - " + "\n  - ".join(sorted(set(problems))))
     return [built[n] for n in names if n in built]

@@ -56,6 +56,7 @@ class SpotifyModule(Module):
     """BD5b: playing their own music, from Spotify."""
 
     name = "spotify"
+    kind = "connector"
     website = "Each person who wants it links Spotify on Accounts (/accounts)."
     tool_groups = (home_groups.MUSIC,)
     settings = SpotifySettings
@@ -105,6 +106,7 @@ class OurGroceriesModule(Module):
     """The grocery list mirrored to OurGroceries."""
 
     name = "ourgroceries"
+    kind = "connector"
     settings = OurGroceriesSettings
     requires = ("groceries", "pantry")
 
@@ -135,6 +137,7 @@ class KeepModule(Module):
     runs `themi keep link`."""
 
     name = "keep"
+    kind = "connector"
     website = "Each person who wants it runs `themi keep link <name>` on the server."
     requires = ("groceries", "pantry")
 
@@ -174,6 +177,7 @@ class CozylaTodosModule(Module):
     """The Cozyla wall's to-do list, kept in step with Themi's tasks."""
 
     name = "cozyla_todos"
+    kind = "connector"
     tool_groups = (
         groups.LISTS,
         groups.WALL,
@@ -231,6 +235,7 @@ class CozylaChoresModule(Module):
     """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
 
     name = "cozyla_chores"
+    kind = "connector"
     tool_groups = (groups.WALL,)
     preferences = ChartPreferences
     settings = CozylaSettings
@@ -273,6 +278,7 @@ class HomeConnectModule(Module):
     """H1: the dishwasher, through Home Connect."""
 
     name = "home_connect"
+    kind = "connector"
     website = "An admin links Home Connect on Accounts (/accounts)."
     settings = HomeConnectSettings
     requires = ("tasks",)
@@ -300,6 +306,7 @@ class ThinqModule(Module):
     """30: the washer and dryer, through LG ThinQ, and laundry that's waiting."""
 
     name = "thinq"
+    kind = "connector"
     website = "An admin adds the ThinQ token on Accounts (/accounts)."
     household = LaundrySettings
     settings = ThinqSettings
@@ -334,6 +341,7 @@ class RoborockModule(Module):
     """V1: the robot vacuum, through Roborock."""
 
     name = "roborock"
+    kind = "connector"
     website = "An admin signs in to Roborock on Accounts (/accounts)."
     requires = ("tasks",)
 
@@ -362,6 +370,7 @@ class TuyaModule(Module):
     """32: the pet feeders, through Tuya's cloud."""
 
     name = "tuya"
+    kind = "connector"
     website = "An admin links the feeders on Accounts (/accounts)."
     requires = ("tasks",)
 
@@ -385,6 +394,7 @@ class CatGenieModule(Module):
     """CG1a: the litter box, through CatGenie's cloud."""
 
     name = "catgenie"
+    kind = "connector"
     website = "An admin links the litter box on Accounts (/accounts)."
     requires = ("tasks",)
 

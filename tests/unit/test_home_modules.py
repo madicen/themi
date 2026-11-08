@@ -9,6 +9,7 @@ import pytest
 from tests.fakes.modules import module_context
 from tests.fixtures.family import SeededFamily
 from themi.modules import Module
+from themi.standard.capabilities import ImageGenerationModule
 from themi.standard.lists import ListsModule
 from themi.standard.tasks import TasksModule
 from themi_home.appliances import Appliances, AppliancesModule
@@ -53,7 +54,12 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (CookingTimersModule, CookingTimers, [*RECIPES, CookingModule], set()),
     (BodyDoubleModule, BodyDouble, [], set()),
     (GuidedStepsModule, GuidedSteps, BODY, set()),
-    (StepPicturesModule, StepPictures, [*BODY, GuidedStepsModule], set()),
+    (
+        StepPicturesModule,
+        StepPictures,
+        [*BODY, GuidedStepsModule, ImageGenerationModule],
+        set(),
+    ),  # CR19
     (ModeChooserModule, ModeChooser, BODY, set()),
     (MusicOffersModule, MusicOffers, BODY, set()),
     (WebRecipesModule, WebRecipes, [RecipesModule], {"recipes.forget_web"}),

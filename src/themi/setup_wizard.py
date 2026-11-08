@@ -1,10 +1,13 @@
 """`themi setup`: what this Themi is made of, written to themi.toml and .env (CR11).
 
 It asks for the core's settings (the Telegram bot's token; it makes the secret key), a
-template or none, which of its modules to leave out or add (with what those need), and
-each module's own settings. Plain answers go to themi.toml, secrets to .env (readable only
-by its owner). Then it tries each module that has something to try against its service,
-and lists what's left to do on the website. `--check` tries an existing setup again.
+template, then (CR19) by kind, in order: how they'll talk to Themi (channels), the AI
+providers (at least one), the capabilities (voice notes, pictures, making pictures), then
+services and features. Each step says what the template has, which to leave out and which
+to add (with what those need). Then each module's own settings. Plain answers go to
+themi.toml, secrets to .env (readable only by its owner). Then it tries each module that
+has something to try against its service, and lists what's left to do on the website.
+`--check` tries an existing setup again.
 
 It never overwrites a file without asking, and a blank answer leaves a setting unset.
 """
@@ -93,15 +96,9 @@ def run_setup(
     answers.template = chosen
     template = load_template(chosen)
     modules = list(template.modules)
-    if modules:
-        say(f"The {chosen} template has: {', '.join(modules)}.")
-    answers.removed = _pick(ask, say, "Leave any out (names, with commas; blank: none)", modules)
-    modules = [m for m in modules if m not in answers.removed]
-    others = [m for m in sorted(known) if m not in modules]
-    if others:
-        say(f"Also available: {', '.join(others)}.")
-    answers.added = _pick(ask, say, "Add any (names, with commas; blank: none)", others)
-    modules += answers.added
+    # CR19: by kind, in order: how they'll talk to Themi, the AI, what it can do, the rest.
+    for step in STEPS:
+        modules = _ask_kind(ask, say, step, chosen, modules, known, answers)
     for name in list(modules):  # what they need comes too, said once each
         for need in _needs(name, known):
             if need not in modules:
@@ -141,6 +138,60 @@ def run_setup(
     say(f"Wrote {toml_path} and {env_path}.")
     check_setup(out_dir, say, known=known, run=run)
     return toml_path, env_path
+
+
+@dataclass(frozen=True)
+class Step:
+    kinds: tuple[str, ...]
+    heading: str  # what the step is about, said first
+    leave_out: str  # the questions; distinct per step, so each answer goes to its own
+    add: str
+
+
+STEPS = (
+    Step(
+        ("channel",), "How you'll talk to Themi", "Leave out any channels", "Which other channels"
+    ),
+    Step(("ai",), "AI providers", "Leave out any AI providers", "Which other AI providers"),
+    Step(
+        ("capability",),
+        "What Themi can do with voice notes and pictures, and make",
+        "Leave out any capabilities",
+        "Which other capabilities",
+    ),
+    Step(("connector", "feature"), "Services and features", "Leave any out", "Add any"),
+)
+AI_FALLBACK = "gemini"  # its free tier is every member's first backend
+
+
+def _ask_kind(
+    ask: Ask,
+    say: Say,
+    step: Step,
+    template: str,
+    modules: list[str],
+    known: dict[str, type[Module]],
+    answers: Answers,
+) -> list[str]:
+    """One kind's step: what the template has of it, leave any out, add others."""
+    mine = [m for m in modules if m in known and known[m].kind in step.kinds]
+    others = [m for m in sorted(known) if known[m].kind in step.kinds and m not in modules]
+    if not mine and not others:
+        return modules
+    say(f"{step.heading}. The {template} template has: {', '.join(mine) or 'none'}.")
+    removed = _pick(ask, say, f"{step.leave_out} (names, with commas; blank: none)", mine)
+    if others:
+        say(f"Also available: {', '.join(others)}.")
+    added = _pick(ask, say, f"{step.add} (names, with commas; blank: none)", others)
+    if "ai" in step.kinds and not [m for m in mine if m not in removed] and not added:
+        if AI_FALLBACK in removed:
+            removed.remove(AI_FALLBACK)
+        else:
+            added.append(AI_FALLBACK)
+        say(f"A Themi needs at least one AI provider, so it keeps {AI_FALLBACK}.")
+    answers.removed += removed
+    answers.added += added
+    return [m for m in modules if m not in removed] + added
 
 
 def _pick(ask: Ask, say: Say, question: str, choices: list[str]) -> list[str]:

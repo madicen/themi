@@ -50,7 +50,7 @@ def test_modules_given_already_are_used_and_one_not_given_is_left_out() -> None:
             pass
 
     given: dict[str, Module] = {}
-    for name in ("tasks", "reminders", "memory"):
+    for name in ("gemini", "tasks", "reminders", "memory"):  # CR19: one AI provider at least
         module = Plain()
         module.name = name  # type: ignore[misc]  # an instance's own name, for the test
         given[name] = module

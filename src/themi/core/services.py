@@ -136,6 +136,10 @@ class Services(Registry):
     # CR17b: each loaded pack's `web` folder, by its short name ("home", "google"): its
     # page templates, and its static files under /static/<name>/.
     web_folders: dict[str, Path] = field(default_factory=dict)
+    # CR19: the loaded AI provider modules' adapters, by kind (the router builds from
+    # these), and the loaded capabilities ("voice_notes", "pictures", "image_generation").
+    ai_adapters: dict[str, Callable[[Any], Any]] = field(default_factory=dict)
+    capabilities: set[str] = field(default_factory=set)
     accounts_sections: list[AccountsSection] = field(default_factory=list)
     waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.

@@ -312,7 +312,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR17b | Round two: each pack's own page templates and static files | Core refactor | [x] 2026-11-08 |
 | CR18a | Round two: Google permissions asked per module | Core refactor | [x] 2026-11-08 |
 | CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [x] 2026-11-08 |
-| CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [ ] |
+| CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [x] 2026-11-08 |
 | CR20a | Round two: a channel seam, and channel identities for members | Core refactor | [ ] |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
 | CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
@@ -15067,7 +15067,7 @@ Notes (2026-11-08):
   needs what. New there: each feature installs alone on its base; the bases alone work.
 
 ### CR19 · Round two: module kinds, AI providers and capabilities as modules, setup by kind
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR18b
 - `Module.kind`: channel, ai, capability, connector or feature. Each AI provider (Claude,
   Gemini, OpenAI-compatible, Cloudflare) becomes a module registering its adapter; a Themi
@@ -15078,6 +15078,35 @@ Depends on: CR18b
   providers, which capabilities, then services and features.
 Tests: a template without image generation offers no picture tools; setup's order; golden
 files identical for the family (every provider and capability on).
+
+Notes (2026-11-08):
+- `Module.kind` (`themi.modules.KINDS`): every module has one. Connectors are those that
+  bring an outside service (Google, Gmail, Calendar, Google Tasks, travel, web search, the
+  wall, the devices, Spotify, the grocery mirrors); the rest are features.
+- AI providers (`themi/standard/ai_providers.py`): `claude`, `gemini`,
+  `openai_compatible` (Ollama, LM Studio, others) and `cloudflare` (pictures only). Each
+  registers its adapter builder with `ctx.ai_adapter`. The router builds a backend only
+  with a loaded module's builder; other kinds fail as a permanent error, so the chain
+  falls through. The AI page offers only loaded kinds. The adapters stay in `themi.ai`
+  (the architecture rule); the router hands them out (`builders_for`).
+- At least one provider: `resolve_modules` refuses a config with none. The empty
+  template now holds `gemini`. The wizard keeps gemini when every provider is left out.
+- Capabilities (`themi/standard/capabilities.py`, names in `themi/core/capabilities.py`):
+  - `voice_notes` and `pictures`: without them a voice note or a picture gets a plain
+    word that typing works. Reading a recipe from a picture is offered only with
+    `pictures`.
+  - `image_generation`: `step_pictures` requires it, so its tools go without it. The AI
+    page hides the voice-note and picture-model jobs when their capability isn't loaded.
+- Deviation: image generation's "own provider key" is the picture-model backend each
+  member already chooses on the AI page (per-member keys through the router, a rule the
+  code keeps). There's no new household-wide key.
+- `themi setup` asks by kind, in order: channels (none yet, so skipped until CR20b), AI
+  providers, capabilities, then services and features. Each step has its own wording.
+- The family and work templates list the providers and capabilities. Work has no
+  cloudflare or image_generation. Golden files identical.
+- Tests changed for the new rules: test_home_modules (step pictures need image
+  generation), test_dev_setups (its given modules include an AI provider). New:
+  tests/scenarios/test_module_kinds.py.
 
 ### CR20a · Round two: a channel seam, and channel identities for members
 Status: [ ]

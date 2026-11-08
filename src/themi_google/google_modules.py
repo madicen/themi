@@ -56,6 +56,7 @@ class GoogleModule(Module):
     """Linking Google accounts, for the Google modules that read and write through them."""
 
     name = "google"
+    kind = "connector"
     website = "Each person links their Google account on Accounts (/accounts)."
     settings = GoogleSettings
 
@@ -89,6 +90,7 @@ class GmailModule(Module):
     modules of its own that require this one."""
 
     name = "gmail"
+    kind = "connector"
     google_scopes = (ScopeNeed("Gmail", (GMAIL_SCOPE,)),)
     tool_groups = (google_groups.EMAIL,)
     requires = ("google",)
@@ -204,6 +206,7 @@ class CalendarModule(Module):
     modules of their own that require this one."""
 
     name = "calendar"
+    kind = "connector"
     google_scopes = (ScopeNeed("the calendar", CALENDAR_SCOPES),)
     tool_groups = (groups.CALENDAR,)
     preferences = CalendarPreferences

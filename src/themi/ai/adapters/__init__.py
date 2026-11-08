@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -55,44 +56,48 @@ class AdapterConfig:
         return self.model or DEFAULT_MODELS.get(self.kind, "")
 
 
-def build_provider(config: AdapterConfig) -> Provider:
-    model = config.resolved_model
-    if not model:
-        raise PermanentError(f"no model configured for {config.kind}")
-    if config.kind == "anthropic":
-        if config.api_key is None:
-            raise PermanentError("Claude needs an API key")
-        from themi.ai.adapters.anthropic import AnthropicProvider
+Builder = Callable[[AdapterConfig], Provider]
 
-        return AnthropicProvider(
-            config.api_key,
-            model,
-            base_url=config.base_url,
-            timeout=config.timeout,
-            effort=config.effort or ANTHROPIC_DEFAULT_EFFORT,
+
+def build_anthropic(config: AdapterConfig) -> Provider:
+    if config.api_key is None:
+        raise PermanentError("Claude needs an API key")
+    from themi.ai.adapters.anthropic import AnthropicProvider
+
+    return AnthropicProvider(
+        config.api_key,
+        config.resolved_model,
+        base_url=config.base_url,
+        timeout=config.timeout,
+        effort=config.effort or ANTHROPIC_DEFAULT_EFFORT,
+    )
+
+
+def build_gemini(config: AdapterConfig) -> Provider:
+    if config.api_key is None:
+        raise PermanentError("Gemini needs an API key")
+    from themi.ai.adapters.gemini import GeminiProvider
+
+    return GeminiProvider(
+        config.api_key, config.resolved_model, base_url=config.base_url, timeout=config.timeout
+    )
+
+
+def build_cloudflare(config: AdapterConfig) -> Provider:
+    if config.api_key is None or not config.base_url:
+        raise PermanentError("Cloudflare needs an API token and the account ID")
+    from themi.ai.adapters.cloudflare import CloudflareProvider
+
+    try:
+        return CloudflareProvider(
+            config.api_key, config.base_url, config.resolved_model, timeout=config.timeout
         )
-    if config.kind == "gemini":
-        if config.api_key is None:
-            raise PermanentError("Gemini needs an API key")
-        from themi.ai.adapters.gemini import GeminiProvider
+    except ValueError as exc:
+        raise PermanentError(str(exc)) from exc
 
-        return GeminiProvider(
-            config.api_key,
-            model,
-            base_url=config.base_url,
-            timeout=config.timeout,
-        )
-    if config.kind == "cloudflare":
-        if config.api_key is None or not config.base_url:
-            raise PermanentError("Cloudflare needs an API token and the account ID")
-        from themi.ai.adapters.cloudflare import CloudflareProvider
 
-        try:
-            return CloudflareProvider(
-                config.api_key, config.base_url, model, timeout=config.timeout
-            )
-        except ValueError as exc:
-            raise PermanentError(str(exc)) from exc
+def build_openai_compat(config: AdapterConfig) -> Provider:
+    """Ollama, LM Studio, or any other OpenAI-compatible server."""
     capabilities = Capabilities(
         tools=config.supports_tools,
         structured=config.supports_structured,
@@ -106,13 +111,35 @@ def build_provider(config: AdapterConfig) -> Provider:
     from themi.ai.adapters.openai_compat import OpenAICompatProvider
 
     return OpenAICompatProvider(
-        model,
+        config.resolved_model,
         base_url=base_url,
         api_key=config.api_key,
         name=config.kind,
         capabilities=capabilities,
         timeout=config.timeout,
     )
+
+
+# CR19: each provider's builder, by kind. A Themi's AI provider modules register theirs.
+BUILDERS: dict[str, Builder] = {
+    "anthropic": build_anthropic,
+    "gemini": build_gemini,
+    "cloudflare": build_cloudflare,
+    "ollama": build_openai_compat,
+    "lm_studio": build_openai_compat,
+    "openai_compat": build_openai_compat,
+}
+
+
+def build_provider(config: AdapterConfig, builders: dict[str, Builder] | None = None) -> Provider:
+    """The provider a stored configuration describes. `builders`: the loaded AI provider
+    modules' (CR19); every kind when not given."""
+    if not config.resolved_model:
+        raise PermanentError(f"no model configured for {config.kind}")
+    builder = (BUILDERS if builders is None else builders).get(config.kind)
+    if builder is None:
+        raise PermanentError(f"{config.kind} isn't one of this Themi's AI providers")
+    return builder(config)
 
 
 # The SDKs load only when a provider is built (or one of these is imported by name),
@@ -134,9 +161,11 @@ def __getattr__(name: str) -> Any:
 
 
 __all__ = [
+    "BUILDERS",
     "AdapterConfig",
     "AdapterKind",
     "AnthropicProvider",
+    "Builder",
     "GeminiProvider",
     "OpenAICompatProvider",
     "build_provider",

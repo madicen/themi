@@ -308,7 +308,7 @@ class StepPicturesModule(Module):
 
     name = "step_pictures"
     tool_groups = (home_groups.BODY_DOUBLE,)
-    requires = ("body_double", "guided_steps")
+    requires = ("body_double", "guided_steps", "image_generation")  # CR19
 
     def install(self, ctx: ModuleContext) -> None:
         from themi_home.body_double import (

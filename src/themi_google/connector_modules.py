@@ -39,6 +39,7 @@ class GoogleTasksModule(Module):
     """GT1: a Google Tasks list as an inbox, and Themi's tasks kept in step with it."""
 
     name = "google_tasks"
+    kind = "connector"
     requires = ("google", "tasks")
     google_scopes = (
         ScopeNeed(
@@ -84,6 +85,7 @@ class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
     name = "travel"
+    kind = "connector"
     tool_groups = (groups.CALENDAR,)
     preferences = TravelPreferences
     settings = TravelSettings

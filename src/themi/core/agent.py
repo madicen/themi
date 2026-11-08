@@ -38,6 +38,7 @@ from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
 from themi.core import keys, listening, partner
 from themi.core.approvals import ASK_TEXT
+from themi.core.capabilities import PICTURES, VOICE_NOTES
 from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
@@ -262,6 +263,9 @@ LAST_WORD = (
 )
 SHORT_LINE = 120  # characters: what a reply may add to a message a tool sent as the answer
 VOICE_FAILED_TEXT = "I couldn't make out that voice note. A typed message works too."
+# CR19: a Themi set up without the voice notes or pictures capability.
+VOICE_OFF_TEXT = "I can't listen to voice notes here. A typed message works."
+PICTURES_OFF_TEXT = "I can't look at pictures here. Telling me what's in it works."
 # F34g: past their daily cap (members.picture_daily_cap), a picture isn't looked at.
 PICTURE_CAP_TEXT = (
     "I've looked at as many pictures as I can today. Tomorrow works, or type out what's in it."
@@ -346,6 +350,9 @@ class Agent:
                 return
             text = str(event.button.payload.get("text", event.button.label))
         elif event.kind == "voice" and event.voice is not None:
+            if VOICE_NOTES not in self.services.capabilities:  # CR19: not this Themi's
+                await self._reply(member, VOICE_OFF_TEXT)
+                return
             async with channel.typing(member):
                 transcript = await self._transcribe(member, event)
             if transcript is None:
@@ -353,6 +360,9 @@ class Agent:
                 return
             text = transcript
         elif event.kind == "picture" and event.picture is not None:
+            if PICTURES not in self.services.capabilities:  # CR19: not this Themi's
+                await self._reply(member, PICTURES_OFF_TEXT)
+                return
             if self._pictures_today(member) > self._picture_cap(member):
                 await self._reply(member, PICTURE_CAP_TEXT)
                 return

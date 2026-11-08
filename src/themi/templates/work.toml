@@ -4,6 +4,12 @@
 name = "work"
 
 modules = [
+    # CR19: the AI providers and capabilities (a Themi needs at least one provider)
+    "claude",
+    "gemini",
+    "openai_compatible",
+    "voice_notes",
+    "pictures",
     "memory",
     "journal",
     "google",

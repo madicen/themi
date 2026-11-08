@@ -6,6 +6,14 @@
 
 name = "family"
 modules = [
+    # CR19: the AI providers and capabilities (a Themi needs at least one provider)
+    "claude",
+    "gemini",
+    "openai_compatible",
+    "cloudflare",
+    "voice_notes",
+    "pictures",
+    "image_generation",
     "memory",
     "journal",
     "google",

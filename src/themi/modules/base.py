@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Literal, TypeVar
 
 from themi.accounts.household import HouseholdSettings
 from themi.accounts.preferences import Preferences
@@ -19,6 +19,14 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T")
+
+
+# CR19: what a module is, for `themi setup` (asked in this order) and the website.
+# A channel is how people talk to Themi; an AI provider answers; a capability is something
+# Themi can do with what it's sent (voice notes, pictures) or make (pictures); a connector
+# brings an outside service; a feature is everything else.
+ModuleKind = Literal["channel", "ai", "capability", "connector", "feature"]
+KINDS: tuple[ModuleKind, ...] = ("channel", "ai", "capability", "connector", "feature")
 
 
 class ModuleError(Exception):
@@ -95,6 +103,7 @@ class Module:
     declaration, read before anything is installed."""
 
     name: ClassVar[str] = ""
+    kind: ClassVar[ModuleKind] = "feature"  # CR19
     requires: ClassVar[tuple[str, ...]] = ()
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml

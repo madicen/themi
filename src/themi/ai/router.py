@@ -36,7 +36,7 @@ from typing import Any, TypeVar
 
 from themi import clock
 from themi.ai import json_mode
-from themi.ai.adapters import AdapterConfig, build_provider
+from themi.ai.adapters import BUILDERS, AdapterConfig, build_provider
 from themi.ai.breaker import BreakerBoard, BreakerState
 from themi.ai.errors import (
     AIError,
@@ -66,6 +66,19 @@ from themi.localtime import start_of_local_day, to_utc_iso
 
 T = TypeVar("T")
 ProviderFactory = Callable[[AdapterConfig], Provider]
+
+
+def builders_for(*kinds: str) -> dict[str, ProviderFactory]:
+    """CR19: the adapters for these kinds of backend, for an AI provider module."""
+    return {kind: BUILDERS[kind] for kind in kinds}
+
+
+def module_factory(adapters: dict[str, ProviderFactory]) -> ProviderFactory:
+    """CR19: build backends with the loaded AI provider modules' adapters only (filled in as
+    they install)."""
+    return lambda config: build_provider(config, adapters)
+
+
 Operation = Callable[[Provider], Awaitable[T]]
 
 log = logging.getLogger(__name__)

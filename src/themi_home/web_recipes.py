@@ -35,6 +35,7 @@ from themi.ai.types import CallKind, ImageBlock
 from themi.channels.events import Picture
 from themi.connectors.search import SearchError
 from themi.core import keys
+from themi.core.capabilities import PICTURES
 from themi.core.kept_pictures import MOST_TOGETHER
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
@@ -200,7 +201,8 @@ class WebRecipes:
         self.services.provide(keys.web_recipes, self)
         self.services.tools.register(recipe_from_link)
         self.services.tools.register(find_web_recipe)  # RC4b
-        self.services.tools.register(recipe_from_picture)  # F34m
+        if PICTURES in self.services.capabilities:  # CR19: only where pictures are looked at
+            self.services.tools.register(recipe_from_picture)  # F34m
 
     # ----- reading -------------------------------------------------------------------------
 
@@ -536,6 +538,7 @@ class WebRecipesModule(Module):
     name = "web_recipes"
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
+    optional = ("pictures",)  # CR19: reading a recipe from a picture, when it's there
 
     def __init__(self, reader: PageReader | None = None) -> None:
         self.reader = reader

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from themi.accounts import Member
     from themi.accounts.preferences import Preferences
+    from themi.ai.router import ProviderFactory
     from themi.autonomy.engine import Executor
     from themi.core.services import (
         AwaitingSource,
@@ -214,6 +215,15 @@ class ModuleContext:
     def waiting_link(self, link: Waiting) -> None:
         """CR17a: a line in "Waiting on you" standing for some waiting actions."""
         self.services.waiting_links.append(link)
+
+    def ai_adapter(self, kind: str, builder: ProviderFactory) -> None:
+        """CR19: an AI provider module's adapter for one kind of backend; the router builds
+        a member's backends of that kind with it."""
+        self.services.ai_adapters[kind] = builder
+
+    def capability(self, name: str) -> None:
+        """CR19: something Themi can now do ("voice_notes", "pictures", "image_generation")."""
+        self.services.capabilities.add(name)
 
     def executor(self, name: str, fn: Executor) -> None:
         self.services.autonomy.executors.register(name)(fn)
