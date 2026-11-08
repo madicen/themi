@@ -450,7 +450,7 @@ class WebSearchModule(Module):
             return None  # no key: Themi says how to set one up when asked to look something up
         try:
             await self.backend.search("weather today", count=1)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The web search didn't answer: {exc}"
         return None
 

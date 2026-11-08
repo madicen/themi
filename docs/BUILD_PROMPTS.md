@@ -337,7 +337,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [x] 2026-11-08 |
 | SP7b | Passkeys for admins without Telegram | Setup portal | [x] 2026-11-08 |
 | SP8 | Migration and retirement | Setup portal | split |
-| SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [ ] |
+| SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [ ] |
 
 ## Fixed technical choices
@@ -15733,7 +15733,7 @@ Notes (2026-11-08):
 Status: split into SP8a and SP8b.
 
 ### SP8a · Setup portal: "Move to Themi", `themi setup` removed, docs
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP7b
 - A value set in the environment shows "set on the server" with a lock; "Move to Themi"
   copies it into the store and says which `.env` line can go. Themi never edits `.env`.
@@ -15742,6 +15742,29 @@ Depends on: SP7b
 - DEPLOY.md and RASPBERRY_PI.md say: get a server, run `themi install`, open the address,
   enter the claim code. `.env.example` keeps only what the host needs.
 Tests: an upgraded family install is unchanged; a moved value wins once `.env` drops it.
+
+Notes (2026-11-08):
+- "Move to Themi": a module setting set in the environment shows its variable, locked,
+  with "Move it to Themi" (`POST /modules/<name>/move/<field>`, `Portal.move`). A secret
+  goes into the module secrets now, a plain value into themi.toml now: the environment
+  still wins, so nothing changes until the `.env` line goes and Themi restarts. The field
+  then says it's copied. Moving a secret needs a recent sign-in. Modules sharing settings
+  get it too.
+- Only module settings move. The core's own (`THEMI_PUBLIC_URL`, backups, the key) stay in
+  `.env`; `[core] public_url` exists (SP2) but the page doesn't set it yet.
+- Removed on purpose: `themi setup` (the CLI command), `themi/setup_wizard.py`,
+  `tests/unit/test_setup_wizard.py`, and two scenarios that tested the wizard itself
+  (`test_setup_asks_by_kind_in_order`, `test_leaving_out_every_ai_provider_keeps_gemini`).
+  `test_the_wizard_sets_up_work` became `test_the_modules_page_sets_up_work` (the same
+  check through the planner). `SetupStep` and `Module.setup` went too: nothing used them.
+  `Module.check`, `questions` and `themi config show` stay.
+- The secret-in-TOML message now says ".env, or the Modules page".
+- Docs: README's "Running Themi" is claim, Modules, Restart; its service sections say the
+  Modules page has the same steps. DEPLOY.md gained "The short way" (install, claim,
+  Modules) and new section 5 (`.env`, first run) and 8 (secrets) text. RASPBERRY_PI.md
+  points there. `.env.example` keeps what the host needs; the whole list moved to
+  `docs/ENVIRONMENT.md`.
+- Golden: routes.json gained the move route.
 
 ### SP8b · Setup portal: `themi install`
 Status: [ ]

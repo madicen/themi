@@ -49,8 +49,9 @@ def env_field(
     choices: tuple[str, ...] = (),
     advanced: bool | None = None,
 ) -> Any:
-    """A setting read from `env`. `ask`: the setup wizard's question for it (CR11); no
-    question, and the wizard leaves it alone. `help`: where to get it.
+    """A setting read from `env`. `ask`: its question (CR11's wizard asked it; now the
+    Modules page's label, and a field with none is folded away there). `help`: where to
+    get it.
     SP3a, for the Modules page: `label` (the question, by default), `placeholder`,
     `choices` (a dropdown), `advanced` (folded away; by default, a field with no question)."""
     extra = {
@@ -101,7 +102,8 @@ def read_settings[S: ModuleSettings](
         raw = env.get(variable, "").strip() if variable else ""
         if name in section and is_secret(info):
             problems.append(
-                f"[module.{module}] has {name}, a secret: set {variable} in .env instead"
+                f"[module.{module}] has {name}, a secret: set {variable} in .env, or set it "
+                "on the Modules page, instead"
             )
             continue
         if raw:
@@ -128,8 +130,8 @@ def read_settings[S: ModuleSettings](
 
 
 def questions(model: type[ModuleSettings]) -> list[tuple[str, str, str, bool, str]]:
-    """CR11: what the setup wizard asks for a model: (field, env variable, question, secret,
-    help), for each field with a question."""
+    """CR11: a model's questions (the wizard asked them; the lint and the Modules page read
+    them now): (field, env variable, question, secret, help), for each field with one."""
     out = []
     for name, info in model.model_fields.items():
         extra = _extra(info)

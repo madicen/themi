@@ -87,6 +87,7 @@ class FieldView:
     value: Any = None  # plain fields only; never a secret's value
     ending: str = ""  # a stored secret's last four characters
     waiting: bool = False  # the draft changes it
+    copied: bool = False  # SP8a: set on the server, and copied into Themi already
 
 
 @dataclass
@@ -168,9 +169,12 @@ def field_views(kit: Kit, name: str, draft: Draft | None) -> list[FieldView]:
         waiting = draft is not None and (
             spec.name in draft.sections.get(name, {}) or spec.name in draft.secrets.get(name, {})
         )
+        copied = source == "environment" and (
+            spec.name in stored if spec.secret else spec.name in section
+        )
         if spec.secret:
             ending = stored[spec.name].ending if source == "stored" else ""
-            out.append(FieldView(spec, source, None, ending, waiting))
+            out.append(FieldView(spec, source, None, ending, waiting, copied))
             continue
         if source == "environment":
             value = services.environment.get(spec.env, "")
@@ -178,7 +182,7 @@ def field_views(kit: Kit, name: str, draft: Draft | None) -> list[FieldView]:
             value = section.get(spec.name)
         else:
             value = spec.default
-        out.append(FieldView(spec, source, value, "", waiting))
+        out.append(FieldView(spec, source, value, "", waiting, copied))
     return out
 
 
@@ -397,6 +401,28 @@ def routes(kit: Kit) -> APIRouter:
         except PortalError as exc:
             message = str(exc)
         return kit.redirect(f"/modules/{name}", message)
+
+    @router.post("/modules/{name}/move/{field}", response_class=HTMLResponse)
+    async def move(request: Request, name: str, field: str) -> Response:
+        """SP8a: a setting from the server's .env copied into Themi."""
+        session, _ = await kit.checked(request, admin=True)
+        cls = available_modules().get(name)
+        secret = (
+            any(f.name == field and f.secret for f in fields(cls.settings))
+            if (cls and cls.settings)
+            else False
+        )
+        if secret and not recently_signed_in(session):
+            return kit.redirect(f"/modules/{name}", SIGN_IN_AGAIN)
+        try:
+            variable = portal().move(name, field, session.member)
+        except (PortalError, KeyError) as exc:
+            return kit.redirect(f"/modules/{name}", str(exc).strip("'"))
+        return kit.redirect(
+            f"/modules/{name}",
+            f"Copied into Themi. On the server, delete the {variable} line from .env and "
+            "restart Themi: it'll use the copy from then on.",
+        )
 
     # ----- SP6: restart and apply ----------------------------------------------------------
 

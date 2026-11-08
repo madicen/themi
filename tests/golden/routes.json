@@ -116,6 +116,7 @@
   "POST /modules/restart",
   "POST /modules/template",
   "POST /modules/undo",
+  "POST /modules/{name}/move/{field}",
   "POST /modules/{name}/settings",
   "POST /modules/{name}/switch",
   "POST /modules/{name}/test",

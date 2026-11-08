@@ -25,7 +25,6 @@ from themi.modules.base import (
     ModuleKind,
     ModuleSetup,
     PeriodicTask,
-    SetupStep,
     as_job,
 )
 from themi.modules.context import ModuleContext
@@ -43,7 +42,6 @@ __all__ = [
     "ModuleState",
     "ModuleStatus",
     "PeriodicTask",
-    "SetupStep",
     "StartReport",
     "as_job",
     "load",

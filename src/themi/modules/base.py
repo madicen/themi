@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-# CR19: what a module is, for `themi setup` (asked in this order) and the website.
+# CR19: what a module is, shown by kind (in this order) on the Modules page (SP4).
 # A channel is how people talk to Themi; an AI provider answers; a capability is something
 # Themi can do with what it's sent (voice notes, pictures) or make (pictures); a connector
 # brings an outside service; a feature is everything else.
@@ -41,16 +41,6 @@ class PeriodicTask:
     name: str
     every: timedelta
     run: Callable[[], Awaitable[object]]
-
-
-@dataclass(frozen=True)
-class SetupStep:
-    """One question the setup wizard (CR11) asks for a module."""
-
-    key: str  # the settings field it fills
-    prompt: str  # what the wizard asks, in Themi's plain words
-    secret: bool = False  # goes to .env, typed without echo, never into themi.toml
-    help_url: str = ""  # where to get it (a key page, a console)
 
 
 @dataclass(frozen=True)
@@ -139,7 +129,6 @@ class Module:
     household: ClassVar[type[HouseholdSettings] | None] = None  # CR7c: per household
     # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
     migrations: ClassVar[str | Path | None] = None
-    setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
     tool_groups: ClassVar[tuple[ToolGroup, ...]] = ()  # CR8b: the groups its tools are in
     website: ClassVar[str] = ""  # CR11: what's left to do on the website once it's set up
 
@@ -159,7 +148,8 @@ class Module:
 
     async def check(self) -> str | None:
         """CR11: try the module's settings against its service, through its own client:
-        None when they work, else what's wrong, in plain words. Most have nothing to try."""
+        None when they work, else what's wrong, in plain words. Most have nothing to try.
+        The Modules page's Test runs it (SP5)."""
         return None
 
     def install(self, ctx: ModuleContext) -> None:

@@ -122,7 +122,7 @@ class OurGroceriesModule(Module):
     async def check(self) -> str | None:
         try:
             await self.client.items()
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"OurGroceries didn't open the list: {exc}"
         return None
 

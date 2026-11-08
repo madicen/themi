@@ -18,7 +18,6 @@ from themi.config import available_modules, parse_config, resolve_modules
 from themi.core.agent import PICTURES_OFF_TEXT, VOICE_OFF_TEXT
 from themi.modules import KINDS
 from themi.settings import Settings, SettingsError
-from themi.setup_wizard import run_setup
 from themi.storage.secrets import Secret, generate_key
 
 PICTURE_TOOLS = {"send_step_picture", "redo_step_picture"}
@@ -96,51 +95,3 @@ def test_only_the_loaded_providers_build_backends() -> None:
     factory = module_factory({})
     with pytest.raises(PermanentError, match="isn't one of this Themi's AI providers"):
         factory(AdapterConfig("anthropic", api_key=Secret("k")))
-
-
-def test_setup_asks_by_kind_in_order(tmp_path: Path) -> None:
-    asked: list[str] = []
-    told: list[str] = []
-
-    def ask(question: str, default: str | None = None) -> str:
-        asked.append(question)
-        return "family" if "Which template" in question else ""
-
-    def skip(coro):
-        coro.close()
-
-    run_setup(ask, lambda _q: "", told.append, tmp_path, run=skip)
-    steps = [q for q in asked if q.startswith(("Leave", "Which other", "Add any"))]
-    assert [s.split(" (")[0] for s in steps] == [
-        "Leave out any channels",  # CR20b: telegram and web_chat are channel modules
-        "Which other channels",
-        "Leave out any AI providers",
-        "Which other AI providers",
-        "Leave out any capabilities",
-        "Which other capabilities",
-        "Leave any out",
-        "Add any",
-    ]
-    headings = [t.split(".")[0] for t in told if " template has: " in t]
-    assert headings == [
-        "How you'll talk to Themi",
-        "AI providers",
-        "What Themi can do with voice notes and pictures, and make",
-        "Services and features",
-    ]
-
-
-def test_leaving_out_every_ai_provider_keeps_gemini(tmp_path: Path) -> None:
-    told: list[str] = []
-
-    def ask(question: str, default: str | None = None) -> str:
-        if "Which template" in question:
-            return "empty"
-        return "gemini" if "Leave out any AI providers" in question else ""
-
-    def skip(coro):
-        coro.close()
-
-    run_setup(ask, lambda _q: "", told.append, tmp_path, run=skip)
-    assert "A Themi needs at least one AI provider, so it keeps gemini." in told
-    assert "gemini" not in (tmp_path / "themi.toml").read_text()  # the template's, kept

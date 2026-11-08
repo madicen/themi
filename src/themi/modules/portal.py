@@ -177,6 +177,43 @@ class Portal:
         self.save(planner, member, f"changed {cls.title or name}: {', '.join(said)}")
         return Saved(True)
 
+    def move(self, name: str, field: str, member: Member) -> str:
+        """SP8a: copy a setting from the environment (.env) into Themi: a secret into the
+        module secrets, a plain value into themi.toml, for the module and those sharing its
+        settings. The environment still wins until its line goes, so nothing changes now.
+        Returns the variable, for the person to delete."""
+        from themi.config import write_config, write_path
+
+        cls = self.known()[name]
+        spec = (
+            next((f for f in fields(cls.settings) if f.name == field), None)
+            if cls.settings
+            else None
+        )
+        if spec is None:
+            raise PortalError(f"{cls.title or name} has no setting called {field}.")
+        value = self.services.environment.get(spec.env, "").strip()
+        if not value:
+            raise PortalError(f"{spec.env} isn't set on the server, so there's nothing to copy.")
+        if spec.secret:
+            for module in self.siblings(name):
+                self.secrets.set(module, field, value, member.id)
+        else:
+            config = self.config()
+            sections = {n: dict(v) for n, v in config.sections.items()}
+            typed: Any = (
+                value.lower() in ("1", "true", "yes", "on") if spec.kind == "bool" else value
+            )
+            for module in self.siblings(name):
+                sections.setdefault(module, {})[field] = typed
+            from dataclasses import replace
+
+            config = replace(config, sections=sections)
+            write_config(config, write_path(config, self.services.environment or None))
+            self.services.instance_config = config
+        self.audit.note(member.id, f"copied {spec.env} from the server into Themi")
+        return spec.env
+
     def stored_with_draft(self, name: str, draft: Draft) -> dict[str, Secret]:
         """The module's stored secrets with the draft's changes over them."""
         stored = dict(self.secrets.all().get(name, {}))

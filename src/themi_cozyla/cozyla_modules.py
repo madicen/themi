@@ -60,7 +60,7 @@ class CozylaTodosModule(Module):
 
         try:
             await check(self.client)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The Cozyla wall didn't answer: {exc}"
         return None
 
@@ -121,7 +121,7 @@ class CozylaChoresModule(Module):
 
         try:
             await check(self.client)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The Cozyla wall didn't answer: {exc}"
         return None
 

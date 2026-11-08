@@ -7,7 +7,12 @@
     <label for="{{ id }}">{{ f.spec.label }}</label>
     {% if f.source == "environment" %}
       <input id="{{ id }}" disabled value="{{ '' if f.spec.secret else f.value }}" placeholder="Set on the server">
-      <span class="muted">Set on the server, so it can't be changed here.</span>
+      {% if f.copied %}
+      <span class="muted">Set on the server, and copied into Themi: delete <code>{{ f.spec.env }}</code> from .env on the server and restart, and Themi uses its copy.</span>
+      {% else %}
+      <span class="muted">Set on the server (<code>{{ f.spec.env }}</code> in .env), so it can't be changed here.
+        <button form="move-{{ f.spec.name }}" class="link">Move it to Themi</button></span>
+      {% endif %}
     {% elif f.spec.secret %}
       <input id="{{ id }}" name="{{ f.spec.name }}" type="password" autocomplete="off"
         placeholder="{{ 'Saved, ends in …' ~ f.ending if f.source == 'stored' else f.spec.placeholder }}">
@@ -67,6 +72,11 @@
       {% endif %}
       <button class="primary">Save</button>
     </form>
+    {% for f in fields + advanced %}{% if f.source == "environment" and not f.copied %}
+    <form id="move-{{ f.spec.name }}" method="post" action="/modules/{{ card.name }}/move/{{ f.spec.name }}" hidden>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+    </form>
+    {% endif %}{% endfor %}
     <form method="post" action="/modules/{{ card.name }}/test" class="module-action">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button>Test</button>

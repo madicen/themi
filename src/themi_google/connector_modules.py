@@ -107,7 +107,7 @@ class TravelModule(Module):
     async def check(self) -> str | None:
         try:
             found = await self.client.geocode("Pike Place Market, Seattle")
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The map service didn't answer: {exc}"
         return None if found is not None else "The map service found nothing for a test address."
 
