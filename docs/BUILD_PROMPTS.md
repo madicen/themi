@@ -153,7 +153,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
 | 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [x] |
-| 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
+| 36 | Research: CatGenie, automated calls, SMS | 7 Research | split |
+| 36a | Research: the CatGenie, voice-call and SMS write-ups | 7 Research | [x] 2026-11-08 |
+| 36b | CatGenie fallback: schedule estimates and a check-in task | 7 Research | waiting (Michael's call) |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
@@ -7354,7 +7356,8 @@ Notes (2026-10-31):
 ## Milestone 7: Research
 
 ### 36 · Research: CatGenie, automated calls, SMS
-Status: [ ]
+Status: split 2026-11-08 into 36a (the research write-ups, done) and 36b (the CatGenie
+fallback, waiting).
 Depends on: 29
 Read first: "Integrations" → CatGenie, vendor phone calls; "Decisions so far" (chat channel).
 
@@ -7373,6 +7376,42 @@ Do:
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.
+
+### 36a · Research: the CatGenie, voice-call and SMS write-ups
+Status: [x] 2026-11-08
+Depends on: 29
+
+Notes:
+- `docs/research/catgenie.md`, `voice-calls.md`, `sms.md`, each with sources opened on
+  2026-11-08 and what couldn't be confirmed marked as such.
+- CatGenie: viable, built as CG1a/CG1b. The community client's repository was renamed to
+  `kclif9/catgenie-api`; the credit in `connectors/catgenie/client.py` and the README now
+  point there. Two Home Assistant integrations now build on it.
+- Voice calls: every provider is under $5 a month at ~20 minutes. Proposed: Twilio
+  ConversationRelay ($0.07/min + $0.014 outbound, $1.15/month number) with our own model
+  through the router, so the router, trust tiers and outbox still hold; Retell or Vapi if
+  quality falls short. Each call Tier 1, the AI said at once, no recording by default
+  (California Penal Code 632 needs every party's consent).
+- SMS: Twilio $0.0083 a segment plus carrier fees; about $11-12 a month at 300 texts.
+  Proposed: SMS only as a fallback for urgent messages Telegram didn't deliver, from a
+  verified toll-free number (sole proprietors exempt from the new business-number rule),
+  10DLC sole-proprietor registration ($4-4.50 brand, $15 vetting, $2/month) if refused.
+- Proposed follow-ups, not added as prompts until Michael wants them: V1 a call placed by
+  Themi (ConversationRelay, Tier 1 per call) after V2 a five-call trial; S0 Michael sets up
+  Twilio and submits verification, then S1 the SMS fallback through the outbox; CG1c the
+  CatGenie's error-code tables once captures arrive.
+
+### 36b · CatGenie fallback: schedule estimates and a check-in task
+Status: waiting (Michael's call, 2026-11-08)
+Depends on: 36a, CG1b
+
+36 asked for a fallback for when there's no way to read the box: cleaning-schedule
+estimates plus a quick check-in task. CG1a/CG1b now read the box directly, so the fallback
+only matters if the unofficial client breaks. Decide first (Michael): build it now, build it
+only if CatGenie breaks, or drop it. If built: while the CatGenie module is off or its
+sign-in has failed for a day, estimate cleans from the lifetime cycle count's usual pace
+and offer a weekly "quick look at the litter box" check-in (solution, granules, any error
+light), as a household chore. `docs/research/catgenie.md` has the proposal.
 
 ### R2 · Research: Google Home
 Status: [x] 2026-10-30
