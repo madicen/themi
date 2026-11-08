@@ -321,6 +321,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [x] 2026-11-08 |
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
+| CR21d | Round two: drop the columns the modules copied out | Core refactor | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -15301,4 +15302,32 @@ Notes (2026-11-08):
   test_prompt_parts, test_module_checks, and the path rewrite across the Cozyla tests.
   New: tests/scenarios/test_cozyla_pack.py, plus a pack-check case. Golden identical.
 - Follow-up: CR10b3 (a distribution per pack) would make this a separate install.
+
+### CR21d · Round two: drop the columns the modules copied out
+Status: [x] 2026-11-08
+Depends on: CR21c
+- Each module drops the old core columns its own `0001` copied, in a `0002` in its own
+  track, so the drop always comes after the copy (core migrations run before a module's,
+  so a core migration could drop them first on a Themi that jumps several releases):
+  `chore_chart` drops `tasks.on_chart`; `cozyla_todos` drops `lists.cozyla_list_id`,
+  `lists.wall_name`, `list_items.cozyla_todo_id`, `wall_title` and `wall_done`;
+  `cozyla_chores` drops `routine_ticks.on_wall_at`.
+- Without the module, its columns stay (empty, or meaningless there).
+- `members.telegram_user_id` stays: it's UNIQUE, so dropping it means rebuilding
+  `members` with foreign keys off, which the migration runner can't do yet.
+Tests: an old database upgraded straight to the newest keeps every value in the new
+tables and loses the old columns; a module not loaded leaves its columns.
+
+Notes (2026-11-08):
+- Three `0002` migrations: `chore_chart_schema/0002_drop_tasks_on_chart.sql`,
+  `cozyla_todos_schema/0002_drop_list_columns.sql`,
+  `cozyla_chores_schema/0002_drop_on_wall_at.sql`. No index, view or trigger used them.
+- A module that drops a core table's column is unusual. It's the owner of that data,
+  and its own track is the one place the drop is sure to come after the copy.
+- Follow-up, not scheduled: `members.telegram_user_id` (empty, unread). Dropping it needs
+  a runner that can rebuild a table outside a transaction with foreign keys off, then
+  check them; try it on `make dev-prod`'s copy first.
+- Test changed for moved wiring: test_cozyla_todos replays old migration 0043, whose SQL
+  reads `tasks.on_chart`; it now reads chart_tasks in its place. New:
+  tests/unit/test_dropped_columns.py. Golden identical.
 

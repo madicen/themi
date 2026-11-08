@@ -264,7 +264,9 @@ async def test_to_dos_sent_at_midnight_are_moved_to_the_end_of_the_day(
     fake_cozyla.edit(todo["todoId"], dueDateTime=int(midnight.timestamp() * 1000))
     await sync(scenario)  # a due time change alone on the wall isn't Themi's to undo...
     (fix,) = [m for m in discover() if m.name == "cozyla_due_end_of_day"]
-    for statement in split_statements(fix.sql):  # ...but the migration marks them again
+    # CR21d: today's schema keeps what's on the chart in chart_tasks, not tasks.on_chart
+    sql = fix.sql.replace("on_chart = 0", "id NOT IN (SELECT task_id FROM chart_tasks)")
+    for statement in split_statements(sql):  # ...but the migration marks them again
         scenario.app.db.execute(statement)
     await sync(scenario)
     due = datetime.fromtimestamp(
