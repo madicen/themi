@@ -315,7 +315,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [x] 2026-11-08 |
 | CR20a | Round two: a channel seam, and channel identities for members | Core refactor | split |
 | CR20a1 | Round two: the Channel protocol | Core refactor | [x] 2026-11-08 |
-| CR20a2 | Round two: channel identities for members | Core refactor | [~] |
+| CR20a2 | Round two: channel identities for members | Core refactor | [x] 2026-11-08 |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
 | CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [ ] |
@@ -15142,13 +15142,28 @@ Notes (2026-11-08):
   channel carries a message in and the reply out). Golden files identical.
 
 ### CR20a2 · Round two: channel identities for members
-Status: [~]
+Status: [x] 2026-11-08
 Depends on: CR20a1
 - `member_identities` (member, channel, external id) in place of `members.telegram_user_id`,
   with a migration that copies them, and the store's lookups by channel. `Member` keeps a
   `telegram_user_id` read from it, so the code that reads it doesn't change yet.
 Tests: the migration copies; lookups by channel; pairing writes an identity; golden files
 identical.
+
+Notes (2026-11-08):
+- Migration 0150: `member_identities (member_id, channel, external_id)`, one per member
+  per channel and one member per identity, copied from `members.telegram_user_id`.
+- Deviation: the old column stays, emptied and unread. SQLite can't drop a UNIQUE column
+  without rebuilding `members`, and every table cascades from it.
+- The store reads a member with their Telegram id from the identities. New:
+  `member_by_identity`, `identity`, `identities`, `set_identity`. Pairing writes an
+  identity; `member_by_telegram` is a lookup by channel.
+- `Member.telegram_user_id` is still how code asks "can Themi reach them". CR20b, with a
+  second channel, is where that becomes "on any channel".
+- Tests changed for moved wiring: test_dev_prod_copy (ids are in member_identities, and
+  `make dev-prod`'s copy pairs them there), and the old-schema helper in
+  test_member_preferences (raw member rows: today's store needs the new table). New:
+  tests/unit/test_member_identities.py. Golden files identical.
 
 ### CR20b · Round two: Telegram as a channel module, and a website chat channel
 Status: [ ]

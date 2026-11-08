@@ -130,12 +130,20 @@ def _hash_code(code: str) -> str:
     return hashlib.sha256(normalised.encode()).hexdigest()
 
 
+# CR20a2: a member with their Telegram id, which is kept in member_identities.
+MEMBERS = (
+    "SELECT m.*, (SELECT i.external_id FROM member_identities i WHERE i.member_id = m.id "
+    "AND i.channel = 'telegram') AS telegram_id FROM members m"
+)
+TELEGRAM = "telegram"
+
+
 def _member_from_row(row: dict[str, Any]) -> Member:
     return Member(
         id=row["id"],
         name=row["name"],
         role=Role(row["role"]),
-        telegram_user_id=row["telegram_user_id"],
+        telegram_user_id=int(row["telegram_id"]) if row["telegram_id"] is not None else None,
         quiet_start=parse_hhmm(row["quiet_start"]),
         quiet_end=parse_hhmm(row["quiet_end"]),
         daily_limit=row["daily_limit"],
@@ -367,24 +375,56 @@ class AccountStore:
     # ----- members ------------------------------------------------------------
 
     def list_members(self) -> list[Member]:
-        return [_member_from_row(r) for r in self.db.query("SELECT * FROM members ORDER BY id")]
+        return [_member_from_row(r) for r in self.db.query(f"{MEMBERS} ORDER BY m.id")]
 
     def get_member(self, member_id: int) -> Member:
-        row = self.db.one("SELECT * FROM members WHERE id = ?", (member_id,))
+        row = self.db.one(f"{MEMBERS} WHERE m.id = ?", (member_id,))
         if row is None:
             raise NotFound(f"no member with id {member_id}")
         return _member_from_row(row)
 
     def member_by_name(self, name: str) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE name = ?", (name.strip(),))
+        row = self.db.one(f"{MEMBERS} WHERE m.name = ?", (name.strip(),))
         return _member_from_row(row) if row else None
 
     def member_by_telegram(self, telegram_user_id: int) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE telegram_user_id = ?", (telegram_user_id,))
-        return _member_from_row(row) if row else None
+        return self.member_by_identity(TELEGRAM, str(telegram_user_id))
+
+    # ----- channel identities (CR20a2) ---------------------------------------------------
+
+    def member_by_identity(self, channel: str, external_id: str) -> Member | None:
+        """Who this is on that channel ("telegram", their user id), if anyone."""
+        row = self.db.one(
+            "SELECT member_id FROM member_identities WHERE channel = ? AND external_id = ?",
+            (channel, external_id),
+        )
+        return self.get_member(row["member_id"]) if row is not None else None
+
+    def identity(self, member_id: int, channel: str) -> str | None:
+        """The member's id on that channel, if they're on it."""
+        return self.db.scalar(
+            "SELECT external_id FROM member_identities WHERE member_id = ? AND channel = ?",
+            (member_id, channel),
+        )
+
+    def identities(self, member_id: int) -> dict[str, str]:
+        rows = self.db.query(
+            "SELECT channel, external_id FROM member_identities WHERE member_id = ?",
+            (member_id,),
+        )
+        return {r["channel"]: r["external_id"] for r in rows}
+
+    def set_identity(self, member_id: int, channel: str, external_id: str) -> None:
+        """Pairs the member with an account on a channel (their old one there goes)."""
+        self.db.execute(
+            "INSERT INTO member_identities (member_id, channel, external_id, created_at) "
+            "VALUES (?, ?, ?, ?) ON CONFLICT (member_id, channel) DO UPDATE SET "
+            "external_id = excluded.external_id, created_at = excluded.created_at",
+            (member_id, channel, external_id, _iso(clock.now())),
+        )
 
     def member_by_email(self, email: str) -> Member | None:
-        row = self.db.one("SELECT * FROM members WHERE lower(email) = ?", (email.strip().lower(),))
+        row = self.db.one(f"{MEMBERS} WHERE lower(m.email) = ?", (email.strip().lower(),))
         return _member_from_row(row) if row else None
 
     def set_email(self, actor: Actor, member_id: int, email: str | None) -> Member:
@@ -589,9 +629,9 @@ class AccountStore:
             self.db.execute(
                 "UPDATE invites SET used_at = ? WHERE code_hash = ?", (_iso(now), row["code_hash"])
             )
+            self.set_identity(row["member_id"], TELEGRAM, str(telegram_user_id))  # CR20a2
             self.db.execute(
-                "UPDATE members SET telegram_user_id = ?, updated_at = ? WHERE id = ?",
-                (telegram_user_id, _iso(now), row["member_id"]),
+                "UPDATE members SET updated_at = ? WHERE id = ?", (_iso(now), row["member_id"])
             )
         return self.get_member(row["member_id"])
 

@@ -73,8 +73,11 @@ def test_a_value_out_of_range_says_so_in_the_old_words(
 def old_family(store: AccountStore) -> SeededFamily:
     """A family as an older schema holds it: only what create_family and create_member
     write (no module settings yet, their tables come later)."""
+    from types import SimpleNamespace
+    from typing import cast
+
     from themi import clock
-    from themi.accounts import SYSTEM, Role, Workspace
+    from themi.accounts import Member, Role, Workspace
 
     now = clock.now().isoformat()
     store.db.execute(  # as the old schema has it: no template column yet (CR9)
@@ -83,8 +86,14 @@ def old_family(store: AccountStore) -> SeededFamily:
         (now, now),
     )
     family = Workspace("Household", "America/Los_Angeles", clock.now())
-    erin = store.create_member(SYSTEM, "Erin", Role.ADMIN)
-    husband = store.create_member(SYSTEM, "Husband", Role.MEMBER)
+    # CR20a2: raw rows too; today's store reads member_identities, which comes later
+    for member_id, name, role in ((1, "Erin", Role.ADMIN), (2, "Husband", Role.MEMBER)):
+        store.db.execute(
+            "INSERT INTO members (id, name, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+            (member_id, name, role.value, now, now),
+        )
+    erin = cast(Member, SimpleNamespace(id=1, name="Erin"))  # the tests read their ids
+    husband = cast(Member, SimpleNamespace(id=2, name="Husband"))
     return SeededFamily(store, family, erin, husband)
 
 
