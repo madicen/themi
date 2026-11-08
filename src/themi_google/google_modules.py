@@ -18,7 +18,7 @@ from themi.core import groups
 from themi.core.approvals import ApprovalsUI
 from themi.core.calendar_view import CalendarPreferences
 from themi.energy import EnergyModel
-from themi.modules import Module, ModuleContext, ModuleSetup, as_job
+from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
 from themi.modules.prompt import PromptFragment
 from themi.modules.web import WaitingLink
 from themi.standard.tasks import TaskBoard
@@ -56,8 +56,14 @@ class GoogleModule(Module):
     """Linking Google accounts, for the Google modules that read and write through them."""
 
     name = "google"
+    title = "Google accounts"
+    summary = "Lets each person link their Google account, for Gmail, Calendar and the rest."
+    cost = "Free"
     kind = "connector"
     website = "Each person links their Google account on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "a Google account", "/accounts", "each person", "SELECT 1 FROM linked_accounts LIMIT 1"
+    )
     settings = GoogleSettings
 
     def __init__(self, config: GoogleConfig) -> None:
@@ -90,6 +96,8 @@ class GmailModule(Module):
     modules of its own that require this one."""
 
     name = "gmail"
+    title = "Gmail"
+    summary = "Reads each linked Gmail account every minute, for the email features."
     kind = "connector"
     google_scopes = (ScopeNeed("Gmail", (GMAIL_SCOPE,)),)
     tool_groups = (google_groups.EMAIL,)
@@ -107,6 +115,8 @@ class EmailTriageModule(Module):
     """New mail sorted: what needs them now, what can wait, what's noise (CR18b)."""
 
     name = "email_triage"
+    title = "Email triage"
+    summary = "Sorts new mail into what needs someone now, what can wait, and what's noise."
     requires = ("gmail",)
 
     def install(self, ctx: ModuleContext) -> None:
@@ -119,6 +129,8 @@ class EmailForwardingModule(Module):
     """F31d: forwarding an email to someone, from chat (CR18b)."""
 
     name = "email_forwarding"
+    title = "Forwarding email"
+    summary = "Forwards an email to someone, when asked in chat."
     requires = ("gmail",)
 
     def install(self, ctx: ModuleContext) -> None:
@@ -129,6 +141,8 @@ class UrgentSendersModule(Module):
     """Senders who always count as time-sensitive, and suggestions of new ones (CR18b)."""
 
     name = "urgent_senders"
+    title = "Urgent senders"
+    summary = "Senders whose mail always counts as time-sensitive."
     requires = ("gmail",)
 
     def install(self, ctx: ModuleContext) -> None:
@@ -142,6 +156,8 @@ class ExpectedEmailsModule(Module):
     through triage."""
 
     name = "expected_emails"
+    title = "Expected emails"
+    summary = "Watches for mail that should arrive, like a bill, and says when it doesn't."
     requires = ("gmail", "email_triage")
 
     def install(self, ctx: ModuleContext) -> None:
@@ -155,6 +171,8 @@ class NoiseDigestModule(Module):
     finds them."""
 
     name = "noise_digest"
+    title = "Noise digest"
+    summary = "Gathers emails that look like noise and offers to archive them together."
     preferences = NoisePreferences  # kept under "gmail", where they always were
     requires = ("gmail", "email_triage")
 
@@ -206,6 +224,8 @@ class CalendarModule(Module):
     modules of their own that require this one."""
 
     name = "calendar"
+    title = "Google Calendar"
+    summary = "Each person's calendars, events made from chat, and the family calendar."
     kind = "connector"
     google_scopes = (ScopeNeed("the calendar", CALENDAR_SCOPES),)
     tool_groups = (groups.CALENDAR,)
@@ -235,6 +255,8 @@ class CalendarBusyModule(Module):
     messages and count against the day's energy, and the agent sees what's on."""
 
     name = "calendar_busy"
+    title = "Busy times"
+    summary = "Reads calendars every 15 minutes so Themi doesn't nudge people while they're busy."
     requires = ("calendar",)
 
     def install(self, ctx: ModuleContext) -> None:
@@ -251,6 +273,8 @@ class CalendarTwinsModule(Module):
     """F34e: the same event on two calendars, asked about once (CR18b)."""
 
     name = "calendar_twins"
+    title = "Duplicate events"
+    summary = "Notices the same event on two calendars and asks about it once."
     requires = ("calendar", "calendar_busy")
 
     def install(self, ctx: ModuleContext) -> None:
@@ -261,6 +285,8 @@ class CalendarCopiesModule(Module):
     """F34f: a calendar shown on the family calendar, as much of it as they choose (CR18b)."""
 
     name = "calendar_copies"
+    title = "Calendar copies"
+    summary = "Shows a calendar on the family calendar, with as much detail as its owner chooses."
     requires = ("calendar", "calendar_busy")
 
     def install(self, ctx: ModuleContext) -> None:
@@ -271,6 +297,8 @@ class TaskBlocksModule(Module):
     """Time held on the calendar for a task (CR18b)."""
 
     name = "task_blocks"
+    title = "Time for tasks"
+    summary = "Holds time on the calendar for a task."
     requires = ("calendar",)
     optional = ("calendar_busy",)  # windows outside busy times, when it's there
 

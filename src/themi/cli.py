@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -17,6 +19,8 @@ if TYPE_CHECKING:
     from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from themi.settings import Settings
+
+log = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -33,11 +37,6 @@ def build_parser() -> argparse.ArgumentParser:
     invite.add_argument("name")
     invite.add_argument("--admin", action="store_true", help="make the new member an admin")
     commands.add_parser("run", help="run Themi: Telegram bot, scheduler and website")
-    setup = commands.add_parser(
-        "setup", help="make themi.toml and .env for a new Themi: template, modules, settings"
-    )
-    setup.add_argument("--dir", default=".", help="where to write them (default: here)")
-    setup.add_argument("--check", action="store_true", help="try an existing setup's modules again")
     config = commands.add_parser("config", help="what this Themi is made of (themi.toml)")
     config_commands = config.add_subparsers(dest="config_command", required=True)
     config_commands.add_parser(
@@ -155,21 +154,37 @@ def build_runtime(
 
     modules = None
     template = None
+    report = None
     options: dict[str, Any] = {}
-    from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.config import config_path, load_config, load_template, resolve_start
+    from themi.modules.store import ModuleSecrets
 
+    # SP1: a module's problem leaves it off and Themi starts; Telegram with no token is
+    # one of those, said on the dashboard rather than stopping everything.
+    unavailable = {}
+    if settings.telegram_enabled and settings.telegram_bot_token is None:
+        unavailable["telegram"] = "it needs a bot token (TELEGRAM_BOT_TOKEN, from @BotFather)"
+    db = open_database(settings.db_path)
+    stored = ModuleSecrets(db, settings.cipher()).all()  # SP2: set on the Modules page
     if connectors is not None and config is None:  # `make dev`: the family, on the fakes
         options = dict(connectors)
     elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
         from themi.app import family_modules
 
         on_fakes = {m.name: m for m in family_modules(**connectors)}
-        modules = resolve_modules(config, settings, given=on_fakes)
+        modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
         template = load_template(config.template)
     else:  # CR5a: the modules themi.toml (or the family template) names
-        config = config or load_config(config_path())
-        modules = resolve_modules(config, settings)
+        config = config or load_config(config_path(settings.environment or None))
+        modules, report = resolve_start(config, settings, unavailable=unavailable, stored=stored)
         template = load_template(config.template)
+    if config is not None and not settings.public_url and config.core.get("public_url"):
+        # SP2: the website's address, as set on the Modules page (the environment wins)
+        settings = settings.model_copy(
+            update={"public_url": str(config.core["public_url"]).rstrip("/")}
+        )
+    for line in report.warnings() if report is not None else ():
+        log.warning("%s", line)
     # CR20b: Telegram's channel, when the setup has the telegram module (the family's
     # always does). The runner builds it, since only it knows the simulator's address.
     telegram = modules is None or any(m.name == "telegram" for m in modules)
@@ -179,7 +194,7 @@ def build_runtime(
     token = settings.telegram_bot_token or Secret("0:telegram-disabled")
     api = settings.telegram_api_url  # set only for the simulator
     app = build_app(
-        open_database(settings.db_path),
+        db,
         settings.cipher(),
         (
             lambda store: TelegramChannel.from_token(
@@ -198,8 +213,23 @@ def build_runtime(
         control_dir=settings.control_dir,
         modules=modules,
         template=template,
+        report=report,
         **options,
     )
+    from themi.accounts.claim import CODE_FILE, Claim
+
+    claim = Claim(app.store)
+    if claim.needed():  # SP7a: a new Themi, claimed on its website
+        code = claim.make(settings.db_path.parent)
+        log.warning(
+            "Nobody has set up this Themi yet. Open its website and enter the claim code "
+            "%s (it's also in %s).",
+            code,
+            settings.db_path.parent / CODE_FILE,
+        )
+    app.services.instance_config = config  # SP4: for the Modules page
+    app.services.environment = dict(settings.environment)
+    app.services.settings = settings
     return Runtime(
         app,
         host=settings.http_host,
@@ -212,24 +242,27 @@ def build_runtime(
 
 def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
     """`themi config show`: where the config came from, the template, and each module."""
-    from themi.config import config_path, load_config, load_template, resolve_modules
+    from themi.config import config_path, load_config, load_template, resolve_start
     from themi.modules.settings import plain_values, read_settings
 
     path = config_path(env)
     config = load_config(path)
-    modules = resolve_modules(config, settings)
+    modules, report = resolve_start(config, settings)  # SP1: what starts, and what doesn't
     template = load_template(config.template)
-    loaded = {m.name for m in modules}
     lines = [
         f"Config: {path if path else 'none (the family template, from the environment)'}",
         f"Template: {template.name}",
         f"Modules ({len(modules)}):",
         *(f"  {m.name}" for m in modules),
     ]
-    left_out = [n for n in (*template.modules, *config.added) if n not in loaded]
+    left_out = report.lines()
     if left_out:
-        lines.append("Left out (not set up, or removed):")
-        lines += [f"  {n}" for n in dict.fromkeys(left_out)]
+        lines.append("Left out:")
+        lines += left_out
+    warnings = report.warnings()
+    if warnings:
+        lines.append("To look at:")
+        lines += [f"  {w}" for w in warnings]
     for module in modules:  # CR5b: each module's settings, secrets left out
         model = type(module).settings
         if model is None:
@@ -248,10 +281,13 @@ def _run() -> None:
     import asyncio
 
     from themi.logs import configure_logging
-    from themi.settings import Settings
+    from themi.settings import Settings, ensure_secret_key, read_dotenv
 
+    made = ensure_secret_key({**read_dotenv(Path(".env")), **os.environ})  # SP2
     settings = Settings.load()
     configure_logging(settings.log_level)
+    if made is not None:
+        log.warning("Made a new secret key at %s. Save a copy somewhere safe.", made)
     runtime = build_runtime(settings)
 
     async def main() -> None:
@@ -259,6 +295,11 @@ def _run() -> None:
         await runtime.run()
 
     asyncio.run(main())
+    if runtime.restart_requested:  # SP6: asked for on the Modules page
+        from themi.runtime import reexec
+
+        log.info("Starting again, with the Modules page's changes")
+        reexec()
 
 
 def _login_link(name: str) -> str:
@@ -556,21 +597,6 @@ def _catgenie_capture(out: str) -> int:
     return 0
 
 
-def _setup(out_dir: Path, check: bool) -> int:
-    """CR11: `themi setup` and `themi setup --check`."""
-    import getpass
-
-    from themi.setup_wizard import SetupCancelled, check_setup, run_setup
-
-    if check:
-        return 1 if check_setup(out_dir, print) else 0
-    try:
-        run_setup(_ask, lambda q: getpass.getpass(f"{q} (hidden): "), print, out_dir)
-    except SetupCancelled:
-        return 1
-    return 0
-
-
 def _ask(question: str, default: str | None) -> str:
     suffix = f" [{default}]" if default else ""
     return input(f"{question}{suffix}: ")
@@ -596,8 +622,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(pairing_instructions(member, code, _bot_username()))
         elif args.command == "run":
             _run()
-        elif args.command == "setup":
-            return _setup(Path(args.dir), args.check)
         elif args.command == "config":
             print(config_report(Settings.load()))
         elif args.command == "login-link":

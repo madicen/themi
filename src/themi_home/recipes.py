@@ -29,7 +29,7 @@ from themi.core import keys
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
 from themi.localtime import to_utc_iso
-from themi.modules import Module, ModuleContext, ModuleSetup
+from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup
 from themi.standard.lists import name_key
 from themi_google.connectors.gdocs import DOC_MIME, DocsClient, DocsError
 from themi_google.connectors.google import (
@@ -756,7 +756,15 @@ class RecipesModule(Module):
     """RC1a: the family cookbook, read from its Google Doc."""
 
     name = "recipes"
+    title = "Family cookbook"
+    summary = "Reads the family's recipes from their Google Doc cookbook."
     website = "Once Google is linked, pick the family cookbook on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the family cookbook, picked from a linked Google account",
+        "/accounts",
+        "anyone",
+        "SELECT 1 FROM cookbook WHERE doc_id IS NOT NULL",
+    )
     google_scopes = (  # CR18a: only the files picked or made (RC1a)
         ScopeNeed(
             "the cookbook",

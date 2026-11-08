@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ card.title }} · Modules · Themi{% endblock %}
+{% macro badge(c) %}<span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span>{% endmacro %}
+{% macro field_input(f) %}
+  {% set id = "field-" ~ f.spec.name %}
+  <div class="field">
+    <label for="{{ id }}">{{ f.spec.label }}</label>
+    {% if f.source == "environment" %}
+      <input id="{{ id }}" disabled value="{{ '' if f.spec.secret else f.value }}" placeholder="Set on the server">
+      {% if f.copied %}
+      <span class="muted">Set on the server, and copied into Themi: delete <code>{{ f.spec.env }}</code> from .env on the server and restart, and Themi uses its copy.</span>
+      {% else %}
+      <span class="muted">Set on the server (<code>{{ f.spec.env }}</code> in .env), so it can't be changed here.
+        <button form="move-{{ f.spec.name }}" class="link">Move it to Themi</button></span>
+      {% endif %}
+    {% elif f.spec.secret %}
+      <input id="{{ id }}" name="{{ f.spec.name }}" type="password" autocomplete="off"
+        placeholder="{{ 'Saved, ends in …' ~ f.ending if f.source == 'stored' else f.spec.placeholder }}">
+      {% if f.source == "stored" %}<span class="muted">Saved, ends in …{{ f.ending }}. Type a new one to replace it.</span>
+      <label class="check"><input type="checkbox" name="clear_{{ f.spec.name }}" value="1"> Clear it</label>{% endif %}
+    {% elif f.spec.kind == "bool" %}
+      <label class="check"><input id="{{ id }}" type="checkbox" name="{{ f.spec.name }}" value="on"{% if f.value %} checked{% endif %}> Yes</label>
+    {% elif f.spec.kind == "choice" %}
+      <select id="{{ id }}" name="{{ f.spec.name }}">
+        <option value="">(not set)</option>
+        {% for choice in f.spec.choices %}<option{% if f.value == choice %} selected{% endif %}>{{ choice }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input id="{{ id }}" name="{{ f.spec.name }}" type="{{ 'number' if f.spec.kind == 'number' else ('url' if f.spec.kind == 'url' else 'text') }}"
+        value="{{ '' if f.value is none else f.value }}" placeholder="{{ f.spec.placeholder }}">
+    {% endif %}
+    {% if f.waiting %}<span class="chip info">Waiting for restart</span>{% endif %}
+    {% if f.spec.hint %}<span class="muted">{{ f.spec.hint }}</span>{% endif %}
+  </div>
+{% endmacro %}
+{% block content %}
+<p><a href="/modules">All modules</a></p>
+<h1>{{ card.title }} {{ badge(card) }}</h1>
+<p>{{ card.summary }}</p>
+{% if cls.cost %}<p class="muted">{{ cls.cost }}</p>{% endif %}
+{% if card.reason and card.badge != "on" %}<p class="alert">{{ card.reason }}</p>{% endif %}
+
+<div class="module-detail">
+  <section class="module-settings">
+    <form method="post" action="/modules/{{ card.name }}/switch" class="module-action">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if in_list %}
+      <input type="hidden" name="to" value="off">
+      <button>Turn off</button>
+      {% else %}
+      <input type="hidden" name="to" value="on">
+      <button class="primary">Turn on</button>
+      {% endif %}
+    </form>
+
+    {% if problems %}
+    <section class="alerts" role="alert">
+      {% for problem in problems %}<p class="alert">{{ problem }}</p>{% endfor %}
+    </section>
+    {% endif %}
+
+    {% if fields or advanced %}
+    <h2>Settings</h2>
+    <form method="post" action="/modules/{{ card.name }}/settings" class="settings-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for f in fields %}{{ field_input(f) }}{% endfor %}
+      {% if advanced %}
+      <details>
+        <summary>Advanced settings</summary>
+        {% for f in advanced %}{{ field_input(f) }}{% endfor %}
+      </details>
+      {% endif %}
+      <button class="primary">Save</button>
+    </form>
+    {% for f in fields + advanced %}{% if f.source == "environment" and not f.copied %}
+    <form id="move-{{ f.spec.name }}" method="post" action="/modules/{{ card.name }}/move/{{ f.spec.name }}" hidden>
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+    </form>
+    {% endif %}{% endfor %}
+    <form method="post" action="/modules/{{ card.name }}/test" class="module-action">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Test</button>
+      <span class="muted">Tries the settings as saved here, against the service.</span>
+    </form>
+    {% else %}
+    <p class="muted">Nothing to fill in here.</p>
+    {% endif %}
+
+    {% if need %}
+    <h2>After it's on</h2>
+    <p>{{ need.who | capitalize }} links {{ need.what }} on <a href="{{ need.where }}">{{ need.where.strip("/") | capitalize }}</a>.
+      {% if linked is true %}<span class="chip good">Linked</span>{% elif linked is false %}<span class="chip warn">Not linked yet</span>{% endif %}</p>
+    {% elif website %}
+    <h2>After it's on</h2>
+    <p>{{ website }}</p>
+    {% endif %}
+
+    <h2>Works with</h2>
+    {% if requires %}
+    <h3>It needs</h3>
+    <ul>{% for c in requires %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if required_by %}
+    <h3>These need it</h3>
+    <ul>{% for c in required_by %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if optional %}
+    <h3>It does more with</h3>
+    <ul>{% for c in optional %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if improves %}
+    <h3>It makes these better</h3>
+    <ul>{% for c in improves %}<li><a href="/modules/{{ c.name }}">{{ c.title }}</a> {{ badge(c) }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% if not (requires or required_by or optional or improves) %}<p class="muted">It works on its own.</p>{% endif %}
+
+    {% if groups %}
+    <h2>What Themi can do with it</h2>
+    <ul>{% for g in groups %}<li>{{ g | capitalize }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  {% if guide %}
+  <section class="module-guide card">
+    {{ guide }}
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

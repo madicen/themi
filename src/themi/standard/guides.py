@@ -203,6 +203,8 @@ class GuidesModule(Module):
     """F29ha: guides kept for later."""
 
     name = "guides"
+    title = "Guides"
+    summary = "Keeps your own how-tos and cooking charts for later."
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry

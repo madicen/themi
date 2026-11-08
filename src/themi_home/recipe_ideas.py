@@ -209,6 +209,8 @@ class RecipeIdeasModule(Module):
     """RC7: cookbook recipes in meal ideas."""
 
     name = "recipe_ideas"
+    title = "Cookbook meal ideas"
+    summary = "Brings the family's own recipes into meal ideas."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
 

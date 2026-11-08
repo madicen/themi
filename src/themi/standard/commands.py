@@ -244,6 +244,8 @@ class CommandsModule(Module):
     """Themi's own commands (/help, /pause and the rest)."""
 
     name = "commands"
+    title = "Chat commands"
+    summary = "Themi's own commands, like /help and /pause."
     tool_groups = (SETTINGS,)
 
     def install(self, ctx: ModuleContext) -> None:

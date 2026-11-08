@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Set up Themi{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Welcome to Themi</h1>
+  <p>Nobody has set up this Themi yet. Enter its claim code to become its first admin.</p>
+  <p class="muted">The code is in Themi's log when it starts, and in the <code>claim-code</code>
+  file next to its data. The install command printed it too.</p>
+  {% if problem %}<p class="alert" role="alert">{{ problem }}</p>{% endif %}
+  <form method="post" action="/claim" class="settings-form">
+    <div class="field">
+      <label for="code">Claim code</label>
+      <input id="code" name="code" autocomplete="off" autocapitalize="characters" required placeholder="ABCD-EFGH">
+    </div>
+    <div class="field">
+      <label for="household">The household's name</label>
+      <input id="household" name="household" value="{{ values.household or '' }}" required placeholder="The Smiths">
+    </div>
+    <div class="field">
+      <label for="timezone">Timezone</label>
+      <input id="timezone" name="timezone" list="zones" value="{{ values.timezone }}" required>
+      <datalist id="zones">{% for z in zones %}<option value="{{ z }}">{% endfor %}</datalist>
+    </div>
+    <div class="field">
+      <label for="name">Your first name</label>
+      <input id="name" name="name" value="{{ values.name or '' }}" required>
+    </div>
+    <button class="primary">Set up Themi</button>
+  </form>
+</section>
+{% endblock %}

@@ -273,6 +273,8 @@ class CheckinReviewsModule(Module):
     """Now and then, asking whether a check-in is helping."""
 
     name = "checkin_reviews"
+    title = "Check-in reviews"
+    summary = "Asks now and then whether a regular check-in is still helping."
     tool_groups = (groups.SCHEDULES,)
     preferences = CheckinReviewsPreferences
 

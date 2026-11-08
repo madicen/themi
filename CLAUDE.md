@@ -10,6 +10,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Core refactor (themi-core, modules, templates): Themi Core Refactor Plan,
   https://claude.ai/artifact/GPx1CsQiMWCNadYNxxDmCR. Read it the same way. It is the design
   source for the CR prompts.
+- Setup portal (the Modules page, configuring Themi from its website): Themi Setup Portal
+  Plan, https://claude.ai/artifact/HEKsyoURuTFPJcJGEyn9aJ. Read it the same way. It is the
+  design source for the SP prompts.
 
 ## "Implement the next prompt"
 

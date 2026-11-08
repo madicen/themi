@@ -13,15 +13,17 @@ from themi.accounts.preferences import Preferences
 from themi.modules.settings import ModuleSettings, read_settings
 
 if TYPE_CHECKING:
+    from themi.core.services import Services
     from themi.core.tools import ToolGroup
     from themi.modules.context import ModuleContext
     from themi.settings import Settings
+    from themi.storage.secrets import Secret
 
 
 T = TypeVar("T")
 
 
-# CR19: what a module is, for `themi setup` (asked in this order) and the website.
+# CR19: what a module is, shown by kind (in this order) on the Modules page (SP4).
 # A channel is how people talk to Themi; an AI provider answers; a capability is something
 # Themi can do with what it's sent (voice notes, pictures) or make (pictures); a connector
 # brings an outside service; a feature is everything else.
@@ -42,13 +44,16 @@ class PeriodicTask:
 
 
 @dataclass(frozen=True)
-class SetupStep:
-    """One question the setup wizard (CR11) asks for a module."""
+class AccountNeed:
+    """SP3a: what someone links on the website before the module does anything (a Google
+    account, the dishwasher), where, and who: each person who wants it, or an admin for
+    the household. The Modules page shows it until `Module.accounts_linked` says so."""
 
-    key: str  # the settings field it fills
-    prompt: str  # what the wizard asks, in Themi's plain words
-    secret: bool = False  # goes to .env, typed without echo, never into themi.toml
-    help_url: str = ""  # where to get it (a key page, a console)
+    what: str  # "a Google account"
+    where: str  # "/accounts"
+    who: Literal["each person", "an admin", "anyone"] = "each person"
+    # SP3b: a query that finds a row once it's linked (by anyone), for `accounts_linked`
+    linked_when: str = ""
 
 
 def as_job(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
@@ -73,12 +78,14 @@ class ModuleSetup:
         *,
         module: str = "",
         sections: dict[str, dict[str, object]] | None = None,
+        stored: dict[str, dict[str, Secret]] | None = None,
     ) -> None:
         self.settings = settings
         self.section = section or {}
         self._shared = {} if shared is None else shared
         self.module = module
         self.sections = sections or ({module: self.section} if module else {})
+        self.stored = stored or {}  # SP2: secrets kept on the Modules page, by module
 
     def shared(self, key: str, make: Callable[[], T]) -> T:
         if key not in self._shared:
@@ -93,7 +100,11 @@ class ModuleSetup:
         return self.shared(
             key,
             lambda: read_settings(
-                model, self.settings.environment, self.sections.get(name, {}), name
+                model,
+                self.settings.environment,
+                self.sections.get(name, {}),
+                name,
+                self.stored.get(name),
             ),
         )
 
@@ -104,6 +115,13 @@ class Module:
 
     name: ClassVar[str] = ""
     kind: ClassVar[ModuleKind] = "feature"  # CR19
+    # SP3a: for the Modules page. A plain name ("Email triage"), one sentence on what it
+    # does for the family, what someone links on the website first, and a word on cost
+    # ("Free plan is enough"). Its guide is `setup/<name>.md` in its package (`guide`).
+    title: ClassVar[str] = ""
+    summary: ClassVar[str] = ""
+    needs_accounts: ClassVar[AccountNeed | None] = None
+    cost: ClassVar[str] = ""
     requires: ClassVar[tuple[str, ...]] = ()
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
@@ -111,7 +129,6 @@ class Module:
     household: ClassVar[type[HouseholdSettings] | None] = None  # CR7c: per household
     # CR6: its own migration track: a package of NNNN_name.sql files, or a folder.
     migrations: ClassVar[str | Path | None] = None
-    setup: ClassVar[tuple[SetupStep, ...]] = ()  # CR11
     tool_groups: ClassVar[tuple[ToolGroup, ...]] = ()  # CR8b: the groups its tools are in
     website: ClassVar[str] = ""  # CR11: what's left to do on the website once it's set up
 
@@ -121,9 +138,18 @@ class Module:
         no login). Modules that take nothing override nothing."""
         return cls()
 
+    def accounts_linked(self, services: Services) -> bool | None:
+        """SP3a: whether what `needs_accounts` names is linked (by anyone, for a member's
+        account); None when it can't be told. By default, from its `linked_when` query."""
+        need = type(self).needs_accounts
+        if need is None or not need.linked_when:
+            return None
+        return services.store.db.scalar(need.linked_when) is not None
+
     async def check(self) -> str | None:
         """CR11: try the module's settings against its service, through its own client:
-        None when they work, else what's wrong, in plain words. Most have nothing to try."""
+        None when they work, else what's wrong, in plain words. Most have nothing to try.
+        The Modules page's Test runs it (SP5)."""
         return None
 
     def install(self, ctx: ModuleContext) -> None:

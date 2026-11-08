@@ -11,7 +11,6 @@ from tests.scenarios.harness import Scenario
 from themi.accounts import SYSTEM, AccountStore, Role
 from themi.config import load_config, load_template, resolve_modules
 from themi.settings import Settings
-from themi.setup_wizard import run_setup
 from themi.standard.tasks import TaskBoard
 from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
@@ -125,23 +124,22 @@ async def test_a_working_day(tmp_path: Path, fake_telegram: FakeTelegram) -> Non
         await scenario.stop()
 
 
-def test_the_wizard_sets_up_work(tmp_path: Path) -> None:
-    import tomllib
+def test_the_modules_page_sets_up_work(tmp_path: Path) -> None:
+    """SP8a: what the wizard's work run checked, the Modules page's way: the work template
+    chosen, Google's client id and secret given, and the config it makes."""
+    from themi.config import available_modules, parse_config, write_config
+    from themi.modules.planning import Planner
+    from themi.storage.secrets import Secret, generate_key
 
-    answers = {"Which template": "work", "Google OAuth client id": "id"}
-
-    def ask(question: str, default: str | None = None) -> str:
-        return next((v for k, v in answers.items() if k in question), "")
-
-    def secret(question: str) -> str:
-        return "secret" if "Google OAuth client secret" in question else ""
-
-    def skip(coro):
-        coro.close()
-
-    toml_path, env_path = run_setup(ask, secret, lambda _: None, tmp_path, run=skip)
-    assert tomllib.loads(toml_path.read_text())["template"] == "work"
-    env = dict(line.split("=", 1) for line in env_path.read_text().splitlines())
-    names = [m.name for m in resolve_modules(load_config(toml_path), Settings.from_mapping(env))]
+    planner = Planner(parse_config({}), available_modules(), lambda n: load_template(n).modules)
+    planner.use_template("work")
+    planner.draft.sections["google"] = {"client_id": "id"}
+    toml_path = tmp_path / "themi.toml"
+    write_config(planner.as_config(), toml_path)
+    settings = Settings.from_mapping({"THEMI_SECRET_KEY": generate_key()})
+    stored = {"google": {"client_secret": Secret("secret")}}
+    config = load_config(toml_path)
+    assert config.template == "work"
+    names = [m.name for m in resolve_modules(config, settings, stored=stored)]
     assert {"tasks", "gmail", "calendar", "google_tasks"} <= set(names)
     assert "groceries" not in names and "liaison" not in names

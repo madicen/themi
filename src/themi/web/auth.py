@@ -34,6 +34,7 @@ class Session:
     member: Member
     csrf_token: str
     expires_at: datetime
+    signed_in_at: datetime | None = None  # SP5: when this session began
 
 
 class WebAuth:
@@ -114,7 +115,12 @@ class WebAuth:
             "UPDATE web_sessions SET last_seen_at = ?, expires_at = ? WHERE token_hash = ?",
             (to_utc_iso(now), to_utc_iso(new_expiry), _hash(cookie)),
         )
-        return Session(self.store.get_member(row["member_id"]), row["csrf_token"], new_expiry)
+        return Session(
+            self.store.get_member(row["member_id"]),
+            row["csrf_token"],
+            new_expiry,
+            datetime.fromisoformat(row["created_at"]),
+        )
 
     def end_session(self, cookie: str | None) -> None:
         if cookie:

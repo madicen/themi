@@ -28,6 +28,8 @@ class EmailAuditModule(Module):
     """E2: the email audit, over Gmail."""
 
     name = "email_audit"
+    title = "Email audit"
+    summary = "Goes through an inbox with someone, sender by sender, to decide what matters."
     tool_groups = (google_groups.EMAIL,)
     requires = ("tasks", "gmail")
 
@@ -39,6 +41,8 @@ class GoogleTasksModule(Module):
     """GT1: a Google Tasks list as an inbox, and Themi's tasks kept in step with it."""
 
     name = "google_tasks"
+    title = "Google Tasks"
+    summary = "Tasks added to Google Tasks, like by voice on a speaker, come into Themi."
     kind = "connector"
     requires = ("google", "tasks")
     google_scopes = (
@@ -85,6 +89,9 @@ class TravelModule(Module):
     """K4: travel times, and "time to get ready"."""
 
     name = "travel"
+    title = "Travel times"
+    summary = "Works out travel time to events and says when it's time to get ready."
+    cost = "Free plan is enough"
     kind = "connector"
     tool_groups = (groups.CALENDAR,)
     preferences = TravelPreferences
@@ -100,7 +107,7 @@ class TravelModule(Module):
     async def check(self) -> str | None:
         try:
             found = await self.client.geocode("Pike Place Market, Seattle")
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The map service didn't answer: {exc}"
         return None if found is not None else "The map service found nothing for a test address."
 

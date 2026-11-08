@@ -398,6 +398,8 @@ class ConversationModeModule(Module):
     """CM1: conversation mode, its setting and its sidecar."""
 
     name = "conversation_mode"
+    title = "Conversation mode"
+    summary = "Plain chat replies, with tasks picked out in the background."
     preferences = ConversationPreferences
 
     def install(self, ctx: ModuleContext) -> None:

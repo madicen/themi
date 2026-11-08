@@ -14,6 +14,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
   the [Themi Core Refactor Plan](https://claude.ai/artifact/GPx1CsQiMWCNadYNxxDmCR), and its
   own command: **"run the core refactor track"** works through it prompt after prompt
   (CLAUDE.md). "Implement the next prompt" skips CR prompts.
+- The Setup portal (SP prompts, after the Core refactor) has its own design doc too, the
+  [Themi Setup Portal Plan](https://claude.ai/artifact/HEKsyoURuTFPJcJGEyn9aJ): configuring
+  Themi from a Modules page on its own website instead of `themi setup` in a terminal.
 
 ## Progress
 
@@ -322,6 +325,20 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
 | CR21d | Round two: drop the columns the modules copied out | Core refactor | [x] 2026-11-08 |
+| SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [x] 2026-11-08 |
+| SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [x] 2026-11-08 |
+| SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | [x] 2026-11-08 (split) |
+| SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [x] 2026-11-08 |
+| SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [x] 2026-11-08 |
+| SP4 | Modules page, read only | Setup portal | [x] 2026-11-08 |
+| SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [x] 2026-11-08 |
+| SP6 | Restart and apply from the Modules page | Setup portal | [x] 2026-11-08 |
+| SP7 | First visit | Setup portal | [x] 2026-11-08 (split) |
+| SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [x] 2026-11-08 |
+| SP7b | Passkeys for admins without Telegram | Setup portal | [x] 2026-11-08 |
+| SP8 | Migration and retirement | Setup portal | [x] 2026-11-08 (split) |
+| SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
+| SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -335,6 +352,9 @@ and record the change here.
   other OpenAI-compatible server via `base_url`).
 - Own REST clients over `httpx` for Google (OAuth, Gmail, Calendar) and Tuya, so they are easy
   to point at local HTTP fakes.
+- Passkeys (SP7b, 2026-11-08) use Duo Labs' `webauthn` (py_webauthn), pinned to 2.x
+  (`>=2.7,<3`): the WebAuthn checks (attestation, signatures, counters) are its, not
+  Themi's. It brings `cbor2` and `pyOpenSSL`; the tests' fake authenticator uses `cbor2` too.
 - CatGenie's client runs over `curl_cffi` instead, agreed with the user on 2026-11-04 (CG1a):
   PetNovations' cloud quietly drops requests whose TLS doesn't look like a phone's, which
   httpx's does. It has wheels for the Pi (aarch64) and `python:3.13-slim`. Tests and
@@ -15331,3 +15351,449 @@ Notes (2026-11-08):
   reads `tasks.on_chart`; it now reads chart_tasks in its place. New:
   tests/unit/test_dropped_columns.py. Golden identical.
 
+
+## Setup portal
+
+Design source: the [Themi Setup Portal Plan](https://claude.ai/artifact/HEKsyoURuTFPJcJGEyn9aJ).
+Read it with the Claude Docs tools, like the other plans. Its decisions (2026-11-08):
+
+- The Modules page is an ordinary admin page, always in the menu. There is no setup mode.
+- Every admin can use it. Family members still sign in with the link from /site, unchanged.
+- Themi makes `/data/secret.key` on first start (unless `THEMI_SECRET_KEY` or
+  `THEMI_SECRET_KEY_FILE` is set) and the claim step asks the admin to save it.
+- Changing template from the page is allowed, after a confirm that lists every module it
+  turns off and what goes with each.
+- A multi-family host (CR15) has one shared set of modules; per-family data is CR15's.
+- `themi setup` is removed in SP8a. Host-side steps belong to `themi install` (SP8b), a shell
+  script, since it runs before any Themi exists.
+
+### SP1 · Setup portal: tolerant start
+Status: [x] 2026-11-08
+Depends on: CR21d
+Read first: the plan's "Restart and apply" (Change to how Themi starts); `themi/config.py`
+(`resolve_modules`); `themi/app.py`; `themi/cli.py` (`build_runtime`).
+- `resolve_modules` splits problems in two. Problems with `themi.toml` itself (it can't be
+  read, unknown keys, a module or template that isn't installed) still stop Themi. A module
+  whose settings fail (`SettingsProblem`), whose `build` raises, or that requires a module
+  left out is left out, and the problem is recorded, not raised.
+- A `StartReport` (in `themi.modules`): per module name, its state (`on`, `off`,
+  `not_set_up`, `failed`) and the reason in plain words; the template; when it was made.
+  `resolve_modules` returns it next to the modules; `App` keeps it on `services`.
+- Installing is tolerant too: a module whose `install` raises is recorded as failed and
+  what requires it is left out. Whatever it registered before raising must not be half
+  there; if that can't be undone cleanly, install into a scratch context first, or at
+  least leave the module's routes, tools and jobs out.
+- "At least one AI provider" stops being a refusal to start. The report carries it as a
+  warning, and an admin's dashboard shows it (a plain line in the existing admin panel area)
+  until a provider is on.
+- `themi config show` prints the report.
+Tests: a bad key leaves only that module and its dependents off and Themi starts; a
+corrupt `themi.toml` still stops; no AI provider starts with the warning; an install that
+raises leaves the module and its dependents out; a scenario where an admin sees the warning.
+
+Notes (2026-11-08):
+- `resolve_start` (config.py) is the tolerant resolver that `themi run`, `make dev` with a
+  config, and `themi config show` use. `resolve_modules` keeps its strict behaviour and
+  messages, so the wizard and its tests are unchanged. Both share `_resolve`. Strict mode
+  still lets a `build` that raises go up; tolerant mode records it as failed.
+- `StartReport` (`themi/modules/report.py`) per module: `on`, `off`, `not_set_up`,
+  `failed`, a kind, a reason, and `warn` for a module that isn't a failure but should be
+  said (Telegram with no token). `warnings()` is what admins see; `lines()` is for
+  `themi config show`. It's on `services.start_report`. `build_app` makes an all-on one
+  when given none (tests), and is tolerant only when given one.
+- Tolerant install: `ModuleContext.load(..., tolerant=True)` snapshots every list, dict
+  and set on the context, the services, the tool registry, the channel set, the mirrors and
+  the executors, plus the services' other attributes, and puts them back if `install`
+  raises. Something a module changed elsewhere before raising stays changed, and its
+  migrations stay applied. Modules needing a failed one are left out as `off`.
+- Telegram with no token no longer stops `themi run`: it's `not_set_up` with a warning. A
+  Themi whose channels don't poll (only the website's chat) used to shut down as soon as
+  it started, because the channels task returned; the runtime now keeps going.
+- Test changed on purpose: `test_run_requires_a_telegram_token` asserted the rule SP1
+  reverses. It's now `test_run_without_a_telegram_token_starts_and_says_what_telegram_needs`
+  (starts, answers /health, logs what Telegram needs).
+- Not covered: a member writing to a Themi with no AI provider gets whatever the router's
+  failure path says. SP7a's "Finish setting up" card is where that gets attention.
+- Local only: `tests/integration/test_deploy_scripts.py` fails 8 tests on macOS (BSD sed in
+  `update.sh`), the same on CR21d's commit. CI runs Linux.
+
+### SP2 · Setup portal: settings store
+Status: [x] 2026-11-08
+Depends on: SP1
+Read first: the plan's "Settings store"; `themi/modules/settings.py`; `themi/settings.py`;
+`themi/storage/secrets.py`.
+- `/data/themi.toml` written by Themi: a `ConfigWriter` that writes the instance config
+  atomically (temp file, fsync, rename), keeping comments it didn't write out of scope.
+  Where it writes: the path `config_path` found, else next to the database.
+- A `module_secrets` table (core migration): module, field, the value encrypted with the
+  secret key, who set it and when. Module settings read the environment first, then this
+  table, then the module's TOML section, then the default.
+- A `config_drafts` table: one pending draft (template, module changes, plain values,
+  secret changes as encrypted values) with who changed what. Applying is SP6's.
+- The secret key: when neither `THEMI_SECRET_KEY` nor `THEMI_SECRET_KEY_FILE` is set,
+  Themi makes `secret.key` next to the database (mode 600) on first start and uses it.
+  An existing database with no key still stops: never make a new key for old data.
+- The core's own settings that belong on the page (the public address) can come from the
+  TOML's `[core]` table; the environment still wins.
+- Where each value came from (`environment`, `stored`, `file`, `default`) is available for
+  the page, without the value for secrets.
+Tests: precedence each way; secrets never in the TOML; the writer survives a crash between
+write and rename; a key is made only for a new database; values' sources reported.
+
+Notes (2026-11-08):
+- Migration 0152: `module_secrets` (module, field, ciphertext, set_by, set_at) and
+  `config_drafts` (one row). `themi/modules/store.py`: `ModuleSecrets` (set, clear, all,
+  info without values but with the last four characters) and `DraftStore` with `Draft`
+  (template, modules on/off, plain sections, secrets as Fernet tokens or None to clear,
+  a log). `Draft.put_secret` encrypts as it's put; nothing is kept in the clear.
+- `read_settings(..., stored)`: environment, then a stored secret, then the TOML section,
+  then the default. `value_sources` says which for each field. `ModuleSetup.stored` and
+  `resolve_start/resolve_modules(..., stored=)` carry them. `build_runtime` opens the
+  database first and passes `ModuleSecrets.all()`.
+- themi.toml: `[core]` (only `public_url` for now; the environment's `THEMI_PUBLIC_URL`
+  wins). `config_path` now also looks next to the database first (`beside_database`),
+  then the old places. `write_path` is where the page writes: where it was read, else next
+  to the database. `write_config` writes a temp file, fsyncs, renames, and refuses to write
+  what `parse_config` can't read back. `as_toml` replaces the wizard's own writer later.
+- The key: `ensure_secret_key` (settings.py) makes `secret.key` next to the database,
+  mode 600, only when no key is set, none was made, and there's no database yet.
+  `themi run` calls it and logs where. `Settings.from_mapping` reads that file when no key
+  is set, so the other commands (login-link, backup) find it too.
+- The secret-in-TOML message still says to set the variable in .env; SP8a rewords it once
+  the page is the way to set secrets.
+
+### SP3 · Setup portal: module manifest
+Status: split into SP3a and SP3b.
+
+### SP3a · Setup portal: module manifest, the mechanism and the core's modules
+Status: [x] 2026-11-08
+Depends on: SP2
+Read first: the plan's "Module setup manifest"; `themi/modules/base.py`; `themi/modules/settings.py`.
+- `Module.title`, `Module.summary` (one sentence, what it does for the family),
+  `Module.needs_accounts` (who links what on the website: per member or household, and a
+  way to ask whether it's done), and an optional `cost` note.
+- Guides: `setup/<name>.md` in the module's package, shipped as package data; a loader
+  that finds it. Markdown rendered by the site with a small safe renderer (no raw HTML).
+- `env_field` grows `label`, `placeholder`, `choices`, `advanced`; `ask` and `help` stay as
+  the defaults for the label and hint. A `fields(model)` helper gives the page each field's
+  kind (text, secret, bool, choice, url, number) from its annotation.
+- `tools/check_packs.py`: every installed module has a title and a summary, and a guide
+  when it has settings with questions. Packs not yet done are listed in an allowlist that
+  SP3b empties.
+- Fill these in for the core's modules (`themi.standard`).
+Tests: `fields` for each kind; the guide loader; the lint fails on a module without a title.
+
+Notes (2026-11-08):
+- `Module.title`, `summary`, `cost`, `needs_accounts` (an `AccountNeed`: what, where, and
+  "each person" or "an admin") and `accounts_linked(services)` (None by default; SP3b
+  fills it in where it can be told).
+- Guides: `themi/modules/guides.py` finds `setup/<name>.md` in the package the module's
+  class is in. Package data added for `themi/standard/setup` and each pack's `setup`.
+  The core's guides: telegram, web_search, gemini, claude, openai_compatible, cloudflare,
+  web_chat. The AI providers have no settings of their own (keys are per person on My AI),
+  but their guides say where the keys go.
+- `themi/web/markdown.py`: the guides' renderer (headings, paragraphs, lists, bold, code,
+  http(s) and site-path links). Everything is escaped first; there's no raw HTML.
+- `env_field` grows `label`, `placeholder`, `choices`, `advanced`. `fields(model)` gives
+  each field's kind (text, secret, bool, choice, url, number) from its annotation; a label
+  from the question (without "(blank: ...)") or the field's name; and `advanced` defaults
+  to "the wizard never asked it". Web search's Firecrawl key and backend got labels, and
+  the backend is now a choice.
+- The lint is in `tools/check_packs.py` (`manifest_problems`), with `PENDING` listing
+  the 49 pack modules SP3b does. An entry that's done fails until it's taken out.
+
+### SP3b · Setup portal: module manifest, the packs
+Status: [x] 2026-11-08
+Depends on: SP3a
+- Titles, summaries, guides and `needs_accounts` for `themi_google`, `themi_home` and
+  `themi_cozyla`. Guides carry the real steps now in README and DEPLOY (Google OAuth client,
+  Home Connect app, Spotify app, Tavily key, OurGroceries, Cozyla's caveats), in plain words.
+- `Module.website` lines become `needs_accounts` where the page can check them; keep the
+  line where it can't.
+- The lint's allowlist is empty at the end.
+Tests: the lint passes with an empty allowlist; each `needs_accounts` check against fakes.
+
+Notes (2026-11-08):
+- Titles and summaries for all 49 pack modules; `cost` where it helps someone choose
+  ("Unofficial: may stop working" for the reverse-engineered services).
+- Guides: Google (OAuth client, unverified publishing, the cookbook's picker), travel,
+  OurGroceries, Home Connect, Spotify, ThinQ, Roborock, Tuya, CatGenie, Keep, the cookbook,
+  and the two Cozyla modules. Redirect and origin addresses are written as `$SITE`; the
+  Modules page (SP4) puts the site's address in its place.
+- `AccountNeed.linked_when` is a query that finds a row once linked; the default
+  `accounts_linked` runs it. Set for google, spotify, keep, home_connect, thinq, roborock,
+  tuya, catgenie, and the cookbook ("anyone" picks it).
+- `Module.website` lines stay for now: `themi setup` still prints them. SP8a removes the
+  wizard, and they can go with it (or stay for what the page can't check, like Keep).
+- Google's picker key and project number got labels. `PENDING` in check_packs is empty.
+
+### SP4 · Setup portal: Modules page, read only
+Status: [x] 2026-11-08
+Depends on: SP3b
+Read first: the plan's "The Modules page"; `themi/web/site.py`, `themi/web/kit.py`,
+`themi/web/admin_pages.py`.
+- `/modules` in the Admin menu group, admins only: modules grouped by kind (channels, AI,
+  capabilities, connectors, features), a card each with title, summary and a badge from the
+  start report and the draft (On, Needs settings, Needs an account linked, Couldn't start,
+  Waiting for restart, Off). Search, and "only what's on".
+- `/modules/<name>`: the guide beside its settings (values shown, secrets as "saved, ends in
+  …" or "set on the server"), Works with (requires, required by, optional), what Themi can
+  do with it (tool groups), what's left after restart.
+- The dashboard's admin warning from SP1 links here.
+Tests: badges match the report; dependents listed both ways; a secret's value never in the
+HTML; members who aren't admins get the site's usual admins-only answer.
+
+Notes (2026-11-08):
+- `themi/web/modules_page.py` with `modules.html` and `module.html`. `/modules` lists
+  every installed module by kind, a card each with a badge; `?q=` searches, `?only_on=1`
+  hides what's off. `/modules/<name>` shows the settings (plain values; secrets as "Saved,
+  ends in …" or "Set on the server"; advanced ones folded), what it needs, what needs it,
+  what it does more with, what it makes better, its tool groups, what's left after it's
+  on, and its guide with `$SITE` replaced by the site's address.
+- Badge order: waiting for restart (anything for it in the draft), couldn't start, needs
+  settings (`not_set_up`), needs an account linked (on, and `accounts_linked` is False),
+  on, off. A module not in the start report is off.
+- `services.instance_config` and `services.environment` (set by `build_runtime`) are what
+  the page reads for values and their sources; tests and a Themi with no config file get
+  `InstanceConfig()`.
+- Menu: "Modules" in the Admin group, before Development (icon `MODULES`).
+  `test_menu`'s expected Admin group and bar labels gained it. Golden: `routes.json` gained
+  `GET /modules` and `GET /modules/{name}`, nothing else.
+- The dashboard's module warnings now end with a link to Modules.
+
+### SP5 · Setup portal: Modules page, editing
+Status: [x] 2026-11-08
+Depends on: SP4
+- Switches: turning one on shows what it brings (its requirements, each with its badge);
+  turning one off shows what goes with it. The change goes into the draft after the confirm.
+- Template picker: Family, Work, Empty. Switching lists every module it turns off and what
+  goes with each, and changes nothing until confirmed.
+- Settings forms from `fields`: validated with `read_settings` on the draft, problems under
+  their fields; secrets written only through Replace, never sent back.
+- Saving a secret, testing with new secrets and switching template need a sign-in within
+  the last 15 minutes; otherwise the page asks to sign in again.
+- Test: builds the module from the draft and runs `check()` with a 20 second limit, through
+  the trust tiers (`server_control`), a few a minute at most.
+- A bar on every admin page when a draft exists: how many changes wait, Review, Undo.
+- An audit of config changes, tests and restarts at the foot of the page (no secret values).
+Tests: turning on email triage drafts Gmail and Google; turning off Google lists its
+dependents; a template switch's confirm lists everything; a failing Test against a fake;
+a scenario: an admin turns on travel with a key, tests it, sees "waiting for restart".
+
+Notes (2026-11-08):
+- `themi/modules/planning.py` (`Planner`): the desired module list from the config and the
+  draft; `turn_on` (what it needs that isn't there), `turn_off` (what needs it),
+  `switch_template` (each module going, with what goes because it needs it), `apply` (a
+  switch back to how the base has it is dropped), `use_template`, and `as_config` (the
+  config the draft makes, for SP6). A template switch starts from the new template whole;
+  the config's own +/- changes don't carry over.
+- `themi/modules/portal.py` (`Portal`, on the services, made in `build_app`): saves into
+  the draft and the audit, checks settings with `read_settings` before keeping them (the
+  config's and draft's values, stored and draft secrets), and runs Test through the trust
+  tiers (`server_control`, executor `modules.test`) with a 20 second limit and 5 a minute
+  per admin. `Portal.builder` is the seam tests use to give Test a fake module.
+- Settings shared by several modules (the wall's two) are saved to each.
+- Problems show at the top of the form, not under each field: the model's messages ("set
+  both or neither") often name two fields. A number or choice that's wrong is said by its
+  label.
+- Recent sign-in (15 minutes, from `web_sessions.created_at`, now `Session.signed_in_at`)
+  for saving or clearing a secret, testing with a secret in the draft, and switching
+  template. The way to sign in again is still /site or Google; SP7b adds passkeys.
+- `config_audit` (migration 0153) and `ConfigAudit`: changes, tests (with their result) and
+  undo, shown under "Changes lately" on /modules. Never a secret's value.
+- The bar ("N changes wait for a restart. Review") is in base.html for admins, through a
+  `pending_changes` template global the Modules page's routes set.
+- `services.settings` is the app's `Settings` (set by `build_runtime`); Test builds with
+  it, or with just the environment when there's none (module builds read nothing else).
+- Golden: routes.json gained the five POSTs; handlers.json gained `modules.test`.
+
+### SP6 · Setup portal: restart and apply
+Status: [x] 2026-11-08
+Depends on: SP5
+Read first: the plan's "Restart and apply"; `themi/runtime.py`; `themi/updates.py`.
+- Restart on the Modules page: pre-flight (resolve and build the draft without installing,
+  problems shown, "restart anyway" allowed); the live config copied to `last_good`; the
+  draft written as the live config; the runtime's graceful stop; then the process
+  re-executes itself (`os.execv`, same arguments). Through the trust tiers as
+  `server_control`, like the existing restart.
+- The page shows "Restarting" and polls `/health`, then reloads into the list.
+- After the start, the admin who restarted gets a line through the outbox naming what
+  changed and anything that couldn't start.
+- "Go back to the last working setup" when the last restart left a module failed: it
+  puts `last_good` in the draft for review.
+- `make dev` survives a re-exec (the dev runner's process, fakes and simulator).
+- The website's existing Restart (host runner, pulls the image again) stays for updates;
+  the page says which is which.
+Tests: the re-exec is a seam tests replace (no real exec); pre-flight problems shown; the
+draft becomes live and `last_good` keeps the old one; a scenario: turn on travel, restart,
+it's on and the admin is told; a failed module offers undo.
+
+Notes (2026-11-08):
+- `/modules/restart` shows the draft's changes and a pre-flight (`Portal.preflight`:
+  `resolve_start` on the draft's config and secrets, building but not installing); with
+  problems the button says "Restart anyway". `POST /modules/restart` goes through the trust
+  tiers (`server_control`, executor `modules.restart`), which applies and restarts.
+- `Portal.apply`: the current config (as TOML) and the module secrets (still encrypted) go
+  to `config_last_good`; the draft's config is written with `write_config` at
+  `write_path`; the draft's secrets are set or cleared; the draft is discarded; a
+  `config_restarts` row (migration 0154) says who asked and what changed.
+- The runtime: `services.restart` is `Runtime.request_restart`, which marks the restart
+  and stops a second later (so the page gets its answer). `themi run` and `make dev` then
+  call `themi.runtime.reexec()`: `os.execv` with the same command (`sys.orig_argv`), the
+  same PID. Tests replace `services.restart`; nothing in the tests execs.
+- `restarting.html` polls `/modules/restart/status?since=<this start>` with htmx every
+  2 seconds; a 204 while it's the same start, then `HX-Redirect: /modules`.
+- `modules.announce` (every minute; the first run is right after the start) tells whoever
+  restarted what changed and anything that couldn't start, once, through the outbox.
+- "Go back to the last working setup" shows on /modules when the last start left a module
+  failed and there's a last good setup. It puts that setup in the draft (template, modules,
+  plain values, secrets) for review; Restart applies it.
+- `make dev`: `dev_setup` prefers a `themi.toml` the page wrote into the setup's data folder
+  (`data/dev/themi.toml` for the family's), so a restart there comes back with the changes.
+  Note: with such a file in `data/dev`, `test_the_family_with_no_changes_is_as_before`
+  fails locally until `make dev-reset`.
+- Without a runtime (tests, `themi` commands), Restart saves and says to restart by hand.
+- The Development page's Restart says to use the Modules page's for module changes.
+- Golden: handlers.json `modules.restart`; jobs.json `modules.announce`; routes.json the
+  restart pages and `POST /modules/last-good`.
+
+### SP7 · Setup portal: first visit
+Status: split into SP7a and SP7b.
+
+### SP7a · Setup portal: claim code, first admin, the key saved
+Status: [x] 2026-11-08
+Depends on: SP6
+- With no members, Themi makes a one-time claim code, logs it, and writes it next to the
+  database (mode 600). The sign-in page asks for it instead of saying there's nobody.
+- The claim makes the family (name, timezone) and its first admin, like `themi init`
+  (which keeps working), and signs them in.
+- The key saved: when Themi made the key itself, the next page shows it once and asks the
+  admin to save it before going on.
+- A "Finish setting up Themi" card on an admin's dashboard while there's no AI provider, no
+  channel besides the website, or modules needing settings; it links to Modules.
+- The code works once and is rate-limited.
+Tests: a scenario from an empty Themi to chatting on the website chat with only the
+website; a wrong code; a second claim refused; the key page only when Themi made the key.
+
+Notes (2026-11-08):
+- `themi/accounts/claim.py` (`Claim`, migration 0155 `claim`): `build_runtime` makes a
+  code when there's no family (each start makes a new one; only its hash is kept), logs
+  it, and writes `claim-code` next to the database (mode 600). Codes are 8 characters
+  without 0/O/1/I, shown as ABCD-EFGH, and typed loosely is fine. Five wrong tries lock it
+  for 10 minutes. Using it makes the family (on the running template) and its admin, and
+  deletes the file.
+- `themi/web/claim_pages.py`: `/claim` (code, household, timezone with a list to pick
+  from, your name; what was typed stays after a mistake); `/signed-out` sends a Themi with
+  no family there. Then `/claim/key`, only for the claimant, only when Themi made its own
+  key (no `THEMI_SECRET_KEY`/`_FILE`, and `secret.key` next to the database), and only
+  until "I've saved it".
+- The dashboard's "Finish setting up Themi" card, for admins: no AI provider; no chat
+  channel but the website's; a module added or marked to say (`warn`) that needs its
+  settings. Each links to its module. The SP1 warnings for these moved to the card; a
+  module that couldn't start stays an alert.
+- A first admin who signs up on the website has no Telegram yet; the Family page's
+  pairing code works as before. Their only way back in after the session ends is /site
+  (once paired) or Google, until SP7b's passkeys.
+- `themi init` still works.
+- Golden: routes.json gained the four claim routes.
+
+### SP7b · Setup portal: passkeys for admins without Telegram
+Status: [x] 2026-11-08
+Depends on: SP7a
+- WebAuthn passkeys for admins, with a printable recovery code. Offered after the claim and
+  on the admin's settings. Admins with Telegram can keep using /site.
+- Family members' sign-in is unchanged: the /site link, nothing more.
+- The library choice is a fixed technical choice: record it in "Fixed technical choices".
+Tests: registration and sign-in against a fake authenticator; the recovery code works once;
+a member who isn't an admin is never asked for a passkey.
+
+Notes (2026-11-08):
+- Library: `webauthn` 2.x (Duo Labs' py_webauthn, 2.8.0 installed), recorded in "Fixed
+  technical choices". `pip install -e '.[dev]'` picks it up; the Docker image reads it from
+  pyproject. Not 3.x: it's the newest major release, and nothing here needs it.
+- `themi/accounts/passkeys.py` (migration 0156): passkeys per member, one recovery code per
+  member (a hash; 16 characters in four groups; using it deletes it), and ceremony
+  challenges (5 minutes, found by an HttpOnly, SameSite=Strict cookie, used once).
+- `themi/web/passkey_pages.py` and `static/passkeys.js`: `/passkeys` for admins (add,
+  name and remove passkeys; make a recovery code, shown once); sign-in with a passkey or
+  `/recovery` from the signed-out page, which offers them only once some admin has a
+  passkey. A passkey or code of someone who's no longer an admin doesn't sign in.
+- The relying party is the site address's host name; the origin must match. Passkeys need
+  HTTPS, or `localhost`: the page says so on `http://127.0.0.1`, which `make dev` uses, so
+  try them there at `http://localhost:<port>`.
+- Offered after the claim (the key page leads to /passkeys), on the "Finish setting up"
+  card for an admin with no Telegram and no passkey, and on My settings for admins. Family
+  members see none of it; /site links work as before.
+- Tests: `tests/fakes/passkey.py` is a fake authenticator (a real P-256 key, "none"
+  attestation, ECDSA signatures); a wrong origin, a reused challenge, a used recovery code
+  and a family member are each refused.
+- Golden: routes.json gained the passkey and recovery routes.
+
+### SP8 · Setup portal: migration and retirement
+Status: split into SP8a and SP8b.
+
+### SP8a · Setup portal: "Move to Themi", `themi setup` removed, docs
+Status: [x] 2026-11-08
+Depends on: SP7b
+- A value set in the environment shows "set on the server" with a lock; "Move to Themi"
+  copies it into the store and says which `.env` line can go. Themi never edits `.env`.
+- `themi setup` and `setup_wizard.py` are removed, with their tests (retired on purpose,
+  said in the commit); `Module.check` stays for the page's Test. `themi config show` stays.
+- DEPLOY.md and RASPBERRY_PI.md say: get a server, run `themi install`, open the address,
+  enter the claim code. `.env.example` keeps only what the host needs.
+Tests: an upgraded family install is unchanged; a moved value wins once `.env` drops it.
+
+Notes (2026-11-08):
+- "Move to Themi": a module setting set in the environment shows its variable, locked,
+  with "Move it to Themi" (`POST /modules/<name>/move/<field>`, `Portal.move`). A secret
+  goes into the module secrets now, a plain value into themi.toml now: the environment
+  still wins, so nothing changes until the `.env` line goes and Themi restarts. The field
+  then says it's copied. Moving a secret needs a recent sign-in. Modules sharing settings
+  get it too.
+- Only module settings move. The core's own (`THEMI_PUBLIC_URL`, backups, the key) stay in
+  `.env`; `[core] public_url` exists (SP2) but the page doesn't set it yet.
+- Removed on purpose: `themi setup` (the CLI command), `themi/setup_wizard.py`,
+  `tests/unit/test_setup_wizard.py`, and two scenarios that tested the wizard itself
+  (`test_setup_asks_by_kind_in_order`, `test_leaving_out_every_ai_provider_keeps_gemini`).
+  `test_the_wizard_sets_up_work` became `test_the_modules_page_sets_up_work` (the same
+  check through the planner). `SetupStep` and `Module.setup` went too: nothing used them.
+  `Module.check`, `questions` and `themi config show` stay.
+- The secret-in-TOML message now says ".env, or the Modules page".
+- Docs: README's "Running Themi" is claim, Modules, Restart; its service sections say the
+  Modules page has the same steps. DEPLOY.md gained "The short way" (install, claim,
+  Modules) and new section 5 (`.env`, first run) and 8 (secrets) text. RASPBERRY_PI.md
+  points there. `.env.example` keeps what the host needs; the whole list moved to
+  `docs/ENVIRONMENT.md`.
+- Golden: routes.json gained the move route.
+
+### SP8b · Setup portal: `themi install`
+Status: [x] 2026-11-08
+Depends on: SP8a
+- `deploy/install.sh` (published so it can be run with one command): checks the host,
+  installs Docker, writes the short `.env` and `compose.yml`, offers Tailscale Funnel and
+  walks the person through making a Tailscale account and signing in, starts Themi, and
+  prints the address and the claim code. Safe to run again.
+- What the host's control runner needs for updates is installed with it.
+Tests: shellcheck-clean; a dry run against stubbed commands; run twice changes nothing.
+
+Notes (2026-11-08):
+- `deploy/install.sh`: checks the machine (Linux, 64-bit, not root, sudo and curl, a word
+  if there's under 1 GB), installs Docker (get.docker.com, the docker group, capped logs),
+  makes `~/themi` with compose.yml and the scripts (from beside it, else
+  `THEMI_FILES_URL`), writes `.env` only when there's none and otherwise only adds missing
+  `THEMI_IMAGE`/`THEMI_VERSION` (mode 600), offers Tailscale Funnel with the account
+  walkthrough (install, `tailscale up`'s link, turning Funnel on, up to three tries) and
+  sets `THEMI_PUBLIC_URL` from the tailnet name, pulls and starts Themi, waits for
+  /health, installs the update runner where there's systemd, and prints the address and
+  the claim code (from `/data/claim-code` in the container).
+- Questions come from the terminal even through `curl | bash`; `THEMI_NONINTERACTIVE=1`,
+  `THEMI_FUNNEL=yes|no` and `THEMI_NO_RUNNER=1` answer them for scripts and tests. It runs
+  in macOS's bash 3.2 too (for the tests).
+- The repository is private, so the one-command download (`curl ... | bash`) needs it to
+  be public or the files fetched with a token; until then, copy `deploy/` across and run
+  `bash install.sh`, as DEPLOY.md's short way says.
+- `bootstrap-pi.sh` stays for the Pi's own extras (unattended upgrades, Tailscale SSH).
+- Tests (`tests/integration/test_install_script.py`): stand-ins for uname, id, sudo, curl,
+  docker, tailscale and the rest on PATH; a fresh install, a second run changing nothing,
+  an existing .env kept, Funnel's address, a failed pull, and not Linux. shellcheck runs on
+  it at warning level: `shellcheck-py` joined the dev extras.

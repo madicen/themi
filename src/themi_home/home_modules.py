@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import timedelta
 
-from themi.modules import Module, ModuleContext, ModuleSetup
+from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup
 from themi.standard.tasks import TaskBoard
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
@@ -46,8 +46,14 @@ class SpotifyModule(Module):
     """BD5b: playing their own music, from Spotify."""
 
     name = "spotify"
+    title = "Spotify"
+    summary = "Plays each person's own music from Spotify during tasks."
+    cost = "Free"
     kind = "connector"
     website = "Each person who wants it links Spotify on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "a Spotify account", "/accounts", "each person", "SELECT 1 FROM spotify_links LIMIT 1"
+    )
     tool_groups = (home_groups.MUSIC,)
     settings = SpotifySettings
 
@@ -96,6 +102,9 @@ class OurGroceriesModule(Module):
     """The grocery list mirrored to OurGroceries."""
 
     name = "ourgroceries"
+    title = "OurGroceries"
+    summary = "Shows the grocery list in the OurGroceries app too, kept in step both ways."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     settings = OurGroceriesSettings
     requires = ("groceries", "pantry")
@@ -113,7 +122,7 @@ class OurGroceriesModule(Module):
     async def check(self) -> str | None:
         try:
             await self.client.items()
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"OurGroceries didn't open the list: {exc}"
         return None
 
@@ -127,8 +136,17 @@ class KeepModule(Module):
     runs `themi keep link`."""
 
     name = "keep"
+    title = "Google Keep shopping list"
+    summary = "Groceries said to a Google speaker come into the grocery list."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     website = "Each person who wants it runs `themi keep link <name>` on the server."
+    needs_accounts = AccountNeed(
+        "a Google Keep list, linked on the server with `themi keep link <name>`",
+        "/accounts",
+        "each person",
+        "SELECT 1 FROM keep_accounts LIMIT 1",
+    )
     requires = ("groceries", "pantry")
 
     def __init__(self, factory: KeepFactory) -> None:
@@ -156,8 +174,14 @@ class HomeConnectModule(Module):
     """H1: the dishwasher, through Home Connect."""
 
     name = "home_connect"
+    title = "Dishwasher (Home Connect)"
+    summary = "Knows when a Bosch or Siemens dishwasher runs, and offers to tick it off."
+    cost = "Free"
     kind = "connector"
     website = "An admin links Home Connect on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the Home Connect account", "/accounts", "an admin", "SELECT 1 FROM home_connect_account"
+    )
     settings = HomeConnectSettings
     requires = ("tasks",)
 
@@ -184,8 +208,14 @@ class ThinqModule(Module):
     """30: the washer and dryer, through LG ThinQ, and laundry that's waiting."""
 
     name = "thinq"
+    title = "Washer and dryer (LG ThinQ)"
+    summary = "Says when the laundry is done and nudges someone to move it."
+    cost = "Free"
     kind = "connector"
     website = "An admin adds the ThinQ token on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the LG ThinQ token", "/accounts", "an admin", "SELECT 1 FROM thinq_account"
+    )
     household = LaundrySettings
     settings = ThinqSettings
     requires = ("tasks",)
@@ -219,8 +249,14 @@ class RoborockModule(Module):
     """V1: the robot vacuum, through Roborock."""
 
     name = "roborock"
+    title = "Robot vacuum (Roborock)"
+    summary = "Says when the robot vacuum is stuck or needs emptying."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     website = "An admin signs in to Roborock on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the Roborock account", "/accounts", "an admin", "SELECT 1 FROM roborock_account"
+    )
     requires = ("tasks",)
 
     def __init__(self, login: RoborockLogin) -> None:
@@ -248,8 +284,14 @@ class TuyaModule(Module):
     """32: the pet feeders, through Tuya's cloud."""
 
     name = "tuya"
+    title = "Pet feeders (SmartLife)"
+    summary = "Says when a pet feeder runs low on food or gets stuck."
+    cost = "Free, renewed monthly"
     kind = "connector"
     website = "An admin links the feeders on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the SmartLife feeders", "/accounts", "an admin", "SELECT 1 FROM tuya_account"
+    )
     requires = ("tasks",)
 
     def __init__(self, config: TuyaConfig) -> None:
@@ -272,8 +314,14 @@ class CatGenieModule(Module):
     """CG1a: the litter box, through CatGenie's cloud."""
 
     name = "catgenie"
+    title = "CatGenie litter box"
+    summary = "Says when the litter box has an error or its sani-solution runs low."
+    cost = "Unofficial: may stop working"
     kind = "connector"
     website = "An admin links the litter box on Accounts (/accounts)."
+    needs_accounts = AccountNeed(
+        "the CatGenie litter box", "/accounts", "an admin", "SELECT 1 FROM catgenie_account"
+    )
     requires = ("tasks",)
 
     def __init__(self, config: CatGenieConfig) -> None:

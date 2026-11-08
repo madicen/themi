@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ card.title }} · Modules · Themi{% endblock %}
+{% block content %}
+<h1>Turn {{ "on" if on else "off" }} {{ card.title }}?</h1>
+{% if on %}
+<p>{{ card.title }} needs these, so they'll be turned on too:</p>
+{% else %}
+<p>These need {{ card.title }}, so they'll be turned off too:</p>
+{% endif %}
+<ul>
+  {% for c in others %}
+  <li><a href="/modules/{{ c.name }}">{{ c.title }}</a> <span class="chip {{ c.badge_colour }}">{{ c.badge_words }}</span></li>
+  {% endfor %}
+</ul>
+{% if on %}<p class="muted">Any marked "Needs settings" will need filling in before they work.</p>{% endif %}
+<p class="muted">Nothing changes until Themi restarts.</p>
+<form method="post" action="/modules/{{ card.name }}/switch" class="module-action">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="to" value="{{ 'on' if on else 'off' }}">
+  <input type="hidden" name="confirmed" value="1">
+  <button class="primary">Yes, turn {{ "them" if others else "it" }} {{ "on" if on else "off" }}</button>
+</form>
+<a href="/modules/{{ card.name }}">Leave it as it is</a>
+{% endblock %}

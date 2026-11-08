@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
+import sys
 from datetime import timedelta
+from typing import NoReturn
 
 import uvicorn
 
@@ -25,6 +28,14 @@ log = logging.getLogger(__name__)
 
 SCHEDULER_TICK = timedelta(seconds=15)
 SHUTDOWN_GRACE_SECONDS = 30
+RESTART_AFTER_SECONDS = 1.0
+
+
+def reexec() -> NoReturn:
+    """SP6: start this same command again in this process (its PID stays, so in a
+    container it's still PID 1 and Docker sees no exit). Called once Themi has stopped."""
+    logging.shutdown()
+    os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
 
 
 class Runtime:
@@ -42,6 +53,8 @@ class Runtime:
         self.telegram_enabled = telegram_enabled
         self.scheduler_tick = scheduler_tick
         self.stop_event = asyncio.Event()
+        self.restart_requested = False  # SP6: run again once stopped (`reexec`)
+        app.services.restart = self.request_restart
         app.services.site_url = site_base_url(public_url, host, port)
         self.scheduler = app.scheduler or Scheduler(app.db)
         for task in app.periodic:
@@ -76,6 +89,15 @@ class Runtime:
     def stop(self) -> None:
         self.stop_event.set()
 
+    def request_restart(self) -> None:
+        """SP6: stop as on SIGTERM, then start again (the caller re-executes the process).
+        Soon, not now, so the page that asked gets its answer first."""
+        self.restart_requested = True
+        try:
+            asyncio.get_running_loop().call_later(RESTART_AFTER_SECONDS, self.stop)
+        except RuntimeError:  # no loop running: nothing to wait for
+            self.stop()
+
     def install_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -103,10 +125,24 @@ class Runtime:
         log.info("Themi is running")
         try:
             stopper = asyncio.create_task(self.stop_event.wait())
-            done, _ = await asyncio.wait([*tasks, stopper], return_when=asyncio.FIRST_COMPLETED)
-            for task in done:
-                if task is not stopper and task.exception() is not None:
-                    log.error("%s stopped unexpectedly", task.get_name(), exc_info=task.exception())
+            waiting = {*tasks, stopper}
+            while waiting:
+                done, waiting = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+                stop = stopper in done
+                for task in done:
+                    if task is stopper:
+                        continue
+                    if task.exception() is not None:
+                        log.error(
+                            "%s stopped unexpectedly", task.get_name(), exc_info=task.exception()
+                        )
+                        stop = True
+                    elif task.get_name() != "telegram":
+                        stop = True
+                    # SP1: the channels finishing on their own (none of them polls, as in a
+                    # Themi with only the website's chat) isn't a reason to stop.
+                if stop:
+                    break
         finally:
             await self._shutdown(tasks)
 

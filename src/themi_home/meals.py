@@ -215,6 +215,8 @@ class MealsModule(Module):
     """Meal ideas from what the pantry has."""
 
     name = "meals"
+    title = "Meal ideas"
+    summary = "Suggests meals from what's in the pantry."
     tool_groups = (home_groups.PANTRY,)
     requires = ("pantry",)
 

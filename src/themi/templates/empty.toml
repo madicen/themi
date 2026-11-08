@@ -1,5 +1,5 @@
 # An empty template (CR11): no modules but an AI provider, for building a Themi up from nothing with
-# `themi setup` or `+name` in themi.toml. The core's rules still apply.
+# the Modules page or `+name` in themi.toml. The core's rules still apply.
 
 name = "empty"
 

@@ -1,5 +1,10 @@
 # Themi on a Raspberry Pi: a plan for painless deploys
 
+> **Setup portal (2026-11-08):** a new Pi needs only `deploy/install.sh` (`themi install`),
+> then the website: claim it with the code the install prints, and set everything else up
+> on the Modules page. `docs/DEPLOY.md`, "The short way". The steps below are how the
+> family's Pi was moved by hand; they still work.
+
 A plan, not yet done. The aim: the Pi only ever runs a published, tested image. A release is
 one tag on your laptop, and getting Themi onto a new Pi after a failure takes about fifteen
 minutes. `docs/DEPLOY.md` stays the general guide; this is the Pi-specific path through it,

@@ -71,6 +71,8 @@ class WrongRepliesModule(Module):
     """A reply marked wrong with a reaction, kept for review."""
 
     name = "wrong_replies"
+    title = "Wrong replies"
+    summary = "A reply marked wrong with a reaction is kept for review."
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(WrongReplies(ctx.services)).install()

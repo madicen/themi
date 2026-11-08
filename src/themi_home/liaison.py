@@ -745,6 +745,8 @@ class LiaisonModule(Module):
     """Passing notes between partners."""
 
     name = "liaison"
+    title = "Passing notes"
+    summary = "Passes a note from one partner to the other, at a good moment."
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.prompt(*PROMPT_RULES)

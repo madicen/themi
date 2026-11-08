@@ -566,6 +566,8 @@ class SafewayModule(Module):
     """35c: the Safeway cart, filled by the helper extension."""
 
     name = "safeway"
+    title = "Safeway cart"
+    summary = "Fills the Safeway cart from the grocery list, with the helper extension."
     tool_groups = (home_groups.PANTRY,)
     requires = ("groceries",)
 

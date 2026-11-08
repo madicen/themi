@@ -292,6 +292,8 @@ class CallsModule(Module):
     """Calls to vendors, prepared for a person to make."""
 
     name = "calls"
+    title = "Calls"
+    summary = "Prepares calls to companies and vendors, for a person to make."
     tool_groups = (home_groups.CALLS,)
     requires = ("tasks",)
 

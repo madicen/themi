@@ -68,15 +68,20 @@ opens the management site signed in as that person.
 
 ## Running Themi
 
-1. Copy `.env.example` to `.env`. Fill in `THEMI_SECRET_KEY` (from `themi keygen`) and
-   `TELEGRAM_BOT_TOKEN` (from @BotFather). Back up the secret key: without it, stored tokens
-   and keys can't be decrypted.
-2. Run `themi init` once to create the family and its first admin. Then send the bot
-   `/start <code>` from Telegram. `themi init` and `themi invite <name>` also print a
-   `https://t.me/<bot>?start=<code>` link: opening it on a phone and pressing Start sends
-   the code, so you can text the link to the person you're inviting.
-3. Run `themi run`. This starts the bot, the scheduler and the website (`/health` on
-   port 8080).
+1. Run `themi run`. A new Themi makes its own secret key (next to its database) and prints a
+   claim code. It starts the scheduler and the website (`/health` on port 8080).
+2. Open the website (<http://localhost:8080>) and enter the claim code: you name the
+   household and become its first admin. Save the secret key it shows you: without it,
+   stored tokens, keys and backups can't be decrypted.
+3. On the **Modules** page, turn on what you want and fill in what each needs, with its
+   guide beside it: the Telegram bot's token, an AI provider, Google and the rest. Then
+   press **Restart** on the same page.
+4. Invite the family from the **Family** page. Each person pairs Telegram with their code
+   (`/start <code>`), and then gets a website link by sending `/site`.
+
+Settings can still come from `.env` or the environment instead (`docs/ENVIRONMENT.md`
+lists them); a value set there wins, and the Modules page offers to move it into Themi.
+`themi init` and `themi invite <name>` still work for scripted installs.
 
 ### Bug reports and ideas from the chat
 
@@ -90,6 +95,12 @@ themi feedback              # new reports as Markdown, to paste into a Claude se
 themi feedback --done 3 4   # mark reports reviewed
 themi feedback --all        # include reviewed ones
 ```
+
+### Connecting services
+
+Each service's steps are also its guide on the Modules page, where its values go (and
+are kept encrypted when they're secrets). The sections below name the `.env` variables,
+for setting them on the server instead.
 
 ### Google sign-in and Gmail (Google Cloud setup)
 
@@ -121,8 +132,9 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
    own machine, set `THEMI_PUBLIC_URL=http://localhost:8080` and use
    `http://localhost:8080/auth/google/callback`. Google only accepts plain `http` for
    `localhost`, not for `127.0.0.1` or other addresses.
-7. **Keys.** Put the client id and secret in `.env` as `GOOGLE_CLIENT_ID` and
-   `GOOGLE_CLIENT_SECRET`, then restart Themi.
+7. **Keys.** Put the client id and secret on the Modules page, under **Google
+   accounts**, then press **Restart** there. (`GOOGLE_CLIENT_ID` and
+   `GOOGLE_CLIENT_SECRET` in `.env` work too.)
 8. **Sign-in addresses.** On the website's *Family* page, an admin enters each person's Google
    address. Only those addresses can use "Sign in with Google". A person's first linked
    Gmail becomes their sign-in address if they don't have one yet.

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Use a recovery code · Themi{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Use a recovery code</h1>
+  {% if problem %}<p class="alert" role="alert">{{ problem }}</p>{% endif %}
+  <form method="post" action="/recovery" class="settings-form">
+    <div class="field">
+      <label for="code">Recovery code</label>
+      <input id="code" name="code" autocomplete="off" required>
+    </div>
+    <button class="primary">Sign in</button>
+  </form>
+  <p class="muted">It works once. Afterwards, make a new one.</p>
+</section>
+{% endblock %}

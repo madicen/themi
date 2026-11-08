@@ -27,15 +27,21 @@ class VoiceNotesModule(CapabilityModule):
     """Voice notes, transcribed."""
 
     name = VOICE_NOTES
+    title = "Voice notes"
+    summary = "Themi listens to voice notes and writes them down."
 
 
 class PicturesModule(CapabilityModule):
     """Pictures sent in chat, looked at."""
 
     name = PICTURES
+    title = "Pictures in chat"
+    summary = "Themi looks at pictures people send it."
 
 
 class ImageGenerationModule(CapabilityModule):
     """Pictures made by a picture model (its own key, on the AI page)."""
 
     name = IMAGE_GENERATION
+    title = "Making pictures"
+    summary = "Themi can make pictures with a picture model."

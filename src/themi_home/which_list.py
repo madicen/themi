@@ -173,6 +173,8 @@ class WhichListModule(Module):
     """Which list an item goes on, asked when unclear."""
 
     name = "which_list"
+    title = "Which list"
+    summary = "Asks which list something goes on when it isn't clear."
     optional = ("lists",)
 
     def install(self, ctx: ModuleContext) -> None:

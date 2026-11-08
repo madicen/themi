@@ -130,6 +130,8 @@ class TakingModule(Module):
     """Taking a task on, from the other person or the chart."""
 
     name = "taking"
+    title = "Taking tasks on"
+    summary = "Lets someone take a task on from another person or the chart."
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

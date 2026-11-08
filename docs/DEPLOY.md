@@ -13,11 +13,28 @@ upgrade after that.
 > **2026-10-25** against the sources linked in each section. Check the
 > provider's own page again before you sign up.
 
+## The short way
+
+On a fresh Linux server or Raspberry Pi with Ubuntu or Debian:
+
+1. Copy `deploy/install.sh` to it and run it: `bash install.sh` (that's `themi install`).
+   It installs Docker, writes the short `.env`, offers to set up Tailscale Funnel (and walks
+   you through making a Tailscale account), starts Themi, and prints its address and a
+   claim code.
+2. Open the address, enter the claim code, and name your household. Save the secret key
+   the next page shows you, in a password manager.
+3. On the **Modules** page, turn on what you want and fill in what each one needs, with its
+   guide beside it. Press **Restart** on the same page to put the changes in place.
+
+The rest of this guide is the long way: each step by hand, and what to know about hosts,
+backups, secrets and upgrades.
+
 ---
 
 ## 1. Before you start
 
-You need these, most of them from the local setup in the README:
+With the Modules page, the keys below can be added after Themi is running. You need
+them sooner or later, most of them from the local setup in the README:
 
 - The **Telegram bot token**. The family bot is not the test bot.
 - **`THEMI_SECRET_KEY`** (`themi keygen` makes one). This key encrypts every stored token
@@ -126,16 +143,14 @@ nano .env          # see below
 chmod 600 .env     # only you can read it
 ```
 
-`.env` needs at least these lines. `.env.example` lists everything else:
+`.env` needs only what the server needs before Themi starts. `.env.example` has those;
+everything else goes on the Modules page:
 
 ```sh
 THEMI_IMAGE=ghcr.io/madicen/themi
 THEMI_VERSION=1.0.0            # or latest
-THEMI_SECRET_KEY=...           # the same key as before, if you're bringing data across
-TELEGRAM_BOT_TOKEN=...
 THEMI_PUBLIC_URL=https://<machine>.<tailnet>.ts.net   # from step 6
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+# THEMI_SECRET_KEY=...         # only when bringing data across: the same key as before
 # backups: step 7
 ```
 
@@ -143,11 +158,13 @@ First run:
 
 ```sh
 docker compose pull
-docker compose run --rm themi init        # the family and the first admin
-docker compose run --rm themi invite Erin # each person, if init didn't
 docker compose up -d
-docker compose logs -f                    # Ctrl-C to stop watching
+docker compose logs themi | grep "claim code"   # the code for the website
 ```
+
+Open the website, enter the claim code, and name the household: you're its first admin.
+Then add the rest on the Modules page. (`docker compose run --rm themi init` still works,
+for a scripted install.)
 
 If you have no registry, `docker compose -f compose.yml build` won't work, because the file
 names an image. Copy the repository across instead, and use the repository's own
@@ -251,21 +268,25 @@ Sources:
 
 ## 8. Secrets
 
-- **Where they live:** only in `~/themi/.env` on the server (`chmod 600`), and in your
-  password manager. They never go in git: `.env` is ignored. CI secrets go in GitHub's
-  repository settings.
-- **In the database:** tokens and keys are encrypted with `THEMI_SECRET_KEY`. Logs redact
-  them.
-- **`THEMI_SECRET_KEY`:** there's no key rotation yet. Changing it makes stored tokens and
-  old backups unreadable, so keep it as it is.
-- **If the server is lost:** every secret in `.env` can be recreated (tokens re-issued,
-  Gmail linked again), except `THEMI_SECRET_KEY`. That's why it goes in the password
-  manager.
+- **The secret key:** a new Themi makes its own, in `/data/secret.key` (readable only by
+  Themi), and shows it once after the claim. Save it in your password manager: it
+  encrypts every stored token and every backup. `THEMI_SECRET_KEY` in `.env` wins if
+  you set one (to bring data across from another Themi). There's no key rotation yet:
+  changing it makes stored tokens and old backups unreadable.
+- **Everything else** (the Telegram token, API keys, Google's client secret) is set on the
+  Modules page and kept in the database, encrypted with that key. The page never shows a
+  saved secret again, only its last four characters. Logs redact them.
+- **In `.env`:** only what the server needs before Themi starts (`chmod 600`). A secret set
+  there still works and wins; the Modules page offers to move it into Themi, after which the
+  line can go. `.env` is never committed. CI secrets go in GitHub's repository settings.
+- **If the server is lost:** restore a backup (section 10) with the saved key, and every
+  secret comes back with the data.
 - **If a token leaks:**
   - Telegram: revoke it with @BotFather `/revoke`.
   - Google: delete the OAuth client secret and make a new one.
   - R2 or B2: delete the API key.
-  - Then update `.env` and run `docker compose up -d`.
+  - Then put the new one on the Modules page and restart there (or update `.env` and run
+    `docker compose up -d`).
 
 ## 9. Upgrades
 

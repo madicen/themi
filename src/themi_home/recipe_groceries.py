@@ -662,6 +662,8 @@ class RecipeGroceriesModule(Module):
     """RC2a: a recipe's ingredients onto the grocery list."""
 
     name = "recipe_groceries"
+    title = "Recipe groceries"
+    summary = "Puts a recipe's ingredients on the grocery list."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes",)
 

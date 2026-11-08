@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Modules · Themi{% endblock %}
+{% block content %}
+<h1>Modules</h1>
+<p class="muted">What this Themi can do. Turn modules on or off, fill in what they need,
+and restart Themi to put changes in place. Started from the {{ template }} template.</p>
+
+{% if warnings %}
+<section class="alerts">
+  {% for warning in warnings %}<p class="alert">{{ warning }}</p>{% endfor %}
+</section>
+{% endif %}
+
+{% if draft %}
+<section class="card">
+  <p class="summary">Changes are waiting for a restart.</p>
+  <ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
+  <div class="module-action">
+    <a class="button primary" href="/modules/restart">Restart Themi to put them in place…</a>
+    <form method="post" action="/modules/undo">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Undo them</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% if last_good %}
+<section class="card">
+  <p class="summary">Something couldn't start after the last restart.</p>
+  <form method="post" action="/modules/last-good" class="module-action">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>Go back to the last working setup…</button>
+    <span class="muted">It waits as changes, so you can look before restarting.</span>
+  </form>
+</section>
+{% endif %}
+
+<details class="card">
+  <summary>Template: {{ template }}</summary>
+  <p class="muted">A template is a starting set of modules. Changing it turns off what the new
+  one doesn't have; you'll see the list before anything changes.</p>
+  <form method="post" action="/modules/template">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Template
+      <select name="template">
+        {% for name in templates %}<option{% if name == template %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <button>Change template…</button>
+  </form>
+</details>
+
+<form method="get" action="/modules" class="module-search">
+  <label>Find a module <input type="search" name="q" value="{{ q }}"></label>
+  <label><input type="checkbox" name="only_on" value="1"{% if only_on %} checked{% endif %}> Only what's in use</label>
+  <button>Show</button>
+</form>
+
+{% for heading, cards in groups %}
+<h2>{{ heading }}</h2>
+<ul class="modules">
+  {% for card in cards %}
+  <li class="card module" id="module-{{ card.name }}">
+    <a href="/modules/{{ card.name }}"><strong>{{ card.title }}</strong></a>
+    <span class="chip {{ card.badge_colour }}">{{ card.badge_words }}</span>
+    <p class="muted">{{ card.summary }}</p>
+    {% if card.reason and card.badge in ("failed", "needs_settings") %}<p class="muted">{{ card.reason }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="muted">No module matches that.</p>
+{% endfor %}
+
+{% if audit %}
+<details class="group">
+  <summary>Changes lately</summary>
+  <ul class="activity">
+    {% for row in audit %}<li><span class="when">{{ row.at | local_time }}</span> {{ row.name or "Someone" }} {{ row.what }}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endblock %}

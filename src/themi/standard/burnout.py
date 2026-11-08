@@ -357,6 +357,8 @@ class BurnoutModule(Module):
     """Burnout: handing tasks over when someone's running low."""
 
     name = "burnout"
+    title = "Burnout watch"
+    summary = "Notices when someone is running low and offers to hand their tasks over."
     tool_groups = (SETTINGS,)
     requires = ("tasks",)
 

@@ -370,6 +370,8 @@ class RemindersModule(Module):
     """Reminders: a day's end and overdue tasks."""
 
     name = "reminders"
+    title = "Reminders"
+    summary = "Reminders at the end of the day and for overdue tasks."
     tool_groups = (groups.SCHEDULES,)
     requires = ("tasks",)
 

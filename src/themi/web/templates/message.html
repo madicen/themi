@@ -7,5 +7,11 @@
   {% if offer_google and google_signin %}
   <p><a class="button primary" href="/auth/google">Sign in with Google</a></p>
   {% endif %}
+  {% if offer_passkey %}
+  <p><button data-passkey="sign-in">Sign in with a passkey</button>
+    <a href="/recovery">Use a recovery code</a></p>
+  <p id="passkey-said" class="muted" role="status"></p>
+  <script src="{{ asset('passkeys.js') }}" defer></script>
+  {% endif %}
 </section>
 {% endblock %}

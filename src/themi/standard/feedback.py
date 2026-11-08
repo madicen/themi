@@ -523,6 +523,8 @@ class FeedbackModule(Module):
     """Bug reports and ideas from chat (/bug, /idea)."""
 
     name = "feedback"
+    title = "Feedback"
+    summary = "Bug reports and ideas sent from chat with /bug and /idea."
 
     def install(self, ctx: ModuleContext) -> None:
         feedback = ctx.provide(FeedbackChat(ctx.services))

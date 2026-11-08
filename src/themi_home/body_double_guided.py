@@ -392,6 +392,8 @@ class GuidedStepsModule(Module):
     """BD1b: a body double session's guided step-through."""
 
     name = "guided_steps"
+    title = "Guided steps"
+    summary = "Steps through a task one small step at a time during a body double session."
     requires = ("body_double",)
 
     def install(self, ctx: ModuleContext) -> None:

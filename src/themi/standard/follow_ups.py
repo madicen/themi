@@ -226,6 +226,8 @@ class FollowUpsModule(Module):
     """F18: following up on what someone is waiting for."""
 
     name = "follow_ups"
+    title = "Follow-ups"
+    summary = "Follows up on things someone is waiting to hear back about."
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

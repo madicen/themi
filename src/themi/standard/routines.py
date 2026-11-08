@@ -746,6 +746,8 @@ class RoutinesModule(Module):
     """Routines: morning, evening and the rest."""
 
     name = "routines"
+    title = "Routines"
+    summary = "Morning, evening and other routines, one step at a time."
     tool_groups = (groups.ROUTINES,)
 
     def install(self, ctx: ModuleContext) -> None:

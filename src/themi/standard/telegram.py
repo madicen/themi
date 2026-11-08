@@ -1,5 +1,5 @@
 """CR20b: Telegram as a channel module. With it, people talk to Themi in Telegram (their own
-chats, the family group, the Mini App); `themi setup` asks for the bot's token here.
+chats, the family group, the Mini App); the Modules page asks for the bot's token here.
 
 The runner builds the channel (it knows the simulator's address), and the app adds it
 before the modules install; built any other way, this module makes it from the token.
@@ -28,6 +28,9 @@ class TelegramModule(Module):
     """People's chats with Themi, in Telegram."""
 
     name = NAME
+    title = "Telegram"
+    summary = "Each person chats with Themi in Telegram, on their phone."
+    cost = "Free"
     kind = "channel"
     settings = TelegramSettings
     website = "Each person pairs Telegram with the code from the Family page (/family)."

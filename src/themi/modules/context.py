@@ -7,6 +7,7 @@ side by side. CR3 moves the features' slots on `Services` onto `provide`/`get`.
 
 from __future__ import annotations
 
+import logging
 import sys
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
@@ -43,6 +44,7 @@ if TYPE_CHECKING:
     from themi.web.kit import Kit
 
 T = TypeVar("T")
+log = logging.getLogger(__name__)
 
 
 class ModuleContext:
@@ -54,33 +56,57 @@ class ModuleContext:
         self.jobs: list[PeriodicTask] = []
         self._providers: dict[str, str] = {}  # class name -> the module that provided it
         self._current = ""  # the module installing now, for error messages
+        # SP1: modules a tolerant load left out, with why (an install raised, or it needs
+        # one that did)
+        self.failed: dict[str, str] = {}
 
     # ----- loading --------------------------------------------------------------------
 
-    def load(self, *modules: Module) -> list[Module]:
+    def load(self, *modules: Module, tolerant: bool = False) -> list[Module]:
         """Install these modules in dependency order. Can be called more than once; a later
-        call's modules may require ones installed earlier."""
+        call's modules may require ones installed earlier.
+
+        SP1: `tolerant`, and a module whose install raises is left out, with what needs
+        it: what it had added is taken back (`_Snapshot`), the reason goes in `failed`,
+        and the rest install. Otherwise the error goes up, as before."""
         ordered = order(modules, self.installed)
+        done: list[Module] = []
         for module in ordered:
+            missing = [r for r in module.requires if r in self.failed]
+            if missing:
+                self.failed[module.name] = f"it needs {', '.join(missing)}, which couldn't start"
+                continue
+            snapshot = _Snapshot(self) if tolerant else None
             self._current = module.name
             try:
-                for group in module.tool_groups:  # CR8b: the groups its tools are in
-                    self.services.tools.add_group(group)
-                if module.migrations is not None:  # CR6: its tables, before it installs
-                    apply_track(self.services.store.db, module.name, module.migrations)
-                if module.preferences is not None:  # CR7a: for the settings page
-                    self.services.preference_models.append(module.preferences)
-                if module.household is not None:  # CR7c: for the family's pages
-                    self.services.household_models.append(module.household)
-                self._web_folder(module)
-                self.services.tools.installing = module.name  # CR9: whose tools these are
-                module.install(self)
+                self._install(module)
+            except Exception as exc:
+                if snapshot is None:
+                    raise
+                snapshot.restore()
+                self.failed[module.name] = f"it couldn't start: {exc}"
+                log.warning("Module %s couldn't start; left out", module.name, exc_info=True)
+                continue
             finally:
                 self._current = ""
                 self.services.tools.installing = ""
             self.installed.append(module.name)
             self.modules.append(module)
-        return ordered
+            done.append(module)
+        return done
+
+    def _install(self, module: Module) -> None:
+        for group in module.tool_groups:  # CR8b: the groups its tools are in
+            self.services.tools.add_group(group)
+        if module.migrations is not None:  # CR6: its tables, before it installs
+            apply_track(self.services.store.db, module.name, module.migrations)
+        if module.preferences is not None:  # CR7a: for the settings page
+            self.services.preference_models.append(module.preferences)
+        if module.household is not None:  # CR7c: for the family's pages
+            self.services.household_models.append(module.household)
+        self._web_folder(module)
+        self.services.tools.installing = module.name  # CR9: whose tools these are
+        module.install(self)
 
     def _web_folder(self, module: Module) -> None:
         """CR17b: a module from a pack brings the pack's `web` folder (its page templates
@@ -240,3 +266,57 @@ class ModuleContext:
 
     def _who(self) -> str:
         return f"module {self._current}" if self._current else "the app"
+
+
+class _Snapshot:
+    """SP1: what a module's install could change, as it was before, so a failed install can
+    be taken back: every list, dict and set on the services and on the registries modules
+    add to (tools, channels, executors, mirrors), the context's jobs, and the services'
+    other attributes. Only what lives in those is taken back; a module that changed
+    something else before raising leaves that changed. Its migrations stay applied (its
+    tables are harmless without it)."""
+
+    def __init__(self, ctx: ModuleContext) -> None:
+        services = ctx.services
+        self._objects: list[tuple[object, dict[str, object], dict[str, object]]] = []
+        targets = [
+            ctx,
+            services,
+            services.tools,
+            services.channels,
+            services.mirrors,
+            getattr(services.autonomy, "executors", None),
+        ]
+        for target in targets:
+            if target is None:
+                continue
+            attrs = dict(vars(target))
+            copies = {k: _copy(v) for k, v in attrs.items() if isinstance(v, (list, dict, set))}
+            self._objects.append((target, attrs, copies))
+
+    def restore(self) -> None:
+        for target, attrs, copies in self._objects:
+            now = vars(target)
+            for name in [n for n in now if n not in attrs]:
+                delattr(target, name)
+            for name, value in attrs.items():
+                if name in copies:  # the same container, its old contents
+                    _refill(value, copies[name])
+                elif now.get(name) is not value:
+                    setattr(target, name, value)
+
+
+def _copy(value: object) -> object:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return set(value)  # type: ignore[arg-type]
+
+
+def _refill(container: object, old: object) -> None:
+    if isinstance(container, list) and isinstance(old, list):
+        container[:] = old
+    elif isinstance(container, (dict, set)) and isinstance(old, (dict, set)):
+        container.clear()
+        container.update(old)  # type: ignore[arg-type]

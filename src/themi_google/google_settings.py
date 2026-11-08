@@ -40,8 +40,12 @@ class GoogleSettings(ModuleSettings):
     docs_url: str = env_field("GOOGLE_DOCS_URL", "")
     drive_url: str = env_field("GOOGLE_DRIVE_URL", "")
     # RC1a: not endpoints, but strings for the same config: Google's file picker.
-    picker_api_key: str = env_field("GOOGLE_PICKER_API_KEY", "")
-    project_number: str = env_field("GOOGLE_PROJECT_NUMBER", "")
+    picker_api_key: str = env_field(
+        "GOOGLE_PICKER_API_KEY", "", label="Picker API key, for choosing the cookbook"
+    )
+    project_number: str = env_field(
+        "GOOGLE_PROJECT_NUMBER", "", label="Project number, for choosing the cookbook"
+    )
 
     @model_validator(mode="after")
     def _pair(self) -> Self:

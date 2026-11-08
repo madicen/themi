@@ -214,13 +214,26 @@ def dev_setup(template: str = "", modules: str = "", config: str = "") -> DevSet
         return DevSetup(load_config(path), path.stem, Path(f"data/dev-{_slug(path.stem)}"))
     changes = [c.strip() for c in modules.split(",") if c.strip()]
     if not template and not changes:
-        return DevSetup(None, "family", DEV_DIR)
+        return _from_page(DevSetup(None, "family", DEV_DIR))
     name = template or "family"
     found = parse_config({"template": name, "modules": changes})
     load_template(name)  # an unknown template says so now, before anything starts
     label = name + ("" if not changes else " " + ",".join(changes))
     folder = Path(f"data/dev-{_slug(label)}")
-    return DevSetup(found, label, folder)
+    return _from_page(DevSetup(found, label, folder))
+
+
+def _from_page(setup: DevSetup) -> DevSetup:
+    """SP6: a themi.toml the Modules page wrote into this setup's data folder wins, so a
+    restart from the page comes back with its changes."""
+    from themi.config import load_config
+
+    written = setup.dev_dir / "themi.toml"
+    if not written.exists():
+        return setup
+    return DevSetup(
+        load_config(written), f"{setup.name}, as the Modules page set it", setup.dev_dir
+    )
 
 
 def _slug(text: str) -> str:
@@ -250,6 +263,7 @@ def run(
     simulator = Simulator(port)
     simulator.start()
     dev_fakes: DevFakes | None = None
+    runtime: Runtime | None = None
     try:
         settings = dev_settings(dev_dir, simulator.url, env)
         gemini_key = env.get("GEMINI_API_KEY", "").strip()
@@ -308,6 +322,13 @@ def run(
                 dev_fakes.save()  # what the fakes got since the last minute's save
             dev_fakes.stop()
         simulator.stop()
+    if (
+        runtime is not None and runtime.restart_requested
+    ):  # SP6: the Modules page's Restart, the whole dev run again
+        from themi.runtime import reexec
+
+        print("Starting again, with the Modules page's changes...", flush=True)
+        reexec()
 
 
 def site_urls(settings: Settings) -> list[str]:

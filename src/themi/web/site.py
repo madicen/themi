@@ -33,10 +33,12 @@ from fastapi.staticfiles import StaticFiles
 
 from themi.accounts import TRACKING_INPUTS, BusyTime, InvalidValue, Member
 from themi.accounts.models import DAY_NAMES
+from themi.accounts.passkeys import Passkeys
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import keys
+from themi.modules import StartReport
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
 from themi.web import icons
@@ -136,7 +138,15 @@ class PackStatic(StaticFiles):
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import accounts_page, admin_pages, ai_pages, dev_pages
+    from themi.web import (
+        accounts_page,
+        admin_pages,
+        ai_pages,
+        claim_pages,
+        dev_pages,
+        modules_page,
+        passkey_pages,
+    )
 
     kit = Kit(ctx)
     modules_pages = ctx.app.services.web_pages
@@ -198,6 +208,9 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(accounts_page.routes(kit))  # CR17a: made of the modules' sections
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
+    web.include_router(modules_page.routes(kit))  # SP4
+    web.include_router(claim_pages.routes(kit))  # SP7a
+    web.include_router(passkey_pages.routes(kit))  # SP7b
     for pages in modules_pages:  # CR4: each loaded module's pages
         web.include_router(pages.routes(kit))
 
@@ -231,13 +244,16 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         return kit.signed_in(member)
 
     @router.get("/signed-out", response_class=HTMLResponse)
-    def signed_out(request: Request) -> HTMLResponse:
+    def signed_out(request: Request) -> Response:
+        if app.store.get_family() is None:  # SP7a: nobody has claimed this Themi yet
+            return RedirectResponse("/claim", status_code=303)
         return kit.page(
             request,
             "message.html",
             title="You're signed out",
             body="Sending /site to Themi in Telegram gets you a sign-in link.",
             offer_google=True,
+            offer_passkey=Passkeys(app.store).any(),  # SP7b
         )
 
     @router.post("/logout")
@@ -267,7 +283,21 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             (member.id,),
         )
         alerts = []
+        report = app.services.start_report
+        broken = [f"{s.name} couldn't start: {s.reason}" for s in report.failed()]
+        setup_steps = finish_setting_up(report) if member.is_admin else []
+        if (
+            member.is_admin
+            and "telegram" not in member.channels
+            and not Passkeys(app.store).of(member)
+        ):  # SP7b: no /site link for them, so a passkey is their way back in
+            setup_steps.append(
+                ("Add a passkey, so you can sign in again without Telegram.", "/passkeys")
+            )
         if member.is_admin:
+            # SP1: a module that couldn't start, said to admins (SP7a: the rest of what
+            # SP1 said is on the "Finish setting up" card)
+            alerts.extend(broken)
             for category in autonomy.categories():
                 if category.escalated:
                     alerts.append(
@@ -290,6 +320,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
+            "modules_link": bool(member.is_admin and broken),  # SP4: links to Modules
+            "setup_steps": setup_steps,  # SP7a
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -465,6 +497,33 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
     return router
 
 
+def finish_setting_up(report: StartReport) -> list[tuple[str, str]]:
+    """SP7a: what's left before this Themi is useful, for an admin's dashboard: (what to do,
+    where). Empty once it's done."""
+    steps = []
+    if not report.has_ai():
+        choices = ", ".join(report.ai_choices) or "an AI provider module"
+        steps.append(
+            (
+                f"Themi has no AI provider yet, so it can't answer. Add one of {choices}.",
+                "/modules/gemini",
+            )
+        )
+    chats = [
+        s
+        for s in report.modules.values()
+        if s.kind == "channel" and s.state == "on" and s.name != "web_chat"
+    ]
+    if not chats:
+        steps.append(("Set up a way to chat from a phone, like Telegram.", "/modules/telegram"))
+    for status in report.modules.values():
+        if status.state != "not_set_up" or status.kind == "channel":
+            continue
+        if status.warn or status.reason.startswith("added"):
+            steps.append((f"{status.name} needs its settings.", f"/modules/{status.name}"))
+    return steps
+
+
 CORE_MENU = (
     MenuEntry("/", "Home", "Today, and what's waiting on you", "Main", 10, icon=icons.HOME),
     MenuEntry(
@@ -512,6 +571,16 @@ CORE_MENU = (
         40,
         bar_label="Tiers",
         icon=icons.TIERS,
+    ),
+    MenuEntry(  # SP4: what this Themi is made of, and setting it up
+        "/modules",
+        "Modules",
+        "What Themi can do, and setting it up",
+        "Admin",
+        5,
+        admin_only=True,
+        bar_label="Modules",
+        icon=icons.MODULES,
     ),
     MenuEntry(
         "/dev",

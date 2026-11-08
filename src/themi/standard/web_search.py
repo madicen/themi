@@ -428,6 +428,9 @@ class WebSearchModule(Module):
     one up."""
 
     name = "web_search"
+    title = "Web search"
+    summary = "Themi can look things up online and read a page."
+    cost = "Free plan is enough"
     kind = "connector"  # CR19: a search service, when one is set up
     tool_groups = (groups.WEB,)
     settings = SearchSettings
@@ -447,7 +450,7 @@ class WebSearchModule(Module):
             return None  # no key: Themi says how to set one up when asked to look something up
         try:
             await self.backend.search("weather today", count=1)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
+        except Exception as exc:  # whatever went wrong, said once, for Test
             return f"The web search didn't answer: {exc}"
         return None
 

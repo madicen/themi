@@ -2762,6 +2762,8 @@ class TasksModule(Module):
     """The task board: tasks, chores, schedules and check-ins."""
 
     name = "tasks"
+    title = "Tasks and chores"
+    summary = "The task board: tasks, chores, schedules and check-ins."
     tool_groups = (groups.SCHEDULES,)
     preferences = TasksPreferences
 

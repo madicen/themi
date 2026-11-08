@@ -312,6 +312,8 @@ class MemoryModule(Module):
     """Facts Themi was told, recalled when they matter."""
 
     name = "memory"
+    title = "Memory"
+    summary = "Remembers what it's told and brings it up when it matters."
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.core.rules import Rulebook  # at install: importing it at the top is a cycle

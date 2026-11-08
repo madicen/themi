@@ -33,6 +33,7 @@
   "laundry.fresh": 900,
   "maintenance.offer": 900,
   "memory.journal": 3600,
+  "modules.announce": 60,
   "outbox.flush": 30,
   "pantry.predict": 21600,
   "pantry.receipts": 600,

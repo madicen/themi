@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from themi.backup.s3 import S3Config
 from themi.backup.snapshots import BackupConfig
-from themi.storage.secrets import Cipher, Secret, SecretKeyError
+from themi.storage.secrets import Cipher, Secret, SecretKeyError, generate_key
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
 ToolRouting = Literal["groups", "all", "embeddings"]
@@ -78,6 +78,12 @@ class Settings(BaseModel):
                 key = Path(key_file).read_text().strip()
             except OSError as exc:
                 problems.append(f"THEMI_SECRET_KEY_FILE ({key_file}) can't be read: {exc}")
+        made = key_beside_database(values)
+        if not key and not key_file and made.exists():  # SP2: the one Themi made itself
+            try:
+                key = made.read_text().strip()
+            except OSError as exc:
+                problems.append(f"{made} can't be read: {exc}")
         if not key and not problems:
             problems.append(
                 "THEMI_SECRET_KEY (or THEMI_SECRET_KEY_FILE) is required; "
@@ -158,6 +164,30 @@ class Settings(BaseModel):
             else None,
             environment={k: v for k, v in values.items() if isinstance(v, str)},
         )
+
+
+def key_beside_database(values: Mapping[str, str]) -> Path:
+    """SP2: where Themi keeps the key it made itself: next to the database."""
+    db = Path(values.get("THEMI_DB_PATH", "").strip() or "data/themi.db")
+    return db.parent / "secret.key"
+
+
+def ensure_secret_key(values: Mapping[str, str]) -> Path | None:
+    """SP2: on a new Themi with no key set, make one next to the database (readable only
+    by its owner) and return its path, so it can be told to an admin to save. Nothing is
+    made when a key is set, when Themi made one already, or when there's a database
+    already: data encrypted with a lost key must never meet a new one."""
+    if values.get("THEMI_SECRET_KEY", "").strip() or values.get("THEMI_SECRET_KEY_FILE", ""):
+        return None
+    path = key_beside_database(values)
+    database = Path(values.get("THEMI_DB_PATH", "").strip() or "data/themi.db")
+    if path.exists() or database.exists():
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as out:
+        out.write(generate_key() + "\n")
+    return path
 
 
 def read_dotenv(path: Path) -> dict[str, str]:

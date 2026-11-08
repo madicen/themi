@@ -392,6 +392,8 @@ class SpendingModule(Module):
     """X1: takeout, eating out and business expenses."""
 
     name = "spending"
+    title = "Spending"
+    summary = "Keeps track of takeout, eating out and business expenses."
     tool_groups = (home_groups.SPENDING,)
     household = SpendingSettings
 

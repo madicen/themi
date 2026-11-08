@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Save Themi's key{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Save Themi's key</h1>
+  <p>Themi made a secret key that locks the passwords and keys it keeps, and its backups.
+  <strong>Without it, a backup can't be read.</strong> Save it somewhere safe, away from this
+  server: a password manager is best, or print this page.</p>
+  <pre class="key">{{ key }}</pre>
+  <p class="muted">This page shows it once.</p>
+  <form method="post" action="/claim/key">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="primary">I've saved it</button>
+  </form>
+</section>
+{% endblock %}

@@ -495,6 +495,8 @@ class ChoreChartModule(Module):
     Cozyla wall) shows it; the dashboard does too."""
 
     name = "chore_chart"
+    title = "Chore chart"
+    summary = "The family's chore chart: who does what, and how many each day."
     preferences = ChartPreferences  # stored under "cozyla_chores", where they always were
     requires = ("tasks",)
     migrations = Path(__file__).parent / "chore_chart_schema"
