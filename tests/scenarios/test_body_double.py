@@ -773,3 +773,26 @@ async def test_not_linked_only_the_loop(scenario: Scenario) -> None:
     assert scenario.last_buttons("Erin") == ["Play", "Not now"]
     bd = scenario.app.services.maybe(keys.body_double)
     assert bd is not None and bd.state(scenario.member("Erin"))["spotify"] == []
+
+
+async def test_my_spotify_on_the_page_says_what_happened_and_keeps_the_choice(
+    scenario: Scenario, site: httpx.AsyncClient, fake_spotify: FakeSpotify
+) -> None:
+    """Bug 2026-11-08: Play under My Spotify reloaded the page, said nothing, and the
+    playlist went back to the first one."""
+    await own_playlists(scenario, site, fake_spotify)
+    await start(scenario, "keep me company while I write", mode="quiet",
+                what="writing the newsletter")  # fmt: skip
+    csrf = await sign_in(scenario, site, "Erin")
+    fetch = {"X-Requested-With": "fetch"}
+    played = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:playlist:kitchendance"})  # fmt: skip
+    assert played.status_code == 200
+    assert played.json()["said"] == "Playing Kitchen Dance on Desk speaker."
+    assert played.json()["spotify_playing"] == "spotify:playlist:kitchendance"
+    page = (await site.get("/session")).text
+    assert '<option value="spotify:playlist:kitchendance" selected>' in page
+    fake_spotify.devices.clear()  # Spotify closed on every device
+    again = await site.post("/session/spotify", headers=fetch, data={
+        "csrf": csrf, "action": "play", "uri": "spotify:playlist:deepfocus"})  # fmt: skip
+    assert again.json()["said"].startswith("Spotify isn't open anywhere")

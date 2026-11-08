@@ -209,8 +209,37 @@
     return true;
   }
 
+  // F34i, bug 2026-11-08: My Spotify. A plain form post carried no session header, so in
+  // Telegram the page reloaded, nothing played and the playlist went back to the first.
+  function onSpotify(event) {
+    var form = event.target;
+    if (!form.closest || !form.closest(".session-spotify")) return false;
+    event.preventDefault();
+    var data = new URLSearchParams(new FormData(form));
+    var tapped = event.submitter;
+    data.set("action", tapped && tapped.value ? tapped.value : "play");
+    var said = form.parentNode.querySelector(".session-spotify-said");
+    var buttons = form.querySelectorAll("button");
+    for (var i = 0; i < buttons.length; i++) buttons[i].disabled = true;
+    function done(text) {
+      for (var j = 0; j < buttons.length; j++) buttons[j].disabled = false;
+      if (said) said.textContent = text;
+    }
+    fetch(form.getAttribute("action"), {
+      method: "POST", body: data.toString(), credentials: "same-origin",
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+    }).then(function (r) {
+      if (!r.ok) report("spotify " + data.get("action") + " answered " + r.status);
+      return r.ok ? r.json() : null;
+    }).then(function (s) {
+      done(s && s.said ? s.said : "That didn't reach Spotify. Try again in a moment.");
+      if (s && s.active) redraw(s);
+    }, function (e) { done("That didn't reach Spotify. Try again in a moment."); report("spotify failed: " + e); });
+    return true;
+  }
+
   function onSubmit(event) {
-    if (onChat(event) || onRedo(event)) return;
+    if (onChat(event) || onRedo(event) || onSpotify(event)) return;
     var form = event.target;
     if (!form.closest || !form.closest(".session-moves")) return;
     event.preventDefault();

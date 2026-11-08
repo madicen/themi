@@ -916,6 +916,9 @@ class BodyDouble:
             **(self.pictures.page_state(session) if self.pictures is not None else {}),
             "music": self.music_state(member),
             "spotify": json.loads(session.row.get("playlists") or "[]"),  # F34i
+            "spotify_playing": music if (music := session.row.get("music") or "").startswith(
+                "spotify:"
+            ) else "",  # the one that played, still chosen on the page
             "buttons": [
                 {"label": b.label, "action": b.payload.get("action", ""),
                  "mode": b.payload.get("mode", "")}
