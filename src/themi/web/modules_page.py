@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, Response
 
 from themi import clock
 from themi.config import InstanceConfig, available_modules, template_packages
+from themi.localtime import to_utc_iso
 from themi.modules import KINDS, Module, StartReport
 from themi.modules.guides import guide
 from themi.modules.portal import Portal, PortalError
@@ -227,9 +228,9 @@ def routes(kit: Kit) -> APIRouter:
             templates=sorted(template_packages()),
             draft=view.draft,
             audit=portal().audit.recent(),
+            last_good=bool(view.report.failed()) and portal().last_good() is not None,
         )
 
-    @router.get("/modules/{name}", response_class=HTMLResponse)
     def module_page(request: Request, name: str) -> HTMLResponse:
         return show_module(request, name)
 
@@ -397,12 +398,72 @@ def routes(kit: Kit) -> APIRouter:
             message = str(exc)
         return kit.redirect(f"/modules/{name}", message)
 
+    # ----- SP6: restart and apply ----------------------------------------------------------
+
+    @router.get("/modules/restart", response_class=HTMLResponse)
+    def restart_page(request: Request) -> HTMLResponse:
+        session = kit.admin(request)
+        draft = DraftStore(app.db).get()
+        try:
+            check = portal().preflight()
+            problems = [w for w in check.warnings()]
+            broken = ""
+        except Exception as exc:  # a config the draft makes that can't even be read
+            problems, broken = [], str(exc)
+        return kit.with_flash(
+            request,
+            "restart.html",
+            session,
+            draft=draft,
+            problems=problems,
+            broken=broken,
+        )
+
+    @router.post("/modules/restart", response_class=HTMLResponse)
+    async def restart(request: Request) -> Response:
+        session, _ = await kit.checked(request, admin=True)
+        started = to_utc_iso(app.services.start_report.made_at)
+        try:
+            message = await portal().restart(session.member)
+        except Exception as exc:
+            return kit.redirect("/modules/restart", f"Couldn't restart: {exc}")
+        return kit.with_flash(
+            request,
+            "restarting.html",
+            session,
+            message=message,
+            started=started,
+            restarting=app.services.restart is not None,
+        )
+
+    @router.get("/modules/restart/status")
+    def restart_status(request: Request, since: str = "") -> Response:
+        """Polled by the Restarting page: 204 while the same Themi is running, then a
+        redirect to the Modules page once a new one has started."""
+        kit.admin(request)
+        if to_utc_iso(app.services.start_report.made_at) == since:
+            return Response(status_code=204)
+        return Response(status_code=200, headers={"HX-Redirect": "/modules"})
+
+    @router.post("/modules/last-good", response_class=HTMLResponse)
+    async def last_good(request: Request) -> Response:
+        session, _ = await kit.checked(request, admin=True)
+        if not portal().back_to_last_good(session.member):
+            return kit.redirect("/modules", "There's no earlier setup to go back to.")
+        return kit.redirect(
+            "/modules/restart", "The last working setup is waiting. Restart to go back to it."
+        )
+
     @router.post("/modules/undo", response_class=HTMLResponse)
     async def undo(request: Request) -> Response:
         session, _ = await kit.checked(request, admin=True)
         portal().undo(session.member)
         return kit.redirect("/modules", "The changes waiting for a restart are gone.")
 
+    # Last, so the pages above (/modules/restart) aren't taken for a module's name.
+    router.add_api_route(
+        "/modules/{name}", module_page, methods=["GET"], response_class=HTMLResponse
+    )
     return router
 
 

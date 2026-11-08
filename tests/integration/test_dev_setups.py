@@ -37,6 +37,22 @@ def test_a_themi_toml_names_the_setup(tmp_path: Path) -> None:
     assert setup.config is not None and setup.config.removed == ("focus",)
 
 
+def test_what_the_modules_page_wrote_wins_after_a_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SP6: a restart from the Modules page in `make dev` comes back with its changes."""
+    monkeypatch.chdir(tmp_path)
+    DEV_DIR.mkdir(parents=True)
+    (DEV_DIR / "themi.toml").write_text('template = "family"\nmodules = ["-safeway"]\n')
+    setup = dev_setup()
+    assert setup.config is not None and setup.config.removed == ("safeway",)
+    assert setup.dev_dir == DEV_DIR and "Modules page" in setup.name
+    work = Path("data/dev-work")
+    work.mkdir()
+    (work / "themi.toml").write_text('template = "work"\nmodules = ["+travel"]\n')
+    assert dev_setup(template="work").config.added == ("travel",)  # type: ignore[union-attr]
+
+
 def test_an_unknown_template_says_so_before_anything_starts() -> None:
     from themi.settings import SettingsError
 

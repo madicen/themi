@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
+import sys
 from datetime import timedelta
+from typing import NoReturn
 
 import uvicorn
 
@@ -25,6 +28,14 @@ log = logging.getLogger(__name__)
 
 SCHEDULER_TICK = timedelta(seconds=15)
 SHUTDOWN_GRACE_SECONDS = 30
+RESTART_AFTER_SECONDS = 1.0
+
+
+def reexec() -> NoReturn:
+    """SP6: start this same command again in this process (its PID stays, so in a
+    container it's still PID 1 and Docker sees no exit). Called once Themi has stopped."""
+    logging.shutdown()
+    os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
 
 
 class Runtime:
@@ -42,6 +53,8 @@ class Runtime:
         self.telegram_enabled = telegram_enabled
         self.scheduler_tick = scheduler_tick
         self.stop_event = asyncio.Event()
+        self.restart_requested = False  # SP6: run again once stopped (`reexec`)
+        app.services.restart = self.request_restart
         app.services.site_url = site_base_url(public_url, host, port)
         self.scheduler = app.scheduler or Scheduler(app.db)
         for task in app.periodic:
@@ -75,6 +88,15 @@ class Runtime:
 
     def stop(self) -> None:
         self.stop_event.set()
+
+    def request_restart(self) -> None:
+        """SP6: stop as on SIGTERM, then start again (the caller re-executes the process).
+        Soon, not now, so the page that asked gets its answer first."""
+        self.restart_requested = True
+        try:
+            asyncio.get_running_loop().call_later(RESTART_AFTER_SECONDS, self.stop)
+        except RuntimeError:  # no loop running: nothing to wait for
+            self.stop()
 
     def install_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()

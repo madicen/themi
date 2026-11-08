@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Restarting · Themi{% endblock %}
+{% block content %}
+<h1>{{ "Restarting" if restarting else "Saved" }}</h1>
+<p>{{ message }}</p>
+{% if restarting %}
+<p class="muted" hx-get="/modules/restart/status?since={{ started | urlencode }}" hx-trigger="every 2s"
+   hx-swap="none">This page goes back to the Modules page when Themi is back.</p>
+{% endif %}
+<p><a href="/modules">Back to the Modules page</a></p>
+{% endblock %}

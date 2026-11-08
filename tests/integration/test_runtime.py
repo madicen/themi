@@ -138,3 +138,20 @@ def test_themi_run_as_a_process_starts_and_stops_on_sigterm(tmp_path: Path) -> N
     assert process.returncode == 0, stderr
     assert "Stopped" in stderr
     assert (tmp_path / "themi.db").exists()
+
+
+async def test_a_restart_from_the_modules_page_stops_themi_to_start_again(
+    family: SeededFamily, fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SP6: the runtime stops as on SIGTERM and says to start again; the caller re-executes."""
+    from themi import runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "RESTART_AFTER_SECONDS", 0)
+    scenario = Scenario(family, fake_telegram)
+    runtime = Runtime(scenario.app, host="127.0.0.1", port=0, telegram_enabled=False)
+    task = asyncio.create_task(runtime.run())
+    await wait_for(lambda: runtime.server.started)
+    assert scenario.app.services.restart is not None
+    scenario.app.services.restart()
+    await asyncio.wait_for(task, timeout=10)
+    assert runtime.restart_requested

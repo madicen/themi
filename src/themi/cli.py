@@ -289,6 +289,11 @@ def _run() -> None:
         await runtime.run()
 
     asyncio.run(main())
+    if runtime.restart_requested:  # SP6: asked for on the Modules page
+        from themi.runtime import reexec
+
+        log.info("Starting again, with the Modules page's changes")
+        reexec()
 
 
 def _login_link(name: str) -> str:

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Restart · Modules · Themi{% endblock %}
+{% block content %}
+<p><a href="/modules">All modules</a></p>
+<h1>Restart Themi</h1>
+{% if draft %}
+<p>These changes go in place when Themi restarts:</p>
+<ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
+{% else %}
+<p class="muted">No changes are waiting. Restarting starts Themi again as it is.</p>
+{% endif %}
+
+{% if broken %}
+<p class="alert">These changes can't be read: {{ broken }}. Undo them on the Modules page.</p>
+{% else %}
+{% if problems %}
+<p>Starting with them, Themi would say:</p>
+<section class="alerts">{% for p in problems %}<p class="alert">{{ p }}</p>{% endfor %}</section>
+<p class="muted">Themi still starts: what can't start stays off until it's sorted.</p>
+{% endif %}
+<form method="post" action="/modules/restart" class="module-action">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="primary">{{ "Restart anyway" if problems else "Restart now" }}</button>
+  <span class="muted">Themi stops for about half a minute; messages wait and go out after.</span>
+</form>
+{% endif %}
+<p class="muted">This starts the same version again. To move to a new release, use
+<a href="/dev">Development</a>.</p>
+{% endblock %}

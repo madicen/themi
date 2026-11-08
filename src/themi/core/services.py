@@ -164,6 +164,8 @@ class Services(Registry):
     # None when nothing was read) and the environment as read (never shown: it holds secrets)
     instance_config: Any = None
     settings: Any = None  # SP5: the app's themi.settings.Settings, when it was run from them
+    # SP6: stop Themi cleanly and start it again (the runtime's); None when nothing runs it
+    restart: Callable[[], None] | None = None
     environment: dict[str, str] = field(default_factory=dict, repr=False)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
 

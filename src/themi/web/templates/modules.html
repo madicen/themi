@@ -15,9 +15,23 @@ and restart Themi to put changes in place. Started from the {{ template }} templ
 <section class="card">
   <p class="summary">Changes are waiting for a restart.</p>
   <ul>{% for entry in draft.log %}<li>{{ entry.what }}</li>{% endfor %}</ul>
-  <form method="post" action="/modules/undo" class="module-action">
+  <div class="module-action">
+    <a class="button primary" href="/modules/restart">Restart Themi to put them in place…</a>
+    <form method="post" action="/modules/undo">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button>Undo them</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% if last_good %}
+<section class="card">
+  <p class="summary">Something couldn't start after the last restart.</p>
+  <form method="post" action="/modules/last-good" class="module-action">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <button>Undo them</button>
+    <button>Go back to the last working setup…</button>
+    <span class="muted">It waits as changes, so you can look before restarting.</span>
   </form>
 </section>
 {% endif %}

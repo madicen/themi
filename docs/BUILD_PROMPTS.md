@@ -332,7 +332,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [x] 2026-11-08 |
 | SP4 | Modules page, read only | Setup portal | [x] 2026-11-08 |
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [x] 2026-11-08 |
-| SP6 | Restart and apply from the Modules page | Setup portal | [ ] |
+| SP6 | Restart and apply from the Modules page | Setup portal | [x] 2026-11-08 |
 | SP7 | First visit | Setup portal | split |
 | SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [ ] |
 | SP7b | Passkeys for admins without Telegram | Setup portal | [ ] |
@@ -15605,7 +15605,7 @@ Notes (2026-11-08):
 - Golden: routes.json gained the five POSTs; handlers.json gained `modules.test`.
 
 ### SP6 · Setup portal: restart and apply
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP5
 Read first: the plan's "Restart and apply"; `themi/runtime.py`; `themi/updates.py`.
 - Restart on the Modules page: pre-flight (resolve and build the draft without installing,
@@ -15624,6 +15624,35 @@ Read first: the plan's "Restart and apply"; `themi/runtime.py`; `themi/updates.p
 Tests: the re-exec is a seam tests replace (no real exec); pre-flight problems shown; the
 draft becomes live and `last_good` keeps the old one; a scenario: turn on travel, restart,
 it's on and the admin is told; a failed module offers undo.
+
+Notes (2026-11-08):
+- `/modules/restart` shows the draft's changes and a pre-flight (`Portal.preflight`:
+  `resolve_start` on the draft's config and secrets, building but not installing); with
+  problems the button says "Restart anyway". `POST /modules/restart` goes through the trust
+  tiers (`server_control`, executor `modules.restart`), which applies and restarts.
+- `Portal.apply`: the current config (as TOML) and the module secrets (still encrypted) go
+  to `config_last_good`; the draft's config is written with `write_config` at
+  `write_path`; the draft's secrets are set or cleared; the draft is discarded; a
+  `config_restarts` row (migration 0154) says who asked and what changed.
+- The runtime: `services.restart` is `Runtime.request_restart`, which marks the restart
+  and stops a second later (so the page gets its answer). `themi run` and `make dev` then
+  call `themi.runtime.reexec()`: `os.execv` with the same command (`sys.orig_argv`), the
+  same PID. Tests replace `services.restart`; nothing in the tests execs.
+- `restarting.html` polls `/modules/restart/status?since=<this start>` with htmx every
+  2 seconds; a 204 while it's the same start, then `HX-Redirect: /modules`.
+- `modules.announce` (every minute; the first run is right after the start) tells whoever
+  restarted what changed and anything that couldn't start, once, through the outbox.
+- "Go back to the last working setup" shows on /modules when the last start left a module
+  failed and there's a last good setup. It puts that setup in the draft (template, modules,
+  plain values, secrets) for review; Restart applies it.
+- `make dev`: `dev_setup` prefers a `themi.toml` the page wrote into the setup's data folder
+  (`data/dev/themi.toml` for the family's), so a restart there comes back with the changes.
+  Note: with such a file in `data/dev`, `test_the_family_with_no_changes_is_as_before`
+  fails locally until `make dev-reset`.
+- Without a runtime (tests, `themi` commands), Restart saves and says to restart by hand.
+- The Development page's Restart says to use the Modules page's for module changes.
+- Golden: handlers.json `modules.restart`; jobs.json `modules.announce`; routes.json the
+  restart pages and `POST /modules/last-good`.
 
 ### SP7 · Setup portal: first visit
 Status: split into SP7a and SP7b.

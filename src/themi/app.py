@@ -401,6 +401,7 @@ def build_app(
     portal = Portal(services, cipher)  # SP5: what the Modules page does
     portal.install()
     services.provide(Portal, portal)
+    ctx.periodic("modules.announce", timedelta(minutes=1), portal.announce)  # SP6
     if control_dir is not None:
         ctx.periodic("server.results", timedelta(minutes=1), server.check)
     if backup is not None:
