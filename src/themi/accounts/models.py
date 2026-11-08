@@ -82,6 +82,13 @@ class Member:
     # The website's menu bar, in order (F28c): paths, at most MENU_BAR_MAX; None: the usual.
     menu_bar: tuple[str, ...] | None = None
     # CM1a: talk with a plain chat model; a background pass picks out tasks (CM1b).
+    # CR20b: the channels they're on ("telegram", "web_chat"), from member_identities.
+    channels: tuple[str, ...] = ()
+
+    @property
+    def reachable(self) -> bool:
+        """Themi can write to them on some channel (CR20b; Telegram only, before)."""
+        return bool(self.channels)
 
     def kind_cost(self, kind: str) -> float:
         return self.kind_costs.get(kind, 1.0)

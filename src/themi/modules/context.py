@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from themi.accounts.preferences import Preferences
     from themi.ai.router import ProviderFactory
     from themi.autonomy.engine import Executor
+    from themi.channels.base import Channel
     from themi.core.services import (
         AwaitingSource,
         CommandHandler,
@@ -220,6 +221,10 @@ class ModuleContext:
         """CR19: an AI provider module's adapter for one kind of backend; the router builds
         a member's backends of that kind with it."""
         self.services.ai_adapters[kind] = builder
+
+    def channel(self, name: str, channel: Channel) -> None:
+        """CR20b: a channel people talk to Themi on ("telegram", "web_chat")."""
+        self.services.channels.add(name, channel)
 
     def capability(self, name: str) -> None:
         """CR19: something Themi can now do ("voice_notes", "pictures", "image_generation")."""

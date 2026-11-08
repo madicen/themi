@@ -187,7 +187,7 @@ class DaySummary:
         sent = 0
         for member in self.services.store.list_members():
             at = self.services.store.preferences(member.id, DaySummaryPreferences).morning_summary
-            if at is None or member.telegram_user_id is None:
+            if at is None or not member.reachable:
                 continue
             due_at = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
             if not due_at <= now < due_at + SEND_WITHIN or self._sent(member, now.date()):

@@ -19,6 +19,7 @@ from themi.ai.router import AIRouter
 from themi.ai.settings import AISettingsStore
 from themi.autonomy import Autonomy
 from themi.channels.calibration import PdaCalibrator
+from themi.channels.channel_set import ChannelSet
 from themi.channels.events import InboundEvent
 from themi.channels.outbox import Outbox
 from themi.core.kept_pictures import KeptPictures
@@ -140,6 +141,8 @@ class Services(Registry):
     # these), and the loaded capabilities ("voice_notes", "pictures", "image_generation").
     ai_adapters: dict[str, Callable[[Any], Any]] = field(default_factory=dict)
     capabilities: set[str] = field(default_factory=set)
+    # CR20b: the channels people talk to Themi on (channel modules add theirs).
+    channels: ChannelSet = field(default_factory=ChannelSet)
     accounts_sections: list[AccountsSection] = field(default_factory=list)
     waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.

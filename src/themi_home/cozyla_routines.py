@@ -368,7 +368,7 @@ class CozylaRoutines:
         sent = 0
         for member in self.store.list_members():
             uid = self._to_cozyla.get(member.id)
-            if uid is None or member.telegram_user_id is None:
+            if uid is None or not member.reachable:
                 continue
             quiet = self._quiet_starts(member, now)
             evening = quiet - EVENING_BEFORE_QUIET

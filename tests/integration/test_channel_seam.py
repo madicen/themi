@@ -83,7 +83,8 @@ async def test_a_channel_that_isnt_telegram_carries_a_reply(family: SeededFamily
     letters = LetterChannel()
     models = ModelBank()
     app = build_app(family.db, family.store.cipher, lambda _store: letters, provider_factory=models)
-    assert app.channel is letters and letters.handler is not None
+    assert app.channel.get("telegram") is letters  # CR20b: in the app's set of channels
+    assert letters.handler is not None
     erin = family.erin
     ai = app.ai_settings
     backend = ai.add_backend(erin, erin.id, "Primary", "ollama", model="primary")

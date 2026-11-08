@@ -30,6 +30,7 @@ def test_every_module_has_a_kind() -> None:
     of = {kind: {n for n, cls in known.items() if cls.kind == kind} for kind in KINDS}
     assert of["ai"] == {"claude", "gemini", "openai_compatible", "cloudflare"}
     assert of["capability"] == {"voice_notes", "pictures", "image_generation"}
+    assert of["channel"] == {"telegram", "web_chat"}  # CR20b
     assert {"google", "gmail", "calendar", "spotify", "thinq", "cozyla_todos"} <= of["connector"]
     assert {"tasks", "reminders", "noise_digest"} <= of["feature"]
 
@@ -111,15 +112,18 @@ def test_setup_asks_by_kind_in_order(tmp_path: Path) -> None:
     run_setup(ask, lambda _q: "", told.append, tmp_path, run=skip)
     steps = [q for q in asked if q.startswith(("Leave", "Which other", "Add any"))]
     assert [s.split(" (")[0] for s in steps] == [
+        "Leave out any channels",  # CR20b: telegram and web_chat are channel modules
+        "Which other channels",
         "Leave out any AI providers",
         "Which other AI providers",
         "Leave out any capabilities",
         "Which other capabilities",
         "Leave any out",
         "Add any",
-    ]  # no channel modules yet: Telegram is the core's (CR20b makes it one)
+    ]
     headings = [t.split(".")[0] for t in told if " template has: " in t]
     assert headings == [
+        "How you'll talk to Themi",
         "AI providers",
         "What Themi can do with voice notes and pictures, and make",
         "Services and features",

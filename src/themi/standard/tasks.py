@@ -919,7 +919,7 @@ class TaskBoard:
         self.withdraw_prompt(task)
         task = self.get(task_id)
         people = (
-            [m for m in self.store.list_members() if m.telegram_user_id is not None]
+            [m for m in self.store.list_members() if m.reachable]
             if shared
             else [self.store.get_member(assignee)]
             if assignee is not None
@@ -1489,7 +1489,7 @@ class TaskBoard:
                 task = self.get(task.id)
                 if both:
                     for member in self.store.list_members():
-                        if member.telegram_user_id is not None:
+                        if member.reachable:
                             await self.prompt(task, member=member, overdue="shared")
                 else:
                     await self.prompt(task, overdue="own")
@@ -1596,7 +1596,7 @@ class TaskBoard:
         if due_on is not None:
             if task.either:
                 for member in self.store.list_members():
-                    if member.telegram_user_id is not None:
+                    if member.reachable:
                         await self.prompt(task, member=member)
             else:
                 await self.prompt(task)
@@ -1708,7 +1708,7 @@ class TaskBoard:
         task = self.get(task_id)
         self.withdraw_prompt(task)  # one nudge each, not a second for whoever had it
         for member in self.store.list_members():
-            if member.telegram_user_id is not None:
+            if member.reachable:
                 await self.prompt(task, member=member)
         return task
 
@@ -1757,7 +1757,7 @@ class TaskBoard:
         others = [
             m.name
             for m in self.store.list_members()
-            if m.id != by.id and m.telegram_user_id is not None and not self._own_snooze(task, m)
+            if m.id != by.id and m.reachable and not self._own_snooze(task, m)
         ]
         if others:
             text += STILL_ON_TEXT.format(whose=" and ".join(f"{n}'s" for n in others))

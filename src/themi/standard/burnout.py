@@ -151,7 +151,7 @@ class Burnout:
         for row in self.db.query("SELECT * FROM burnout WHERE ended_at IS NULL"):
             member = self.services.store.get_member(row["member_id"])
             other = next(
-                (m for m in members if m.id != member.id and m.telegram_user_id is not None),
+                (m for m in members if m.id != member.id and m.reachable),
                 None,
             )
             if other is None or self.current(other) is not None:

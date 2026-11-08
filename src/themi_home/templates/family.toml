@@ -6,6 +6,7 @@
 
 name = "family"
 modules = [
+    "telegram",  # CR20b: how they talk to Themi (web_chat adds a chat on the website)
     # CR19: the AI providers and capabilities (a Themi needs at least one provider)
     "claude",
     "gemini",

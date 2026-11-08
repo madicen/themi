@@ -168,7 +168,7 @@ class NoiseDigest:
         now = clock.now().astimezone(tz)
         sent = 0
         for member in self.services.store.list_members():
-            if member.telegram_user_id is None:
+            if not member.reachable:
                 continue
             due = self._due(member, now) or self._stale(member, now)
             if due and await self.send(member):

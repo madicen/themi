@@ -1,6 +1,6 @@
 """`themi setup`: what this Themi is made of, written to themi.toml and .env (CR11).
 
-It asks for the core's settings (the Telegram bot's token; it makes the secret key), a
+It asks for the core's settings (the website's address; it makes the secret key), a
 template, then (CR19) by kind, in order: how they'll talk to Themi (channels), the AI
 providers (at least one), the capabilities (voice notes, pictures, making pictures), then
 services and features. Each step says what the template has, which to leave out and which
@@ -75,10 +75,7 @@ def run_setup(
     answers = Answers()
     say("Setting up a Themi. A blank answer leaves a setting unset; you can add it later.")
 
-    # ----- the core ------------------------------------------------------------------------
-    token = ask_secret("Telegram bot token (from @BotFather)").strip()
-    if token:
-        answers.env["TELEGRAM_BOT_TOKEN"] = token
+    # ----- the core (CR20b: Telegram's token is the telegram module's, asked with it) ------
     answers.env["THEMI_SECRET_KEY"] = generate_key()
     say(KEY_NOTE)
     public = ask("The website's public address (blank: this machine only)", None).strip()
@@ -179,7 +176,8 @@ def _ask_kind(
     if not mine and not others:
         return modules
     say(f"{step.heading}. The {template} template has: {', '.join(mine) or 'none'}.")
-    removed = _pick(ask, say, f"{step.leave_out} (names, with commas; blank: none)", mine)
+    question = f"{step.leave_out} (names, with commas; blank: none)"
+    removed = _pick(ask, say, question, mine) if mine else []
     if others:
         say(f"Also available: {', '.join(others)}.")
     added = _pick(ask, say, f"{step.add} (names, with commas; blank: none)", others)

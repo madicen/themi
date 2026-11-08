@@ -541,7 +541,7 @@ class CozylaTodos:
         return next(m for m in self.services.store.list_members() if m.is_admin)
 
     def _everyone(self) -> list[Member]:
-        return [m for m in self.services.store.list_members() if m.telegram_user_id is not None]
+        return [m for m in self.services.store.list_members() if m.reachable]
 
     def _doer(self, task: Task) -> Member:
         if task.assignee is not None:

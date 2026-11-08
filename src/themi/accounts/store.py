@@ -133,7 +133,8 @@ def _hash_code(code: str) -> str:
 # CR20a2: a member with their Telegram id, which is kept in member_identities.
 MEMBERS = (
     "SELECT m.*, (SELECT i.external_id FROM member_identities i WHERE i.member_id = m.id "
-    "AND i.channel = 'telegram') AS telegram_id FROM members m"
+    "AND i.channel = 'telegram') AS telegram_id, (SELECT group_concat(i.channel) FROM "
+    "member_identities i WHERE i.member_id = m.id) AS channel_names FROM members m"
 )
 TELEGRAM = "telegram"
 
@@ -144,6 +145,7 @@ def _member_from_row(row: dict[str, Any]) -> Member:
         name=row["name"],
         role=Role(row["role"]),
         telegram_user_id=int(row["telegram_id"]) if row["telegram_id"] is not None else None,
+        channels=tuple(sorted(row["channel_names"].split(","))) if row["channel_names"] else (),
         quiet_start=parse_hhmm(row["quiet_start"]),
         quiet_end=parse_hhmm(row["quiet_end"]),
         daily_limit=row["daily_limit"],

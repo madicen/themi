@@ -316,7 +316,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR20a | Round two: a channel seam, and channel identities for members | Core refactor | split |
 | CR20a1 | Round two: the Channel protocol | Core refactor | [x] 2026-11-08 |
 | CR20a2 | Round two: channel identities for members | Core refactor | [x] 2026-11-08 |
-| CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
+| CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [x] 2026-11-08 |
 | CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [ ] |
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [ ] |
@@ -15166,12 +15166,33 @@ Notes (2026-11-08):
   tests/unit/test_member_identities.py. Golden files identical.
 
 ### CR20b · Round two: Telegram as a channel module, and a website chat channel
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR20a
 - Telegram's channel becomes the `telegram` module (kind channel). A `web_chat` module adds
   a chat page on the website, for someone who uses only the site; it renders buttons as
   buttons.
 Tests: a scenario over the web channel alone; a member on both channels.
+
+Notes (2026-11-08):
+- `ChannelSet` (`themi/channels/channel_set.py`) is the app's channel: every loaded
+  channel as one. It notes which channel each person last wrote from and sends there,
+  otherwise to the first channel they're on, otherwise to the first channel. Edits go
+  the same way. Group sends (`chat_id`) go to the channel with the family group.
+- `telegram` (kind channel, `themi/standard/telegram.py`) holds the bot token setting, so
+  `themi setup` asks for it in the channel step, not with the core's. The runner still
+  builds Telegram's channel (it knows the simulator's address), only when the setup has
+  the module. The app adds it before modules install.
+- `web_chat` (kind channel, `themi/standard/web_chat.py`, its own migration track) adds
+  `/chat`. Opening the page gives the member a "web_chat" identity. What they write goes
+  to the agent; Themi's messages are kept with their buttons, shown as buttons; a tap is
+  a button event like Telegram's. Mini App buttons aren't shown there.
+- `Member.channels` and `Member.reachable` (on any channel) replace "has a Telegram id"
+  wherever a feature asks whether Themi can write to someone. The Telegram-only
+  checks stay: pairing, the family group, the Family page's "On Telegram".
+- Not in the family or work templates. Add it with `+web_chat`, or in `themi setup`.
+- Tests changed for moved wiring: test_architecture (the channel set hands on the
+  outbox's sends), test_channel_seam (the app's channel is the set), my CR19 setup-order
+  test (a channel step now). New: tests/scenarios/test_web_chat.py. Golden identical.
 
 ### CR20c · Gate: Discord and Slack channels
 Status: [ ]

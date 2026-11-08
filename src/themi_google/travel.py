@@ -120,7 +120,7 @@ class TravelHeadsUps:
         for member in self.services.store.list_members():
             if (
                 not self.services.store.preferences(member.id, TravelPreferences).leave_heads_up
-                or member.telegram_user_id is None
+                or not member.reachable
             ):
                 continue
             for entry in reader.entries(member, now, now + LOOK_AHEAD):

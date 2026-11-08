@@ -40,7 +40,7 @@ async def from_wall(outbox: Outbox, member: Member, title: str, seed: str) -> No
     """Ticked on the wall by `member`: a warm word, a moment later, if they want one."""
     if (
         not outbox.store.preferences(member.id, TasksPreferences).done_praise
-        or member.telegram_user_id is None
+        or not member.reachable
     ):
         return
     now = clock.now()

@@ -353,7 +353,7 @@ class Routines:
         now = clock.now().astimezone(tz)
         sent = 0
         for member in self.store.list_members():
-            if member.telegram_user_id is None:
+            if not member.reachable:
                 continue
             for routine in self.of(member):
                 end = self._end(routine, member, now)

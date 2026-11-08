@@ -84,7 +84,7 @@ class GoogleTasksInbox:
         inbox. Returns how many were handled."""
         handled = 0
         for member in self.store.list_members():
-            if member.telegram_user_id is None:
+            if not member.reachable:
                 continue
             accounts = [
                 a

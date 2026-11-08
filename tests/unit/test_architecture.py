@@ -35,7 +35,11 @@ def test_only_the_ai_package_reaches_model_sdks() -> None:
 
 # Every message to a person goes through the outbox (quiet hours, limits, PDA
 # shielding). Only the outbox and the channel itself may call send_text.
-SEND_TEXT_ALLOWED = {SRC / "channels" / "outbox.py", SRC / "channels" / "telegram.py"}
+SEND_TEXT_ALLOWED = {
+    SRC / "channels" / "outbox.py",
+    SRC / "channels" / "telegram.py",
+    SRC / "channels" / "channel_set.py",  # CR20b: the channels as one, handing on the outbox's
+}
 
 
 def test_only_the_outbox_sends_messages() -> None:

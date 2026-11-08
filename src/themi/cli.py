@@ -153,11 +153,6 @@ def build_runtime(
     from themi.storage import open_database
     from themi.storage.secrets import Secret
 
-    if settings.telegram_enabled and settings.telegram_bot_token is None:
-        raise SettingsError("TELEGRAM_BOT_TOKEN is required to run Themi (get one from @BotFather)")
-    # With Telegram disabled the channel is never started; sends simply queue.
-    token = settings.telegram_bot_token or Secret("0:telegram-disabled")
-    api = settings.telegram_api_url  # set only for the simulator
     modules = None
     template = None
     options: dict[str, Any] = {}
@@ -175,16 +170,28 @@ def build_runtime(
         config = config or load_config(config_path())
         modules = resolve_modules(config, settings)
         template = load_template(config.template)
+    # CR20b: Telegram's channel, when the setup has the telegram module (the family's
+    # always does). The runner builds it, since only it knows the simulator's address.
+    telegram = modules is None or any(m.name == "telegram" for m in modules)
+    if telegram and settings.telegram_enabled and settings.telegram_bot_token is None:
+        raise SettingsError("TELEGRAM_BOT_TOKEN is required to run Themi (get one from @BotFather)")
+    # With Telegram disabled the channel is never started; sends simply queue.
+    token = settings.telegram_bot_token or Secret("0:telegram-disabled")
+    api = settings.telegram_api_url  # set only for the simulator
     app = build_app(
         open_database(settings.db_path),
         settings.cipher(),
-        lambda store: TelegramChannel.from_token(
-            token,
-            store,
-            None,
-            base_url=f"{api}/bot" if api else None,
-            base_file_url=f"{api}/file/bot" if api else None,
-        ),
+        (
+            lambda store: TelegramChannel.from_token(
+                token,
+                store,
+                None,
+                base_url=f"{api}/bot" if api else None,
+                base_file_url=f"{api}/file/bot" if api else None,
+            )
+        )
+        if telegram
+        else None,
         backup=settings.backup,
         tool_routing=settings.tool_routing,
         conversation_mode=settings.conversation_mode,

@@ -990,7 +990,7 @@ class BodyDouble:
         text = text.strip()[:4000]
         if session is None or session.phase != "break" or not text:
             return None
-        if member.telegram_user_id is None:
+        if not member.reachable:
             return None
         now = clock.now()
         self.db.execute(
@@ -998,7 +998,7 @@ class BodyDouble:
             (to_utc_iso(now), session.id),
         )
         self.store.log_message(member.id, "in", text, "chat", None)
-        return InboundEvent("text", member, member.telegram_user_id, None, now, 0, text=text)
+        return InboundEvent("text", member, member.telegram_user_id or 0, None, now, 0, text=text)
 
     async def act_from_page(
         self, member: Member, session_id: int, action: str, seq: int, mode: str = ""

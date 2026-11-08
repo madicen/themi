@@ -65,7 +65,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/session/telegram")
     async def telegram_sign_in(request: Request) -> Response:
         form = dict(await request.form())
-        channel = app.channel
+        channel = app.channel.get("telegram")  # CR20b: the Mini App is Telegram's
         check = getattr(channel, "web_app_user", None)
         user_id = check(str(form.get("init_data", ""))) if check is not None else None
         member = app.store.member_by_telegram(user_id) if user_id is not None else None

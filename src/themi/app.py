@@ -27,6 +27,7 @@ from themi.backup import BackupConfig, Backups
 from themi.backup.job import BackupJob
 from themi.channels.base import Channel
 from themi.channels.calibration import PdaCalibrator
+from themi.channels.channel_set import ChannelSet
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
 from themi.config import Template, load_template
@@ -68,6 +69,7 @@ from themi.standard.reminders import RemindersModule
 from themi.standard.routines import RoutinesModule
 from themi.standard.taking import TakingModule
 from themi.standard.tasks import TasksModule
+from themi.standard.telegram import TelegramModule
 from themi.standard.web_search import WebSearchModule
 from themi.standard.wrong_replies import WrongRepliesModule
 from themi.storage.db import Database
@@ -146,7 +148,7 @@ class App:
     store: AccountStore
     ai_settings: AISettingsStore
     router: AIRouter
-    channel: Channel
+    channel: ChannelSet  # CR20b: every channel, as one
     outbox: Outbox
     services: Services
     agent: Agent
@@ -179,6 +181,7 @@ def family_modules(
     (see the module docstring); CR5 turns this into the family template."""
 
     return [
+        TelegramModule(),  # CR20b: the channel (the runner's, added before modules install)
         *(provider() for provider in AI_PROVIDERS),  # CR19: every provider and capability
         VoiceNotesModule(),
         PicturesModule(),
@@ -271,7 +274,7 @@ def family_modules(
 def build_app(
     db: Database,
     cipher: Cipher,
-    make_channel: ChannelFactory,
+    make_channel: ChannelFactory | None,
     *,
     provider_factory: ProviderFactory | None = None,
     sleep: Sleep = asyncio.sleep,
@@ -326,7 +329,11 @@ def build_app(
         sleep=sleep,
         hedge_after=hedge_after,
     )
-    channel = make_channel(store)
+    # CR20b: the channels, as one for the core. A factory given here is Telegram's (the
+    # runner's and the tests'); channel modules add theirs as they install.
+    channel = ChannelSet()
+    if make_channel is not None:
+        channel.add("telegram", make_channel(store))
     energy = EnergyModel(store)
     outbox = Outbox(store, channel, PdaShield(AIRewriter(router)), EnergyReceptivity(energy))
     outcomes = OutcomeTracker(store)
@@ -353,6 +360,7 @@ def build_app(
         prompt_fragments=list(CORE_RULES),
         prompt_overrides=dict(template.prompt),
         role_modules={name: role.allowed() for name, role in template.roles.items()},  # CR9
+        channels=channel,
     )
     scheduler = Scheduler(db)
     ctx = ModuleContext(services, scheduler=scheduler)

@@ -205,7 +205,7 @@ class Liaison:
             raise ToolFailed(f"The urgency is one of {', '.join(URGENCIES)}.")
         if not body:
             raise ToolFailed("Not passed on: the note was empty.")
-        if recipient.telegram_user_id is None:
+        if not recipient.reachable:
             raise ToolFailed(
                 f"Not passed on: {recipient.name} isn't connected to Themi on Telegram yet."
             )

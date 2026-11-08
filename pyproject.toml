@@ -115,11 +115,13 @@ step_pictures = "themi_home.step_images:StepPicturesModule"
 taking = "themi.standard.taking:TakingModule"
 task_blocks = "themi_google.google_modules:TaskBlocksModule"
 tasks = "themi.standard.tasks:TasksModule"
+telegram = "themi.standard.telegram:TelegramModule"
 thinq = "themi_home.home_modules:ThinqModule"
 travel = "themi_google.connector_modules:TravelModule"
 tuya = "themi_home.home_modules:TuyaModule"
 urgent_senders = "themi_google.google_modules:UrgentSendersModule"
 voice_notes = "themi.standard.capabilities:VoiceNotesModule"
+web_chat = "themi.standard.web_chat:WebChatModule"
 web_recipes = "themi_home.web_recipes:WebRecipesModule"
 web_search = "themi.standard.web_search:WebSearchModule"
 which_list = "themi_home.which_list:WhichListModule"
@@ -149,6 +151,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
 themi_google = ["web/templates/*.html", "web/templates/*/*.html"]
 themi = [
     "storage/schema/*.sql",
+    "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
     "templates/*.toml",
     "web/templates/*.html",
     "web/templates/*/*.html",

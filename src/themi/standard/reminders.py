@@ -94,7 +94,7 @@ class Reminders:
         tz = self._tz()
         now = clock.now().astimezone(tz)
         for member in self.store.list_members():
-            if member.telegram_user_id is None:
+            if not member.reachable:
                 continue
             quiet = self._quiet_starts(member, now)
             if not quiet - DAY_END_BEFORE_QUIET <= now < quiet:
@@ -205,7 +205,7 @@ class Reminders:
             stage = row["overdue_reminders"] + 1
             lead = self._lead(task, stage, today)
             people: list[Member | None] = (
-                [m for m in self.store.list_members() if m.telegram_user_id is not None]
+                [m for m in self.store.list_members() if m.reachable]
                 if task.shared
                 else [self._doer(task)]
             )
@@ -258,11 +258,7 @@ class Reminders:
         if member is not None:
             lead += f". {self._lighter_moment(member)}"
         other = next(
-            (
-                m.name
-                for m in self.store.list_members()
-                if m.telegram_user_id is not None and m.id != task.assignee
-            ),
+            (m.name for m in self.store.list_members() if m.reachable and m.id != task.assignee),
             None,
         )
         offer = f"I can move it, or ask {other} to take it" if other else "I can move it"
