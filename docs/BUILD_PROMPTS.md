@@ -336,9 +336,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP7 | First visit | Setup portal | [x] 2026-11-08 (split) |
 | SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [x] 2026-11-08 |
 | SP7b | Passkeys for admins without Telegram | Setup portal | [x] 2026-11-08 |
-| SP8 | Migration and retirement | Setup portal | split |
+| SP8 | Migration and retirement | Setup portal | [x] 2026-11-08 (split) |
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
-| SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [ ] |
+| SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -15767,7 +15767,7 @@ Notes (2026-11-08):
 - Golden: routes.json gained the move route.
 
 ### SP8b · Setup portal: `themi install`
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP8a
 - `deploy/install.sh` (published so it can be run with one command): checks the host,
   installs Docker, writes the short `.env` and `compose.yml`, offers Tailscale Funnel and
@@ -15775,3 +15775,25 @@ Depends on: SP8a
   prints the address and the claim code. Safe to run again.
 - What the host's control runner needs for updates is installed with it.
 Tests: shellcheck-clean; a dry run against stubbed commands; run twice changes nothing.
+
+Notes (2026-11-08):
+- `deploy/install.sh`: checks the machine (Linux, 64-bit, not root, sudo and curl, a word
+  if there's under 1 GB), installs Docker (get.docker.com, the docker group, capped logs),
+  makes `~/themi` with compose.yml and the scripts (from beside it, else
+  `THEMI_FILES_URL`), writes `.env` only when there's none and otherwise only adds missing
+  `THEMI_IMAGE`/`THEMI_VERSION` (mode 600), offers Tailscale Funnel with the account
+  walkthrough (install, `tailscale up`'s link, turning Funnel on, up to three tries) and
+  sets `THEMI_PUBLIC_URL` from the tailnet name, pulls and starts Themi, waits for
+  /health, installs the update runner where there's systemd, and prints the address and
+  the claim code (from `/data/claim-code` in the container).
+- Questions come from the terminal even through `curl | bash`; `THEMI_NONINTERACTIVE=1`,
+  `THEMI_FUNNEL=yes|no` and `THEMI_NO_RUNNER=1` answer them for scripts and tests. It runs
+  in macOS's bash 3.2 too (for the tests).
+- The repository is private, so the one-command download (`curl ... | bash`) needs it to
+  be public or the files fetched with a token; until then, copy `deploy/` across and run
+  `bash install.sh`, as DEPLOY.md's short way says.
+- `bootstrap-pi.sh` stays for the Pi's own extras (unattended upgrades, Tailscale SSH).
+- Tests (`tests/integration/test_install_script.py`): stand-ins for uname, id, sudo, curl,
+  docker, tailscale and the rest on PATH; a fresh install, a second run changing nothing,
+  an existing .env kept, Funnel's address, a failed pull, and not Linux. shellcheck runs on
+  it at warning level: `shellcheck-py` joined the dev extras.

@@ -41,6 +41,7 @@ dev = [
     "ruff>=0.8",
     "pyright>=1.1.390",
     "types-python-dateutil>=2.9",
+    "shellcheck-py>=0.10,<0.12",  # SP8b: deploy/install.sh is checked in the tests
 ]
 
 [project.scripts]
