@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Session · Themi</title>
   <link rel="stylesheet" href="{{ asset('themi.css') }}">
-  <script src="{{ asset('session.js') }}" defer></script>
+  <script src="{{ asset('home/session.js') }}" defer></script>
 </head>
 <body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}" data-session="{{ session_token }}">
 <main id="session" class="session" aria-live="polite"{% if state and state.active %} data-mode="{{ state.mode }}"{% endif %}>
@@ -19,8 +19,8 @@
   <p class="session-mode" data-field="mode_name">{{ state.mode_name | capitalize }}</p>
   <h1 class="session-label" data-field="label">{{ state.label }}</h1>
   <div class="session-scene" data-mode="{{ state.mode }}" data-phase="{{ state.phase }}" data-state="{{ state.scene }}">
-    {{ inline_svg("chameleon/scenes.svg") }}
-    {{ inline_svg("chameleon/chameleon.svg") }}
+    {{ inline_svg("home/chameleon/scenes.svg") }}
+    {{ inline_svg("home/chameleon/chameleon.svg") }}
     <p class="session-timer" data-timer="{{ state.timer.kind }}" data-to="{{ state.timer.to or '' }}" data-from="{{ state.timer.from or '' }}" data-now="{{ state.now }}">{{ state.timer.text }}</p>
   </div>
   {% if state.part %}<p class="muted" data-field="part">{{ state.part }}</p>{% endif %}
@@ -55,10 +55,10 @@
   <section class="session-music" aria-label="Music">
     <button class="session-play" type="button" aria-pressed="false">Play</button>
     <select name="sound" aria-label="Which sound">
-      {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
+      {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
     </select>
     <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
-    <audio loop preload="none" src="{{ asset('audio/' ~ state.music.file) }}"></audio>
+    <audio loop preload="none" src="{{ asset('home/audio/' ~ state.music.file) }}"></audio>
   </section>
   {% if state.spotify %}
   <section class="session-spotify" aria-label="My Spotify">

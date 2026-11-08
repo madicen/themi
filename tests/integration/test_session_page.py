@@ -137,7 +137,7 @@ async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.Asyn
     await bd(scenario).start(erin, mode=SILENT)
     page = (await site.get("/session")).text
     assert 'class="session-music"' in page and "autoplay" not in page
-    assert '<audio loop preload="none" src="/static/audio/lofi.m4a?v=' in page
+    assert '<audio loop preload="none" src="/static/home/audio/lofi.m4a?v=' in page
     saved = await site.post("/session/music", data={"csrf": csrf, "sound": "rain", "volume": "30"})
     assert saved.status_code == 204
     music = (await site.get("/session/state")).json()["music"]
@@ -147,7 +147,7 @@ async def test_the_sound_is_theirs_and_kept(scenario: Scenario, site: httpx.Asyn
     bad = await site.post("/session/music", data={"csrf": csrf, "sound": "", "volume": "101"})
     assert bad.status_code == 400
     assert sound(scenario) == "rain"
-    audio = await site.get("/static/audio/rain.m4a")
+    audio = await site.get("/static/home/audio/rain.m4a")  # CR17b: the home pack's
     assert audio.status_code == 200 and len(audio.content) > 10_000
 
 

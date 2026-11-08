@@ -25,11 +25,22 @@ FLASH_COOKIE = "themi_flash"
 SESSION_HEADER = "X-Themi-Session"
 
 
-@cache
-def asset(name: str) -> str:
+def static_file(name: str, packs: dict[str, Path] | None = None) -> Path:
+    """Where a static file is: the core's (`themi.css`), or a pack's when the name starts
+    with the pack's short name (`home/kitchen.js`, CR17b). Only files that ship with Themi."""
+    head, _, rest = name.partition("/")
+    root = (packs or {}).get(head) if rest else None
+    folder, inner = (root, rest) if root is not None else (HERE / "static", name)
+    path = (folder / inner).resolve()
+    if not path.is_relative_to(folder.resolve()):
+        raise ValueError(name)
+    return path
+
+
+def asset(name: str, packs: dict[str, Path] | None = None) -> str:
     """A static file's URL with a fingerprint of its contents, so a browser never keeps
     an old copy after an update (Michael's phone kept the pre-W1 stylesheet)."""
-    digest = hashlib.sha256((HERE / "static" / name).read_bytes()).hexdigest()[:12]
+    digest = hashlib.sha256(static_file(name, packs).read_bytes()).hexdigest()[:12]
     return f"/static/{name}?v={digest}"
 
 
@@ -42,14 +53,18 @@ def clock(moment: time | None) -> str:
     return f"{hour}{minutes} {'am' if moment.hour < 12 else 'pm'}"
 
 
-@cache
-def inline_svg(name: str) -> Markup:
+def inline_svg(name: str, packs: dict[str, Path] | None = None) -> Markup:
     """A static SVG put into the page itself, so the stylesheet can colour and move its
     parts (BD3b's chameleon). Only files that ship with Themi."""
-    path = (HERE / "static" / name).resolve()
-    if not path.is_relative_to((HERE / "static").resolve()) or path.suffix != ".svg":
+    path = static_file(name, packs)
+    if path.suffix != ".svg":
         raise ValueError(name)
-    return Markup(path.read_text())
+    return Markup(_read(path))
+
+
+@cache
+def _read(path: Path) -> str:
+    return path.read_text()
 
 
 class NotSignedIn(Exception):
@@ -72,11 +87,25 @@ class Kit:
         self.ctx = ctx
         self.app = ctx.app
         self.auth = WebAuth(ctx.app.store)
-        self.templates = Jinja2Templates(directory=str(HERE / "templates"))
+        # CR17b: the core's templates first, then each loaded pack's; static files from a
+        # pack are named with its short name first ("home/kitchen.js").
+        self.static_folders: dict[str, Path] = {
+            name: folder / "static"
+            for name, folder in ctx.app.services.web_folders.items()
+            if (folder / "static").is_dir()
+        }
+        folders = [HERE / "templates"] + [
+            folder / "templates"
+            for folder in ctx.app.services.web_folders.values()
+            if (folder / "templates").is_dir()
+        ]
+        self.templates = Jinja2Templates(directory=[str(f) for f in folders])
         self.templates.env.filters["local_time"] = self.local_time
         self.templates.env.filters["clock"] = clock
-        self.templates.env.globals["asset"] = asset
-        self.templates.env.globals["inline_svg"] = inline_svg
+        self.templates.env.globals["asset"] = lambda name: asset(name, self.static_folders)
+        self.templates.env.globals["inline_svg"] = lambda name: inline_svg(
+            name, self.static_folders
+        )
 
     def timezone(self) -> str:
         family = self.app.store.get_family()

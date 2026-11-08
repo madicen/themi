@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from themi.accounts import AccountStore, Member
@@ -132,6 +133,9 @@ class Services(Registry):
     # CR17a: the dashboard's panels, the Accounts page's sections, and links in "Waiting
     # on you", from modules.
     dashboard_panels: list[Panel] = field(default_factory=list)
+    # CR17b: each loaded pack's `web` folder, by its short name ("home", "google"): its
+    # page templates, and its static files under /static/<name>/.
+    web_folders: dict[str, Path] = field(default_factory=dict)
     accounts_sections: list[AccountsSection] = field(default_factory=list)
     waiting_links: list[Waiting] = field(default_factory=list)
     # CR8a: the system prompt's parts: the template's persona and rewordings, the rules.

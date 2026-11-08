@@ -44,5 +44,5 @@ Google already lets Themi open.</p>{% endif %}
 {% for recipe in looks %}<li>{{ recipe.name }}: {{ recipe.needs_look }}</li>{% endfor %}
 </ul>
 {% endif %}
-{% if picker %}<script src="{{ asset('cookbook_picker.js') }}"></script>{% endif %}
+{% if picker %}<script src="{{ asset('home/cookbook_picker.js') }}"></script>{% endif %}
 {% endblock %}

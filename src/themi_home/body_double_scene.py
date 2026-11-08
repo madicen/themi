@@ -1,6 +1,6 @@
 """What Themi the chameleon is doing on the session page (BD3b), picked in code.
 
-The page draws one original character (`web/static/chameleon/`) and a scene per mode;
+The page draws one original character (`themi_home/web/static/chameleon/`) and a scene per mode;
 this says which animation state it shows, as a flag in the page's state:
 
 - `cheering` for a moment after a finished sprint block or guided step;

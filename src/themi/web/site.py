@@ -20,8 +20,10 @@ Security:
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -39,7 +41,7 @@ from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
 from themi.web import icons
 from themi.web.auth import COOKIE_NAME
-from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext
+from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext, static_file
 
 __all__ = ["SiteContext", "install_site"]
 
@@ -113,6 +115,26 @@ def security_headers(response: Response, form_targets: str = "") -> None:
     response.headers["Referrer-Policy"] = "no-referrer"
 
 
+class PackStatic(StaticFiles):
+    """CR17b: the core's static files under /static/, and each pack's under
+    /static/<pack>/ (one mount, so the routes stay as they were)."""
+
+    def __init__(self, core: Path, packs: dict[str, Path]) -> None:
+        super().__init__(directory=str(core))
+        self.packs = packs
+
+    def lookup_path(self, path: str) -> tuple[str, os.stat_result | None]:
+        head, _, rest = path.partition("/")
+        folder = self.packs.get(head) if rest else None
+        if folder is None:
+            return super().lookup_path(path)
+        try:
+            full = static_file(path, self.packs)
+            return str(full), os.stat(full)
+        except (ValueError, FileNotFoundError, NotADirectoryError):
+            return "", None
+
+
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
     from themi.web import accounts_page, admin_pages, ai_pages, dev_pages
 
@@ -132,7 +154,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     if music is not None:  # BD5b: linking Spotify leads to its sign-in page
         accounts = _origin(music.links.client.config.accounts_url)
         form_targets = f"{form_targets} {accounts}".strip()
-    web.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    web.mount("/static", PackStatic(HERE / "static", kit.static_folders), name="static")
 
     @web.middleware("http")
     async def headers(

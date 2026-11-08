@@ -7,8 +7,10 @@ side by side. CR3 moves the features' slots on `Services` onto `provide`/`get`.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeVar
 
 from themi.modules.base import Module, ModuleError, PeriodicTask
@@ -66,6 +68,7 @@ class ModuleContext:
                     self.services.preference_models.append(module.preferences)
                 if module.household is not None:  # CR7c: for the family's pages
                     self.services.household_models.append(module.household)
+                self._web_folder(module)
                 self.services.tools.installing = module.name  # CR9: whose tools these are
                 module.install(self)
             finally:
@@ -73,6 +76,20 @@ class ModuleContext:
                 self.services.tools.installing = ""
             self.installed.append(module.name)
         return ordered
+
+    def _web_folder(self, module: Module) -> None:
+        """CR17b: a module from a pack brings the pack's `web` folder (its page templates
+        and static files), found next to the pack's package. The core's own is the site's."""
+        package = type(module).__module__.split(".")[0]
+        if package == "themi":
+            return
+        name = package.removeprefix("themi_")
+        if name in self.services.web_folders:
+            return
+        root = sys.modules[package].__file__
+        folder = Path(root).parent / "web" if root else None
+        if folder is not None and folder.is_dir():
+            self.services.web_folders[name] = folder
 
     def has(self, name: str) -> bool:
         return name in self.installed

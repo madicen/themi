@@ -73,7 +73,11 @@ def test_capacity_numbers_stay_inside_the_energy_package() -> None:
 
 
 def test_templates_never_mention_capacity_scores() -> None:
-    for template in (SRC / "web" / "templates").glob("*.html"):
+    # CR17b: the packs have page templates too; every one of them, in subfolders as well
+    packs = ("themi", "themi_google", "themi_home")
+    templates = [t for p in packs for t in (SRC.parent / p / "web" / "templates").rglob("*.html")]
+    assert len(templates) > 40
+    for template in templates:
         text = template.read_text().lower()
         assert "capacity" not in text and "score" not in text, template.name
 

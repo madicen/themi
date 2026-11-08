@@ -309,7 +309,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | waiting (tutoring spec) |
 | CR16 | Round two: the simulator with any module setup | Core refactor | [x] 2026-11-08 |
 | CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [x] 2026-11-08 |
-| CR17b | Round two: each pack's own page templates and static files | Core refactor | [ ] |
+| CR17b | Round two: each pack's own page templates and static files | Core refactor | [x] 2026-11-08 |
 | CR18a | Round two: Google permissions asked per module | Core refactor | [ ] |
 | CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [ ] |
 | CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [ ] |
@@ -14992,12 +14992,31 @@ Notes (2026-11-08):
   template folder: CR17b.
 
 ### CR17b · Round two: each pack's own page templates and static files
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR17a
 - A module's pages render templates from its own package (`ctx.web(..., templates=)`): the
   site's loader searches the core's folder, then each loaded pack's. Static files likewise,
   under `/static/<pack>/`. The home and Google pages' templates move to their packs.
 Tests: every page renders; package data includes each pack's templates.
+
+Notes (2026-11-08):
+- Deviation: no `templates=` argument. A loaded module from a pack brings the pack's `web`
+  folder on its own (`ModuleContext` finds it next to the package; `services.web_folders`
+  by short name, "home" and "google"). A third pack works the same way with no wiring.
+- The site's Jinja loader searches the core's templates, then each loaded pack's. A test
+  checks no template name is in two places (the core's would hide the pack's).
+- Static files: one `/static` mount (`PackStatic` in site.py) serves the core's files and
+  `/static/<pack>/...` from the pack's `web/static`, so the golden routes didn't change.
+  `asset("home/kitchen.js")` and `inline_svg("home/chameleon/...")` take the pack's name.
+- Moved: the Google pack's Accounts rows, calendars, the noise digest page and the email
+  settings; the home pack's device rows, recipes, kitchen, cookbook, Safeway, spending,
+  upkeep, the session page, two settings sections and two dashboard panels; the session
+  page's script, sounds and chameleon, and the kitchen and cookbook scripts.
+- Tests changed for moved wiring: test_session_page (the sounds are under
+  /static/home/audio/), test_session_page_assets (the folder). The capacity-words check
+  now reads every pack's templates, in subfolders too (it read only the core's top level).
+  New: tests/scenarios/test_pack_pages.py (every GET page renders with every fake on;
+  a pack's static files and the path check), and package data per pack.
 
 ### CR18a · Round two: Google permissions asked per module
 Status: [ ]

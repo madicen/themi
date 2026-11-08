@@ -22,7 +22,7 @@ from themi.modules import Module, ModuleContext
 class Loop:
     key: str
     name: str
-    file: str  # under web/static/audio/
+    file: str  # under themi_home/web/static/audio/ (CR17b)
 
 
 LOOPS = {

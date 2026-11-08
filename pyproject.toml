@@ -123,7 +123,14 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-themi_home = ["templates/*.toml"]
+themi_home = [  # CR17b: its own pages' templates and static files
+    "templates/*.toml",
+    "web/templates/*.html",
+    "web/templates/*/*.html",
+    "web/static/*",
+    "web/static/*/*",
+]
+themi_google = ["web/templates/*.html", "web/templates/*/*.html"]
 themi = [
     "storage/schema/*.sql",
     "templates/*.toml",

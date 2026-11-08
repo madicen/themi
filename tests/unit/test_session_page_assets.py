@@ -8,8 +8,9 @@ from pathlib import Path
 
 from themi_home.body_double_scene import FLAGS
 
-STATIC = Path(__file__).parents[2] / "src" / "themi" / "web" / "static"
-CSS = (STATIC / "themi.css").read_text()
+SRC = Path(__file__).parents[2] / "src"
+STATIC = SRC / "themi_home" / "web" / "static"  # CR17b: the home pack's
+CSS = (SRC / "themi" / "web" / "static" / "themi.css").read_text()
 CHAMELEON = (STATIC / "chameleon" / "chameleon.svg").read_text()
 SCENES = (STATIC / "chameleon" / "scenes.svg").read_text()
 
