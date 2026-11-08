@@ -144,16 +144,22 @@ where = ["src"]
 [tool.setuptools.package-data]
 themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
+    "setup/*.md",  # SP3b: the modules' setup guides
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",
     "web/static/*/*",
 ]
-themi_google = ["web/templates/*.html", "web/templates/*/*.html"]
-themi_cozyla = ["cozyla_chores_schema/*.sql", "cozyla_todos_schema/*.sql"]  # CR21c
+themi_google = ["web/templates/*.html", "web/templates/*/*.html", "setup/*.md"]
+themi_cozyla = [
+    "cozyla_chores_schema/*.sql",  # CR21c
+    "cozyla_todos_schema/*.sql",
+    "setup/*.md",  # SP3b: the modules' setup guides
+]
 themi = [
     "storage/schema/*.sql",
+    "standard/setup/*.md",  # SP3a: the modules' setup guides
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
     "templates/*.toml",
     "web/templates/*.html",

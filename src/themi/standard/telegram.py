@@ -28,6 +28,9 @@ class TelegramModule(Module):
     """People's chats with Themi, in Telegram."""
 
     name = NAME
+    title = "Telegram"
+    summary = "Each person chats with Themi in Telegram, on their phone."
+    cost = "Free"
     kind = "channel"
     settings = TelegramSettings
     website = "Each person pairs Telegram with the code from the Family page (/family)."

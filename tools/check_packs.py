@@ -80,9 +80,88 @@ def problems(src: Path) -> list[str]:
     return out
 
 
+# SP3a: every installed module says what it is on the Modules page: a title, a summary,
+# and a guide when it has settings to fill in. Modules not yet done are listed here; the
+# list can only shrink (an entry that's done fails until it's taken out).
+PENDING = frozenset(  # SP3b gives these theirs, and empties this
+    {
+        "appliances",
+        "body_double",
+        "buying",
+        "calendar",
+        "calendar_busy",
+        "calendar_copies",
+        "calendar_twins",
+        "calls",
+        "catgenie",
+        "chore_chart",
+        "cookbook_save",
+        "cooking",
+        "cooking_timers",
+        "cozyla_chores",
+        "cozyla_todos",
+        "email_audit",
+        "email_forwarding",
+        "email_triage",
+        "expected_emails",
+        "gmail",
+        "google",
+        "google_tasks",
+        "groceries",
+        "guided_steps",
+        "home_connect",
+        "keep",
+        "liaison",
+        "maintenance",
+        "meals",
+        "mode_chooser",
+        "music_offers",
+        "noise_digest",
+        "ourgroceries",
+        "pantry",
+        "recipe_groceries",
+        "recipe_ideas",
+        "recipes",
+        "roborock",
+        "safeway",
+        "spending",
+        "spotify",
+        "step_pictures",
+        "task_blocks",
+        "thinq",
+        "travel",
+        "tuya",
+        "urgent_senders",
+        "web_recipes",
+        "which_list",
+    }
+)
+
+
+def manifest_problems(pending: frozenset[str] = PENDING) -> list[str]:
+    from themi.config import available_modules
+    from themi.modules.guides import guide
+    from themi.modules.settings import questions
+
+    out = []
+    for name, cls in sorted(available_modules().items()):
+        missing = []
+        if not cls.title:
+            missing.append("a title")
+        if not cls.summary:
+            missing.append("a summary")
+        if cls.settings is not None and questions(cls.settings) and guide(cls) is None:
+            missing.append(f"a guide (setup/{name}.md beside its code)")
+        if missing and name not in pending:
+            out.append(f"module {name} needs {' and '.join(missing)}")
+        elif not missing and name in pending:
+            out.append(f"module {name} is done: take it out of PENDING in tools/check_packs.py")
+    return out
+
+
 def main(argv: list[str]) -> int:
     src = Path(argv[1]) if len(argv) > 1 else REPO_ROOT / "src"
-    found = problems(src)
+    found = problems(src) + manifest_problems()
     for line in found:
         print(line)
     return 1 if found else 0

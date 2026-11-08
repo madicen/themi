@@ -67,6 +67,8 @@ class ReactionsModule(Module):
     """What lands with each person, read from their emoji reactions."""
 
     name = "reactions"
+    title = "Reactions"
+    summary = "Learns what lands with each person from their emoji reactions."
 
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(Reactions(ctx.services)).install()

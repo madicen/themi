@@ -65,6 +65,8 @@ class BreaksModule(Module):
     """B1: a rest mode that ends with a question."""
 
     name = "breaks"
+    title = "Breaks"
+    summary = "A rest mode: Themi goes quiet for a while, then checks in gently."
     tool_groups = (SETTINGS,)
     preferences = BreaksPreferences
 

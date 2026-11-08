@@ -229,6 +229,8 @@ class HabitsModule(Module):
     """The habit reserve: small habits offered when there is room."""
 
     name = "habits"
+    title = "Habits"
+    summary = "Offers small habits when there's room in the day."
 
     def install(self, ctx: ModuleContext) -> None:
         habits = ctx.provide(HabitReserve(ctx.services))

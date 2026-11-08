@@ -224,6 +224,8 @@ class JournalModule(Module):
     """Themi's journal of each day, written hourly."""
 
     name = "journal"
+    title = "Journal"
+    summary = "Themi keeps a short journal of each day."
 
     def install(self, ctx: ModuleContext) -> None:
         journal = ctx.provide(Journal(ctx.services))

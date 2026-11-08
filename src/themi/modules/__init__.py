@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from themi.modules.base import (
     KINDS,
+    AccountNeed,
     Module,
     ModuleError,
     ModuleKind,
@@ -33,6 +34,7 @@ from themi.modules.report import ModuleState, ModuleStatus, StartReport
 
 __all__ = [
     "KINDS",
+    "AccountNeed",
     "Module",
     "ModuleContext",
     "ModuleError",

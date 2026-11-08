@@ -195,6 +195,8 @@ class WebChatModule(Module):
     """A chat with Themi on the website."""
 
     name = NAME
+    title = "Website chat"
+    summary = "Anyone in the family can chat with Themi on its website."
     kind = "channel"
     migrations = Path(__file__).parent / "web_chat_schema"
     website = "Anyone can talk to Themi on the Chat page (/chat)."

@@ -428,6 +428,9 @@ class WebSearchModule(Module):
     one up."""
 
     name = "web_search"
+    title = "Web search"
+    summary = "Themi can look things up online and read a page."
+    cost = "Free plan is enough"
     kind = "connector"  # CR19: a search service, when one is set up
     tool_groups = (groups.WEB,)
     settings = SearchSettings

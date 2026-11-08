@@ -310,6 +310,8 @@ class DaySummaryModule(Module):
     """K2: what's on someone's day, and the morning summary."""
 
     name = "day_summary"
+    title = "Day summary"
+    summary = "What's on someone's day, and a summary each morning."
     tool_groups = (groups.CALENDAR,)
     preferences = DaySummaryPreferences
     requires = ("tasks",)

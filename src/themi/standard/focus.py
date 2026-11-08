@@ -371,6 +371,8 @@ class FocusModule(Module):
     """O1a: a few things for now when it's too much."""
 
     name = "focus"
+    title = "Focus"
+    summary = "A few things to do now, when everything feels like too much."
     preferences = FocusPreferences
     requires = ("tasks", "day_summary")
 

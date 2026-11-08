@@ -328,7 +328,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP1 | Tolerant start: a module's problem leaves it off, not Themi | Setup portal | [x] 2026-11-08 |
 | SP2 | Settings store: the data folder's themi.toml, encrypted module secrets, drafts | Setup portal | [x] 2026-11-08 |
 | SP3 | Module manifest: titles, summaries, guides, richer fields | Setup portal | split |
-| SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [ ] |
+| SP3a | Module manifest: the mechanism, the lint, the core's modules | Setup portal | [x] 2026-11-08 |
 | SP3b | Module manifest: the Google, home and Cozyla packs | Setup portal | [ ] |
 | SP4 | Modules page, read only | Setup portal | [ ] |
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [ ] |
@@ -15463,7 +15463,7 @@ Notes (2026-11-08):
 Status: split into SP3a and SP3b.
 
 ### SP3a · Setup portal: module manifest, the mechanism and the core's modules
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP2
 Read first: the plan's "Module setup manifest"; `themi/modules/base.py`; `themi/modules/settings.py`.
 - `Module.title`, `Module.summary` (one sentence, what it does for the family),
@@ -15479,6 +15479,25 @@ Read first: the plan's "Module setup manifest"; `themi/modules/base.py`; `themi/
   SP3b empties.
 - Fill these in for the core's modules (`themi.standard`).
 Tests: `fields` for each kind; the guide loader; the lint fails on a module without a title.
+
+Notes (2026-11-08):
+- `Module.title`, `summary`, `cost`, `needs_accounts` (an `AccountNeed`: what, where, and
+  "each person" or "an admin") and `accounts_linked(services)` (None by default; SP3b
+  fills it in where it can be told).
+- Guides: `themi/modules/guides.py` finds `setup/<name>.md` in the package the module's
+  class is in. Package data added for `themi/standard/setup` and each pack's `setup`.
+  The core's guides: telegram, web_search, gemini, claude, openai_compatible, cloudflare,
+  web_chat. The AI providers have no settings of their own (keys are per person on My AI),
+  but their guides say where the keys go.
+- `themi/web/markdown.py`: the guides' renderer (headings, paragraphs, lists, bold, code,
+  http(s) and site-path links). Everything is escaped first; there's no raw HTML.
+- `env_field` grows `label`, `placeholder`, `choices`, `advanced`. `fields(model)` gives
+  each field's kind (text, secret, bool, choice, url, number) from its annotation; a label
+  from the question (without "(blank: ...)") or the field's name; and `advanced` defaults
+  to "the wizard never asked it". Web search's Firecrawl key and backend got labels, and
+  the backend is now a choice.
+- The lint is in `tools/check_packs.py` (`manifest_problems`), with `PENDING` listing
+  the 49 pack modules SP3b does. An entry that's done fails until it's taken out.
 
 ### SP3b · Setup portal: module manifest, the packs
 Status: [ ]

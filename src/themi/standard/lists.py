@@ -738,6 +738,8 @@ class ListsModule(Module):
     """L1a: named lists Themi keeps."""
 
     name = "lists"
+    title = "Lists"
+    summary = "Named lists Themi keeps, made and changed from chat."
     tool_groups = (groups.LISTS,)
     preferences = ListsPreferences
 

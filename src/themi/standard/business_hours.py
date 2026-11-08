@@ -481,6 +481,8 @@ class BusinessHoursModule(Module):
     """F34k: errands that need a place to be open."""
 
     name = "business_hours"
+    title = "Opening hours"
+    summary = "Plans errands for when the place they need is open."
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:

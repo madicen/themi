@@ -13,6 +13,7 @@ from themi.accounts.preferences import Preferences
 from themi.modules.settings import ModuleSettings, read_settings
 
 if TYPE_CHECKING:
+    from themi.core.services import Services
     from themi.core.tools import ToolGroup
     from themi.modules.context import ModuleContext
     from themi.settings import Settings
@@ -50,6 +51,17 @@ class SetupStep:
     prompt: str  # what the wizard asks, in Themi's plain words
     secret: bool = False  # goes to .env, typed without echo, never into themi.toml
     help_url: str = ""  # where to get it (a key page, a console)
+
+
+@dataclass(frozen=True)
+class AccountNeed:
+    """SP3a: what someone links on the website before the module does anything (a Google
+    account, the dishwasher), where, and who: each person who wants it, or an admin for
+    the household. The Modules page shows it until `Module.accounts_linked` says so."""
+
+    what: str  # "a Google account"
+    where: str  # "/accounts"
+    who: Literal["each person", "an admin"] = "each person"
 
 
 def as_job(fn: Callable[[], object]) -> Callable[[], Awaitable[object]]:
@@ -111,6 +123,13 @@ class Module:
 
     name: ClassVar[str] = ""
     kind: ClassVar[ModuleKind] = "feature"  # CR19
+    # SP3a: for the Modules page. A plain name ("Email triage"), one sentence on what it
+    # does for the family, what someone links on the website first, and a word on cost
+    # ("Free plan is enough"). Its guide is `setup/<name>.md` in its package (`guide`).
+    title: ClassVar[str] = ""
+    summary: ClassVar[str] = ""
+    needs_accounts: ClassVar[AccountNeed | None] = None
+    cost: ClassVar[str] = ""
     requires: ClassVar[tuple[str, ...]] = ()
     optional: ClassVar[tuple[str, ...]] = ()  # ordered before this one when present
     settings: ClassVar[type[ModuleSettings] | None] = None  # CR5b: from env and themi.toml
@@ -127,6 +146,11 @@ class Module:
         """This module as the settings set it up, or None when it isn't (a connector with
         no login). Modules that take nothing override nothing."""
         return cls()
+
+    def accounts_linked(self, services: Services) -> bool | None:
+        """SP3a: whether what `needs_accounts` names is linked (by anyone, for a member's
+        account); None when it can't be told."""
+        return None
 
     async def check(self) -> str | None:
         """CR11: try the module's settings against its service, through its own client:

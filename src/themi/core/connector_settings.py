@@ -30,5 +30,12 @@ class SearchSettings(ModuleSettings):
         ask="Tavily API key, for web search (blank: none)",
         help="tavily.com, free plan",
     )
-    firecrawl_api_key: Secret | None = env_field("FIRECRAWL_API_KEY", secret=True)
-    backend: str = env_field("THEMI_SEARCH_BACKEND", "")  # "tavily", "firecrawl", or ""
+    firecrawl_api_key: Secret | None = env_field(
+        "FIRECRAWL_API_KEY", secret=True, label="Firecrawl API key", help="firecrawl.dev"
+    )
+    backend: str = env_field(  # "tavily", "firecrawl", or ""
+        "THEMI_SEARCH_BACKEND",
+        "",
+        label="Which one to use, when both keys are saved",
+        choices=("tavily", "firecrawl"),
+    )

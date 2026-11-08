@@ -12,8 +12,10 @@ Problems come back as plain lines, like the core settings' ("set both or neither
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
-from typing import Any, Literal
+from dataclasses import dataclass
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.fields import FieldInfo
@@ -36,11 +38,31 @@ class ModuleSettings(BaseModel):
 
 
 def env_field(
-    env: str, default: Any = None, *, secret: bool = False, ask: str = "", help: str = ""
+    env: str,
+    default: Any = None,
+    *,
+    secret: bool = False,
+    ask: str = "",
+    help: str = "",
+    label: str = "",
+    placeholder: str = "",
+    choices: tuple[str, ...] = (),
+    advanced: bool | None = None,
 ) -> Any:
     """A setting read from `env`. `ask`: the setup wizard's question for it (CR11); no
-    question, and the wizard leaves it alone. `help`: where to get it."""
-    extra = {"env": env, "secret": secret, "ask": ask, "help": help}
+    question, and the wizard leaves it alone. `help`: where to get it.
+    SP3a, for the Modules page: `label` (the question, by default), `placeholder`,
+    `choices` (a dropdown), `advanced` (folded away; by default, a field with no question)."""
+    extra = {
+        "env": env,
+        "secret": secret,
+        "ask": ask,
+        "help": help,
+        "label": label,
+        "placeholder": placeholder,
+        "choices": list(choices),
+        "advanced": advanced,
+    }
     return Field(default, json_schema_extra=extra)
 
 
@@ -154,3 +176,74 @@ def value_sources(
         else:
             out[name] = "default"
     return out
+
+
+FieldKind = Literal["text", "secret", "bool", "choice", "url", "number"]
+
+
+@dataclass(frozen=True)
+class FieldSpec:
+    """SP3a: one setting as the Modules page shows it."""
+
+    name: str
+    env: str
+    label: str
+    hint: str
+    kind: FieldKind
+    secret: bool
+    choices: tuple[str, ...]
+    placeholder: str
+    advanced: bool
+    default: Any
+
+
+def fields(model: type[ModuleSettings]) -> list[FieldSpec]:
+    """Each field of a settings model, with what the page needs to show it."""
+    out = []
+    for name, info in model.model_fields.items():
+        extra = _extra(info)
+        ask = str(extra.get("ask", ""))
+        label = str(extra.get("label", "")) or _label_from(ask) or _label_from_name(name)
+        choices = tuple(str(c) for c in extra.get("choices") or ())
+        advanced = extra.get("advanced")
+        out.append(
+            FieldSpec(
+                name=name,
+                env=env_name(info),
+                label=label,
+                hint=str(extra.get("help", "")),
+                kind=_kind(name, info, choices),
+                secret=is_secret(info),
+                choices=choices,
+                placeholder=str(extra.get("placeholder", "")),
+                advanced=bool(advanced) if advanced is not None else not ask,
+                default=None if info.is_required() else info.default,
+            )
+        )
+    return out
+
+
+def _label_from(ask: str) -> str:
+    """A question as a label: "Tavily API key, for web search (blank: none)" ->
+    "Tavily API key, for web search"."""
+    text = re.sub(r"\s*\((blank|yes or no)[^)]*\)\s*$", "", ask).strip()
+    return text.removesuffix("?").strip()
+
+
+def _label_from_name(name: str) -> str:
+    return name.replace("_", " ").capitalize()
+
+
+def _kind(name: str, info: FieldInfo, choices: tuple[str, ...]) -> FieldKind:
+    if is_secret(info):
+        return "secret"
+    if choices:
+        return "choice"
+    types = {a for a in (get_args(info.annotation) or (info.annotation,)) if a is not type(None)}
+    if types == {bool}:
+        return "bool"
+    if types and types <= {int, float}:
+        return "number"
+    if name.endswith("_url"):
+        return "url"
+    return "text"
