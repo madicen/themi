@@ -55,7 +55,13 @@ def task_rows(app: Any, member: Member, limit: int | None = None) -> dict[str, A
     if limit is not None:
         added = []
     shown = [*mine, *added]
+    parts = app.services.maybe(keys.task_parts)  # F26c: where a part stands
     return {
+        "parts": {
+            t.id: note.removesuffix(".")
+            for t in shown
+            if parts is not None and (note := parts.note(t))
+        },
         "mine": mine,
         "added": added,
         "names": {m.id: m.name for m in app.store.list_members()},

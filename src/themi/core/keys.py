@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from themi.standard.reactions import Reactions
     from themi.standard.routines import Routines
     from themi.standard.taking import Taking
+    from themi.standard.task_parts import TaskParts
     from themi.standard.tasks import TaskBoard
     from themi.standard.web_search import WebSearch
     from themi_cozyla.cozyla_routines import CozylaRoutines
@@ -82,6 +83,7 @@ if TYPE_CHECKING:
 
 memory: Key[Memory] = Key("Memory")
 taskboard: Key[TaskBoard] = Key("TaskBoard")
+task_parts: Key[TaskParts] = Key("TaskParts")  # F26c
 habits: Key[HabitReserve] = Key("HabitReserve")
 google: Key[GoogleAccounts] = Key("GoogleAccounts")
 gmail: Key[GmailSync] = Key("GmailSync")

@@ -221,7 +221,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "4f00c5305642"
+    "spec": "6beaf1af8e82"
   },
   "move_list_item": {
     "group": "core",
@@ -446,6 +446,10 @@
   "spending_summary": {
     "group": "spending",
     "spec": "2fb4e80890c5"
+  },
+  "split_task": {
+    "group": "schedules",
+    "spec": "df602be0c8b9"
   },
   "start_body_double": {
     "group": "body_double",

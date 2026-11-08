@@ -271,6 +271,10 @@ def _task_from_row(row: dict[str, Any]) -> Task:
 
 
 MAX_STEPS = 30
+# F26c: a task split into parts is off the lists while its parts stand in for it. Every
+# query of open tasks someone could be asked about leaves it out (`t.` when aliased).
+NOT_SPLIT = "id NOT IN (SELECT parent_id FROM task_parts)"
+T_NOT_SPLIT = "t.id NOT IN (SELECT parent_id FROM task_parts)"
 MAX_STEP_LENGTH = 200
 
 
@@ -380,7 +384,8 @@ class TaskBoard:
     def open_for(self, member: Member) -> list[Task]:
         rows = self.db.query(  # shared (escalated to both) chores come first, for everyone
             "SELECT * FROM tasks WHERE (assignee = ? OR shared = 1) "
-            "AND status IN ('open', 'snoozed') ORDER BY shared DESC, due_on IS NULL, due_on, id",
+            f"AND status IN ('open', 'snoozed') AND {NOT_SPLIT} "
+            "ORDER BY shared DESC, due_on IS NULL, due_on, id",
             (member.id,),
         )
         return [_task_from_row(r) for r in rows]
@@ -420,7 +425,7 @@ class TaskBoard:
         """Open tasks this member added, whoever is doing them."""
         rows = self.db.query(
             "SELECT * FROM tasks WHERE created_by = ? AND status IN ('open', 'snoozed') "
-            "ORDER BY due_on IS NULL, due_on, id",
+            f"AND {NOT_SPLIT} ORDER BY due_on IS NULL, due_on, id",
             (member.id,),
         )
         return [_task_from_row(r) for r in rows]
@@ -2413,7 +2418,8 @@ async def _check_meant(
     change only must not name another one."""
     board = _board(ctx)
     rows = board.db.query(
-        "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND id != ?", (task.id,)
+        f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {NOT_SPLIT} AND id != ?",
+        (task.id,),
     )
     others = [board.get(r["id"]) for r in rows]
     namer = ctx.services.task_namer

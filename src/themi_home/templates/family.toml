@@ -34,6 +34,7 @@ modules = [
     "breaks",
     "pantry",
     "tasks",
+    "task_parts",  # F26c
     "chore_chart",  # CR21a
     "follow_ups",
     "email_audit",

@@ -15,12 +15,12 @@ from themi.core.tools import ToolGroup
 
 SCHEDULES = ToolGroup(
     name="schedules",
-    description="repeating chores, plans, importance, check-in reviews",
+    description="repeating chores, plans, importance, check-in reviews, splitting tasks",
     words=(
         "every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?"
         "|twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remi"
         "nd|(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|week"
-        "ends"
+        "ends|split|steps?\\b|parts?\\b|break (?:it |that )?(?:up|down)"
     ),
     examples=(
         "Make this chore repeat every Monday",
@@ -35,6 +35,7 @@ SCHEDULES = ToolGroup(
         "Start at ten push-ups and add two a week",
         "Check in with me about the garden every few days",
         "Make it repeat on the first of the month",
+        "Split the cat box task up, I'll do the first part",
     ),
     tools=(
         "set_task_schedule",
@@ -42,6 +43,7 @@ SCHEDULES = ToolGroup(
         "set_task_importance",
         "set_check_in_reviews",
         "set_task_medicine",
+        "split_task",
     ),
     order=10,
 )

@@ -84,7 +84,8 @@ class Matcher:
         today = to_local(clock.now(), family.timezone if family else "UTC").date()
         row = self.store.db.one(
             "SELECT COUNT(*) AS open, SUM(CASE WHEN due_on < ? THEN 1 ELSE 0 END) AS overdue "
-            "FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed')",
+            "FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed') "
+            "AND id NOT IN (SELECT parent_id FROM task_parts)",  # F26c: its parts count
             (today.isoformat(), member.id),
         )
         if row is None:

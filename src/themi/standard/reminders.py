@@ -189,7 +189,8 @@ class Reminders:
         today = clock.now().astimezone(self._tz()).date()
         raised = 0
         for row in self.db.query(
-            "SELECT * FROM tasks WHERE status = 'open' AND due_on IS NOT NULL AND due_on < ?",
+            "SELECT * FROM tasks WHERE status = 'open' AND due_on IS NOT NULL AND due_on < ? "
+            "AND id NOT IN (SELECT parent_id FROM task_parts)",  # F26c: its parts are raised
             (today.isoformat(),),
         ):
             task = self.board.get(row["id"])
