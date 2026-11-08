@@ -49,7 +49,7 @@ from themi.standard import focus
 from themi.standard.timing import SLOW_AFTER, ReplyTimer, pick_notice
 
 if TYPE_CHECKING:
-    from themi.channels.telegram import TelegramChannel
+    from themi.channels.base import Channel
 
 log = logging.getLogger(__name__)
 
@@ -317,7 +317,7 @@ class Agent:
         self.history = history
         self._rng = rng or random.Random()
 
-    async def handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+    async def handle(self, event: InboundEvent, channel: Channel) -> None:
         """Something said in the family group (34b) is answered there: the outbox sends
         this person's replies to the group while it's handled."""
         if not event.in_group:
@@ -329,7 +329,7 @@ class Agent:
         finally:
             group_replies.reset(token)
 
-    async def _handle(self, event: InboundEvent, channel: TelegramChannel) -> None:
+    async def _handle(self, event: InboundEvent, channel: Channel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
         if self.services.outcomes is not None:
             self.services.outcomes.observe(member, event)

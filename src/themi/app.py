@@ -25,10 +25,10 @@ from themi.ai.settings import AISettingsStore
 from themi.autonomy import Autonomy, ExecutorRegistry
 from themi.backup import BackupConfig, Backups
 from themi.backup.job import BackupJob
+from themi.channels.base import Channel
 from themi.channels.calibration import PdaCalibrator
 from themi.channels.outbox import Outbox
 from themi.channels.pda import AIRewriter, PdaShield
-from themi.channels.telegram import TelegramChannel
 from themi.config import Template, load_template
 from themi.connectors.search import SearchBackend
 from themi.connectors.travel import TravelClient
@@ -135,7 +135,7 @@ from themi_home.step_images import StepPicturesModule
 from themi_home.web_recipes import WebRecipesModule
 from themi_home.which_list import WhichListModule
 
-ChannelFactory = Callable[[AccountStore], TelegramChannel]
+ChannelFactory = Callable[[AccountStore], Channel]  # CR20a1: any channel
 
 __all__ = ["App", "ChannelFactory", "PeriodicTask", "build_app", "family_modules"]
 
@@ -146,7 +146,7 @@ class App:
     store: AccountStore
     ai_settings: AISettingsStore
     router: AIRouter
-    channel: TelegramChannel
+    channel: Channel
     outbox: Outbox
     services: Services
     agent: Agent

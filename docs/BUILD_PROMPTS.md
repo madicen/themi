@@ -313,7 +313,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR18a | Round two: Google permissions asked per module | Core refactor | [x] 2026-11-08 |
 | CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [x] 2026-11-08 |
 | CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [x] 2026-11-08 |
-| CR20a | Round two: a channel seam, and channel identities for members | Core refactor | [ ] |
+| CR20a | Round two: a channel seam, and channel identities for members | Core refactor | split |
+| CR20a1 | Round two: the Channel protocol | Core refactor | [x] 2026-11-08 |
+| CR20a2 | Round two: channel identities for members | Core refactor | [~] |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
 | CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [ ] |
@@ -15109,7 +15111,7 @@ Notes (2026-11-08):
   tests/scenarios/test_module_kinds.py.
 
 ### CR20a · Round two: a channel seam, and channel identities for members
-Status: [ ]
+Status: split into CR20a1 and CR20a2 (2026-11-08)
 Depends on: CR19
 - A `Channel` protocol in core (receive events, send and edit texts with buttons, typing,
   pictures, groups) that the outbox and agent use instead of `TelegramChannel`.
@@ -15117,6 +15119,36 @@ Depends on: CR19
   with a migration and the store's lookups by channel.
 - Split it in two if it doesn't fit a session (it touches about 50 files).
 Tests: everything still runs over Telegram; golden files identical.
+
+### CR20a1 · Round two: the Channel protocol
+Status: [x] 2026-11-08
+Depends on: CR19
+- `themi.channels.base.Channel`: start, stop, run, receive (its `handler`), send and edit
+  texts with buttons, pictures, reactions, typing, the command menu. The app, runtime,
+  agent, inbound handlers and outbox name it instead of `TelegramChannel`.
+Tests: everything still runs over Telegram; golden files identical; a fake channel that
+isn't Telegram satisfies the protocol and carries a reply.
+
+Notes (2026-11-08):
+- `themi/channels/base.py`: `Channel` (runtime-checkable): `handler`, `last_poll_at`,
+  start, stop, run, send_text, edit_text, typing, publish_commands. Pictures and reactions
+  are their own small protocols, since the outbox already looks for them with `getattr`.
+- The app, the agent and inbound handlers name `Channel`. Only the composition root
+  (`themi.cli`) builds a `TelegramChannel`.
+- Telegram-only parts stay Telegram's: the Mini App sign-in checks for `web_app_user`,
+  and the family group lives on the Telegram channel. CR20b moves the channel into a
+  module.
+- Tests: tests/integration/test_channel_seam.py (Telegram is a Channel; a made-up
+  channel carries a message in and the reply out). Golden files identical.
+
+### CR20a2 · Round two: channel identities for members
+Status: [~]
+Depends on: CR20a1
+- `member_identities` (member, channel, external id) in place of `members.telegram_user_id`,
+  with a migration that copies them, and the store's lookups by channel. `Member` keeps a
+  `telegram_user_id` read from it, so the code that reads it doesn't change yet.
+Tests: the migration copies; lookups by channel; pairing writes an identity; golden files
+identical.
 
 ### CR20b · Round two: Telegram as a channel module, and a website chat channel
 Status: [ ]
