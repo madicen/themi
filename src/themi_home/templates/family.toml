@@ -34,6 +34,7 @@ modules = [
     "breaks",
     "pantry",
     "tasks",
+    "task_parts",  # F26c
     "chore_chart",  # CR21a
     "follow_ups",
     "email_audit",
@@ -52,6 +53,7 @@ modules = [
     "conversation_mode",
     "checkin_reviews",
     "meals",
+    "takeout",  # 35a
     "calls",
     "cooking_timers",
     "body_double",

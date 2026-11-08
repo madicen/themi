@@ -1,8 +1,8 @@
 """CatGenie: the litter box, through the CatGenie app's own cloud (PetNovations) (CG1a).
 
-There's no official API. This follows the community client kclif9/catgenieapi (`catgenie`
+There's no official API. This follows the community client kclif9/catgenie-api (`catgenie`
 0.1.6 on PyPI, MIT), which was read for this, never run or depended on
-(github.com/kclif9/catgenieapi, checked 2026-11-04):
+(github.com/kclif9/catgenie-api, renamed from catgenieapi; checked 2026-11-08):
 
 - Everything is at `https://iot.petnovations.com`. Sign-in is a phone number and a code
   sent by text: `ums/v1/users/generateLoginCode/v2`, then

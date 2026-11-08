@@ -11,6 +11,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.core import keys
 from themi.standard.repeat import parse
+from themi.standard.routines import asked_to_remove
 from themi.standard.tasks import TaskBoard
 
 WED = date(2026, 10, 21)
@@ -573,11 +574,21 @@ async def test_reply_237_an_add_in_a_removal_is_declined(
 
 
 async def test_a_swap_still_adds(scenario: Scenario, fake_cozyla: FakeCozyla) -> None:
+    said = "Remove take meds and add refill cat feeders to my evening routine"
+    assert not asked_to_remove(said)  # a swap isn't a removal (F33d)
     await on_the_wall(scenario, fake_cozyla)
-    await add(scenario, "Remove take meds and add refill cat feeders to my evening routine", {
+    await add(scenario, said, {
         "title": "Refill cat feeders", "part": "Evening", "repeat": "",
     })  # fmt: skip
-    assert len(cards(scenario)) == 1
+    # F32b (bug #171): this item is on the routine already, so it isn't added twice. Before
+    # F32b the duplicate was staged; the swap's other half is remove_routine_item's.
+    assert cards(scenario) == []
+    result = str(scenario.primary.requests[-1].messages[-1])
+    assert "Refill cat feeders is on the evening routine already" in result
+    await add(scenario, "Remove take meds and add brush teeth to my evening routine", {
+        "title": "Brush teeth", "part": "Evening", "repeat": "",
+    })  # fmt: skip
+    assert len(cards(scenario)) == 1  # a new item in a swap still stages
 
 
 async def test_a_new_item_in_a_removal_message_still_stages(

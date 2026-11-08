@@ -51,7 +51,8 @@ PANTRY = ToolGroup(
     name="pantry",
     description="the pantry and meal ideas",
     words=(
-        "pantry|fridge|freezer|meal|dinner|lunch|breakfast|cook|recipe|out of|low on|"
+        "pantry|fridge|freezer|meal|dinner|lunch|breakfast|\\bate\\b|eaten|snack|cook|recipe|"
+        "out of|low on|"
         "running low|ran out|leftover|used (?:up|the last)|last of|finished the|picke"
         "d up|bought|got (?:some|more)|stocked|use (?:it |them )?up|using up|expir|go"
         "(?:es)? off|went off|safeway|\\bcart\\b|weekly shop"
@@ -70,11 +71,13 @@ PANTRY = ToolGroup(
         "The milk went off",
         "Got more coffee beans",
         "Load up the online grocery cart from the list",
+        "Just had lunch",
     ),
     tools=(
         "update_pantry",
         "show_pantry",
         "suggest_meals",
+        "log_meal",
         "fill_safeway_cart",
     ),
     order=80,

@@ -104,6 +104,7 @@
     "routines.add_item",
     "safeway.fill",
     "server.request",
+    "takeout.order",
     "tasks.step_up"
   ],
   "open_item_sources": [

@@ -199,6 +199,10 @@
     "group": "maintenance",
     "spec": "500dc8b1a70b"
   },
+  "log_meal": {
+    "group": "pantry",
+    "spec": "8480d3618c2b"
+  },
   "log_spending": {
     "group": "spending",
     "spec": "4e9c6309e4c6"
@@ -217,7 +221,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "4f00c5305642"
+    "spec": "6beaf1af8e82"
   },
   "move_list_item": {
     "group": "core",
@@ -245,7 +249,7 @@
   },
   "put_task_on_chore_chart": {
     "group": "wall",
-    "spec": "bf52c6a5e0fd"
+    "spec": "e42337fb60f8"
   },
   "put_task_on_wall_list": {
     "group": "wall",
@@ -442,6 +446,10 @@
   "spending_summary": {
     "group": "spending",
     "spec": "2fb4e80890c5"
+  },
+  "split_task": {
+    "group": "schedules",
+    "spec": "df602be0c8b9"
   },
   "start_body_double": {
     "group": "body_double",

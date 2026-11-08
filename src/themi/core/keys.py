@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from themi.standard.reactions import Reactions
     from themi.standard.routines import Routines
     from themi.standard.taking import Taking
+    from themi.standard.task_parts import TaskParts
     from themi.standard.tasks import TaskBoard
     from themi.standard.web_search import WebSearch
     from themi_cozyla.cozyla_routines import CozylaRoutines
@@ -75,12 +76,14 @@ if TYPE_CHECKING:
     from themi_home.recipes import Recipes
     from themi_home.safeway import SafewayCart
     from themi_home.spending import Spending
+    from themi_home.takeout import Takeout
     from themi_home.vacuum import Vacuum
     from themi_home.web_recipes import WebRecipes
     from themi_home.which_list import WhichList
 
 memory: Key[Memory] = Key("Memory")
 taskboard: Key[TaskBoard] = Key("TaskBoard")
+task_parts: Key[TaskParts] = Key("TaskParts")  # F26c
 habits: Key[HabitReserve] = Key("HabitReserve")
 google: Key[GoogleAccounts] = Key("GoogleAccounts")
 gmail: Key[GmailSync] = Key("GmailSync")
@@ -107,6 +110,7 @@ chart_queue: Key[ChartQueue] = Key("ChartQueue")
 lists: Key[Lists] = Key("Lists")
 buying: Key[ThingsToBuy] = Key("ThingsToBuy")
 spending: Key[Spending] = Key("Spending")
+takeout: Key[Takeout] = Key("Takeout")  # 35a
 safeway: Key[SafewayCart] = Key("SafewayCart")
 breaks: Key[Breaks] = Key("Breaks")
 body_double: Key[BodyDouble] = Key("BodyDouble")

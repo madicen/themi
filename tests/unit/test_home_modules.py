@@ -32,6 +32,7 @@ from themi_home.recipes import Recipes, RecipesModule
 from themi_home.safeway import SafewayCart, SafewayModule
 from themi_home.spending import Spending, SpendingModule
 from themi_home.step_images import StepPictures, StepPicturesModule
+from themi_home.takeout import Takeout, TakeoutModule
 from themi_home.web_recipes import WebRecipes, WebRecipesModule
 
 RECIPES: list[Callable[[], Module]] = [RecipesModule, RecipeGroceriesModule]
@@ -44,7 +45,13 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (BuyingModule, ThingsToBuy, [ListsModule], set()),
     (SpendingModule, Spending, [], set()),
     (PantryModule, Pantry, [GroceriesModule], {"pantry.predict"}),
-    (MealsModule, Meals, [GroceriesModule, PantryModule], set()),
+    (MealsModule, Meals, [GroceriesModule, PantryModule], {"meals.nudges"}),  # 35a
+    (
+        TakeoutModule,
+        Takeout,
+        [SpendingModule, GroceriesModule, PantryModule, MealsModule],
+        {"takeout.rescue"},
+    ),  # 35a
     (CallsModule, VendorCalls, [TasksModule], set()),
     (RecipesModule, Recipes, [], {"recipes.sync"}),
     (CookbookSaveModule, CookbookSave, [RecipesModule], set()),

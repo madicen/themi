@@ -43,10 +43,12 @@ from themi.core.services import Services
 from themi.core.tools import (
     Proposal,
     ToolContext,
+    ToolDeclined,
     ToolFailed,
     staged_tool,
     tool,
 )
+from themi.core.wording import words_in_common
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
 from themi.standard.repeat import RepeatError, parse, read_back, round_end
@@ -610,6 +612,15 @@ ROUTINE_WORDS = re.compile(
 )
 
 
+# F32b (bugs #171, #166): "my chores", "the chore chart", "the chore list" are the chart.
+CHART_WORDS = re.compile(r"\b(?:chart|chores?|chore list)\b")
+CHART_NOT_ROUTINE = (
+    "They asked for the chore chart, not a routine. A task goes there with "
+    "put_task_on_chore_chart (task_id); a routine item with put_task_on_chore_chart "
+    "(routine_item). Nothing was added."
+)
+
+
 TAKE_TASKS = re.compile(r"\b(?:take|do|help with|pick up)\b.*\b(?:tasks?|chores?|jobs?)\b")
 PERSONS_TASKS = re.compile(r"\b\w+'?s\s+(?:tasks|chores|jobs|to-?dos?)\b", re.IGNORECASE)
 
@@ -663,14 +674,15 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
             "They didn't ask about a routine. If they want a partner's tasks to take on, "
             "use tasks_i_could_take; otherwise answer with the tasks."
         )
+    if CHART_WORDS.search(said) and not ROUTINE_WORDS.search(said):
+        raise ToolDeclined(CHART_NOT_ROUTINE)  # F32b
     if asked_to_remove(ctx.request_text):  # F33d
         part = str(args["part"])
-        titles = await ctx.services.get(keys.wall_routines).titles_on(ctx.member, part)
-        routines = ctx.services.maybe(keys.routines)
-        ours = routines.find(ctx.member, part) if routines is not None else None
-        if routines is not None and ours is not None:
-            titles += [i.title for i in routines.items(ours)]
-        already_there(title, part, titles)
+        already_there(title, part, await _titles_on(ctx, part, None))
+    if not int(args.get("task_id") or 0):  # F32b: an item like one on it for that day
+        part = str(args["part"])
+        on_day = ctx.services.get(keys.wall_routines)._today() if once else None
+        like_one_there(title, part, await _titles_on(ctx, part, on_day))
     moved = _moved_task(ctx, int(args.get("task_id") or 0), title, said)
     words = [w for w in name_key(title).split() if len(w) > 2]
     asked = "routine" in said and (
@@ -698,6 +710,31 @@ async def add_to_wall_routine(ctx: ToolContext, args: dict[str, Any]) -> Proposa
         },
     )
     return replace(proposal, requested=asked)
+
+
+async def _titles_on(ctx: ToolContext, part: str, day: date | None) -> list[str]:
+    """The items on their routine for this part of the day: the wall's, and Themi's own
+    (only those for `day`, when it's just one day)."""
+    titles = await ctx.services.get(keys.wall_routines).titles_on(ctx.member, part)
+    routines = ctx.services.maybe(keys.routines)
+    ours = routines.find(ctx.member, part) if routines is not None else None
+    if routines is not None and ours is not None:
+        titles += [i.title for i in routines.items(ours) if day is None or i.applies(day)]
+    return titles
+
+
+def like_one_there(title: str, part: str, titles: list[str]) -> None:
+    """F32b (bug #171): "replace vacuum water" is "Refill the vacuum's clean water", which
+    is on the evening routine already: the same words, or two of three letters or more."""
+    for each in titles:
+        if (
+            name_key(each) == name_key(title)
+            or title_matches(title, each)
+            or words_in_common(title, each) >= 2
+        ):
+            raise ToolDeclined(
+                f"{each} is on the {part.lower()} routine already. Nothing was added."
+            )
 
 
 def board_list(ctx: ToolContext, task: Task) -> str:

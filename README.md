@@ -306,7 +306,7 @@ capture --out /data/tuya-captures`). The files leave out the devices' ids, keys 
 A CatGenie A.I. can tell Themi how it's doing: cleaning or not, its sani-solution and any
 error. CatGenie has no official API, so Themi talks to the CatGenie app's own cloud
 (PetNovations) the way the community client
-[kclif9/catgenieapi](https://github.com/kclif9/catgenieapi) found it works. It may stop
+[kclif9/catgenie-api](https://github.com/kclif9/catgenie-api) found it works. It may stop
 working when they change things; the admin then hears once, and the litter box goes quiet.
 Themi only reads it; it never starts, stops or changes a clean.
 

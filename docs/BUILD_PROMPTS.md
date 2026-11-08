@@ -149,11 +149,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CG1b | CatGenie litter box: errors and supplies become chores | 5 Devices | [x] 2026-11-04 |
 | 34a | Liaison: relays between partners | 6 Liaison and food | [x] 2026-11-04 |
 | 34b | Liaison: family group and alignment prompts | 6 Liaison and food | [x] 2026-11-04 |
-| 35a | Meal reminders and takeout rescue | 6 Liaison and food | [ ] |
+| 35a | Meal reminders and takeout rescue | 6 Liaison and food | [x] 2026-11-08 |
 | 35b | Safeway cart: a Chrome extension that fills the cart on its own | 6 Liaison and food | [x] |
 | 35c | Safeway cart: Themi's side (pairing, jobs, product memory) | 6 Liaison and food | [x] |
 | 35d | Safeway cart: the extension takes jobs from Themi | 6 Liaison and food | [x] |
-| 36 | Research: CatGenie, automated calls, SMS | 7 Research | [ ] |
+| 36 | Research: CatGenie, automated calls, SMS | 7 Research | split |
+| 36a | Research: the CatGenie, voice-call and SMS write-ups | 7 Research | [x] 2026-11-08 |
+| 36b | CatGenie fallback: schedule estimates and a check-in task | 7 Research | waiting (Michael's call) |
 | R2 | Research: Google Home | 7 Research | [x] |
 | GT1a | Google Tasks as an inbox: voice-added items processed, then removed | Google Home | [x] |
 | GT1b | Themi's tasks on Google Tasks, kept apart from the inbox | Google Home | [x] |
@@ -196,7 +198,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | W5 | Website redesign: Tiers, Rules & memory, AI and the remaining pages | Website redesign | [x] 2026-11-03 |
 | F26a | Feedback: a one-off routine item already gone stopped the wall's routine sync | Feedback | [x] 2026-11-04 |
 | F26b | Idea: approvals from one email thread in one message | Feedback | [x] 2026-11-06 |
-| F26c | Idea: a task's steps split into tasks of their own | Feedback | [ ] |
+| F26c | Idea: a task's steps split into tasks of their own | Feedback | [x] 2026-11-08 |
 | F27 | Feedback: the family group hears "Themi, ..." and says when Telegram hides messages | Feedback | [x] 2026-11-04 |
 | F28a | Feedback: a new due date sent to the wall is put back by the wall's order | Feedback | [x] 2026-11-05 |
 | F28b | Feedback: a confirmation's amount is what the reader paid | Feedback | [x] 2026-11-05 |
@@ -218,8 +220,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F31b | Feedback: a card after a retried call is the whole answer, and no task numbers in what people read | Feedback | [x] 2026-11-06 |
 | F31c | Idea: web searches near home, and a different place isn't the one asked for | Feedback | [x] 2026-11-06 |
 | F31d | Idea: forwarding an email | Feedback | [x] 2026-11-06 |
-| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [ ] |
-| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [ ] |
+| F32a | Idea: tasks on the website, grouped by due date and other ways | Feedback | [x] 2026-11-08 |
+| F32b | Feedback: "my chores" is the chore chart, and a routine item moves there in one go | Feedback | [x] 2026-11-08 |
 | F33a | Feedback: a direct change made as asked ends the turn | Feedback | [x] 2026-11-06 |
 | F33b | Feedback: more_tools offers only what isn't here yet | Feedback | [x] 2026-11-06 |
 | F33c | Feedback: "no such routine item" says what's there, and a near name is found | Feedback | [x] 2026-11-06 |
@@ -7068,7 +7070,7 @@ Notes (2026-11-04):
   (the default) the bot only sees commands, mentions and replies, which is all it needs.
 
 ### 35a · Meal reminders and takeout rescue
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: 27, 19
 Read first: "Module behaviour" → D; "Integrations" → Safeway/DoorDash row.
 Split from prompt 35 on 2026-10-30; the Safeway cart moved to 35b and 35c.
@@ -7091,6 +7093,47 @@ Tests:
 - Spending updates from receipts.
 
 Commit when done.
+
+Notes:
+- The plan (Build Plan V1) couldn't be read from this session (the Docs and Artifact tools
+  both refused it), so this follows the prompt and the earlier prompts' notes. Worth a
+  look against "Module behaviour" D when someone can open it.
+- Meal log: `log_meal` (pantry group; "ate", "eaten", "snack" added to its words), a
+  picked meal idea, and `Meals.log_eaten(member, what, at, source="device")`, the device
+  hook (nothing calls it yet). Tables `meals_eaten` and `meal_nudges`, in the meals
+  module's own track (`meals_schema`).
+- Gap: the median of same-day gaps over the last 30 days ×1.3, between 3 and 7 hours;
+  5 hours until there are 5 gaps. Overnight gaps don't count. The gap counts from the
+  last meal or the end of their quiet hours, whichever is later, so the morning's first
+  reminder comes a gap after they wake. No reminder for someone who hasn't logged a meal
+  in two days (nobody is reminded until they start logging). The `meals.nudges` job runs
+  every 15 minutes; a reminder carries two meal ideas (prompt 27), or a plain line when
+  the AI can't be reached. Kind `meal`, so "no meal reminders today" pauses it, and it
+  lapses after an hour rather than arriving late.
+- Takeout rescue is its own module, `takeout` (needs spending and meals), with its own
+  track (`takeout_schema`: `takeout_favourites`, `takeout_rescues`). Household settings
+  `TakeoutSettings`: dinner 17:00 to 19:30, at most $60 an order; admins change them on
+  the Takeout page. "Low" is `suggested_level == "low"` for every member (tracking off is
+  no read, so no rescue). Also held back by a takeout or eating-out spend already today.
+  The favourite chosen is within the cap and the budget left, offered longest ago, then
+  cheapest. No budget set: the cap alone.
+- The card goes through the existing `doordash_order` category (capped, always asks), to
+  an admin. Deviation: approvals gained `timely` (a set of categories whose card goes at
+  once, with a deadline of now). Otherwise a card waits for a good moment, and with
+  everyone low that doesn't come until after dinner. Pauses, quiet hours and busy times
+  still hold it. Going ahead edits the card to the store link and the items; the checkout
+  is the person's. Nothing is bought by Themi.
+- Spending from DoorDash receipts was already X1's (`Spending.from_receipt`); the budget
+  left reads it.
+- Website: `/takeout` (favourites: add, change, remove; admins: the dinner window and
+  cap), linked from Spending. No menu entry.
+- Tests changed for the new module, not loosened: the key count (65), takeout leaving with
+  spending in the planner and the menu test, and the meals module's job. Golden files:
+  the two jobs, the five routes, `log_meal`, the `takeout.order` executor.
+- Setup: restart `themi run` (the two new tracks), and save a favourite or two on the
+  Takeout page.
+- Also in this session: `deploy/update.sh` no longer uses `sed -i` (BSD sed on macOS took
+  `.env` as the backup suffix, so the deploy script tests failed locally).
 
 ### 35b · Safeway cart: a Chrome extension that fills the cart on its own
 Status: [x] 2026-10-31
@@ -7313,7 +7356,8 @@ Notes (2026-10-31):
 ## Milestone 7: Research
 
 ### 36 · Research: CatGenie, automated calls, SMS
-Status: [ ]
+Status: split 2026-11-08 into 36a (the research write-ups, done) and 36b (the CatGenie
+fallback, waiting).
 Depends on: 29
 Read first: "Integrations" → CatGenie, vendor phone calls; "Decisions so far" (chat channel).
 
@@ -7332,6 +7376,42 @@ Do:
 - End with a summary for the user and proposed follow-up prompts added to this file.
 
 Commit when done.
+
+### 36a · Research: the CatGenie, voice-call and SMS write-ups
+Status: [x] 2026-11-08
+Depends on: 29
+
+Notes:
+- `docs/research/catgenie.md`, `voice-calls.md`, `sms.md`, each with sources opened on
+  2026-11-08 and what couldn't be confirmed marked as such.
+- CatGenie: viable, built as CG1a/CG1b. The community client's repository was renamed to
+  `kclif9/catgenie-api`; the credit in `connectors/catgenie/client.py` and the README now
+  point there. Two Home Assistant integrations now build on it.
+- Voice calls: every provider is under $5 a month at ~20 minutes. Proposed: Twilio
+  ConversationRelay ($0.07/min + $0.014 outbound, $1.15/month number) with our own model
+  through the router, so the router, trust tiers and outbox still hold; Retell or Vapi if
+  quality falls short. Each call Tier 1, the AI said at once, no recording by default
+  (California Penal Code 632 needs every party's consent).
+- SMS: Twilio $0.0083 a segment plus carrier fees; about $11-12 a month at 300 texts.
+  Proposed: SMS only as a fallback for urgent messages Telegram didn't deliver, from a
+  verified toll-free number (sole proprietors exempt from the new business-number rule),
+  10DLC sole-proprietor registration ($4-4.50 brand, $15 vetting, $2/month) if refused.
+- Proposed follow-ups, not added as prompts until Michael wants them: V1 a call placed by
+  Themi (ConversationRelay, Tier 1 per call) after V2 a five-call trial; S0 Michael sets up
+  Twilio and submits verification, then S1 the SMS fallback through the outbox; CG1c the
+  CatGenie's error-code tables once captures arrive.
+
+### 36b · CatGenie fallback: schedule estimates and a check-in task
+Status: waiting (Michael's call, 2026-11-08)
+Depends on: 36a, CG1b
+
+36 asked for a fallback for when there's no way to read the box: cleaning-schedule
+estimates plus a quick check-in task. CG1a/CG1b now read the box directly, so the fallback
+only matters if the unofficial client breaks. Decide first (Michael): build it now, build it
+only if CatGenie breaks, or drop it. If built: while the CatGenie module is off or its
+sign-in has failed for a day, estimate cleans from the lifetime cycle count's usual pace
+and offer a weekly "quick look at the litter box" check-in (solution, granules, any error
+light), as a household chore. `docs/research/catgenie.md` has the proposal.
 
 ### R2 · Research: Google Home
 Status: [x] 2026-10-30
@@ -9535,7 +9615,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0119). Mark idea #137 reviewed once it's live.
 
 ### F26c · Idea (2026-11-04): a task's steps split into tasks of their own
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: F6a, F4, O1a
 Read first: "Shadow Calendar" → Task matching, capacity; F6a (steps on tasks). From
 Michael's idea #142 (2026-11-04, 1:32 pm, "be able to take tasks that have multiple steps
@@ -9554,6 +9634,32 @@ at least do part of it"). For example task 10, Split Merlin's cat box, has three
 Tests: task 10 split three ways between Erin and Michael; each part on the right list and
 the wall; the parent done when the last part is. A part done counts as done in the
 summary. A repeating chore is refused.
+
+Notes:
+- `themi.standard.task_parts` (module `task_parts`, family template only: the work template
+  mustn't send "partner" or "chore" to the model). Its own migration track,
+  `task_parts_schema/0001_task_parts.sql` (part, parent, position). First written as core
+  migration 0157, moved before it was pushed (2026-11-08): a feature table belongs to its
+  module (CR6), and the work template runs without it.
+- `split_task(task_id, parts)`: every step becomes a part, titled "<task>: <step>" so it
+  reads alone on the wall. Named steps go to 'me', 'partner' (a household of two) or
+  'either' (matching decides: whoever has room); the rest stay with the task's assignee.
+  Each part keeps the task's due date unless one is given, its kind and importance, and
+  effort/steps (at least 1). In the schedules tool group ("split", "step", "part", "break
+  it up" added to its words).
+- The parent stays open but is hidden. The task board has a `set_aside` list (subqueries
+  of task ids, shared with the matcher) that a module adds to; `board.shown()` is the SQL
+  that leaves them out. Task parts adds its parents. Used by `open_for`, `added_by`, the
+  naming check, matching's task load, overdue reminders, and the dishwasher, vacuum and
+  body-double title matches, so none of them names the parts' table; `off_displays` set, so it leaves the wall and other displays.
+  Its nudge is withdrawn.
+- Each part's line says "Part 2 of 3 of <task>; 1 of 3 parts done." (open items and the
+  website's task rows). Last part settled: the parent is done if any part was, cancelled if
+  all were.
+- Refused, changing nothing: a repeating chore, fewer than two steps, already split, a part
+  itself, a step number that isn't there.
+- Golden: `split_task`, and `more_tools` (the schedules group's description).
+- Setup: restart `themi run` (the task_parts track's 0001). Mark #142 reviewed once live.
 
 ### F27 · Feedback (2026-11-04): the family group hears "Themi, ..." and says when Telegram hides messages
 Status: [x] (2026-11-04)
@@ -10860,7 +10966,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run` (migration 0118). No new Google scope.
 
 ### F32a · Idea (2026-11-06): tasks on the website, grouped by due date and other ways
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: W2, T1
 Read first: W1's principles (collapsed rows, phone first, no new JS); W2's notes
 (`task_pages.task_rows`, `_task_row.html`); T1's `themi.core.priority` (urgent and
@@ -10904,6 +11010,21 @@ Scenario: Michael chooses "Urgency" on Tasks, sees "Urgent" with today's dentist
 it, comes back later and it's still grouped that way. Erin's page is still by due date.
 
 Setup: restart `themi run` (the migration). Mark #170 reviewed once live.
+
+Notes:
+- Deviation: no `members.task_grouping` column. Since CR7a a member's feature setting is a
+  module preference, so it's `TasksPreferences.task_grouping` (default "due") in
+  `member_preferences`; no migration. It isn't on My settings, and saving that page leaves
+  it alone (tested).
+- `task_pages.group_tasks(tasks, by, today)` and `grouping_of` (anything unknown is "due").
+  "This week" runs to Sunday; on a Sunday, Monday is "Tomorrow" and the rest of that week
+  "Next week". Kind headings follow `TASK_KINDS` (an unknown kind reads "Around the
+  house"). Check-ins come before "Repeating chores" when a check-in repeats.
+- The chips are CSRF-checked POST buttons (`.group-by button.chip`), the current one green
+  with `aria-current`. Each group is an `<h2>` with its count; "None" is one list with no
+  heading. Home's panel is unchanged.
+- Golden: `POST /tasks/grouping`.
+- Setup: none beyond the usual restart. Mark #170 reviewed once live.
 
 ### F33a · Feedback (2026-11-06): a direct change made as asked ends the turn
 Status: [x] 2026-11-06
@@ -11094,7 +11215,7 @@ Notes (2026-11-06):
 - Setup: restart `themi run`. No migration.
 
 ### F32b · Feedback (2026-11-06): "my chores" is the chore chart, and a routine item moves there in one go
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: C2b, R1a, F23e, F29d
 Read first: C2b's notes (the chore chart, `put_task_on_chore_chart`); R1a's and R1b's notes
 (routine items, just-for-today ones); F23e's notes (a task moved into a routine becomes
@@ -11162,6 +11283,31 @@ off the routine. No card, nothing snoozed.
 Data (Michael decides): decline actions 512 and 513 on the Pi (snoozed cards that would
 add "replace vacuum water" to the evening routine), or they'll come back. Task 81 is right
 as it is. Mark #171 reviewed once live.
+
+Notes:
+- `put_task_on_chore_chart(task_id, routine_item)`: with task_id 0 and an item, the item is
+  found as `remove_routine_item` finds it (`routines.item_for`, so a near name works and a
+  miss says what's there), taken off its routine (the wall follows at its sync), made a
+  task for the routine's owner, and put on the chart. A just-for-one-day item is a one-off
+  due that day; otherwise a repeating chore on the item's days (every day if none). No
+  card, one line back. Every call must now send `routine_item` ('' when not used), as the
+  tools are strict: two integration tests send it.
+- `add_to_wall_routine` refuses (ToolDeclined, nothing staged) when the message names the
+  chart, chores or the chore list and no routine word, naming both ways onto the chart.
+  It also refuses a new item like one on that routine (the wall's and Themi's; for a
+  just-today add, Themi's items for today): the same words, `title_matches`, or two words
+  of three letters or more in common. A task moved into a routine (task_id) isn't checked.
+- Test changed: F33d's `test_a_swap_still_adds` added "Refill cat feeders" while that very
+  item was on the routine, and expected a card. F32b refuses that duplicate, so the test
+  now expects the refusal, and checks the swap with a new item ("Brush teeth") instead,
+  plus that a swap isn't read as a removal. The two prompts disagree on this one case; the
+  later one is followed.
+- Every category (in `Autonomy.stage`): a card staged while an identical one (same
+  category, person and payload) is pending or snoozed withdraws the old one ("Replaced by
+  the newer card.", declined by `system`). A snoozed card's message was already edited when
+  it was snoozed, so only its status changes; it doesn't come back.
+- Routing examples added to the wall group. Golden: `put_task_on_chore_chart`'s spec.
+- Data (Michael decides, as above): actions 512 and 513 on the Pi.
 
 ### F34a · Feedback (2026-11-07): in conversation mode, a word about an open task, body doubling or Themi itself goes to the tools
 Status: [x] 2026-11-07

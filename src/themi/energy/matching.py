@@ -55,10 +55,20 @@ TASK_LOAD_POINTS = 2.0  # per open task; an overdue one counts twice
 TASK_LOAD_CAP = 15.0
 
 
+def not_set_aside(set_aside: list[str], column: str = "id") -> str:
+    """SQL that leaves out tasks a module has set aside (`set_aside`: subqueries of task
+    ids), for "AND ..." in a query of open tasks. "1 = 1" when nothing is."""
+    return " AND ".join(f"{column} NOT IN ({q})" for q in set_aside) or "1 = 1"
+
+
 class Matcher:
     def __init__(self, store: AccountStore, model: EnergyModel) -> None:
         self.store = store
         self.model = model
+        # Open tasks that someone isn't asked about while others stand in for them (a
+        # split task while its parts are open, F26c): subqueries of task ids, which a
+        # module adds. The task board shares this list.
+        self.set_aside: list[str] = []
 
     def default_owner(self, kind: str, requester: Member) -> Member:
         family = self.store.get_family()
@@ -84,7 +94,8 @@ class Matcher:
         today = to_local(clock.now(), family.timezone if family else "UTC").date()
         row = self.store.db.one(
             "SELECT COUNT(*) AS open, SUM(CASE WHEN due_on < ? THEN 1 ELSE 0 END) AS overdue "
-            "FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed')",
+            "FROM tasks WHERE assignee = ? AND status IN ('open', 'snoozed') "
+            f"AND {not_set_aside(self.set_aside)}",  # F26c: a split task's parts count
             (today.isoformat(), member.id),
         )
         if row is None:

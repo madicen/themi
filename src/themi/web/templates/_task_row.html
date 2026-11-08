@@ -12,6 +12,7 @@
   {%- else %}{% set _ = bits.append("Due " ~ task.due_on.strftime('%a %-d %b')) %}{% endif -%}
 {%- endif -%}
 {%- if task.repeats %}{% set _ = bits.append(summary(task)) %}{% endif -%}
+{%- if parts is defined and parts.get(task.id) %}{% set _ = bits.append(parts[task.id]) %}{% endif -%}
 {%- if task.shared %}{% set _ = bits.append("On both your lists") %}{% elif task.either %}{% set _ = bits.append("Either of you") %}{% endif -%}
 {%- set chips = [("Overdue", "warn")] if overdue else [] -%}
 {% call(part) row(task.title, meta=bits | join(" · "), chips=chips, id="task-" ~ task.id) %}

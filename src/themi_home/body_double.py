@@ -372,7 +372,9 @@ class BodyDouble:
         from themi_google.events import title_matches
 
         theirs = board.open_for(member)
-        rows = self.db.query("SELECT id FROM tasks WHERE status IN ('open', 'snoozed')")
+        rows = self.db.query(  # F26c: a split task's parts, not the task
+            f"SELECT id FROM tasks WHERE status IN ('open', 'snoozed') AND {board.shown()}"
+        )
         others = [board.get(r["id"]) for r in rows if r["id"] not in {t.id for t in theirs}]
         for task in (*theirs, *others):
             if title_matches(what, task.title) or title_matches(task.title, what):

@@ -113,10 +113,12 @@ roborock = "themi_home.home_modules:RoborockModule"
 routines = "themi.standard.routines:RoutinesModule"
 safeway = "themi_home.safeway:SafewayModule"
 spending = "themi_home.spending:SpendingModule"
+takeout = "themi_home.takeout:TakeoutModule"
 spotify = "themi_home.home_modules:SpotifyModule"
 step_pictures = "themi_home.step_images:StepPicturesModule"
 taking = "themi.standard.taking:TakingModule"
 task_blocks = "themi_google.google_modules:TaskBlocksModule"
+task_parts = "themi.standard.task_parts:TaskPartsModule"
 tasks = "themi.standard.tasks:TasksModule"
 telegram = "themi.standard.telegram:TelegramModule"
 thinq = "themi_home.home_modules:ThinqModule"
@@ -148,6 +150,8 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
     "setup/*.md",  # SP3b: the modules' setup guides
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
+    "meals_schema/*.sql",  # 35a: the meal log
+    "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",
@@ -163,6 +167,7 @@ themi = [
     "storage/schema/*.sql",
     "standard/setup/*.md",  # SP3a: the modules' setup guides
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
+    "standard/task_parts_schema/*.sql",  # F26c: task parts' own track
     "templates/*.toml",
     "web/templates/*.html",
     "web/templates/*/*.html",

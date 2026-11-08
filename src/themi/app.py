@@ -69,6 +69,7 @@ from themi.standard.reactions import ReactionsModule
 from themi.standard.reminders import RemindersModule
 from themi.standard.routines import RoutinesModule
 from themi.standard.taking import TakingModule
+from themi.standard.task_parts import TaskPartsModule
 from themi.standard.tasks import TasksModule
 from themi.standard.telegram import TelegramModule
 from themi.standard.web_search import WebSearchModule
@@ -135,6 +136,7 @@ from themi_home.recipes import RecipesModule
 from themi_home.safeway import SafewayModule
 from themi_home.spending import SpendingModule
 from themi_home.step_images import StepPicturesModule
+from themi_home.takeout import TakeoutModule
 from themi_home.web_recipes import WebRecipesModule
 from themi_home.which_list import WhichListModule
 
@@ -212,6 +214,7 @@ def family_modules(
         BreaksModule(),
         PantryModule(),
         TasksModule(),
+        TaskPartsModule(),  # F26c
         ChoreChartModule(),  # CR21a: the chart, with or without the wall
         FollowUpsModule(),
         *([EmailAuditModule()] if google else []),
@@ -230,6 +233,7 @@ def family_modules(
         ConversationModeModule(),
         CheckinReviewsModule(),
         MealsModule(),
+        TakeoutModule(),  # 35a: after spending and meals
         CallsModule(),
         CookingTimersModule(),  # RC3c: timers are scheduler jobs
         BodyDoubleModule(),  # BD1a: block ends are scheduler jobs
