@@ -302,11 +302,23 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR10b3 | Core refactor: a distribution per pack | Core refactor | deferred |
 | CR11 | Core refactor: the setup wizard | Core refactor | [x] 2026-11-07 |
 | CR12 | Core refactor: the work template | Core refactor | [x] 2026-11-07 |
-| CR13 | Gate: tutoring design | Core refactor | [~] |
-| CR14 | Tutoring pack for one family | Core refactor | [ ] |
-| CR15a | Multi-family host: instance database and family registry | Core refactor | [ ] |
-| CR15b | Multi-family host: routing messages and the website | Core refactor | [ ] |
-| CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | [ ] |
+| CR13 | Gate: tutoring design | Core refactor | waiting (tutoring spec) |
+| CR14 | Tutoring pack for one family | Core refactor | waiting (tutoring spec) |
+| CR15a | Multi-family host: instance database and family registry | Core refactor | waiting (tutoring spec) |
+| CR15b | Multi-family host: routing messages and the website | Core refactor | waiting (tutoring spec) |
+| CR15c | Multi-family host: the tutor's summaries and registering families | Core refactor | waiting (tutoring spec) |
+| CR16 | Round two: the simulator with any module setup | Core refactor | [~] |
+| CR17a | Round two: the dashboard and Accounts page in module sections | Core refactor | [ ] |
+| CR17b | Round two: each pack's own page templates and static files | Core refactor | [ ] |
+| CR18a | Round two: Google permissions asked per module | Core refactor | [ ] |
+| CR18b | Round two: Gmail and Calendar split into base and feature modules | Core refactor | [ ] |
+| CR19 | Round two: module kinds, AI providers and capabilities as modules, setup by kind | Core refactor | [ ] |
+| CR20a | Round two: a channel seam, and channel identities for members | Core refactor | [ ] |
+| CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [ ] |
+| CR20c | Gate: Discord and Slack channels | Core refactor | [ ] |
+| CR21a | Round two: the chore chart as its own household module | Core refactor | [ ] |
+| CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [ ] |
+| CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [ ] |
 
 ## Fixed technical choices
 
@@ -14838,7 +14850,7 @@ Notes:
   and argument description); and runs the wizard for work.
 
 ### CR13 · Gate: tutoring design
-Status: [~]
+Status: waiting for the tutoring spec (2026-11-08)
 Depends on: CR12
 Gate: stop here. This prompt is a conversation with Michael and the tutor, not code.
 - Settle: the roles and what each can see (especially what a parent sees of a student's
@@ -14865,12 +14877,12 @@ Notes:
   setup wizard, and rewording for template-specific words.
 
 ### CR14 · Tutoring pack for one family
-Status: [ ]
+Status: waiting for the tutoring spec (2026-11-08)
 Depends on: CR13
 Written by CR13.
 
 ### CR15a · Multi-family host: instance database and family registry
-Status: [ ]
+Status: waiting for the tutoring spec (2026-11-08)
 Depends on: CR14
 Read first: the refactor doc's Tutoring section; CR9's two-workspaces test.
 - An instance database (its own core track) with the tutor as admin and the family
@@ -14883,7 +14895,7 @@ Tests: two families' jobs run separately; a failing family; isolation (data writ
 can't be read from the other's app).
 
 ### CR15b · Multi-family host: routing messages and the website
-Status: [ ]
+Status: waiting for the tutoring spec (2026-11-08)
 Depends on: CR15a
 - One Telegram bot: an inbound message goes to the family of its sender's Telegram
   account, looked up in the instance database. Parents and students belong to one family.
@@ -14895,7 +14907,7 @@ Tests: routing for each role; the tutor's switch and guess; a parent can't reach
 family's pages.
 
 ### CR15c · Multi-family host: the tutor's summaries and registering families
-Status: [ ]
+Status: waiting for the tutoring spec (2026-11-08)
 Depends on: CR15b
 - Each family's app exposes a narrow summary interface (sessions today, homework due,
   open questions). The tutor's "what's on today" reads only through it, never raw queries.
@@ -14907,3 +14919,125 @@ Depends on: CR15b
 Tests: the summary across two families; a model call's input checked for one family's data
 only; registering and removing a family; a scenario from registration to a parent's first
 message.
+
+### Round two (2026-11-08)
+
+From Michael's asks after the first run: run the simulator with other module setups; a
+website built from the modules; finer Google modules; modules grouped by kind with setup
+asking by kind (channels, AI providers, capabilities); Cozyla as its own module. The design
+is the refactor doc's "Round two" section. CR13 to CR15c (tutoring) still wait for its spec,
+so "run the core refactor track" goes on from CR16.
+
+### CR16 · Round two: the simulator with any module setup
+Status: [~]
+Depends on: CR12
+- `make dev TEMPLATE=work MODULES=-safeway,+travel`, or `make dev CONFIG=path/to/themi.toml`.
+  The fakes stand in for the chosen connector modules (as `make dev` does today); a module
+  not chosen isn't loaded, whatever fakes exist.
+- Modules are chosen as `themi run` chooses them (`resolve_modules`), with each module built
+  from the fakes instead of from settings: `resolve_modules` takes the instances to use.
+- Each setup keeps its own dev data (`data/dev` for the family, `data/dev-<name>` otherwise)
+  and its workspace is made from its template. The simulator page says which setup it is.
+Tests: resolving with given instances; the dev runner builds a work setup with the fakes
+(no network); `make dev` with no options is as before.
+
+### CR17a · Round two: the dashboard and Accounts page in module sections
+Status: [ ]
+Depends on: CR16
+- `ctx.dashboard_panel(template, order, values=)` and `ctx.accounts_section(template,
+  order, values=, routes=)`, like CR7d's settings sections. Today's panels and the Accounts
+  page's connections (Google accounts, the cookbook, each device) move into their modules.
+- The pack check's exemptions for `google_pages` and `connection_pages` go.
+Tests: the family's dashboard and Accounts page show the same sections in the same order;
+a module left out takes its section with it.
+
+### CR17b · Round two: each pack's own page templates and static files
+Status: [ ]
+Depends on: CR17a
+- A module's pages render templates from its own package (`ctx.web(..., templates=)`): the
+  site's loader searches the core's folder, then each loaded pack's. Static files likewise,
+  under `/static/<pack>/`. The home and Google pages' templates move to their packs.
+Tests: every page renders; package data includes each pack's templates.
+
+### CR18a · Round two: Google permissions asked per module
+Status: [ ]
+Depends on: CR17a
+- Each Google module declares the scopes it needs (`google_scopes`); linking asks for the
+  loaded modules' scopes only. An account linked before a module was added shows "Link
+  again for <what>" on Accounts (the cookbook's pattern, RC1a).
+Tests: the work template asks for Gmail, Calendar and Tasks scopes and not Drive; adding the
+cookbook asks for Drive on the next link.
+
+### CR18b · Round two: Gmail and Calendar split into base and feature modules
+Status: [ ]
+Depends on: CR18a
+- `gmail` keeps the sync and its tools; triage, forwarding, urgent senders, expected emails
+  and the noise digest become modules requiring it. `calendar` keeps the sync and events;
+  busy times, task blocks, twins and copies become modules requiring it.
+- The family and work templates list them all; golden files identical.
+Tests: each feature module installs alone on its base; a base with no features works.
+
+### CR19 · Round two: module kinds, AI providers and capabilities as modules, setup by kind
+Status: [ ]
+Depends on: CR18b
+- `Module.kind`: channel, ai, capability, connector or feature. Each AI provider (Claude,
+  Gemini, OpenAI-compatible, Cloudflare) becomes a module registering its adapter; a Themi
+  needs at least one. Capabilities: voice notes (transcription), pictures (reading photos),
+  image generation (with its own provider key; without it, picture-making tools and step
+  pictures aren't offered).
+- `themi setup` asks by kind, in order: how you'll talk to Themi (channels), which AI
+  providers, which capabilities, then services and features.
+Tests: a template without image generation offers no picture tools; setup's order; golden
+files identical for the family (every provider and capability on).
+
+### CR20a · Round two: a channel seam, and channel identities for members
+Status: [ ]
+Depends on: CR19
+- A `Channel` protocol in core (receive events, send and edit texts with buttons, typing,
+  pictures, groups) that the outbox and agent use instead of `TelegramChannel`.
+- `member_identities` (member, channel, external id) in place of `members.telegram_user_id`,
+  with a migration and the store's lookups by channel.
+- Split it in two if it doesn't fit a session (it touches about 50 files).
+Tests: everything still runs over Telegram; golden files identical.
+
+### CR20b · Round two: Telegram as a channel module, and a website chat channel
+Status: [ ]
+Depends on: CR20a
+- Telegram's channel becomes the `telegram` module (kind channel). A `web_chat` module adds
+  a chat page on the website, for someone who uses only the site; it renders buttons as
+  buttons.
+Tests: a scenario over the web channel alone; a member on both channels.
+
+### CR20c · Gate: Discord and Slack channels
+Status: [ ]
+Depends on: CR20b
+Gate: needs a Discord bot and a Slack app to test against, and Michael's call on which
+first.
+
+### CR21a · Round two: the chore chart as its own household module
+Status: [ ]
+Depends on: CR16
+- The chore chart (limits per person, which chores are up, "a different one") becomes a
+  `chore_chart` module in the home pack, independent of any display: its table holds which
+  tasks are on the chart, in place of `tasks.on_chart`; the website shows the chart.
+  `tasks.off_wall` becomes a generic "keep off shared displays" flag.
+- `cozyla_chores` requires `chore_chart` and only shows it on the wall.
+Tests: the chart works with no wall; the family's golden files identical.
+
+### CR21b · Round two: a mirror seam for lists, tasks and routines
+Status: [ ]
+Depends on: CR21a
+- A `mirrors` seam in core: a display or app that keeps a list, a task list or a routine in
+  step registers itself (its item limit, its ticks coming back, its "ticked there" praise).
+  `lists.cozyla_list_id` and the list items' wall columns move to the mirror's own tables;
+  `routines.mark_on_wall` and `praise.from_wall` become mirror events.
+- No standard module names Cozyla or the wall afterwards (a check).
+Tests: lists, tasks and routines with no mirror; the wall's sync as before.
+
+### CR21c · Round two: Cozyla as its own package that only syncs
+Status: [ ]
+Depends on: CR21b
+- `themi_cozyla`: the Cozyla connector and its modules (to-dos, lists, the chart's and
+  routines' display), its settings, pages and templates. It may use home; home doesn't use
+  it (the pack check). The family template lists its modules.
+Tests: the family with and without Cozyla; golden files identical with it.
