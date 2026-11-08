@@ -68,8 +68,8 @@ conversation_mode = "themi.standard.conversation_mode:ConversationModeModule"
 cookbook_save = "themi_home.cookbook_save:CookbookSaveModule"
 cooking = "themi_home.cooking:CookingModule"
 cooking_timers = "themi_home.cooking_timers:CookingTimersModule"
-cozyla_chores = "themi_home.home_modules:CozylaChoresModule"
-cozyla_todos = "themi_home.home_modules:CozylaTodosModule"
+cozyla_chores = "themi_cozyla.cozyla_modules:CozylaChoresModule"
+cozyla_todos = "themi_cozyla.cozyla_modules:CozylaTodosModule"
 day_summary = "themi.standard.day_summary:DaySummaryModule"
 email_audit = "themi_google.connector_modules:EmailAuditModule"
 email_forwarding = "themi_google.google_modules:EmailForwardingModule"
@@ -145,14 +145,13 @@ where = ["src"]
 themi_home = [  # CR17b: its own pages' templates and static files
     "templates/*.toml",
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
-    "cozyla_chores_schema/*.sql",  # CR21b: the wall's own tables
-    "cozyla_todos_schema/*.sql",
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",
     "web/static/*/*",
 ]
 themi_google = ["web/templates/*.html", "web/templates/*/*.html"]
+themi_cozyla = ["cozyla_chores_schema/*.sql", "cozyla_todos_schema/*.sql"]  # CR21c
 themi = [
     "storage/schema/*.sql",
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track

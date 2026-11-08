@@ -60,18 +60,18 @@ from themi.standard.routines import (  # CR10a: the routines' own; the wall's bu
     asked_to_remove,
 )
 from themi.standard.tasks import Task, TaskBoard
-from themi_google.events import title_matches
-from themi_home.connectors.cozyla import (
+from themi_cozyla.connector import (
     WALL_WHERE,
     CozylaClient,
     CozylaError,
     Routine,
     RoutineRecord,
 )
-from themi_home.connectors.cozyla.emoji import better_icon, routine_icon
-from themi_home.connectors.cozyla.schedule import to_wall, wall_can_say, with_round_days
-from themi_home.cozyla_chores import LOOK_BACK, is_routine
-from themi_home.cozyla_todos import backoff, member_map
+from themi_cozyla.connector.emoji import better_icon, routine_icon
+from themi_cozyla.connector.schedule import to_wall, wall_can_say, with_round_days
+from themi_cozyla.cozyla_chores import LOOK_BACK, is_routine
+from themi_cozyla.cozyla_todos import backoff, member_map
+from themi_google.events import title_matches
 from themi_home.groceries import and_list
 
 log = logging.getLogger(__name__)

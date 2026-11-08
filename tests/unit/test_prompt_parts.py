@@ -11,14 +11,15 @@ from themi.config import load_template
 from themi.core.prompts import CORE_RULES
 from themi.modules.prompt import PromptFragment, compose_system
 from themi.standard import follow_ups, lists, memory, tasks
+from themi_cozyla import cozyla_modules
 from themi_google import connector_modules, google_modules
-from themi_home import appliances, home_modules, liaison, spending
+from themi_home import appliances, liaison, spending
 
 EVERY_MODULE_RULES = (
     *tasks.PROMPT_RULES,
     *appliances.PROMPT_RULES,
     *memory.PROMPT_RULES,
-    *home_modules.CHORE_PROMPT_RULES,
+    *cozyla_modules.CHORE_PROMPT_RULES,  # CR21c: the wall's pack
     *google_modules.CALENDAR_PROMPT_RULES,
     *connector_modules.TRAVEL_PROMPT_RULES,
     *liaison.PROMPT_RULES,

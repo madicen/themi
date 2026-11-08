@@ -29,8 +29,8 @@ from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
 from themi.storage.secrets import Secret
+from themi_cozyla.connector import CozylaClient, CozylaConfig
 from themi_google.connectors.google import GoogleConfig
-from themi_home.connectors.cozyla import CozylaClient, CozylaConfig
 
 WALL_LIST = "Family"  # the Cozyla to-do list Themi syncs
 WALL_MEMBERS = ("Erin", "Husband")

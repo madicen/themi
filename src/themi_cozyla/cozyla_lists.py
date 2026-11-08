@@ -1,6 +1,6 @@
 """Themi's lists and the wall's, kept in step (L1b).
 
-The to-do sync (`themi_home.cozyla_todos`) reads every list on the wall each minute and
+The to-do sync (`themi_cozyla.cozyla_todos`) reads every list on the wall each minute and
 hands what it read to `WallLists.sync`, so nothing is read twice:
 
 - Every wall list except the to-do list (Things to Cook, Shopping List...) is one of
@@ -33,7 +33,7 @@ from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, st
 from themi.localtime import to_utc_iso
 from themi.modules.mirrors import Mirror
 from themi.standard.lists import Lists, list_key, name_key, named_in
-from themi_home.connectors.cozyla import WALL_WHERE, CozylaClient, CozylaError, Todo, TodoList
+from themi_cozyla.connector import WALL_WHERE, CozylaClient, CozylaError, Todo, TodoList
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

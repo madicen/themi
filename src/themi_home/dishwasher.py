@@ -27,9 +27,9 @@ from themi.autonomy import ExecutionContext
 from themi.core import keys
 from themi.core.services import Services
 from themi.localtime import to_utc_iso
+from themi.modules.mirrors import MirrorError
 from themi.standard.tasks import TaskBoard, clock_words
 from themi_google.events import title_matches
-from themi_home.connectors.cozyla import CozylaError
 from themi_home.connectors.homeconnect import (
     RUN,
     ApplianceOffline,
@@ -166,7 +166,7 @@ class Dishwasher:
         if wall is not None:
             try:
                 items = await wall.open_matching(WORDS)
-            except CozylaError as exc:
+            except MirrorError as exc:
                 log.warning("The wall's routines couldn't be read for the dishwasher: %s", exc)
                 items = []
             for record, member in items:

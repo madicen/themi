@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from themi.standard.taking import Taking
     from themi.standard.tasks import TaskBoard
     from themi.standard.web_search import WebSearch
+    from themi_cozyla.cozyla_routines import CozylaRoutines
+    from themi_cozyla.cozyla_todos import CozylaTodos
     from themi_google.calendar_copies import CalendarCopies
     from themi_google.connectors.gcal import CalendarSync
     from themi_google.connectors.gcal.busy import CalendarBusy
@@ -58,8 +60,6 @@ if TYPE_CHECKING:
     from themi_home.connectors.tuya import TuyaWatcher
     from themi_home.cookbook_save import CookbookSave
     from themi_home.cooking import Cooking
-    from themi_home.cozyla_routines import CozylaRoutines
-    from themi_home.cozyla_todos import CozylaTodos
     from themi_home.dishwasher import Dishwasher
     from themi_home.feeders import Feeders
     from themi_home.groceries import GroceryList

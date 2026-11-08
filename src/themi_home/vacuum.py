@@ -49,9 +49,9 @@ from themi.channels.outbox import Button, Priority
 from themi.core import keys
 from themi.core.services import Services
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
+from themi.modules.mirrors import MirrorError
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_google.events import words_in_common
-from themi_home.connectors.cozyla import CozylaError
 from themi_home.connectors.roborock import (
     BIN,
     FAULT,
@@ -211,7 +211,7 @@ class Vacuum:
             return
         try:
             items = await wall.open_items()
-        except CozylaError as exc:
+        except MirrorError as exc:
             log.warning("The wall's routines couldn't be read for the vacuum: %s", exc)
             return
         local = to_local(event.at, self._timezone())

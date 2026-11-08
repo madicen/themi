@@ -75,6 +75,8 @@ from themi.standard.wrong_replies import WrongRepliesModule
 from themi.storage.db import Database
 from themi.storage.secrets import Cipher
 from themi.updates import ServerControl
+from themi_cozyla.connector import CozylaClient
+from themi_cozyla.cozyla_modules import CozylaChoresModule, CozylaTodosModule
 from themi_google.connector_modules import EmailAuditModule, GoogleTasksModule, TravelModule
 from themi_google.connectors.google import GoogleConfig
 from themi_google.google_modules import (
@@ -100,7 +102,6 @@ from themi_home.buying import BuyingModule
 from themi_home.calls import CallsModule
 from themi_home.chore_chart import ChoreChartModule
 from themi_home.connectors.catgenie import CatGenieConfig
-from themi_home.connectors.cozyla import CozylaClient
 from themi_home.connectors.gkeep import KeepFactory
 from themi_home.connectors.homeconnect import HomeConnectClient
 from themi_home.connectors.ourgroceries import GroceryListClient
@@ -115,8 +116,6 @@ from themi_home.cooking_timers import CookingTimersModule
 from themi_home.groceries import GroceriesModule
 from themi_home.home_modules import (
     CatGenieModule,
-    CozylaChoresModule,
-    CozylaTodosModule,
     HomeConnectModule,
     KeepModule,
     OurGroceriesModule,

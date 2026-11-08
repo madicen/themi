@@ -35,15 +35,15 @@ from themi.standard import praise
 from themi.standard.repeat import DAY_NAMES
 from themi.standard.routines import DEFAULTS, Item, Routines
 from themi.standard.routines import Routine as ThemiRoutine
-from themi_home.connectors.cozyla import (
+from themi_cozyla.connector import (
     WALL_WHERE,
     CozylaClient,
     CozylaError,
     Routine,
     WallSchedule,
 )
-from themi_home.cozyla_routines import CozylaRoutines, part_of_day
-from themi_home.cozyla_todos import backoff, member_map
+from themi_cozyla.cozyla_routines import CozylaRoutines, part_of_day
+from themi_cozyla.cozyla_todos import backoff, member_map
 
 log = logging.getLogger(__name__)
 

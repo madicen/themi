@@ -374,7 +374,7 @@ async def test_a_due_date_changed_on_the_wall_is_logged(
         todo["todoId"],
         dueDateTime=int(datetime(2026, 10, 29, 23, 59, tzinfo=LA).timestamp() * 1000),
     )
-    with caplog.at_level(logging.INFO, logger="themi_home.cozyla_todos"):
+    with caplog.at_level(logging.INFO, logger="themi_cozyla.cozyla_todos"):
         await sync(scenario)
     assert board(scenario).get(stamps.id).due_on == date(2026, 10, 29)
     assert (

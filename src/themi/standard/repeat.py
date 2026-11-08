@@ -473,3 +473,9 @@ def next_occurrences(rep: Repeat, after: datetime, tz: ZoneInfo, count: int = 1)
         found.append(nxt.replace(tzinfo=tz))
         cursor = nxt
     return found
+
+
+def fixed_days(rep: Repeat | None) -> bool:
+    """Repeats on fixed days of the week or month, anchored, not "the second Tuesday" (a
+    routine on a display, CR21c)."""
+    return rep is not None and rep.anchored and rep.month_position is None

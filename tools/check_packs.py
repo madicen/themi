@@ -6,7 +6,8 @@ Packs, and what each may import at runtime:
   heads-ups, the Google connectors): not the home pack;
 - the home pack (the household: groceries and pantry, recipes and cooking, body double,
   appliances and devices, the Cozyla wall, Safeway, spending, upkeep, notes between
-  partners, and those services' connectors): anything (the cookbook uses Google Docs).
+  partners, and those services' connectors): Google (the cookbook uses Google Docs);
+- the Cozyla pack (CR21c: the wall, which only syncs): home and Google; nothing uses it.
 
 A type-only import (inside `if TYPE_CHECKING:`) is allowed: `keys.py` names every pack's
 types. The composition root (`themi.app`, and `themi.cli`'s commands for each service) is
@@ -24,9 +25,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # CR10b2: a pack is its own package.
-PACKAGES = {"themi_google": "google", "themi_home": "home"}
+PACKAGES = {"themi_google": "google", "themi_home": "home", "themi_cozyla": "cozyla"}
 EXEMPT = {"themi.app", "themi.cli"}
-MAY_IMPORT = {"core": set(), "google": set(), "home": {"google"}}
+MAY_IMPORT = {"core": set(), "google": set(), "home": {"google"}, "cozyla": {"home", "google"}}
 
 
 def pack_of(module: str) -> str:

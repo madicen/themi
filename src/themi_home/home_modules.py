@@ -13,16 +13,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import timedelta
-from pathlib import Path
 
-from themi.core import groups
 from themi.modules import Module, ModuleContext, ModuleSetup
-from themi.modules.prompt import PromptFragment
-from themi.standard.routines import Routines
 from themi.standard.tasks import TaskBoard
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
-from themi_home.connectors.cozyla import CozylaClient
 from themi_home.connectors.gkeep import KeepFactory
 from themi_home.connectors.homeconnect import HomeConnectAccount, HomeConnectClient
 from themi_home.connectors.ourgroceries import GroceryListClient, GroceryMirror
@@ -30,14 +25,10 @@ from themi_home.connectors.roborock import RoborockAccount, RoborockLogin, Robor
 from themi_home.connectors.spotify import SpotifyClient, SpotifyLinks
 from themi_home.connectors.thinq import ThinqAccount, ThinqConfig, ThinqPush, ThinqWatcher
 from themi_home.connectors.tuya import TuyaAccount, TuyaConfig, TuyaWatcher
-from themi_home.cozyla_chores import CozylaChores
-from themi_home.cozyla_routines import CozylaRoutines
-from themi_home.cozyla_todos import CozylaTodos
 from themi_home.dishwasher import Dishwasher
 from themi_home.feeders import Feeders
 from themi_home.groceries import GroceryList
 from themi_home.home_settings import (
-    CozylaSettings,
     HomeConnectSettings,
     OurGroceriesSettings,
     SpotifySettings,
@@ -48,7 +39,6 @@ from themi_home.laundry import Laundry, LaundrySettings
 from themi_home.litter_box import LitterBox
 from themi_home.music import Music
 from themi_home.pantry import Pantry
-from themi_home.routines_wall import RoutinesWall
 from themi_home.vacuum import Vacuum
 
 
@@ -160,120 +150,6 @@ class KeepModule(Module):
             bought=_bought(ctx),
         )
         ctx.periodic("groceries.keep", timedelta(minutes=2), from_keep.sync)
-
-
-def _wall(setup: ModuleSetup) -> CozylaClient | None:
-    """One Cozyla client for both wall modules, as before (CR5a)."""
-    config = setup.read(CozylaSettings).config()
-    return setup.shared("cozyla", lambda: CozylaClient(config)) if config else None
-
-
-def _wall_in_family_time(ctx: ModuleContext, cozyla: CozylaClient) -> None:
-    family = ctx.services.store.get_family()
-    cozyla.timezone = family.timezone if family else cozyla.timezone
-
-
-class CozylaTodosModule(Module):
-    """The Cozyla wall's to-do list, kept in step with Themi's tasks."""
-
-    name = "cozyla_todos"
-    kind = "connector"
-    tool_groups = (
-        groups.LISTS,
-        groups.WALL,
-    )
-    settings = CozylaSettings
-    requires = ("tasks",)
-    migrations = Path(__file__).parent / "cozyla_todos_schema"  # CR21b: the wall's lists
-
-    def __init__(self, client: CozylaClient) -> None:
-        self.client = client
-
-    @classmethod
-    def build(cls, setup: ModuleSetup) -> Module | None:
-        wall = _wall(setup)
-        return cls(wall) if wall and wall.config.todo_list else None
-
-    async def check(self) -> str | None:
-        from themi_home.connectors.cozyla.check import check
-
-        try:
-            await check(self.client)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
-            return f"The Cozyla wall didn't answer: {exc}"
-        return None
-
-    def install(self, ctx: ModuleContext) -> None:
-        _wall_in_family_time(ctx, self.client)
-        wall = ctx.provide(CozylaTodos(ctx.services, ctx.get(TaskBoard), self.client))
-        wall.install()
-        ctx.periodic("cozyla.sync", timedelta(minutes=1), wall.sync)
-
-
-# CR8a: the system prompt's rules about this module's feature.
-CHORE_PROMPT_RULES = (
-    PromptFragment(
-        "cozyla_chores.how-many-chores-someone",
-        "act",
-        110,
-        """\
-- How many chores someone sees on the wall's chore chart at once is a setting too
-  (set_chore_chart_limit), not a rule; "a different one" or "another one" is
-  change_chore_chart.""",
-    ),
-    PromptFragment(
-        "cozyla_chores.an-item-for-someone",
-        "act",
-        130,
-        """\
-- An item for someone's morning, afternoon or evening routine on the wall is
-  add_to_wall_routine: not a calendar event, a chore or a list.""",
-    ),
-)
-
-
-class CozylaChoresModule(Module):
-    """The Cozyla wall's chore chart and routines, and Themi's routines shown there."""
-
-    name = "cozyla_chores"
-    kind = "connector"
-    tool_groups = (groups.WALL,)
-    settings = CozylaSettings
-    requires = ("tasks", "routines", "chore_chart")
-    migrations = (
-        Path(__file__).parent / "cozyla_chores_schema"
-    )  # CR21b: what the wall saw  # CR21a: it shows the chart on the wall
-
-    def __init__(self, client: CozylaClient) -> None:
-        self.client = client
-
-    @classmethod
-    def build(cls, setup: ModuleSetup) -> Module | None:
-        wall = _wall(setup)
-        return cls(wall) if wall and wall.config.chores else None
-
-    async def check(self) -> str | None:
-        from themi_home.connectors.cozyla.check import check
-
-        try:
-            await check(self.client)
-        except Exception as exc:  # whatever went wrong, said once, for the wizard
-            return f"The Cozyla wall didn't answer: {exc}"
-        return None
-
-    def install(self, ctx: ModuleContext) -> None:
-        ctx.prompt(*CHORE_PROMPT_RULES)
-        _wall_in_family_time(ctx, self.client)
-        s, tasks = ctx.services, ctx.get(TaskBoard)
-        chart = ctx.provide(CozylaChores(s, tasks, self.client))
-        chart.install()
-        ctx.periodic("cozyla.chores", timedelta(minutes=5), chart.sync)
-        wall_routines = ctx.provide(CozylaRoutines(s, tasks, self.client))
-        wall_routines.install()
-        ctx.periodic("cozyla.routines", timedelta(minutes=15), wall_routines.sync)
-        mirror = ctx.provide(RoutinesWall(s, ctx.get(Routines), wall_routines, self.client))
-        mirror.install()
-        ctx.periodic("routines.wall", timedelta(minutes=5), mirror.sync)
 
 
 class HomeConnectModule(Module):

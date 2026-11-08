@@ -320,7 +320,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR20c | Gate: Discord and Slack channels | Core refactor | waiting (bot accounts, Michael's call) |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [x] 2026-11-08 |
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
-| CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [~] |
+| CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -15276,9 +15276,29 @@ Notes (2026-11-08):
   - New: tests/scenarios/test_mirrors.py.
 
 ### CR21c · Round two: Cozyla as its own package that only syncs
-Status: [~]
+Status: [x] 2026-11-08
 Depends on: CR21b
 - `themi_cozyla`: the Cozyla connector and its modules (to-dos, lists, the chart's and
   routines' display), its settings, pages and templates. It may use home; home doesn't use
   it (the pack check). The family template lists its modules.
 Tests: the family with and without Cozyla; golden files identical with it.
+
+Notes (2026-11-08):
+- `src/themi_cozyla` holds:
+  - the connector (`themi_cozyla.connector`, was `themi_home.connectors.cozyla`);
+  - `cozyla_todos`, `cozyla_lists`, `cozyla_chores`, `cozyla_routines`, `routines_wall`;
+  - both schema tracks;
+  - the modules (`cozyla_modules.py`) and `CozylaSettings` (`settings.py`).
+- Module names and entry points keep their names (`cozyla_todos`, `cozyla_chores`). The
+  family template lists them as before.
+- Home doesn't use it any more. The dishwasher and vacuum catch `MirrorError`
+  (themi.modules.mirrors), which `CozylaError` now is. The chart asks
+  `themi.standard.repeat.fixed_days`, which the wall's schedule uses too.
+- The pack check knows a third pack: Cozyla may use home and Google; nothing uses it.
+  `themi.app` and `themi.cli` still wire it, as the composition root.
+- The snapshot fakes may rebuild `themi_cozyla.connector` dataclasses.
+- Tests changed for moved wiring (import paths): test_module_settings, test_config,
+  test_prompt_parts, test_module_checks, and the path rewrite across the Cozyla tests.
+  New: tests/scenarios/test_cozyla_pack.py, plus a pack-check case. Golden identical.
+- Follow-up: CR10b3 (a distribution per pack) would make this a separate install.
+

@@ -21,6 +21,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 
+class MirrorError(Exception):
+    """CR21c: a mirror couldn't be reached or refused (its own errors are these), so a
+    feature that asks one (the dishwasher, of the wall's routines) can tell it's that."""
+
+
 @dataclass(frozen=True)
 class Mirror:
     name: str  # "cozyla"

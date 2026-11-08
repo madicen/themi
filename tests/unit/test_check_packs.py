@@ -55,3 +55,14 @@ def test_home_may_use_google_and_google_may_not_use_home(tmp_path: Path) -> None
     assert found == [
         "themi_google/triage.py:1: the google code imports the home pack's themi_home.pantry"
     ]
+
+
+def test_cozyla_may_use_home_and_nothing_uses_cozyla(tmp_path: Path) -> None:
+    """CR21c: the wall's pack only syncs; home, Google and the core never import it."""
+    plant(tmp_path, "themi_cozyla/cozyla_chores.py", "from themi_home.chore_chart import X\n")
+    plant(tmp_path, "themi_home/vacuum.py", "from themi_cozyla.connector import CozylaError\n")
+    plant(tmp_path, "themi_google/events.py", "import themi_cozyla.cozyla_todos\n")
+    plant(tmp_path, "themi/standard/lists.py", "from themi_cozyla.cozyla_lists import WALL\n")
+    found = problems(tmp_path)
+    assert len(found) == 3
+    assert all("themi_cozyla" not in f.split(":")[0] for f in found)

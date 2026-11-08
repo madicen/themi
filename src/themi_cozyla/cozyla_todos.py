@@ -10,7 +10,7 @@ happened on the wall since:
   having added it. Assigned to the family member (Cozyla's "Madicen Family"),
   it's shared: on both lists, nudged to both. Unassigned items on other lists
   ("Things to Cook") are lists, not jobs: Themi's lists keep them (L1b,
-  `themi_home.cozyla_lists`, handed the same read);
+  `themi_cozyla.cozyla_lists`, handed the same read);
 - ticked off: done; ticked back: open again; deleted: cancelled; reassigned:
   the task goes to that person (or to both); moved to another list: the task
   stays on it; a new title or due date: copied over.
@@ -57,7 +57,7 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange
-from themi_home.connectors.cozyla import (
+from themi_cozyla.connector import (
     WALL_WHERE,
     CozylaClient,
     CozylaError,
@@ -65,7 +65,7 @@ from themi_home.connectors.cozyla import (
     Todo,
     TodoList,
 )
-from themi_home.cozyla_lists import WallLists
+from themi_cozyla.cozyla_lists import WallLists
 
 if TYPE_CHECKING:
     from themi_home.chore_chart import ChartQueue

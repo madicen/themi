@@ -7,7 +7,7 @@ simply compared with what Themi has:
 
 - Each Themi chore has one wall chore: repeating with the same schedule when
   the wall can say it, otherwise a one-off on the current round's day, moved
-  when the round moves (`themi_home.connectors.cozyla.schedule`). Its name, people
+  when the round moves (`themi_cozyla.connector.schedule`). Its name, people
   and schedule are put back if they were changed on the wall, and it's made
   again if it was deleted there; a chore is stopped in Themi.
 - A chore for one person is the wall's "Everyone" with them; one either of
@@ -42,12 +42,12 @@ from themi.core.services import Services
 from themi.localtime import to_utc_iso
 from themi.standard.reminders import MEDICINE
 from themi.standard.tasks import Task, TaskBoard
+from themi_cozyla.connector import WALL_WHERE, Chore, CozylaClient, CozylaError, WallSchedule
+from themi_cozyla.connector.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
+from themi_cozyla.connector.emoji import better_icon, chore_icon
+from themi_cozyla.connector.schedule import from_wall, to_wall
+from themi_cozyla.cozyla_todos import backoff, member_map
 from themi_home.chore_chart import ChartQueue, day_words, is_routine
-from themi_home.connectors.cozyla import WALL_WHERE, Chore, CozylaClient, CozylaError, WallSchedule
-from themi_home.connectors.cozyla.client import LOCKED_OUT, TOKEN_EXPIRED, WRONG_LOGIN
-from themi_home.connectors.cozyla.emoji import better_icon, chore_icon
-from themi_home.connectors.cozyla.schedule import from_wall, to_wall
-from themi_home.cozyla_todos import backoff, member_map
 
 log = logging.getLogger(__name__)
 

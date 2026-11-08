@@ -8,8 +8,9 @@ from tests.fakes.search import FakeSearch
 from tests.fakes.travel import FakeTravel
 from tests.fakes.wiring import cozyla_client
 from themi.standard.web_search import WebSearchModule
+from themi_cozyla.cozyla_modules import CozylaTodosModule  # CR21c: the wall's pack
 from themi_google.connector_modules import TravelModule
-from themi_home.home_modules import CozylaTodosModule, OurGroceriesModule
+from themi_home.home_modules import OurGroceriesModule
 
 
 async def test_ourgroceries_is_tried_and_a_failure_said(

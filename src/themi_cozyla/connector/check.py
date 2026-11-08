@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from zoneinfo import ZoneInfo
 
-from themi_home.connectors.cozyla.client import CozylaClient
+from themi_cozyla.connector.client import CozylaClient
 
 SAMPLE_DUES = 5
 

@@ -27,8 +27,9 @@ from cryptography.hazmat.primitives.serialization import load_der_public_key
 
 from themi import clock
 from themi.http import tls
+from themi.modules.mirrors import MirrorError
 from themi.storage.secrets import Secret
-from themi_home.connectors.cozyla.chores import (
+from themi_cozyla.connector.chores import (
     Chore,
     ChoreRecord,
     Routine,
@@ -56,7 +57,7 @@ WRONG_LOGIN = 1001
 LOCKED_OUT = 1002
 
 
-class CozylaError(Exception):
+class CozylaError(MirrorError):
     """Cozyla couldn't be reached or refused; the sync retries later."""
 
     def __init__(self, message: str, code: int = -1, result: Any = None) -> None:

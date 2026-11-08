@@ -26,6 +26,7 @@ ALLOWED_MODULES = (  # CR10b2: the packs have connectors too
     "themi.connectors.",
     "themi_google.connectors.",
     "themi_home.connectors.",
+    "themi_cozyla.connector.",  # CR21c
 )
 TAG = "~"
 

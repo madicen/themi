@@ -20,6 +20,7 @@ from themi.config import (
 )
 from themi.settings import Settings, SettingsError
 from themi.storage.secrets import generate_key
+from themi_cozyla.settings import CozylaSettings  # CR21c
 
 KEY = generate_key()
 GOOGLE = {"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret"}
@@ -37,10 +38,10 @@ def before_cr5a(s: Settings) -> list[str]:
     from themi.connectors.travel import TravelClient
     from themi.core import connector_settings as cs
     from themi.modules.settings import read_settings
+    from themi_cozyla.connector import CozylaClient
     from themi_google import google_settings as gs
     from themi_home import home_settings as hs
     from themi_home.connectors.catgenie import CatGenieConfig
-    from themi_home.connectors.cozyla import CozylaClient
     from themi_home.connectors.gkeep import GKeepAccount
     from themi_home.connectors.homeconnect import HomeConnectClient
     from themi_home.connectors.ourgroceries import OurGroceriesClient
@@ -58,7 +59,7 @@ def before_cr5a(s: Settings) -> list[str]:
         "grocery_list": OurGroceriesClient(g)
         if (g := read(hs.OurGroceriesSettings).config())
         else None,
-        "cozyla": CozylaClient(w) if (w := read(hs.CozylaSettings).config()) else None,
+        "cozyla": CozylaClient(w) if (w := read(CozylaSettings).config()) else None,
         "travel": TravelClient(read(gs.TravelSettings).tomtom_api_key),
         "search": choose_search(search.backend, search.tavily_api_key, search.firecrawl_api_key),
         "home_connect": HomeConnectClient(h)

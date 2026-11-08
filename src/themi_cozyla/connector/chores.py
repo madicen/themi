@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date, time, timedelta
 from typing import Any
 
-from themi_home.connectors.cozyla.emoji import better_icon, chore_icon, routine_icon
+from themi_cozyla.connector.emoji import better_icon, chore_icon, routine_icon
 
 NO_TIME = "23:59"  # what the app stores when a chore has no time of day
 # The app always sends this as the chore's device id.

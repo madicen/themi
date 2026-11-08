@@ -17,7 +17,7 @@ wall, without nudges, until one comes up:
 - In chat, `change_chore_chart`: "a different one" puts the current chore back for the
   day and brings up another; "another one" adds one on top of the limit.
 
-The chore sync (`themi_home.cozyla_chores`) asks this module what each chore's wall
+The chore sync (`themi_cozyla.cozyla_chores`) asks this module what each chore's wall
 people are; holds keep waiting chores' nudges back (`TaskBoard.holds`).
 """
 
@@ -41,8 +41,8 @@ from themi.core.services import Services
 from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
+from themi.standard.repeat import fixed_days
 from themi.standard.tasks import Task, TaskBoard
-from themi_home.connectors.cozyla.schedule import wall_can_say
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def day_words(day: date) -> str:
 
 def is_routine(task: Task) -> bool:
     """A check-in on fixed days: it lives on the wall as a routine (C3), not a chore."""
-    return task.check_in and wall_can_say(task.repeat)
+    return task.check_in and fixed_days(task.repeat)
 
 
 @dataclass(frozen=True)

@@ -423,9 +423,9 @@ def _cozyla_check(titles: bool, fields: bool = False) -> int:
 
     from themi.modules.settings import SettingsProblem, read_settings
     from themi.settings import Settings
-    from themi_home.connectors.cozyla import CozylaClient, CozylaError
-    from themi_home.connectors.cozyla.check import check
-    from themi_home.home_settings import CozylaSettings
+    from themi_cozyla.connector import CozylaClient, CozylaError
+    from themi_cozyla.connector.check import check
+    from themi_cozyla.settings import CozylaSettings
 
     settings = Settings.load()
     try:

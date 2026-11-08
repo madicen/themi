@@ -1,13 +1,13 @@
 """Cozyla: the family's wall calendar, through its unofficial cloud API (C1, C2)."""
 
-from themi_home.connectors.cozyla.chores import (
+from themi_cozyla.connector.chores import (
     Chore,
     ChoreRecord,
     Routine,
     RoutineRecord,
     WallSchedule,
 )
-from themi_home.connectors.cozyla.client import (
+from themi_cozyla.connector.client import (
     CozylaClient,
     CozylaConfig,
     CozylaError,

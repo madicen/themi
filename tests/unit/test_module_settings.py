@@ -19,9 +19,9 @@ from themi.modules.settings import (
     read_settings,
 )
 from themi.storage.secrets import Secret
+from themi_cozyla.settings import CozylaSettings  # CR21c: the wall's own pack
 from themi_google.google_settings import GoogleSettings
 from themi_home.home_settings import (
-    CozylaSettings,
     HomeConnectSettings,
     OurGroceriesSettings,
     ThinqSettings,

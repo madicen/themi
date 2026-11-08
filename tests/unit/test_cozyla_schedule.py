@@ -5,8 +5,8 @@ from datetime import date, time
 import pytest
 
 from themi.standard.repeat import parse, read_back
-from themi_home.connectors.cozyla.chores import WallSchedule, chore_from, schedule_fields
-from themi_home.connectors.cozyla.schedule import from_wall, to_wall, wall_can_say
+from themi_cozyla.connector.chores import WallSchedule, chore_from, schedule_fields
+from themi_cozyla.connector.schedule import from_wall, to_wall, wall_can_say
 
 WED = date(2026, 10, 21)
 

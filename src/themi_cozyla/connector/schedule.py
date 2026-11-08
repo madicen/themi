@@ -13,12 +13,12 @@ from collections.abc import Iterable
 from dataclasses import replace
 from datetime import date
 
-from themi.standard.repeat import DAY_NAMES, Repeat
-from themi_home.connectors.cozyla.chores import WallSchedule
+from themi.standard.repeat import DAY_NAMES, Repeat, fixed_days
+from themi_cozyla.connector.chores import WallSchedule
 
 
 def wall_can_say(rep: Repeat | None) -> bool:
-    return rep is not None and rep.anchored and rep.month_position is None
+    return fixed_days(rep)  # CR21c: the chart asks the same
 
 
 def to_wall(rep: Repeat | None, due_on: date) -> WallSchedule:
