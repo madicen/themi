@@ -1,0 +1,95 @@
+"""SP7a: from a brand-new Themi to chatting with it, with only the website."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+from tests.fixtures.web import csrf_of, web_client
+from tests.scenarios.harness import ModelBank
+from tests.scenarios.test_web_chat import said, scripted
+from themi.accounts import AccountStore
+from themi.accounts.claim import CODE_FILE, Claim
+from themi.app import build_app, family_modules
+from themi.settings import Settings, ensure_secret_key
+from themi.standard.web_chat import WebChatModule
+from themi.storage import open_database
+
+
+def new_themi(tmp_path: Path) -> tuple[SimpleNamespace, ModelBank, str]:
+    env = {"THEMI_DB_PATH": str(tmp_path / "themi.db")}
+    assert ensure_secret_key(env) is not None  # a new Themi makes its own key
+    settings = Settings.from_mapping(env)
+    db = open_database(settings.db_path)
+    models = ModelBank()
+    modules = [m for m in family_modules() if m.name != "telegram"] + [WebChatModule()]
+    app = build_app(db, settings.cipher(), None, provider_factory=models, modules=modules)
+    app.services.settings = settings
+    app.services.environment = env
+    code = Claim(AccountStore(db, settings.cipher())).make(tmp_path)
+    return SimpleNamespace(app=app), models, code
+
+
+async def test_a_new_themi_is_claimed_set_up_and_chatted_with(tmp_path: Path) -> None:
+    themi, models, code = new_themi(tmp_path)
+    app = themi.app
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        first = await site.get("/", follow_redirects=True)
+        assert str(first.url).endswith("/claim") and "Enter its claim code" in first.text
+        wrong = await site.post(
+            "/claim",
+            data={"code": "AAAA-AAAA", "household": "The Smiths", "timezone": "UTC", "name": "Sam"},
+        )
+        assert wrong.status_code == 400 and "isn&#39;t the code" in wrong.text
+        assert 'value="The Smiths"' in wrong.text  # what they typed stays
+        claimed = await site.post(
+            "/claim",
+            data={"code": code, "household": "The Smiths", "timezone": "UTC", "name": "Sam"},
+        )
+        assert claimed.headers["location"] == "/claim/key"
+        key_page = (await site.get("/claim/key")).text
+        key = (tmp_path / "secret.key").read_text().strip()
+        assert key in key_page and "Without it, a backup can't be read." in key_page
+        await site.post("/claim/key", data={"csrf": csrf_of(key_page)})
+        home = (await site.get("/")).text
+        assert "Finish setting up Themi" in home
+        assert "Set up a way to chat from a phone, like Telegram." in home
+        assert (await site.get("/claim/key")).headers["location"] == "/"  # shown once
+        assert (await site.get("/claim")).headers["location"] == "/"
+        sam = app.store.member_by_name("Sam")
+        assert sam is not None and sam.is_admin
+        scripted(app, sam, models)  # Sam's AI key, as the AI page would add it
+        models["primary"].queue_text("Hi Sam. I'm ready when you are.")
+        csrf = csrf_of(home)
+        await site.post("/chat", data={"csrf": csrf, "text": "Hello"})
+        await app.outbox.flush()
+        chat = (await site.get("/chat")).text
+    assert said(chat)[-2:] == ["Hello", "Hi Sam. I&#39;m ready when you are."]
+    assert not (tmp_path / CODE_FILE).exists()
+
+
+async def test_without_a_key_made_by_themi_there_is_no_key_page(tmp_path: Path) -> None:
+    themi, _, code = new_themi(tmp_path)
+    themi.app.services.environment = {**themi.app.services.environment, "THEMI_SECRET_KEY": "x"}
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        claimed = await site.post(
+            "/claim", data={"code": code, "household": "H", "timezone": "UTC", "name": "Sam"}
+        )
+        assert claimed.headers["location"] == "/"
+
+
+async def test_a_claimed_themi_never_asks_again(tmp_path: Path) -> None:
+    themi, _, code = new_themi(tmp_path)
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        await site.post(
+            "/claim", data={"code": code, "household": "H", "timezone": "UTC", "name": "Sam"}
+        )
+    async with web_client(themi) as other:  # type: ignore[arg-type]
+        again = await other.post(
+            "/claim", data={"code": code, "household": "X", "timezone": "UTC", "name": "Eve"}
+        )
+        assert again.headers["location"] == "/"
+        signed_out = await other.get("/signed-out")
+        assert signed_out.status_code == 200 and re.search("signed out", signed_out.text)
+    assert themi.app.store.member_by_name("Eve") is None

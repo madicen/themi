@@ -334,7 +334,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP5 | Modules page, editing: switches, forms, secrets, templates, Test | Setup portal | [x] 2026-11-08 |
 | SP6 | Restart and apply from the Modules page | Setup portal | [x] 2026-11-08 |
 | SP7 | First visit | Setup portal | split |
-| SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [ ] |
+| SP7a | First visit: claim code, first admin, the key saved, "Finish setting up" | Setup portal | [x] 2026-11-08 |
 | SP7b | Passkeys for admins without Telegram | Setup portal | [ ] |
 | SP8 | Migration and retirement | Setup portal | split |
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [ ] |
@@ -15658,7 +15658,7 @@ Notes (2026-11-08):
 Status: split into SP7a and SP7b.
 
 ### SP7a · Setup portal: claim code, first admin, the key saved
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SP6
 - With no members, Themi makes a one-time claim code, logs it, and writes it next to the
   database (mode 600). The sign-in page asks for it instead of saying there's nobody.
@@ -15671,6 +15671,28 @@ Depends on: SP6
 - The code works once and is rate-limited.
 Tests: a scenario from an empty Themi to chatting on the website chat with only the
 website; a wrong code; a second claim refused; the key page only when Themi made the key.
+
+Notes (2026-11-08):
+- `themi/accounts/claim.py` (`Claim`, migration 0155 `claim`): `build_runtime` makes a
+  code when there's no family (each start makes a new one; only its hash is kept), logs
+  it, and writes `claim-code` next to the database (mode 600). Codes are 8 characters
+  without 0/O/1/I, shown as ABCD-EFGH, and typed loosely is fine. Five wrong tries lock it
+  for 10 minutes. Using it makes the family (on the running template) and its admin, and
+  deletes the file.
+- `themi/web/claim_pages.py`: `/claim` (code, household, timezone with a list to pick
+  from, your name; what was typed stays after a mistake); `/signed-out` sends a Themi with
+  no family there. Then `/claim/key`, only for the claimant, only when Themi made its own
+  key (no `THEMI_SECRET_KEY`/`_FILE`, and `secret.key` next to the database), and only
+  until "I've saved it".
+- The dashboard's "Finish setting up Themi" card, for admins: no AI provider; no chat
+  channel but the website's; a module added or marked to say (`warn`) that needs its
+  settings. Each links to its module. The SP1 warnings for these moved to the card; a
+  module that couldn't start stays an alert.
+- A first admin who signs up on the website has no Telegram yet; the Family page's
+  pairing code works as before. Their only way back in after the session ends is /site
+  (once paired) or Google, until SP7b's passkeys.
+- `themi init` still works.
+- Golden: routes.json gained the four claim routes.
 
 ### SP7b · Setup portal: passkeys for admins without Telegram
 Status: [ ]

@@ -221,6 +221,17 @@ def build_runtime(
         report=report,
         **options,
     )
+    from themi.accounts.claim import CODE_FILE, Claim
+
+    claim = Claim(app.store)
+    if claim.needed():  # SP7a: a new Themi, claimed on its website
+        code = claim.make(settings.db_path.parent)
+        log.warning(
+            "Nobody has set up this Themi yet. Open its website and enter the claim code "
+            "%s (it's also in %s).",
+            code,
+            settings.db_path.parent / CODE_FILE,
+        )
     app.services.instance_config = config  # SP4: for the Modules page
     app.services.environment = dict(settings.environment)
     app.services.settings = settings

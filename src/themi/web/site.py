@@ -37,6 +37,7 @@ from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
 from themi.core import keys
+from themi.modules import StartReport
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
 from themi.web import icons
@@ -136,7 +137,14 @@ class PackStatic(StaticFiles):
 
 
 def install_site(web: FastAPI, ctx: SiteContext) -> None:
-    from themi.web import accounts_page, admin_pages, ai_pages, dev_pages, modules_page
+    from themi.web import (
+        accounts_page,
+        admin_pages,
+        ai_pages,
+        claim_pages,
+        dev_pages,
+        modules_page,
+    )
 
     kit = Kit(ctx)
     modules_pages = ctx.app.services.web_pages
@@ -199,6 +207,7 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
     web.include_router(ai_pages.routes(kit))
     web.include_router(dev_pages.routes(kit))
     web.include_router(modules_page.routes(kit))  # SP4
+    web.include_router(claim_pages.routes(kit))  # SP7a
     for pages in modules_pages:  # CR4: each loaded module's pages
         web.include_router(pages.routes(kit))
 
@@ -232,7 +241,9 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         return kit.signed_in(member)
 
     @router.get("/signed-out", response_class=HTMLResponse)
-    def signed_out(request: Request) -> HTMLResponse:
+    def signed_out(request: Request) -> Response:
+        if app.store.get_family() is None:  # SP7a: nobody has claimed this Themi yet
+            return RedirectResponse("/claim", status_code=303)
         return kit.page(
             request,
             "message.html",
@@ -268,10 +279,13 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             (member.id,),
         )
         alerts = []
-        module_warnings = app.services.start_report.warnings() if member.is_admin else []
+        report = app.services.start_report
+        broken = [f"{s.name} couldn't start: {s.reason}" for s in report.failed()]
+        setup_steps = finish_setting_up(report) if member.is_admin else []
         if member.is_admin:
-            # SP1: no AI provider, or a module that couldn't start, said to admins
-            alerts.extend(module_warnings)
+            # SP1: a module that couldn't start, said to admins (SP7a: the rest of what
+            # SP1 said is on the "Finish setting up" card)
+            alerts.extend(broken)
             for category in autonomy.categories():
                 if category.escalated:
                     alerts.append(
@@ -294,7 +308,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 {**row, "words": EVENT_WORDS.get(row["event"], row["event"])} for row in activity
             ],
             "alerts": alerts,
-            "modules_link": bool(module_warnings),  # SP4: those warnings link to Modules
+            "modules_link": bool(member.is_admin and broken),  # SP4: links to Modules
+            "setup_steps": setup_steps,  # SP7a
         }
 
     @router.get("/", response_class=HTMLResponse)
@@ -468,6 +483,33 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         return kit.redirect("/settings", "Busy time removed.")
 
     return router
+
+
+def finish_setting_up(report: StartReport) -> list[tuple[str, str]]:
+    """SP7a: what's left before this Themi is useful, for an admin's dashboard: (what to do,
+    where). Empty once it's done."""
+    steps = []
+    if not report.has_ai():
+        choices = ", ".join(report.ai_choices) or "an AI provider module"
+        steps.append(
+            (
+                f"Themi has no AI provider yet, so it can't answer. Add one of {choices}.",
+                "/modules/gemini",
+            )
+        )
+    chats = [
+        s
+        for s in report.modules.values()
+        if s.kind == "channel" and s.state == "on" and s.name != "web_chat"
+    ]
+    if not chats:
+        steps.append(("Set up a way to chat from a phone, like Telegram.", "/modules/telegram"))
+    for status in report.modules.values():
+        if status.state != "not_set_up" or status.kind == "channel":
+            continue
+        if status.warn or status.reason.startswith("added"):
+            steps.append((f"{status.name} needs its settings.", f"/modules/{status.name}"))
+    return steps
 
 
 CORE_MENU = (

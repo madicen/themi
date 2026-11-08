@@ -2,6 +2,14 @@
 {% block content %}
 <h1>Hi {{ member.name }}</h1>
 
+{% if setup_steps %}
+<section class="card setup-card">
+  <h2>Finish setting up Themi</h2>
+  <ul>{% for words, href in setup_steps %}<li><a href="{{ href }}">{{ words }}</a></li>{% endfor %}</ul>
+  <p class="muted">Everything is on the <a href="/modules">Modules page</a>.</p>
+</section>
+{% endif %}
+
 {% if alerts %}
 <section class="alerts">
   {% for alert in alerts %}<p class="alert">{{ alert }}</p>{% endfor %}
