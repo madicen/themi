@@ -150,12 +150,13 @@ def routes(kit: Kit) -> APIRouter:
             payload, executor = {}, PAUSE if action == "pause" else NEXT
         else:
             return Response(status_code=400)
-        await app.services.autonomy.stage(
+        outcome = await app.services.autonomy.stage(
             CATEGORY, signed.member, summary, payload, executor, interactive=True,
             requested=True,
         )  # fmt: skip
-        if request.headers.get("X-Requested-With") == "fetch":
-            return session_state(request)
+        if request.headers.get("X-Requested-With") == "fetch":  # what Spotify said, on the page
+            state = {**bd.state(signed.member), "said": outcome.message}
+            return JSONResponse(state, headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 
     @router.post("/session/chat")
