@@ -163,6 +163,7 @@
     if (!state.view) return;
     body.dataset.theme = state.view.theme;
     body.dataset.textSize = String(state.view.text_size);
+    document.documentElement.dataset.textSize = String(state.view.text_size);
   }
   document.addEventListener("submit", function (event) {
     var form = event.target;
