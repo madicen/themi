@@ -10,6 +10,7 @@ from tests.fixtures.cookbook import load
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.unit.test_cook_screen import ALFREDO, lines
+from themi.core import keys
 
 
 async def test_next_typed_in_telegram_shows_on_the_page(
@@ -157,3 +158,47 @@ async def test_how_much_garlic_asked_in_the_drawer(
         {"who": "themi", "text": "From the recipe: 4 garlic cloves, peeled and left whole."},
     ]
     assert scenario.inbox("Erin")[-1] == "From the recipe: 4 garlic cloves, peeled and left whole."
+
+
+async def test_pancakes_end_with_almond_milk_used_up_and_cleanup_company(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CK6: after [All done], "Anything used up?" (the almond milk, out in the pantry), then
+    company for cleanup: a Sprint Partner session, and /session turns to it."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "pancakes", "scale": ""})
+    scenario.primary.queue_structured(lines(PANCAKES))
+    await scenario.say("Erin", "Let's make pancakes")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "go to step 5"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+
+    async def act(action: str, **form: str) -> dict:
+        seq = scenario.app.db.scalar("SELECT seq FROM cooking_sessions WHERE id = ?",
+                                     (state["id"],))  # fmt: skip
+        response = await site.post(
+            f"/session/cook/{state['id']}/act",
+            headers={"X-Requested-With": "fetch"},
+            data={"csrf": csrf, "action": action, "seq": str(seq), **form},
+        )
+        return response.json()
+
+    done = await act("finish")
+    assert (done["phase"], done["line"], done["scene"]) == ("done", "All done. Enjoy it!",
+                                                            "cheering")  # fmt: skip
+    assert done["wrap"]["text"] == "Anything used up?"
+    page = (await site.get("/session/cook/view")).text
+    assert "Anything used up?" in page and 'value="almond milk"' in page
+    used = await act("wrap_used", name="almond milk")
+    assert used["said"] == "Almond milk: out."
+    pantry = scenario.app.services.maybe(keys.pantry)
+    assert pantry is not None and pantry.item("almond milk").status == "out"  # type: ignore[union-attr]
+    offer = await act("wrap_used_done")
+    assert offer["wrap"] == {"kind": "cleanup", "text": "Want company for cleanup?"}
+    turned = await act("wrap_cleanup")
+    assert turned.get("kind") != "cooking" and turned["label"] == "Clean up after Pancakes"
+    assert turned["mode"] == "sprint"
+    assert "cook-page" not in (await site.get("/session")).text  # the sprint's page now
+    assert scenario.inbox("Erin")[-1].startswith("Sprint on: 25 minutes")  # the sprint's start

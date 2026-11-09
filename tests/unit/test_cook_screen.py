@@ -72,9 +72,13 @@ async def test_the_state_in_every_phase(scenario: Scenario, cooking: Cooking) ->
     gather = cooking.state(erin)
     assert gather["phase"] == "gather" and gather["seq"] > ready["seq"]
     assert gather["gather"][0] == {
-        "n": 0, "line": "2 Cups cashews, soaked in water for at least 10 minutes (260g)",
-        "group": "", "ticked": False,
-    }  # fmt: skip
+        "n": 0,
+        "line": "2 Cups cashews, soaked in water for at least 10 minutes (260g)",
+        "group": "",
+        "ticked": False,
+        "maybe_out": False,
+        "item": "cashews",
+    }  # fmt: skip  (CK6: whether the pantry has it out, and its item)
     assert [b["label"] for b in gather["buttons"]] == ["All here"]
     no_energy(gather)
 
