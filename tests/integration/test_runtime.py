@@ -23,7 +23,7 @@ import pytest
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import ERIN_TELEGRAM_ID, SeededFamily
 from tests.scenarios.harness import Scenario
-from themi.runtime import Runtime
+from themi.runtime import PortInUse, Runtime
 from themi.storage.secrets import generate_key
 
 
@@ -138,6 +138,46 @@ def test_themi_run_as_a_process_starts_and_stops_on_sigterm(tmp_path: Path) -> N
     assert process.returncode == 0, stderr
     assert "Stopped" in stderr
     assert (tmp_path / "themi.db").exists()
+
+
+def test_themi_run_on_a_port_in_use_says_so_and_stops(tmp_path: Path) -> None:
+    """Another Themi (or anything) on the port: one plain line, no tracebacks, exit 1."""
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        process = subprocess.run(
+            [sys.executable, "-m", "themi", "run"],
+            env={
+                **os.environ,
+                "THEMI_SECRET_KEY": generate_key(),
+                "THEMI_DB_PATH": str(tmp_path / "themi.db"),
+                "THEMI_DISABLE_TELEGRAM": "1",
+                "THEMI_HTTP_PORT": str(port),
+            },
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    assert process.returncode == 1, process.stderr
+    assert f"Port {port} is already in use" in process.stderr
+    assert "THEMI_HTTP_PORT" in process.stderr
+    assert "Traceback" not in process.stderr and "Themi is running" not in process.stderr
+
+
+async def test_a_port_in_use_stops_the_runtime_before_anything_starts(
+    scenario: Scenario,
+) -> None:
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = taken.getsockname()[1]
+        runtime = Runtime(scenario.app, host="127.0.0.1", port=port, telegram_enabled=False)
+        with pytest.raises(PortInUse, match=f"Port {port} is already in use"):
+            await runtime.run()
+    assert scenario.app.scheduler is not None
+    assert not runtime.stop_event.is_set()  # it never started, so there's nothing to stop
 
 
 async def test_a_restart_from_the_modules_page_stops_themi_to_start_again(

@@ -296,7 +296,13 @@ def _run() -> None:
         runtime.install_signal_handlers()
         await runtime.run()
 
-    asyncio.run(main())
+    from themi.runtime import PortInUse
+
+    try:
+        asyncio.run(main())
+    except PortInUse as exc:
+        log.error("%s", exc)
+        raise SystemExit(1) from None
     if runtime.restart_requested:  # SP6: asked for on the Modules page
         from themi.runtime import reexec
 
