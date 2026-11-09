@@ -151,6 +151,31 @@ def routes(kit: Kit) -> APIRouter:
             return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 
+    @router.post("/session/cook/prefs")
+    async def cook_prefs(request: Request) -> Response:
+        """CK7: A- and A+ (and the theme and steps view) from the cook screen, kept as their
+        preferences, as Settings keeps them."""
+        signed, form = await kit.checked(request)
+        from themi_home.cooking import TEXT_SIZES, CookingPreferences
+
+        member = app.store.get_member(signed.member.id)
+        prefs = app.store.preferences(member.id, CookingPreferences)
+        changes: dict[str, Any] = {}
+        size = str(form.get("text_size", ""))
+        if size in ("up", "down"):
+            at = min(range(len(TEXT_SIZES)),
+                     key=lambda i: abs(TEXT_SIZES[i] - prefs.cooking_text_size))  # fmt: skip
+            at = min(len(TEXT_SIZES) - 1, at + 1) if size == "up" else max(0, at - 1)
+            changes["cooking_text_size"] = TEXT_SIZES[at]
+        for field in ("theme", "steps_view"):
+            if form.get(field):
+                changes[f"cooking_{field}"] = str(form[field])
+        try:
+            app.store.save_preferences(member, member.id, CookingPreferences, **changes)
+        except InvalidValue:
+            return Response(status_code=400)
+        return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
+
     @router.post("/session/cook/chime")
     async def cook_chime(request: Request) -> Response:
         """CK3: the chime's volume on the cook screen, kept for next time."""

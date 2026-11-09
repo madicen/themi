@@ -19,7 +19,7 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-rail-title { margin: 0; }
 .cook-title { font-size: 1.5rem; margin: 0; }
 .cook-count { margin: 0; color: var(--muted); font-size: 1.15rem; }
-.cook-text { margin: 0; font-size: max(var(--cook-text), 28px); line-height: 1.4; overflow-wrap: anywhere;
+.cook-text { margin: 0; font-size: max(calc(var(--cook-text) * var(--cook-scale, 1)), 28px); line-height: 1.4; overflow-wrap: anywhere;
   padding: var(--space-4); background: var(--card); border: 2px solid var(--line); border-radius: var(--radius); }
 .cook-line { margin: 0; font-size: 1.2rem; }
 .cook-peek { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
@@ -29,7 +29,7 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-moves button { width: 100%; font-size: 1.35rem; }
 .cook-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .cook-list form { margin: 0; }
-.cook-item { width: 100%; text-align: left; font-size: 1.3rem; background: var(--card); color: var(--fg);
+.cook-item { width: 100%; text-align: left; font-size: calc(1.3rem * var(--cook-scale, 1)); background: var(--card); color: var(--fg);
   border: 2px solid var(--line); overflow-wrap: anywhere; }
 .cook-item[aria-pressed="true"] { color: var(--muted); text-decoration: line-through; background: var(--soft); }
 .cook-group { color: var(--muted); font-weight: 600; margin-top: var(--space-2); }
@@ -108,3 +108,37 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-out summary { min-height: var(--tap); display: inline-flex; align-items: center; cursor: pointer; color: var(--warn); }
 .cook-out-moves { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-out-moves form { margin: 0; }
+
+/* CK7: text size (A- A+, a preference), the themes, the whole list of steps, and an
+   optional step folded away on a lighter day */
+body.cook-page[data-text-size="80"] { --cook-scale: .8; }
+body.cook-page[data-text-size="90"] { --cook-scale: .9; }
+body.cook-page[data-text-size="120"] { --cook-scale: 1.2; }
+body.cook-page[data-text-size="140"] { --cook-scale: 1.4; }
+body.cook-page[data-text-size="170"] { --cook-scale: 1.7; }
+body.cook-page[data-text-size="200"] { --cook-scale: 2; }
+.cook-size { display: flex; gap: var(--space-1); margin: 0; }
+body.cook-page[data-theme="light"] {
+  --bg: #faf8f5; --fg: #2b2a28; --muted: #6f6b66; --card: #ffffff; --line: #e5e0d8;
+  --accent: #3d6f6a; --accent-fg: #ffffff; --soft: #eef4f3; --info-bg: #e7eef8; --warn: #8a5a00; --warn-bg: #fdf0d8;
+  color-scheme: light;
+}
+body.cook-page[data-theme="dark"] {
+  --bg: #1c1b1a; --fg: #ece9e4; --muted: #a39e97; --card: #262523; --line: #3a3835;
+  --accent: #7fb3ad; --accent-fg: #1c1b1a; --soft: #24302e; --info-bg: #232c3a; --warn: #f0c878; --warn-bg: #3a3022;
+  color-scheme: dark;
+}
+/* kitchen: high contrast, readable across the room with flour on your hands */
+body.cook-page[data-theme="kitchen"] {
+  --bg: #000000; --fg: #ffffff; --muted: #e6e6e6; --card: #000000; --line: #ffffff;
+  --accent: #ffd60a; --accent-fg: #000000; --soft: #1a1a1a; --info-bg: #1a1a1a; --warn: #ffd60a; --warn-bg: #1a1a1a;
+  color-scheme: dark;
+}
+body.cook-page[data-theme="kitchen"] .cook-text, body.cook-page[data-theme="kitchen"] .cook-item,
+body.cook-page[data-theme="kitchen"] .cook-timer { border-width: 3px; }
+body.cook-page[data-theme="kitchen"] .cook-text { font-weight: 600; }
+.cook-all-steps { margin: 0; padding-left: 1.5rem; display: flex; flex-direction: column; gap: var(--space-2);
+  font-size: calc(1.15rem * var(--cook-scale, 1)); overflow-wrap: anywhere; }
+.cook-all-steps li.done { color: var(--muted); }
+.cook-all-steps li.current::marker { color: var(--accent); font-weight: 700; }
+.cook-fold summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; color: var(--muted); }

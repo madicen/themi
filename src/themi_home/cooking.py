@@ -78,6 +78,8 @@ PHASE_LINES = {
     "cook": "On to the steps. One at a time.",
 }
 DONE_LINE = "All done. Enjoy it!"
+TEXT_SIZES = (80, 90, 100, 120, 140, 170, 200)  # CK7: A- and A+ step through these
+THEMES = ("auto", "light", "dark", "kitchen")
 MAX_GATHER = 30
 MAX_PREP = 12
 LABEL = 28
@@ -313,6 +315,9 @@ class CookingPreferences(Preferences):
     module: ClassVar[str] = "cooking"
     cooking_units: str = "written"  # CK2: "written" (as the recipe says) or "grams"
     cooking_chime_volume: int = 70  # CK3: a timer's chime on the cook screen, 0-100
+    cooking_text_size: int = 100  # CK7: the cook screen's text, percent (A- A+)
+    cooking_theme: str = "auto"  # CK7: auto (as the device), light, dark or kitchen
+    cooking_steps_view: str = "one"  # CK7: one step at a time, or "all" with this one marked
 
     @classmethod
     def on_form(cls, services: Any, member: Member) -> set[str] | None:
@@ -324,6 +329,27 @@ class CookingPreferences(Preferences):
     def _chime(cls, value: int) -> int:
         if not 0 <= value <= 100:
             raise ValueError("the chime's volume is between 0 and 100")
+        return value
+
+    @field_validator("cooking_text_size")
+    @classmethod
+    def _size(cls, value: int) -> int:
+        if not TEXT_SIZES[0] <= value <= TEXT_SIZES[-1]:
+            raise ValueError("the cook screen's text size is between 80% and 200%")
+        return value
+
+    @field_validator("cooking_theme")
+    @classmethod
+    def _theme(cls, value: str) -> str:
+        if value not in THEMES:
+            raise ValueError("the cook screen's themes are light, dark and kitchen")
+        return value
+
+    @field_validator("cooking_steps_view")
+    @classmethod
+    def _steps(cls, value: str) -> str:
+        if value not in ("one", "all"):
+            raise ValueError("the steps show one at a time, or all of them")
         return value
 
     @field_validator("cooking_units")

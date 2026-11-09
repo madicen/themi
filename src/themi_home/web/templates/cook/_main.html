@@ -6,6 +6,11 @@
     <p class="cook-recipe" data-field="heading">{{ state.recipe }}{% if state.scale_words %} <span class="cook-scale-words">({{ state.scale_words }})</span>{% endif %}</p>
     {% if state.phase in ("gather", "prep", "cook") %}{% include "cook/_scale.html" %}{% endif %}
     <p class="cook-soonest" data-ends="{{ state.soonest }}" aria-label="The soonest timer"></p>
+    <form class="cook-size" method="post" action="/session/cook/prefs" data-local="1" aria-label="Text size">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button name="text_size" value="down" aria-label="Smaller text">A-</button>
+      <button name="text_size" value="up" aria-label="Bigger text">A+</button>
+    </form>
     {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop link") }}{% endif %}
   </header>
   <section class="cook-step" aria-label="This step">

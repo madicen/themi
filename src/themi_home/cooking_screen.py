@@ -36,6 +36,10 @@ FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long 
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
 TIMER_TAPS = ("timer_add", "timer_cancel", "timer_clear", "timers_keep", "timers_cancel")
 AFTER_END = (*TIMER_TAPS, *WRAP_TAPS)  # what an ended session's screen can still do
+OPTIONAL = re.compile(
+    r"\b(?:optional|if (?:you['\u2019]d like|you like|you want|desired|using|wanted))\b",
+    re.IGNORECASE,
+)  # CK7: a step that can be left out
 SCALES = (("½", "half", 0.5), ("1\u00d7", "", 1.0), ("2\u00d7", "double", 2.0))  # CK2's switcher
 
 
@@ -90,6 +94,10 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
 
     now = clock.now()
     parts = step_parts(recipe)
+    prefs = cooking.preferences(viewer.id)
+    # CK7: a low level at the start leans the screen lighter. Only the effects are in the
+    # state, never why.
+    lighter = session.energy_at_start == "low"
     out: dict[str, Any] = {
         "active": True,
         "kind": "cooking",
@@ -109,6 +117,13 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         "gather": [],
         "prep": [],
         "offers": [],
+        "view": {
+            "text_size": prefs.cooking_text_size,
+            "theme": prefs.cooking_theme,
+            "steps_view": prefs.cooking_steps_view,
+        },
+        "skip_checklist": lighter and session.phase == "gather",
+        "steps": [],
     }
     if session.phase == "ready":
         out["ahead"] = [
@@ -143,7 +158,14 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             "words": f"Step {part.label} of {len(recipe.steps)}",
             "first": n == 0,
             "last": n >= len(parts) - 1,
+            "folded": lighter and bool(OPTIONAL.search(part.text)),
         }
+        if prefs.cooking_steps_view == "all":
+            out["steps"] = [
+                {"label": p.label, "text": p.text, "current": i == n,
+                 "done": i < n, "folded": lighter and i != n and bool(OPTIONAL.search(p.text))}
+                for i, p in enumerate(parts)
+            ]  # fmt: skip
         out["amounts"] = amounts(cooking, session, recipe, part.label, viewer)
         if n + 1 < len(parts):
             nxt = parts[n + 1]
@@ -158,7 +180,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             ]
     from themi_home.cooking_ahead import strip
 
-    out["strip"] = strip(cooking, session, recipe) if session.ended_at is None else None
+    out["strip"] = (
+        strip(cooking, session, recipe, must_only=lighter) if session.ended_at is None else None
+    )
     out["timers"] = timers(cooking, session)
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
@@ -295,6 +319,9 @@ def buttons(session: Session, recipe: Recipe) -> list[dict[str, str]]:
                     {"label": "Remind me tomorrow", "action": "tomorrow"}]  # fmt: skip
         return [{"label": "Done", "action": "next"}, {"label": "Skip", "action": "skip"}]
     if session.phase == "gather":
+        if session.energy_at_start == "low":  # CK7: the checklist is optional today
+            return [{"label": "Skip the checklist", "action": "skip"},
+                    {"label": "All here", "action": "next"}]  # fmt: skip
         return [{"label": "All here", "action": "next"}]
     if session.phase == "prep":
         return [{"label": "Prep done", "action": "next"}, {"label": "Skip prep", "action": "skip"}]

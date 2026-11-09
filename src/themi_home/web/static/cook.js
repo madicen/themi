@@ -89,6 +89,7 @@
     var shown = main();
     if (!shown || String(state.id) !== shown.dataset.session) { reload(); return; }
     if (state.drawn !== shown.dataset.drawn) view();
+    looks(state);
     company(state);
     if (window.themiCook && window.themiCook.onState) window.themiCook.onState(state);
   }
@@ -156,6 +157,25 @@
       alerting = null;
     }
   }
+
+  // CK7: A- and A+, kept as a preference; the theme and size follow the state
+  function looks(state) {
+    if (!state.view) return;
+    body.dataset.theme = state.view.theme;
+    body.dataset.textSize = String(state.view.text_size);
+  }
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!form.closest || !form.closest(".cook-size")) return;
+    event.preventDefault();
+    var data = new URLSearchParams(new FormData(form));
+    if (event.submitter && event.submitter.name) data.set(event.submitter.name, event.submitter.value);
+    fetch(form.getAttribute("action"), {
+      method: "POST", body: data.toString(), credentials: "same-origin",
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (s) { if (s) { looks(s); redraw(s); } }, function (e) { report("size failed: " + e); });
+  });
 
   // CK3: the chime's volume, kept for next time (a preference)
   document.addEventListener("change", function (event) {

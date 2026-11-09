@@ -27,7 +27,21 @@
   </ul>
 {% elif state.step %}
   <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
+  {% if state.steps %}
+  <ol class="cook-all-steps">
+  {% for st in state.steps %}
+    <li class="{{ 'current' if st.current else ('done' if st.done else '') }}"{% if st.current %} aria-current="step"{% endif %}>
+      {% if st.folded %}<details class="cook-fold"><summary>(Optional) 1 more</summary><span>{{ st.label }}. {{ st.text }}</span></details>
+      {% elif st.current %}<blockquote class="cook-text">{{ st.text }}</blockquote>
+      {% else %}<span>{{ st.label }}. {{ st.text }}</span>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {% elif state.step.folded %}
+  <details class="cook-fold"><summary>(Optional) 1 more</summary><blockquote class="cook-text">{{ state.step.text }}</blockquote></details>
+  {% else %}
   <blockquote class="cook-text">{{ state.step.text }}</blockquote>
+  {% endif %}
   {% if state.offers %}<div class="cook-offers">
   {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
   </div>{% endif %}
