@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Welcome · Themi{% endblock %}
+{% block content %}
+<h1>Welcome to Themi, {{ member.name }}</h1>
+<p class="muted">A few steps and it's ready. Each one ticks itself off once it's done.</p>
+
+<ol class="rows welcome-steps">
+  {% for step in steps %}
+  <li class="welcome-step {{ 'done' if step.done else 'todo' }}" id="step-{{ step.key }}">
+    <span class="welcome-mark" aria-hidden="true">{{ "✓" if step.done else loop.index }}</span>
+    <span class="row-main">
+      <span class="row-title">{{ step.title }}</span>
+      <span class="row-meta">{% if step.optional %}<span class="chip">Optional</span> {% endif %}{{ step.detail }}</span>
+    </span>
+    {% if step.done %}<span class="visually-hidden">Done</span>{% if step.after %}
+    <a class="button small" href="{{ step.href }}">{{ step.after }}</a>{% endif %}
+    {% elif step.href %}<a class="button small{% if not step.optional %} primary{% endif %}" href="{{ step.href }}">{{ step.action }}</a>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+
+{% if ready %}<p><a class="button primary" href="/chat">Start chatting</a></p>{% endif %}
+
+<form method="post" action="/welcome/done" class="welcome-done">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="link">I'm done, show the dashboard</button>
+  <span class="muted">What's left stays on Home, and everything is on <a href="/modules">Modules</a>.</span>
+</form>
+{% endblock %}

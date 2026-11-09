@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,10 +18,12 @@ from themi.accounts.claim import CODE_FILE, Claim
 from themi.app import build_app, family_modules
 from themi.cli import build_runtime
 from themi.config import load_config
+from themi.modules.store import Draft, DraftStore
 from themi.runtime import Runtime
 from themi.settings import Settings, ensure_secret_key
 from themi.standard.web_chat import WebChatModule
 from themi.storage import open_database
+from themi.storage.secrets import Secret
 
 
 def new_themi(tmp_path: Path) -> tuple[SimpleNamespace, ModelBank, str]:
@@ -59,8 +62,8 @@ async def test_a_new_themi_is_claimed_set_up_and_chatted_with(tmp_path: Path) ->
         assert key in key_page and "Without it, a backup can't be read." in key_page
         await site.post("/claim/key", data={"csrf": csrf_of(key_page)})
         home = (await site.get("/")).text
-        assert "Finish setting up Themi" in home
-        assert "Set up a way to chat from a phone, like Telegram." in home
+        assert "Welcome to Themi, Sam" in home  # Home sets it up, step by step
+        assert "For your phone, add Telegram or Slack on Modules." in home
         assert (await site.get("/claim/key")).headers["location"] == "/"  # shown once
         assert (await site.get("/claim")).headers["location"] == "/"
         sam = app.store.member_by_name("Sam")
@@ -222,3 +225,66 @@ async def test_a_new_themis_menu_is_for_setting_it_up(tmp_path: Path) -> None:
     assert "People" in titles and "Family" not in titles
     assert not {"Google accounts", "Household connections"} & set(titles)
     assert "<h1>People</h1>" in people and "Appliances, the vacuum" not in people
+
+
+def welcome_steps(page: str) -> list[tuple[str, bool]]:
+    """(the step's title, whether it's ticked) on the welcome page, in order."""
+    return [
+        (html.unescape(re.sub(r"\s+", " ", title).strip()), state == "done")
+        for state, title in re.findall(
+            r'<li class="welcome-step (done|todo)"[^>]*>.*?<span class="row-title">(.*?)</span>',
+            page,
+            re.S,
+        )
+    ]
+
+
+async def test_a_new_themi_welcomes_its_admin_until_it_is_set_up(tmp_path: Path) -> None:
+    runtime = started(tmp_path)
+    app = runtime.app
+    claim = Claim(app.store)
+    sam = claim.claim(claim.make(tmp_path), "Sam's work", "UTC", "Sam", tmp_path)
+    themi = SimpleNamespace(app=app, member=lambda _: sam)
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        await sign_in(themi, site, "Sam")  # type: ignore[arg-type]
+        home = (await site.get("/")).text
+        assert "Welcome to Themi, Sam" in home and "Waiting on you" not in home
+        assert welcome_steps(home) == [
+            ("Claim it and save its key", True),
+            ("Add a passkey, so you can sign in again later", False),
+            ("Choose what Themi is for", False),
+            ("Give it an AI to think with", False),
+            ("Talk to it", True),  # the web chat works from the start
+            ("Invite the people who'll use it", False),
+        ]
+        assert "Optional" in home and 'href="/chat"' in home
+
+        # An AI key and a template chosen (waiting for a restart): those tick, and a
+        # restart step appears
+        app.ai_settings.add_backend(sam, sam.id, "Gemini", "gemini", api_key=Secret("k"))
+        DraftStore(app.db).save(Draft(template="work"), sam.id)
+        steps = dict(welcome_steps((await site.get("/")).text))
+        assert steps["Give it an AI to think with"] and steps["Choose what Themi is for"]
+        assert steps["Restart to apply your changes"] is False
+
+        # "I'm done": the dashboard from then on, the rest on its card
+        home = (await site.get("/")).text
+        done = await site.post("/welcome/done", data={"csrf": csrf_of(home)})
+        assert done.headers["location"] == "/"
+        home = (await site.get("/")).text
+        assert "Welcome to Themi" not in home and "Waiting on you" in home
+
+
+async def test_the_family_never_sees_the_welcome(tmp_path: Path) -> None:
+    env = {"THEMI_DB_PATH": str(tmp_path / "themi.db")}
+    ensure_secret_key(env)
+    settings = Settings.from_mapping(env)
+    seeded = seed_family(AccountStore(open_database(settings.db_path), settings.cipher()))
+    runtime = started(tmp_path)  # the family's install: Telegram and an AI key
+    erin = runtime.app.store.get_member(seeded.erin.id)
+    runtime.app.ai_settings.add_backend(erin, erin.id, "G", "gemini", api_key=Secret("k"))
+    themi = SimpleNamespace(app=runtime.app, member=lambda _: erin)
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        await sign_in(themi, site, "Erin")  # type: ignore[arg-type]
+        home = (await site.get("/")).text
+    assert "Welcome to Themi" not in home and "Waiting on you" in home

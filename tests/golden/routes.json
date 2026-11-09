@@ -172,5 +172,6 @@
   "POST /tasks/{task_id}/edit",
   "POST /tiers/{category}/{change}",
   "POST /week/correct",
+  "POST /welcome/done",
   "PUT /api/safeway/products"
 ]

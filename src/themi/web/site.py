@@ -42,9 +42,10 @@ from themi.core import keys
 from themi.modules import StartReport
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
-from themi.web import icons
+from themi.web import icons, welcome
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext, static_file
+from themi.web.welcome import SITE_LINK_CHANNELS
 
 __all__ = ["SiteContext", "install_site"]
 
@@ -93,8 +94,8 @@ PICKER_POLICY = (
 )
 
 
-# The chat channels where /site (Slack: `/themi site`) sends a sign-in link (SL5).
-SITE_LINK_CHANNELS = frozenset({"telegram", "slack"})
+# The chat channels where /site (Slack: `/themi site`) sends a sign-in link (SL5): in
+# welcome.py, which its steps need too.
 
 
 def sign_in_hint(channels: set[str]) -> str:
@@ -356,9 +357,24 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
     @router.get("/", response_class=HTMLResponse)
     def dashboard(request: Request) -> HTMLResponse:
         session = kit.current(request)
+        steps = welcome.steps(app, session.member, kit.templates.env.globals["words"])
+        if welcome.shown(app, session.member, steps):  # a new Themi: setting it up
+            return kit.with_flash(
+                request,
+                "welcome.html",
+                session,
+                steps=steps,
+                ready=welcome.ready(steps),
+            )
         return kit.with_flash(
             request, "dashboard.html", session, **dashboard_values(session.member)
         )
+
+    @router.post("/welcome/done")
+    async def welcome_done(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        welcome.dismiss(app)
+        return kit.redirect("/", "The rest of setting up is on Home, and on Modules.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:
