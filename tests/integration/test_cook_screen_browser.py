@@ -46,7 +46,7 @@ async def test_a_timer_counts_down_from_the_servers_times(scenario: Scenario) ->
     await to_step_three(scenario)
     async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves") as tab:
         await tab.value("document.querySelector('form[data-move=next] button').click()")
-        chip = "document.querySelector('.cook-chip')"
+        chip = "document.querySelector('.cook-offers .cook-chip')"
         assert await until(lambda: tab.value(f"!!{chip}"))
         await tab.value(f"{chip}.click()")
         left = "(document.querySelector('.cook-timer-left') || {}).textContent || ''"

@@ -81,6 +81,7 @@ async def test_a_tap_moves_the_session_and_edits_the_chat_card(
     session = await start(scenario, cooking)
     seq = (await site.get("/session/state")).json()["seq"]
     scenario.primary.queue_structured({"jobs": []})
+    scenario.primary.queue_structured({"steps": []})  # CK2: which lines the step uses
     state = (await act(site, session.id, csrf, "next", seq)).json()
     assert state["phase"] == "cook" and state["seq"] > seq
     assert scenario.edits("Erin")[-1]["text"].startswith(

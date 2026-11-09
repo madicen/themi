@@ -82,6 +82,7 @@ async def test_cook_this_opens_the_cook_screen(
     session = scenario.app.services.maybe(keys.cooking).current(scenario.member("Erin"))  # type: ignore[union-attr]
     assert session is not None
     scenario.primary.queue_structured({"jobs": []})
+    scenario.primary.queue_structured({"steps": []})  # CK2: which lines the step uses
     moved = await site.post(
         f"/session/cook/{session.id}/act", headers={"X-Requested-With": "fetch"},
         data={"csrf": signed_in, "action": "next", "seq": str(session.seq)},
