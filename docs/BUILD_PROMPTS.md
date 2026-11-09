@@ -295,7 +295,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [x] 2026-11-08 |
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
 | CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [x] 2026-11-08 |
-| CK8 | Cooking companion: push-to-talk | Cooking companion | [ ] |
+| CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -14620,7 +14620,7 @@ Notes:
   the kitchen theme with the whole list.
 
 ### CK8 · Cooking companion: push-to-talk
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, CK3
 Read first: the plan's Features "Hands-free and kitchen-proof" (push-to-talk) and the
 decision above.
@@ -14636,6 +14636,25 @@ decision above.
 Tests: integration for the say route (each phrase, the opt-in off is 403); browser test
 with a faked recognizer: the button hidden without support or the setting, "next" moving
 the session.
+
+Notes:
+- `CookingPreferences.cooking_voice` (off), a checkbox "Voice on the cook screen" in the
+  Cooking part of Settings, whose words say Chrome sends the audio to Google to recognise it
+  and that nothing listens until the button is pressed.
+- `themi_home/cooking_voice.py`: `plain` turns the words into a typed line (lower case, no
+  end punctuation, "two" as 2, "a minute" as 1 minute, "5 more minutes" as 5 minutes);
+  `say` puts it through `Cooking.on_text` and `CookingTimers.on_text`, the handlers a typed
+  line meets, with `in_group` set for a partner on a group session. "How long left" also
+  comes back on the screen (`said`). Anything else is Ask Themi (the drawer opens).
+- `POST /session/cook/{id}/say` (routes.json): 404 for a session that isn't theirs or has
+  ended, 403 while their setting is off. The answer is the state with `heard`, `said` and
+  `open_chat`.
+- The button is only on the page with the setting on, hidden until the script finds
+  `SpeechRecognition` or `webkitSpeechRecognition`. Hold to talk (stops when let go, after
+  400 ms) or tap (the recognizer stops itself after one phrase); `continuous` off. The
+  recognizer is looked up at each press. The words heard show under the button for 4 s.
+- Telegram voice notes are untouched.
+- Tests changed: the settings form list and CK7's view dict gain `cooking_voice`.
 
 ---
 
