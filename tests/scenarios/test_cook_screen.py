@@ -83,3 +83,42 @@ async def test_pancakes_with_two_timers_at_once(
     for timer in shown:
         await act("timer_clear", timer=str(timer["id"]))
     assert (await site.get("/session/state")).json()["timers"] == []
+
+
+async def test_alfredo_preheat_offered_early_and_back_after_later(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CK4: Alfredo Sauce baked over pasta. The oven in step 4 is offered from the start;
+    [Later] hides it until step 3, where it comes back; [Done] and it's gone."""
+    from tests.unit.test_cooking_look_ahead import BAKED, items
+
+    load(scenario.app.services, BAKED)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "alfredo sauce", "scale": ""})
+    scenario.primary.queue_structured(items())
+    await scenario.say("Erin", "Let's make the alfredo sauce")
+    await scenario.tap("Erin", "Skip")  # "before anything else": not now
+    state = (await site.get("/session/state")).json()
+    assert state["strip"]["text"] == "Step 4 wants the oven at 400°F. Start it now?"
+    page = (await site.get("/session/cook/view")).text
+    assert "Step 4 wants the oven at 400°F" in page and 'value="ahead_later"' in page
+    await site.post(
+        f"/session/cook/{state['id']}/act",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "ahead_later", "seq": str(state["seq"]),
+              "key": state["strip"]["key"]},
+    )  # fmt: skip
+    scenario.primary.queue_structured({"jobs": []})
+    for said, label in (("all here", "1"), ("next", "2")):
+        await scenario.say("Erin", said)
+        state = (await site.get("/session/state")).json()
+        assert (state["step"]["label"], state["strip"]) == (label, None)
+    await scenario.say("Erin", "next")
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["label"] == "3" and state["strip"]["key"] == "preheat:3"
+    await site.post(
+        f"/session/cook/{state['id']}/act",
+        headers={"X-Requested-With": "fetch"},
+        data={"csrf": csrf, "action": "ahead_done", "seq": str(state["seq"]), "key": "preheat:3"},
+    )
+    assert (await site.get("/session/state")).json()["strip"] is None
