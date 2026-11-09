@@ -291,7 +291,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
 | CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
-| CK4 | Cooking companion: look-ahead | Cooking companion | [ ] |
+| CK4 | Cooking companion: look-ahead | Cooking companion | [x] 2026-11-08 |
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [ ] |
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [ ] |
 | CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [ ] |
@@ -14446,7 +14446,7 @@ Notes:
 - The soonest running timer shows in the header while the All ingredients drawer is open.
 
 ### CK4 · Cooking companion: look-ahead
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK2
 Read first: the plan's Features "Look-ahead" and "Phrasing and energy"; RC3a's
 `ahead_of_time` finders in `cooking.py`.
@@ -14462,6 +14462,27 @@ Tests: unit tests for later-step finding on the fixture (Alfredo Sauce's soak an
 preheat), [Later] returning at the right step, the simmer line only with a long timer;
 scenario: Alfredo Sauce, the preheat offered from a later step and brought back after
 [Later].
+
+Notes:
+- `themi_home/cooking_ahead.py`: `look_ahead(recipe)` finds, per step part, a preheat (RC3a's
+  `PREHEAT`), water to boil, a soak ("soak", "soaking", not "soaked": that was done before),
+  a marinade and a rest, each keyed `kind:part`. `offers` keeps those for parts still to
+  come (all of them before the steps), nearest first; `strip` shows the nearest offer, else
+  the simmer line, else nothing. Must-do kinds (CK7): preheat, soak, marinate.
+- The ready phase already lists every preheat and soak (RC3a, unchanged). What it listed
+  and they said [Done] to (or ticked on the screen) isn't offered again; what they skipped
+  comes back, tied to its step. For that the ready phase's [Skip] now sends `skip` (it sent
+  `next`, the same move); [Done] marks the ready list done. Typed "skip" there does too.
+- [Later] keeps `{"status": "later", "at": <part>}` in `ahead_done`; the offer is back only
+  on the part just before its step, and only when [Later] was said earlier than that.
+  Answers save through `Cooking.save` (`seq` bumps; the chat's card isn't edited).
+- The simmer line: a timer of 10 min or more running, and the next step (not the second
+  half of this one) has CK2 links: "Step 4 uses the scallions, sliced." (item, plus the
+  line's note when it has RC3a's prep words).
+- Deviation: the fixture's Alfredo Sauce has no oven step, and every fixture preheat is in
+  step 1, so the tests use "Alfredo Sauce" baked over pasta (the fixture's lines plus
+  scallions, and a fourth step that preheats and bakes), defined in
+  `tests/unit/test_cooking_look_ahead.py`.
 
 ### CK5 · Cooking companion: company in the kitchen
 Status: [ ]
