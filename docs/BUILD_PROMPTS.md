@@ -296,6 +296,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
 | CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [x] 2026-11-08 |
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
+| CK10 | Cooking companion: full screen in Telegram | Cooking companion | [ ] |
+| CK11 | Cooking companion: the kitchen tablet | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -14655,6 +14657,52 @@ Notes:
   recognizer is looked up at each press. The words heard show under the button for 4 s.
 - Telegram voice notes are untouched.
 - Tests changed: the settings form list and CK7's view dict gain `cooking_voice`.
+
+
+### CK10 · Cooking companion: full screen in Telegram
+Status: [ ]
+Depends on: CK1, CK7
+Read first: the plan's Features "Hands-free and kitchen-proof"; Telegram's Mini App events
+(core.telegram.org/api/web-events); `static/session.js`'s sign-in; `web/site.py`'s CSP.
+- `static/miniapp.js`, loaded by `session.html` and `cook.html`: a small bridge to Telegram
+  (`TelegramWebviewProxy.postEvent`, else `window.external.notify`, else a message to the
+  parent frame), and `window.Telegram.WebView.receiveEvent` for what comes back. Not
+  Telegram's own script: the page carries a session token and its CSP stays `'self'`.
+- It only acts inside Telegram (`tgWebAppPlatform` in the address's hash, or the proxy
+  present). Both pages send `web_app_ready` and `web_app_expand`. The cook screen also,
+  from Mini App version 8.0 (`tgWebAppVersion`): `web_app_request_fullscreen` and
+  `web_app_setup_swipe_behavior` with vertical swipes off (7.7). Older versions only expand.
+- Safe areas: `web_app_request_safe_area` and `web_app_request_content_safe_area`; their
+  insets become `--tg-safe-*` and `--tg-content-*` on the page, and the cook screen's
+  padding keeps clear of them (Telegram's close and menu buttons float over full screen).
+- The cook screen's [Full screen] button (CK11's) works in Telegram too: it asks to leave
+  or re-enter full screen, its label following `fullscreen_changed`.
+Tests: browser test with a faked `TelegramWebviewProxy` (events recorded): the cook screen
+asks for full screen and no swipes on 8.0, only expands on 7.0, the body double page only
+expands, a `content_safe_area_changed` moves the header down; outside Telegram nothing is
+sent.
+
+### CK11 · Cooking companion: the kitchen tablet
+Status: [ ]
+Depends on: CK10
+Read first: the plan's Features "Hands-free and kitchen-proof" and its open question on a
+kitchen device sign-in.
+- A [Full screen] button in the cook header where the browser offers the Fullscreen API
+  (`document.fullscreenEnabled`, or webkit's on an iPad), hidden where it doesn't
+  (iPhone Safari) and when the page already runs full screen as an installed app. It toggles
+  "Full screen" / "Exit full screen" with `fullscreenchange`. The wake lock is taken again
+  after the change.
+- Installable: `/session/manifest.webmanifest` (name Themi, start `/session`, scope
+  `/session`, `display: standalone` with `display_override: ["fullscreen"]`, the theme's
+  colours), PNG icons 192 and 512 (and maskable) plus an apple-touch-icon, the iOS
+  web-app metas. Both `/session` pages link it.
+- Sign-in in a plain browser: `/session` opened signed out and not in Telegram shows how to
+  sign in (/site in Telegram, or [Sign in] to the signed-out page with Google), not "Opening
+  your session…".
+- No new kind of sign-in: the tablet is signed in as a person (the plan's open question).
+Tests: the manifest route and its fields, the icons served; browser test: the button shown
+and toggling with a faked Fullscreen API, hidden without it; the signed-out page in a plain
+browser shows the sign-in help.
 
 ---
 
