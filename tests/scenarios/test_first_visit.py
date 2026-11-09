@@ -188,4 +188,9 @@ async def test_a_new_themis_settings_are_only_the_cores(tmp_path: Path) -> None:
         page = (await site.get("/settings")).text
     titles = re.findall(r'<span class="row-title">([^<]+)</span>', page)
     assert "Quiet hours" in titles
-    assert not set(titles) & {"Body double", "My chore chart", "Day summary", "My calendars"}
+    assert not set(titles) & {
+        "Body double",
+        "My chore chart",
+        "Good-morning message",
+        "My calendars",
+    }

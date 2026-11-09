@@ -92,7 +92,7 @@ async def section_ids(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
 
 # CR7d: the sections, in the order the page had before they came from modules.
 SECTIONS = [
-    "quiet", "limit", "breaks", "body-double", "chart", "calendars",
+    "quiet", "limit", "breaks", "body-double", "chart", "day-summary", "calendars", "lists",
     "expenses",  # EX2b, the spending module's
     "email", "phrasing", "pda", "tracking",
 ]  # fmt: skip
@@ -108,5 +108,5 @@ async def test_the_family_sections_keep_their_order(
 async def test_a_module_left_out_takes_its_section_with_it(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
-    found = await section_ids(scenario, site)  # no Gmail (CR21a: the chart needs no wall)
-    assert found == [s for s in SECTIONS if s != "email"]
+    found = await section_ids(scenario, site)  # no Google (CR21a: the chart needs no wall)
+    assert found == [s for s in SECTIONS if s not in ("email", "calendars")]

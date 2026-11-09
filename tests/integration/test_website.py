@@ -393,12 +393,12 @@ async def test_each_settings_section_says_what_its_set_to(
     assert "At most 4 a day" in page
     assert "Gentle: indirect and low-key</span>" in page
     assert '<span class="row-meta">On, strict</span>' in page
-    assert "No good-morning message" in page
+    assert '<span class="row-title">Good-morning message</span>' in page and ">Off</span>" in page
     assert "2 of 5 on" in page
 
     await site.post("/settings", data={**form, "morning_summary": "07:15", "phrasing": "plain"})
     page = (await site.get("/settings")).text
-    assert "Good-morning message at 7:15 am" in page and "Plain: say it straight</span>" in page
+    assert "Each morning at 7:15 am" in page and "Plain: say it straight</span>" in page
 
 
 @pytest.mark.usefixtures("fake_cozyla", "fake_gmail", "fake_gcal")  # CR7a/b1: their rows

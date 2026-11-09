@@ -1,6 +1,6 @@
-{# CR7d: a section of the settings form, the cozyla_chores module's. #}
+{# CR7d: a section of the settings form, the chore_chart module's. #}
 {% from "_row.html" import row %}
-  {% if prefs.cozyla_chores %}{% set chart = prefs.cozyla_chores %}{% call(part) row("The wall's chore chart", meta=("All of my chores" if chart.chart_limit == 0 else chart.chart_limit ~ " of my chores at a time"), id="chart") %}{% if part == "body" %}
+  {% if prefs.cozyla_chores %}{% set chart = prefs.cozyla_chores %}{% call(part) row("My chore chart", meta=("All of my chores" if chart.chart_limit == 0 else chart.chart_limit ~ " of my chores at a time"), id="chart") %}{% if part == "body" %}
     <label>Show <input type="number" name="chart_limit" min="0" max="10" value="{{ chart.chart_limit }}"> of my chores at a time</label>
     <label class="check"><input type="checkbox" name="chart_counts_shared" {% if chart.chart_counts_shared %}checked{% endif %}> Chores either of us can do count toward that number</label>
     <p class="muted">0 shows them all. The rest wait their turn; medicines and other important chores always show. Unticked, chores for either of you always show too.</p>
