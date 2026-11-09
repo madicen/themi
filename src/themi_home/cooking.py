@@ -524,7 +524,7 @@ class Cooking:
                 f"Cooking {head}.\nBefore anything else: {jobs}.",
                 [
                     Button("Done", "cooking", {**tap, "action": "next"}),
-                    Button("Skip", "cooking", {**tap, "action": "next"}),
+                    Button("Skip", "cooking", {**tap, "action": "skip"}),  # CK4: not done
                 ],
             )
         if session.phase == "gather":
@@ -597,6 +597,11 @@ class Cooking:
         return text, buttons
 
     # ----- the cook screen (CK1) ----------------------------------------------------------
+
+    def save(self, session: Session) -> None:
+        """A change only the screen shows (CK4's look-ahead answers): saved, `seq` bumped,
+        the chat's card left as it is."""
+        self._save(session)
 
     async def prepare(self, member: Member) -> None:
         """Before the cook screen draws: the step links (CK2), from the cache or one call."""
@@ -699,6 +704,8 @@ class Cooking:
                 await self.timers.ask_on_end(self._owner(session))
             return
         if session.phase == "ready":
+            if action == "next":  # [Done]: the look-ahead (CK4) won't offer these again
+                session.ahead = [{**a, "done": True} for a in session.ahead]
             session.phase = "gather"
         elif session.phase == "gather":
             session.phase = "prep"
@@ -855,7 +862,7 @@ class Cooking:
             await self.after_prep(session)
             await self.show(session, fresh=True)
         elif action == "skip" and session.phase != "cook":
-            await self.advance(session, "next", fresh=True)
+            await self.advance(session, "skip", fresh=True)
         else:
             await self.advance(session, action, fresh=True)
         return True

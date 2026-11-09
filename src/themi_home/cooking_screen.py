@@ -144,6 +144,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 for found in durations(part.text)
                 if not found.reminder
             ]
+    from themi_home.cooking_ahead import strip
+
+    out["strip"] = strip(cooking, session, recipe) if session.ended_at is None else None
     out["timers"] = timers(cooking, session)
     running = [t for t in out["timers"] if not t["fired"]]
     out["ended"] = session.ended_at is not None
@@ -247,7 +250,7 @@ def buttons(session: Session, recipe: Recipe) -> list[dict[str, str]]:
         if any(a["overnight"] for a in session.ahead):
             return [{"label": "Cook anyway", "action": "anyway"},
                     {"label": "Remind me tomorrow", "action": "tomorrow"}]  # fmt: skip
-        return [{"label": "Done", "action": "next"}, {"label": "Skip", "action": "next"}]
+        return [{"label": "Done", "action": "next"}, {"label": "Skip", "action": "skip"}]
     if session.phase == "gather":
         return [{"label": "All here", "action": "next"}]
     if session.phase == "prep":
@@ -296,6 +299,13 @@ async def act(
         return Tapped(timer_tap(cooking, session, action, form))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action in ("ahead_done", "ahead_later"):  # CK4: the look-ahead strip
+        from themi_home.cooking_ahead import answer
+
+        if not answer(session, str(form.get("key", "")), action.removeprefix("ahead_")):
+            return Tapped(False)
+        cooking.save(session)
+        return Tapped(True)
     if action == "use":
         n = _int(form.get("n"))
         if not 0 <= n < len(recipe.ingredients):

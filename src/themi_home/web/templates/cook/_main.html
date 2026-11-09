@@ -9,6 +9,10 @@
     {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop link") }}{% endif %}
   </header>
   <section class="cook-step" aria-label="This step">
+    {% if state.strip %}<div class="cook-strip" data-kind="{{ state.strip.kind }}">
+      <p>{{ state.strip.text }}</p>
+      {% if state.strip.kind == "offer" %}{{ act(state, csrf, "ahead_done", "Done", {"key": state.strip.key}) }}{{ act(state, csrf, "ahead_later", "Later", {"key": state.strip.key}) }}{% endif %}
+    </div>{% endif %}
     {% include "cook/_step.html" %}
     <div class="cook-moves">
     {% for b in state.buttons %}
