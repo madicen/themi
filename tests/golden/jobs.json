@@ -7,6 +7,7 @@
   "calendar.morning": 300,
   "checkins.reviews": 900,
   "cooking.expire": 900,
+  "cooking.stuck": 300,
   "cozyla.chores": 300,
   "cozyla.routines": 900,
   "cozyla.sync": 60,

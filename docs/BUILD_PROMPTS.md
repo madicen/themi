@@ -288,14 +288,14 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
-| CK1 | Cooking companion: the cook screen on /session | Cooking companion | [ ] |
-| CK2 | Cooking companion: amounts for this step | Cooking companion | [ ] |
-| CK3 | Cooking companion: the timer rail | Cooking companion | [ ] |
-| CK4 | Cooking companion: look-ahead | Cooking companion | [ ] |
-| CK5 | Cooking companion: company in the kitchen | Cooking companion | [ ] |
-| CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [ ] |
-| CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [ ] |
-| CK8 | Cooking companion: push-to-talk | Cooking companion | [ ] |
+| CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
+| CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
+| CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
+| CK4 | Cooking companion: look-ahead | Cooking companion | [x] 2026-11-08 |
+| CK5 | Cooking companion: company in the kitchen | Cooking companion | [x] 2026-11-08 |
+| CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
+| CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [x] 2026-11-08 |
+| CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -14276,7 +14276,7 @@ of state, and the chat step card and the cook screen are two views of it. Its de
 - No step pictures (BD4b) while cooking. No appliance control, nutrition or video.
 
 ### CK1 · Cooking companion: the cook screen on /session
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: RC3c, BD3a, RC6
 Read first: the plan's Summary, "What the family sees", "How it fits the codebase" and
 "Data model and recipes"; BD3a's and RC3a-c's notes; `themi_home/web/session_pages.py`,
@@ -14315,8 +14315,40 @@ browser test (as `test_session_page_browser.py`): Next moves the session, the co
 runs from server times; scenario: "next" typed in Telegram shows on the page at the next
 poll.
 
+Notes:
+- The Cooking Companion Plan couldn't be read from this session (the Docs and Artifact tools
+  both refused it: not shared with this account), so CK1 to CK8 follow the prompts and the
+  decisions above. Worth a look against the plan when it's readable.
+- `themi_home/cooking_screen.py` holds the screen's `state` and `act`; `Cooking.state` and
+  `Cooking.act_from_page` call them. The state: `kind`, `id`, `seq`, `now`, `phase`, `recipe`,
+  `heading`, `scale_words`, `group`, `line`, `step` (index, label, text, group, words "Step 2
+  of 3", first, last), `peek`, `ahead` / `gather` / `prep` (each with its tick), `offers` (the
+  step's timer chips), `timers` (id, label, ends_at, fired, text), `buttons`, and `drawn`, a
+  fingerprint of what's shown: the page polls `/session/state` and fetches its regions from
+  `GET /session/cook/view` only when `drawn` changed (a move, or a timer firing).
+- A partner sees and taps a group session's screen (`session_for`: their own, else the
+  group's). Ticks on the ahead and prep lists are kept as `done` in those JSON lists, not
+  new columns. A timer chip on the page starts the timer without the chat's "Timer set"
+  line (the card is redrawn).
+- `_save` bumps `seq` on every move (so `show` does) and `end` bumps it too; a new phase or
+  step sets `step_since`.
+- The one migration is the cooking module's own track (`themi_home/cooking_schema/0001`),
+  and carries every column the companion needs, not only CK1's: also `step_since`,
+  `stuck_said`, `line`, `line_at`, `page_at` and `wrap` on `cooking_sessions` (CK3, CK5,
+  CK6) and `cleared_at` on `cooking_timers` (CK3's "until the card is tapped").
+- `cook.js` is its own script; it copies `session.js`'s plumbing (session header, reload with
+  a ticket, the error report, wake lock) rather than sharing a file, so the body double page
+  is untouched. A body double page that sees a cooking state reloads into the cook screen.
+- Tests changed: RC6's `test_the_kitchen_view_moves_the_chat_card` became
+  `test_cook_this_opens_the_cook_screen` (the kitchen view is gone; [Cook] lands on
+  /session); `test_a_packs_static_files_are_served_under_its_name` reads `session.js`
+  instead of the deleted `kitchen.js`; `page_in_chrome` takes the selector it waits for and
+  a window size. `routes.json` gains the two cook routes.
+- Browser tests run where `google-chrome` or `chromium` is on PATH (on a Mac, a two-line
+  wrapper for Chrome.app does it).
+
 ### CK2 · Cooking companion: amounts for this step
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, RC2b
 Read first: the plan's Features "Amounts"; RC2b's notes (`scale_for`, `scale_line`);
 RC3a's prep notes (the cached call and the dropped-line check, which this copies).
@@ -14338,8 +14370,36 @@ Tests: rule links for every fixture step; model links kept and dropped; the cach
 scale mid-session; used ticks shared by both views; evals: links for 15 recipes (each
 really used in that step, none added).
 
+Notes:
+- `themi_home/cooking_links.py`: `rule_links`, `gaps`, `StepLinks` (`links`, `ensure`,
+  `ask`), `with_grams`. The rule takes every word of the item, or its last word when that
+  names a food alone (not "powder", "sauce", "oil", "milk"... in `GENERIC`): every word only
+  missed "the flours" for "white whole wheat flour". The model's links fill only the steps
+  the rule left empty (a gap: no link, and amount or "ingredients" words); its item must
+  share a stemmed word with its line.
+- The links call is made only for the screen: `Cooking.prepare(member)`, from `GET
+  /session`, `/session/cook/view` and the act route, and only in the cook phase. The chat
+  card doesn't use links, so chat-only cooking makes no new call. Tests that reach the steps
+  of a recipe with a gap (Ranch) queue a `{"steps": [...]}` response.
+- `CookingPreferences` (module `cooking`): `cooking_units` ("written" or "grams") for now;
+  `on_form` shows the cooking fields only inside the body double section (CK7 adds them
+  there). No conversion: "With grams" moves a weight the line gives ("(130g)") next to its
+  amount as "(130 g)", keeping "1 Tbsp + 1 tsp" together.
+- The state's `amounts` (in the cook phase): `uses` (this step's linked lines, scaled,
+  each with `used`), `groups` (every line for the drawer) and `units` (the viewer's).
+  `scales`: the ½ / 1× / 2× options with `on`, `makes`, `for`. A tap's one-off line comes
+  back as `said` beside the state ("Now for 6.", or why not), shown for 4 s; `act` returns
+  a `Tapped(ok, said)`.
+- "for N" on a recipe that doesn't say how many it makes says so and changes nothing (the
+  chat's set_recipe_yield is the way to give it one).
+- Eval: `tests/evals/test_cooking_links_evals.py`, 15 recipes (the fixture's 12 with steps
+  and 3 written in the eval); passes at 13 clean. Not run here (no eval backend).
+- Tests changed: CK1's page test and RC6's [Cook] test queue the links call (Ranch's one
+  step is a gap); the browser countdown test picks the timer chip under `.cook-offers`
+  (the scale switcher's chips come first now).
+
 ### CK3 · Cooking companion: the timer rail
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1
 Read first: the plan's Features "Timers"; RC3c's notes (`CookingTimers`, the
 `cooking.timer` job, urgent delivery).
@@ -14361,8 +14421,32 @@ pulse when `fired_at` appears (audio faked), repeating until tapped, the reduced
 form; scenario: Pancakes with two timers running at once, firing in order on a frozen
 clock, both shown and cleared on the page.
 
+Notes:
+- `CookingTimers.add`, `cancel` and `clear` take one timer (the owner's only); typed "add 2
+  minutes" now goes through `add`. A moved timer's queued job sees the later end and queues
+  itself again (as before). `start(..., label=)`: their own label (40 characters), else
+  `default_label` ("Sauce, step 3" when the step has a group, else "Step 3").
+- Screen taps: `timer` (`minutes` from a preset button, or `typed`, and `label`),
+  `timer_add` (`timer`, `minutes`), `timer_cancel`, `timer_clear`, `timers_keep`,
+  `timers_cancel`. Timer taps don't bump `seq` (nothing on the chat card changes); `drawn`
+  changes, so the screen redraws.
+- The ending: an ended session stays on the screen (`Cooking.recent_ended`, up to 3 hours)
+  while it has timers to show. The state then has `phase: "done"`, `ended`, `outcome`, and
+  `ask_timers` until [Keep timers] or [Cancel them] is answered, on the screen or in chat
+  (`Cooking.answer_timers`, kept in `wrap["timers"]`, asked once). Only timer taps work on
+  an ended session. A [Stop] in the screen's header ends it, as typed "stop" does.
+- The alert, in `cook.js`: when a fired timer is drawn, `ring()` (a WebAudio chime at the
+  chime volume, and the `.cook-pulse` overlay's 3 s fade to 35% accent, twice) and again
+  every 30 s (`themiCook.alertEvery`) until no fired timer is shown. Under
+  `prefers-reduced-motion` the overlay is hidden and the screen gets a steady 12 px accent
+  border. `themiCook.playChime` replaces the chime (the browser test fakes it).
+- Chime volume: `CookingPreferences.cooking_chime_volume` (70), saved from the rail's slider
+  by `POST /session/cook/chime` (new in routes.json, as `/session/music` saves the music's
+  volume). CK7 puts it in Settings too.
+- The soonest running timer shows in the header while the All ingredients drawer is open.
+
 ### CK4 · Cooking companion: look-ahead
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK2
 Read first: the plan's Features "Look-ahead" and "Phrasing and energy"; RC3a's
 `ahead_of_time` finders in `cooking.py`.
@@ -14379,8 +14463,29 @@ preheat), [Later] returning at the right step, the simmer line only with a long 
 scenario: Alfredo Sauce, the preheat offered from a later step and brought back after
 [Later].
 
+Notes:
+- `themi_home/cooking_ahead.py`: `look_ahead(recipe)` finds, per step part, a preheat (RC3a's
+  `PREHEAT`), water to boil, a soak ("soak", "soaking", not "soaked": that was done before),
+  a marinade and a rest, each keyed `kind:part`. `offers` keeps those for parts still to
+  come (all of them before the steps), nearest first; `strip` shows the nearest offer, else
+  the simmer line, else nothing. Must-do kinds (CK7): preheat, soak, marinate.
+- The ready phase already lists every preheat and soak (RC3a, unchanged). What it listed
+  and they said [Done] to (or ticked on the screen) isn't offered again; what they skipped
+  comes back, tied to its step. For that the ready phase's [Skip] now sends `skip` (it sent
+  `next`, the same move); [Done] marks the ready list done. Typed "skip" there does too.
+- [Later] keeps `{"status": "later", "at": <part>}` in `ahead_done`; the offer is back only
+  on the part just before its step, and only when [Later] was said earlier than that.
+  Answers save through `Cooking.save` (`seq` bumps; the chat's card isn't edited).
+- The simmer line: a timer of 10 min or more running, and the next step (not the second
+  half of this one) has CK2 links: "Step 4 uses the scallions, sliced." (item, plus the
+  line's note when it has RC3a's prep words).
+- Deviation: the fixture's Alfredo Sauce has no oven step, and every fixture preheat is in
+  step 1, so the tests use "Alfredo Sauce" baked over pasta (the fixture's lines plus
+  scallions, and a fourth step that preheats and bakes), defined in
+  `tests/unit/test_cooking_look_ahead.py`.
+
 ### CK5 · Cooking companion: company in the kitchen
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, BD3b, BD5c
 Read first: the plan's Features "Company" and "Phrasing and energy"; BD3b's and BD5's
 notes; `body_double_scene.py`. BD3b is `[~]`: if its chameleon isn't there yet, build the
@@ -14399,8 +14504,41 @@ Tests: unit tests for the cooking scene states, the stuck line's once-only rule 
 silence while a timer runs; scenario: "how much garlic?" asked in the drawer answered from
 the scaled recipe; evals: the companion's lines against the plan's phrasing table.
 
+Notes:
+- BD3b is still `[~]`, but its chameleon and scenes are there, so the cooking scene is built
+  on them: `scene-cooking` in `scenes.svg` (tiles, a counter with a hob and a steaming pot,
+  a stool) and `prop-apron` / `prop-spoon` on the chameleon. `pick_cooking_state`:
+  `cheering` for 20 s after [All done], `stirring` while a timer runs, else `watching`.
+  `FLAGS` gains the two new states; their CSS is in `themi.css` beside BD3b's.
+- The company bar (`cook/_company.html`: the scene, Themi's line, music, Ask Themi) is
+  drawn once with the page and kept live by `cook.js` from the state; it's left out of
+  `drawn` (`UNDRAWN`), so redrawing the regions never stops the music.
+- Lines (`Cooking.say`): the start ("I'm here. Alfredo Sauce for 4, whenever you're
+  ready."), each phase (`PHASE_LINES`), a timer's end ("Time's up: Step 3.") and All done.
+  All show on the screen's line. Deviation: they go through the outbox only while the
+  screen is open (it asked for its state in the last 2 minutes, `page_at`), as
+  `cooking_company` messages; a chat-only session's card already says each of these, so
+  chat stays as it was. A timer's end and All done never send (RC3c's urgent line and the
+  card already did).
+- The stuck line: `cooking.stuck`, every 5 minutes (jobs.json): in the cook phase, 20
+  minutes since the step began and since the last tap, no timer running, once a session
+  (`stuck_said`), BD1b's `STUCK_TEXT`.
+- Music: the body double page's loop player (`BodyDouble.music_state`, saved by
+  `/session/music`), with BD5c's suggestion: `DEFAULTS["cooking"]` is lofi ("Some lofi
+  while you cook?"), or their own sound again. Cooking sessions don't record what played,
+  so there's no learned pick yet. Spotify: their playlists read once a session in
+  `Cooking.prepare` (kept in memory) and ranked with `FITS["cooking"]` (kitchen, cook,
+  dinner, dance...); `/session/spotify` now serves a cooking session too.
+- Ask Themi: `POST /session/cook/chat` (routes.json) sends the text to the agent as their
+  own chat, like BD3b's break chat; RC3a's open item carries the recipe at the session's
+  scale as data. The drawer lists the conversation since the session began, without the
+  step card's and timers' messages.
+- Evals: the companion's lines are fixed words, not a model's, so their phrasing is a unit
+  test (`test_the_lines_are_offers_or_plain_words`), not an eval.
+- Test changed: `test_home_modules`' Cooking row lists the new `cooking.stuck` job.
+
 ### CK6 · Cooking companion: pantry, swaps and wrap-up
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK2, 25
 Read first: the plan's Features "Pantry and groceries" and "What the family sees" step 7;
 prompt 25's notes (`update_pantry`, `grocery_list_add`); RC5's save offer.
@@ -14418,8 +14556,32 @@ Tests: unit tests for "might be out", staged grocery add and pantry updates (not
 applied before its tier allows), the cleanup handoff; scenario: Pancakes ending with
 butter marked used up and cleanup company accepted.
 
+Notes:
+- `themi_home/cooking_wrap.py`. "Might be out": the line's item (CK2's reading) is `out` or
+  `low` in the pantry (low is what prompt 25's prediction sets, so "probably low" is
+  covered). A tap on "Might be out" opens [Add to groceries] (`grocery_list_add` through
+  `autonomy.stage`, or "already on the grocery list") and [Ask for a swap], which sends "I
+  might be out of miso. What could I use instead in the Alfredo Sauce?" to the agent as
+  their own chat and opens the drawer; `wrap["swap"]` then adds the pantry, as data, to
+  the cooking open item.
+- The wrap-up after [All done] is on the screen only, one offer at a time, each once, kept
+  in `wrap`: CK3's timers question first, then RC5's save offer (a web recipe; [Save to
+  cookbook] calls `CookbookSave.offer`, whose preview and approval go to chat), then
+  "Anything used up?" (chips of the recipe's items, not water; [That's all] moves on), then
+  "Want company for cleanup?". An ended session stays on the screen while one is open.
+- A used-up chip does what `update_pantry` does for "used the last olive oil": the item is
+  `out` at once (as in chat), and a staple is staged for the grocery list through the tiers
+  (nothing on the list before a yes). Not a staple: only marked out.
+- [Yes] to cleanup: `BodyDouble.start(mode=SPRINT, label="Clean up after <recipe>")`, its
+  start sent to chat with `Dishwasher.status_line()` ("The dishwasher is running now.",
+  "...last finished at 7 am.") when that module is on; the cook screen's state goes
+  inactive and the page reloads into the sprint.
+- Deviation: the fixture's Pancakes has no butter, so the scenario marks the almond milk
+  used up.
+- Test changed: CK1's state test expects the gather lines' new `maybe_out` and `item`.
+
 ### CK7 · Cooking companion: kitchen-proof settings and energy
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, CK2, CK3, CK4
 Read first: the plan's Features "Hands-free and kitchen-proof" and "Phrasing and energy";
 CR7a's preferences and CR7d's settings sections.
@@ -14433,8 +14595,32 @@ CR7a's preferences and CR7d's settings sections.
 Tests: unit tests for each preference in the state, the low-energy effects with no energy
 word anywhere; browser tests at the three widths (nothing cut off, no horizontal scroll).
 
+Notes:
+- `CookingPreferences` now: `cooking_units`, `cooking_chime_volume`, `cooking_text_size`
+  (80-200%, stepped by A- A+ through `TEXT_SIZES`), `cooking_theme` (`auto`, as the device,
+  is the default, beside light, dark and kitchen), `cooking_steps_view` (`one` or `all`).
+  They're the viewer's own, so two people on one group session each get theirs.
+- Settings: a "Cooking" part inside the Body double section (`id="cooking"`).
+  `test_the_family_form_is_as_it_was` now lists the five fields added since CR7a, by
+  prompt, beside the CR7a snapshot (still exact).
+- On the screen: A- A+ post to `POST /session/cook/prefs` (routes.json), which also takes
+  `theme` and `steps_view`. The CSP allows no inline styles, so the size is
+  `data-text-size` on the body with a CSS rule per step, and the theme `data-theme` with
+  its tokens. Kitchen: black, white and a yellow accent, thicker borders, bold step text.
+- The whole list: `steps` in the state (label, text, current, done, folded), the current
+  step at full size and marked.
+- A low level at the start (`energy_at_start == "low"`, kept as BD1a keeps it): the strip
+  offers only must-do items (preheat, soak, marinate); an optional step ("optional", "if
+  you'd like", "if desired", "if using"...) is folded under "(Optional) 1 more"; gather
+  has [Skip the checklist]. The state carries `skip_checklist` and each step's `folded`,
+  never the level or the reason.
+- Browser tests: 1024×768, 768×1024 and 390×844 (no horizontal scroll, nothing past either
+  edge, step text at least 28 px, move buttons at least 64 px, the rail beside the step in
+  landscape and under it in portrait, the drawer open too), and a phone at 200% text in
+  the kitchen theme with the whole list.
+
 ### CK8 · Cooking companion: push-to-talk
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, CK3
 Read first: the plan's Features "Hands-free and kitchen-proof" (push-to-talk) and the
 decision above.
@@ -14450,6 +14636,25 @@ decision above.
 Tests: integration for the say route (each phrase, the opt-in off is 403); browser test
 with a faked recognizer: the button hidden without support or the setting, "next" moving
 the session.
+
+Notes:
+- `CookingPreferences.cooking_voice` (off), a checkbox "Voice on the cook screen" in the
+  Cooking part of Settings, whose words say Chrome sends the audio to Google to recognise it
+  and that nothing listens until the button is pressed.
+- `themi_home/cooking_voice.py`: `plain` turns the words into a typed line (lower case, no
+  end punctuation, "two" as 2, "a minute" as 1 minute, "5 more minutes" as 5 minutes);
+  `say` puts it through `Cooking.on_text` and `CookingTimers.on_text`, the handlers a typed
+  line meets, with `in_group` set for a partner on a group session. "How long left" also
+  comes back on the screen (`said`). Anything else is Ask Themi (the drawer opens).
+- `POST /session/cook/{id}/say` (routes.json): 404 for a session that isn't theirs or has
+  ended, 403 while their setting is off. The answer is the state with `heard`, `said` and
+  `open_chat`.
+- The button is only on the page with the setting on, hidden until the script finds
+  `SpeechRecognition` or `webkitSpeechRecognition`. Hold to talk (stops when let go, after
+  400 ms) or tap (the recognizer stops itself after one phrase); `continuous` off. The
+  recognizer is looked up at each press. The words heard show under the button for 4 s.
+- Telegram voice notes are untouched.
+- Tests changed: the settings form list and CK7's view dict gain `cooking_voice`.
 
 ---
 

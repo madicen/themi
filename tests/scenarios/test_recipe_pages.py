@@ -1,5 +1,5 @@
-"""RC6: the website's Recipes page and the kitchen view. The clock starts Wednesday 21
-October 2026, 9 am."""
+"""RC6: the website's Recipes page (CK1: [Cook] opens the cook screen on /session). The clock
+starts Wednesday 21 October 2026, 9 am."""
 
 from __future__ import annotations
 
@@ -62,9 +62,11 @@ async def test_add_to_grocery_list_sends_the_card(
     assert scenario.inbox("Erin")[-1].startswith("For Alfredo Sauce, the grocery list would get")
 
 
-async def test_the_kitchen_view_moves_the_chat_card(
+async def test_cook_this_opens_the_cook_screen(
     scenario: Scenario, site: httpx.AsyncClient, signed_in: str
 ) -> None:
+    """CK1 retired RC6's kitchen view: [Cook] lands on /session, the cook screen, and a tap
+    there moves the chat's card as the kitchen view's did."""
     ranch = recipe_id(scenario, "Silken Tofu Ranch Dressing")
     items = ["silken tofu", "water", "olive oil", "garlic", "onion powder", "salt",
              "apple cider vinegar", "nutritional yeast", "fresh herbs", "peppercorns"]  # fmt: skip
@@ -72,23 +74,24 @@ async def test_the_kitchen_view_moves_the_chat_card(
         {"lines": [{"n": n, "item": i, "quantity": "", "unit": "", "note": "", "optional": False,
                     "staple": False} for n, i in enumerate(items, 1)]}
     )  # fmt: skip
-    await site.post(f"/recipes/{ranch}/cook", data={"csrf": signed_in, "scale": ""})
-    view = await site.get("/recipes/kitchen")
-    assert "What it uses" not in view.text and "1 package silken tofu (12.3oz) firm" in view.text
+    cooked = await site.post(f"/recipes/{ranch}/cook", data={"csrf": signed_in, "scale": ""})
+    assert cooked.headers["location"] == "/session"
+    view = await site.get("/session")
+    assert "cook-page" in view.text and "1 package silken tofu (12.3oz) firm" in view.text
     assert scenario.inbox("Erin")[-1].startswith("Cooking Silken Tofu Ranch Dressing. What it uses")
     session = scenario.app.services.maybe(keys.cooking).current(scenario.member("Erin"))  # type: ignore[union-attr]
     assert session is not None
     scenario.primary.queue_structured({"jobs": []})
+    scenario.primary.queue_structured({"steps": []})  # CK2: which lines the step uses
     moved = await site.post(
-        f"/recipes/kitchen/{session.id}/next", data={"csrf": signed_in},
-        headers={"HX-Request": "true"},
+        f"/session/cook/{session.id}/act", headers={"X-Requested-With": "fetch"},
+        data={"csrf": signed_in, "action": "next", "seq": str(session.seq)},
     )  # fmt: skip
-    assert "Blend ingredients together until smooth" in moved.text  # the fragment
+    assert moved.json()["step"]["text"].startswith("Blend ingredients together until smooth")
     assert scenario.edits("Erin")[-1]["text"].startswith(
         "Silken Tofu Ranch Dressing: step 1 of 1"
     )  # the chat's card moved too
-    state = await site.get("/recipes/kitchen/state")
-    assert 'hx-trigger="every 5s"' in state.text
+    assert (await site.get("/recipes/kitchen")).headers["location"] == "/session"
 
 
 async def test_only_family_members(scenario: Scenario, site: httpx.AsyncClient) -> None:

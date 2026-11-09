@@ -1,0 +1,53 @@
+{# CK5: company in the kitchen: Themi the chameleon by the counter, Themi's line, music,
+   and Ask Themi. Drawn once with the page and kept live by cook.js (not redrawn with the
+   regions), so the music keeps playing. #}
+<section class="cook-company" aria-label="Themi">
+  <div class="session-scene cook-scene" data-mode="cooking" data-state="{{ state.scene }}">
+    {{ inline_svg("home/chameleon/scenes.svg") }}
+    {{ inline_svg("home/chameleon/chameleon.svg") }}
+  </div>
+  <div class="cook-company-side">
+    <p class="cook-line" data-live="line">{{ state.line }}</p>
+    <button type="button" class="cook-chat-open">Ask Themi</button>
+    {% if state.view.voice %}
+    <div class="cook-voice">
+      <button type="button" class="cook-mic" data-on="1" aria-pressed="false" hidden>Hold to talk</button>
+      <p class="cook-heard muted" role="status" aria-live="polite"></p>
+    </div>
+    {% endif %}
+    {% if state.music %}
+    <section class="cook-music session-music" aria-label="Music">
+      <p class="muted cook-music-offer">{{ state.music.offer }}</p>
+      <button class="session-play" type="button" aria-pressed="false">Play</button>
+      <select name="sound" aria-label="Which sound">
+        {% for track in state.music.loops %}<option value="{{ track.key }}" data-src="{{ asset('home/audio/' ~ track.file) }}" {% if track.key == state.music.sound %}selected{% endif %}>{{ track.name }}</option>{% endfor %}
+      </select>
+      <input type="range" name="volume" min="0" max="100" value="{{ state.music.volume }}" aria-label="Volume">
+      <audio loop preload="none" src="{{ asset('home/audio/' ~ state.music.file) }}"></audio>
+    </section>
+    {% if state.music.spotify %}
+    <section class="session-spotify cook-spotify" aria-label="My Spotify">
+      <form method="post" action="/session/spotify">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <select name="uri" aria-label="Which playlist">
+          {% for p in state.music.spotify %}<option value="{{ p.uri }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <button name="action" value="play" class="primary">Play</button>
+        <button name="action" value="pause">Pause</button>
+        <button name="action" value="next">Next</button>
+      </form>
+      <p class="session-spotify-said" role="status" aria-live="polite"></p>
+    </section>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+<section class="cook-chat session-chat" aria-label="Ask Themi" hidden>
+  <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>
+  <form method="post" action="/session/cook/chat" data-local="1">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="text" name="text" autocomplete="off" aria-label="Ask Themi" placeholder="How much garlic?" required>
+    <button class="primary">Ask</button>
+  </form>
+  <button class="link cook-chat-close" type="button">Back to the step</button>
+</section>

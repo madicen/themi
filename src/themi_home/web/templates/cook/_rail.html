@@ -1,0 +1,48 @@
+{# CK1/CK3: every timer, counted down in the browser from the server's ends_at, with
+   [+1] [+5] [Cancel]. A fired one turns accent and says "Time's up"; tapping it stops the
+   chime and the pulse. [+ Timer] starts one: presets or a number, labelled as the step
+   unless they type a label. #}
+{% from "cook/_act.html" import act %}
+<h2 class="cook-rail-title">Timers</h2>
+{% for t in state.timers %}
+  {% if t.fired %}
+  <form method="post" action="/session/cook/{{ state.id }}/act" class="cook-timer" data-timer="{{ t.id }}" data-ends="{{ t.ends_at }}" data-fired="1">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="seq" value="{{ state.seq }}">
+    <input type="hidden" name="action" value="timer_clear">
+    <input type="hidden" name="timer" value="{{ t.id }}">
+    <button class="cook-timer-done"><span class="cook-timer-label">{{ t.label }}</span> <span class="cook-timer-left">Time's up</span></button>
+  </form>
+  {% else %}
+  <div class="cook-timer" data-timer="{{ t.id }}" data-ends="{{ t.ends_at }}">
+    <p class="cook-timer-label">{{ t.label }}</p>
+    <p class="cook-timer-left">{{ t.text }}</p>
+    <div class="cook-timer-moves">
+      {{ act(state, csrf, "timer_add", "+1", {"timer": t.id, "minutes": 1}) }}
+      {{ act(state, csrf, "timer_add", "+5", {"timer": t.id, "minutes": 5}) }}
+      {{ act(state, csrf, "timer_cancel", "Cancel", {"timer": t.id}) }}
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <p class="muted cook-no-timers">No timers running.</p>
+{% endfor %}
+{% if not state.ended %}
+<details class="cook-new" data-keep-open="new-timer">
+  <summary>+ Timer</summary>
+  <form method="post" action="/session/cook/{{ state.id }}/act">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="seq" value="{{ state.seq }}">
+    <input type="hidden" name="action" value="timer">
+    {% if state.step %}<input type="hidden" name="step" value="{{ state.step.label }}">{% endif %}
+    <div class="cook-presets">{% for m in state.presets %}<button name="minutes" value="{{ m }}" class="cook-chip">{{ m }} min</button>{% endfor %}</div>
+    <label>Minutes <input type="number" name="typed" min="1" max="479" inputmode="numeric"></label>
+    <label>Label <input type="text" name="label" maxlength="40" autocomplete="off" placeholder="{{ 'Step ' ~ state.step.label if state.step else 'Timer' }}"></label>
+    <button class="primary">Start</button>
+  </form>
+</details>
+{% endif %}
+<form class="cook-chime" method="post" action="/session/cook/chime" data-local="1">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Chime <input type="range" name="volume" min="0" max="100" value="{{ state.chime_volume }}" aria-label="Chime volume"></label>
+</form>

@@ -262,7 +262,8 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .scene { display: none; }
 .session-scene[data-mode="silent"] .scene-silent,
 .session-scene[data-mode="sprint"] .scene-sprint,
-.session-scene[data-mode="guided"] .scene-guided { display: inline; }
+.session-scene[data-mode="guided"] .scene-guided,
+.session-scene[data-mode="cooking"] .scene-cooking { display: inline; }
 .scene-wall { fill: var(--soft); }
 .scene-window { fill: var(--info-bg); stroke: var(--line); stroke-width: 4; }
 .scene-frame, .scene-branch { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; }
@@ -328,6 +329,24 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 .session-scene[data-state="stretching"] .cham-hand-front { transform: rotate(-60deg); }
 .session-scene[data-state="doodling"] .prop-pencil { display: inline; }
 .session-scene[data-state="doodling"] .cham-hand-front { animation: dab 0.9s ease-in-out infinite; }
+/* CK5: the cooking scene: Themi in an apron on a stool by the counter, watching, or
+   stirring while a timer runs */
+.scene-tiles { fill: var(--card); }
+.scene-counter { fill: var(--line); }
+.scene-hob { fill: var(--muted); }
+.scene-pot { fill: var(--muted); stroke: var(--fg); stroke-width: 2; }
+.scene-steam path, .scene-stool { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
+.scene-stool { stroke: var(--warn); stroke-width: 6; }
+.scene-steam { opacity: 0; }
+.session-scene[data-mode="cooking"] .prop-apron { display: inline; }
+.session-scene[data-mode="cooking"] .prop-apron > path:not(.prop-line) { fill: var(--card); }
+.session-scene[data-mode="cooking"] .cham { width: 40%; max-width: 12rem; left: 4%; bottom: 20%; }
+.session-scene[data-state="watching"] .cham-body { animation: breathe-body 5s ease-in-out infinite; }
+.session-scene[data-state="watching"] .cham-pupil { transform: translateX(2px); }
+.session-scene[data-state="watching"] .cham-lid { animation: blink 7s infinite; }
+.session-scene[data-state="stirring"] .prop-spoon { display: inline; animation: dab 1.4s ease-in-out infinite; transform-origin: bottom left; }
+.session-scene[data-state="stirring"] .cham-hand-front { animation: dab 1.4s ease-in-out infinite; }
+.session-scene[data-state="stirring"] .scene-steam { opacity: .7; animation: float 3s ease-in-out infinite; }
 .session-scene[data-state="cheering"] .cham { animation: hop .6s ease-in-out 3; }
 .session-scene[data-state="cheering"] .cham-hand-front { transform: rotate(-80deg); }
 .session-scene[data-state="cheering"] .prop { display: none; }

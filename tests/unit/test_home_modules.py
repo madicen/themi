@@ -57,7 +57,7 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (CookbookSaveModule, CookbookSave, [RecipesModule], set()),
     (RecipeGroceriesModule, RecipeGroceries, [RecipesModule], set()),
     (RecipeIdeasModule, RecipeIdeas, RECIPES, set()),
-    (CookingModule, Cooking, RECIPES, {"cooking.expire"}),
+    (CookingModule, Cooking, RECIPES, {"cooking.expire", "cooking.stuck"}),  # CK5: stuck line
     (CookingTimersModule, CookingTimers, [*RECIPES, CookingModule], set()),
     (BodyDoubleModule, BodyDouble, [], set()),
     (GuidedStepsModule, GuidedSteps, BODY, set()),

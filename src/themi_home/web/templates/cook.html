@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Cooking · Themi</title>
+  <link rel="stylesheet" href="{{ asset('themi.css') }}">
+  <link rel="stylesheet" href="{{ asset('home/cook.css') }}">
+  <script src="{{ asset('home/cook.js') }}" defer></script>
+</head>
+{# CK1: the cook screen, one full screen propped up while cooking. The regions are partials
+   under cook/, drawn again from /session/cook/view when the state changes. #}
+<body class="session-page cook-page" data-signed-in="1" data-csrf="{{ csrf }}" data-session="{{ session_token }}" data-now="{{ state.now }}" data-theme="{{ state.view.theme }}" data-text-size="{{ state.view.text_size }}">
+<main class="cook">
+<div id="cook" aria-live="polite">
+{% include "cook/_main.html" %}
+</div>
+{% include "cook/_company.html" %}
+</main>
+<p class="cook-said" role="status" aria-live="polite" hidden></p>
+<div class="cook-pulse" aria-hidden="true"></div>
+</body>
+</html>

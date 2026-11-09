@@ -253,6 +253,26 @@ class Dishwasher:
         before = count(week_start - history, week_start)
         return count(week_start, now), before * (RECENT / history)
 
+    def status_line(self) -> str:
+        """CK6: one line for cleanup company: running now, or when it last finished."""
+        devices = self.devices("dishwasher")
+        if not devices:
+            return ""
+        marks = ", ".join("?" for _ in devices)
+        row = self.db.one(
+            f"SELECT started_at, ended_at FROM appliance_cycles WHERE device_id IN ({marks}) "
+            "ORDER BY started_at DESC LIMIT 1",
+            tuple(d.id for d in devices),
+        )
+        if row is None:
+            return ""
+        if row["ended_at"] is None:
+            return "The dishwasher is running now."
+        ended = datetime.fromisoformat(row["ended_at"]).astimezone(self._tz())
+        if ended.date() == self._today():
+            return f"The dishwasher last finished at {clock_words(ended)}."
+        return f"The dishwasher last finished on {ended.strftime('%A')}."
+
     # ----- small things -------------------------------------------------------------------
 
     def devices(self, appliance: str | None = None) -> list[Device]:

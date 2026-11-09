@@ -7,6 +7,12 @@ timer (counted in the browser from the server's times: the server is the truth),
 in Guided, and the same buttons as chat, which post to the same `BodyDouble` methods. It
 polls `/session/state` every 5 seconds, so a tap in chat shows on the page and the reverse.
 Nothing about energy is ever on it.
+
+CK1: `/session` is one entry point, not one screen. It opens whatever session is going on:
+a body double session gets this page, a cooking session the cook screen (`cook.html`).
+They share only the plumbing: sign-in, polling `/session/state`, the chameleon, music and
+chat. Cooking and body double sessions are separate tables, so their ids collide: the cook
+screen's taps go to `/session/cook/{id}/act`.
 """
 
 from __future__ import annotations
@@ -33,13 +39,27 @@ def routes(kit: Kit) -> APIRouter:
     def body_double() -> Any:
         return app.services.maybe(keys.body_double)
 
-    def page(request: Request, **values: Any) -> HTMLResponse:
-        response = kit.page(request, "session.html", **values)
+    def cooking() -> Any:
+        return app.services.maybe(keys.cooking)
+
+    def page(request: Request, name: str = "session.html", **values: Any) -> HTMLResponse:
+        response = kit.page(request, name, **values)
         response.headers["X-Themi-Page"] = "session"  # may be framed by Telegram's web app
         return response
 
+    def current_state(member: Any, *, seen: bool = False) -> dict[str, Any]:
+        """The session going on, in the plan's order: a body double session, else cooking,
+        else none. `seen`: the cook screen asked (CK5: Themi's lines go to chat too)."""
+        bd = body_double()
+        state = bd.state(member) if bd is not None else {"active": False}
+        if not state.get("active") and cooking() is not None:
+            state = cooking().state(member)
+            if seen and state.get("active"):
+                cooking().seen(member)
+        return state
+
     @router.get("/session", response_class=HTMLResponse)
-    def session_page(request: Request, ticket: str = "") -> Response:
+    async def session_page(request: Request, ticket: str = "") -> Response:
         token = ""
         member = kit.auth.consume_link(ticket) if ticket else None
         if member is not None:  # signed in from Telegram: the page carries the session
@@ -51,10 +71,12 @@ def routes(kit: Kit) -> APIRouter:
             except NotSignedIn:  # opened from Telegram: the page signs in with initData
                 return page(request, member=None, csrf="", state=None, session_token="")
         assert signed is not None
-        bd = body_double()
-        state = bd.state(signed.member) if bd is not None else {"active": False}
-        response = page(request, member=signed.member, csrf=signed.csrf_token, state=state,
-                        session_token=token)  # fmt: skip
+        if cooking() is not None:
+            await cooking().prepare(signed.member)  # CK2: the step links, once per recipe
+        state = current_state(signed.member)
+        name = "cook.html" if state.get("kind") == "cooking" else "session.html"
+        response = page(request, name, member=signed.member, csrf=signed.csrf_token,
+                        state=state, session_token=token)  # fmt: skip
         if token:  # the cookie too, for a browser that keeps it
             response.set_cookie(
                 COOKIE_NAME, token, max_age=int(SESSION_TTL.total_seconds()), httponly=True,
@@ -98,9 +120,126 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/session/state")
     def session_state(request: Request) -> JSONResponse:
         signed = kit.current(request)
-        bd = body_double()
-        state = bd.state(signed.member) if bd is not None else {"active": False}
+        state = current_state(signed.member, seen=True)
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
+    # ----- CK1: the cook screen ---------------------------------------------------------------
+
+    @router.get("/session/cook/view", response_class=HTMLResponse)
+    async def cook_view(request: Request) -> Response:
+        """The cook screen's regions, drawn again when its state changes."""
+        signed = kit.current(request)
+        if cooking() is not None:
+            await cooking().prepare(signed.member)
+        state = current_state(signed.member)
+        if state.get("kind") != "cooking":
+            return Response(status_code=204)
+        return page(request, "cook/_main.html", member=signed.member, csrf=signed.csrf_token,
+                    state=state)  # fmt: skip
+
+    @router.post("/session/cook/chat")
+    async def cook_chat(request: Request) -> Response:
+        """CK5: Ask Themi on the cook screen, as their own chat with Themi (answers show in
+        the drawer and in Telegram)."""
+        signed, form = await kit.checked(request)
+        member = app.store.get_member(signed.member.id)
+        event = cooking().page_chat_event(member, str(form.get("text", ""))) if cooking() else None
+        handler = getattr(app.channel, "handler", None)
+        if event is not None and handler is not None:
+            await handler.handle(event, app.channel)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
+        return kit.redirect("/session")
+
+    @router.post("/session/cook/prefs")
+    async def cook_prefs(request: Request) -> Response:
+        """CK7: A- and A+ (and the theme and steps view) from the cook screen, kept as their
+        preferences, as Settings keeps them."""
+        signed, form = await kit.checked(request)
+        from themi_home.cooking import TEXT_SIZES, CookingPreferences
+
+        member = app.store.get_member(signed.member.id)
+        prefs = app.store.preferences(member.id, CookingPreferences)
+        changes: dict[str, Any] = {}
+        size = str(form.get("text_size", ""))
+        if size in ("up", "down"):
+            at = min(range(len(TEXT_SIZES)),
+                     key=lambda i: abs(TEXT_SIZES[i] - prefs.cooking_text_size))  # fmt: skip
+            at = min(len(TEXT_SIZES) - 1, at + 1) if size == "up" else max(0, at - 1)
+            changes["cooking_text_size"] = TEXT_SIZES[at]
+        for field in ("theme", "steps_view"):
+            if form.get(field):
+                changes[f"cooking_{field}"] = str(form[field])
+        try:
+            app.store.save_preferences(member, member.id, CookingPreferences, **changes)
+        except InvalidValue:
+            return Response(status_code=400)
+        return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
+
+    @router.post("/session/cook/{session_id}/say")
+    async def cook_say(request: Request, session_id: int) -> Response:
+        """CK8: one phrase from the cook screen's mic, as a typed line would go (RC3's
+        handlers), else to Ask Themi. Only once they've turned voice on in Settings."""
+        signed, form = await kit.checked(request)
+        from themi_home import cooking_screen, cooking_voice
+        from themi_home.cooking import CookingPreferences
+
+        found = cooking().get(session_id) if cooking() is not None else None
+        member = app.store.get_member(signed.member.id)
+        if found is None or found.ended_at is not None or not cooking_screen.may_tap(found, member):
+            return Response(status_code=404)
+        if not app.store.preferences(member.id, CookingPreferences).cooking_voice:
+            return Response(status_code=403)  # off until each person turns it on
+        heard = await cooking_voice.say(cooking(), member, found, str(form.get("text", "")))
+        if heard.ask:
+            event = cooking().page_chat_event(member, heard.words)
+            handler = getattr(app.channel, "handler", None)
+            if event is not None and handler is not None:
+                await handler.handle(event, app.channel)
+        await cooking().prepare(member)
+        state = {**current_state(member), "heard": heard.words, "said": heard.said,
+                 "open_chat": heard.ask}  # fmt: skip
+        return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
+    @router.post("/session/cook/chime")
+    async def cook_chime(request: Request) -> Response:
+        """CK3: the chime's volume on the cook screen, kept for next time."""
+        signed, form = await kit.checked(request)
+        from themi_home.cooking import CookingPreferences
+
+        try:
+            volume = int(str(form.get("volume", "")))
+            app.store.save_preferences(signed.member, signed.member.id, CookingPreferences,
+                                       cooking_chime_volume=volume)  # fmt: skip
+        except (ValueError, InvalidValue):
+            return Response(status_code=400)
+        return Response(status_code=204)
+
+    @router.post("/session/cook/{session_id}/act")
+    async def cook_act(request: Request, session_id: int) -> Response:
+        signed, form = await kit.checked(request)
+        found = cooking().get(session_id) if cooking() is not None else None
+        if found is None or (found.member_id != signed.member.id and not found.in_group):
+            return Response(status_code=404)  # someone else's session is no business of theirs
+        try:
+            seq = int(str(form.get("seq", "")))
+        except ValueError:
+            seq = -1
+        member = app.store.get_member(signed.member.id)
+        action = str(form.get("action", ""))
+        tapped = await cooking().act_from_page(member, session_id, action, seq, dict(form))
+        asked = action == "out_swap" and tapped.ok  # CK6: the swap is a question in the drawer
+        if asked:
+            event = cooking().page_chat_event(member, tapped.said)
+            handler = getattr(app.channel, "handler", None)
+            if event is not None and handler is not None:
+                await handler.handle(event, app.channel)
+        if request.headers.get("X-Requested-With") == "fetch":
+            await cooking().prepare(member)
+            state = {**current_state(member), "said": "" if asked else tapped.said,
+                     "open_chat": asked}  # fmt: skip
+            return JSONResponse(state, headers={"Cache-Control": "no-store"})
+        return kit.redirect("/session")
 
     @router.post("/session/music")
     async def session_music(request: Request) -> Response:
@@ -132,11 +271,20 @@ def routes(kit: Kit) -> APIRouter:
 
         bd = body_double()
         session = bd.current(signed.member) if bd is not None else None
-        if bd is None or session is None or app.services.maybe(keys.music) is None:
+        cooking_state = (
+            current_state(signed.member) if session is None and cooking() is not None else {}
+        )  # CK5: Spotify on the cook screen too
+        if app.services.maybe(keys.music) is None or (
+            session is None and cooking_state.get("kind") != "cooking"
+        ):
             return kit.redirect("/session")
         action = str(form.get("action", ""))
         if action == "play":
-            kept = {p["uri"]: p for p in bd.state(signed.member).get("spotify", [])}
+            playlists = (
+                bd.state(signed.member).get("spotify", []) if bd is not None and session is not None
+                else (cooking_state.get("music") or {}).get("spotify", [])
+            )  # fmt: skip
+            kept = {p["uri"]: p for p in playlists}
             chosen = kept.get(str(form.get("uri", "")))
             if chosen is None:  # only their own, as read for this session
                 return Response(status_code=400)
@@ -155,7 +303,7 @@ def routes(kit: Kit) -> APIRouter:
             requested=True,
         )  # fmt: skip
         if request.headers.get("X-Requested-With") == "fetch":  # what Spotify said, on the page
-            state = {**bd.state(signed.member), "said": outcome.message}
+            state = {**current_state(signed.member), "said": outcome.message}
             return JSONResponse(state, headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 

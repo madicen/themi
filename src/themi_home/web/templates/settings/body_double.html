@@ -14,4 +14,36 @@
       </select>
     </label>
     {% endfor %}{% endif %}
+    {% if prefs.cooking %}{% set c = prefs.cooking %}
+    <h3 id="cooking">Cooking</h3>
+    <p class="muted">The cook screen: open it from [Open in kitchen view] on a recipe's card in chat.</p>
+    <label>Text size
+      <select name="cooking_text_size">
+        {% for size in (80, 90, 100, 120, 140, 170, 200) %}<option value="{{ size }}" {% if c.cooking_text_size == size %}selected{% endif %}>{{ size }}%</option>{% endfor %}
+      </select>
+    </label>
+    <label>Theme
+      <select name="cooking_theme">
+        <option value="auto" {% if c.cooking_theme == "auto" %}selected{% endif %}>As the device</option>
+        <option value="light" {% if c.cooking_theme == "light" %}selected{% endif %}>Light</option>
+        <option value="dark" {% if c.cooking_theme == "dark" %}selected{% endif %}>Dark</option>
+        <option value="kitchen" {% if c.cooking_theme == "kitchen" %}selected{% endif %}>Kitchen (high contrast)</option>
+      </select>
+    </label>
+    <label>Steps
+      <select name="cooking_steps_view">
+        <option value="one" {% if c.cooking_steps_view == "one" %}selected{% endif %}>One at a time</option>
+        <option value="all" {% if c.cooking_steps_view == "all" %}selected{% endif %}>The whole list, this one marked</option>
+      </select>
+    </label>
+    <label>Amounts
+      <select name="cooking_units">
+        <option value="written" {% if c.cooking_units == "written" %}selected{% endif %}>As written</option>
+        <option value="grams" {% if c.cooking_units == "grams" %}selected{% endif %}>With grams (where the recipe gives them)</option>
+      </select>
+    </label>
+    <label>Timer chime volume <input type="range" name="cooking_chime_volume" min="0" max="100" value="{{ c.cooking_chime_volume }}"></label>
+    <label class="check"><input type="checkbox" name="cooking_voice" {% if c.cooking_voice %}checked{% endif %}> Voice on the cook screen</label>
+    <p class="muted">Hold the mic button and say "next", "back", "go to step 4", "add two minutes" or "how long left". Only where the browser can recognise speech: Chrome sends the audio to Google to recognise it. Nothing listens until you press the button.</p>
+    {% endif %}
   {% endif %}{% endcall %}{% endif %}

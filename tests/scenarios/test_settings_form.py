@@ -23,6 +23,11 @@ BEFORE_CR7A = [
     "sprint_break_minutes", "sprint_work_minutes", "track_calendar", "track_device_activity",
     "track_message_timing", "track_reactions", "track_text_notes",
 ]  # fmt: skip
+# Fields added since, by the prompt that added them.
+ADDED = {
+    "cooking_chime_volume": "CK7", "cooking_steps_view": "CK7", "cooking_text_size": "CK7",
+    "cooking_theme": "CK7", "cooking_units": "CK7", "cooking_voice": "CK8",
+}  # fmt: skip
 
 
 async def form_fields(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
@@ -34,7 +39,7 @@ async def form_fields(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
 
 @pytest.mark.usefixtures(*CONNECTORS)
 async def test_the_family_form_is_as_it_was(scenario: Scenario, site: httpx.AsyncClient) -> None:
-    assert await form_fields(scenario, site) == BEFORE_CR7A
+    assert await form_fields(scenario, site) == sorted([*BEFORE_CR7A, *ADDED])
 
 
 async def test_the_chart_section_comes_with_the_chore_chart_not_the_wall(

@@ -1,0 +1,69 @@
+{# CK1: the step, or this phase's list, tappable to tick. #}
+{% from "cook/_act.html" import act %}
+{% if state.phase == "ready" %}
+  <h1 class="cook-title">Before anything else</h1>
+  <ul class="cook-list">
+  {% for a in state.ahead %}<li>{{ act(state, csrf, "untick" if a.done else "tick", ("✓ " if a.done else "") ~ a.text, {"list": "ahead", "n": a.n}, cls="cook-item", pressed=a.done) }}</li>
+  {% endfor %}
+  </ul>
+{% elif state.phase == "gather" %}
+  <h1 class="cook-title">What it uses</h1>
+  <ul class="cook-list">
+  {% set ns = namespace(group="") %}
+  {% for g in state.gather %}
+    {% if g.group and g.group != ns.group %}{% set ns.group = g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
+    <li>{{ act(state, csrf, "untick" if g.ticked else "tick", ("✓ " if g.ticked else "") ~ g.line, {"list": "gather", "n": g.n}, cls="cook-item", pressed=g.ticked) }}
+      {% if g.maybe_out %}<details class="cook-out" data-keep-open="out-{{ g.n }}"><summary>Might be out</summary>
+        <div class="cook-out-moves">{{ act(state, csrf, "out_groceries", "Add to groceries", {"n": g.n}) }}{{ act(state, csrf, "out_swap", "Ask for a swap", {"n": g.n}) }}</div>
+      </details>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+{% elif state.phase == "prep" %}
+  <h1 class="cook-title">Prep</h1>
+  <ul class="cook-list">
+  {% for job in state.prep %}<li>{{ act(state, csrf, "untick" if job.done else "tick", ("✓ " if job.done else "") ~ job.text, {"list": "prep", "n": job.n}, cls="cook-item", pressed=job.done) }}</li>
+  {% endfor %}
+  </ul>
+{% elif state.step %}
+  <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
+  {% if state.steps %}
+  <ol class="cook-all-steps">
+  {% for st in state.steps %}
+    <li class="{{ 'current' if st.current else ('done' if st.done else '') }}"{% if st.current %} aria-current="step"{% endif %}>
+      {% if st.folded %}<details class="cook-fold"><summary>(Optional) 1 more</summary><span>{{ st.label }}. {{ st.text }}</span></details>
+      {% elif st.current %}<blockquote class="cook-text">{{ st.text }}</blockquote>
+      {% else %}<span>{{ st.label }}. {{ st.text }}</span>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {% elif state.step.folded %}
+  <details class="cook-fold"><summary>(Optional) 1 more</summary><blockquote class="cook-text">{{ state.step.text }}</blockquote></details>
+  {% else %}
+  <blockquote class="cook-text">{{ state.step.text }}</blockquote>
+  {% endif %}
+  {% if state.offers %}<div class="cook-offers">
+  {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
+  </div>{% endif %}
+  {% if state.peek %}<p class="cook-peek muted">{{ state.peek }}</p>{% endif %}
+  {% include "cook/_amounts.html" %}
+{% elif state.phase == "done" %}
+  <h1 class="cook-title">{{ "All done." if state.outcome == "finished" else "Stopped cooking." }}</h1>
+  {% if state.ask_timers %}
+  <p class="cook-line">There's a timer still running. Keep it going?</p>
+  <div class="cook-moves">
+    {{ act(state, csrf, "timers_keep", "Keep timers", cls="primary big") }}
+    {{ act(state, csrf, "timers_cancel", "Cancel them", cls="big") }}
+  </div>
+  {% elif state.wrap %}
+  <p class="cook-line">{{ state.wrap.text }}</p>
+  {% if state.wrap.kind == "save" %}
+  <div class="cook-moves">{{ act(state, csrf, "wrap_save", "Save to cookbook", cls="primary big") }}{{ act(state, csrf, "wrap_save_no", "Not now", cls="big") }}</div>
+  {% elif state.wrap.kind == "used" %}
+  <div class="cook-offers">{% for c in state.wrap.chips %}{{ act(state, csrf, "wrap_used", ("✓ " if c.on else "") ~ c.name, {"name": c.name}, cls="cook-chip", pressed=c.on) }}{% endfor %}</div>
+  <div class="cook-moves">{{ act(state, csrf, "wrap_used_done", "That's all", cls="primary big") }}</div>
+  {% elif state.wrap.kind == "cleanup" %}
+  <div class="cook-moves">{{ act(state, csrf, "wrap_cleanup", "Yes", cls="primary big") }}{{ act(state, csrf, "wrap_cleanup_no", "Not now", cls="big") }}</div>
+  {% endif %}
+  {% endif %}
+{% endif %}

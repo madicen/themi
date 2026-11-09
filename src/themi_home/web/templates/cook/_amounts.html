@@ -1,0 +1,23 @@
+{# CK2: the amounts this step uses, scaled; a tap marks a line used. [All ingredients]
+   opens every line, grouped as the recipe groups them. #}
+{% from "cook/_act.html" import act %}
+<section class="cook-amounts" aria-label="Amounts">
+  {% if state.amounts.uses %}
+  <h2>This step uses</h2>
+  <ul class="cook-list">
+  {% for a in state.amounts.uses %}<li>{{ act(state, csrf, "use", a.line, {"n": a.n}, cls="cook-item cook-amount", pressed=a.used) }}</li>
+  {% endfor %}
+  </ul>
+  {% endif %}
+  <button type="button" class="cook-all-open">All ingredients</button>
+</section>
+<div class="cook-drawer" role="dialog" aria-label="All ingredients" hidden>
+  <div class="cook-drawer-head"><h2>All ingredients</h2><button type="button" class="cook-drawer-close">Close</button></div>
+  <ul class="cook-list">
+  {% for g in state.amounts.groups %}
+    {% if g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
+    {% for a in g.lines %}<li>{{ act(state, csrf, "use", a.line, {"n": a.n}, cls="cook-item cook-amount", pressed=a.used) }}</li>
+    {% endfor %}
+  {% endfor %}
+  </ul>
+</div>

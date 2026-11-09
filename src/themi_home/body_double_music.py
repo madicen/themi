@@ -80,7 +80,7 @@ async def choose_session_sound(ctx: ToolContext, args: dict[str, Any]) -> str:
 
 # With nothing learned yet: a default per kind of job. None of the built-ins is fast (they're
 # kept slow, 60-90 BPM), so tidying gets lofi too, the one with a beat.
-DEFAULTS = {"deep_work": "builtin:lofi", "tidy": "builtin:lofi"}
+DEFAULTS = {"deep_work": "builtin:lofi", "tidy": "builtin:lofi", "cooking": "builtin:lofi"}
 LEARNED_AFTER = 2  # finished sessions with the same music in the cell before it's offered
 OFFER_LEARNED_TEXT = "{name} again, like last time?"
 OFFER_DEFAULT_TEXT = "Some {name} while you work?"
@@ -95,6 +95,7 @@ FITS = {
     "admin": ("focus", "work", "instrumental", "ambient"),
     "chores": ("clean", "chore", "dance", "upbeat", "energy", "party", "pop", "kitchen"),
     "tidy": ("clean", "chore", "dance", "upbeat", "energy", "party", "pop", "kitchen"),
+    "cooking": ("kitchen", "cook", "dinner", "dance", "upbeat", "jazz", "soul"),  # CK5
 }
 
 

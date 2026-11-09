@@ -1,6 +1,7 @@
 <svg class="scene-art" viewBox="0 0 360 200" preserveAspectRatio="xMidYMax slice" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
   <!-- BD3b: the scenes around the chameleon, one group per mode; CSS shows the one for the
-       session's mode. Original art: a desk by a rainy window, a timer to perch on, a branch. -->
+       session's mode. Original art: a desk by a rainy window, a timer to perch on, a branch;
+       CK5: a kitchen counter. -->
   <g class="scene scene-silent">
     <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
     <rect class="scene-window" x="196" y="18" width="136" height="104" rx="6"/>
@@ -17,5 +18,18 @@
     <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
     <path class="scene-branch" d="M0 176 C 60 168, 110 172, 150 160 C 160 157, 170 150, 176 146"/>
     <path class="scene-leaf" d="M90 170 C 96 156, 110 154, 114 160 C 108 168, 98 172, 90 170 Z M140 162 C 150 150, 162 152, 164 158 C 156 164, 148 166, 140 162 Z"/>
+  </g>
+  <g class="scene scene-cooking">
+    <!-- CK5: a kitchen counter with a hob and a pot, a stool for Themi to sit on -->
+    <rect class="scene-wall" x="0" y="0" width="360" height="200"/>
+    <rect class="scene-tiles" x="150" y="40" width="210" height="80"/>
+    <path class="scene-frame" d="M150 66 L 360 66 M150 93 L 360 93 M185 40 L 185 120 M220 40 L 220 120 M255 40 L 255 120 M290 40 L 290 120 M325 40 L 325 120"/>
+    <rect class="scene-counter" x="150" y="120" width="210" height="80"/>
+    <rect class="scene-hob" x="214" y="112" width="96" height="8" rx="2"/>
+    <path class="scene-pot" d="M232 78 L 292 78 L 288 112 L 236 112 Z"/>
+    <path class="scene-frame" d="M226 80 L 232 80 M292 80 L 298 80"/>
+    <g class="scene-steam"><path d="M248 70 C 242 62, 254 56, 248 46 M262 70 C 256 60, 268 54, 262 42 M276 70 C 270 62, 282 56, 276 46"/></g>
+    <path class="scene-stool" d="M30 160 L 120 160 M42 160 L 34 200 M108 160 L 116 200 M38 184 L 112 184"/>
+    <rect class="scene-desk" x="0" y="196" width="360" height="4"/>
   </g>
 </svg>

@@ -71,9 +71,17 @@ async def until(check: Any, seconds: float = 8) -> Any:
 
 
 @contextlib.asynccontextmanager
-async def page_in_chrome(scenario: Scenario, member: Member) -> AsyncIterator[Tab]:
+async def page_in_chrome(
+    scenario: Scenario,
+    member: Member,
+    ready: str = ".session-moves",
+    *,
+    width: int = 0,
+    height: int = 0,
+) -> AsyncIterator[Tab]:
     """The session page served for real and open in a headless Chrome, signed in as the Mini
-    App signs in, its deferred script run."""
+    App signs in, its deferred script run (`ready`: what shows once it has; CK1's cook screen
+    has `.cook-moves`). `width` and `height`: the window's size (CK7)."""
     assert CHROME is not None and member.telegram_user_id is not None
     port = free_port()
     web = create_app(
@@ -91,7 +99,7 @@ async def page_in_chrome(scenario: Scenario, member: Member) -> AsyncIterator[Ta
     chrome = subprocess.Popen(
         [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
          f"--remote-debugging-port={debug}", f"--user-data-dir={tempfile.mkdtemp()}",
-         "about:blank"],
+         *([f"--window-size={width},{height}"] if width else []), "about:blank"],
         stdout=subprocess.DEVNULL, stderr=errors,
     )  # fmt: skip
     try:
@@ -119,8 +127,11 @@ async def page_in_chrome(scenario: Scenario, member: Member) -> AsyncIterator[Ta
             await tab.call("Page.navigate", url=f"http://127.0.0.1:{port}/session?ticket={ticket}")
             # session.js is deferred: a tap before it ran was a plain form post that left the
             # page (flaky on a busy CI runner, 2026-11-07). "complete" comes after it has run.
+            if width:  # the page's own size, whatever the window's frame takes
+                await tab.call("Emulation.setDeviceMetricsOverride", width=width, height=height,
+                               deviceScaleFactor=1, mobile=False)  # fmt: skip
             assert await until(lambda: tab.value(
-                "document.readyState === 'complete' && !!document.querySelector('.session-moves')"
+                f"document.readyState === 'complete' && !!document.querySelector('{ready}')"
             ))  # fmt: skip
             yield tab
     finally:
