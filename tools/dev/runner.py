@@ -332,11 +332,12 @@ def run(
 
 
 def site_urls(settings: Settings) -> list[str]:
-    """The dev website's addresses: the one Themi uses for links first, then localhost."""
+    """The dev website's addresses: the one Themi uses for links (localhost) first, then
+    127.0.0.1, which reaches the same site."""
     from themi.web import site_base_url
 
     base = site_base_url(settings.public_url, settings.http_host, settings.http_port)
-    return [base, base.replace("127.0.0.1", "localhost")]
+    return [base, base.replace("localhost", "127.0.0.1")]
 
 
 def family_timezone(settings: Settings) -> str:

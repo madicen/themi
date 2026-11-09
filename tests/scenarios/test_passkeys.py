@@ -14,7 +14,7 @@ from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts import SYSTEM, Role
-from themi.web import HealthSources, create_app
+from themi.web import HealthSources, create_app, site_base_url
 from themi.web.auth import WebAuth
 from themi.web.kit import SiteContext
 
@@ -130,3 +130,28 @@ async def test_an_admin_without_telegram_is_offered_a_passkey(scenario: Scenario
         assert "Add a passkey, so you can sign in again without Telegram." in home
         await sign_in(scenario, client, "Erin")  # paired with Telegram: not asked
         assert "Add a passkey" not in (await client.get("/")).text
+
+
+async def test_on_one_computer_passkeys_work_at_localhost(scenario: Scenario) -> None:
+    """With no public address, the site is localhost, which browsers count as secure;
+    127.0.0.1 isn't, so passkeys couldn't be added there."""
+    base = site_base_url("", "127.0.0.1", 8080)
+    assert base == site_base_url("", "0.0.0.0", 8080) == "http://localhost:8080"
+    web = create_app(
+        HealthSources(scenario.app.db, None, clock.now()),
+        SiteContext(scenario.app, base_url=base, secure_cookies=False),
+    )
+    phone = FakeAuthenticator(base, "localhost")
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=web), base_url=base, follow_redirects=False
+    ) as client:
+        csrf = await sign_in(scenario, client, "Erin")
+        assert "Add a passkey" in (await client.get("/passkeys")).text
+        options = (await client.post("/passkeys/options", headers={"X-CSRF-Token": csrf})).json()
+        assert options["rp"]["id"] == "localhost"
+        answer = await client.post(
+            "/passkeys/register",
+            json={"credential": phone.register(options), "name": "This Mac"},
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert answer.status_code == 200, answer.text

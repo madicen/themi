@@ -173,7 +173,7 @@ def test_seeding_happens_once_and_sets_the_gemini_key(tmp_path: Path) -> None:
     assert runner.seed(settings, "AIza-test-key") == runner.SeedResult(seeded=True, key_set=True)
     assert runner.seed(settings, "") == runner.SeedResult(seeded=False, key_set=True)
 
-    assert (runner.login_link(settings) or "").startswith("http://127.0.0.1:8081/login/")
+    assert (runner.login_link(settings) or "").startswith("http://localhost:8081/login/")
     assert runner.login_link(settings, NEWCOMER_ID) is None
     assert runner.invite(settings, "Sam")
 

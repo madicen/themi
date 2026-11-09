@@ -104,7 +104,7 @@ def test_the_copy_opens_on_dev_with_its_own_key(tmp_path: Path) -> None:
     assert all(
         b.has_key for m in store.list_members() for b in ai.backends(m.id) if b.kind == "gemini"
     )
-    assert (runner.login_link(settings) or "").startswith("http://127.0.0.1:8081/login/")
+    assert (runner.login_link(settings) or "").startswith("http://localhost:8081/login/")
     store.db.close()
 
 
