@@ -176,12 +176,18 @@ def routes(kit: Kit) -> APIRouter:
         except ValueError:
             seq = -1
         member = app.store.get_member(signed.member.id)
-        tapped = await cooking().act_from_page(
-            member, session_id, str(form.get("action", "")), seq, dict(form)
-        )
+        action = str(form.get("action", ""))
+        tapped = await cooking().act_from_page(member, session_id, action, seq, dict(form))
+        asked = action == "out_swap" and tapped.ok  # CK6: the swap is a question in the drawer
+        if asked:
+            event = cooking().page_chat_event(member, tapped.said)
+            handler = getattr(app.channel, "handler", None)
+            if event is not None and handler is not None:
+                await handler.handle(event, app.channel)
         if request.headers.get("X-Requested-With") == "fetch":
             await cooking().prepare(member)
-            state = {**current_state(member), "said": tapped.said}
+            state = {**current_state(member), "said": "" if asked else tapped.said,
+                     "open_chat": asked}  # fmt: skip
             return JSONResponse(state, headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 

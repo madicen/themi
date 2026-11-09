@@ -103,3 +103,8 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-music-offer { flex: 1 1 100%; margin: 0; }
 .cook-spotify form { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-chat.session-chat { inset: var(--space-3); }
+
+/* CK6: "might be out" on a gathered line, and the wrap-up's offers */
+.cook-out summary { min-height: var(--tap); display: inline-flex; align-items: center; cursor: pointer; color: var(--warn); }
+.cook-out-moves { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cook-out-moves form { margin: 0; }

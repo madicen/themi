@@ -1049,11 +1049,21 @@ class Cooking:
         recipe_text += "\nSteps:\n" + "\n".join(
             f"{n}. {s.text}" for n, s in enumerate(recipe.steps, start=1)
         )
+        swap = ""
+        if session.wrap.get("swap"):  # CK6: a swap asked on the cook screen
+            from themi_home.cooking_wrap import pantry_data
+
+            pantry = pantry_data(self)
+            if pantry:
+                swap = (
+                    f"\nThey asked for a swap for {session.wrap['swap']}: suggest one from "
+                    "what the pantry has, saying it's a suggestion:\n" + pantry
+                )
         return [
             OpenItem(
                 f"Cooking now with Themi: {self.heading(session, recipe)} ({where}). Questions "
                 "about it are answered from this recipe (amounts at this scale), saying it's "
-                "from the recipe:\n" + as_data(f"recipe {recipe.name}", recipe_text)
+                "from the recipe:\n" + as_data(f"recipe {recipe.name}", recipe_text) + swap
             )
         ]
 

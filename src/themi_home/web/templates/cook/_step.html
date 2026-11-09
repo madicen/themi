@@ -12,7 +12,11 @@
   {% set ns = namespace(group="") %}
   {% for g in state.gather %}
     {% if g.group and g.group != ns.group %}{% set ns.group = g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
-    <li>{{ act(state, csrf, "untick" if g.ticked else "tick", ("✓ " if g.ticked else "") ~ g.line, {"list": "gather", "n": g.n}, cls="cook-item", pressed=g.ticked) }}</li>
+    <li>{{ act(state, csrf, "untick" if g.ticked else "tick", ("✓ " if g.ticked else "") ~ g.line, {"list": "gather", "n": g.n}, cls="cook-item", pressed=g.ticked) }}
+      {% if g.maybe_out %}<details class="cook-out" data-keep-open="out-{{ g.n }}"><summary>Might be out</summary>
+        <div class="cook-out-moves">{{ act(state, csrf, "out_groceries", "Add to groceries", {"n": g.n}) }}{{ act(state, csrf, "out_swap", "Ask for a swap", {"n": g.n}) }}</div>
+      </details>{% endif %}
+    </li>
   {% endfor %}
   </ul>
 {% elif state.phase == "prep" %}
@@ -37,5 +41,15 @@
     {{ act(state, csrf, "timers_keep", "Keep timers", cls="primary big") }}
     {{ act(state, csrf, "timers_cancel", "Cancel them", cls="big") }}
   </div>
+  {% elif state.wrap %}
+  <p class="cook-line">{{ state.wrap.text }}</p>
+  {% if state.wrap.kind == "save" %}
+  <div class="cook-moves">{{ act(state, csrf, "wrap_save", "Save to cookbook", cls="primary big") }}{{ act(state, csrf, "wrap_save_no", "Not now", cls="big") }}</div>
+  {% elif state.wrap.kind == "used" %}
+  <div class="cook-offers">{% for c in state.wrap.chips %}{{ act(state, csrf, "wrap_used", ("✓ " if c.on else "") ~ c.name, {"name": c.name}, cls="cook-chip", pressed=c.on) }}{% endfor %}</div>
+  <div class="cook-moves">{{ act(state, csrf, "wrap_used_done", "That's all", cls="primary big") }}</div>
+  {% elif state.wrap.kind == "cleanup" %}
+  <div class="cook-moves">{{ act(state, csrf, "wrap_cleanup", "Yes", cls="primary big") }}{{ act(state, csrf, "wrap_cleanup_no", "Not now", cls="big") }}</div>
+  {% endif %}
   {% endif %}
 {% endif %}

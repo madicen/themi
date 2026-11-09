@@ -23,6 +23,7 @@ from themi.localtime import to_utc_iso
 from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
 from themi_home.cooking_links import shown
 from themi_home.cooking_timers import PRESETS
+from themi_home.cooking_wrap import WRAP_TAPS
 from themi_home.quantities import NeedsYield, fraction, scale_for
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ log = logging.getLogger(__name__)
 FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long at most
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
 TIMER_TAPS = ("timer_add", "timer_cancel", "timer_clear", "timers_keep", "timers_cancel")
-AFTER_END = TIMER_TAPS  # what an ended session's screen can still do (CK3)
+AFTER_END = (*TIMER_TAPS, *WRAP_TAPS)  # what an ended session's screen can still do
 SCALES = (("½", "half", 0.5), ("1\u00d7", "", 1.0), ("2\u00d7", "double", 2.0))  # CK2's switcher
 
 
@@ -61,8 +62,13 @@ def may_tap(session: Session, member: Member) -> bool:
 
 def still_shown(cooking: Cooking, session: Session) -> bool:
     """An ended session stays on the screen while it has timers to show (kept ones, until
-    they fire and are tapped)."""
-    return bool(timers(cooking, session))
+    they fire and are tapped), or a wrap-up offer not yet answered (CK6)."""
+    from themi_home.cooking_wrap import offer
+
+    recipe = cooking.recipes.get(session.recipe_id)
+    return bool(timers(cooking, session)) or (
+        recipe is not None and offer(cooking, session, recipe) is not None
+    )
 
 
 def state(cooking: Cooking, member: Member) -> dict[str, Any]:
@@ -111,11 +117,16 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             for n, a in enumerate(session.ahead)
         ]  # fmt: skip
     elif session.phase == "gather":
+        from themi_home.cooking_wrap import might_be_out
+
         lines = cooking.lines(session, recipe)
+        out_now = might_be_out(cooking, recipe)  # CK6
+        items = cooking.groceries.known(recipe)
         out["gather"] = [
-            {"n": n, "line": line, "group": source.group, "ticked": n in session.gathered}
+            {"n": n, "line": line, "group": source.group, "ticked": n in session.gathered,
+             "maybe_out": n in out_now, "item": items[n].item if n < len(items) else ""}
             for n, (line, source) in enumerate(zip(lines, recipe.ingredients, strict=False))
-        ]
+        ]  # fmt: skip
     elif session.phase == "prep":
         out["prep"] = [
             {"n": n, "text": job["text"], "done": bool(job.get("done"))}
@@ -153,6 +164,9 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     out["ended"] = session.ended_at is not None
     out["outcome"] = session.outcome or ""
     out["ask_timers"] = out["ended"] and bool(running) and "timers" not in session.wrap
+    from themi_home.cooking_wrap import offer
+
+    out["wrap"] = offer(cooking, session, recipe) if out["ended"] else None
     out["soonest"] = running[0]["ends_at"] if running else ""
     out["presets"] = list(PRESETS)
     out["chime_volume"] = cooking.preferences(viewer.id).cooking_chime_volume
@@ -330,6 +344,23 @@ async def act(
     said = ""
     if action in TIMER_TAPS:
         return Tapped(timer_tap(cooking, session, action, form))
+    if action in WRAP_TAPS:
+        from themi_home import cooking_wrap
+
+        done, said = await cooking_wrap.tap(cooking, session, recipe, action, form)
+        return Tapped(done, said)
+    if action in ("out_groceries", "out_swap"):  # CK6: a "might be out" line
+        from themi_home import cooking_wrap
+
+        n = _int(form.get("n"))
+        items = cooking.groceries.known(recipe)
+        if session.phase != "gather" or n not in cooking_wrap.might_be_out(cooking, recipe):
+            return Tapped(False)
+        if action == "out_groceries":
+            return Tapped(True, await cooking_wrap.to_groceries(cooking, member, items[n].item))
+        session.wrap["swap"] = items[n].item
+        cooking.save_wrap(session)
+        return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
     if action in ("ahead_done", "ahead_later"):  # CK4: the look-ahead strip

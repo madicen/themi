@@ -111,7 +111,10 @@
     }).then(function (r) {
       if (!r.ok) report("cook tap " + data.get("action") + " answered " + r.status);
       return r.ok ? r.json() : null;
-    }).then(function (s) { if (s) { say(s.said); redraw(s); } return s; }, function (e) { report("cook tap failed: " + e); });
+    }).then(function (s) {
+      if (s) { say(s.said); redraw(s); if (s.open_chat) chatOpen(true); }
+      return s;
+    }, function (e) { report("cook tap failed: " + e); });
   }
 
   // CK3: a fired timer chimes and pulses the screen (slowly, never a strobe), again every
