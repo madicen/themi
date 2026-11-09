@@ -30,6 +30,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
@@ -43,6 +44,7 @@ from themi.channels.step_card import StepCard
 from themi.core import keys
 from themi.core.prompts import OpenItem, as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.energy.model import hour_of_week
 from themi.localtime import to_local, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.lists import name_key
@@ -231,6 +233,16 @@ class Session:
     ahead: list[dict[str, Any]] = field(default_factory=list)
     started_at: datetime | None = None
     last_tap_at: datetime | None = None
+    seq: int = 0  # CK1: bumps on every move, from the chat card or the cook screen
+    used: list[int] = field(default_factory=list)  # CK2: lines marked used on the screen
+    ahead_done: dict[str, Any] = field(default_factory=dict)  # CK4: look-ahead answers
+    energy_at_start: str | None = None  # CK7: kept at start (never shown)
+    step_since: datetime | None = None  # CK5: on this phase and step since
+    stuck_said: bool = False  # CK5: the stuck line, once a session
+    line: str = ""  # CK5: Themi's line on the screen
+    wrap: dict[str, Any] = field(default_factory=dict)  # CK3/CK6: after the end, once each
+    ended_at: datetime | None = None
+    outcome: str | None = None
 
 
 def _session(row: dict[str, Any]) -> Session:
@@ -249,7 +261,21 @@ def _session(row: dict[str, Any]) -> Session:
         ahead=json.loads(row["ahead"]),
         started_at=datetime.fromisoformat(row["started_at"]),
         last_tap_at=datetime.fromisoformat(row["last_tap_at"]),
+        seq=row["seq"],
+        used=json.loads(row["used"]),
+        ahead_done=json.loads(row["ahead_done"]),
+        energy_at_start=row["energy_at_start"],
+        step_since=_when(row["step_since"]),
+        stuck_said=bool(row["stuck_said"]),
+        line=row["line"],
+        wrap=json.loads(row["wrap"]),
+        ended_at=_when(row["ended_at"]),
+        outcome=row["outcome"],
     )
+
+
+def _when(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
 
 
 TYPED = {
@@ -306,9 +332,22 @@ class Cooking:
         return _session(row) if row else None
 
     def _save(self, session: Session) -> None:
+        """Save a move and bump `seq` (CK1), so the cook screen redraws and a tap made on an
+        older screen does nothing. A new phase or step starts its own time (CK5)."""
+        now = clock.now()
+        before = self.db.one(
+            "SELECT phase, step, step_since FROM cooking_sessions WHERE id = ?", (session.id,)
+        )
+        if before is not None and (before["phase"], before["step"]) != (
+            session.phase,
+            session.step,
+        ):
+            session.step_since = now
+        session.seq += 1
         self.db.execute(
             "UPDATE cooking_sessions SET phase = ?, step = ?, message_id = ?, gathered = ?, "
-            "prep = ?, ahead = ?, last_tap_at = ? WHERE id = ?",
+            "prep = ?, ahead = ?, last_tap_at = ?, seq = ?, scale = ?, scale_said = ?, used = ?, "
+            "ahead_done = ?, step_since = ? WHERE id = ?",
             (
                 session.phase,
                 session.step,
@@ -316,14 +355,20 @@ class Cooking:
                 json.dumps(session.gathered),
                 json.dumps(session.prep),
                 json.dumps(session.ahead),
-                to_utc_iso(clock.now()),
+                to_utc_iso(now),
+                session.seq,
+                session.scale,
+                session.scale_said,
+                json.dumps(session.used),
+                json.dumps(session.ahead_done),
+                to_utc_iso(session.step_since or now),
                 session.id,
             ),
         )
 
     def end(self, session: Session, outcome: str) -> None:
         self.db.execute(
-            "UPDATE cooking_sessions SET ended_at = ?, outcome = ?, phase = 'done' "
+            "UPDATE cooking_sessions SET ended_at = ?, outcome = ?, phase = 'done', seq = seq + 1 "
             "WHERE id = ? AND ended_at IS NULL",
             (to_utc_iso(clock.now()), outcome, session.id),
         )
@@ -339,6 +384,10 @@ class Cooking:
 
     def _owner(self, session: Session) -> Member:
         return self.services.store.get_member(session.member_id)
+
+    def _tz(self) -> str:
+        family = self.services.store.get_family()
+        return family.timezone if family else "UTC"
 
     # ----- starting -------------------------------------------------------------------------
 
@@ -358,13 +407,15 @@ class Cooking:
         items = await self.groceries.ingredients(member, recipe)
         ahead = [{"text": a.text, "overnight": a.overnight} for a in ahead_of_time(recipe, items)]
         now = to_utc_iso(clock.now())
+        energy = self.services.energy.suggested_level(member)  # kept, as BD1a keeps it
         session_id = self.db.execute(
             "INSERT INTO cooking_sessions (member_id, recipe_id, scale, scale_said, phase, step, "
-            "in_group, gathered, prep, ahead, started_at, last_tap_at) "
-            "VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?)",
+            "in_group, gathered, prep, ahead, started_at, last_tap_at, energy_at_start, "
+            "hour_of_week, step_since) VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?, ?, ?, ?)",
             (
                 member.id, recipe.id, scale, scale_said, "ready" if ahead else "gather",
-                int(in_group), json.dumps(ahead), now, now,
+                int(in_group), json.dumps(ahead), now, now, energy,
+                hour_of_week(clock.now(), self._tz()), now,
             ),
         )  # fmt: skip
         session = self.get(session_id)
@@ -481,12 +532,38 @@ class Cooking:
         buttons.extend(self.step_buttons(session, recipe, part))
         return text, buttons
 
+    # ----- the cook screen (CK1) ----------------------------------------------------------
+
+    def state(self, member: Member) -> dict[str, Any]:
+        """What the cook screen shows, as JSON (`cooking_screen`). Never the energy level."""
+        from themi_home import cooking_screen
+
+        return cooking_screen.state(self, member)
+
+    async def act_from_page(
+        self, member: Member, session_id: int, action: str, seq: int, form: dict[str, Any]
+    ) -> bool:
+        """A tap on the cook screen: the same methods as the chat's buttons, and the chat's
+        card redrawn. False when it isn't theirs, is over, or is out of date."""
+        from themi_home import cooking_screen
+
+        return await cooking_screen.act(self, member, session_id, action, seq, form)
+
+    def open_button(self) -> list[Button]:
+        """CK1: [Open in kitchen view], the cook screen as a Telegram Mini App, as BD3a's
+        [Open]. Telegram only opens https pages, so a local run has no button."""
+        base = self.services.site_url.rstrip("/")
+        if not base.startswith("https://"):
+            return []
+        return [Button("Open in kitchen view", "web_app", web_app=f"{base}/session")]
+
     def step_buttons(self, session: Session, recipe: Recipe, part: Part) -> list[Button]:
         """More buttons for a step: RC3c's timers."""
         return self.timers.buttons(session, part) if self.timers is not None else []
 
     async def show(self, session: Session, *, fresh: bool = False) -> None:
         text, buttons = await self.render(session)
+        buttons = [*buttons, *self.open_button()]
         session.message_id = await self.card.show(
             self._owner(session), text, buttons, message_id=session.message_id,
             in_group=session.in_group, fresh=fresh,
@@ -849,6 +926,7 @@ class CookingModule(Module):
     summary = "Walks through a recipe: the prep first, then one step at a time."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
+    migrations = Path(__file__).parent / "cooking_schema"  # CK1: the cooking companion
 
     def install(self, ctx: ModuleContext) -> None:
         from themi_home.recipe_groceries import (

@@ -1,4 +1,4 @@
-"""Recipes on the website (RC1a, RC6).
+"""Recipes on the website (RC1a, RC6; CK1 retired the kitchen view for /session).
 
 RC1a: the cookbook page under Accounts. A person picks the family's recipe doc in Google's
 file picker (scope `drive.file`, so Themi can open that file and nothing else of theirs);
@@ -9,7 +9,6 @@ scripts, so it gets its own, wider Content-Security-Policy.
 
 from __future__ import annotations
 
-from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, Request
@@ -20,7 +19,6 @@ from themi.core import keys
 from themi.web.kit import Kit
 from themi_google.connectors.gdocs import DocsError, doc_id_from
 from themi_google.connectors.google import DRIVE_FILE_SCOPE
-from themi_home.cooking import Session, step_parts
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
 from themi_home.recipes import Recipe, Recipes, search
@@ -165,60 +163,15 @@ def routes(kit: Kit) -> APIRouter:
         except ValueError:
             return 1.0, "That isn't an amount to scale by."
 
-    @router.get("/recipes/kitchen", response_class=HTMLResponse)
-    def kitchen(request: Request) -> Response:
-        session = kit.current(request)
-        return kit.with_flash(request, "kitchen.html", session, **kitchen_values(session.member))
-
-    @router.get("/recipes/kitchen/state", response_class=HTMLResponse)
-    def kitchen_state(request: Request) -> Response:
-        session = kit.current(request)
-        return kit.page(request, "_kitchen.html", csrf=session.csrf_token,
-                        **kitchen_values(session.member))  # fmt: skip
-
-    def kitchen_values(member: Member) -> dict[str, Any]:
-        cooking = app.services.maybe(keys.cooking)
-        current: Session | None = cooking.current(member) if cooking else None
-        if cooking is None or current is None:
-            return {"cooking": None}
-        recipe = book().get(current.recipe_id)
-        assert recipe is not None
-        parts = step_parts(recipe)
-        step = parts[min(current.step, len(parts) - 1)] if parts else None
-        return {
-            "cooking": current,
-            "recipe": recipe,
-            "heading": cooking.heading(current, recipe),
-            "lines": cooking.lines(current, recipe),
-            "step": step,
-            "steps": len(recipe.steps),
-            "first": current.step == 0,
-            "last": current.step >= len(parts) - 1,
-            "prep": current.prep,
-            "ahead": current.ahead,
-        }
+    # CK1: RC6's kitchen view is retired; the cook screen on /session took its place.
+    @router.get("/recipes/kitchen")
+    @router.get("/recipes/kitchen/state")
+    def kitchen() -> Response:
+        return kit.redirect("/session")
 
     @router.post("/recipes/kitchen/{session_id}/{action}")
-    async def kitchen_move(request: Request, session_id: int, action: str) -> Response:
-        signed, _ = await kit.checked(request)
-        cooking = app.services.maybe(keys.cooking)
-        current = cooking.get(session_id) if cooking else None
-        if (
-            cooking is None
-            or current is None
-            or action not in ("next", "back", "stop", "skip")
-            or (current.member_id != signed.member.id and not current.in_group)
-            or app.db.scalar("SELECT ended_at FROM cooking_sessions WHERE id = ?", (session_id,))
-        ):
-            return kit.redirect("/recipes/kitchen", "That cooking session has ended.")
-        if action == "skip" and current.phase == "prep":
-            await cooking.after_prep(current)
-            await cooking.show(current)
-        else:
-            await cooking.advance(current, action)  # the chat's card moves too
-        if request.headers.get("HX-Request"):
-            return kitchen_state(request)
-        return kit.redirect("/recipes/kitchen")
+    def kitchen_move(session_id: int, action: str) -> Response:
+        return kit.redirect("/session")
 
     @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
     def recipe_page(request: Request, recipe_id: int, scale: str = Query("")) -> Response:
@@ -276,6 +229,6 @@ def routes(kit: Kit) -> APIRouter:
             return kit.redirect(f"/recipes/{recipe_id}", problem)
         member = app.store.get_member(signed.member.id)
         await cooking.start(member, recipe, scale=factor, scale_said=said)
-        return kit.redirect("/recipes/kitchen", "Cooking: the same card is in your chat.")
+        return kit.redirect("/session", "Cooking: the same card is in your chat.")
 
     return router

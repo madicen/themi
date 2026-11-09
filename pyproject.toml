@@ -153,6 +153,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "setup/*.md",  # SP3b: the modules' setup guides
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
     "meals_schema/*.sql",  # 35a: the meal log
+    "cooking_schema/*.sql",  # CK1: the cooking companion
     "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "web/templates/*.html",
     "web/templates/*/*.html",

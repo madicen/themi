@@ -7,6 +7,12 @@ timer (counted in the browser from the server's times: the server is the truth),
 in Guided, and the same buttons as chat, which post to the same `BodyDouble` methods. It
 polls `/session/state` every 5 seconds, so a tap in chat shows on the page and the reverse.
 Nothing about energy is ever on it.
+
+CK1: `/session` is one entry point, not one screen. It opens whatever session is going on:
+a body double session gets this page, a cooking session the cook screen (`cook.html`).
+They share only the plumbing: sign-in, polling `/session/state`, the chameleon, music and
+chat. Cooking and body double sessions are separate tables, so their ids collide: the cook
+screen's taps go to `/session/cook/{id}/act`.
 """
 
 from __future__ import annotations
@@ -33,10 +39,22 @@ def routes(kit: Kit) -> APIRouter:
     def body_double() -> Any:
         return app.services.maybe(keys.body_double)
 
-    def page(request: Request, **values: Any) -> HTMLResponse:
-        response = kit.page(request, "session.html", **values)
+    def cooking() -> Any:
+        return app.services.maybe(keys.cooking)
+
+    def page(request: Request, name: str = "session.html", **values: Any) -> HTMLResponse:
+        response = kit.page(request, name, **values)
         response.headers["X-Themi-Page"] = "session"  # may be framed by Telegram's web app
         return response
+
+    def current_state(member: Any) -> dict[str, Any]:
+        """The session going on, in the plan's order: a body double session, else cooking,
+        else none."""
+        bd = body_double()
+        state = bd.state(member) if bd is not None else {"active": False}
+        if not state.get("active") and cooking() is not None:
+            state = cooking().state(member)
+        return state
 
     @router.get("/session", response_class=HTMLResponse)
     def session_page(request: Request, ticket: str = "") -> Response:
@@ -51,10 +69,10 @@ def routes(kit: Kit) -> APIRouter:
             except NotSignedIn:  # opened from Telegram: the page signs in with initData
                 return page(request, member=None, csrf="", state=None, session_token="")
         assert signed is not None
-        bd = body_double()
-        state = bd.state(signed.member) if bd is not None else {"active": False}
-        response = page(request, member=signed.member, csrf=signed.csrf_token, state=state,
-                        session_token=token)  # fmt: skip
+        state = current_state(signed.member)
+        name = "cook.html" if state.get("kind") == "cooking" else "session.html"
+        response = page(request, name, member=signed.member, csrf=signed.csrf_token,
+                        state=state, session_token=token)  # fmt: skip
         if token:  # the cookie too, for a browser that keeps it
             response.set_cookie(
                 COOKIE_NAME, token, max_age=int(SESSION_TTL.total_seconds()), httponly=True,
@@ -98,9 +116,37 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/session/state")
     def session_state(request: Request) -> JSONResponse:
         signed = kit.current(request)
-        bd = body_double()
-        state = bd.state(signed.member) if bd is not None else {"active": False}
+        state = current_state(signed.member)
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
+    # ----- CK1: the cook screen ---------------------------------------------------------------
+
+    @router.get("/session/cook/view", response_class=HTMLResponse)
+    def cook_view(request: Request) -> Response:
+        """The cook screen's regions, drawn again when its state changes."""
+        signed = kit.current(request)
+        state = current_state(signed.member)
+        if state.get("kind") != "cooking":
+            return Response(status_code=204)
+        return page(request, "cook/_main.html", member=signed.member, csrf=signed.csrf_token,
+                    state=state)  # fmt: skip
+
+    @router.post("/session/cook/{session_id}/act")
+    async def cook_act(request: Request, session_id: int) -> Response:
+        signed, form = await kit.checked(request)
+        found = cooking().get(session_id) if cooking() is not None else None
+        if found is None or (found.member_id != signed.member.id and not found.in_group):
+            return Response(status_code=404)  # someone else's session is no business of theirs
+        try:
+            seq = int(str(form.get("seq", "")))
+        except ValueError:
+            seq = -1
+        member = app.store.get_member(signed.member.id)
+        await cooking().act_from_page(member, session_id, str(form.get("action", "")), seq,
+                                      dict(form))  # fmt: skip
+        if request.headers.get("X-Requested-With") == "fetch":
+            return session_state(request)
+        return kit.redirect("/session")
 
     @router.post("/session/music")
     async def session_music(request: Request) -> Response:

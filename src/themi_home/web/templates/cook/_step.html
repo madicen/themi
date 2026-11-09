@@ -1,0 +1,32 @@
+{# CK1: the step, or this phase's list, tappable to tick. #}
+{% from "cook/_act.html" import act %}
+{% if state.line %}<p class="cook-line" data-field="line">{{ state.line }}</p>{% endif %}
+{% if state.phase == "ready" %}
+  <h1 class="cook-title">Before anything else</h1>
+  <ul class="cook-list">
+  {% for a in state.ahead %}<li>{{ act(state, csrf, "untick" if a.done else "tick", ("✓ " if a.done else "") ~ a.text, {"list": "ahead", "n": a.n}, cls="cook-item", pressed=a.done) }}</li>
+  {% endfor %}
+  </ul>
+{% elif state.phase == "gather" %}
+  <h1 class="cook-title">What it uses</h1>
+  <ul class="cook-list">
+  {% set ns = namespace(group="") %}
+  {% for g in state.gather %}
+    {% if g.group and g.group != ns.group %}{% set ns.group = g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
+    <li>{{ act(state, csrf, "untick" if g.ticked else "tick", ("✓ " if g.ticked else "") ~ g.line, {"list": "gather", "n": g.n}, cls="cook-item", pressed=g.ticked) }}</li>
+  {% endfor %}
+  </ul>
+{% elif state.phase == "prep" %}
+  <h1 class="cook-title">Prep</h1>
+  <ul class="cook-list">
+  {% for job in state.prep %}<li>{{ act(state, csrf, "untick" if job.done else "tick", ("✓ " if job.done else "") ~ job.text, {"list": "prep", "n": job.n}, cls="cook-item", pressed=job.done) }}</li>
+  {% endfor %}
+  </ul>
+{% elif state.step %}
+  <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
+  <blockquote class="cook-text">{{ state.step.text }}</blockquote>
+  {% if state.offers %}<div class="cook-offers">
+  {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
+  </div>{% endif %}
+  {% if state.peek %}<p class="cook-peek muted">{{ state.peek }}</p>{% endif %}
+{% endif %}

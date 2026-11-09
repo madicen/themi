@@ -1,0 +1,19 @@
+{# CK1: the cook screen's regions: the step (or the list for this phase) with its moves, and
+   the timer rail. Landscape puts them side by side; portrait stacks them. #}
+{% from "cook/_act.html" import act %}
+<div class="cook-main" data-drawn="{{ state.drawn }}" data-session="{{ state.id }}" data-seq="{{ state.seq }}" data-phase="{{ state.phase }}">
+  <header class="cook-head">
+    <p class="cook-recipe" data-field="heading">{{ state.heading }}</p>
+  </header>
+  <section class="cook-step" aria-label="This step">
+    {% include "cook/_step.html" %}
+    <div class="cook-moves">
+    {% for b in state.buttons %}
+      {{ act(state, csrf, b.action, b.label, cls=("primary " if loop.last else "") ~ "big", move=b.action) }}
+    {% endfor %}
+    </div>
+  </section>
+  <aside class="cook-rail" aria-label="Timers">
+    {% include "cook/_rail.html" %}
+  </aside>
+</div>

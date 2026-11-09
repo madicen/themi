@@ -1,0 +1,10 @@
+{# CK1: every running timer, counted down in the browser from the server's ends_at. #}
+<h2 class="cook-rail-title">Timers</h2>
+{% for t in state.timers %}
+  <div class="cook-timer" data-timer="{{ t.id }}" data-ends="{{ t.ends_at }}"{% if t.fired %} data-fired="1"{% endif %}>
+    <p class="cook-timer-label">{{ t.label }}</p>
+    <p class="cook-timer-left">{% if t.fired %}Time's up{% else %}{{ t.text }}{% endif %}</p>
+  </div>
+{% else %}
+  <p class="muted cook-no-timers">No timers running.</p>
+{% endfor %}
