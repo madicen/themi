@@ -288,7 +288,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC5 | Recipes: saving a liked one to the cookbook | Recipes | [x] 2026-11-06 |
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
-| CK1 | Cooking companion: the cook screen on /session | Cooking companion | [ ] |
+| CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [ ] |
 | CK3 | Cooking companion: the timer rail | Cooking companion | [ ] |
 | CK4 | Cooking companion: look-ahead | Cooking companion | [ ] |
@@ -14276,7 +14276,7 @@ of state, and the chat step card and the cook screen are two views of it. Its de
 - No step pictures (BD4b) while cooking. No appliance control, nutrition or video.
 
 ### CK1 · Cooking companion: the cook screen on /session
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: RC3c, BD3a, RC6
 Read first: the plan's Summary, "What the family sees", "How it fits the codebase" and
 "Data model and recipes"; BD3a's and RC3a-c's notes; `themi_home/web/session_pages.py`,
@@ -14314,6 +14314,38 @@ session, stale `seq`, the redirect, a page tap editing the chat card on the fake
 browser test (as `test_session_page_browser.py`): Next moves the session, the countdown
 runs from server times; scenario: "next" typed in Telegram shows on the page at the next
 poll.
+
+Notes:
+- The Cooking Companion Plan couldn't be read from this session (the Docs and Artifact tools
+  both refused it: not shared with this account), so CK1 to CK8 follow the prompts and the
+  decisions above. Worth a look against the plan when it's readable.
+- `themi_home/cooking_screen.py` holds the screen's `state` and `act`; `Cooking.state` and
+  `Cooking.act_from_page` call them. The state: `kind`, `id`, `seq`, `now`, `phase`, `recipe`,
+  `heading`, `scale_words`, `group`, `line`, `step` (index, label, text, group, words "Step 2
+  of 3", first, last), `peek`, `ahead` / `gather` / `prep` (each with its tick), `offers` (the
+  step's timer chips), `timers` (id, label, ends_at, fired, text), `buttons`, and `drawn`, a
+  fingerprint of what's shown: the page polls `/session/state` and fetches its regions from
+  `GET /session/cook/view` only when `drawn` changed (a move, or a timer firing).
+- A partner sees and taps a group session's screen (`session_for`: their own, else the
+  group's). Ticks on the ahead and prep lists are kept as `done` in those JSON lists, not
+  new columns. A timer chip on the page starts the timer without the chat's "Timer set"
+  line (the card is redrawn).
+- `_save` bumps `seq` on every move (so `show` does) and `end` bumps it too; a new phase or
+  step sets `step_since`.
+- The one migration is the cooking module's own track (`themi_home/cooking_schema/0001`),
+  and carries every column the companion needs, not only CK1's: also `step_since`,
+  `stuck_said`, `line`, `line_at`, `page_at` and `wrap` on `cooking_sessions` (CK3, CK5,
+  CK6) and `cleared_at` on `cooking_timers` (CK3's "until the card is tapped").
+- `cook.js` is its own script; it copies `session.js`'s plumbing (session header, reload with
+  a ticket, the error report, wake lock) rather than sharing a file, so the body double page
+  is untouched. A body double page that sees a cooking state reloads into the cook screen.
+- Tests changed: RC6's `test_the_kitchen_view_moves_the_chat_card` became
+  `test_cook_this_opens_the_cook_screen` (the kitchen view is gone; [Cook] lands on
+  /session); `test_a_packs_static_files_are_served_under_its_name` reads `session.js`
+  instead of the deleted `kitchen.js`; `page_in_chrome` takes the selector it waits for and
+  a window size. `routes.json` gains the two cook routes.
+- Browser tests run where `google-chrome` or `chromium` is on PATH (on a Mac, a two-line
+  wrapper for Chrome.app does it).
 
 ### CK2 · Cooking companion: amounts for this step
 Status: [ ]
