@@ -92,6 +92,7 @@ ALREADY_TEXT = "Already on your calendar{why}. Nothing new was added."
 ICS_TYPES = {"text/calendar", "application/ics"}
 INVITED = re.compile(r"\(([^()\s]+@[^()\s]+)\)\s*$")
 MOVED_SINCE_TEXT = "Not needed now: that event has been changed since."
+ON_CALENDAR_TEXT = "Already on your calendar."  # F37b: a waiting card whose event came in
 MAX_NOTES = 500
 # F29a (idea #150): an event started earlier for set-up time says when it really starts.
 SETUP_LINE = re.compile(r"^Starts at ([^.\n]+)\. The time before it is set-up time\.$", re.M)
@@ -427,27 +428,27 @@ class Events:
         return text
 
     async def _there_now(self, member: Member, payload: dict[str, Any]) -> bool:
-        """Is something with this start and a matching title on their calendar now, read
-        from Google rather than the last calendar read (F29b)?"""
-        starts = datetime.fromisoformat(payload["starts"])
-        ends = datetime.fromisoformat(payload["ends"])
+        """Is this booking on their calendar now, read from Google rather than the last
+        calendar read (F29b), judged as `same_booking` does (F37b)?"""
+        tz = self._tz()
+        when = _payload_when(payload)
+        day = when.starts.astimezone(tz).date()
         try:
             account = self.own_account(member)
             items = await self._client(account.id).list_events(
-                "primary", to_utc_iso(starts), to_utc_iso(ends)
+                "primary",
+                to_utc_iso(datetime.combine(day, time(), tz)),
+                to_utc_iso(datetime.combine(day + timedelta(days=1), time(), tz)),
             )
         except (ToolFailed, CalendarError) as exc:
             log.info("Couldn't check the calendar before adding an email's event: %s", exc)
             return False
+        title, location = str(payload["title"]), str(payload.get("location") or "")
         for item in items:
             if (item.get("extendedProperties") or {}).get("private", {}).get("themi"):
                 continue  # Themi's own: made_that_day and the card's own key cover those
-            when = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
-            try:
-                same_start = when and datetime.fromisoformat(str(when)) == starts
-            except ValueError:
-                same_start = False
-            if same_start and _same_title(str(payload["title"]), str(item.get("summary", ""))):
+            found = _item_found(item, account.id, tz)
+            if found is not None and same_booking(title, location, when, found, tz):
                 return True
         return False
 
@@ -753,37 +754,59 @@ class Events:
         )
 
     def _already(self, member: Member, payload: dict[str, Any]) -> bool:
-        """Something at those very times is on their calendars, or waiting on a card (bug
-        #101: the tutoring she'd had added came back as a card, twice, from its emails).
-        Titles aren't compared: the email's rarely says it the way she did."""
-        span = (
-            to_utc_iso(datetime.fromisoformat(payload["starts"])),
-            to_utc_iso(datetime.fromisoformat(payload["ends"])),
-        )
-        if self.db.one(
-            "SELECT 1 FROM calendar_entries WHERE member_id = ? AND starts_at = ? AND ends_at = ? "
-            "UNION ALL SELECT 1 FROM themi_events WHERE deleted_at IS NULL "
-            "AND (member_id = ? OR calendar_id != 'primary') AND starts_at = ? AND ends_at = ?",
-            (member.id, *span, member.id, *span),
-        ):
-            return True
-        if any(  # F29b: the same start and title, whatever its end
-            _same_title(str(payload["title"]), r["title"])
-            for r in self.db.query(
-                "SELECT title FROM calendar_entries WHERE member_id = ? AND starts_at = ?",
-                (member.id, span[0]),
+        """Something like it is on their calendars that day, or waiting on a card (bug #101:
+        the tutoring she'd had added came back as a card, twice, from its emails; bug #187:
+        the Meta visit was there as "Samuel | Craig, Gina, and 2 more people", 12-2:30 pm).
+        `same_booking` judges it."""
+        return self._like_it(member, payload) is not None or any(
+            same_booking(
+                str(payload["title"]), str(payload.get("location") or ""),
+                _payload_when(payload), _payload_as_found(old), self._tz(),
             )
-        ):
-            return True
-        return any(
-            (old["starts"], old["ends"]) == (payload["starts"], payload["ends"])
             for row in self.db.query(
                 "SELECT payload FROM pending_actions WHERE member_id = ? AND executor = ? "
                 "AND status IN ('pending', 'snoozed')",
                 (member.id, ADD),
             )
             if (old := json.loads(row["payload"]))
+        )  # fmt: skip
+
+    def _like_it(self, member: Member, payload: dict[str, Any]) -> Found | None:
+        """An event on their calendars (as last read, and Themi's own) that is this booking."""
+        tz = self._tz()
+        when = _payload_when(payload)
+        day = when.starts.astimezone(tz).date()
+        lo = to_utc_iso(datetime.combine(day, time(), tz))
+        hi = to_utc_iso(datetime.combine(day + timedelta(days=1), time(), tz))
+        rows = self.db.query(
+            "SELECT account_id, calendar_id, event_id, title, location, starts_at, ends_at, "
+            "all_day FROM calendar_entries WHERE member_id = ? AND starts_at < ? AND ends_at > ? "
+            "UNION ALL SELECT account_id, calendar_id, event_id, title, location, starts_at, "
+            "ends_at, all_day FROM themi_events WHERE deleted_at IS NULL "
+            "AND (member_id = ? OR calendar_id != 'primary') AND starts_at < ? AND ends_at > ?",
+            (member.id, hi, lo, member.id, hi, lo),
         )
+        title, location = str(payload["title"]), str(payload.get("location") or "")
+        return next(
+            (
+                found
+                for row in rows
+                if same_booking(title, location, when, found := self._found(row, None), tz)
+            ),
+            None,
+        )
+
+    async def settle_waiting(self, member: Member) -> None:
+        """A calendar listener (F37b): after their calendars are read, a card from an email
+        for something that's on them now is taken back, so they aren't asked about it."""
+        for row in self.db.query(
+            "SELECT id, payload FROM pending_actions WHERE member_id = ? AND category = ? "
+            "AND status IN ('pending', 'snoozed') ORDER BY id",
+            (member.id, FROM_EMAIL),
+        ):
+            payload = json.loads(row["payload"])
+            if payload.get("calendar") == "mine" and self._like_it(member, payload) is not None:
+                await self.services.autonomy.withdraw(row["id"], ON_CALENDAR_TEXT)
 
     async def _after_email_event(self, ctx: ExecutionContext, text: str) -> None:
         automatic = self.db.scalar(
@@ -867,6 +890,55 @@ def _same_title(a: str, b: str) -> bool:
     return name_key(a) == name_key(b) or title_matches(a, b) or title_matches(b, a)
 
 
+# F37b (bug #187): words that say what kind of thing a booking is, not who or what it's
+# with: "Meta visit with Samuel Carrijo" and "Samuel | Craig, Gina, and 2 more people" share
+# "samuel", not "visit".
+PLAIN_WORDS = frozenset(
+    "about appointment appt booked booking call check class coffee confirmed confirmation "
+    "consult delivery details dinner event follow from from lunch meet meeting more online "
+    "order other people pickup reminder reservation return review service session that "
+    "their them there this visit visitor video with your zoom".split()
+)
+STREET_WORDS: dict[str, str] = {"street": "st", "avenue": "ave", "road": "rd", "boulevard": "blvd",
+                "drive": "dr", "lane": "ln", "court": "ct", "place": "pl", "suite": "ste",
+                "highway": "hwy", "parkway": "pkwy"}  # fmt: skip
+
+
+def _place_words(location: str) -> list[str]:
+    """A place's first part (up to its first comma), its words evened out."""
+    words: list[str] = re.findall(r"[a-z0-9]+", location.split(",")[0].lower())
+    return [STREET_WORDS.get(w, w) for w in words]
+
+
+def same_place(a: str, b: str) -> bool:
+    """ "1 Hacker Way" and "1 Hacker Way, Building 16, Menlo park": one's first part starts
+    the other's. A one-word place with no number ("Online", "Home") says too little."""
+    first, second = sorted((_place_words(a), _place_words(b)), key=len)
+    if not first or second[: len(first)] != first:
+        return False
+    return len(first) > 1 or any(w.isdigit() for w in first)
+
+
+def _names(title: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", title.lower()) if len(w) >= 4 and w not in PLAIN_WORDS}
+
+
+def same_booking(title: str, location: str, when: When, other: Found, tz: ZoneInfo) -> bool:
+    """Is this event on their calendar the booking an email (or a card) describes (F37b)?
+    The very same times, whatever the titles (bug #101: the email's rarely says it the way
+    she did); the same title on the same day, whatever the times (an email's are often
+    rounded); or the same start with the same place or a name in common. Times that only
+    overlap stay two events (a dentist at 12 and a lunch at 12:30)."""
+    if when == other.when:
+        return True
+    day, other_day = when.starts.astimezone(tz).date(), other.when.starts.astimezone(tz).date()
+    if day == other_day and _same_title(title, other.title):
+        return True
+    if when.starts != other.when.starts or when.all_day != other.when.all_day:
+        return False
+    return same_place(location, other.location) or bool(_names(title) & _names(other.title))
+
+
 def _invitation(row: dict[str, Any]) -> str | None:
     """The address a Google Calendar invitation was sent to (its subject ends with it), or
     "" when it's an invitation that doesn't say; None when the email isn't one."""
@@ -906,6 +978,45 @@ def _found_payload(found: Found) -> dict[str, Any]:
         "was_all_day": found.when.all_day,
         "themi_id": found.themi_id,
     }
+
+
+def _payload_when(payload: dict[str, Any]) -> When:
+    return When(
+        datetime.fromisoformat(str(payload["starts"])),
+        datetime.fromisoformat(str(payload["ends"])),
+        bool(payload.get("all_day")),
+    )
+
+
+def _payload_as_found(payload: dict[str, Any]) -> Found:
+    """A waiting card's event, to judge against another (F37b)."""
+    return Found(
+        0, "", "", str(payload["title"]), str(payload.get("location") or ""),
+        _payload_when(payload), None,
+    )  # fmt: skip
+
+
+def _item_found(item: dict[str, Any], account_id: int, tz: ZoneInfo) -> Found | None:
+    """A Google Calendar event as a Found, or None when its times can't be read."""
+
+    def at(field: str) -> tuple[datetime, bool] | None:
+        part = item.get(field) or {}
+        try:
+            if part.get("dateTime"):
+                return datetime.fromisoformat(str(part["dateTime"])), False
+            if part.get("date"):
+                return datetime.combine(date.fromisoformat(str(part["date"])), time(), tz), True
+        except ValueError:
+            return None
+        return None
+
+    starts, ends = at("start"), at("end")
+    if starts is None or ends is None:
+        return None
+    return Found(
+        account_id, "primary", str(item.get("id", "")), str(item.get("summary", "")),
+        str(item.get("location", "")), When(starts[0], ends[0], starts[1]), None,
+    )  # fmt: skip
 
 
 def _located(ctx: ToolContext, location: str) -> str:

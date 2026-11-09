@@ -257,7 +257,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
-| F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [ ] |
+| F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -12693,7 +12693,7 @@ Notes (2026-11-09):
 - Setup: none. Deploy, then mark #189 reviewed once it's live.
 
 ### F37b · Feedback (2026-11-09): an email's booking already on the calendar under another name
-Status: [ ]
+Status: [x] 2026-11-09
 Depends on: K3, F29b, F34e
 Read first: `Events._already` in `themi_google/events.py` and its history (bug #101, F29b);
 bug #159's note (an invitation already on the calendar); F34e's notes (`calendar_twins`,
@@ -12743,6 +12743,25 @@ at 1 Hacker Way. The Meta visit email comes in, and she gets no card about it.
 
 Data: decline pending_action 554 on the Pi once live (or it lapses at 1 pm Mon 9 Nov on its
 own). Mark #187 reviewed once live.
+
+Notes (2026-11-09):
+- `themi_google.events.same_booking(title, location, when, found, tz)` is the one
+  judgement. It counts as the same event: the very same times (bug #101's rule, kept), the
+  same title on the same day (`_same_title`) whatever the times, or the same start with
+  `same_place` or a name in common (a word of four or more letters not in `PLAIN_WORDS`).
+  `same_place` compares the first parts up to the comma, word by word, with street words
+  evened out. A one-word place with no number ("Online", "Home") never matches.
+- `_already` uses it on the day's `calendar_entries` and `themi_events` (`_like_it`), and on
+  waiting cards. `_there_now` (F29b's check when the card runs) reads the event's local day
+  from Google and uses it too, keeping its "Already on your calendar" wording.
+- `Events.settle_waiting` is a calendar listener (hooked up in `CalendarBusyModule`). After
+  each read, a waiting email card for something now on their own calendar is withdrawn,
+  with "Already on your calendar." added to the card.
+- Deviation: F34e's `alike` (twins) is left as it is. It's built for two events, and its
+  appointment-word test doesn't fit a booking ("Samuel | Craig, Gina…" has none). The
+  place and name tests could join it later if twins miss pairs like this one.
+- The "guests" in `calendar_entries` is a count, not names, so names are compared by title.
+- Setup: none.
 
 ### F37c · Idea (2026-11-09): "Not ever" on an email's card, and stopping a sender's offers
 Status: [ ]

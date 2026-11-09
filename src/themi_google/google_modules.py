@@ -263,6 +263,7 @@ class CalendarBusyModule(Module):
         s = ctx.services
         busy = CalendarBusy(s.store, ctx.get(CalendarSync))
         ctx.provide(busy)
+        busy.listeners.append(ctx.get(Events).settle_waiting)  # F37b
         s.calendar_source = busy.context
         s.outbox.calendar_blocks = busy.blocks
         ctx.get(EnergyModel).calendar_blocks = busy.blocks
