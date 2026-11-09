@@ -7,20 +7,20 @@ import re
 from pathlib import Path
 
 from tests.fakes.slack_api import MICHAEL, FakeSlack
+from tests.fixtures.db import migrated_file
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.slack_harness import SlackScenario
 from themi.accounts import SYSTEM, AccountStore, Role
 from themi.config import load_config, load_template, resolve_modules
 from themi.settings import Settings
 from themi.standard.tasks import TaskBoard
-from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 
 HOUSEHOLD_WORDS = re.compile(r"\b(washer|pantry|partners?|chores?|family)\b", re.IGNORECASE)
 
 
 def work_family(tmp_path: Path) -> SeededFamily:
-    store = AccountStore(open_database(tmp_path / "work.db"), Cipher(generate_key()))
+    store = AccountStore(migrated_file(tmp_path / "work.db"), Cipher(generate_key()))
     workspace = store.create_family("Michael at work", "America/Los_Angeles", template="work")
     michael = store.create_member(SYSTEM, "Michael", Role.ADMIN)
     return SeededFamily(store, workspace, michael, michael)

@@ -2,15 +2,22 @@ name: Checks
 
 # The checks themselves, called by CI (ci.yml) and Release (release.yml).
 #   quick: lint, type check and unit tests on one Python. A couple of minutes.
-#   full:  lint once, then unit, integration and scenario tests with the coverage gates
-#          on every supported Python, the Safeway extension tests, and the container
-#          smoke test, all in parallel.
+#   full:  lint once; the unit, integration and scenario tests on each Python in
+#          `pythons`, split across two runners each; the coverage gates, measured on 3.14
+#          (where branch coverage costs next to nothing) over two more runners; the
+#          Safeway extension tests; and the container smoke test. All in parallel.
+# Pull requests test on the image's Python only; Release adds requires-python's floor,
+# 3.12, and so does Nightly, so a 3.12-only break shows up within a day.
 on:
   workflow_call:
     inputs:
       full:
         type: boolean
         default: false
+      pythons:
+        description: "For full: the Pythons to test on, as a JSON list"
+        type: string
+        default: '["3.13"]'
 
 permissions:
   contents: read
@@ -48,6 +55,7 @@ jobs:
       - name: Lint and type check
         run: make lint PYTHON=python
 
+  # Each half (pytest-split, by the times in .test_durations) on its own 4-CPU runner.
   test:
     if: ${{ inputs.full }}
     runs-on: ubuntu-latest
@@ -55,7 +63,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]   # requires-python's floor, and the image's
+        python-version: ${{ fromJSON(inputs.pythons) }}
+        split: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,8 +73,57 @@ jobs:
           cache: pip
       - name: Install
         run: make install PYTHON=python
-      - name: Unit, integration and scenario tests, with the coverage gates
-        run: make cov PYTHON=python
+      - name: Unit, integration and scenario tests, part ${{ matrix.split }} of 2
+        run: make test-py PYTHON=python SPLIT=${{ matrix.split }}/2
+
+  # The coverage gates. Python 3.14's sys.monitoring measures branches with almost no
+  # slowdown, where 3.12 and 3.13 fall back to the old tracer (a third slower, or more).
+  coverage:
+    if: ${{ inputs.full }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        split: [1, 2]
+    env:
+      COVERAGE_CORE: sysmon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Measure part ${{ matrix.split }} of 2
+        run: make cov-run PYTHON=python SPLIT=${{ matrix.split }}/2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.split }}
+          path: .coverage.*
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  coverage-gates:
+    needs: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      - name: Both parts together, and the gates
+        run: make cov-report PYTHON=python
 
   extension:
     if: ${{ inputs.full }}

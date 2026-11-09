@@ -201,6 +201,41 @@ async def test_the_biggest_text_fits_a_phone(scenario: Scenario) -> None:
         assert await tab.value(LAYOUT) == ""
         await tab.value("document.querySelector('.cook-size button[value=down]').click()")
         assert await until(lambda: tab.value("document.body.dataset.textSize === '170'"))
+    # Bug 2026-11-08: since A+ scales the whole screen, the Back and All done buttons ran off
+    # CI's Chrome by 3 px at 390 (its fonts are wider). A smaller phone, with room to spare.
+    scenario.app.store.save_preferences(erin, erin.id, CookingPreferences, cooking_text_size=200)
+    async with page_in_chrome(scenario, erin, ".cook-moves", width=360, height=780) as tab:
+        assert await tab.value(LAYOUT) == ""
+
+
+SIZES = (
+    "JSON.stringify(['.cook-text', '.cook-count', '.cook-recipe', '.cook-moves button']"
+    ".map(s => parseFloat(getComputedStyle(document.querySelector(s)).fontSize)))"
+)
+
+
+async def test_a_minus_and_a_plus_change_what_shows(scenario: Scenario) -> None:
+    """Bug 2026-11-08: A- and A+ saved the size but the screen hardly changed: A- did
+    nothing to the step (held at its 28 px floor), and the count, the recipe's name and the
+    buttons never scaled at all. Every size on the screen follows them now."""
+    import json
+
+    clock.unfreeze()
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves") as tab:
+        start = json.loads(await tab.value(SIZES))
+        await tab.value("document.querySelector('.cook-size button[value=down]').click()")
+        assert await until(lambda: tab.value("document.body.dataset.textSize === '90'"))
+        smaller = json.loads(await tab.value(SIZES))
+        assert all(a < b for a, b in zip(smaller, start, strict=True)), (start, smaller)
+        assert smaller[0] >= 28  # the step text keeps its floor
+        for size in ("100", "120"):
+            await tab.value("document.querySelector('.cook-size button[value=up]').click()")
+            assert await until(
+                lambda s=size: tab.value(f"document.body.dataset.textSize === '{s}'")
+            )
+        bigger = json.loads(await tab.value(SIZES))
+        assert all(a > b for a, b in zip(bigger, start, strict=True)), (start, bigger)
 
 
 FAKE_RECOGNIZER = (

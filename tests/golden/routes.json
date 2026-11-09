@@ -36,6 +36,7 @@
   "GET /safeway",
   "GET /session",
   "GET /session/cook/view",
+  "GET /session/manifest.webmanifest",
   "GET /session/pictures/{session_id}/{index}",
   "GET /session/state",
   "GET /settings",

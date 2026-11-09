@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from tests.fakes.telegram_api import FakeTelegram
+from tests.fixtures.db import migrated_file
 from tests.fixtures.family import SeededFamily, seed_family
 from tests.scenarios.test_module_lists import build
 from themi.accounts import AccountStore
@@ -15,7 +16,6 @@ from themi.app import family_modules
 from themi.config import RoleSpec, load_template
 from themi.core.tools import ToolContext
 from themi.standard.tasks import TaskBoard
-from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 
 
@@ -52,8 +52,8 @@ async def test_a_role_sees_and_runs_only_its_modules_tools(
 def test_two_workspaces_in_one_process_keep_to_their_own(
     tmp_path: Path, fake_telegram: FakeTelegram
 ) -> None:
-    one = seed_family(AccountStore(open_database(tmp_path / "one.db"), Cipher(generate_key())))
-    two = seed_family(AccountStore(open_database(tmp_path / "two.db"), Cipher(generate_key())))
+    one = seed_family(AccountStore(migrated_file(tmp_path / "one.db"), Cipher(generate_key())))
+    two = seed_family(AccountStore(migrated_file(tmp_path / "two.db"), Cipher(generate_key())))
     first = build(one, fake_telegram, family_modules())
     second = build(two, fake_telegram, family_modules())
     import asyncio

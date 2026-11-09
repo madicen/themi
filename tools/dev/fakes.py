@@ -22,6 +22,7 @@ import inspect
 import json
 import os
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, cast
@@ -142,8 +143,10 @@ class DevFakes:
             server.start()
 
     def stop(self) -> None:
-        for server in self._servers:
-            server.stop()
+        # Together: each waits a moment for its server to wind down, so one after another
+        # adds up (most of a dev test's teardown).
+        with ThreadPoolExecutor(len(self._servers)) as pool:
+            list(pool.map(lambda server: server.stop(), self._servers))
 
     def connectors(self, timezone: str) -> dict[str, Any]:
         return connector_options(

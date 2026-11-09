@@ -50,7 +50,12 @@
     var hash = new URLSearchParams(location.hash.slice(1));
     var data = hash.get("tgWebAppData");
     var help = document.getElementById("sign-in-help");
-    if (!data) { if (help) help.hidden = false; return; }
+    if (!data) {  // CK11: a plain browser (the kitchen tablet): how to sign in, not "Opening…"
+      var opening = document.getElementById("signing-in");
+      if (opening) opening.hidden = true;
+      if (help) help.hidden = false;
+      return;
+    }
     fetch("/session/telegram", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },

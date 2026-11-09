@@ -37,8 +37,9 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-xdist>=3.6",
+    "pytest-split>=0.10",  # CI's runners each take part of the tests (make test-py SPLIT=1/2)
     "hypothesis>=6.100",
-    "coverage[toml]>=7.6",
+    "coverage[toml]>=7.10",  # CI measures on 3.14, where branches are fast (sysmon)
     "ruff>=0.8",
     "pyright>=1.1.390",
     "types-python-dateutil>=2.9",
@@ -194,7 +195,8 @@ filterwarnings = [
 [tool.coverage.run]
 source = ["themi", "themi_google", "themi_home"]
 branch = true
-# make cov runs the tests in parallel (xdist): measure each worker, then combine.
+# make cov runs the tests in parallel (xdist): measure each worker, then combine. CI splits
+# them across runners too (make cov-run SPLIT=n/2, then cov-report on all the files).
 patch = ["subprocess"]
 parallel = true
 

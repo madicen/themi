@@ -84,6 +84,35 @@ def routes(kit: Kit) -> APIRouter:
             )  # fmt: skip
         return response
 
+    @router.get("/session/manifest.webmanifest")
+    def manifest() -> JSONResponse:
+        """CK11: the kitchen tablet. Added to a home screen, /session opens as its own app
+        with no browser bars (full screen where the browser allows it). Nothing private."""
+        from themi.web.kit import asset
+
+        def icon(name: str, size: int, purpose: str) -> dict[str, str]:
+            return {"src": asset(f"home/icons/{name}", kit.static_folders),
+                    "sizes": f"{size}x{size}", "type": "image/png", "purpose": purpose}  # fmt: skip
+
+        return JSONResponse(
+            {
+                "name": "Themi",
+                "short_name": "Themi",
+                "id": "/session",
+                "start_url": "/session",
+                "scope": "/session",
+                "display": "standalone",
+                "display_override": ["fullscreen", "standalone"],
+                "background_color": "#faf8f5",
+                "theme_color": "#3d6f6a",
+                "icons": [
+                    icon("icon-192.png", 192, "any maskable"),
+                    icon("icon-512.png", 512, "any maskable"),
+                ],
+            },
+            media_type="application/manifest+json",
+        )
+
     @router.post("/session/telegram")
     async def telegram_sign_in(request: Request) -> Response:
         form = dict(await request.form())

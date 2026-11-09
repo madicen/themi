@@ -77,6 +77,7 @@
         box.innerHTML = html;
         box.querySelectorAll("details[data-keep-open]").forEach(function (d) { if (open[d.dataset.keepOpen]) d.open = true; });
         drawer(drawerOpen);
+        fullscreenButton();
         alerts();
         tick();
         if (window.themiCook && window.themiCook.onDraw) window.themiCook.onDraw();
@@ -163,6 +164,7 @@
     if (!state.view) return;
     body.dataset.theme = state.view.theme;
     body.dataset.textSize = String(state.view.text_size);
+    document.documentElement.dataset.textSize = String(state.view.text_size);
   }
   document.addEventListener("submit", function (event) {
     var form = event.target;
@@ -392,6 +394,48 @@
     if (form) post(form);
   }, { passive: true });
 
+  // CK11: [Full screen] where the browser offers it (Android Chrome, iPad Safari; not iPhone
+  // Safari), hidden in an installed app that already runs full screen. In Telegram (from
+  // 8.0) it asks Telegram instead, through CK10's bridge (miniapp.js).
+  var tg = window.themiMiniApp || null;
+  function inTelegram() { return !!(tg && tg.inTelegram); }
+  function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function isFull() { return inTelegram() ? tg.isFullscreen() : !!fsElement(); }
+  function canFull() {
+    if (inTelegram()) return !!tg.canFullscreen;
+    if (!(document.fullscreenEnabled || document.webkitFullscreenEnabled)) return false;
+    return !(window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches && !fsElement());
+  }
+  function fullscreenButton() {
+    var button = document.querySelector(".cook-fullscreen");
+    if (!button) return;
+    var on = isFull();
+    button.hidden = !canFull();
+    button.textContent = on ? "Exit full screen" : "Full screen";
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+  function toggleFull() {
+    if (inTelegram()) { tg.toggleFullscreen(); return; }
+    var done = null;
+    try {
+      if (fsElement()) {
+        done = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        var el = document.documentElement;
+        var go = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (go) done = go.call(el, { navigationUI: "hide" });
+      }
+    } catch (e) { report("full screen: " + e); }
+    if (done && done.then) done.then(function () {}, function (e) { report("full screen: " + e); });
+  }
+  document.addEventListener("click", function (event) {
+    if (event.target.closest && event.target.closest(".cook-fullscreen")) toggleFull();
+  });
+  ["fullscreenchange", "webkitfullscreenchange"].forEach(function (name) {
+    document.addEventListener(name, function () { fullscreenButton(); hold(); });
+  });
+  if (tg) tg.onChange(fullscreenButton);
+
   var lock = null;
   function hold() { // keep the screen on, where the browser offers it
     if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
@@ -414,6 +458,7 @@
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
+  fullscreenButton();
   setupVoice();
   music();
   alerts();

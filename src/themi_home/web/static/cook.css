@@ -1,9 +1,14 @@
 /* CK1: the cook screen. A tablet propped up in landscape is the main screen (1024px); a
    phone works too. Tap targets at least 64px, step text at least 28px. Colours come from
    the site's tokens (themi.css). */
-body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
-.cook { max-width: none; min-height: 100vh; min-height: 100dvh; padding-top: max(var(--space-3), env(safe-area-inset-top));
-  padding-bottom: max(var(--space-3), var(--safe-bottom)); }
+body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden;
+  /* CK10: in Telegram's full screen its close and menu buttons float over the top; the bridge
+     (miniapp.js) sets --tg-safe-* and --tg-content-* from what Telegram says */
+  --cook-top: max(var(--space-3), env(safe-area-inset-top), calc(var(--tg-safe-top, 0px) + var(--tg-content-top, 0px)));
+  --cook-bottom: max(var(--space-3), var(--safe-bottom), calc(var(--tg-safe-bottom, 0px) + var(--tg-content-bottom, 0px)));
+  --cook-left: max(var(--space-4), env(safe-area-inset-left), calc(var(--tg-safe-left, 0px) + var(--tg-content-left, 0px)));
+  --cook-right: max(var(--space-4), env(safe-area-inset-right), calc(var(--tg-safe-right, 0px) + var(--tg-content-right, 0px))); }
+.cook { max-width: none; min-height: 100vh; min-height: 100dvh; padding: var(--cook-top) var(--cook-right) var(--cook-bottom) var(--cook-left); }
 .cook { display: flex; flex-direction: column; gap: var(--space-4); }
 #cook { flex: 1 0 auto; }
 .cook-main { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr);
@@ -19,17 +24,18 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-rail-title { margin: 0; }
 .cook-title { font-size: 1.5rem; margin: 0; }
 .cook-count { margin: 0; color: var(--muted); font-size: 1.15rem; }
-.cook-text { margin: 0; font-size: max(calc(var(--cook-text) * var(--cook-scale, 1)), 28px); line-height: 1.4; overflow-wrap: anywhere;
+.cook-text { margin: 0; font-size: max(var(--cook-text), 28px); line-height: 1.4; overflow-wrap: anywhere;
   padding: var(--space-4); background: var(--card); border: 2px solid var(--line); border-radius: var(--radius); }
 .cook-line { margin: 0; font-size: 1.2rem; }
 .cook-peek { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
 .cook-page button { min-height: var(--cook-tap); min-width: var(--cook-tap); font-size: 1.15rem; }
-.cook-moves { display: flex; gap: var(--space-3); margin-top: auto; }
-.cook-moves form { flex: 1 1 0; }
-.cook-moves button { width: 100%; font-size: 1.35rem; }
+/* side by side; at big text on a phone they take a row each (bug 2026-11-08: they ran off) */
+.cook-moves { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: auto; }
+.cook-moves form { flex: 1 1 7rem; min-width: 0; }
+.cook-moves button { width: 100%; font-size: 1.35rem; overflow-wrap: anywhere; }
 .cook-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .cook-list form { margin: 0; }
-.cook-item { width: 100%; text-align: left; font-size: calc(1.3rem * var(--cook-scale, 1)); background: var(--card); color: var(--fg);
+.cook-item { width: 100%; text-align: left; font-size: 1.3rem; background: var(--card); color: var(--fg);
   border: 2px solid var(--line); overflow-wrap: anywhere; }
 .cook-item[aria-pressed="true"] { color: var(--muted); text-decoration: line-through; background: var(--soft); }
 .cook-group { color: var(--muted); font-weight: 600; margin-top: var(--space-2); }
@@ -46,7 +52,7 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-amounts h2 { margin: var(--space-2) 0; }
 .cook-amount { font-size: 1.2rem; }
 .cook-all-open { align-self: flex-start; }
-.cook-drawer { position: fixed; inset: var(--space-3); z-index: 20; overflow-y: auto; background: var(--card);
+.cook-drawer { position: fixed; inset: var(--cook-top) var(--space-3) var(--space-3); z-index: 20; overflow-y: auto; background: var(--card);
   border: 2px solid var(--line); border-radius: var(--radius); padding: var(--space-3); }
 .cook-drawer[hidden] { display: none; }
 .cook-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
@@ -76,7 +82,7 @@ form.cook-timer[data-fired] { padding: 0; border: none; background: none; }
 .cook-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-chime input { width: 100%; }
 .cook-soonest { display: none; margin: 0; }
-body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-index: 30; top: var(--space-2); right: var(--space-4);
+body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-index: 30; top: var(--cook-top); right: var(--cook-right);
   padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); background: var(--fg); color: var(--bg);
   font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 .cook-stop { margin-left: auto; }
@@ -95,14 +101,15 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-strip form { margin: 0; }
 
 /* CK5: the company bar: the chameleon by the counter, Themi's line, music, Ask Themi */
-.cook-company { display: flex; gap: var(--space-3); align-items: stretch; border-top: 2px solid var(--line); padding-top: var(--space-3); }
-.cook-scene { flex: 0 0 auto; width: clamp(9rem, 30%, 16rem); min-height: 7.5rem; }
-.cook-company-side { flex: 1 1 0; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.cook-company { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: stretch; border-top: 2px solid var(--line); padding-top: var(--space-3); }
+/* the art keeps its size in px: A+ grows the words, not the chameleon */
+.cook-scene { flex: 0 0 auto; width: clamp(144px, 30%, 256px); min-height: 120px; }
+.cook-company-side { flex: 1 1 12rem; min-width: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .cook-company-side .cook-line { flex: 1 1 100%; }
 .cook-music { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .cook-music-offer { flex: 1 1 100%; margin: 0; }
 .cook-spotify form { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cook-chat.session-chat { inset: var(--space-3); }
+.cook-chat.session-chat { inset: var(--cook-top) var(--space-3) var(--space-3); }
 
 /* CK6: "might be out" on a gathered line, and the wrap-up's offers */
 .cook-out summary { min-height: var(--tap); display: inline-flex; align-items: center; cursor: pointer; color: var(--warn); }
@@ -111,13 +118,16 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 
 /* CK7: text size (A- A+, a preference), the themes, the whole list of steps, and an
    optional step folded away on a lighter day */
-body.cook-page[data-text-size="80"] { --cook-scale: .8; }
-body.cook-page[data-text-size="90"] { --cook-scale: .9; }
-body.cook-page[data-text-size="120"] { --cook-scale: 1.2; }
-body.cook-page[data-text-size="140"] { --cook-scale: 1.4; }
-body.cook-page[data-text-size="170"] { --cook-scale: 1.7; }
-body.cook-page[data-text-size="200"] { --cook-scale: 2; }
+/* Bug 2026-11-08: A- and A+ scale the page's root size, so every rem on the screen (the step,
+   headings, amounts, timers, buttons) follows them, not only the step text. */
+html.cook-root[data-text-size="80"] { font-size: 80%; }
+html.cook-root[data-text-size="90"] { font-size: 90%; }
+html.cook-root[data-text-size="120"] { font-size: 120%; }
+html.cook-root[data-text-size="140"] { font-size: 140%; }
+html.cook-root[data-text-size="170"] { font-size: 170%; }
+html.cook-root[data-text-size="200"] { font-size: 200%; }
 .cook-size { display: flex; gap: var(--space-1); margin: 0; }
+.cook-fullscreen[hidden] { display: none; }
 body.cook-page[data-theme="light"] {
   --bg: #faf8f5; --fg: #2b2a28; --muted: #6f6b66; --card: #ffffff; --line: #e5e0d8;
   --accent: #3d6f6a; --accent-fg: #ffffff; --soft: #eef4f3; --info-bg: #e7eef8; --warn: #8a5a00; --warn-bg: #fdf0d8;
@@ -138,7 +148,7 @@ body.cook-page[data-theme="kitchen"] .cook-text, body.cook-page[data-theme="kitc
 body.cook-page[data-theme="kitchen"] .cook-timer { border-width: 3px; }
 body.cook-page[data-theme="kitchen"] .cook-text { font-weight: 600; }
 .cook-all-steps { margin: 0; padding-left: 1.5rem; display: flex; flex-direction: column; gap: var(--space-2);
-  font-size: calc(1.15rem * var(--cook-scale, 1)); overflow-wrap: anywhere; }
+  font-size: 1.15rem; overflow-wrap: anywhere; }
 .cook-all-steps li.done { color: var(--muted); }
 .cook-all-steps li.current::marker { color: var(--accent); font-weight: 700; }
 .cook-fold summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; color: var(--muted); }

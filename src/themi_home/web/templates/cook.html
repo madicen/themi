@@ -1,11 +1,18 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="cook-root" data-text-size="{{ state.view.text_size }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cooking · Themi</title>
+  <link rel="manifest" href="/session/manifest.webmanifest">
+  <meta name="theme-color" content="#3d6f6a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Themi">
+  <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ asset('themi.css') }}">
   <link rel="stylesheet" href="{{ asset('home/cook.css') }}">
+  <script src="{{ asset('home/miniapp.js') }}" defer></script>
   <script src="{{ asset('home/cook.js') }}" defer></script>
 </head>
 {# CK1: the cook screen, one full screen propped up while cooking. The regions are partials

@@ -4,10 +4,16 @@ PYTEST := $(PYTHON) -m pytest
 # Tests run in parallel, one worker per CPU (pytest-xdist), each file kept on one worker.
 # PARALLEL= runs them in one process, e.g. to debug with pdb.
 PARALLEL ?= -n auto --dist loadfile
+# The unit, integration and scenario tests: what test-all and cov run.
+TESTS := tests/unit tests/integration tests/scenarios
+# CI splits them across runners: SPLIT=1/2 runs the first half, SPLIT=2/2 the rest
+# (pytest-split, balanced by the times in .test_durations; make durations refreshes them).
+SPLIT ?=
+SPLIT_ARGS = $(if $(SPLIT),--splits $(word 2,$(subst /, ,$(SPLIT))) --group $(word 1,$(subst /, ,$(SPLIT))))
 # Override to pin a specific interpreter, e.g. make venv VENV_PYTHON=/path/to/python3.13
 VENV_PYTHON ?= python3
 
-.PHONY: golden venv install fmt lint test test-all test-live evals router-eval naming-eval cov dev dev-reset dev-invite dev-prod
+.PHONY: golden venv install fmt lint test test-all test-py test-live evals router-eval naming-eval cov cov-run cov-report durations dev dev-reset dev-invite dev-prod
 
 venv:
 	$(VENV_PYTHON) -m venv .venv
@@ -30,13 +36,19 @@ lint:
 test:
 	$(PYTEST) $(PARALLEL) tests/unit
 
-test-all:
-	$(PYTEST) $(PARALLEL) tests/unit tests/integration tests/scenarios
+test-all: test-py
 	@if command -v node >/dev/null 2>&1; then \
 		node --test extension/safeway/tests/*.test.js; \
 	else \
 		echo "Node isn't installed: skipping the Safeway extension tests."; \
 	fi
+
+test-py:
+	$(PYTEST) $(PARALLEL) $(SPLIT_ARGS) $(TESTS)
+
+# After adding or speeding up a lot of tests, so CI's halves stay even. Commit the file.
+durations:
+	$(PYTEST) $(PARALLEL) $(TESTS) --store-durations
 
 test-live:
 	$(PYTEST) tests/live --run-live
@@ -56,8 +68,16 @@ naming-eval:
 	$(PYTHON) -c 'from tests.evals.naming import *; print(format_naming(score(load_naming_cases(), word_check)))'
 
 cov:
+	$(MAKE) cov-run
+	$(MAKE) cov-report
+
+# cov in two halves, for CI: each runner does cov-run SPLIT=n/2 and keeps its .coverage.*
+# files, and one more gathers them all and does cov-report.
+cov-run:
 	$(PYTHON) -m coverage erase
-	$(PYTHON) -m coverage run -m pytest $(PARALLEL) tests/unit tests/integration tests/scenarios
+	$(PYTHON) -m coverage run -m pytest $(PARALLEL) $(SPLIT_ARGS) $(TESTS)
+
+cov-report:
 	$(PYTHON) -m coverage combine -q
 	$(PYTHON) -m coverage report
 	$(PYTHON) tools/check_coverage.py

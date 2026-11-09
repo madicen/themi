@@ -78,10 +78,13 @@ async def page_in_chrome(
     *,
     width: int = 0,
     height: int = 0,
+    before: str = "",
+    hash: str = "",
 ) -> AsyncIterator[Tab]:
     """The session page served for real and open in a headless Chrome, signed in as the Mini
     App signs in, its deferred script run (`ready`: what shows once it has; CK1's cook screen
-    has `.cook-moves`). `width` and `height`: the window's size (CK7)."""
+    has `.cook-moves`). `width` and `height`: the window's size (CK7). `before`: a script run
+    before the page's own (CK10's faked Telegram); `hash`: added to the address (`#...`)."""
     assert CHROME is not None and member.telegram_user_id is not None
     port = free_port()
     web = create_app(
@@ -124,7 +127,11 @@ async def page_in_chrome(
             pytest.skip(f"Chrome didn't start (exit {chrome.poll()}): {' | '.join(said)}")
         async with websockets.connect(pages[0]["webSocketDebuggerUrl"], max_size=None) as ws:
             tab = Tab(ws)
-            await tab.call("Page.navigate", url=f"http://127.0.0.1:{port}/session?ticket={ticket}")
+            if before:
+                await tab.call("Page.enable")
+                await tab.call("Page.addScriptToEvaluateOnNewDocument", source=before)
+            address = f"http://127.0.0.1:{port}/session?ticket={ticket}"
+            await tab.call("Page.navigate", url=address + (f"#{hash}" if hash else ""))
             # session.js is deferred: a tap before it ran was a plain form post that left the
             # page (flaky on a busy CI runner, 2026-11-07). "complete" comes after it has run.
             if width:  # the page's own size, whatever the window's frame takes

@@ -35,6 +35,7 @@ jobs:
     uses: ./.github/workflows/checks.yml
     with:
       full: true
+      pythons: '["3.12", "3.13"]'   # requires-python's floor, and the image's
 
   tag:
     needs: checks

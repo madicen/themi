@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixtures.db import migrated_file
 from themi.config import (
     InstanceConfig,
     as_toml,
@@ -23,14 +24,13 @@ from themi.core.connector_settings import SearchSettings
 from themi.modules.settings import read_settings, value_sources
 from themi.modules.store import Draft, DraftStore, ModuleSecrets
 from themi.settings import Settings, SettingsError, ensure_secret_key
-from themi.storage import open_database
 from themi.storage.secrets import Cipher, Secret, generate_key
 
 KEY = generate_key()
 
 
 def secrets_store(tmp_path: Path) -> ModuleSecrets:
-    return ModuleSecrets(open_database(tmp_path / "themi.db"), Cipher(KEY))
+    return ModuleSecrets(migrated_file(tmp_path / "themi.db"), Cipher(KEY))
 
 
 # ----- precedence ----------------------------------------------------------------------
@@ -147,7 +147,7 @@ def test_themi_writes_next_to_the_database_and_finds_it_there(tmp_path: Path) ->
 
 
 def test_a_draft_keeps_its_changes_and_its_secrets_encrypted(tmp_path: Path) -> None:
-    db = open_database(tmp_path / "themi.db")
+    db = migrated_file(tmp_path / "themi.db")
     cipher = Cipher(KEY)
     drafts = DraftStore(db)
     assert drafts.get() is None
@@ -184,7 +184,7 @@ def test_a_new_themi_makes_its_own_key_and_uses_it(tmp_path: Path) -> None:
 
 
 def test_a_key_is_never_made_for_an_existing_database(tmp_path: Path) -> None:
-    open_database(tmp_path / "themi.db").close()
+    migrated_file(tmp_path / "themi.db").close()
     env = {"THEMI_DB_PATH": str(tmp_path / "themi.db")}
     assert ensure_secret_key(env) is None
     with pytest.raises(SettingsError, match="THEMI_SECRET_KEY"):

@@ -296,6 +296,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
 | CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [x] 2026-11-08 |
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
+| CK10 | Cooking companion: full screen in Telegram | Cooking companion | [x] 2026-11-08 |
+| CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -14655,6 +14657,90 @@ Notes:
   recognizer is looked up at each press. The words heard show under the button for 4 s.
 - Telegram voice notes are untouched.
 - Tests changed: the settings form list and CK7's view dict gain `cooking_voice`.
+
+
+### CK10 · Cooking companion: full screen in Telegram
+Status: [x] 2026-11-08
+Depends on: CK1, CK7
+Read first: the plan's Features "Hands-free and kitchen-proof"; Telegram's Mini App events
+(core.telegram.org/api/web-events); `static/session.js`'s sign-in; `web/site.py`'s CSP.
+- `static/miniapp.js`, loaded by `session.html` and `cook.html`: a small bridge to Telegram
+  (`TelegramWebviewProxy.postEvent`, else `window.external.notify`, else a message to the
+  parent frame), and `window.Telegram.WebView.receiveEvent` for what comes back. Not
+  Telegram's own script: the page carries a session token and its CSP stays `'self'`.
+- It only acts inside Telegram (`tgWebAppPlatform` in the address's hash, or the proxy
+  present). Both pages send `web_app_ready` and `web_app_expand`. The cook screen also,
+  from Mini App version 8.0 (`tgWebAppVersion`): `web_app_request_fullscreen` and
+  `web_app_setup_swipe_behavior` with vertical swipes off (7.7). Older versions only expand.
+- Safe areas: `web_app_request_safe_area` and `web_app_request_content_safe_area`; their
+  insets become `--tg-safe-*` and `--tg-content-*` on the page, and the cook screen's
+  padding keeps clear of them (Telegram's close and menu buttons float over full screen).
+- The cook screen's [Full screen] button (CK11's) works in Telegram too: it asks to leave
+  or re-enter full screen, its label following `fullscreen_changed`.
+Tests: browser test with a faked `TelegramWebviewProxy` (events recorded): the cook screen
+asks for full screen and no swipes on 8.0, only expands on 7.0, the body double page only
+expands, a `content_safe_area_changed` moves the header down; outside Telegram nothing is
+sent.
+
+Notes:
+- `themi_home/web/static/miniapp.js`, loaded before each page's own script. Inside Telegram
+  is `tgWebAppPlatform` in the hash or `TelegramWebviewProxy` present; what it found is kept
+  in `sessionStorage` (`themi_tg`) for a reload whose address lost the hash. It exposes
+  `window.themiMiniApp` (`inTelegram`, `canFullscreen`, `isFullscreen()`,
+  `toggleFullscreen()`, `onChange(fn)`, `send`), which CK11's button uses.
+- Swipe behaviour from 7.7, full screen and safe areas from 8.0, as Telegram's docs version
+  them. Orientation isn't locked: a phone turned on purpose should still turn.
+- `cook.css`: `--cook-top` / `--cook-bottom` / `--cook-left` / `--cook-right` take the
+  larger of the browser's safe area and Telegram's (`--tg-safe-*` + `--tg-content-*`); the
+  page, the ingredients drawer, Ask Themi and the soonest-timer badge use them.
+- `page_in_chrome` gained `before` (a script run before the page's,
+  `Page.addScriptToEvaluateOnNewDocument`) and `hash`.
+- Check on a real phone and tablet: the faked proxy can't show what Telegram's floating
+  buttons cover.
+
+### CK11 · Cooking companion: the kitchen tablet
+Status: [x] 2026-11-08
+Depends on: CK10
+Read first: the plan's Features "Hands-free and kitchen-proof" and its open question on a
+kitchen device sign-in.
+- A [Full screen] button in the cook header where the browser offers the Fullscreen API
+  (`document.fullscreenEnabled`, or webkit's on an iPad), hidden where it doesn't
+  (iPhone Safari) and when the page already runs full screen as an installed app. It toggles
+  "Full screen" / "Exit full screen" with `fullscreenchange`. The wake lock is taken again
+  after the change.
+- Installable: `/session/manifest.webmanifest` (name Themi, start `/session`, scope
+  `/session`, `display: standalone` with `display_override: ["fullscreen"]`, the theme's
+  colours), PNG icons 192 and 512 (and maskable) plus an apple-touch-icon, the iOS
+  web-app metas. Both `/session` pages link it.
+- Sign-in in a plain browser: `/session` opened signed out and not in Telegram shows how to
+  sign in (/site in Telegram, or [Sign in] to the signed-out page with Google), not "Opening
+  your session…".
+- No new kind of sign-in: the tablet is signed in as a person (the plan's open question).
+Tests: the manifest route and its fields, the icons served; browser test: the button shown
+and toggling with a faked Fullscreen API, hidden without it; the signed-out page in a plain
+browser shows the sign-in help. `tests/golden/routes.json` gains the manifest route.
+
+Notes:
+- `GET /session/manifest.webmanifest` (`id`, `start_url` and `scope` all `/session`;
+  `display_override` fullscreen then standalone; the light theme's colours). Icons in
+  `themi_home/web/static/icons/`: `icon.svg` (the chameleon's parts in fixed colours) and the
+  PNGs drawn from it with ImageMagick (the command is in the SVG). One 192 and one 512, both
+  "any maskable": the art sits inside the maskable safe zone.
+- Both `/session` templates link the manifest, the apple-touch-icon and the web-app metas.
+  The iOS status bar stays "default" (the body double page has no top safe-area padding).
+- The button is in the cook header beside A- A+, and is set again after each redraw. It is
+  hidden when an installed app already runs `display-mode: fullscreen`. It calls
+  `requestFullscreen({navigationUI: "hide"})` on the page, or the webkit form on an iPad.
+  The wake lock is taken again on `fullscreenchange`.
+- Signed out in a plain browser (no `tgWebAppData`), `/session` hides "Opening your
+  session…" and says how to sign in: /site in Telegram, or a link to `/signed-out` (Google).
+  Signing in lands on `/`, so they come back to `/session` themselves.
+- Setup for the tablet: sign in in its browser, open `/session`, then "Add to Home Screen"
+  (Android Chrome: "Install app"). On an iPad, the home-screen app keeps its own cookies, so
+  it needs a sign-in inside it, and a link opened in Safari doesn't reach it. Whether Google's
+  sign-in finishes inside an iPad home-screen app is untested; until then, use the [Full
+  screen] button in Safari on an iPad. A kitchen device sign-in is the plan's open question,
+  not planned yet.
 
 ---
 

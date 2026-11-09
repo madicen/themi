@@ -8,16 +8,16 @@ from pathlib import Path
 
 import pytest
 
+from tests.fixtures.db import migrated_file
 from themi import clock
 from themi.accounts import AccountStore, Role
 from themi.accounts.claim import CODE_FILE, Claim, ClaimError
-from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 
 
 @pytest.fixture
 def claim(tmp_path: Path) -> Claim:
-    return Claim(AccountStore(open_database(tmp_path / "themi.db"), Cipher(generate_key())))
+    return Claim(AccountStore(migrated_file(tmp_path / "themi.db"), Cipher(generate_key())))
 
 
 def test_a_code_is_made_and_written_for_its_owner_only(claim: Claim, tmp_path: Path) -> None:

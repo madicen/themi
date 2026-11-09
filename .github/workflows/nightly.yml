@@ -1,11 +1,11 @@
 name: Nightly
 
-# Live smoke tests nightly; AI behaviour evals weekly (they use up free-tier
-# quota), or by hand. Test-account secrets live in the repository's settings,
+# The tests on Python 3.12 and the live smoke tests nightly; AI behaviour evals weekly
+# (they use up free-tier quota), or by hand. Test-account secrets live in the repository's settings,
 # never the family's real accounts.
 on:
   schedule:
-    - cron: "17 10 * * *"   # live tests: 10:17 UTC, early morning in California
+    - cron: "17 10 * * *"   # 3.12 and live tests: 10:17 UTC, early morning in California
     - cron: "47 10 * * 0"   # evals: Sundays
   workflow_dispatch:
     inputs:
@@ -14,6 +14,23 @@ on:
         default: gemini
 
 jobs:
+  # requires-python's floor. Pull requests test on 3.13 only (checks.yml), so a break
+  # that only 3.12 sees is caught here, the next morning, or by Release.
+  oldest-python:
+    if: github.event_name != 'schedule' || github.event.schedule == '17 10 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: make install PYTHON=python
+      - name: Unit, integration and scenario tests on 3.12
+        run: make test-py PYTHON=python
+
   live:
     if: github.event_name != 'schedule' || github.event.schedule == '17 10 * * *'
     runs-on: ubuntu-latest
