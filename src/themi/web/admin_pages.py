@@ -42,6 +42,7 @@ def routes(kit: Kit) -> APIRouter:
             if app.services.maybe(keys.travel)
             else None,
             "travel": app.services.maybe(keys.travel) is not None,
+            "household_connections": any(s.household for s in app.services.accounts_sections),
             **extra,
         }
 

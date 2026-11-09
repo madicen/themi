@@ -321,6 +321,19 @@ async def test_the_more_page_shows_admin_pages_only_to_admins(
             assert admin_only in admin
 
 
+async def test_the_family_keeps_its_words_and_its_bar(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """A new Themi says "People" and puts Modules on an admin's bar; the family's doesn't."""
+    await sign_in(scenario, site, "Erin")
+    home = (await site.get("/")).text
+    more = (await site.get("/more")).text
+    bar = home[home.index('<nav class="tabs"') : home.index("</nav>")]
+    assert 'href="/modules"' not in bar and 'href="/tasks"' in bar
+    assert "<h2>Household</h2>" in more and ">Family</span>" in more
+    assert "<h1>Family</h1>" in (await site.get("/family")).text
+
+
 async def test_every_page_renders_in_the_new_shell(scenario: Scenario) -> None:
     pages = (
         "/",

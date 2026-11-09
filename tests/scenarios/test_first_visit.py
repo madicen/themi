@@ -198,3 +198,27 @@ async def test_a_new_themis_settings_are_only_the_cores(tmp_path: Path) -> None:
         "Good-morning message",
         "My calendars",
     }
+
+
+async def test_a_new_themis_menu_is_for_setting_it_up(tmp_path: Path) -> None:
+    """Nothing in the menu for modules that aren't on; Modules and Development on the
+    admin's bar and in their name's menu; "People", not "Family", off the family template."""
+    runtime = started(tmp_path)
+    claim = Claim(runtime.app.store)
+    sam = claim.claim(claim.make(tmp_path), "Sam's work", "UTC", "Sam", tmp_path)
+    themi = SimpleNamespace(app=runtime.app, member=lambda _: sam)
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        await sign_in(themi, site, "Sam")  # type: ignore[arg-type]
+        home = (await site.get("/")).text
+        more = (await site.get("/more")).text
+        people = (await site.get("/family")).text
+    bar = home[home.index('<nav class="tabs"') : home.index("</nav>")]
+    assert re.findall(r'href="([^"]+)"', bar) == ["/", "/modules", "/dev", "/more"]
+    menu = home[home.index('<details class="menu">') :]
+    assert '<a href="/modules">Modules</a>' in menu[: menu.index("</details>")]
+    groups = re.findall(r"<h2>([^<]+)</h2>", more)
+    assert "Household" not in groups and "This Themi" in groups
+    titles = re.findall(r'<span class="row-title">([^<]+)</span>', more)
+    assert "People" in titles and "Family" not in titles
+    assert not {"Google accounts", "Household connections"} & set(titles)
+    assert "<h1>People</h1>" in people and "Appliances, the vacuum" not in people
