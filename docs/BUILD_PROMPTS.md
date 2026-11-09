@@ -294,7 +294,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK4 | Cooking companion: look-ahead | Cooking companion | [x] 2026-11-08 |
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [x] 2026-11-08 |
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
-| CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [ ] |
+| CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [x] 2026-11-08 |
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
@@ -14581,7 +14581,7 @@ Notes:
 - Test changed: CK1's state test expects the gather lines' new `maybe_out` and `item`.
 
 ### CK7 · Cooking companion: kitchen-proof settings and energy
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, CK2, CK3, CK4
 Read first: the plan's Features "Hands-free and kitchen-proof" and "Phrasing and energy";
 CR7a's preferences and CR7d's settings sections.
@@ -14594,6 +14594,30 @@ CR7a's preferences and CR7d's settings sections.
 - Layouts checked at 1024 px landscape (the main one), 768 px portrait and 390 px.
 Tests: unit tests for each preference in the state, the low-energy effects with no energy
 word anywhere; browser tests at the three widths (nothing cut off, no horizontal scroll).
+
+Notes:
+- `CookingPreferences` now: `cooking_units`, `cooking_chime_volume`, `cooking_text_size`
+  (80-200%, stepped by A- A+ through `TEXT_SIZES`), `cooking_theme` (`auto`, as the device,
+  is the default, beside light, dark and kitchen), `cooking_steps_view` (`one` or `all`).
+  They're the viewer's own, so two people on one group session each get theirs.
+- Settings: a "Cooking" part inside the Body double section (`id="cooking"`).
+  `test_the_family_form_is_as_it_was` now lists the five fields added since CR7a, by
+  prompt, beside the CR7a snapshot (still exact).
+- On the screen: A- A+ post to `POST /session/cook/prefs` (routes.json), which also takes
+  `theme` and `steps_view`. The CSP allows no inline styles, so the size is
+  `data-text-size` on the body with a CSS rule per step, and the theme `data-theme` with
+  its tokens. Kitchen: black, white and a yellow accent, thicker borders, bold step text.
+- The whole list: `steps` in the state (label, text, current, done, folded), the current
+  step at full size and marked.
+- A low level at the start (`energy_at_start == "low"`, kept as BD1a keeps it): the strip
+  offers only must-do items (preheat, soak, marinate); an optional step ("optional", "if
+  you'd like", "if desired", "if using"...) is folded under "(Optional) 1 more"; gather
+  has [Skip the checklist]. The state carries `skip_checklist` and each step's `folded`,
+  never the level or the reason.
+- Browser tests: 1024×768, 768×1024 and 390×844 (no horizontal scroll, nothing past either
+  edge, step text at least 28 px, move buttons at least 64 px, the rail beside the step in
+  landscape and under it in portrait, the drawer open too), and a phone at 200% text in
+  the kitchen theme with the whole list.
 
 ### CK8 · Cooking companion: push-to-talk
 Status: [ ]
