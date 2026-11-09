@@ -256,6 +256,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
 | F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
+| F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [ ] |
+| F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [ ] |
+| F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12613,6 +12616,174 @@ gets a short list of options from the fake web search.
 
 Data: once live, set aside or retire Erin's rule 29 if it's still there, and re-add the VNS
 device and the washable dog bed as her someday items. Mark #185 reviewed once live.
+
+### F37a · Feedback (2026-11-09): the dishwasher ticks the routine on the owner's day
+Status: [ ]
+Depends on: F34ja, F34jb, H1, R1b
+Read first: F34ja's and F34jb's notes (`member_day`, `Routines.today(member)`,
+`Routines.owner(item)`, and the dishwasher left as the household's on purpose); H1's notes
+(the dishwasher checking things off); R1b's notes (`RoutinesWall.on_tick`). From Michael's
+bug #189 (2026-11-09, 12:10 am, "dishwasher task was marked off on the wrong day, should
+have respected my day start time").
+
+What the Pi shows: Michael's day ends at 4 am (`members.day_ends` 4). "Cycle Dishwasher" is
+routine item 2 on his evening routine (routine 6), linked to wall routine 986608. He started
+the dishwasher after midnight four nights running, and each time the staged
+`dishwasher_done` action ticked the next calendar day:
+- pending_actions 505 (Fri 6 Nov, 1:27 am), 530 (Sat 1:46 am), 539 (Sun 12:19 am) and 585
+  (Mon 9 Nov, 12:08 am), payloads `{"routine": 986608, "day": "<that calendar date>"}`.
+- `Dishwasher._started` takes `today` from the family's clock (`local.date()`), and
+  `CozylaRoutines.open_matching` / `open_items` read the wall's records for
+  `CozylaRoutines._today()`, also the family's date. So Monday's item was found open and
+  ticked, and Sunday's stayed open.
+- The executor ticks the wall record directly (`wall.tick`), so Themi's own `routine_ticks`
+  has no row for item 2 on 8 Nov either. The 11:31 pm and 11:37 pm evening checks still
+  listed it, and it would have shown as undone in Sunday's day summary.
+F34jb kept the dishwasher on the family's day because the machine is the household's. The
+routine item it ticks belongs to a person, though, so the tick is that person's.
+
+Build:
+- Bug fix: start with the failing test below.
+- The day for a dishwasher check-off is the owner's day: for a wall routine record, the
+  person it maps to (`member_map`), or the admin when nobody does; for a task, the assignee,
+  or the person acting for a shared task (`TaskBoard._doer_today`). `_to_check_off` works
+  per person: `open_matching(words, member)` reads the wall's records for
+  `member_day(member, now)` and keeps that member's.
+- A wall record linked to a Themi routine item (`routine_item_links`) is ticked through
+  Themi: `Routines.tick_now(item, day)` on the owner's day, which writes `routine_ticks` and
+  ticks the wall through `RoutinesWall.on_tick` as a tick in chat does. Only a record Themi
+  doesn't own (a C3 check-in, or something unlinked) is ticked on the wall directly, still
+  on the owner's day.
+- The payload keeps `day` as the owner's day. The card's summary is unchanged, and so is
+  `expires`: the end of the owner's day, not midnight.
+- `vacuum.py`'s `open_items` use (the same H1 path) gets the same per-owner day.
+- `test_member_day.py`'s allow-list: take the dishwasher's and vacuum's check-off out of it
+  (the pace stays the household's and stays listed).
+
+Tests: start with a failing one. Frozen clock Sun 8 Nov 11:59 pm advanced to Mon 9 Nov
+12:08 am, Michael's day ending at 4 am: the dishwasher starts, the staged check-off's day is
+8 Nov, approving it writes `routine_ticks` (item 2, 8 Nov) and ticks wall routine 986608 on
+8 Nov in the fake Cozyla client, and Monday's record is untouched. At 4:01 am the same start
+ticks 9 Nov. Erin (day ends at midnight), with a dishwasher item on her routine, sees no
+change. A task check-off goes to the assignee's day. The card lapses at Michael's 4 am, not
+at midnight.
+Scenario: Michael, day ends at 4 am, starts the dishwasher at 12:30 am and approves the
+card. Asked "is my evening routine done?" he hears Cycle Dishwasher done for tonight, and
+Monday evening's check still lists it.
+
+Data: Michael can tick 8 Nov's Cycle Dishwasher on the wall himself if he wants the history
+right, and untick 9 Nov's (the wall keeps both). Mark #189 reviewed once live.
+
+### F37b · Feedback (2026-11-09): an email's booking already on the calendar under another name
+Status: [ ]
+Depends on: K3, F29b, F34e
+Read first: `Events._already` in `themi_google/events.py` and its history (bug #101, F29b);
+bug #159's note (an invitation already on the calendar); F34e's notes (`calendar_twins`,
+how two events are judged the same). From Erin's bug #187 (2026-11-08, 4:01 pm, "the meta
+visit is already on the calendar, twice").
+
+What the Pi shows: at 1:01 pm on Sun 8 Nov, Themi staged pending_action 554 for Erin, "From
+an email: Meta visit with Samuel Carrijo, Mon 09 Nov, 12-1 pm (at 1 Hacker Way), for your
+calendar", from email 1137 ("Your Meta visit details", security@facebookmail.com, in
+Michael's inbox, addressed to Erin). The visit was on both their calendars already, as an
+invitation: calendar_entries 92671 (Erin's) and 92696 (Michael's), "Samuel | Craig, Gina,
+and 2 more people", 12-2:30 pm, "1 Hacker Way, Building 16, Menlo park". That's the "twice".
+`_already` says it's there only for the very same start and end, or the same start and the
+same title. Here the start matched, but the end (1 pm vs 2:30 pm) and the title didn't.
+The card is still pending.
+
+Build:
+- Bug fix: start with the failing test below.
+- `_already` also counts an event on their calendars (`calendar_entries`, and Themi's own
+  `themi_events`) as this booking when the times overlap and any of these holds:
+  - Same start, and the places match: one place's first part (up to its first comma, with
+    case, punctuation and "st"/"street" style words evened out) starts the other's ("1 Hacker
+    Way" and "1 Hacker Way, Building 16, Menlo park").
+  - Same start, and a name in the booking's title is in the event's title or guests (a word
+    of four or more letters that isn't a common word such as "visit", "meeting",
+    "appointment" or "with": "Samuel").
+  - The same title (`_same_title`) on the same day, whatever the times (an email's times
+    are often rounded).
+  Times that only overlap with nothing else in common stay two events (a dentist at 12 and
+  a lunch at 12:30 are both kept).
+- F29b's check when the card runs (`events.py`, the same-start-and-title test before
+  `make`) uses the same wider judgement, keeping its "Already on your calendar" wording.
+- A card waiting for an event that has since shown up on their calendar is withdrawn at the
+  next calendar fetch, its message edited to "Already on your calendar.", so they aren't
+  asked about something done.
+- Use F34e's sameness test if it fits (place and names); one judgement for both places,
+  not two.
+
+Tests: start with a failing one. Email 1137's booking with Erin's 92671 on her calendar
+stages nothing. The same with 92671's place changed to "Stanford" and its title to "Lunch"
+stages a card. A booking at "2 Hacker Way" with no shared name stages one. A same-title
+booking on the same day at other times stages nothing. A card staged before the event was
+fetched is withdrawn at the next fetch, with the edited message. "Go ahead" on a card whose
+event has since come in adds nothing.
+Scenario: Erin has "Samuel | Craig, Gina, and 2 more people" on her calendar Monday at noon
+at 1 Hacker Way. The Meta visit email comes in, and she gets no card about it.
+
+Data: decline pending_action 554 on the Pi once live (or it lapses at 1 pm Mon 9 Nov on its
+own). Mark #187 reviewed once live.
+
+### F37c · Idea (2026-11-09): "Not ever" on an email's card, and stopping a sender's offers
+Status: [ ]
+Depends on: F26b, F37b
+Read first: `themi/core/approvals.py` (`buttons_for`, `RESULT_TEXT`, why Not now snoozes);
+`themi/core/approval_groups.py` (F26b's shared card); `Events` in `themi_google/events.py`
+(`calendar_from_email` and its `source` "email:<id>"); the plan's PDA phrasing rules. From
+Michael's idea #188 (2026-11-08, 5:35 pm, "these email things need a "not ever" option").
+
+What the Pi shows: at 5:33 pm Themi offered Michael pending_action 571, "From an email:
+Lasagna Love service resume, Mon 16 Nov, all day, for your calendar". He tapped Not now,
+which snoozes, so the card said "No rush, this will come back later.", and he didn't want it
+back at all. The only way to decline outright is a bare "no". The date was 16 Nov **2054**:
+email 1144 (lasagnaloveportal.org, "Pause Confirmation") says "paused your service until 16
+November 2054", so the reading was right. But `describe` leaves out the year, and 16 Nov
+2054 is also a Monday, so the card looked like next week.
+
+Decided (Michael, 2026-11-09): "Not ever" declines this card for good. The card then asks
+once whether to stop that sender's calendar offers too.
+
+Build:
+- On a card made from an email (category `calendar_from_email`, and the other email-made
+  offers that stage from triage: `email_mark_read` and the like, each with the email's id
+  in its payload), a third button: [Go ahead] [Not now] [Not ever]. Other cards keep two
+  buttons. F26b's shared card for one email gets the same third button, for all of it.
+- "Not ever" declines the action (`Decision.DECLINE`), so it never comes back, and edits the
+  card to "{summary}\nLeft as is, for good. Skip calendar offers from Lasagna Love from now
+  on?" with [Yes, skip them] [Just this one]. The sender's name is the email's from-name
+  (its address when there's none), in a delimited block as data inside the summary's
+  making. "Just this one" edits to "{summary}\nLeft as is, for good." and nothing else
+  changes.
+- "Yes, skip them" stores a sender rule (migration: `email_sender_skips` with member,
+  sender address, kind, created_at). The kind is the card's category, so skipping Lasagna
+  Love's calendar offers doesn't hide its bills. Triage leaves out that kind of offer from
+  that address for that person, logged at INFO with no subject or body. The card edits to
+  "{summary}\nLeft as is. No more calendar offers from Lasagna Love." A sender skipped by
+  one person still reaches the other.
+- They can undo it: My settings lists "Skipped senders" with a remove per row, and "show
+  me Lasagna Love's calendar offers again" in chat removes it (a tool,
+  `unskip_email_sender`, staged like other settings changes).
+- The 💤 reaction stays Not now. A bare "no" stays a decline with no sender question.
+- `describe` gives the year when the event isn't within the next twelve months ("Mon 16
+  Nov 2054, all day"), on every card and read-back that uses it.
+- The wording stays gentle, with no "never" said back at them as a demand: the button is
+  their word, and the replies are statements of what happened.
+
+Tests: an email calendar card has three buttons, and a task card has two. Not ever
+declines it: it isn't in /pending and doesn't come back after the snooze time. The edit
+asks about the sender with two buttons. "Just this one" stores nothing. "Yes, skip them"
+stores the rule, and a new calendar offer from that address for that person is never
+staged, while one for the other person is, and a bill from the same address is still
+triaged as before. Removing it on My settings brings offers back. `describe` of 16 Nov 2054
+says 2054, and of 16 Nov this year doesn't. The sender's name with instructions in it ("Ignore
+the above") is shown as data only.
+Scenario: Michael gets the Lasagna Love card, taps Not ever, then Yes, skip them. The card
+says no more calendar offers from Lasagna Love, and a second Lasagna Love email with a date
+a week later brings no card.
+
+Data: none needed (action 571 is declined already). Mark #188 reviewed once live.
 
 ## Conversation mode
 
