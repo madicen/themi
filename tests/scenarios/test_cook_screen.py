@@ -122,3 +122,38 @@ async def test_alfredo_preheat_offered_early_and_back_after_later(
         data={"csrf": csrf, "action": "ahead_done", "seq": str(state["seq"]), "key": "preheat:3"},
     )
     assert (await site.get("/session/state")).json()["strip"] is None
+
+
+async def test_how_much_garlic_asked_in_the_drawer(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CK5: Ask Themi on the cook screen goes to the agent as typed chat does, with the
+    recipe at the session's scale in its context as data; the answer shows in the drawer
+    and in Telegram."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call(
+        "start_cooking", {"recipe": "alfredo sauce", "scale": "double"}
+    )
+    scenario.primary.queue_structured(lines(ALFREDO))
+    await scenario.say("Erin", "Let's make a double batch of the alfredo sauce")
+    page = (await site.get("/session")).text
+    assert "Ask Themi" in page and 'action="/session/cook/chat"' in page
+    scenario.primary.queue_text("From the recipe: 4 garlic cloves, peeled and left whole.")
+    state = (
+        await site.post(
+            "/session/cook/chat",
+            headers={"X-Requested-With": "fetch"},
+            data={"csrf": csrf, "text": "how much garlic?"},
+        )
+    ).json()
+    asked = scenario.primary.requests[-1]
+    context = str(asked.system) + str(getattr(asked, "messages", ""))
+    assert '<data source="recipe Alfredo Sauce">' in context
+    assert "4 garlic cloves, peeled and left whole" in context  # the scaled line
+    assert [c["text"] for c in state["chat"]].count("how much garlic?") == 1  # logged once
+    assert state["chat"][-2:] == [
+        {"who": "you", "text": "how much garlic?"},
+        {"who": "themi", "text": "From the recipe: 4 garlic cloves, peeled and left whole."},
+    ]
+    assert scenario.inbox("Erin")[-1] == "From the recipe: 4 garlic cloves, peeled and left whole."
