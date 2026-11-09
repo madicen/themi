@@ -290,7 +290,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
 | CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
-| CK3 | Cooking companion: the timer rail | Cooking companion | [ ] |
+| CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
 | CK4 | Cooking companion: look-ahead | Cooking companion | [ ] |
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [ ] |
 | CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [ ] |
@@ -14399,7 +14399,7 @@ Notes:
   (the scale switcher's chips come first now).
 
 ### CK3 · Cooking companion: the timer rail
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1
 Read first: the plan's Features "Timers"; RC3c's notes (`CookingTimers`, the
 `cooking.timer` job, urgent delivery).
@@ -14420,6 +14420,30 @@ Tests: unit tests for custom labels, +1/+5 rescheduling, clear; browser test: ch
 pulse when `fired_at` appears (audio faked), repeating until tapped, the reduced-motion
 form; scenario: Pancakes with two timers running at once, firing in order on a frozen
 clock, both shown and cleared on the page.
+
+Notes:
+- `CookingTimers.add`, `cancel` and `clear` take one timer (the owner's only); typed "add 2
+  minutes" now goes through `add`. A moved timer's queued job sees the later end and queues
+  itself again (as before). `start(..., label=)`: their own label (40 characters), else
+  `default_label` ("Sauce, step 3" when the step has a group, else "Step 3").
+- Screen taps: `timer` (`minutes` from a preset button, or `typed`, and `label`),
+  `timer_add` (`timer`, `minutes`), `timer_cancel`, `timer_clear`, `timers_keep`,
+  `timers_cancel`. Timer taps don't bump `seq` (nothing on the chat card changes); `drawn`
+  changes, so the screen redraws.
+- The ending: an ended session stays on the screen (`Cooking.recent_ended`, up to 3 hours)
+  while it has timers to show. The state then has `phase: "done"`, `ended`, `outcome`, and
+  `ask_timers` until [Keep timers] or [Cancel them] is answered, on the screen or in chat
+  (`Cooking.answer_timers`, kept in `wrap["timers"]`, asked once). Only timer taps work on
+  an ended session. A [Stop] in the screen's header ends it, as typed "stop" does.
+- The alert, in `cook.js`: when a fired timer is drawn, `ring()` (a WebAudio chime at the
+  chime volume, and the `.cook-pulse` overlay's 3 s fade to 35% accent, twice) and again
+  every 30 s (`themiCook.alertEvery`) until no fired timer is shown. Under
+  `prefers-reduced-motion` the overlay is hidden and the screen gets a steady 12 px accent
+  border. `themiCook.playChime` replaces the chime (the browser test fakes it).
+- Chime volume: `CookingPreferences.cooking_chime_volume` (70), saved from the rail's slider
+  by `POST /session/cook/chime` (new in routes.json, as `/session/music` saves the music's
+  volume). CK7 puts it in Settings too.
+- The soonest running timer shows in the header while the All ingredients drawer is open.
 
 ### CK4 · Cooking companion: look-ahead
 Status: [ ]
