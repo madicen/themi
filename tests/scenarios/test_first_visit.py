@@ -8,12 +8,16 @@ from types import SimpleNamespace
 
 from tests.fakes.cozyla import FakeCozyla
 from tests.fakes.wiring import WALL_LIST, connector_options
-from tests.fixtures.web import csrf_of, web_client
+from tests.fixtures.family import seed_family
+from tests.fixtures.web import csrf_of, sign_in, web_client
 from tests.scenarios.harness import ModelBank
 from tests.scenarios.test_web_chat import said, scripted
 from themi.accounts import AccountStore
 from themi.accounts.claim import CODE_FILE, Claim
 from themi.app import build_app, family_modules
+from themi.cli import build_runtime
+from themi.config import load_config
+from themi.runtime import Runtime
 from themi.settings import Settings, ensure_secret_key
 from themi.standard.web_chat import WebChatModule
 from themi.storage import open_database
@@ -127,3 +131,61 @@ async def test_modules_wait_for_the_claim_before_their_jobs_run(
     assert db.query("SELECT title, default_owner FROM tasks") == [
         {"title": "Water the plants", "default_owner": sam.id}
     ]
+
+
+def started(tmp_path: Path, **more: str) -> Runtime:
+    """`themi run` on a data folder, as the container starts it."""
+    env = {"THEMI_DB_PATH": str(tmp_path / "themi.db"), "THEMI_DISABLE_TELEGRAM": "1", **more}
+    ensure_secret_key(env)
+    return build_runtime(Settings.from_mapping(env))
+
+
+def test_a_new_themi_starts_with_only_its_core_and_the_web_chat(tmp_path: Path) -> None:
+    """The setup portal plan: a fresh Themi starts with the core and the web chat, and the
+    admin builds it up on the Modules page. Settings in .env don't bring the family's in."""
+    runtime = started(tmp_path, COZYLA_EMAIL="a@b.c", COZYLA_PASSWORD="x", COZYLA_TODO_LIST="F")
+    names = {m.name for m in runtime.app.modules}
+    assert "web_chat" in names
+    assert not names & {"body_double", "chore_chart", "cozyla_todos", "tasks", "telegram"}
+    written = load_config(tmp_path / "themi.toml")  # so it stays that way once claimed
+    assert (written.template, written.added) == ("empty", ("web_chat",))
+
+
+def test_a_claimed_themi_keeps_what_it_was_started_with(tmp_path: Path) -> None:
+    first = started(tmp_path)
+    claim = Claim(first.app.store)
+    claim.claim(claim.make(tmp_path), "Sam's work", "UTC", "Sam", tmp_path)
+    first.app.db.close()
+    again = started(tmp_path)
+    assert again.app.services.start_report.template == "empty"
+
+
+def test_a_family_without_themi_toml_stays_the_family(tmp_path: Path) -> None:
+    """An install from before the setup portal has a family and no themi.toml."""
+    env = {"THEMI_DB_PATH": str(tmp_path / "themi.db")}
+    ensure_secret_key(env)
+    settings = Settings.from_mapping(env)
+    seed_family(AccountStore(open_database(settings.db_path), settings.cipher()))
+    runtime = started(tmp_path)
+    assert runtime.app.services.start_report.template == "family"
+    assert "body_double" in {m.name for m in runtime.app.modules}
+    assert not (tmp_path / "themi.toml").exists()
+
+
+async def test_a_new_themis_settings_are_only_the_cores(tmp_path: Path) -> None:
+    """No rows for modules that aren't on: body double, the chore chart, the day summary."""
+    runtime = started(tmp_path)
+    claim = Claim(runtime.app.store)
+    claim.claim(claim.make(tmp_path), "Sam's work", "UTC", "Sam", tmp_path)
+    runtime.app.services.settings = Settings.from_mapping(
+        {"THEMI_DB_PATH": str(tmp_path / "themi.db")}
+    )
+    sam = runtime.app.store.member_by_name("Sam")
+    assert sam is not None
+    themi = SimpleNamespace(app=runtime.app, member=lambda _: sam)
+    async with web_client(themi) as site:  # type: ignore[arg-type]
+        await sign_in(themi, site, "Sam")  # type: ignore[arg-type]
+        page = (await site.get("/settings")).text
+    titles = re.findall(r'<span class="row-title">([^<]+)</span>', page)
+    assert "Quiet hours" in titles
+    assert not set(titles) & {"Body double", "My chore chart", "Day summary", "My calendars"}

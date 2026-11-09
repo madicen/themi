@@ -88,6 +88,8 @@ def test_run_without_a_telegram_token_starts_and_says_what_telegram_needs(tmp_pa
     env = {**_env(tmp_path), "THEMI_HTTP_PORT": str(port)}
     env.pop("TELEGRAM_BOT_TOKEN", None)
     env.pop("THEMI_DISABLE_TELEGRAM", None)
+    # The family template, which has Telegram (a new Themi with no file starts empty)
+    (tmp_path / "themi.toml").write_text('template = "family"\n')
     process = subprocess.Popen(
         [sys.executable, "-m", "themi", "run"],
         env=env,
