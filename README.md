@@ -64,6 +64,10 @@ opens the management site signed in as that person.
   simulator's Erin and Husband. It holds the family's real messages and email, so
   `make dev-reset` deletes it too.
 
+`make fresh` runs a brand-new Themi as someone installing it would meet it: a claim code in
+its log, the key page, an empty Modules page, at <http://localhost:8080>. Its data is in
+`data/fresh/` and it doesn't read `.env`. `make fresh-reset` (with it stopped) starts it over.
+
 ### Rules worth knowing
 
 - Read time only through `themi.clock` (`tools/check_clock.py` enforces it), so tests can
