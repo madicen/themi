@@ -74,9 +74,9 @@ opens the management site signed in as that person.
 
 1. Run `themi run`. A new Themi makes its own secret key (next to its database) and prints a
    claim code. It starts the scheduler and the website (`/health` on port 8080).
-2. Open the website (<http://localhost:8080>) and enter the claim code: you name the
-   household and become its first admin. Save the secret key it shows you: without it,
-   stored tokens, keys and backups can't be decrypted.
+2. Open the website (<http://localhost:8080>) and enter the claim code: you give it a
+   name (your family's, or your own for a work Themi) and become its first admin. Save the
+   secret key it shows you: without it, stored tokens, keys and backups can't be decrypted.
 3. On the **Modules** page, turn on what you want and fill in what each needs, with its
    guide beside it: the Telegram bot's token, an AI provider, Google and the rest. Then
    press **Restart** on the same page.

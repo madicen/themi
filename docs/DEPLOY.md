@@ -164,7 +164,7 @@ docker compose up -d
 docker compose logs themi | grep "claim code"   # the code for the website
 ```
 
-Open the website, enter the claim code, and name the household: you're its first admin.
+Open the website, enter the claim code, and give this Themi a name: you're its first admin.
 Then add the rest on the Modules page. (`docker compose run --rm themi init` still works,
 for a scripted install.)
 

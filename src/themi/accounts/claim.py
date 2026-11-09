@@ -102,7 +102,7 @@ class Claim:
 
         household, name = household.strip(), name.strip()
         if not household or not name:
-            raise ClaimError("Give the household a name, and say your own.")
+            raise ClaimError("Give this Themi a name, and say your own.")
         try:
             timezone = _timezone(timezone.strip())
         except InvalidValue as exc:

@@ -1,5 +1,6 @@
-"""SP7a: the first visit. A Themi nobody has claimed asks for its claim code, the
-household's name and timezone, and the claimant's name, and makes them its first admin.
+"""SP7a: the first visit. A Themi nobody has claimed asks for its claim code, its name
+(the household's, or one person's), its timezone, and the claimant's name, and makes them
+its first admin.
 When Themi made its own secret key, the next page shows it once, to be saved.
 """
 
