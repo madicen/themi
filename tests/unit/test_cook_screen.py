@@ -95,7 +95,7 @@ async def test_the_state_in_every_phase(scenario: Scenario, cooking: Cooking) ->
     first = cooking.state(erin)
     assert first["step"] == {
         "index": 0, "label": "1", "text": "Drain and discard water from soaked cashews.",
-        "group": "", "words": "Step 1 of 3", "first": True, "last": False,
+        "group": "", "words": "Step 1 of 3", "first": True, "last": False, "folded": False,
     }  # fmt: skip
     assert first["peek"].startswith("Next, step 2: Blend cashews and all other ingredients")
     assert [b["label"] for b in first["buttons"]] == ["Next"]

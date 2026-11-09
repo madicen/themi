@@ -126,3 +126,78 @@ async def test_reduced_motion_is_a_steady_border(scenario: Scenario) -> None:
         shadow = await tab.value("getComputedStyle(document.body).boxShadow")
         assert "inset" in shadow and "12px" in shadow
         assert await tab.value("(window.chimes || 0) >= 1")  # the chime still sounds
+
+
+# CK7: the main screen (a tablet propped up in landscape), a tablet upright, and a phone.
+LAYOUT = (
+    "(() => {"
+    " const w = window.innerWidth, out = [];"
+    " const wide = document.documentElement.scrollWidth;"
+    " if (wide > w) out.push('scrolls ' + wide);"
+    " for (const el of document.querySelectorAll('.cook *')) {"
+    "  const r = el.getBoundingClientRect();"
+    "  if (!r.width || !r.height) continue;"
+    "  if (el.closest('[hidden], .cook-drawer, details:not([open]) > :not(summary)')) continue;"
+    "  if (el.closest('.session-scene svg')) continue;"  # the art, clipped by its frame
+    "  if (r.right > w + 1 || r.left < -1)"
+    "   out.push((el.className || el.tagName) + ' ' + Math.round(r.left)"
+    "            + '-' + Math.round(r.right));"
+    " }"
+    " const text = parseFloat(getComputedStyle(document.querySelector('.cook-text')).fontSize);"
+    " if (text < 28) out.push('step text ' + text);"
+    " for (const b of document.querySelectorAll('.cook-moves button, .cook-timer-moves button')) {"
+    "  if (b.getBoundingClientRect().height < 64) out.push('short button ' + b.textContent);"
+    " }"
+    " return out.join('; ');"
+    "})()"
+)
+
+
+@pytest.mark.parametrize(("width", "height"), [(1024, 768), (768, 1024), (390, 844)])
+async def test_the_layout_fits(scenario: Scenario, width: int, height: int) -> None:
+    clock.unfreeze()
+    await to_step_three(scenario)
+    cooking = scenario.app.services.maybe(keys.cooking)
+    assert cooking is not None
+    session = cooking.current(scenario.member("Erin"))
+    assert session is not None
+    await cooking.advance(session, "next")  # step 3: a timer chip
+    await short_timer(scenario)  # and a timer on the rail
+    async with page_in_chrome(scenario, scenario.member("Erin"), ".cook-moves",
+                              width=width, height=height) as tab:  # fmt: skip
+        assert await tab.value("window.innerWidth") == width
+        assert await tab.value(LAYOUT) == ""
+        step = await tab.value(
+            "JSON.stringify(document.querySelector('.cook-step').getBoundingClientRect())"
+        )
+        rail = await tab.value(
+            "JSON.stringify(document.querySelector('.cook-rail').getBoundingClientRect())"
+        )
+        import json
+
+        step_box, rail_box = json.loads(step), json.loads(rail)
+        if width > height:  # landscape: the rail beside the step
+            assert rail_box["left"] >= step_box["right"] - 1
+        else:  # portrait: stacked
+            assert rail_box["top"] >= step_box["bottom"] - 1
+        await tab.value("document.querySelector('.cook-all-open').click()")
+        assert await tab.value(LAYOUT) == ""  # the drawer open too
+
+
+async def test_the_biggest_text_fits_a_phone(scenario: Scenario) -> None:
+    """CK7: 200% text, the whole list of steps and the kitchen theme, at 390 px."""
+    from themi_home.cooking import CookingPreferences
+
+    clock.unfreeze()
+    erin = scenario.member("Erin")
+    scenario.app.store.save_preferences(
+        erin, erin.id, CookingPreferences,
+        cooking_text_size=200, cooking_theme="kitchen", cooking_steps_view="all",
+    )  # fmt: skip
+    await to_step_three(scenario)
+    async with page_in_chrome(scenario, erin, ".cook-moves", width=390, height=844) as tab:
+        assert await tab.value("document.body.dataset.theme") == "kitchen"
+        assert await tab.value("!!document.querySelector('.cook-all-steps li.current')")
+        assert await tab.value(LAYOUT) == ""
+        await tab.value("document.querySelector('.cook-size button[value=down]').click()")
+        assert await until(lambda: tab.value("document.body.dataset.textSize === '170'"))
