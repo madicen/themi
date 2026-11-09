@@ -53,8 +53,8 @@ async def test_a_packs_static_files_are_served_under_its_name(
     scenario: Scenario, site: httpx.AsyncClient
 ) -> None:
     await sign_in(scenario, site, "Erin")
-    kitchen = (await site.get("/recipes/kitchen")).text
-    (url,) = re.findall(r'src="(/static/home/kitchen\.js\?v=\w+)"', kitchen)
+    page = (await site.get("/session")).text  # CK1 retired the kitchen view and its script
+    (url,) = re.findall(r'src="(/static/home/session\.js\?v=\w+)"', page)
     response = await site.get(url)
     assert response.status_code == 200 and "visibilitychange" in response.text
     assert response.headers["cache-control"] == "no-cache"
