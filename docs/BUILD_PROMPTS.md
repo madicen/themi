@@ -360,7 +360,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SL1 | Slack: the module, settings and sending | Slack | [x] 2026-11-08 |
 | SL2 | Slack: receiving and pairing | Slack | [x] 2026-11-08 |
 | SL3 | Slack: buttons, edits and threads | Slack | [x] 2026-11-08 |
-| SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [ ] |
+| SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
 | SL5 | Slack: the work template on Slack | Slack | [ ] |
 | SL6 | Slack: status sync | Slack | [ ] |
 
@@ -16412,11 +16412,13 @@ Notes (2026-11-08):
   there; writing at the top of the DM, or two minutes passing, puts Themi back at the top.
   A tap on a card inside a thread counts as writing in that thread. Threads still share
   one conversation in Themi's memory.
-- Mini App (`web_app`) buttons are link buttons to the same page; the page asks them to
-  sign in in the browser, since Slack has no Mini App.
+- Mini App (`web_app`) buttons are link buttons to the same page. In a browser it works
+  only when they're signed in to the website there; otherwise it waits for Telegram's
+  sign-in. The only one today is the home pack's body double, which work doesn't have;
+  follow-up if a pack used on Slack adds one: the ticket sign-in for browsers.
 
 ### SL4 · Slack: pictures, voice clips, reactions, `/themi`
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SL3
 - Files on a DM message: pictures and audio clips downloaded with the bot token (memory
   only, size limits as Telegram's) into `picture` and `voice` events.
@@ -16427,6 +16429,22 @@ Depends on: SL3
   `/themi` alone lists them. `typing` and `publish_commands` are no-ops.
 Tests: a picture and a voice clip reach the agent; 👀 goes out as `eyes`; a reaction on
 Themi's message arrives; `/themi pause` pauses.
+
+Notes (2026-11-08):
+- Files: an audio file or Slack clip becomes a `voice` event (its own mime type, often
+  `audio/mp4` or `audio/webm`, passed through as Telegram's `audio/ogg` is); images become a
+  `picture` event, several in one message as an album. Files off Slack's hosts are never
+  fetched with the token. Follow-up: Slack's clip formats haven't been tried against the
+  live transcription providers (`make test-live`).
+- `send_photo`: `files.getUploadURLExternal`, the bytes, `files.completeUploadExternal` with
+  the caption. Slack doesn't say which message shows the file, so the id stands for the
+  file and can't be reacted to or edited.
+- `react` sends only emoji with a Slack name in `slack_blocks.EMOJI_NAMES`; others are
+  skipped. Reactions in become emoji (`:name:` for one Themi doesn't know).
+- `/themi pause` is handed on as the text `/pause`; `/themi` alone (or `help`) lists the
+  commands from the menu the app publishes, as a line only they see. Someone not paired is
+  told to say hello first. "Tests: `/themi pause` pauses" is covered as far as the channel
+  goes (it becomes `/pause` for the agent); SL5's scenario runs a command end to end.
 
 ### SL5 · Slack: the work template on Slack
 Status: [ ]

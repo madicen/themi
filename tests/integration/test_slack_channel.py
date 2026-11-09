@@ -411,3 +411,99 @@ async def test_a_tap_on_a_card_in_a_thread_is_answered_there(
     assert len(recorder.events) == 1
     await channel.send_text(erin, "Nice.")
     assert fake_slack.posts(MICHAEL)[-1]["thread_ts"] == "1.0"
+
+
+# ----- SL4: pictures, voice clips, reactions, /themi --------------------------------------
+
+
+async def test_pictures_and_a_caption_reach_the_agent(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    files = [
+        fake_slack.add_file(b"\x89PNG-one", "image/png", "a.png"),
+        fake_slack.add_file(b"\xff\xd8-two", "image/jpeg", "b.jpg"),
+        fake_slack.add_file(b"x" * 10, "image/png", "huge.png", size=6 * 1024 * 1024),
+    ]
+    await channel.dispatch(fake_slack.dm(MICHAEL, "what's this?", files=files))
+    [event] = recorder.events
+    assert event.kind == "picture" and event.text == "what's this?"
+    assert [p.data for p in event.pictures] == [b"\x89PNG-one", b"\xff\xd8-two"]
+    assert [p.mime_type for p in event.pictures] == ["image/png", "image/jpeg"]
+    logged = family.db.query("SELECT text FROM message_log WHERE direction = 'in' ORDER BY id")
+    assert [r["text"] for r in logged] == ["[a picture] what's this?", "[a picture]"]
+
+
+async def test_a_voice_clip_reaches_the_agent(family: SeededFamily, fake_slack: FakeSlack) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    clip = fake_slack.add_file(b"audio-bytes", "audio/webm", "clip.webm",
+                               subtype="slack_audio", duration_ms=4200)  # fmt: skip
+    await channel.dispatch(fake_slack.dm(MICHAEL, "", files=[clip]))
+    [event] = recorder.events
+    assert event.kind == "voice" and event.voice is not None
+    assert (event.voice.data, event.voice.mime_type, event.voice.duration_seconds) == (
+        b"audio-bytes", "audio/webm", 4,
+    )  # fmt: skip
+
+
+async def test_a_file_from_elsewhere_is_never_fetched_with_the_token(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    sneaky = fake_slack.add_file(b"x", "image/png")
+    sneaky["url_private_download"] = sneaky["url_private"] = "https://evil.test/steal"
+    await channel.dispatch(fake_slack.dm(MICHAEL, "look", files=[sneaky]))
+    [event] = recorder.events
+    assert event.kind == "text" and event.text == "look"
+
+
+async def test_reactions_go_both_ways_by_slacks_names(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    sent = await channel.send_text(erin, "Approve the expense?")
+    _, ts = channel.where(sent) or ("", "")
+    await channel.dispatch(fake_slack.react(MICHAEL, "+1::skin-tone-2", ts))
+    [event] = recorder.events
+    assert event.kind == "reaction" and event.reaction is not None
+    assert (event.reaction.added, event.reaction.message_id) == (("👍",), sent)
+    await channel.react(erin, sent, "👀")
+    await channel.react(erin, sent, "🦜")  # no Slack name here: nothing sent
+    assert [(c["name"], c["timestamp"]) for c in fake_slack.calls("reactions.add")] == [
+        ("eyes", ts)
+    ]
+
+
+async def test_a_picture_goes_out_through_slacks_upload(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel = make_channel(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    sent = await channel.send_photo(erin, b"\x89PNG\r\n\x1a\nbytes", "Step 2")
+    [done] = fake_slack.calls("files.completeUploadExternal")
+    assert done["channel_id"] == "DMICHAEL" and done["initial_comment"] == "Step 2"
+    file_id = done["files"][0]["id"]
+    assert fake_slack.state.uploads[file_id] == b"\x89PNG\r\n\x1a\nbytes"
+    await channel.react(erin, sent, "👀")  # a file isn't a message to react to
+    assert fake_slack.calls("reactions.add") == []
+
+
+async def test_slash_themi_runs_a_chat_command(family: SeededFamily, fake_slack: FakeSlack) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    await channel.publish_commands(
+        [("pause", "Pause Themi's messages"), ("site", "A sign-in link")]
+    )
+    await channel.dispatch(fake_slack.slash(MICHAEL, "pause 2 hours"))
+    await channel.dispatch(fake_slack.slash(MICHAEL, "/site"))
+    assert [e.text for e in recorder.events] == ["/pause 2 hours", "/site"]
+    await channel.dispatch(fake_slack.slash(MICHAEL, ""))
+    menu = fake_slack.calls("chat.postEphemeral")[-1]["text"]
+    assert "/themi pause: Pause Themi's messages" in menu and "/themi site" in menu
+    await channel.dispatch(fake_slack.slash(STRANGER, "pause"))
+    assert len(recorder.events) == 2
+    assert fake_slack.calls("chat.postEphemeral")[-1]["user"] == STRANGER

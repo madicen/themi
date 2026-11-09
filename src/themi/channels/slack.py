@@ -25,6 +25,10 @@ Threads: a message written in a thread carries its parent as `reply_to_message_i
 what Themi sends to that person within THREAD_WINDOW goes into the same thread (a reply
 can take a while, and a slow reply has a word first); after that, or once they write at
 the top of the DM again, Themi writes at the top.
+
+SL4: files on a DM message (pictures, audio clips) are downloaded with the bot token into
+memory only; Themi's pictures go out through Slack's external upload; reactions go both
+ways by Slack's emoji names; `/themi <command> [words]` runs a chat command.
 """
 
 from __future__ import annotations
@@ -53,7 +57,15 @@ from themi.channels.buttons import (
     note_message,
     store_tokens,
 )
-from themi.channels.events import Button, ButtonPress, InboundEvent, InboundHandler
+from themi.channels.events import (
+    Button,
+    ButtonPress,
+    InboundEvent,
+    InboundHandler,
+    Picture,
+    Reaction,
+    VoiceNote,
+)
 from themi.channels.slack_api import SLACK_API, SlackApi, SlackError, Sleep
 from themi.localtime import to_utc_iso
 from themi.logs import quiet_chatty_libraries
@@ -62,6 +74,11 @@ from themi.storage.secrets import Secret
 log = logging.getLogger(__name__)
 
 NAME = "slack"
+MAX_VOICE_BYTES = 20 * 1024 * 1024  # as Telegram's
+MAX_PICTURE_BYTES = 5 * 1024 * 1024  # F34g's limit, as Telegram's
+PICTURE_LOG = "[a picture]"
+COMMANDS_TEXT = "Themi's commands (type them after /themi):"
+NOT_PAIRED_COMMAND_TEXT = "Themi doesn't know you yet: say hello in its Messages tab first."
 THREAD_WINDOW = timedelta(minutes=2)  # Themi's sends this soon after go to their thread
 SEEN_FOR = timedelta(days=1)  # how long an event id is kept, to drop Slack's repeats
 PAIRING_FAILURE_LIMIT = 5
@@ -103,6 +120,7 @@ class SlackChannel:
         self._rng = rng or random.Random()
         self._pairing_failures: dict[str, list[datetime]] = {}
         self._threads: dict[int, tuple[str, datetime]] = {}  # member: (thread ts, when)
+        self._commands: list[tuple[str, str]] = []  # the menu, for `/themi` alone
         quiet_chatty_libraries()  # httpx logs every request at INFO
 
     @classmethod
@@ -209,6 +227,8 @@ class SlackChannel:
             await self._on_event_callback(payload)
         elif kind == "interactive" and payload.get("type") == "block_actions":
             await self._on_tap(payload)
+        elif kind == "slash_commands":
+            await self._on_command(payload)
 
     async def _on_event_callback(self, payload: dict[str, Any]) -> None:
         event_id = str(payload.get("event_id") or "")
@@ -218,6 +238,8 @@ class SlackChannel:
         event = payload.get("event") or {}
         if event.get("type") == "message":
             await self._on_message(event)
+        elif event.get("type") == "reaction_added":
+            await self._on_reaction(event)
 
     def _first_time(self, event_id: str) -> bool:
         now = clock.now()
@@ -253,21 +275,120 @@ class SlackChannel:
         message_id = self.message_id(channel, ts, member, thread)
         reply_to = self.message_id(channel, thread, member) if thread else None
         self._note_thread(member, thread)
-        if not text:
-            return
-        self.store.log_message(member.id, "in", text, "chat", message_id)
-        await self._hand_on(
-            InboundEvent(
-                "text",
+        files = [f for f in event.get("files") or [] if isinstance(f, dict)]
+        voice = await self._voice(files)
+        pictures = [] if voice is not None else await self._pictures(files)
+        if voice is not None:
+            self.store.log_message(member.id, "in", "[voice note]", "voice", message_id)
+            event_ = InboundEvent("voice", member, member.id, message_id, clock.now(), 0,
+                                  voice=voice, reply_to_message_id=reply_to)  # fmt: skip
+        elif pictures:
+            logged = f"{PICTURE_LOG} {text}".strip()  # never the bytes
+            self.store.log_message(member.id, "in", logged, "picture", message_id)
+            for _ in pictures[1:]:  # each counts towards the daily cap (F34g)
+                self.store.log_message(member.id, "in", PICTURE_LOG, "picture", message_id)
+            event_ = InboundEvent(
+                "picture",
                 member,
                 member.id,
                 message_id,
                 clock.now(),
                 0,
                 text=text,
+                picture=pictures[0],
+                more_pictures=tuple(pictures[1:]),
+                media_group=ts if len(pictures) > 1 else "",
                 reply_to_message_id=reply_to,
             )
+        elif text:
+            self.store.log_message(member.id, "in", text, "chat", message_id)
+            event_ = InboundEvent("text", member, member.id, message_id, clock.now(), 0,
+                                  text=text, reply_to_message_id=reply_to)  # fmt: skip
+        else:
+            return  # a file that's neither, with no words
+        await self._hand_on(event_)
+
+    async def _voice(self, files: list[dict[str, Any]]) -> VoiceNote | None:
+        """An audio clip (Slack's own, or an audio file), if the message has one."""
+        for f in files:
+            mime = str(f.get("mimetype") or "")
+            if not (mime.startswith("audio/") or f.get("subtype") == "slack_audio"):
+                continue
+            if int(f.get("size") or 0) > MAX_VOICE_BYTES:
+                log.info("Skipping a %s-byte audio clip (too large)", f.get("size"))
+                return None
+            data = await self._download(f, MAX_VOICE_BYTES)
+            if data is None:
+                return None
+            seconds = int(f.get("duration_ms") or 0) // 1000
+            return VoiceNote(data, mime or "audio/mp4", seconds)
+        return None
+
+    async def _pictures(self, files: list[dict[str, Any]]) -> list[Picture]:
+        found = []
+        for f in files:
+            mime = str(f.get("mimetype") or "")
+            if not mime.startswith("image/"):
+                continue
+            if int(f.get("size") or 0) > MAX_PICTURE_BYTES:
+                log.info("Skipping a %s-byte image (too large)", f.get("size"))
+                continue
+            data = await self._download(f, MAX_PICTURE_BYTES)
+            if data is not None:
+                found.append(Picture(data, mime))
+        return found
+
+    async def _download(self, f: dict[str, Any], limit: int) -> bytes | None:
+        url = str(f.get("url_private_download") or f.get("url_private") or "")
+        if not url:
+            return None
+        try:
+            return await self.bot.download(url, limit)
+        except (SlackError, OSError) as exc:
+            log.warning("Couldn't download a Slack file (%s)", type(exc).__name__)
+            return None
+
+    async def _on_reaction(self, event: dict[str, Any]) -> None:
+        item = event.get("item") or {}
+        user = str(event.get("user") or "")
+        if item.get("type") != "message" or not str(item.get("channel", "")).startswith("D"):
+            return
+        member = self.store.member_by_identity(NAME, user)
+        if member is None:
+            return
+        emoji = slack_blocks.emoji_for(str(event.get("reaction") or ""))
+        message_id = self.message_id(str(item["channel"]), str(item["ts"]), member)
+        self.store.log_message(member.id, "in", f"[reacted {emoji}]", "reaction", message_id)
+        await self._hand_on(
+            InboundEvent(
+                "reaction",
+                member,
+                member.id,
+                message_id,
+                clock.now(),
+                0,
+                reaction=Reaction((emoji,), message_id),
+            )
         )
+
+    async def _on_command(self, payload: dict[str, Any]) -> None:
+        """`/themi pause` is the chat command /pause; `/themi` alone lists them."""
+        user = str(payload.get("user_id") or "")
+        channel = str(payload.get("channel_id") or "")
+        member = self.store.member_by_identity(NAME, user)
+        if member is None:
+            await self._whisper(channel, user, NOT_PAIRED_COMMAND_TEXT, None)
+            return
+        words = slack_blocks.plain(str(payload.get("text") or "")).strip().lstrip("/")
+        if not words or words.lower() == "help":
+            menu = "\n".join(f"/themi {name}: {about}" for name, about in self._commands)
+            await self._whisper(channel, user, f"{COMMANDS_TEXT}\n{menu}", None)
+            return
+        self._note_thread(member, None)
+        text = f"/{words}"
+        self.store.log_message(member.id, "in", text, "chat", None)
+        await self._hand_on(InboundEvent("text", member, member.id, None, clock.now(), 0,
+                                         text=text))  # fmt: skip
 
     async def _on_tap(self, payload: dict[str, Any]) -> None:
         user = str((payload.get("user") or {}).get("id") or "")
@@ -433,7 +554,44 @@ class SlackChannel:
         yield  # Slack shows no typing for bots in a DM; a slow reply gets a word (P2a)
 
     async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
-        pass  # Slack's commands live in the app's manifest: `/themi <command>`
+        """Slack's command is `/themi`, in the app's manifest; the menu is kept so `/themi`
+        alone can list what goes after it."""
+        self._commands = list(commands)
+
+    async def send_photo(
+        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+    ) -> int:
+        """A picture with a caption in their DM (Slack's external upload). Its id."""
+        channel = await self._dm(member)
+        name = "picture.png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "picture.jpg"
+        place = await self.bot.call("files.getUploadURLExternal", filename=name,
+                                    length=len(photo))  # fmt: skip
+        await self.bot.upload(str(place["upload_url"]), photo, name)
+        thread = self._thread(member)
+        await self.bot.call(
+            "files.completeUploadExternal",
+            files=[{"id": place["file_id"], "title": caption or name}],
+            channel_id=channel,
+            initial_comment=slack_blocks.escape(caption) if caption else None,
+            thread_ts=thread,
+        )
+        # Slack doesn't say which message shows the file: the file stands in for it.
+        message_id = self.message_id(channel, f"file:{place['file_id']}", member, thread)
+        self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind,
+                               message_id)  # fmt: skip
+        return message_id
+
+    async def react(self, member: Member, message_id: int, emoji: str) -> None:
+        name = slack_blocks.emoji_name(emoji)
+        found = self.where(message_id)
+        if name is None or found is None or found[1].startswith("file:"):
+            return
+        channel, ts = found
+        try:
+            await self.bot.call("reactions.add", channel=channel, timestamp=ts, name=name)
+        except SlackError as exc:
+            if exc.error != "already_reacted":
+                raise
 
     # ----- ids --------------------------------------------------------------------------
 
