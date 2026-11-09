@@ -11,6 +11,7 @@
       <button name="text_size" value="down" aria-label="Smaller text">A-</button>
       <button name="text_size" value="up" aria-label="Bigger text">A+</button>
     </form>
+    <button type="button" class="cook-fullscreen" aria-pressed="false" hidden>Full screen</button>
     {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop link") }}{% endif %}
   </header>
   <section class="cook-step" aria-label="This step">

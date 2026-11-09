@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- CK11: the app icon for an installed /session (the kitchen tablet), from the chameleon's
+       own parts (chameleon.svg) in fixed colours. The PNGs beside it are drawn from this file:
+       convert -background none -density 384 icon.svg -resize 512x512 icon-512.png (and 192, 180). -->
+  <rect width="512" height="512" fill="#3d6f6a"/>
+  <g transform="translate(46 70) scale(3)" stroke="#1f3b38" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="none" stroke="#cfe8c8" stroke-width="7" d="M36 74 C 18 76, 10 92, 22 100 C 32 106, 44 96, 37 88 C 32 82, 25 87, 29 92"/>
+    <path fill="#cfe8c8" d="M34 72 C 36 50, 66 42, 88 50 C 102 56, 106 72, 94 80 C 80 88, 46 88, 34 72 Z"/>
+    <path fill="none" d="M44 56 L 48 50 L 52 54 L 57 48 L 61 52 L 66 46 L 70 51 L 75 46 L 79 52"/>
+    <path fill="#cfe8c8" d="M84 50 C 92 34, 118 34, 124 50 C 128 62, 114 70, 98 68 Z"/>
+    <path fill="none" d="M104 62 C 110 65, 117 64, 121 59"/>
+    <circle fill="#ffffff" cx="108" cy="49" r="9"/>
+    <circle fill="#1f3b38" stroke="none" cx="110" cy="49" r="3.4"/>
+    <path fill="#3d6f6a" stroke="none" d="M52 60 a3 3 0 1 0 0.1 0 M66 56 a3 3 0 1 0 0.1 0 M78 60 a2.5 2.5 0 1 0 0.1 0 M60 70 a2 2 0 1 0 0.1 0"/>
+  </g>
+</svg>

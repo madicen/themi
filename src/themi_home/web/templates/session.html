@@ -4,14 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Session · Themi</title>
+  <link rel="manifest" href="/session/manifest.webmanifest">
+  <meta name="theme-color" content="#3d6f6a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Themi">
+  <link rel="apple-touch-icon" href="{{ asset('home/icons/apple-touch-icon.png') }}">
   <link rel="stylesheet" href="{{ asset('themi.css') }}">
+  <script src="{{ asset('home/miniapp.js') }}" defer></script>
   <script src="{{ asset('home/session.js') }}" defer></script>
 </head>
 <body class="session-page" data-signed-in="{{ '1' if member else '0' }}" data-csrf="{{ csrf }}" data-session="{{ session_token }}">
 <main id="session" class="session" aria-live="polite"{% if state and state.active %} data-mode="{{ state.mode }}"{% endif %}>
 {% if not member %}
   <p class="session-label" id="signing-in">Opening your session…</p>
-  <p class="muted" id="sign-in-help" hidden>Open this from the [Open] button in Telegram, or send /site to Themi for a sign-in link.</p>
+  <div id="sign-in-help" hidden>
+    <p>Open this from the [Open] button in Telegram.</p>
+    <p class="muted">On a tablet or another browser: send /site to Themi for a sign-in link, or <a href="/signed-out">sign in</a>, then come back to this page. Add it to the home screen to keep it full screen.</p>
+  </div>
 {% elif not state.active %}
   <p class="session-mode">No session going on</p>
   <p class="muted">Say "sit with me while I…" to Themi in chat, or /bodydouble, and it opens here.</p>

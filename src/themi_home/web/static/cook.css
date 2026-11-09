@@ -1,9 +1,14 @@
 /* CK1: the cook screen. A tablet propped up in landscape is the main screen (1024px); a
    phone works too. Tap targets at least 64px, step text at least 28px. Colours come from
    the site's tokens (themi.css). */
-body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden; }
-.cook { max-width: none; min-height: 100vh; min-height: 100dvh; padding-top: max(var(--space-3), env(safe-area-inset-top));
-  padding-bottom: max(var(--space-3), var(--safe-bottom)); }
+body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden;
+  /* CK10: in Telegram's full screen its close and menu buttons float over the top; the bridge
+     (miniapp.js) sets --tg-safe-* and --tg-content-* from what Telegram says */
+  --cook-top: max(var(--space-3), env(safe-area-inset-top), calc(var(--tg-safe-top, 0px) + var(--tg-content-top, 0px)));
+  --cook-bottom: max(var(--space-3), var(--safe-bottom), calc(var(--tg-safe-bottom, 0px) + var(--tg-content-bottom, 0px)));
+  --cook-left: max(var(--space-4), env(safe-area-inset-left), calc(var(--tg-safe-left, 0px) + var(--tg-content-left, 0px)));
+  --cook-right: max(var(--space-4), env(safe-area-inset-right), calc(var(--tg-safe-right, 0px) + var(--tg-content-right, 0px))); }
+.cook { max-width: none; min-height: 100vh; min-height: 100dvh; padding: var(--cook-top) var(--cook-right) var(--cook-bottom) var(--cook-left); }
 .cook { display: flex; flex-direction: column; gap: var(--space-4); }
 #cook { flex: 1 0 auto; }
 .cook-main { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr);
@@ -46,7 +51,7 @@ body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden; }
 .cook-amounts h2 { margin: var(--space-2) 0; }
 .cook-amount { font-size: 1.2rem; }
 .cook-all-open { align-self: flex-start; }
-.cook-drawer { position: fixed; inset: var(--space-3); z-index: 20; overflow-y: auto; background: var(--card);
+.cook-drawer { position: fixed; inset: var(--cook-top) var(--space-3) var(--space-3); z-index: 20; overflow-y: auto; background: var(--card);
   border: 2px solid var(--line); border-radius: var(--radius); padding: var(--space-3); }
 .cook-drawer[hidden] { display: none; }
 .cook-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
@@ -76,7 +81,7 @@ form.cook-timer[data-fired] { padding: 0; border: none; background: none; }
 .cook-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cook-chime input { width: 100%; }
 .cook-soonest { display: none; margin: 0; }
-body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-index: 30; top: var(--space-2); right: var(--space-4);
+body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-index: 30; top: var(--cook-top); right: var(--cook-right);
   padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); background: var(--fg); color: var(--bg);
   font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 .cook-stop { margin-left: auto; }
@@ -103,7 +108,7 @@ body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-
 .cook-music { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .cook-music-offer { flex: 1 1 100%; margin: 0; }
 .cook-spotify form { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.cook-chat.session-chat { inset: var(--space-3); }
+.cook-chat.session-chat { inset: var(--cook-top) var(--space-3) var(--space-3); }
 
 /* CK6: "might be out" on a gathered line, and the wrap-up's offers */
 .cook-out summary { min-height: var(--tap); display: inline-flex; align-items: center; cursor: pointer; color: var(--warn); }
@@ -121,6 +126,7 @@ html.cook-root[data-text-size="140"] { font-size: 140%; }
 html.cook-root[data-text-size="170"] { font-size: 170%; }
 html.cook-root[data-text-size="200"] { font-size: 200%; }
 .cook-size { display: flex; gap: var(--space-1); margin: 0; }
+.cook-fullscreen[hidden] { display: none; }
 body.cook-page[data-theme="light"] {
   --bg: #faf8f5; --fg: #2b2a28; --muted: #6f6b66; --card: #ffffff; --line: #e5e0d8;
   --accent: #3d6f6a; --accent-fg: #ffffff; --soft: #eef4f3; --info-bg: #e7eef8; --warn: #8a5a00; --warn-bg: #fdf0d8;
