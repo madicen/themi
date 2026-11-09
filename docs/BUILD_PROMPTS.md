@@ -256,7 +256,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
 | F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
-| F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [ ] |
+| F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [ ] |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -12618,7 +12618,7 @@ Data: once live, set aside or retire Erin's rule 29 if it's still there, and re-
 device and the washable dog bed as her someday items. Mark #185 reviewed once live.
 
 ### F37a · Feedback (2026-11-09): the dishwasher ticks the routine on the owner's day
-Status: [ ]
+Status: [x] 2026-11-09
 Depends on: F34ja, F34jb, H1, R1b
 Read first: F34ja's and F34jb's notes (`member_day`, `Routines.today(member)`,
 `Routines.owner(item)`, and the dishwasher left as the household's on purpose); H1's notes
@@ -12673,6 +12673,24 @@ Monday evening's check still lists it.
 
 Data: Michael can tick 8 Nov's Cycle Dishwasher on the wall himself if he wants the history
 right, and untick 9 Nov's (the wall keeps both). Mark #189 reviewed once live.
+
+Notes (2026-11-09):
+- `CozylaRoutines.open_items` (and so `open_matching`) reads each owner's records for
+  `member_day(owner, now)`, the admin's day for a record nobody maps to, and returns each
+  record with `day` set to the day it's for. The dishwasher and the vacuum (F25a) both stage
+  with `record.day`, and each card lapses at the start of the owner's next day
+  (`member_day_start`), not at midnight.
+- `CozylaRoutines.tick` ticks a wall routine linked to a Themi item (`routine_item_links`)
+  through `Routines.tick_now`, so `routine_ticks` has it and R1b's `on_tick` ticks the wall.
+  Anything unlinked is ticked on the wall directly, as before.
+- A dishwasher task is checked off when it's due on its doer's day (`_doer_today`; the
+  family's for a shared task, since no one person starts the machine).
+- `test_member_day.py` only scans `src/themi/core`, and the dishwasher and vacuum live in
+  `themi_home` since the core refactor, so its allow-list entry for `dishwasher.py` had
+  nothing to match. I left the test as it is.
+- The vacuum's change has no test of its own: it's the same `open_items` path the
+  dishwasher's tests cover.
+- Setup: none. Deploy, then mark #189 reviewed once it's live.
 
 ### F37b · Feedback (2026-11-09): an email's booking already on the calendar under another name
 Status: [ ]
