@@ -289,7 +289,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | RC6 | Recipes: the website's Recipes page | Recipes | [x] 2026-11-06 |
 | RC7 | Recipes: cookbook recipes in meal ideas | Recipes | [x] 2026-11-06 |
 | CK1 | Cooking companion: the cook screen on /session | Cooking companion | [x] 2026-11-08 |
-| CK2 | Cooking companion: amounts for this step | Cooking companion | [ ] |
+| CK2 | Cooking companion: amounts for this step | Cooking companion | [x] 2026-11-08 |
 | CK3 | Cooking companion: the timer rail | Cooking companion | [ ] |
 | CK4 | Cooking companion: look-ahead | Cooking companion | [ ] |
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [ ] |
@@ -14348,7 +14348,7 @@ Notes:
   wrapper for Chrome.app does it).
 
 ### CK2 · Cooking companion: amounts for this step
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK1, RC2b
 Read first: the plan's Features "Amounts"; RC2b's notes (`scale_for`, `scale_line`);
 RC3a's prep notes (the cached call and the dropped-line check, which this copies).
@@ -14369,6 +14369,34 @@ RC3a's prep notes (the cached call and the dropped-line check, which this copies
 Tests: rule links for every fixture step; model links kept and dropped; the cache by hash;
 scale mid-session; used ticks shared by both views; evals: links for 15 recipes (each
 really used in that step, none added).
+
+Notes:
+- `themi_home/cooking_links.py`: `rule_links`, `gaps`, `StepLinks` (`links`, `ensure`,
+  `ask`), `with_grams`. The rule takes every word of the item, or its last word when that
+  names a food alone (not "powder", "sauce", "oil", "milk"... in `GENERIC`): every word only
+  missed "the flours" for "white whole wheat flour". The model's links fill only the steps
+  the rule left empty (a gap: no link, and amount or "ingredients" words); its item must
+  share a stemmed word with its line.
+- The links call is made only for the screen: `Cooking.prepare(member)`, from `GET
+  /session`, `/session/cook/view` and the act route, and only in the cook phase. The chat
+  card doesn't use links, so chat-only cooking makes no new call. Tests that reach the steps
+  of a recipe with a gap (Ranch) queue a `{"steps": [...]}` response.
+- `CookingPreferences` (module `cooking`): `cooking_units` ("written" or "grams") for now;
+  `on_form` shows the cooking fields only inside the body double section (CK7 adds them
+  there). No conversion: "With grams" moves a weight the line gives ("(130g)") next to its
+  amount as "(130 g)", keeping "1 Tbsp + 1 tsp" together.
+- The state's `amounts` (in the cook phase): `uses` (this step's linked lines, scaled,
+  each with `used`), `groups` (every line for the drawer) and `units` (the viewer's).
+  `scales`: the ½ / 1× / 2× options with `on`, `makes`, `for`. A tap's one-off line comes
+  back as `said` beside the state ("Now for 6.", or why not), shown for 4 s; `act` returns
+  a `Tapped(ok, said)`.
+- "for N" on a recipe that doesn't say how many it makes says so and changes nothing (the
+  chat's set_recipe_yield is the way to give it one).
+- Eval: `tests/evals/test_cooking_links_evals.py`, 15 recipes (the fixture's 12 with steps
+  and 3 written in the eval); passes at 13 clean. Not run here (no eval backend).
+- Tests changed: CK1's page test and RC6's [Cook] test queue the links call (Ranch's one
+  step is a gap); the browser countdown test picks the timer chip under `.cook-offers`
+  (the scale switcher's chips come first now).
 
 ### CK3 · Cooking companion: the timer rail
 Status: [ ]
