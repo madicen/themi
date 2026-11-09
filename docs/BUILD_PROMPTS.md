@@ -293,7 +293,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK3 | Cooking companion: the timer rail | Cooking companion | [x] 2026-11-08 |
 | CK4 | Cooking companion: look-ahead | Cooking companion | [x] 2026-11-08 |
 | CK5 | Cooking companion: company in the kitchen | Cooking companion | [x] 2026-11-08 |
-| CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [ ] |
+| CK6 | Cooking companion: pantry, swaps and wrap-up | Cooking companion | [x] 2026-11-08 |
 | CK7 | Cooking companion: kitchen-proof settings and energy | Cooking companion | [ ] |
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
@@ -14538,7 +14538,7 @@ Notes:
 - Test changed: `test_home_modules`' Cooking row lists the new `cooking.stuck` job.
 
 ### CK6 · Cooking companion: pantry, swaps and wrap-up
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CK2, 25
 Read first: the plan's Features "Pantry and groceries" and "What the family sees" step 7;
 prompt 25's notes (`update_pantry`, `grocery_list_add`); RC5's save offer.
@@ -14555,6 +14555,30 @@ prompt 25's notes (`update_pantry`, `grocery_list_add`); RC5's save offer.
 Tests: unit tests for "might be out", staged grocery add and pantry updates (nothing
 applied before its tier allows), the cleanup handoff; scenario: Pancakes ending with
 butter marked used up and cleanup company accepted.
+
+Notes:
+- `themi_home/cooking_wrap.py`. "Might be out": the line's item (CK2's reading) is `out` or
+  `low` in the pantry (low is what prompt 25's prediction sets, so "probably low" is
+  covered). A tap on "Might be out" opens [Add to groceries] (`grocery_list_add` through
+  `autonomy.stage`, or "already on the grocery list") and [Ask for a swap], which sends "I
+  might be out of miso. What could I use instead in the Alfredo Sauce?" to the agent as
+  their own chat and opens the drawer; `wrap["swap"]` then adds the pantry, as data, to
+  the cooking open item.
+- The wrap-up after [All done] is on the screen only, one offer at a time, each once, kept
+  in `wrap`: CK3's timers question first, then RC5's save offer (a web recipe; [Save to
+  cookbook] calls `CookbookSave.offer`, whose preview and approval go to chat), then
+  "Anything used up?" (chips of the recipe's items, not water; [That's all] moves on), then
+  "Want company for cleanup?". An ended session stays on the screen while one is open.
+- A used-up chip does what `update_pantry` does for "used the last olive oil": the item is
+  `out` at once (as in chat), and a staple is staged for the grocery list through the tiers
+  (nothing on the list before a yes). Not a staple: only marked out.
+- [Yes] to cleanup: `BodyDouble.start(mode=SPRINT, label="Clean up after <recipe>")`, its
+  start sent to chat with `Dishwasher.status_line()` ("The dishwasher is running now.",
+  "...last finished at 7 am.") when that module is on; the cook screen's state goes
+  inactive and the page reloads into the sprint.
+- Deviation: the fixture's Pancakes has no butter, so the scenario marks the almond milk
+  used up.
+- Test changed: CK1's state test expects the gather lines' new `maybe_out` and `item`.
 
 ### CK7 · Cooking companion: kitchen-proof settings and energy
 Status: [ ]
