@@ -13,6 +13,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Setup portal (the Modules page, configuring Themi from its website): Themi Setup Portal
   Plan, https://claude.ai/artifact/HEKsyoURuTFPJcJGEyn9aJ. Read it the same way. It is the
   design source for the SP prompts.
+- Cooking companion (the cook screen on /session): Themi Cooking Companion Plan,
+  https://claude.ai/artifact/YFoS2zvhe7NqJ89yR3Hoqw. Read it the same way. It is the design
+  source for the CK prompts.
 
 ## "Implement the next prompt"
 
