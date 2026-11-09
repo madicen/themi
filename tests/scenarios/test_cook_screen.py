@@ -28,3 +28,58 @@ async def test_next_typed_in_telegram_shows_on_the_page(
     assert again["drawn"] != polled["drawn"]  # the page redraws
     page = (await site.get("/session/cook/view")).text
     assert "What it uses" in page and "1 Cup cashews" in page
+
+
+PANCAKES = [
+    "white whole wheat flour", "all-purpose flour", "baking powder", "cinnamon", "kosher salt",
+    "almond milk", "applesauce", "vanilla extract",
+]  # fmt: skip
+
+
+async def test_pancakes_with_two_timers_at_once(
+    scenario: Scenario, site: httpx.AsyncClient
+) -> None:
+    """CK3: the last step's two times, both started from the page, fire in order on the
+    frozen clock; both show on the page, and each is cleared by a tap."""
+    load(scenario.app.services)
+    csrf = await sign_in(scenario, site, "Erin")
+    scenario.primary.queue_tool_call("start_cooking", {"recipe": "pancakes", "scale": ""})
+    scenario.primary.queue_structured(lines(PANCAKES))
+    await scenario.say("Erin", "Let's make pancakes")
+    scenario.primary.queue_structured({"jobs": []})
+    for said in ("skip", "all here", "skip prep", "go to step 5"):
+        await scenario.say("Erin", said)
+    state = (await site.get("/session/state")).json()
+    assert state["step"]["words"] == "Step 5 of 5"
+    assert [o["label"] for o in state["offers"]] == ["Timer 2 min (2-3)", "Timer 1 min (1-2)"]
+
+    async def act(action: str, **form: str) -> dict:
+        seq = (await site.get("/session/state")).json()["seq"]
+        response = await site.post(
+            f"/session/cook/{state['id']}/act",
+            headers={"X-Requested-With": "fetch"},
+            data={"csrf": csrf, "action": action, "seq": str(seq), **form},
+        )
+        return response.json()
+
+    for offer in state["offers"]:
+        await act("timer", minutes=str(offer["minutes"]), step=offer["step"])
+    shown = (await site.get("/session/state")).json()["timers"]
+    assert [(t["label"], t["fired"]) for t in shown] == [("Step 5", False), ("Step 5", False)]
+    await scenario.advance(minutes=1)
+    await scenario.run_jobs()
+    await scenario.app.outbox.flush()
+    assert scenario.inbox("Erin")[-1] == "Time's up: 1 min for step 5 of Pancakes."
+    shown = (await site.get("/session/state")).json()["timers"]
+    assert [t["fired"] for t in shown] == [True, False]  # the 1 minute one first
+    await scenario.advance(minutes=1)
+    await scenario.run_jobs()
+    await scenario.app.outbox.flush()
+    assert scenario.inbox("Erin")[-1] == "Time's up: 2 min for step 5 of Pancakes."
+    shown = (await site.get("/session/state")).json()["timers"]
+    assert [t["fired"] for t in shown] == [True, True]
+    page = (await site.get("/session/cook/view")).text
+    assert page.count('data-fired="1"') == 2 and page.count("Time's up") == 2
+    for timer in shown:
+        await act("timer_clear", timer=str(timer["id"]))
+    assert (await site.get("/session/state")).json()["timers"] == []
