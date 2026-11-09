@@ -16,6 +16,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Cooking companion (the cook screen on /session): Themi Cooking Companion Plan,
   https://claude.ai/artifact/YFoS2zvhe7NqJ89yR3Hoqw. Read it the same way. It is the design
   source for the CK prompts.
+- Slack (the work Themi in Slack DMs): Themi Slack Module Plan,
+  https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB. Read it the same way. It is the design
+  source for the SL prompts.
 
 ## "Implement the next prompt"
 

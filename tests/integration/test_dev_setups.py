@@ -79,7 +79,9 @@ def test_modules_given_already_are_used_and_one_not_given_is_left_out() -> None:
 async def test_a_work_setup_runs_on_the_fakes(boot: Boot) -> None:
     run = await boot(parse_config({"template": "work"}))
     names = [m.name for m in run.runtime.app.modules]
-    assert names == list(load_template("work").modules)  # every one, Google on its fakes
+    # every one, Google on its fakes; SL5: Slack's chat is the simulator's Telegram here
+    wanted = [n for n in load_template("work").modules if n != "slack"]
+    assert [n for n in names if n != "telegram"] == wanted and "telegram" in names
     assert "groceries" not in names and "cozyla_todos" not in names
     assert run.runtime.app.services.system_text().startswith("You are Themi, a work assistant")
     assert run.runtime.app.store.get_workspace().template == "work"  # type: ignore[union-attr]

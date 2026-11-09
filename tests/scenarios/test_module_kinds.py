@@ -29,7 +29,7 @@ def test_every_module_has_a_kind() -> None:
     of = {kind: {n for n, cls in known.items() if cls.kind == kind} for kind in KINDS}
     assert of["ai"] == {"claude", "gemini", "openai_compatible", "cloudflare"}
     assert of["capability"] == {"voice_notes", "pictures", "image_generation"}
-    assert of["channel"] == {"telegram", "web_chat"}  # CR20b
+    assert of["channel"] == {"telegram", "web_chat", "slack"}  # CR20b, SL1
     assert {"google", "gmail", "calendar", "spotify", "thinq", "cozyla_todos"} <= of["connector"]
     assert {"tasks", "reminders", "noise_digest"} <= of["feature"]
 

@@ -16,6 +16,9 @@ from collections import deque
 REDACTED = "[redacted]"
 
 PATTERNS = [
+    # Slack tokens (SL1): bot xoxb-, user xoxp-, app-level xapp-
+    re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{8,}"),
+    re.compile(r"\bxapp-[A-Za-z0-9-]{8,}"),
     # Telegram bot token: <bot id>:<35-char secret>
     re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}"),
     # Anthropic API keys

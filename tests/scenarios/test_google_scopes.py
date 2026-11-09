@@ -10,11 +10,13 @@ import httpx
 import pytest
 
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.slack_api import FakeSlack
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fakes.wiring import connector_options
 from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
+from tests.scenarios.slack_harness import SlackScenario
 from tests.scenarios.test_triage import ERIN
 from tests.scenarios.test_work_template import work_app
 from themi.app import family_modules
@@ -28,7 +30,7 @@ from themi_google.connectors.google import (
 from themi_google.connectors.google.oauth import LINK_SCOPES
 
 
-def asked(scenario: Scenario) -> list[str]:
+def asked(scenario: Scenario | SlackScenario) -> list[str]:
     google = scenario.app.services.get(keys.google)
     member = scenario.app.store.list_members()[0]
     url = google.link_url(member, "http://themi.test/auth/google/callback")
@@ -36,10 +38,10 @@ def asked(scenario: Scenario) -> list[str]:
 
 
 def test_the_work_template_asks_for_gmail_calendar_and_tasks_not_drive(
-    tmp_path: Path, fake_telegram: FakeTelegram
+    tmp_path: Path, fake_slack: FakeSlack
 ) -> None:
     scenario = work_app(
-        tmp_path, fake_telegram, {"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret"}
+        tmp_path, fake_slack, {"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret"}
     )
     scopes = asked(scenario)
     assert scopes == ["openid", "email", GMAIL_SCOPE, *CALENDAR_SCOPES, TASKS_SCOPE]

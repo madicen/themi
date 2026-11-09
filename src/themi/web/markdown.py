@@ -4,6 +4,8 @@ Guides are Themi's own text, but they're rendered without any raw HTML anyway: e
 character is escaped first, and only these become markup: `#`, `##` and `###` headings,
 paragraphs, `-` and `1.` lists, `**bold**`, `` `code` ``, and `[words](https://...)` links,
 which open in a new tab. A link to anything but http(s) or a site path stays as text.
+A fenced block (lines between two ```` ``` ```` lines) is shown as it is, to copy (SL1: the
+Slack app's manifest); nothing inside it becomes markup.
 """
 
 from __future__ import annotations
@@ -58,8 +60,20 @@ def render(text: str) -> Markup:
             items.clear()
             list_tag = ""
 
+    fenced: list[str] | None = None
     for raw in text.splitlines():
         line = raw.strip()
+        if line.startswith("```"):
+            if fenced is None:
+                flush()
+                fenced = []
+            else:
+                html.append(f"<pre><code>{escape(chr(10).join(fenced))}</code></pre>")
+                fenced = None
+            continue
+        if fenced is not None:
+            fenced.append(raw.rstrip())
+            continue
         if not line:
             flush()
             continue
@@ -83,4 +97,6 @@ def render(text: str) -> Markup:
                 flush()
             paragraph.append(line)
     flush()
+    if fenced is not None:  # never closed: shown as it is all the same
+        html.append(f"<pre><code>{escape(chr(10).join(fenced))}</code></pre>")
     return Markup("\n".join(html))

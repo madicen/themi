@@ -20,6 +20,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - The Cooking companion (CK prompts, after Recipes) has its own design doc, the
   [Themi Cooking Companion Plan](https://claude.ai/artifact/YFoS2zvhe7NqJ89yR3Hoqw): a cook
   screen with the step, its amounts and the timers, and Themi as company.
+- Slack (SL prompts, at the end) has its own design doc, the
+  [Themi Slack Module Plan](https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB): the work
+  Themi in Slack direct messages instead of Telegram.
 
 ## Progress
 
@@ -335,7 +338,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CR20a1 | Round two: the Channel protocol | Core refactor | [x] 2026-11-08 |
 | CR20a2 | Round two: channel identities for members | Core refactor | [x] 2026-11-08 |
 | CR20b | Round two: Telegram as a channel module, and a website chat channel | Core refactor | [x] 2026-11-08 |
-| CR20c | Gate: Discord and Slack channels | Core refactor | waiting (bot accounts, Michael's call) |
+| CR20c | Gate: Discord and Slack channels | Core refactor | split: Slack is SL1 to SL6; Discord deferred |
 | CR21a | Round two: the chore chart as its own household module | Core refactor | [x] 2026-11-08 |
 | CR21b | Round two: a mirror seam for lists, tasks and routines | Core refactor | [x] 2026-11-08 |
 | CR21c | Round two: Cozyla as its own package that only syncs | Core refactor | [x] 2026-11-08 |
@@ -354,6 +357,12 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP8 | Migration and retirement | Setup portal | [x] 2026-11-08 (split) |
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
+| SL1 | Slack: the module, settings and sending | Slack | [x] 2026-11-08 |
+| SL2 | Slack: receiving and pairing | Slack | [x] 2026-11-08 |
+| SL3 | Slack: buttons, edits and threads | Slack | [x] 2026-11-08 |
+| SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
+| SL5 | Slack: the work template on Slack | Slack | [x] 2026-11-08 |
+| SL6 | Slack: status sync | Slack | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -15708,7 +15717,8 @@ Notes (2026-11-08):
   test (a channel step now). New: tests/scenarios/test_web_chat.py. Golden identical.
 
 ### CR20c · Gate: Discord and Slack channels
-Status: waiting (gate)
+Status: split (2026-11-08): Michael chose Slack first, for the work Themi (SL1 to SL6, in
+the Slack section at the end). Discord is deferred.
 Depends on: CR20b
 Gate: needs a Discord bot and a Slack app to test against, and Michael's call on which
 first.
@@ -16289,3 +16299,212 @@ Notes (2026-11-08):
   docker, tailscale and the rest on PATH; a fresh install, a second run changing nothing,
   an existing .env kept, Funnel's address, a failed pull, and not Linux. shellcheck runs on
   it at warning level: `shellcheck-py` joined the dev extras.
+
+## Slack
+
+Design source: the [Themi Slack Module Plan](https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB).
+Read it with the Claude Docs tools, like the other plans. Its decisions (2026-11-08):
+
+- The company workspace, as a custom app a workspace admin approves. The plan's "Setting up
+  the bot in the company workspace" is what the module guide and DEPLOY.md say.
+- Socket Mode. Every event goes through one dispatcher that doesn't care how it arrived, so
+  the HTTP Events API can be a second transport later.
+- Pairing by Slack email, with the invite code as the fallback.
+- Themi answers inside the thread the person wrote in.
+- The work template is Slack only for now.
+- Themi writes Michael's Slack status and Do Not Disturb from its own state, and never reads
+  them back (SL6, with a user token).
+
+Deviation from the plan (2026-11-08): no `slack_sdk`. Its async client needs aiohttp, while
+Themi talks HTTP through httpx everywhere and its fakes are httpx-shaped; a thin Web API
+client over httpx and a Socket Mode loop over `websockets` (already installed, through
+google-genai) do the same with nothing new to install.
+
+### SL1 · Slack: the module, settings and sending
+Status: [x] 2026-11-08
+Depends on: CR20b, SP5
+Read first: the plan's "Slack app design" and "Module shape"; `themi/standard/telegram.py`,
+`themi/standard/web_chat.py`, `themi/channels/base.py`, `tests/fakes/telegram_api.py`.
+- `themi/channels/slack_api.py`: a Web API client (form posts with a bearer token, `ok`
+  checked, 429 waits for `Retry-After` through an injected sleep).
+- `SlackModule` (kind channel) and `SlackSettings` (`bot_token`, `app_token`,
+  `pair_by_email`), its migration track (`slack_messages`, `slack_dm_channels`), the
+  manifest file, the setup guide, the entry point, `websockets` as a direct dependency.
+- `SlackChannel.send_text`: a member with a `slack` identity gets a DM (`conversations.open`
+  once, then `chat.postMessage`); the returned id is an integer mapped to the message's `ts`.
+  Text is escaped for mrkdwn; `link_preview=False` turns unfurling off.
+- `check()` for the Test button: `auth.test` with the bot token, `apps.connections.open` with
+  the app token, saying which failed.
+- The log redactor learns `xox?-` and `xapp-` tokens.
+Tests: the fake Slack API; send maps an integer id to a `ts`; escaping; Test tells a bad bot
+token from a bad app token; redaction.
+
+Notes (2026-11-08):
+- `themi/channels/slack_api.py` (`SlackApi`, `SlackError`): form posts over httpx, `ok`
+  checked, 429 waits `Retry-After`, 5xx and network errors back off; `download` sends the
+  token only to Slack's hosts (or the API's own, for the fake); `upload` for SL4.
+- `themi/channels/slack_blocks.py`: escaping, sections split under 3000 characters, button
+  rows as `actions` blocks, the emoji-name map (every reaction Themi's features read or send).
+- `themi/channels/buttons.py`: callback tokens, `button_rows` and the "not yours" / "already
+  handled" rules, moved out of the Telegram channel so Slack shares them. The names are
+  still importable from `themi.channels.telegram`.
+- `SlackChannel` (`themi/channels/slack.py`): sends always carry blocks (a section, plus
+  buttons); `slack_messages` maps integer ids both ways; `slack_dm_channels` remembers each
+  member's DM. `typing` and `publish_commands` do nothing.
+- `SlackModule` (`themi/standard/slack.py`, kind channel, its own track `slack`), its guide
+  (`standard/setup/slack.md`, the plan's company-workspace steps) and the manifest it shows
+  (`standard/slack_manifest.yaml`; a test checks the guide shows the file). Guide Markdown
+  learned fenced blocks for it.
+- `websockets` is now a direct dependency (it was already installed through google-genai).
+- Tests changed for moved wiring: test_module_kinds lists `slack` among the channels.
+  New: tests/fakes/slack_api.py, tests/integration/test_slack_channel.py,
+  tests/unit/test_slack_blocks.py, two in test_module_manifest.
+
+### SL2 · Slack: receiving and pairing
+Status: [x] 2026-11-08
+Depends on: SL1
+- The Socket Mode loop: `apps.connections.open`, a WebSocket, every envelope acked at once,
+  reconnect on `disconnect` or a dropped socket with backoff (injected sleep).
+- One dispatcher (`SlackChannel.dispatch(envelope)`) for `events_api`, `interactive` and
+  `slash_commands`; `message.im` becomes an `InboundEvent`. Event ids are kept a day
+  (`slack_seen_events`) and a repeat is dropped. Bot messages and edits are ignored.
+- Pairing: a DM from someone not paired, whose Slack email (`users.info`) is a member's
+  email, pairs them; otherwise the message is checked as an invite code, with Telegram's
+  limit of five wrong codes an hour. Anyone else is ignored and only their user id logged.
+Tests: a DM reaches the agent and the reply comes back; a resent event is dropped; a
+stranger is ignored; email pairing writes the identity; an invite code pairs; the socket
+loop acks and reconnects against the fake.
+
+Notes (2026-11-08):
+- `SlackChannel.run`: one connection at a time (`apps.connections.open`, then the socket);
+  each envelope is queued, then acked, and a worker hands envelopes to `dispatch` in order,
+  so a slow reply never holds up the 3-second ack. A lost ack is harmless: Slack's repeat
+  is dropped by `slack_seen_events` (migration 0002 on the `slack` track). `disconnect`
+  reconnects at once; a failed connection backs off (injected sleep). On stop, envelopes
+  already acked are still handled.
+- Deviation: a stranger isn't silent as on Telegram. In a company workspace anyone can DM
+  the app, and someone whose Themi email isn't their Slack one needs to know about the code,
+  so they get one line saying how to pair (it counts towards the wrong-code limit, so it
+  can't be used to make Themi talk endlessly). Only their user id is logged.
+- Text arrives as words: links as their address, mentions as their label, unescaped
+  (`slack_blocks.plain`).
+- `AccountStore.redeem_invite(code, id, channel=...)`: any channel, Telegram by default.
+- Pairing by email doesn't take an address from someone already on Slack as another user.
+
+### SL3 · Slack: buttons, edits and threads
+Status: [x] 2026-11-08
+Depends on: SL2
+- Buttons as an `actions` block per row (Telegram's `button_rows`), each button's `value` a
+  `callback_tokens` token; `block_actions` becomes a `ButtonPress`, with the same "not
+  yours" and "already handled" rules (said with an ephemeral message). `web_app` buttons
+  become link buttons to the website. `anyone` honoured.
+- `edit_text` through `chat.update` on the stored channel and `ts`.
+- Threads: a message written in a thread carries `reply_to_message_id` (its parent), and
+  Themi's sends within two minutes of it go into that thread; later ones go to the DM.
+Tests: a tap reaches the agent with its payload; an edit replaces the text and removes the
+buttons; someone else's token is refused; a reply to a message in a thread lands there.
+
+Notes (2026-11-08):
+- Taps use `themi.channels.buttons.claim`, the same rules as Telegram's. A tap that doesn't
+  count is answered with `chat.postEphemeral` (only they see it), in its thread.
+- Threads: `slack_messages.thread_ts` (migration 0003). A message in a thread notes the
+  thread for that person, and every send to them within two minutes (`THREAD_WINDOW`) goes
+  there; writing at the top of the DM, or two minutes passing, puts Themi back at the top.
+  A tap on a card inside a thread counts as writing in that thread. Threads still share
+  one conversation in Themi's memory.
+- Mini App (`web_app`) buttons are link buttons to the same page. In a browser it works
+  only when they're signed in to the website there; otherwise it waits for Telegram's
+  sign-in. The only one today is the home pack's body double, which work doesn't have;
+  follow-up if a pack used on Slack adds one: the ticket sign-in for browsers.
+
+### SL4 · Slack: pictures, voice clips, reactions, `/themi`
+Status: [x] 2026-11-08
+Depends on: SL3
+- Files on a DM message: pictures and audio clips downloaded with the bot token (memory
+  only, size limits as Telegram's) into `picture` and `voice` events.
+- `send_photo` through Slack's external upload (`files.getUploadURLExternal`, the upload,
+  `files.completeUploadExternal`).
+- `react` (`reactions.add`) and `reaction_added` through an emoji-name map.
+- `/themi <command> [words]` runs that chat command (`/themi pause`, `/themi site`);
+  `/themi` alone lists them. `typing` and `publish_commands` are no-ops.
+Tests: a picture and a voice clip reach the agent; 👀 goes out as `eyes`; a reaction on
+Themi's message arrives; `/themi pause` pauses.
+
+Notes (2026-11-08):
+- Files: an audio file or Slack clip becomes a `voice` event (its own mime type, often
+  `audio/mp4` or `audio/webm`, passed through as Telegram's `audio/ogg` is); images become a
+  `picture` event, several in one message as an album. Files off Slack's hosts are never
+  fetched with the token. Follow-up: Slack's clip formats haven't been tried against the
+  live transcription providers (`make test-live`).
+- `send_photo`: `files.getUploadURLExternal`, the bytes, `files.completeUploadExternal` with
+  the caption. Slack doesn't say which message shows the file, so the id stands for the
+  file and can't be reacted to or edited.
+- `react` sends only emoji with a Slack name in `slack_blocks.EMOJI_NAMES`; others are
+  skipped. Reactions in become emoji (`:name:` for one Themi doesn't know).
+- `/themi pause` is handed on as the text `/pause`; `/themi` alone (or `help`) lists the
+  commands from the menu the app publishes, as a line only they see. Someone not paired is
+  told to say hello first. "Tests: `/themi pause` pauses" is covered as far as the channel
+  goes (it becomes `/pause` for the agent); SL5's scenario runs a command end to end.
+
+### SL5 · Slack: the work template on Slack
+Status: [x] 2026-11-08
+Depends on: SL4
+- `work.toml` has `slack` in place of `telegram`; the persona says Slack; the website's
+  lines that name Telegram name the channel the setup has (`/themi site` in Slack).
+- DEPLOY.md's second-instance section: a work Themi on Slack, with the plan's setup steps.
+Tests: the working-day scenario over Slack (pair by email, a task with a due time, its
+nudge, "Done" tapped, the card edited); the household-words test; work goldens updated if
+they change (said in the commit), family goldens identical.
+
+Notes (2026-11-08):
+- `work.toml`: `slack` in place of `telegram`; the persona says Slack direct messages; the
+  core rule about timing (`core.rules-don-t-change`) and `propose_rule` name `/themi site`
+  and `/themi pause`.
+- The Slack channel writes command names in anything it sends the Slack way ("/pause" is
+  "/themi pause"), from the menu the app publishes, so every module's replies read right
+  without rewording them.
+- Website: the signed-out page names the chats this Themi has (`sign_in_hint`), the
+  expired-link page mentions `/themi site`, the "Finish setting up" card points a
+  Slack-only setup at the Slack module, and the passkey nudge isn't shown to someone on
+  Slack (they have `/themi site`).
+- `make dev` on the fakes: the simulator plays Telegram, and Slack has no fake outside the
+  tests, so a setup whose chat is Slack chats through the simulator there instead
+  (`cli._chat_in_the_simulator`, the fakes path only).
+- DEPLOY.md section 12 gained "A work Themi on Slack". (Section 12 still describes `themi
+  setup`, removed in SP8a; not changed here.)
+- Tests changed for moved wiring: test_work_template runs on Slack through a new
+  `tests/scenarios/slack_harness.py` (the working day now also covers email pairing, a
+  thread answer and `/themi site`); test_google_scopes builds the work app with the Slack
+  fake; test_dev_setups expects the simulator's Telegram in place of Slack. Family goldens
+  identical; there are no work goldens.
+
+### SL6 · Slack: status sync
+Status: [x] 2026-11-08
+Depends on: SL5
+- A `user_token` setting (`xoxp-`, secret), the user scopes in the manifest, and a status
+  writer driven by Themi's own state: a focus block sets "Focusing" and Do Not Disturb
+  until it ends, a calendar meeting sets "In a meeting", quiet hours set Do Not Disturb,
+  and the status clears when the state ends. Each change is a side effect through the
+  trust tiers; times come from `themi.clock`. Slack's status is never read back.
+- No user token: no calls, everything else works.
+Tests: a focus block sets and clears status and Do Not Disturb; a meeting sets its status;
+no token, no calls; a status Michael set by hand is replaced only when Themi's state changes.
+
+Notes (2026-11-08):
+- Deviation from the plan's words: Themi has no "focus blocks" as such (the `focus` module
+  is about feeling overwhelmed). Focus time is K5's task blocks: a block Themi put on the
+  calendar for a task (`task_blocks`). A meeting is a timed, busy calendar entry with
+  other people or a video link; an event with nobody else doesn't set a status.
+- `themi/standard/slack_status.py` (`SlackStatus`): each minute (periodic `slack_status`)
+  it works out focus, then meeting, then quiet hours, then nothing, from core tables only
+  (no Google pack import). Slack is written only when that changes, as a `slack_status`
+  action (migration 0004 on the `slack` track; family scope, automatic to start, as
+  Spotify's `music`; an admin can make it ask first). An unanswered card lapses when the
+  state ends.
+- Statuses carry Slack's `status_expiration` and Do Not Disturb is a snooze, so both end
+  on time by themselves; Themi clears what it set only when its state ended early. It
+  never calls Slack while nothing of its own is going on, so a status set by hand stays.
+- Only the person the user token belongs to (auth.test) is synced: Slack lets only their
+  own token change their status. `SLACK_USER_TOKEN` is optional; Test tries it when set.
+- The manifest asks for the user scopes `users.profile:write` and `dnd:write`, so an
+  existing install has to be reinstalled (and re-approved) to give the user token.
