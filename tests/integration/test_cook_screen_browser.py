@@ -201,3 +201,45 @@ async def test_the_biggest_text_fits_a_phone(scenario: Scenario) -> None:
         assert await tab.value(LAYOUT) == ""
         await tab.value("document.querySelector('.cook-size button[value=down]').click()")
         assert await until(lambda: tab.value("document.body.dataset.textSize === '170'"))
+
+
+FAKE_RECOGNIZER = (
+    "window.webkitSpeechRecognition = function () {"
+    " const rec = this;"
+    " rec.start = function () { window.listened = (window.listened || 0) + 1;"
+    "  setTimeout(function () {"
+    "   rec.onresult({ results: [[{ transcript: window.nextWords || 'next' }]] });"
+    "   rec.onend();"
+    "  }, 50); };"
+    " rec.stop = function () {};"
+    "}; window.SpeechRecognition = undefined; window.themiCook.setupVoice();"
+)
+
+
+async def test_push_to_talk(scenario: Scenario) -> None:
+    """CK8: the mic is hidden without speech recognition or without the setting; with both
+    (a faked recognizer here), "next" heard moves the session."""
+    from themi_home.cooking import CookingPreferences
+
+    clock.unfreeze()
+    erin = scenario.member("Erin")
+    await to_step_three(scenario)  # step 2, voice off
+    async with page_in_chrome(scenario, erin, ".cook-moves") as tab:
+        assert await tab.value("!document.querySelector('.cook-mic')")  # off: no button at all
+    scenario.app.store.save_preferences(erin, erin.id, CookingPreferences, cooking_voice=True)
+    async with page_in_chrome(scenario, erin, ".cook-moves") as tab:
+        mic = "document.querySelector('.cook-mic')"
+        await tab.value("window.SpeechRecognition = undefined;"
+                        " window.webkitSpeechRecognition = undefined;"
+                        " window.themiCook.setupVoice()")  # fmt: skip
+        assert await tab.value(f"{mic}.hidden")  # no speech recognition: hidden
+        await tab.value(FAKE_RECOGNIZER)
+        assert await tab.value(f"!{mic}.hidden")
+        count = "document.querySelector('.cook-count').textContent"
+        assert (await tab.value(count)).startswith("Step 2 of 3")
+        await tab.value(f"{mic}.dispatchEvent(new PointerEvent('pointerdown'));"
+                        f" {mic}.dispatchEvent(new PointerEvent('pointerup'))")  # fmt: skip
+        assert await until(lambda: tab.value(f"({count}).startsWith('Step 3 of 3')"))
+        heard = "document.querySelector('.cook-heard').textContent"
+        assert await tab.value(heard) == "“next”"
+        assert await tab.value("window.listened") == 1  # one phrase a press

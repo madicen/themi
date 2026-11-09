@@ -26,7 +26,7 @@ BEFORE_CR7A = [
 # Fields added since, by the prompt that added them.
 ADDED = {
     "cooking_chime_volume": "CK7", "cooking_steps_view": "CK7", "cooking_text_size": "CK7",
-    "cooking_theme": "CK7", "cooking_units": "CK7",
+    "cooking_theme": "CK7", "cooking_units": "CK7", "cooking_voice": "CK8",
 }  # fmt: skip
 
 

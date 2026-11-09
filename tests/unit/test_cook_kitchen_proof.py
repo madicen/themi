@@ -72,7 +72,12 @@ def no_why(state: dict) -> None:
 async def test_each_preference_is_in_the_state(scenario: Scenario, cooking: Cooking) -> None:
     erin = scenario.member("Erin")
     session_id = await start(scenario, cooking, "Pasta Bake", low=False)
-    assert cooking.state(erin)["view"] == {"text_size": 100, "theme": "auto", "steps_view": "one"}
+    assert cooking.state(erin)["view"] == {
+        "text_size": 100,
+        "theme": "auto",
+        "steps_view": "one",
+        "voice": False,
+    }
     scenario.app.store.save_preferences(
         erin, erin.id, CookingPreferences,
         cooking_text_size=140, cooking_theme="kitchen", cooking_steps_view="all",
@@ -82,7 +87,12 @@ async def test_each_preference_is_in_the_state(scenario: Scenario, cooking: Cook
     await tap(cooking, scenario, session_id, "next")
     await tap(cooking, scenario, session_id, "next")
     state = cooking.state(erin)
-    assert state["view"] == {"text_size": 140, "theme": "kitchen", "steps_view": "all"}
+    assert state["view"] == {
+        "text_size": 140,
+        "theme": "kitchen",
+        "steps_view": "all",
+        "voice": False,
+    }
     assert [(s["label"], s["current"], s["done"]) for s in state["steps"]] == [
         ("1", False, True), ("2", True, False), ("3", False, False), ("4", False, False),
     ]  # fmt: skip
