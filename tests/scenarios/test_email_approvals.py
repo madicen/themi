@@ -11,8 +11,10 @@ import pytest
 from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fixtures.web import sign_in
 from tests.scenarios.harness import Scenario
 from tests.scenarios.test_triage import ERIN, link, verdict
+from themi.core import keys
 
 JENNIFER = "Jennifer Noble <jennifer@noble.example>"
 ICS = (("invite.ics", "text/calendar", 2204),)
@@ -143,7 +145,9 @@ async def test_idea_137s_five_cards_come_as_one_message(
     ]
     assert len(cards(scenario)) == 1  # five approvals, one message
     assert scenario.edits("Erin")[-1]["text"] == BURST  # "mark as read"s go with their events
-    assert buttons(scenario.edits("Erin")[-1]) == ["Go ahead with all", "One by one", "Not now"]
+    assert buttons(scenario.edits("Erin")[-1]) == [
+        "Go ahead with all", "One by one", "Not now", "Not ever",  # F37c: for all of it
+    ]  # fmt: skip
 
 
 async def test_go_ahead_with_all_runs_each_action_once(
@@ -312,3 +316,137 @@ async def test_someone_else_in_the_thread_joins_it_too(
         "- A confirmation to mark as read: Re: Tutoring dates (from Sam <sam@noble.example>)"
         in (shown)
     )
+
+
+# ----- F37c (Michael's idea #188): "these email things need a 'not ever' option" ------------
+
+LASAGNA = "Lasagna Love <lasagnachef@lasagnaloveportal.org>"
+RESUME = "From an email: Lasagna Love service resume, Mon 16 Nov 2054, all day, for your calendar"
+
+
+async def pause(scenario: Scenario, inbox: FakeGmail, day: str = "2054-11-16") -> int:
+    """Lasagna Love's "Pause Confirmation", with the day the service resumes."""
+    (email,) = await arrive(
+        scenario,
+        inbox,
+        [{"sender": LASAGNA, "subject": "Pause Confirmation",
+          "text": f"You have paused your service until {day}."}],
+    )  # fmt: skip
+    event = {"title": "Lasagna Love service resume", "date": day, "start": "", "end": "",
+             "location": ""}  # fmt: skip
+    scenario.primary.queue_structured(
+        {"results": [verdict(email, "confirmation", "A pause", event=event)]}
+    )
+    await scenario.run_periodic("email.triage")
+    return email
+
+
+def calendar_statuses(scenario: Scenario) -> list[str]:
+    return [s for c, s, _ in statuses(scenario) if c == "calendar_from_email"]
+
+
+async def test_an_email_calendar_card_has_not_ever_and_says_the_year(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    await pause(scenario, inbox)
+    assert cards(scenario)[-1] == f"{RESUME}\nGo ahead, or not now?"
+    assert scenario.last_buttons("Erin") == ["Go ahead", "Not now", "Not ever"]
+
+
+async def test_not_ever_then_skip_them_stops_that_senders_calendar_offers(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    await pause(scenario, inbox)
+    await scenario.tap("Erin", "Not ever")
+    assert calendar_statuses(scenario) == ["declined"]
+    shown = scenario.edits("Erin")[-1]
+    assert shown["text"] == (
+        f"{RESUME}\nLeft as is, for good. Skip calendar offers from Lasagna Love from now on?"
+    )
+    assert buttons(shown) == ["Yes, skip them", "Just this one"]
+    await scenario.tap("Erin", "Yes, skip them")
+    assert scenario.edits("Erin")[-1]["text"] == (
+        f"{RESUME}\nLeft as is. No more calendar offers from Lasagna Love."
+    )
+    assert buttons(scenario.edits("Erin")[-1]) == []
+
+    await pause(scenario, inbox, "2054-11-23")  # a week later: no calendar card
+    assert calendar_statuses(scenario) == ["declined"]
+    # Its other mail is triaged as before: the confirmation is still offered to mark read.
+    assert [s for c, s, _ in statuses(scenario) if c == "email_mark_read"][-1] == "pending"
+
+    events = scenario.app.services.get(keys.events)
+    assert events.skipped(scenario.member("Erin"), "lasagnachef@lasagnaloveportal.org")
+    assert not events.skipped(scenario.member("Husband"), "lasagnachef@lasagnaloveportal.org")
+
+    await scenario.advance(hours=3, minutes=5)  # declined for good: it doesn't come back
+    await scenario.run_periodic("approvals.resurface")
+    assert calendar_statuses(scenario) == ["declined"]
+
+
+async def test_just_this_one_skips_nothing(scenario: Scenario, inbox: FakeGmail) -> None:
+    await pause(scenario, inbox)
+    await scenario.tap("Erin", "Not ever")
+    await scenario.tap("Erin", "Just this one")
+    assert scenario.edits("Erin")[-1]["text"] == f"{RESUME}\nLeft as is, for good."
+    await pause(scenario, inbox, "2054-11-23")
+    assert calendar_statuses(scenario) == ["declined", "pending"]
+
+
+async def test_skipped_offers_come_again_when_asked(scenario: Scenario, inbox: FakeGmail) -> None:
+    await pause(scenario, inbox)
+    await scenario.tap("Erin", "Not ever")
+    await scenario.tap("Erin", "Yes, skip them")
+    scenario.primary.queue_tool_call("unskip_email_sender", {"sender": "Lasagna Love"})
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Erin", "Show me Lasagna Love's calendar offers again")
+    events = scenario.app.services.get(keys.events)
+    assert not events.skipped(scenario.member("Erin"), "lasagnachef@lasagnaloveportal.org")
+    await pause(scenario, inbox, "2054-11-23")
+    assert calendar_statuses(scenario) == ["declined", "pending"]
+
+
+async def test_a_reply_card_has_two_buttons(scenario: Scenario, inbox: FakeGmail) -> None:
+    (email,) = await arrive(
+        scenario, inbox, [{"sender": JENNIFER, "subject": "Dates", "text": "Do these work?"}]
+    )
+    scenario.primary.queue_structured(
+        {"results": [verdict(email, "needs_reply", reply_draft="They do, thanks!")]}
+    )
+    await scenario.run_periodic("email.triage")
+    assert scenario.last_buttons("Erin") == ["Go ahead", "Not now"]
+
+
+async def test_not_ever_on_one_emails_message_is_for_all_of_it(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    await burst(scenario, inbox)
+    assert buttons(scenario.edits("Erin")[-1])[-1] == "Not ever"
+    await scenario.tap("Erin", "Not ever")
+    assert [s for _, s, _ in statuses(scenario)] == ["declined"] * 5
+    shown = scenario.edits("Erin")[-1]
+    assert shown["text"].endswith(
+        "\nLeft as is, for good. Skip calendar offers from Jennifer Noble from now on?"
+    )
+    await scenario.tap("Erin", "Yes, skip them")
+    assert scenario.edits("Erin")[-1]["text"].endswith(
+        "\nLeft as is. No more calendar offers from Jennifer Noble."
+    )
+
+
+async def test_my_settings_lists_skipped_senders_and_brings_them_back(
+    scenario: Scenario, inbox: FakeGmail, site: httpx.AsyncClient
+) -> None:
+    csrf = await sign_in(scenario, site, "Erin")
+    assert "Skipped senders" not in (await site.get("/settings")).text  # none yet
+    await pause(scenario, inbox)
+    await scenario.tap("Erin", "Not ever")
+    await scenario.tap("Erin", "Yes, skip them")
+    page = (await site.get("/settings")).text
+    assert "Skipped senders" in page and "Lasagna Love" in page
+    field = "unskip_calendar_from_email_lasagnachef@lasagnaloveportal.org"
+    assert f'name="{field}"' in page
+    saved = await site.post("/settings", data={"csrf": csrf, field: "on"})
+    assert saved.status_code == 303
+    await pause(scenario, inbox, "2054-11-23")
+    assert calendar_statuses(scenario) == ["declined", "pending"]

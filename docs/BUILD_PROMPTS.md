@@ -258,7 +258,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
-| F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [ ] |
+| F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12764,7 +12764,7 @@ Notes (2026-11-09):
 - Setup: none.
 
 ### F37c · Idea (2026-11-09): "Not ever" on an email's card, and stopping a sender's offers
-Status: [ ]
+Status: [x] 2026-11-09
 Depends on: F26b, F37b
 Read first: `themi/core/approvals.py` (`buttons_for`, `RESULT_TEXT`, why Not now snoozes);
 `themi/core/approval_groups.py` (F26b's shared card); `Events` in `themi_google/events.py`
@@ -12821,6 +12821,35 @@ says no more calendar offers from Lasagna Love, and a second Lasagna Love email 
 a week later brings no card.
 
 Data: none needed (action 571 is declined already). Mark #188 reviewed once live.
+
+Notes (2026-11-09):
+- Core: `ApprovalsUI.not_ever` maps a category to a `NotEver(words, sender, skip)` that a
+  module registers. A card of that kind gets [Not ever] (`buttons_for(..., not_ever=True)`,
+  through `ApprovalsUI.buttons`). The tap declines it, then `ask_about_sender` edits the
+  same message: "Left as is, for good. Skip calendar offers from {name} from now on?" with
+  [Yes, skip them] [Just this one] (button kind `not_ever`). A group message (F26b) with
+  such a line gets [Not ever] too, for all of it (answer "never" declines every line), and
+  the question goes on the group's message, after its listing.
+- Deviation: only `calendar_from_email` is registered, since that was the card in the idea.
+  `email_mark_read` and `email_reply` keep two buttons on their own cards. They're declined
+  with the rest when [Not ever] is tapped on a group, and only the calendar offers are
+  skipped. Registering another kind is one line in `CalendarModule.install` (or its own
+  module).
+- `email_sender_skips` (migration 0157: member, address, name, category). `Events.on_email`
+  stages nothing for a skipped sender, and logs a line with no subject or body. Everything
+  else about that sender's mail is triaged as before. Skips are per person.
+- Undo: My settings has "Skipped senders" (`settings/skipped_senders.html`, order 75, shown
+  only when there are some), with a box per sender to bring their offers back. In chat,
+  the `unskip_email_sender` tool (calendar group) does the same. Deviation: it isn't staged,
+  since it only brings offers back.
+- The sender's name is the email's from-name (or address), flattened to one line and cut
+  to 60 characters (`shown_name`). It's only shown, never given to the model.
+- `describe` says the year when the day is more than 365 days off, or in an earlier year:
+  "Mon 16 Nov 2054, all day".
+- Changed tests: F26b's `test_idea_137s_five_cards_come_as_one_message` expects the group's
+  new [Not ever] button. Golden files: `handlers.json` (the `not_ever` button) and
+  `tools.json` (`unskip_email_sender`), both as the prompt says.
+- Setup: restart `themi run` (migration 0157).
 
 ## Conversation mode
 

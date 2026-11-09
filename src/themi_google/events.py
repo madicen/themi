@@ -32,19 +32,21 @@ from zoneinfo import ZoneInfo
 
 from themi import clock
 from themi.accounts import LinkedAccount, Member
-from themi.autonomy import ExecutionContext
+from themi.autonomy import Action, ExecutionContext
 from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences, Entry, event_line
 from themi.core.rules import RuleError
 from themi.core.tools import (
     PICTURE_LOG,
+    Done,
     Proposal,
     ToolContext,
     ToolDeclined,
     ToolFailed,
     answers_picture_question,
     staged_tool,
+    tool,
 )
 from themi.core.wording import (  # CR10b1: the matching helpers live there
     FILLER,
@@ -199,10 +201,19 @@ def when_words(when: When, tz: ZoneInfo) -> str:
     return event_line(entry, tz).split(": ", 1)[0]
 
 
+YEAR_AFTER = timedelta(days=365)  # F37c: further off than this, the year is said
+
+
 def describe(title: str, when: When, location: str, tz: ZoneInfo) -> str:
-    """ "Dentist, Tue 03 Nov, 3-4 pm (at Smile Dental)": the read-back, from what's stored."""
+    """ "Dentist, Tue 03 Nov, 3-4 pm (at Smile Dental)": the read-back, from what's stored.
+    A day more than a year off, or in an earlier year, says its year ("Mon 16 Nov 2054":
+    16 Nov 2054 is a Monday too, so without it the card looked like next week, F37c)."""
     entry = Entry(0, title, location, when.starts, when.ends, when.all_day, False, None)
     on, rest = event_line(entry, tz).split(": ", 1)
+    day, today = when.starts.astimezone(tz).date(), clock.now().astimezone(tz).date()
+    if day > today + YEAR_AFTER or day.year < today.year:
+        dated = f"{day:%d %b}"  # as event_line says it: "16 Nov"
+        on = on.replace(dated, f"{dated} {day.year}", 1)
     return f"{rest.split(' (at ')[0]}, {on}" + (f" (at {location})" if location else "")
 
 
@@ -232,7 +243,7 @@ class Events:
         s.autonomy.executors.register(DELETE)(self._execute_delete)
         s.autonomy.executors.register(MERGE)(self._execute_merge)
         for t in (add_calendar_event, change_calendar_event, delete_calendar_event,
-                  merge_calendar_events):  # fmt: skip
+                  merge_calendar_events, unskip_email_sender):  # fmt: skip
             s.tools.register(t)
         if s.maybe(keys.triage) is not None:
             s.get(keys.triage).verdict_listeners.append(self.on_email)
@@ -718,6 +729,9 @@ class Events:
         if event is None or row["initial"]:
             return
         source = f"email:{row['id']}"
+        if self.skipped(member, str(row["from_address"])):
+            log.info("Email %s's booking: they skip this sender's calendar offers", row["id"])
+            return
         if self.db.one(
             "SELECT 1 FROM pending_actions WHERE category = ? AND payload LIKE ?",
             (FROM_EMAIL, f'%"source": "{source}"%'),
@@ -807,6 +821,53 @@ class Events:
             payload = json.loads(row["payload"])
             if payload.get("calendar") == "mine" and self._like_it(member, payload) is not None:
                 await self.services.autonomy.withdraw(row["id"], ON_CALENDAR_TEXT)
+
+    # ----- senders whose calendar offers they skip (F37c) ----------------------------------
+
+    def sender_of(self, action: Action) -> tuple[str, str] | None:
+        """(address, name) of the email a calendar card came from, or None."""
+        source = str(action.payload.get("source", ""))
+        if not source.startswith("email:"):
+            return None
+        row = self.db.one(
+            "SELECT from_address, from_name FROM emails WHERE id = ?", (int(source[6:]),)
+        )
+        if row is None or not row["from_address"]:
+            return None
+        address = str(row["from_address"]).lower()
+        return address, str(row["from_name"] or "") or address
+
+    def skip_sender(self, member: Member, address: str, category: str) -> None:
+        row = self.db.one("SELECT from_name FROM emails WHERE lower(from_address) = ?", (address,))
+        self.db.execute(
+            "INSERT OR IGNORE INTO email_sender_skips (member_id, address, name, category, "
+            "created_at) VALUES (?, ?, ?, ?, ?)",
+            (member.id, address.lower(), str(row["from_name"] or "") if row else "", category,
+             to_utc_iso(clock.now())),
+        )  # fmt: skip
+        log.info("Member %s skips a sender's %s", member.id, category)
+
+    def skipped(self, member: Member, address: str, category: str = FROM_EMAIL) -> bool:
+        return bool(
+            self.db.one(
+                "SELECT 1 FROM email_sender_skips WHERE member_id = ? AND address = ? "
+                "AND category = ?",
+                (member.id, address.lower(), category),
+            )
+        )
+
+    def skips(self, member: Member) -> list[dict[str, Any]]:
+        return self.db.query(
+            "SELECT address, name, category FROM email_sender_skips WHERE member_id = ? "
+            "ORDER BY lower(CASE WHEN name != '' THEN name ELSE address END)",
+            (member.id,),
+        )
+
+    def unskip(self, member: Member, address: str, category: str = FROM_EMAIL) -> None:
+        self.db.execute(
+            "DELETE FROM email_sender_skips WHERE member_id = ? AND address = ? AND category = ?",
+            (member.id, address.lower(), category),
+        )
 
     async def _after_email_event(self, ctx: ExecutionContext, text: str) -> None:
         automatic = self.db.scalar(
@@ -1301,3 +1362,30 @@ async def delete_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Propo
         {**_found_payload(found), "also": [_found_payload(each) for each in copies[1:]]},
     )
     return replace(proposal, requested=themi_made)
+
+
+@tool(
+    "unskip_email_sender",
+    "Bring back the calendar offers from a sender whose offers they chose to skip ([Not "
+    "ever], then [Yes, skip them], on an email's card): 'show me Lasagna Love's calendar "
+    "offers again'. sender: their name or address, as they said it.",
+    {"sender": {"type": "string"}},
+)
+async def unskip_email_sender(ctx: ToolContext, args: dict[str, Any]) -> Done:
+    events = _events(ctx)
+    said = name_key(str(args["sender"]))
+    skips = events.skips(ctx.member)
+    if not said or not skips:
+        raise ToolFailed("They aren't skipping any sender's calendar offers.")
+    found = [
+        row for row in skips
+        if said in name_key(row["name"]) or said in row["address"].lower()
+        or (name_key(row["name"]) and name_key(row["name"]) in said)
+    ]  # fmt: skip
+    if not found:
+        names = ", ".join(row["name"] or row["address"] for row in skips)
+        raise ToolFailed(f"None of the skipped senders is called that. They skip: {names}.")
+    for row in found:
+        events.unskip(ctx.member, row["address"], row["category"])
+    named = " and ".join(row["name"] or row["address"] for row in found)
+    return Done(f"Calendar offers from {named} will come again.")
