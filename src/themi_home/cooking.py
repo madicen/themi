@@ -67,6 +67,7 @@ log = logging.getLogger(__name__)
 KIND = "cooking"
 PAUSE_TOPIC = "cooking"  # RC3b: nudges and check-ins wait while cooking
 LEFT_AFTER = timedelta(hours=3)
+ENDED_SHOWN = timedelta(hours=3)  # CK3/CK6: an ended session's screen, at most this long
 MAX_GATHER = 30
 MAX_PREP = 12
 LABEL = 28
@@ -301,11 +302,19 @@ class CookingPreferences(Preferences):
 
     module: ClassVar[str] = "cooking"
     cooking_units: str = "written"  # CK2: "written" (as the recipe says) or "grams"
+    cooking_chime_volume: int = 70  # CK3: a timer's chime on the cook screen, 0-100
 
     @classmethod
     def on_form(cls, services: Any, member: Member) -> set[str] | None:
         """Shown inside the body double section: without it, nothing is on the form."""
         return None if services.maybe(keys.body_double) is not None else set()
+
+    @field_validator("cooking_chime_volume")
+    @classmethod
+    def _chime(cls, value: int) -> int:
+        if not 0 <= value <= 100:
+            raise ValueError("the chime's volume is between 0 and 100")
+        return value
 
     @field_validator("cooking_units")
     @classmethod
@@ -412,6 +421,33 @@ class Cooking:
 
     def _owner(self, session: Session) -> Member:
         return self.services.store.get_member(session.member_id)
+
+    # ----- after the end (CK3, CK6) --------------------------------------------------------
+
+    def recent_ended(self, member: Member) -> Session | None:
+        """Their latest session, ended in the last few hours, for the screen's ending: kept
+        timers until they fire and are cleared, and the wrap-up's offers."""
+        row = self.db.one(
+            "SELECT * FROM cooking_sessions WHERE member_id = ? AND ended_at IS NOT NULL "
+            "AND ended_at > ? ORDER BY id DESC LIMIT 1",
+            (member.id, to_utc_iso(clock.now() - ENDED_SHOWN)),
+        )
+        return _session(row) if row else None
+
+    def save_wrap(self, session: Session) -> None:
+        """The ending's answers (`wrap`), kept so each offer is made once; `seq` bumps."""
+        session.seq += 1
+        self.db.execute(
+            "UPDATE cooking_sessions SET wrap = ?, seq = ? WHERE id = ?",
+            (json.dumps(session.wrap), session.seq, session.id),
+        )
+
+    def answer_timers(self, member: Member, *, kept: bool) -> None:
+        """[Keep timers] or [Cancel them], in chat or on the screen: asked once."""
+        session = self.recent_ended(member)
+        if session is not None and "timers" not in session.wrap:
+            session.wrap["timers"] = "kept" if kept else "cancelled"
+            self.save_wrap(session)
 
     def _tz(self) -> str:
         family = self.services.store.get_family()

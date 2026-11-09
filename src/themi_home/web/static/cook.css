@@ -58,3 +58,30 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-said { position: fixed; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 40;
   margin: 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius); background: var(--fg); color: var(--bg); }
 .cook-said[hidden] { display: none; }
+
+/* CK3: the timer rail's controls, a fired timer, and the slow pulse */
+.cook-timer-moves { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.cook-timer-moves form { flex: 1 1 0; margin: 0; }
+.cook-timer-moves button { width: 100%; }
+.cook-timer-done { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1);
+  background: var(--accent); color: var(--accent-fg); text-align: left; padding: var(--space-3); }
+.cook-timer-done .cook-timer-label { color: inherit; }
+.cook-timer-done .cook-timer-left { color: inherit; font-size: clamp(2rem, 5vw, 3rem); }
+form.cook-timer[data-fired] { padding: 0; border: none; background: none; }
+.cook-new summary { min-height: var(--cook-tap); display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+.cook-new form { display: flex; flex-direction: column; gap: var(--space-2); }
+.cook-new input { min-height: var(--cook-tap); font-size: 1.15rem; }
+.cook-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.cook-chime input { width: 100%; }
+.cook-soonest { display: none; margin: 0; }
+body.drawer-open .cook-soonest:not(:empty) { display: block; position: fixed; z-index: 30; top: var(--space-2); right: var(--space-4);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); background: var(--fg); color: var(--bg);
+  font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.cook-stop { margin-left: auto; }
+.cook-pulse { position: fixed; inset: 0; z-index: 45; pointer-events: none; background: var(--accent); opacity: 0; }
+.cook-pulse.on { animation: cook-pulse 3s ease-in-out 2; }
+@keyframes cook-pulse { 0%, 100% { opacity: 0; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .cook-pulse { display: none; }
+  body.cook-alerting { box-shadow: inset 0 0 0 12px var(--accent); }
+}

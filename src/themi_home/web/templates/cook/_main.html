@@ -1,10 +1,12 @@
 {# CK1: the cook screen's regions: the step (or the list for this phase) with its moves, and
    the timer rail. Landscape puts them side by side; portrait stacks them. #}
 {% from "cook/_act.html" import act %}
-<div class="cook-main" data-drawn="{{ state.drawn }}" data-session="{{ state.id }}" data-seq="{{ state.seq }}" data-phase="{{ state.phase }}">
+<div class="cook-main" data-drawn="{{ state.drawn }}" data-session="{{ state.id }}" data-seq="{{ state.seq }}" data-phase="{{ state.phase }}" data-chime="{{ state.chime_volume }}">
   <header class="cook-head">
     <p class="cook-recipe" data-field="heading">{{ state.recipe }}{% if state.scale_words %} <span class="cook-scale-words">({{ state.scale_words }})</span>{% endif %}</p>
     {% if state.phase in ("gather", "prep", "cook") %}{% include "cook/_scale.html" %}{% endif %}
+    <p class="cook-soonest" data-ends="{{ state.soonest }}" aria-label="The soonest timer"></p>
+    {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop link") }}{% endif %}
   </header>
   <section class="cook-step" aria-label="This step">
     {% include "cook/_step.html" %}

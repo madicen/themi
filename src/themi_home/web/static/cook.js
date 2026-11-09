@@ -58,6 +58,8 @@
       if (!left || cards[i].dataset.fired) continue;
       left.textContent = words(Date.parse(cards[i].dataset.ends) - now);
     }
+    var soonest = document.querySelector(".cook-soonest");
+    if (soonest) soonest.textContent = soonest.dataset.ends ? words(Date.parse(soonest.dataset.ends) - now) : "";
     if (window.themiCook && window.themiCook.onTick) window.themiCook.onTick(now);
   }
 
@@ -70,8 +72,12 @@
       .then(function (html) {
         if (html === null || html === undefined) return;
         var box = document.getElementById("cook");
+        var open = {};
+        box.querySelectorAll("details[data-keep-open]").forEach(function (d) { open[d.dataset.keepOpen] = d.open; });
         box.innerHTML = html;
+        box.querySelectorAll("details[data-keep-open]").forEach(function (d) { if (open[d.dataset.keepOpen]) d.open = true; });
         drawer(drawerOpen);
+        alerts();
         tick();
         if (window.themiCook && window.themiCook.onDraw) window.themiCook.onDraw();
       }, function (e) { report("view failed: " + e); });
@@ -94,8 +100,9 @@
 
   // Every tap is a form posted with fetch (with the session header), then the state redrawn.
   // Each form has a hidden input named "action", which shadows form.action: read the attribute.
-  function post(form, extra) {
+  function post(form, extra, submitter) {
     var data = new URLSearchParams(new FormData(form));
+    if (submitter && submitter.name) data.set(submitter.name, submitter.value);
     if (extra) Object.keys(extra).forEach(function (k) { data.set(k, extra[k]); });
     return fetch(form.getAttribute("action"), {
       method: "POST", body: data.toString(), credentials: "same-origin",
@@ -105,6 +112,58 @@
       return r.ok ? r.json() : null;
     }).then(function (s) { if (s) { say(s.said); redraw(s); } return s; }, function (e) { report("cook tap failed: " + e); });
   }
+
+  // CK3: a fired timer chimes and pulses the screen (slowly, never a strobe), again every
+  // 30 seconds, until its card is tapped. Under prefers-reduced-motion, a steady border.
+  var alerting = null;
+  function chime(volume) {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx || volume <= 0) return;
+    try {
+      var ctx = chime.ctx || (chime.ctx = new Ctx());
+      if (ctx.state === "suspended") ctx.resume();
+      [660, 880].forEach(function (hz, n) {
+        var osc = ctx.createOscillator(), gain = ctx.createGain(), at = ctx.currentTime + n * 0.35;
+        osc.frequency.value = hz;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume / 100 * 0.6), at + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(at); osc.stop(at + 1);
+      });
+    } catch (e) { report("chime: " + e); }
+  }
+  function ring() {
+    var shown = main();
+    var volume = shown ? Number(shown.dataset.chime || 70) : 70;
+    (window.themiCook.playChime || chime)(volume);
+    body.dataset.rings = String(Number(body.dataset.rings || 0) + 1);
+    var pulse = document.querySelector(".cook-pulse");
+    if (pulse) { pulse.classList.remove("on"); void pulse.offsetWidth; pulse.classList.add("on"); }
+  }
+  function alerts() {
+    var fired = !!document.querySelector(".cook-timer[data-fired]");
+    body.classList.toggle("cook-alerting", fired);
+    if (fired && alerting === null) {
+      ring();
+      alerting = setInterval(ring, window.themiCook.alertEvery || 30000);
+    } else if (!fired && alerting !== null) {
+      clearInterval(alerting);
+      alerting = null;
+    }
+  }
+
+  // CK3: the chime's volume, kept for next time (a preference)
+  document.addEventListener("change", function (event) {
+    var t = event.target;
+    if (!t.closest || !t.closest(".cook-chime")) return;
+    var form = t.closest("form"), shown = main();
+    if (shown) shown.dataset.chime = t.value;
+    fetch(form.getAttribute("action"), {
+      method: "POST", credentials: "same-origin", body: new URLSearchParams(new FormData(form)).toString(),
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded" })
+    }).then(function () {}, function () {});
+  });
 
   // CK2: what a tap says once ("Now for 6."), for a few seconds
   var saidTimer = null;
@@ -137,7 +196,7 @@
     if (!form.closest || !form.closest("#cook")) return;
     if (form.dataset.local) return;  // a form the page handles itself
     event.preventDefault();
-    post(form);
+    post(form, null, event.submitter);
   });
 
   // Swipe left for Next (or All done), right for Back.
@@ -165,6 +224,7 @@
   }
 
   window.themiCook = window.themiCook || {};
+  window.themiCook.alerts = alerts;
   window.themiCook.post = post;
   window.themiCook.poll = poll;
   window.themiCook.view = view;
@@ -176,6 +236,7 @@
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
+  alerts();
   tick();
   setInterval(tick, 1000);
   setInterval(poll, POLL);

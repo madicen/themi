@@ -30,4 +30,13 @@
   </div>{% endif %}
   {% if state.peek %}<p class="cook-peek muted">{{ state.peek }}</p>{% endif %}
   {% include "cook/_amounts.html" %}
+{% elif state.phase == "done" %}
+  <h1 class="cook-title">{{ "All done." if state.outcome == "finished" else "Stopped cooking." }}</h1>
+  {% if state.ask_timers %}
+  <p class="cook-line">There's a timer still running. Keep it going?</p>
+  <div class="cook-moves">
+    {{ act(state, csrf, "timers_keep", "Keep timers", cls="primary big") }}
+    {{ act(state, csrf, "timers_cancel", "Cancel them", cls="big") }}
+  </div>
+  {% endif %}
 {% endif %}

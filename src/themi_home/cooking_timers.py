@@ -38,6 +38,8 @@ JOB = "cooking.timer"
 KIND = "cooking_timer"
 LONG = 8 * 60  # minutes: past this, a reminder instead of a timer
 PER_STEP = 2
+LABEL = 40  # characters of a timer's own label (CK3)
+PRESETS = (1, 3, 5, 10, 15, 30)  # CK3: [+ Timer]'s minutes
 DASHES = "-\u2013\u2014"  # hyphen, en and em dash
 UNIT = r"(?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?)"
 DURATION = re.compile(
@@ -104,6 +106,14 @@ def durations(text: str) -> list[Found]:
     return unique[:PER_STEP]
 
 
+def default_label(recipe: Recipe, step: str) -> str:
+    """ "Sauce, step 3" where the recipe groups its steps, else "Step 3"."""
+    from themi_home.cooking import step_parts
+
+    group = next((p.group for p in step_parts(recipe) if p.label == step), "")
+    return f"{group}, step {step}" if group else f"Step {step}"
+
+
 class CookingTimers:
     def __init__(self, cooking: Cooking, jobs: Scheduler) -> None:
         self.cooking = cooking
@@ -148,18 +158,67 @@ class CookingTimers:
         )
 
     def start(
-        self, member: Member, session: Session, recipe: Recipe, step: str, minutes: float
+        self,
+        member: Member,
+        session: Session,
+        recipe: Recipe,
+        step: str,
+        minutes: float,
+        label: str | None = None,
     ) -> datetime:
+        """A timer for `step`; its label is theirs (CK3) or the step's ("Sauce, step 3")."""
         now = clock.now()
         ends = now + timedelta(minutes=minutes)
+        label = " ".join((label or "").split())[:LABEL] or default_label(recipe, step)
         timer_id = self.db.execute(
             "INSERT INTO cooking_timers (session_id, member_id, recipe, step, minutes, ends_at, "
-            "in_group, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "in_group, created_at, label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (session.id, member.id, recipe.name, step, minutes, to_utc_iso(ends),
-             int(session.in_group), to_utc_iso(now)),
+             int(session.in_group), to_utc_iso(now), label),
         )  # fmt: skip
         self.jobs.enqueue(JOB, {"timer": timer_id}, run_after=ends)
         return ends
+
+    # ----- one timer, from the cook screen (CK3) -------------------------------------------
+
+    def _one(self, member_id: int, timer_id: int) -> dict[str, Any] | None:
+        return self.db.one(
+            "SELECT * FROM cooking_timers WHERE id = ? AND member_id = ? AND cancelled_at IS NULL",
+            (timer_id, member_id),
+        )
+
+    def add(self, member_id: int, timer_id: int, minutes: int) -> datetime | None:
+        """More time on a running timer, as a typed "add 2 minutes": the job already queued
+        sees the later end and queues itself again."""
+        row = self._one(member_id, timer_id)
+        if row is None or row["fired_at"] is not None or not 0 < minutes <= 60:
+            return None
+        ends = datetime.fromisoformat(row["ends_at"]) + timedelta(minutes=minutes)
+        self.db.execute(
+            "UPDATE cooking_timers SET ends_at = ?, minutes = minutes + ? WHERE id = ?",
+            (to_utc_iso(ends), minutes, row["id"]),
+        )
+        return ends
+
+    def cancel(self, member_id: int, timer_id: int) -> bool:
+        """One running timer off, as a typed "cancel the timer" (whose job finds it gone)."""
+        return bool(
+            self.db.update(
+                "UPDATE cooking_timers SET cancelled_at = ? WHERE id = ? AND member_id = ? "
+                "AND fired_at IS NULL AND cancelled_at IS NULL",
+                (to_utc_iso(clock.now()), timer_id, member_id),
+            )
+        )
+
+    def clear(self, member_id: int, timer_id: int) -> bool:
+        """A fired timer tapped on the screen: the chime and the pulse stop."""
+        return bool(
+            self.db.update(
+                "UPDATE cooking_timers SET cleared_at = ? WHERE id = ? AND member_id = ? "
+                "AND fired_at IS NOT NULL AND cleared_at IS NULL",
+                (to_utc_iso(clock.now()), timer_id, member_id),
+            )
+        )
 
     async def run_job(self, payload: dict[str, Any]) -> None:
         row = self.db.one(
@@ -214,6 +273,7 @@ class CookingTimers:
         if action in ("keep", "cancel"):
             if action == "cancel":
                 self.cancel_all(member)
+            self.cooking.answer_timers(member, kept=action == "keep")  # CK3: the screen too
             text = "Timers cancelled." if action == "cancel" else "The timers keep running."
             if event.button.message_id is not None:
                 await self.services.outbox.edit(member, event.button.message_id, text)
@@ -256,11 +316,7 @@ class CookingTimers:
             reply = "Timer cancelled." if count == 1 else f"{count} timers cancelled."
         elif found := ADD.match(said):
             row = self.running(member)[-1]
-            ends = datetime.fromisoformat(row["ends_at"]) + timedelta(minutes=int(found.group(1)))
-            self.db.execute(
-                "UPDATE cooking_timers SET ends_at = ?, minutes = minutes + ? WHERE id = ?",
-                (to_utc_iso(ends), int(found.group(1)), row["id"]),
-            )
+            ends = self.add(member.id, row["id"], int(found.group(1))) or clock.now()
             reply = (
                 f"Added {found.group(1)} min: step {row['step']} is done at {self._clock(ends)}."
             )

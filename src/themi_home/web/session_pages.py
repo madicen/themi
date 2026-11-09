@@ -135,6 +135,20 @@ def routes(kit: Kit) -> APIRouter:
         return page(request, "cook/_main.html", member=signed.member, csrf=signed.csrf_token,
                     state=state)  # fmt: skip
 
+    @router.post("/session/cook/chime")
+    async def cook_chime(request: Request) -> Response:
+        """CK3: the chime's volume on the cook screen, kept for next time."""
+        signed, form = await kit.checked(request)
+        from themi_home.cooking import CookingPreferences
+
+        try:
+            volume = int(str(form.get("volume", "")))
+            app.store.save_preferences(signed.member, signed.member.id, CookingPreferences,
+                                       cooking_chime_volume=volume)  # fmt: skip
+        except (ValueError, InvalidValue):
+            return Response(status_code=400)
+        return Response(status_code=204)
+
     @router.post("/session/cook/{session_id}/act")
     async def cook_act(request: Request, session_id: int) -> Response:
         signed, form = await kit.checked(request)

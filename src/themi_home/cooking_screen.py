@@ -21,6 +21,7 @@ from themi import clock
 from themi.accounts import Member
 from themi.localtime import to_utc_iso
 from themi_home.cooking_links import shown
+from themi_home.cooking_timers import PRESETS
 from themi_home.quantities import NeedsYield, fraction, scale_for
 
 if TYPE_CHECKING:
@@ -31,6 +32,8 @@ log = logging.getLogger(__name__)
 
 FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long at most
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
+TIMER_TAPS = ("timer_add", "timer_cancel", "timer_clear", "timers_keep", "timers_cancel")
+AFTER_END = TIMER_TAPS  # what an ended session's screen can still do (CK3)
 SCALES = (("½", "half", 0.5), ("1\u00d7", "", 1.0), ("2\u00d7", "double", 2.0))  # CK2's switcher
 
 
@@ -55,9 +58,18 @@ def may_tap(session: Session, member: Member) -> bool:
     return session.member_id == member.id or session.in_group
 
 
+def still_shown(cooking: Cooking, session: Session) -> bool:
+    """An ended session stays on the screen while it has timers to show (kept ones, until
+    they fire and are tapped)."""
+    return bool(timers(cooking, session))
+
+
 def state(cooking: Cooking, member: Member) -> dict[str, Any]:
     now = clock.now()
     session = session_for(cooking, member)
+    if session is None:
+        ended = cooking.recent_ended(member)
+        session = ended if ended is not None and still_shown(cooking, ended) else None
     if session is None:
         return {"active": False, "now": to_utc_iso(now)}
     recipe = cooking.recipes.get(session.recipe_id)
@@ -133,6 +145,13 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
                 if not found.reminder
             ]
     out["timers"] = timers(cooking, session)
+    running = [t for t in out["timers"] if not t["fired"]]
+    out["ended"] = session.ended_at is not None
+    out["outcome"] = session.outcome or ""
+    out["ask_timers"] = out["ended"] and bool(running) and "timers" not in session.wrap
+    out["soonest"] = running[0]["ends_at"] if running else ""
+    out["presets"] = list(PRESETS)
+    out["chime_volume"] = cooking.preferences(viewer.id).cooking_chime_volume
     out["buttons"] = buttons(session, recipe)
     out["drawn"] = drawn(out)
     for timer in out["timers"]:  # the count before the page's script runs: not in `drawn`
@@ -259,7 +278,8 @@ async def act(
     """A tap on the cook screen. Not ok (and nothing done) when the session isn't theirs,
     has ended, or the tap came from an older screen than the session's `seq`."""
     session = cooking.get(session_id)
-    if session is None or session.ended_at is not None or not may_tap(session, member):
+    over = session is not None and session.ended_at is not None and action not in AFTER_END
+    if session is None or over or not may_tap(session, member):
         log.info("Cook screen tap %r on session %s refused: not theirs or over",
                  action, session_id)  # fmt: skip
         return Tapped(False)
@@ -272,6 +292,8 @@ async def act(
         return Tapped(False)
     log.info("Cook screen tap %r on session %s", action, session_id)
     said = ""
+    if action in TIMER_TAPS:
+        return Tapped(timer_tap(cooking, session, action, form))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
     if action == "use":
@@ -301,11 +323,12 @@ async def act(
     elif action in ("all done", "all_done"):
         await cooking.advance(session, "finish" if session.phase == "cook" else "next")
     elif action == "timer" and cooking.timers is not None:
-        minutes = _float(form.get("minutes"))
+        minutes = _float(form.get("minutes") or form.get("typed"))
         if not 0 < minutes < 8 * 60:
             return Tapped(False)
         step = str(form.get("step", "")) or _step_label(session, recipe)
-        cooking.timers.start(cooking._owner(session), session, recipe, step, minutes)
+        label = str(form.get("label", "")).strip() or None
+        cooking.timers.start(cooking._owner(session), session, recipe, step, minutes, label)
         await cooking.show(session)
     elif action in MOVES:
         await cooking.advance(session, action)
@@ -332,6 +355,30 @@ async def rescale(
     session.scale, session.scale_said = factor, said
     await cooking.show(session)
     return Tapped(True, now_words(said, factor))
+
+
+def timer_tap(cooking: Cooking, session: Session, action: str, form: dict[str, Any]) -> bool:
+    """CK3: [+1] [+5] [Cancel] on a timer's card, a tap on a fired one, and the ending's
+    [Keep timers] [Cancel them]: the same methods as typed "add 2 minutes", "cancel the
+    timer", and the chat's buttons."""
+    timers = cooking.timers
+    if timers is None:
+        return False
+    owner = session.member_id
+    timer_id = _int(form.get("timer"))
+    if action == "timer_add":
+        return timers.add(owner, timer_id, _int(form.get("minutes"))) is not None
+    if action == "timer_cancel":
+        return timers.cancel(owner, timer_id)
+    if action == "timer_clear":
+        return timers.clear(owner, timer_id)
+    if session.ended_at is None or "timers" in session.wrap:
+        return False  # the ending's question, asked once
+    member = cooking._owner(session)
+    if action == "timers_cancel":
+        timers.cancel_all(member)
+    cooking.answer_timers(member, kept=action == "timers_keep")
+    return True
 
 
 def tick(session: Session, which: str, n: int, on: bool) -> None:
