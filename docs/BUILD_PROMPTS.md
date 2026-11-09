@@ -362,7 +362,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SL3 | Slack: buttons, edits and threads | Slack | [x] 2026-11-08 |
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
 | SL5 | Slack: the work template on Slack | Slack | [x] 2026-11-08 |
-| SL6 | Slack: status sync | Slack | [ ] |
+| SL6 | Slack: status sync | Slack | [x] 2026-11-08 |
 
 ## Fixed technical choices
 
@@ -16479,7 +16479,7 @@ Notes (2026-11-08):
   identical; there are no work goldens.
 
 ### SL6 · Slack: status sync
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SL5
 - A `user_token` setting (`xoxp-`, secret), the user scopes in the manifest, and a status
   writer driven by Themi's own state: a focus block sets "Focusing" and Do Not Disturb
@@ -16489,3 +16489,22 @@ Depends on: SL5
 - No user token: no calls, everything else works.
 Tests: a focus block sets and clears status and Do Not Disturb; a meeting sets its status;
 no token, no calls; a status Michael set by hand is replaced only when Themi's state changes.
+
+Notes (2026-11-08):
+- Deviation from the plan's words: Themi has no "focus blocks" as such (the `focus` module
+  is about feeling overwhelmed). Focus time is K5's task blocks: a block Themi put on the
+  calendar for a task (`task_blocks`). A meeting is a timed, busy calendar entry with
+  other people or a video link; an event with nobody else doesn't set a status.
+- `themi/standard/slack_status.py` (`SlackStatus`): each minute (periodic `slack_status`)
+  it works out focus, then meeting, then quiet hours, then nothing, from core tables only
+  (no Google pack import). Slack is written only when that changes, as a `slack_status`
+  action (migration 0004 on the `slack` track; family scope, automatic to start, as
+  Spotify's `music`; an admin can make it ask first). An unanswered card lapses when the
+  state ends.
+- Statuses carry Slack's `status_expiration` and Do Not Disturb is a snooze, so both end
+  on time by themselves; Themi clears what it set only when its state ended early. It
+  never calls Slack while nothing of its own is going on, so a status set by hand stays.
+- Only the person the user token belongs to (auth.test) is synced: Slack lets only their
+  own token change their status. `SLACK_USER_TOKEN` is optional; Test tries it when set.
+- The manifest asks for the user scopes `users.profile:write` and `dnd:write`, so an
+  existing install has to be reinstalled (and re-approved) to give the user token.

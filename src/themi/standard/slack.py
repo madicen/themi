@@ -4,10 +4,14 @@ with the Themi app in their Slack workspace; the Modules page asks for the app's
 The app is made from the manifest beside this file (`slack_manifest.yaml`, shown in the
 setup guide), installed to the workspace, and connects over Socket Mode: Themi opens the
 connection, so it needs no public address.
+
+SL6: with the user token of whoever installed the app, Themi also writes that person's
+Slack status and Do Not Disturb from its own state (`themi.standard.slack_status`).
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from themi.modules import Module, ModuleContext, ModuleSetup
@@ -42,6 +46,15 @@ class SlackSettings(ModuleSettings):
         help="Someone whose Slack email is their email in Themi is paired when they first "
         "write; anyone else pairs with a code from the Family page.",
     )
+    user_token: Secret | None = env_field(
+        "SLACK_USER_TOKEN",
+        secret=True,
+        ask="User token (starts xoxp-), for status sync",
+        help="api.slack.com/apps: your app, OAuth & Permissions, User OAuth Token. With it, "
+        "Themi sets your Slack status and Do Not Disturb during focus time, meetings and "
+        "quiet hours. Leave it empty to skip that.",
+        placeholder="xoxp-...",
+    )
 
 
 class SlackModule(Module):
@@ -62,17 +75,19 @@ class SlackModule(Module):
         app_token: Secret | None = None,
         *,
         pair_by_email: bool = True,
+        user_token: Secret | None = None,
         base_url: str | None = None,
     ) -> None:
         self.bot_token = bot_token
         self.app_token = app_token
         self.pair_by_email = pair_by_email
+        self.user_token = user_token  # SL6: status sync, when given
         self.base_url = base_url  # the fake's, in tests
 
     @classmethod
     def build(cls, setup: ModuleSetup) -> Module | None:
         s = setup.read(SlackSettings)
-        return cls(s.bot_token, s.app_token, pair_by_email=s.pair_by_email)
+        return cls(s.bot_token, s.app_token, pair_by_email=s.pair_by_email, user_token=s.user_token)
 
     def _api(self, token: Secret):
         from themi.channels.slack_api import SLACK_API, SlackApi
@@ -85,10 +100,13 @@ class SlackModule(Module):
         if self.bot_token is None or self.app_token is None:
             return "Slack needs both tokens: the bot token (xoxb-) and the app-level token (xapp-)."
         problems = []
-        for token, words, method in (
+        tried = [
             (self.bot_token, "The bot token", "auth.test"),
             (self.app_token, "The app-level token", "apps.connections.open"),
-        ):
+        ]
+        if self.user_token is not None:
+            tried.append((self.user_token, "The user token", "auth.test"))
+        for token, words, method in tried:
             api = self._api(token)
             try:
                 await api.call(method)
@@ -100,7 +118,8 @@ class SlackModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         if NAME in ctx.services.channels:
-            return  # given by the app already (tests)
+            self._install_status(ctx)
+            return  # the channel was given by the app already (tests)
         if self.bot_token is None or self.app_token is None:
             raise ModuleError("slack needs SLACK_BOT_TOKEN and SLACK_APP_TOKEN (see its guide)")
         from themi.channels.slack import SlackChannel
@@ -115,3 +134,14 @@ class SlackModule(Module):
         )
         ctx.provide(channel)
         ctx.channel(NAME, channel)
+        self._install_status(ctx)
+
+    def _install_status(self, ctx: ModuleContext) -> None:
+        """SL6: status sync, when there's a user token."""
+        if self.user_token is None:
+            return
+        from themi.standard.slack_status import EXECUTOR, SlackStatus
+
+        status = ctx.provide(SlackStatus(ctx.services, self._api(self.user_token)))
+        ctx.executor(EXECUTOR, status.execute)
+        ctx.periodic("slack_status", timedelta(minutes=1), status.tick)

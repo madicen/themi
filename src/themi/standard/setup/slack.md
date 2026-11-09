@@ -8,7 +8,8 @@ message. It connects over Socket Mode, so Themi needs no public address.
 - Ask a Slack workspace admin (and IT or security, if they review apps) to approve a custom
   app named Themi. Tell them what it can do: direct messages only, with the people who
   write to it; no channel access; it reads the DMs sent to it, posts replies, reactions and
-  files there, and reads names and emails to pair people.
+  files there, reads names and emails to pair people, and sets your own Slack status and Do
+  Not Disturb (with your user token).
 - Say where it runs and what it connects to: a Themi you host, holding outbound
   connections to Slack only, plus your work email and calendar and the AI provider it uses.
 - On an Enterprise Grid org, an org admin may need to approve it for the workspace too.
@@ -23,9 +24,15 @@ message. It connects over Socket Mode, so Themi needs no public address.
 4. Under **Install App**, choose **Install to Workspace** (or **Request to Install** when
    your workspace needs approval: an admin approves it in **Manage apps**, then you come
    back and install).
-5. Under **OAuth & Permissions**, copy the **Bot User OAuth Token** (`xoxb-`).
-6. Paste both tokens here, save, and press **Test**. It says which token didn't work, if
-   either doesn't.
+5. Under **OAuth & Permissions**, copy the **Bot User OAuth Token** (`xoxb-`), and the
+   **User OAuth Token** (`xoxp-`) if you want status sync.
+6. Paste the tokens here, save, and press **Test**. It says which token didn't work, if
+   one doesn't.
+
+With the user token, Themi shows **Focusing** and turns on Do Not Disturb while a block it
+put on your calendar for a task is on, shows **In a meeting** during meetings, and turns on
+Do Not Disturb in your quiet hours. It never reads your status, and leaves one you set
+yourself alone. Without the user token, everything else works.
 
 ```
 display_information:
@@ -58,6 +65,9 @@ oauth_config:
       - files:read
       - files:write
       - commands
+    user:
+      - users.profile:write
+      - dnd:write
 settings:
   event_subscriptions:
     bot_events:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from tests.fakes.slack_api import APP_TOKEN, BOT_TOKEN, MICHAEL, FakeSlack
+from tests.fakes.slack_api import APP_TOKEN, BOT_TOKEN, MICHAEL, USER_TOKEN, FakeSlack
 from tests.fakes.wiring import connector_options
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import START, ModelBank
@@ -32,9 +32,17 @@ async def _no_sleep(seconds: float) -> None:
     return None
 
 
-def on_the_fake(modules: list[Module], slack: FakeSlack) -> list[Module]:
-    """The modules, with Slack's pointed at the fake (and its tokens the fake's)."""
-    fake = SlackModule(Secret(BOT_TOKEN), Secret(APP_TOKEN), base_url=slack.base_url)
+def on_the_fake(
+    modules: list[Module], slack: FakeSlack, *, status_sync: bool = False
+) -> list[Module]:
+    """The modules, with Slack's pointed at the fake (and its tokens the fake's; the user
+    token too with `status_sync`)."""
+    fake = SlackModule(
+        Secret(BOT_TOKEN),
+        Secret(APP_TOKEN),
+        user_token=Secret(USER_TOKEN) if status_sync else None,
+        base_url=slack.base_url,
+    )
     return [fake if m.name == "slack" else m for m in modules]
 
 
@@ -46,6 +54,8 @@ class SlackScenario:
         modules: list[Module],
         template: Template | None = None,
         user: str = MICHAEL,
+        *,
+        status_sync: bool = False,
     ) -> None:
         self.family = family
         self.slack = slack
@@ -57,7 +67,7 @@ class SlackScenario:
             None,
             provider_factory=self.models,
             sleep=_no_sleep,
-            modules=on_the_fake(modules, slack),
+            modules=on_the_fake(modules, slack, status_sync=status_sync),
             template=template,
             **connector_options(timezone=family.family.timezone),
         )

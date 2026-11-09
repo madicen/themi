@@ -28,6 +28,9 @@ oauth_config:
       - files:read
       - files:write
       - commands
+    user:
+      - users.profile:write
+      - dnd:write
 settings:
   event_subscriptions:
     bot_events:
