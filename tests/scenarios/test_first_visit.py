@@ -186,6 +186,10 @@ async def test_a_new_themis_settings_are_only_the_cores(tmp_path: Path) -> None:
     async with web_client(themi) as site:  # type: ignore[arg-type]
         await sign_in(themi, site, "Sam")  # type: ignore[arg-type]
         page = (await site.get("/settings")).text
+        home = (await site.get("/")).text
+        more = (await site.get("/more")).text
+    assert 'href="/more"' in home  # the bar: Home and More (at the bottom, on a phone)
+    assert 'href="/modules"' in more  # the claimant is an admin
     titles = re.findall(r'<span class="row-title">([^<]+)</span>', page)
     assert "Quiet hours" in titles
     assert not set(titles) & {
