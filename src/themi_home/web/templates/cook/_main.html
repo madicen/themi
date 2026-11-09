@@ -3,7 +3,8 @@
 {% from "cook/_act.html" import act %}
 <div class="cook-main" data-drawn="{{ state.drawn }}" data-session="{{ state.id }}" data-seq="{{ state.seq }}" data-phase="{{ state.phase }}">
   <header class="cook-head">
-    <p class="cook-recipe" data-field="heading">{{ state.heading }}</p>
+    <p class="cook-recipe" data-field="heading">{{ state.recipe }}{% if state.scale_words %} <span class="cook-scale-words">({{ state.scale_words }})</span>{% endif %}</p>
+    {% if state.phase in ("gather", "prep", "cook") %}{% include "cook/_scale.html" %}{% endif %}
   </header>
   <section class="cook-step" aria-label="This step">
     {% include "cook/_step.html" %}

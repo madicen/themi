@@ -1,0 +1,12 @@
+{# CK2: the scale switcher: ½, 1, 2, and "for N". Every amount on the screen rescales. #}
+{% from "cook/_act.html" import act %}
+<div class="cook-scale" role="group" aria-label="How much">
+  {% for o in state.scales.options %}{{ act(state, csrf, "scale", o.label, {"said": o.said}, cls="cook-chip", pressed=o.on) }}{% endfor %}
+  <form method="post" action="/session/cook/{{ state.id }}/act" class="cook-for">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="seq" value="{{ state.seq }}">
+    <input type="hidden" name="action" value="scale">
+    <label>For <input type="number" name="for" min="1" max="99" inputmode="numeric" value="{{ state.scales.for or '' }}" aria-label="How many it's for"></label>
+    <button class="cook-chip"{% if state.scales.chosen_for %} aria-pressed="true"{% endif %}>Set</button>
+  </form>
+</div>

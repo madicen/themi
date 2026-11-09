@@ -39,3 +39,22 @@ body.cook-page { --cook-tap: 64px; --cook-text: 1.75rem; overflow-x: hidden; }
 .cook-timer-left { margin: 0; font-size: clamp(2.25rem, 6vw, 3.5rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .cook-timer[data-fired] { border-color: var(--accent); background: var(--soft); }
 .cook-timer[data-fired] .cook-timer-left { color: var(--accent); }
+
+/* CK2: amounts for this step, the drawer with every line, the scale switcher */
+.cook-amounts h2 { margin: var(--space-2) 0; }
+.cook-amount { font-size: 1.2rem; }
+.cook-all-open { align-self: flex-start; }
+.cook-drawer { position: fixed; inset: var(--space-3); z-index: 20; overflow-y: auto; background: var(--card);
+  border: 2px solid var(--line); border-radius: var(--radius); padding: var(--space-3); }
+.cook-drawer[hidden] { display: none; }
+.cook-drawer-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+.cook-drawer-head h2 { margin: 0; }
+.cook-scale { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.cook-scale form { margin: 0; }
+.cook-chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+.cook-for { display: flex; gap: var(--space-2); align-items: center; }
+.cook-for input { width: 4.5rem; min-height: var(--cook-tap); font-size: 1.15rem; }
+.cook-scale-words { font-weight: 400; }
+.cook-said { position: fixed; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 40;
+  margin: 0; padding: var(--space-2) var(--space-4); border-radius: var(--radius); background: var(--fg); color: var(--bg); }
+.cook-said[hidden] { display: none; }

@@ -57,7 +57,7 @@ def routes(kit: Kit) -> APIRouter:
         return state
 
     @router.get("/session", response_class=HTMLResponse)
-    def session_page(request: Request, ticket: str = "") -> Response:
+    async def session_page(request: Request, ticket: str = "") -> Response:
         token = ""
         member = kit.auth.consume_link(ticket) if ticket else None
         if member is not None:  # signed in from Telegram: the page carries the session
@@ -69,6 +69,8 @@ def routes(kit: Kit) -> APIRouter:
             except NotSignedIn:  # opened from Telegram: the page signs in with initData
                 return page(request, member=None, csrf="", state=None, session_token="")
         assert signed is not None
+        if cooking() is not None:
+            await cooking().prepare(signed.member)  # CK2: the step links, once per recipe
         state = current_state(signed.member)
         name = "cook.html" if state.get("kind") == "cooking" else "session.html"
         response = page(request, name, member=signed.member, csrf=signed.csrf_token,
@@ -122,9 +124,11 @@ def routes(kit: Kit) -> APIRouter:
     # ----- CK1: the cook screen ---------------------------------------------------------------
 
     @router.get("/session/cook/view", response_class=HTMLResponse)
-    def cook_view(request: Request) -> Response:
+    async def cook_view(request: Request) -> Response:
         """The cook screen's regions, drawn again when its state changes."""
         signed = kit.current(request)
+        if cooking() is not None:
+            await cooking().prepare(signed.member)
         state = current_state(signed.member)
         if state.get("kind") != "cooking":
             return Response(status_code=204)
@@ -142,10 +146,13 @@ def routes(kit: Kit) -> APIRouter:
         except ValueError:
             seq = -1
         member = app.store.get_member(signed.member.id)
-        await cooking().act_from_page(member, session_id, str(form.get("action", "")), seq,
-                                      dict(form))  # fmt: skip
+        tapped = await cooking().act_from_page(
+            member, session_id, str(form.get("action", "")), seq, dict(form)
+        )
         if request.headers.get("X-Requested-With") == "fetch":
-            return session_state(request)
+            await cooking().prepare(member)
+            state = {**current_state(member), "said": tapped.said}
+            return JSONResponse(state, headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 
     @router.post("/session/music")

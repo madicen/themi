@@ -31,10 +31,13 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from pydantic import field_validator
 
 from themi import clock
 from themi.accounts import Member
+from themi.accounts.preferences import Preferences
 from themi.ai.errors import AIError
 from themi.ai.settings import AITask
 from themi.ai.types import CallKind
@@ -49,6 +52,7 @@ from themi.localtime import to_local, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.lists import name_key
 from themi_home import home_groups
+from themi_home.cooking_links import UNITS, StepLinks
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_groceries import Ingredient, resolve
 from themi_home.recipes import Recipe, Recipes, stem
@@ -291,6 +295,26 @@ TYPED = {
 }  # fmt: skip
 
 
+class CookingPreferences(Preferences):
+    """Each person's cook screen settings (CK2 on), under "Cooking" in the body double
+    section of the settings page."""
+
+    module: ClassVar[str] = "cooking"
+    cooking_units: str = "written"  # CK2: "written" (as the recipe says) or "grams"
+
+    @classmethod
+    def on_form(cls, services: Any, member: Member) -> set[str] | None:
+        """Shown inside the body double section: without it, nothing is on the form."""
+        return None if services.maybe(keys.body_double) is not None else set()
+
+    @field_validator("cooking_units")
+    @classmethod
+    def _units(cls, value: str) -> str:
+        if value not in UNITS:
+            raise ValueError("the units are as written, or with grams")
+        return value
+
+
 class Cooking:
     def __init__(self, services: Services, recipes: Recipes, groceries: RecipeGroceries) -> None:
         self.services = services
@@ -299,6 +323,10 @@ class Cooking:
         self.db = services.store.db
         self.card = StepCard(services.outbox, KIND)
         self.timers: CookingTimers | None = None  # RC3c, once the scheduler exists
+        self.links = StepLinks(services)  # CK2: which lines each step uses
+
+    def preferences(self, member_id: int) -> CookingPreferences:
+        return self.services.store.preferences(member_id, CookingPreferences)
 
     def install(self) -> None:
         s = self.services
@@ -534,6 +562,16 @@ class Cooking:
 
     # ----- the cook screen (CK1) ----------------------------------------------------------
 
+    async def prepare(self, member: Member) -> None:
+        """Before the cook screen draws: the step links (CK2), from the cache or one call."""
+        from themi_home import cooking_screen
+
+        session = cooking_screen.session_for(self, member)
+        recipe = self.recipes.get(session.recipe_id) if session is not None else None
+        if session is None or recipe is None or session.phase != "cook":
+            return  # the links are shown with the steps
+        await self.links.ensure(self._owner(session), recipe, self.groceries.known(recipe))
+
     def state(self, member: Member) -> dict[str, Any]:
         """What the cook screen shows, as JSON (`cooking_screen`). Never the energy level."""
         from themi_home import cooking_screen
@@ -542,7 +580,7 @@ class Cooking:
 
     async def act_from_page(
         self, member: Member, session_id: int, action: str, seq: int, form: dict[str, Any]
-    ) -> bool:
+    ) -> Any:
         """A tap on the cook screen: the same methods as the chat's buttons, and the chat's
         card redrawn. False when it isn't theirs, is over, or is out of date."""
         from themi_home import cooking_screen
@@ -926,6 +964,7 @@ class CookingModule(Module):
     summary = "Walks through a recipe: the prep first, then one step at a time."
     tool_groups = (home_groups.RECIPES,)
     requires = ("recipes", "recipe_groceries")
+    preferences = CookingPreferences
     migrations = Path(__file__).parent / "cooking_schema"  # CK1: the cooking companion
 
     def install(self, ctx: ModuleContext) -> None:

@@ -29,4 +29,5 @@
   {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
   </div>{% endif %}
   {% if state.peek %}<p class="cook-peek muted">{{ state.peek }}</p>{% endif %}
+  {% include "cook/_amounts.html" %}
 {% endif %}

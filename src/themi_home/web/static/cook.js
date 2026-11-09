@@ -71,6 +71,7 @@
         if (html === null || html === undefined) return;
         var box = document.getElementById("cook");
         box.innerHTML = html;
+        drawer(drawerOpen);
         tick();
         if (window.themiCook && window.themiCook.onDraw) window.themiCook.onDraw();
       }, function (e) { report("view failed: " + e); });
@@ -102,8 +103,34 @@
     }).then(function (r) {
       if (!r.ok) report("cook tap " + data.get("action") + " answered " + r.status);
       return r.ok ? r.json() : null;
-    }).then(function (s) { if (s) redraw(s); return s; }, function (e) { report("cook tap failed: " + e); });
+    }).then(function (s) { if (s) { say(s.said); redraw(s); } return s; }, function (e) { report("cook tap failed: " + e); });
   }
+
+  // CK2: what a tap says once ("Now for 6."), for a few seconds
+  var saidTimer = null;
+  function say(text) {
+    var el = document.querySelector(".cook-said");
+    if (!el || !text) return;
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(saidTimer);
+    saidTimer = setTimeout(function () { el.hidden = true; }, 4000);
+  }
+
+  // CK2: the All ingredients drawer, kept open across redraws
+  var drawerOpen = false;
+  function drawer(on) {
+    drawerOpen = on;
+    var box = document.querySelector(".cook-drawer");
+    if (box) box.hidden = !on;
+    body.classList.toggle("drawer-open", on && !!box);
+  }
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (!t.closest) return;
+    if (t.closest(".cook-all-open")) drawer(true);
+    else if (t.closest(".cook-drawer-close")) drawer(false);
+  });
 
   document.addEventListener("submit", function (event) {
     var form = event.target;
@@ -144,6 +171,8 @@
   window.themiCook.auth = auth;
   window.themiCook.report = report;
   window.themiCook.now = function () { return Date.now() + offset; };
+  window.themiCook.drawer = drawer;
+  window.themiCook.say = say;
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();

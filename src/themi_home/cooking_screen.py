@@ -12,13 +12,16 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
 from themi.accounts import Member
 from themi.localtime import to_utc_iso
-from themi_home.quantities import describe
+from themi_home.cooking_links import shown
+from themi_home.quantities import NeedsYield, fraction, scale_for
 
 if TYPE_CHECKING:
     from themi_home.cooking import Cooking, Session
@@ -28,6 +31,19 @@ log = logging.getLogger(__name__)
 
 FIRED_SHOWN = timedelta(hours=2)  # a fired timer nobody tapped stays this long at most
 MOVES = ("next", "back", "skip", "stop", "finish", "anyway", "tomorrow")
+SCALES = (("½", "half", 0.5), ("1\u00d7", "", 1.0), ("2\u00d7", "double", 2.0))  # CK2's switcher
+
+
+@dataclass(frozen=True)
+class Tapped:
+    """What a tap did: `ok` (False: nothing, it was stale or not theirs), and a line the
+    screen says once ("Now for 6.")."""
+
+    ok: bool
+    said: str = ""
+
+    def __bool__(self) -> bool:
+        return self.ok
 
 
 def session_for(cooking: Cooking, member: Member) -> Session | None:
@@ -47,10 +63,10 @@ def state(cooking: Cooking, member: Member) -> dict[str, Any]:
     recipe = cooking.recipes.get(session.recipe_id)
     if recipe is None:
         return {"active": False, "now": to_utc_iso(now)}
-    return draw(cooking, session, recipe)
+    return draw(cooking, session, recipe, member)
 
 
-def draw(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any]:
+def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> dict[str, Any]:
     from themi_home.cooking import step_parts
 
     now = clock.now()
@@ -64,7 +80,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any]:
         "phase": session.phase,
         "recipe": recipe.name,
         "heading": cooking.heading(session, recipe),
-        "scale_words": describe(session.scale_said, session.scale) if session.scale != 1 else "",
+        "scale_words": scale_words(session.scale_said, session.scale),
+        "scales": scales(session, recipe),
         "group": session.in_group,
         "line": session.line,
         "step": None,
@@ -103,6 +120,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any]:
             "first": n == 0,
             "last": n >= len(parts) - 1,
         }
+        out["amounts"] = amounts(cooking, session, recipe, part.label, viewer)
         if n + 1 < len(parts):
             nxt = parts[n + 1]
             out["peek"] = f"Next, step {nxt.label}: {nxt.text}"
@@ -120,6 +138,65 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any]:
     for timer in out["timers"]:  # the count before the page's script runs: not in `drawn`
         timer["text"] = span(seconds_left(timer["ends_at"]))
     return out
+
+
+def step_index(label: str) -> int:
+    """The recipe step (0-based) a part's label is from: "3" and "3b" are step 3."""
+    found = re.match(r"\d+", label)
+    return int(found.group()) - 1 if found else 0
+
+
+def amounts(
+    cooking: Cooking, session: Session, recipe: Recipe, label: str, viewer: Member
+) -> dict[str, Any]:
+    """CK2: the lines this step uses, at the session's scale, and every line for the
+    drawer, grouped as the recipe groups them. Used lines are marked."""
+    units = cooking.preferences(viewer.id).cooking_units
+    scaled = cooking.lines(session, recipe)
+    links = cooking.links.links(recipe, cooking.groceries.known(recipe))
+
+    def line(n: int) -> dict[str, Any]:
+        return {"n": n, "line": shown(scaled[n], units), "used": n in session.used}
+
+    groups: list[dict[str, Any]] = []
+    for n, source in enumerate(recipe.ingredients):
+        if not groups or groups[-1]["group"] != source.group:
+            groups.append({"group": source.group, "lines": []})
+        groups[-1]["lines"].append(line(n))
+    uses = [line(n) for n in links.get(step_index(label), []) if n < len(scaled)]
+    return {"uses": uses, "groups": groups, "units": units}
+
+
+def scale_words(said: str, factor: float) -> str:
+    """How the screen names the batch: "for 6", "half", "double", "1.5 times"; "" as written."""
+    found = re.match(r"^for (\d+)", said.strip().lower())
+    if found:
+        return f"for {found.group(1)}"
+    names = {1.0: "", 0.5: "half", 2.0: "double", 3.0: "triple"}
+    return names.get(factor, f"{fraction(factor)}\u00d7")
+
+
+def scales(session: Session, recipe: Recipe) -> dict[str, Any]:
+    """CK2: the scale switcher: ½, 1, 2, and "for N" (when the recipe says how many)."""
+    chosen = session.scale_said.strip().lower().startswith("for ")
+    return {
+        "options": [
+            {"label": label, "said": said, "on": not chosen and abs(session.scale - f) < 1e-9}
+            for label, said, f in SCALES
+        ],
+        "makes": recipe.makes,
+        "for": round(session.scale * recipe.makes) if recipe.makes else None,
+        "chosen_for": chosen,
+    }
+
+
+def now_words(said: str, factor: float) -> str:
+    words = scale_words(said, factor)
+    if not words:
+        return "Now as written."
+    if words.startswith("for "):
+        return f"Now {words}."
+    return f"Now {words} the recipe." if words in ("half", "double", "triple") else f"Now {words}."
 
 
 def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
@@ -178,23 +255,35 @@ def drawn(out: dict[str, Any]) -> str:
 
 async def act(
     cooking: Cooking, member: Member, session_id: int, action: str, seq: int, form: dict[str, Any]
-) -> bool:
-    """A tap on the cook screen. False (and nothing done) when the session isn't theirs,
+) -> Tapped:
+    """A tap on the cook screen. Not ok (and nothing done) when the session isn't theirs,
     has ended, or the tap came from an older screen than the session's `seq`."""
     session = cooking.get(session_id)
     if session is None or session.ended_at is not None or not may_tap(session, member):
         log.info("Cook screen tap %r on session %s refused: not theirs or over",
                  action, session_id)  # fmt: skip
-        return False
+        return Tapped(False)
     if seq != session.seq:
         log.info("Cook screen tap %r on session %s refused: seq %s, now %s",
                  action, session_id, seq, session.seq)  # fmt: skip
-        return False
+        return Tapped(False)
     recipe = cooking.recipes.get(session.recipe_id)
     if recipe is None:
-        return False
+        return Tapped(False)
     log.info("Cook screen tap %r on session %s", action, session_id)
-    if action in ("tick", "untick"):
+    said = ""
+    if action == "scale":
+        return await rescale(cooking, session, recipe, form)
+    if action == "use":
+        n = _int(form.get("n"))
+        if not 0 <= n < len(recipe.ingredients):
+            return Tapped(False)
+        if n in session.used:
+            session.used.remove(n)
+        else:
+            session.used.append(n)
+        await cooking.show(session)
+    elif action in ("tick", "untick"):
         tick(session, str(form.get("list", "gather")), _int(form.get("n")), action == "tick")
         await cooking.show(session)
     elif action == "anyway" and session.phase == "ready":
@@ -208,21 +297,41 @@ async def act(
     elif action == "goto" and session.phase == "cook":
         await cooking.advance(session, f"goto:{str(form.get('to', '')).strip()}")
     elif action == "back" and session.phase != "cook":
-        return False  # before the steps, Back isn't a move (it would go forward)
+        return Tapped(False)  # before the steps, Back isn't a move (it would go forward)
     elif action in ("all done", "all_done"):
         await cooking.advance(session, "finish" if session.phase == "cook" else "next")
     elif action == "timer" and cooking.timers is not None:
         minutes = _float(form.get("minutes"))
         if not 0 < minutes < 8 * 60:
-            return False
+            return Tapped(False)
         step = str(form.get("step", "")) or _step_label(session, recipe)
         cooking.timers.start(cooking._owner(session), session, recipe, step, minutes)
         await cooking.show(session)
     elif action in MOVES:
         await cooking.advance(session, action)
     else:
-        return False
-    return True
+        return Tapped(False)
+    return Tapped(True, said)
+
+
+async def rescale(
+    cooking: Cooking, session: Session, recipe: Recipe, form: dict[str, Any]
+) -> Tapped:
+    """CK2: ½, 1, 2 or "for N" from the screen. Every amount rescales; the screen says
+    once what it is now, and the chat's card is redrawn with it."""
+    said = str(form.get("said", "")).strip()
+    if str(form.get("for", "")).strip():
+        said = f"for {str(form.get('for')).strip()}"
+    try:
+        factor = scale_for(said, recipe.makes)
+    except NeedsYield:
+        return Tapped(False, f"{recipe.name} doesn't say how many it makes. Tell Themi in "
+                             "chat, or pick ½ or 2\u00d7.")  # fmt: skip
+    except ValueError:
+        return Tapped(False, "That isn't an amount to scale by.")
+    session.scale, session.scale_said = factor, said
+    await cooking.show(session)
+    return Tapped(True, now_words(said, factor))
 
 
 def tick(session: Session, which: str, n: int, on: bool) -> None:
