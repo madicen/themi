@@ -359,7 +359,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
 | SL1 | Slack: the module, settings and sending | Slack | [x] 2026-11-08 |
 | SL2 | Slack: receiving and pairing | Slack | [x] 2026-11-08 |
-| SL3 | Slack: buttons, edits and threads | Slack | [ ] |
+| SL3 | Slack: buttons, edits and threads | Slack | [x] 2026-11-08 |
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [ ] |
 | SL5 | Slack: the work template on Slack | Slack | [ ] |
 | SL6 | Slack: status sync | Slack | [ ] |
@@ -16392,7 +16392,7 @@ Notes (2026-11-08):
 - Pairing by email doesn't take an address from someone already on Slack as another user.
 
 ### SL3 · Slack: buttons, edits and threads
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SL2
 - Buttons as an `actions` block per row (Telegram's `button_rows`), each button's `value` a
   `callback_tokens` token; `block_actions` becomes a `ButtonPress`, with the same "not
@@ -16403,6 +16403,17 @@ Depends on: SL2
   Themi's sends within two minutes of it go into that thread; later ones go to the DM.
 Tests: a tap reaches the agent with its payload; an edit replaces the text and removes the
 buttons; someone else's token is refused; a reply to a message in a thread lands there.
+
+Notes (2026-11-08):
+- Taps use `themi.channels.buttons.claim`, the same rules as Telegram's. A tap that doesn't
+  count is answered with `chat.postEphemeral` (only they see it), in its thread.
+- Threads: `slack_messages.thread_ts` (migration 0003). A message in a thread notes the
+  thread for that person, and every send to them within two minutes (`THREAD_WINDOW`) goes
+  there; writing at the top of the DM, or two minutes passing, puts Themi back at the top.
+  A tap on a card inside a thread counts as writing in that thread. Threads still share
+  one conversation in Themi's memory.
+- Mini App (`web_app`) buttons are link buttons to the same page; the page asks them to
+  sign in in the browser, since Slack has no Mini App.
 
 ### SL4 · Slack: pictures, voice clips, reactions, `/themi`
 Status: [ ]

@@ -12,6 +12,7 @@ import pytest
 from tests.fakes.slack_api import APP_TOKEN, BOT_TOKEN, MICHAEL, STRANGER, FakeSlack
 from tests.fixtures.family import SeededFamily
 from themi.accounts import SYSTEM, Member
+from themi.channels.buttons import ALREADY_HANDLED_TEXT, NOT_YOURS_TEXT
 from themi.channels.events import InboundEvent
 from themi.channels.slack import (
     BAD_CODE_TEXT,
@@ -296,3 +297,117 @@ async def test_a_failed_connection_backs_off_and_tries_again(
     fake_slack.push(fake_slack.dm(MICHAEL, "got through"))
     await asyncio.wait_for(channel.run(stop), timeout=10)
     assert len(sleep.waits) == 2 and [e.text for e in recorder.events] == ["got through"]
+
+
+# ----- SL3: buttons, edits and threads ----------------------------------------------------
+
+
+async def test_a_tap_reaches_the_agent_and_uses_up_the_card(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    from themi.channels.events import Button
+
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    sent = await channel.send_text(
+        erin,
+        "Send the report now?",
+        [
+            Button("Yes", "report", {"id": 7}),
+            Button("Later", "report", {"id": 8}),
+            Button("Open", "", web_app="https://themi.test/session"),
+        ],
+    )
+    yes, later, link = fake_slack.last_buttons(MICHAEL)
+    assert link["url"] == "https://themi.test/session" and "value" not in link
+    _, ts = channel.where(sent) or ("", "")
+    await channel.dispatch(fake_slack.tap(MICHAEL, yes["value"], ts))
+    [event] = recorder.events
+    assert event.kind == "button" and event.message_id == sent
+    assert event.button is not None
+    assert (event.button.label, event.button.kind, event.button.payload) == (
+        "Yes",
+        "report",
+        {"id": 7},
+    )
+    await channel.dispatch(fake_slack.tap(MICHAEL, later["value"], ts))  # one answer a card
+    assert len(recorder.events) == 1
+    whisper = fake_slack.calls("chat.postEphemeral")[-1]
+    assert (whisper["user"], whisper["text"]) == (MICHAEL, ALREADY_HANDLED_TEXT)
+
+
+async def test_someone_elses_card_isnt_theirs_to_answer(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    from themi.channels.events import Button
+
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    on_slack(family, family.husband, STRANGER)
+    await channel.send_text(erin, "Yours?", [Button("Yes", "k")])
+    [yes] = fake_slack.last_buttons(MICHAEL)
+    await channel.dispatch(fake_slack.tap(STRANGER, yes["value"], fake_slack.next_ts()))
+    assert recorder.events == []
+    assert fake_slack.calls("chat.postEphemeral")[-1]["text"] == NOT_YOURS_TEXT
+    await channel.send_text(erin, "Anyone?", [Button("Me", "k")], anyone=True)
+    [me] = fake_slack.last_buttons(MICHAEL)
+    await channel.dispatch(fake_slack.tap(STRANGER, me["value"], fake_slack.next_ts()))
+    assert [e.member.id for e in recorder.events] == [family.husband.id]
+
+
+async def test_an_edit_with_no_buttons_takes_them_away(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    from themi.channels.events import Button
+
+    channel = make_channel(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    sent = await channel.send_text(erin, "Pick", [Button("A", "k"), Button("B", "k")])
+    await channel.edit_text(erin, sent, "Picked A")
+    update = fake_slack.calls("chat.update")[-1]
+    assert [b["type"] for b in update["blocks"]] == ["section"]
+    await channel.edit_text(erin, sent, "Again?", [Button("Yes", "k")])
+    assert fake_slack.buttons(fake_slack.calls("chat.update")[-1])[0]["value"]
+
+
+async def test_themi_answers_in_the_thread_it_was_asked_in(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    clock.freeze(clock.now())
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    card = await channel.send_text(erin, "Your day: three meetings")
+    _, card_ts = channel.where(card) or ("", "")
+    await channel.dispatch(fake_slack.dm(MICHAEL, "move the second one", thread_ts=card_ts))
+    [event] = recorder.events
+    assert event.reply_to_message_id == card
+    assert channel.thread_of(event.message_id or 0) == card_ts
+    reply = await channel.send_text(erin, "Moved it to 3.")
+    assert fake_slack.posts(MICHAEL)[-1]["thread_ts"] == card_ts
+    assert channel.thread_of(reply) == card_ts
+    clock.advance(timedelta(minutes=3))  # a nudge later goes to the top of the DM
+    await channel.send_text(erin, "A nudge")
+    assert "thread_ts" not in fake_slack.posts(MICHAEL)[-1]
+    await channel.dispatch(fake_slack.dm(MICHAEL, "again", thread_ts=card_ts))
+    await channel.dispatch(fake_slack.dm(MICHAEL, "now at the top"))
+    await channel.send_text(erin, "At the top too")
+    assert "thread_ts" not in fake_slack.posts(MICHAEL)[-1]
+
+
+async def test_a_tap_on_a_card_in_a_thread_is_answered_there(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    from themi.channels.events import Button
+
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    await channel.send_text(erin, "Done?", [Button("Done", "k")])
+    [done] = fake_slack.last_buttons(MICHAEL)
+    await channel.dispatch(fake_slack.tap(MICHAEL, done["value"], "1.1", thread_ts="1.0"))
+    assert len(recorder.events) == 1
+    await channel.send_text(erin, "Nice.")
+    assert fake_slack.posts(MICHAEL)[-1]["thread_ts"] == "1.0"

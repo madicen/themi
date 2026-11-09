@@ -19,6 +19,12 @@ Who may talk to Themi:
 - Someone sending an invite code from the Family page: the pairing attempt. Five wrong
   codes in an hour and that account is ignored for the rest of the hour.
 - Everyone else gets one line saying how to pair, and only their user id is logged.
+
+SL3: buttons carry callback tokens, as on Telegram; a tap is a `block_actions` envelope.
+Threads: a message written in a thread carries its parent as `reply_to_message_id`, and
+what Themi sends to that person within THREAD_WINDOW goes into the same thread (a reply
+can take a while, and a slow reply has a word first); after that, or once they write at
+the top of the DM again, Themi writes at the top.
 """
 
 from __future__ import annotations
@@ -39,8 +45,15 @@ from websockets.exceptions import WebSocketException
 from themi import clock
 from themi.accounts import AccountStore, InviteError, Member
 from themi.channels import slack_blocks
-from themi.channels.buttons import note_message, store_tokens
-from themi.channels.events import Button, InboundEvent, InboundHandler
+from themi.channels.buttons import (
+    ALREADY_HANDLED_TEXT,
+    NOT_YOURS_TEXT,
+    Tap,
+    claim,
+    note_message,
+    store_tokens,
+)
+from themi.channels.events import Button, ButtonPress, InboundEvent, InboundHandler
 from themi.channels.slack_api import SLACK_API, SlackApi, SlackError, Sleep
 from themi.localtime import to_utc_iso
 from themi.logs import quiet_chatty_libraries
@@ -49,6 +62,7 @@ from themi.storage.secrets import Secret
 log = logging.getLogger(__name__)
 
 NAME = "slack"
+THREAD_WINDOW = timedelta(minutes=2)  # Themi's sends this soon after go to their thread
 SEEN_FOR = timedelta(days=1)  # how long an event id is kept, to drop Slack's repeats
 PAIRING_FAILURE_LIMIT = 5
 PAIRING_WINDOW = timedelta(hours=1)
@@ -88,6 +102,7 @@ class SlackChannel:
         self._sleep = sleep
         self._rng = rng or random.Random()
         self._pairing_failures: dict[str, list[datetime]] = {}
+        self._threads: dict[int, tuple[str, datetime]] = {}  # member: (thread ts, when)
         quiet_chatty_libraries()  # httpx logs every request at INFO
 
     @classmethod
@@ -192,6 +207,8 @@ class SlackChannel:
         payload = envelope.get("payload") or {}
         if kind == "events_api":
             await self._on_event_callback(payload)
+        elif kind == "interactive" and payload.get("type") == "block_actions":
+            await self._on_tap(payload)
 
     async def _on_event_callback(self, payload: dict[str, Any]) -> None:
         event_id = str(payload.get("event_id") or "")
@@ -231,13 +248,64 @@ class SlackChannel:
             await self._pair(user, channel, slack_blocks.plain(str(event.get("text") or "")))
             return
         text = slack_blocks.plain(str(event.get("text") or "")).strip()
-        message_id = self.message_id(channel, ts, member)
+        thread = str(event.get("thread_ts") or "")
+        thread = thread if thread and thread != ts else None
+        message_id = self.message_id(channel, ts, member, thread)
+        reply_to = self.message_id(channel, thread, member) if thread else None
+        self._note_thread(member, thread)
         if not text:
             return
         self.store.log_message(member.id, "in", text, "chat", message_id)
         await self._hand_on(
-            InboundEvent("text", member, member.id, message_id, clock.now(), 0, text=text)
+            InboundEvent(
+                "text",
+                member,
+                member.id,
+                message_id,
+                clock.now(),
+                0,
+                text=text,
+                reply_to_message_id=reply_to,
+            )
         )
+
+    async def _on_tap(self, payload: dict[str, Any]) -> None:
+        user = str((payload.get("user") or {}).get("id") or "")
+        member = self.store.member_by_identity(NAME, user)
+        if member is None:
+            log.info("Ignoring a button tap from Slack user %s, who isn't paired", user)
+            return
+        container = payload.get("container") or {}
+        channel = str(container.get("channel_id") or (payload.get("channel") or {}).get("id"))
+        message_ts = str(container.get("message_ts") or "")
+        thread = str((payload.get("message") or {}).get("thread_ts") or "") or None
+        for action in payload.get("actions") or []:
+            token = action.get("value")
+            if not token:
+                continue  # a link button: it opened its page
+            tap = claim(self.db, str(token), member)
+            if not isinstance(tap, Tap):
+                words = NOT_YOURS_TEXT if tap == "not yours" else ALREADY_HANDLED_TEXT
+                await self._whisper(channel, user, words, thread)
+                continue
+            message_id = (
+                self.message_id(channel, message_ts, member) if message_ts else tap.message_id
+            )
+            self._note_thread(member, thread)
+            self.store.log_message(member.id, "in", f"[tapped: {tap.label}]", "button",
+                                   message_id)  # fmt: skip
+            press = ButtonPress(tap.label, tap.kind, tap.payload, message_id)
+            await self._hand_on(
+                InboundEvent("button", member, member.id, message_id, clock.now(), 0, button=press)
+            )
+
+    async def _whisper(self, channel: str, user: str, text: str, thread: str | None) -> None:
+        """A line only they see (the answer to a tap that doesn't count)."""
+        try:
+            await self.bot.call("chat.postEphemeral", channel=channel, user=user, text=text,
+                                thread_ts=thread)  # fmt: skip
+        except SlackError as exc:
+            log.warning("Couldn't answer a Slack tap (%s)", exc.error)
 
     async def _hand_on(self, event: InboundEvent) -> None:
         if self.handler is None:
@@ -325,8 +393,11 @@ class SlackChannel:
         if not link_preview:
             params["unfurl_links"] = False
             params["unfurl_media"] = False
+        thread = self._thread(member)
+        if thread is not None:
+            params["thread_ts"] = thread
         sent = await self.bot.call("chat.postMessage", **params)
-        message_id = self.message_id(str(sent["channel"]), str(sent["ts"]), member)
+        message_id = self.message_id(str(sent["channel"]), str(sent["ts"]), member, thread)
         note_message(self.db, group_id, message_id)
         self.store.log_message(member.id, "out", text, kind, message_id)
         return message_id
@@ -366,7 +437,9 @@ class SlackChannel:
 
     # ----- ids --------------------------------------------------------------------------
 
-    def message_id(self, channel: str, ts: str, member: Member | None = None) -> int:
+    def message_id(
+        self, channel: str, ts: str, member: Member | None = None, thread_ts: str | None = None
+    ) -> int:
         """The integer id for a Slack message, made the first time it's seen."""
         row = self.db.one(
             "SELECT id FROM slack_messages WHERE channel = ? AND ts = ?", (channel, ts)
@@ -374,9 +447,27 @@ class SlackChannel:
         if row is not None:
             return int(row["id"])
         return self.db.execute(
-            "INSERT INTO slack_messages (channel, ts, member_id, created_at) VALUES (?, ?, ?, ?)",
-            (channel, ts, member.id if member else None, to_utc_iso(clock.now())),
+            "INSERT INTO slack_messages (channel, ts, member_id, created_at, thread_ts) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (channel, ts, member.id if member else None, to_utc_iso(clock.now()), thread_ts),
         )
+
+    def thread_of(self, message_id: int) -> str | None:
+        """The thread a message is in (its parent's ts), if it's in one."""
+        return self.db.scalar("SELECT thread_ts FROM slack_messages WHERE id = ?", (message_id,))
+
+    def _note_thread(self, member: Member, thread_ts: str | None) -> None:
+        if thread_ts:
+            self._threads[member.id] = (thread_ts, clock.now())
+        else:
+            self._threads.pop(member.id, None)
+
+    def _thread(self, member: Member) -> str | None:
+        """The thread Themi answers them in now, if any (THREAD_WINDOW)."""
+        found = self._threads.get(member.id)
+        if found is None or clock.now() - found[1] > THREAD_WINDOW:
+            return None
+        return found[0]
 
     def where(self, message_id: int) -> tuple[str, str] | None:
         """The conversation and `ts` of a message by its integer id."""
