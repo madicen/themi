@@ -43,5 +43,7 @@
       </select>
     </label>
     <label>Timer chime volume <input type="range" name="cooking_chime_volume" min="0" max="100" value="{{ c.cooking_chime_volume }}"></label>
+    <label class="check"><input type="checkbox" name="cooking_voice" {% if c.cooking_voice %}checked{% endif %}> Voice on the cook screen</label>
+    <p class="muted">Hold the mic button and say "next", "back", "go to step 4", "add two minutes" or "how long left". Only where the browser can recognise speech: Chrome sends the audio to Google to recognise it. Nothing listens until you press the button.</p>
     {% endif %}
   {% endif %}{% endcall %}{% endif %}

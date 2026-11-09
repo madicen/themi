@@ -121,6 +121,7 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             "text_size": prefs.cooking_text_size,
             "theme": prefs.cooking_theme,
             "steps_view": prefs.cooking_steps_view,
+            "voice": prefs.cooking_voice,  # CK8: push-to-talk turned on
         },
         "skip_checklist": lighter and session.phase == "gather",
         "steps": [],

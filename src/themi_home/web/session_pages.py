@@ -176,6 +176,31 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=400)
         return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
 
+    @router.post("/session/cook/{session_id}/say")
+    async def cook_say(request: Request, session_id: int) -> Response:
+        """CK8: one phrase from the cook screen's mic, as a typed line would go (RC3's
+        handlers), else to Ask Themi. Only once they've turned voice on in Settings."""
+        signed, form = await kit.checked(request)
+        from themi_home import cooking_screen, cooking_voice
+        from themi_home.cooking import CookingPreferences
+
+        found = cooking().get(session_id) if cooking() is not None else None
+        member = app.store.get_member(signed.member.id)
+        if found is None or found.ended_at is not None or not cooking_screen.may_tap(found, member):
+            return Response(status_code=404)
+        if not app.store.preferences(member.id, CookingPreferences).cooking_voice:
+            return Response(status_code=403)  # off until each person turns it on
+        heard = await cooking_voice.say(cooking(), member, found, str(form.get("text", "")))
+        if heard.ask:
+            event = cooking().page_chat_event(member, heard.words)
+            handler = getattr(app.channel, "handler", None)
+            if event is not None and handler is not None:
+                await handler.handle(event, app.channel)
+        await cooking().prepare(member)
+        state = {**current_state(member), "heard": heard.words, "said": heard.said,
+                 "open_chat": heard.ask}  # fmt: skip
+        return JSONResponse(state, headers={"Cache-Control": "no-store"})
+
     @router.post("/session/cook/chime")
     async def cook_chime(request: Request) -> Response:
         """CK3: the chime's volume on the cook screen, kept for next time."""

@@ -144,6 +144,7 @@
   "POST /session/cook/chime",
   "POST /session/cook/prefs",
   "POST /session/cook/{session_id}/act",
+  "POST /session/cook/{session_id}/say",
   "POST /session/music",
   "POST /session/pictures/redo",
   "POST /session/report",

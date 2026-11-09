@@ -9,6 +9,12 @@
   <div class="cook-company-side">
     <p class="cook-line" data-live="line">{{ state.line }}</p>
     <button type="button" class="cook-chat-open">Ask Themi</button>
+    {% if state.view.voice %}
+    <div class="cook-voice">
+      <button type="button" class="cook-mic" data-on="1" aria-pressed="false" hidden>Hold to talk</button>
+      <p class="cook-heard muted" role="status" aria-live="polite"></p>
+    </div>
+    {% endif %}
     {% if state.music %}
     <section class="cook-music session-music" aria-label="Music">
       <p class="muted cook-music-offer">{{ state.music.offer }}</p>

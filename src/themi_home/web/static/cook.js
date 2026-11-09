@@ -177,6 +177,68 @@
       .then(function (s) { if (s) { looks(s); redraw(s); } }, function (e) { report("size failed: " + e); });
   });
 
+  // CK8: push-to-talk, only where the browser recognises speech and they've turned it on.
+  // Hold to talk, or tap: one phrase a press. The words go to /session/cook/{id}/say.
+  var heardTimer = null;
+  function heard(text) {
+    var el = document.querySelector(".cook-heard");
+    if (!el) return;
+    el.textContent = text ? "\u201c" + text + "\u201d" : "";
+    clearTimeout(heardTimer);
+    heardTimer = setTimeout(function () { el.textContent = ""; }, 4000);
+  }
+  function sayWords(text) {
+    var shown = main();
+    if (!shown || !text) return;
+    heard(text);
+    fetch("/session/cook/" + shown.dataset.session + "/say", {
+      method: "POST", credentials: "same-origin",
+      body: new URLSearchParams({ csrf: body.dataset.csrf, text: text }).toString(),
+      headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+    }).then(function (r) {
+      if (!r.ok) report("say answered " + r.status);
+      return r.ok ? r.json() : null;
+    }).then(function (s) {
+      if (!s) return;
+      say(s.said); redraw(s);
+      if (s.open_chat) chatOpen(true);
+    }, function (e) { report("say failed: " + e); });
+  }
+  function setupVoice() {
+    var mic = document.querySelector(".cook-mic");
+    if (!mic) return;
+    var Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    mic.hidden = !Rec || mic.dataset.on !== "1";
+    if (mic.hidden || mic.dataset.ready) return;
+    mic.dataset.ready = "1";
+    var rec = null, listening = false, downAt = 0;
+    function start() {
+      var Now = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (listening || !Now) return;
+      try {
+        rec = new Now();
+        rec.lang = document.documentElement.lang || "en";
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        rec.onresult = function (e) {
+          var said = e.results && e.results[0] && e.results[0][0] ? e.results[0][0].transcript : "";
+          sayWords(String(said).trim());
+        };
+        rec.onend = function () { listening = false; mic.setAttribute("aria-pressed", "false"); };
+        rec.onerror = function (e) { listening = false; mic.setAttribute("aria-pressed", "false"); if (e && e.error !== "no-speech") report("voice: " + e.error); };
+        listening = true;
+        mic.setAttribute("aria-pressed", "true");
+        rec.start();
+      } catch (e) { listening = false; report("voice start: " + e); }
+    }
+    mic.addEventListener("pointerdown", function () { downAt = Date.now(); start(); });
+    mic.addEventListener("pointerup", function () {  // held: stop when let go; tapped: one phrase
+      if (rec && listening && Date.now() - downAt > 400) rec.stop();
+    });
+    mic.addEventListener("click", function (e) { if (e.detail === 0) start(); });  // keyboard
+  }
+
   // CK3: the chime's volume, kept for next time (a preference)
   document.addEventListener("change", function (event) {
     var t = event.target;
@@ -339,6 +401,8 @@
   window.themiCook = window.themiCook || {};
   window.themiCook.alerts = alerts;
   window.themiCook.chatOpen = chatOpen;
+  window.themiCook.setupVoice = setupVoice;
+  window.themiCook.sayWords = sayWords;
   window.themiCook.post = post;
   window.themiCook.poll = poll;
   window.themiCook.view = view;
@@ -350,6 +414,7 @@
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
+  setupVoice();
   music();
   alerts();
   tick();

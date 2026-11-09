@@ -318,6 +318,7 @@ class CookingPreferences(Preferences):
     cooking_text_size: int = 100  # CK7: the cook screen's text, percent (A- A+)
     cooking_theme: str = "auto"  # CK7: auto (as the device), light, dark or kitchen
     cooking_steps_view: str = "one"  # CK7: one step at a time, or "all" with this one marked
+    cooking_voice: bool = False  # CK8: push-to-talk on the cook screen, off until turned on
 
     @classmethod
     def on_form(cls, services: Any, member: Member) -> set[str] | None:
