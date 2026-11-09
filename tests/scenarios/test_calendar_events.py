@@ -772,3 +772,103 @@ async def test_an_event_just_added_is_read_before_looking(
     await say(scenario, "I just added an eye exam to my calendar from the app, put Vision "
               "Center on it", "change_calendar_event", args)  # fmt: skip
     assert "No event of theirs" not in tool_result(scenario)
+
+
+# ----- F37b (Erin's bug #187): a booking already there under another name ------------------
+
+META = "1 Hacker Way, Building 16, Menlo park"
+
+
+async def meta_visit(scenario: Scenario, fake_gmail: FakeGmail, **changes: str) -> None:
+    """The Meta visit email: its booking is 12-1 pm, the invitation's event 12-2:30 pm."""
+    (email,) = await arrive(
+        scenario,
+        fake_gmail,
+        {"sender": "Meta <security@facebookmail.com>", "subject": "Your Meta visit details",
+         "text": "We're excited for your visit to Meta!"},
+    )  # fmt: skip
+    event = {"title": "Meta visit with Samuel Carrijo", "date": "2026-10-26", "start": "12:00",
+             "end": "13:00", "location": "1 Hacker Way"} | changes  # fmt: skip
+    scenario.primary.queue_structured(
+        {"results": [verdict(email, "confirmation", "A visit", event=event)]}
+    )
+    await scenario.run_periodic("email.triage")
+
+
+async def watching(scenario: Scenario) -> None:
+    await scenario.tap("Erin", "Watch it")
+    await scenario.run_periodic("gmail.poll")
+
+
+async def test_bug_187_the_visit_on_the_calendar_under_another_name_gets_no_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await watching(scenario)
+    linked.add_event(ERIN, local(12, day=26), local(14, 30, day=26), summary=SAMUEL, location=META)
+    await scenario.run_periodic("calendar.busy")
+    await meta_visit(scenario, fake_gmail)
+    assert calendar_cards(scenario) == []
+
+
+async def test_another_event_at_the_same_start_still_gets_a_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await watching(scenario)
+    linked.add_event(
+        ERIN, local(12, day=26), local(14, 30, day=26), summary="Lunch", location="Stanford"
+    )
+    linked.add_event(  # the same start and street, another number
+        ERIN, local(12, day=26), local(13, 30, day=26), summary="Planning", location=META
+    )
+    await scenario.run_periodic("calendar.busy")
+    await meta_visit(scenario, fake_gmail, location="2 Hacker Way")
+    assert len(calendar_cards(scenario)) == 1
+
+
+async def test_the_same_title_on_the_same_day_at_other_times_gets_no_card(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await watching(scenario)
+    linked.add_event(
+        ERIN, local(11, 30, day=26), local(13, day=26), summary="Meta visit with Samuel Carrijo"
+    )
+    await scenario.run_periodic("calendar.busy")
+    await meta_visit(scenario, fake_gmail)
+    assert calendar_cards(scenario) == []
+
+
+async def test_a_waiting_card_is_taken_back_once_its_event_comes_in(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await watching(scenario)
+    await meta_visit(scenario, fake_gmail)
+    assert len(calendar_cards(scenario)) == 1
+    linked.add_event(  # she accepted the invitation
+        ERIN, local(12, day=26), local(14, 30, day=26), summary=SAMUEL, location=META
+    )
+    await scenario.run_periodic("calendar.busy")
+    (row,) = scenario.app.db.query(
+        "SELECT status FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    assert row["status"] == "declined"
+    shown = [e["text"] for e in scenario.edits("Erin")]
+    assert shown[-1].endswith("\nAlready on your calendar.")
+
+
+async def test_go_ahead_on_a_card_whose_event_has_come_in_adds_nothing(
+    scenario: Scenario, linked: FakeGcal, fake_gmail: FakeGmail
+) -> None:
+    await watching(scenario)
+    await meta_visit(scenario, fake_gmail)
+    linked.add_event(  # on Google, not read by Themi yet
+        ERIN, local(12, day=26), local(14, 30, day=26), summary=SAMUEL, location=META
+    )
+    (row,) = scenario.app.db.query(
+        "SELECT id FROM pending_actions WHERE category = 'calendar_from_email'"
+    )
+    await scenario.app.services.autonomy.resolve(
+        row["id"], Decision.APPROVE, by=scenario.member("Erin")
+    )
+    assert [e["summary"] for e in linked.events(ERIN, ERIN)] == [SAMUEL]
+    result = scenario.app.db.scalar("SELECT result FROM pending_actions WHERE id = ?", (row["id"],))
+    assert result == "Already on your calendar. Nothing new was added."

@@ -78,6 +78,7 @@ CALENDAR = ToolGroup(
         "change_calendar_event",
         "delete_calendar_event",
         "merge_calendar_events",
+        "unskip_email_sender",
         "day_summary",
         "drive_time",
         "block_time_for_task",

@@ -48,7 +48,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Button, Priority
 from themi.core import keys
 from themi.core.services import Services
-from themi.localtime import in_quiet_hours, to_local, to_utc_iso
+from themi.localtime import in_quiet_hours, member_day_start, to_local, to_utc_iso
 from themi.modules.mirrors import MirrorError
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_google.events import words_in_common
@@ -214,18 +214,17 @@ class Vacuum:
         except MirrorError as exc:
             log.warning("The wall's routines couldn't be read for the vacuum: %s", exc)
             return
-        local = to_local(event.at, self._timezone())
-        until = local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
         for record, member in items:
             if not about(event.kind, event.detail, record.title, device.name):
                 continue
-            await self.services.autonomy.stage(
+            owner = member or self._admin()
+            await self.services.autonomy.stage(  # on its owner's day (F37a)
                 DONE_CATEGORY,
-                member or self._admin(),
+                owner,
                 f"{_sorted(event.kind, event.detail)}: check off {record.title} on the wall",
-                {"routine": record.routine_id, "day": local.date().isoformat()},
+                {"routine": record.routine_id, "day": record.day.isoformat()},
                 DONE_EXECUTOR,
-                expires=until,
+                expires=member_day_start(owner, record.day + timedelta(days=1), self._timezone()),
             )
 
     async def _check_off_tasks(self, event: VacuumEvent) -> None:

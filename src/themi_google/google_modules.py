@@ -12,10 +12,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import timedelta
+from typing import Any
 
 from themi.accounts import Member
 from themi.core import groups
-from themi.core.approvals import ApprovalsUI
+from themi.core.approvals import ApprovalsUI, NotEver
 from themi.core.calendar_view import CalendarPreferences
 from themi.energy import EnergyModel
 from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
@@ -37,7 +38,7 @@ from themi_google.connectors.google import (
     GoogleOAuth,
     ScopeNeed,
 )
-from themi_google.events import Events
+from themi_google.events import FROM_EMAIL, Events
 from themi_google.expected import ExpectedEmails
 from themi_google.google_settings import GoogleSettings
 from themi_google.noise_digest import NoiseDigest, NoisePreferences
@@ -247,7 +248,24 @@ class CalendarModule(Module):
         sync = CalendarSync(s.store, ctx.get(GoogleAccounts))
         ctx.provide(sync)
         ctx.provide(TaskCalendar(s, ctx.get(TaskBoard), sync, ctx.scheduler)).install()
-        ctx.provide(Events(s)).install()
+        events = ctx.provide(Events(s))
+        events.install()
+        # F37c: [Not ever] on an email's calendar card, and the senders they skip
+        ctx.get(ApprovalsUI).not_ever[FROM_EMAIL] = NotEver(
+            "calendar offers", events.sender_of, events.skip_sender
+        )
+
+        def skipped_senders(member: Member) -> dict[str, object]:
+            return {"skipped_senders": events.skips(member)}
+
+        def save_skips(member: Member, form: Any) -> None:
+            for row in events.skips(member):
+                if form.get(f"unskip_{row['category']}_{row['address']}"):
+                    events.unskip(member, row["address"], row["category"])
+
+        ctx.settings_section(
+            "settings/skipped_senders.html", 75, values=skipped_senders, save=save_skips
+        )
 
 
 class CalendarBusyModule(Module):
@@ -263,6 +281,7 @@ class CalendarBusyModule(Module):
         s = ctx.services
         busy = CalendarBusy(s.store, ctx.get(CalendarSync))
         ctx.provide(busy)
+        busy.listeners.append(ctx.get(Events).settle_waiting)  # F37b
         s.calendar_source = busy.context
         s.outbox.calendar_blocks = busy.blocks
         ctx.get(EnergyModel).calendar_blocks = busy.blocks

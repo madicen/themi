@@ -1,0 +1,7 @@
+{# F37c: a section of the settings form, the calendar module's: senders whose calendar offers they skip. #}
+{% from "_row.html" import row %}
+  {% if skipped_senders %}{% call(part) row("Skipped senders", meta=skipped_senders | length ~ " skipped", id="skipped-senders") %}{% if part == "body" %}
+    <p class="muted">You chose [Not ever] and then "Yes, skip them" on an email's card, so Themi doesn't offer to put these senders' events on your calendar. Their other mail is sorted as usual. Tick one to have its offers come again.</p>
+    {% for skip in skipped_senders %}<label><input type="checkbox" name="unskip_{{ skip.category }}_{{ skip.address }}"> {{ skip.name or skip.address }}{% if skip.name %} <span class="muted">({{ skip.address }})</span>{% endif %}: calendar offers again</label>
+    {% endfor %}
+  {% endif %}{% endcall %}{% endif %}

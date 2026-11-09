@@ -188,7 +188,7 @@ class ApprovalGroups:
     def render(self, group_id: int) -> tuple[str, list[Button]] | None:
         """The message as things stand, or None when nothing in it is waiting any more
         (its text then is the last one shown: see `final`)."""
-        from themi.core.approvals import ASK_TEXT, RETRY_TEXT, buttons_for
+        from themi.core.approvals import ASK_TEXT, RETRY_TEXT
 
         group = self._group(group_id)
         lines = self.lines(group_id) if group else []
@@ -199,7 +199,7 @@ class ApprovalGroups:
             if action.status not in OPEN:
                 return None
             template = RETRY_TEXT if action.status == "failed" else ASK_TEXT
-            return template.format(summary=action.summary), buttons_for(action)
+            return template.format(summary=action.summary), self.ui.buttons(action)
         if not any(a.status in OPEN for a in lines):
             return None
         assert group is not None
@@ -207,7 +207,16 @@ class ApprovalGroups:
             Button("Go ahead with all", "approval_group", {"group": group_id, "answer": "all"}),
             Button("One by one", "approval_group", {"group": group_id, "answer": "each"}),
             Button("Not now", "approval_group", {"group": group_id, "answer": "later"}),
+            *(  # F37c: for all of it
+                [Button("Not ever", "approval_group", {"group": group_id, "answer": "never"})]
+                if self._not_ever_line(lines) is not None
+                else []
+            ),
         ]
+
+    def _not_ever_line(self, lines: list[Action]) -> Action | None:
+        """The first line still waiting whose kind can be turned down for good (F37c)."""
+        return next((a for a in lines if a.status in OPEN and a.category in self.ui.not_ever), None)
 
     def final(self, group_id: int, footer: str = "") -> str:
         """The message once nothing in it waits: each line with what became of it."""
@@ -360,8 +369,10 @@ class ApprovalGroups:
 
     async def answer(self, group_id: int, answer: str, member: Member) -> str:
         """ "all", "each", "later" or "no", for every line still waiting. Returns a line."""
-        decision = {"all": Decision.APPROVE, "later": Decision.SNOOZE, "no": Decision.DECLINE}
+        decision = {"all": Decision.APPROVE, "later": Decision.SNOOZE, "no": Decision.DECLINE,
+                    "never": Decision.DECLINE}  # fmt: skip
         waiting = [a for a in self.lines(group_id) if a.status in OPEN]
+        asked_about = self._not_ever_line(waiting) if answer == "never" else None
         if answer == "each":
             group = self._group(group_id)
             assert group is not None
@@ -385,6 +396,13 @@ class ApprovalGroups:
             await self._edit_to(group_id, self.final(group_id, LATER_TEXT))
             return LATER_TEXT
         await self.show(group_id)
+        if asked_about is not None:  # F37c: then the sender question, on the same message
+            group = self._group(group_id)
+            assert group is not None
+            outbox_id = group["outbox_id"]
+            message_id = self.outbox.message_id(outbox_id) if outbox_id is not None else None
+            if message_id is not None:
+                await self.ui.ask_about_sender(member, message_id, asked_about.id, group_id)
         return " ".join(said)
 
     async def _edit_to(self, group_id: int, text: str) -> None:

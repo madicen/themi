@@ -4,7 +4,9 @@ a "running behind" sign. The clock starts on Wednesday 21 October 2026, 09:00 (L
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
+from typing import Any
 
 import httpx
 
@@ -13,6 +15,8 @@ from tests.fakes.home_connect import FakeHomeConnect
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.accounts import SYSTEM
+from themi.autonomy import Decision
 from themi.core import keys
 from themi.standard.tasks import TaskBoard
 from themi_home.dishwasher import CATEGORY
@@ -250,3 +254,104 @@ async def test_a_usual_week_says_nothing(
     await at(scenario, WED + timedelta(days=21), 18)
     assert await scenario.run_periodic("devices.dishwasher_pace") is False
     assert signals(scenario, "Erin") == []
+
+
+def pending(scenario: Scenario) -> list[dict[str, Any]]:
+    return [
+        dict(r)
+        for r in scenario.app.db.query(
+            "SELECT id, summary, payload, expires_at FROM pending_actions "
+            "WHERE category = ? AND status = 'pending'",
+            (CATEGORY,),
+        )
+    ]
+
+
+async def approve(scenario: Scenario, action_id: object, name: str) -> None:
+    await scenario.app.services.autonomy.resolve(
+        int(str(action_id)), Decision.APPROVE, by=scenario.member(name)
+    )
+
+
+async def test_after_midnight_it_ticks_the_owners_day_before_their_day_ends(
+    scenario: Scenario,
+    site: httpx.AsyncClient,
+    fake_home_connect: FakeHomeConnect,
+    fake_cozyla: FakeCozyla,
+) -> None:
+    # F37a (Michael's bug #189): his day ends at 4 am, and the dishwasher started at
+    # 12:08 am ticked Monday's "Cycle Dishwasher" on the wall, leaving Sunday's open.
+    fake_home_connect.add_appliance(DISHWASHER, "Dishwasher")
+    wall_id = fake_cozyla.add_routine("m-husband", "Cycle Dishwasher", "Evening")
+    await link(scenario, site, fake_home_connect)
+    await scenario.run_periodic("routines.wall")  # the wall's routines come into Themi (R1b)
+    routines = scenario.app.services.get(keys.routines)
+    michael = scenario.member("Husband")
+    scenario.app.store.update_settings(SYSTEM, michael.id, day_ends=4)
+    evening = routines.find(michael, "Evening")
+    assert evening is not None
+    (item,) = routines.items(evening)
+    thu = WED + timedelta(days=1)
+
+    await at(scenario, thu, 0, 8)
+    fake_home_connect.set_state(DISHWASHER, "Run")
+    await read(scenario)
+    (action,) = pending(scenario)  # its card waits for the morning (quiet hours)
+    assert action["summary"] == (
+        "The dishwasher started at 12:08 am: check off Cycle Dishwasher on the wall"
+    )
+    assert json.loads(action["payload"]) == {"routine": wall_id, "day": WED.isoformat()}
+    assert action["expires_at"].startswith(f"{thu.isoformat()}T11:00:00")  # his 4 am (PDT)
+    await approve(scenario, action["id"], "Husband")
+    assert (wall_id, WED.isoformat()) in fake_cozyla.routine_ticks
+    assert (wall_id, thu.isoformat()) not in fake_cozyla.routine_ticks
+    ticks = scenario.app.db.query("SELECT day FROM routine_ticks WHERE item_id = ?", (item.id,))
+    assert [t["day"] for t in ticks] == [WED.isoformat()]  # Themi's routine knows
+
+    fake_home_connect.set_state(DISHWASHER, "Finished")
+    await read(scenario)
+    await at(scenario, thu, 4, 1)  # his Thursday now
+    fake_home_connect.set_state(DISHWASHER, "Run")
+    await read(scenario)
+    (action,) = pending(scenario)
+    assert json.loads(action["payload"])["day"] == thu.isoformat()
+    await approve(scenario, action["id"], "Husband")
+    assert (wall_id, thu.isoformat()) in fake_cozyla.routine_ticks
+
+
+async def test_with_midnight_after_midnight_is_the_new_day(
+    scenario: Scenario,
+    site: httpx.AsyncClient,
+    fake_home_connect: FakeHomeConnect,
+    fake_cozyla: FakeCozyla,
+) -> None:
+    fake_home_connect.add_appliance(DISHWASHER, "Dishwasher")
+    wall_id = fake_cozyla.add_routine("m-erin", "Cycle Dishwasher", "Evening")
+    await link(scenario, site, fake_home_connect)
+    await scenario.run_periodic("routines.wall")
+    thu = WED + timedelta(days=1)
+    await at(scenario, thu, 0, 8)
+    fake_home_connect.set_state(DISHWASHER, "Run")
+    await read(scenario)
+    (action,) = pending(scenario)
+    await approve(scenario, action["id"], "Erin")
+    assert (wall_id, thu.isoformat()) in fake_cozyla.routine_ticks
+    assert (wall_id, WED.isoformat()) not in fake_cozyla.routine_ticks
+
+
+async def test_a_task_is_checked_off_on_its_assignees_day(
+    scenario: Scenario, site: httpx.AsyncClient, fake_home_connect: FakeHomeConnect
+) -> None:
+    fake_home_connect.add_appliance(DISHWASHER, "Dishwasher")
+    michael = scenario.member("Husband")
+    scenario.app.store.update_settings(SYSTEM, michael.id, day_ends=4)
+    thu = WED + timedelta(days=1)
+    tomorrows = await board(scenario).create(
+        michael, "Run the dishwasher", "physical", 1, thu, assignee=michael, nudge=False
+    )
+    await link(scenario, site, fake_home_connect)
+    await at(scenario, thu, 0, 30)  # still his Wednesday: Thursday's task isn't due yet
+    fake_home_connect.set_state(DISHWASHER, "Run")
+    await read(scenario)
+    assert pending(scenario) == []
+    assert board(scenario).get(tomorrows.id).status == "open"

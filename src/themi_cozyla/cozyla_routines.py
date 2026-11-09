@@ -49,7 +49,7 @@ from themi.core.tools import (
     tool,
 )
 from themi.core.wording import words_in_common
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day, to_utc_iso
 from themi.standard.lists import name_key
 from themi.standard.repeat import RepeatError, parse, read_back, round_end
 from themi.standard.routines import (  # CR10a: the routines' own; the wall's built on them
@@ -544,20 +544,40 @@ class CozylaRoutines:
         return [(r, m) for r, m in await self.open_items() if title_matches(words, r.title)]
 
     async def open_items(self) -> list[tuple[RoutineRecord, Member | None]]:
-        """Today's items on the wall's routines not yet ticked, and whose they are. Themi's
-        own check-ins are left out: they're tasks."""
+        """Items on the wall's routines not yet ticked, and whose they are, each for the day
+        it is for its owner (F37a, bug #189: the dishwasher started at 12:08 am ticked
+        Michael's Monday, though his Sunday runs to 4 am). An item nobody on the wall maps
+        to is the admin's, on the admin's day; `record.day` is the day it's for. Themi's own
+        check-ins are left out: they're tasks."""
         members = await self.client.members()
-        records = await self.client.routine_records(self._today())
         mapped = member_map(members, self.store.list_members())
         mine = {r["routine_id"] for r in self.db.query("SELECT routine_id FROM cozyla_routines")}
-        return [
-            (r, self.store.get_member(mapped[r.member]) if r.member in mapped else None)
-            for r in records
-            if not r.completed and r.routine_id not in mine
-        ]
+        now, tz = clock.now(), self._tz()
+        owners = {uid: self.store.get_member(member_id) for uid, member_id in mapped.items()}
+        days = {uid: member_day(owner, now, tz) for uid, owner in owners.items()}
+        nobodys = member_day(self._admin(), now, tz)
+        found: list[tuple[RoutineRecord, Member | None]] = []
+        for day in sorted({*days.values(), nobodys}):
+            for record in await self.client.routine_records(day):
+                if record.completed or record.routine_id in mine:
+                    continue
+                if days.get(record.member, nobodys) == day:
+                    found.append((replace(record, day=day), owners.get(record.member)))
+        return found
 
     async def tick(self, routine_id: int, day: date) -> None:
-        await self.client.check_routine(routine_id, day, True)
+        """A device's tick (H1, F25a). A wall routine that is one of Themi's items (R1b) is
+        ticked in Themi, which ticks the wall too, so Themi's routine knows it's done
+        (F37a); anything else is ticked on the wall alone."""
+        link = self.db.one(
+            "SELECT item_id FROM routine_item_links WHERE wall_id = ?", (routine_id,)
+        )
+        routines = self.services.maybe(keys.routines)
+        item = routines.item(link["item_id"]) if link and routines is not None else None
+        if item is not None and routines is not None:
+            await routines.tick_now(item, day)
+        else:
+            await self.client.check_routine(routine_id, day, True)
         self._first_time(f"{routine_id}_{day}")
 
     # ----- small things -------------------------------------------------------------------

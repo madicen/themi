@@ -26,7 +26,7 @@ from themi.accounts import Device, Member
 from themi.autonomy import ExecutionContext
 from themi.core import keys
 from themi.core.services import Services
-from themi.localtime import to_utc_iso
+from themi.localtime import member_day_start, to_utc_iso
 from themi.modules.mirrors import MirrorError
 from themi.standard.tasks import TaskBoard, clock_words
 from themi_google.events import title_matches
@@ -147,21 +147,23 @@ class Dishwasher:
     # ----- checking things off ---------------------------------------------------------
 
     async def _started(self) -> None:
-        local = clock.now().astimezone(self._tz())
-        at, today = clock_words(local), local.date()
-        until = local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        for title, member, payload in await self._to_check_off(today):
+        tz = self._tz()
+        at = clock_words(clock.now().astimezone(tz))
+        for title, member, payload, day in await self._to_check_off():
             await self.services.autonomy.stage(
                 CATEGORY,
                 member,
                 f"The dishwasher started at {at}: check off {title}",
                 payload,
                 EXECUTOR,
-                expires=until,
+                expires=member_day_start(member, day + timedelta(days=1), tz),
             )
 
-    async def _to_check_off(self, today: date) -> list[tuple[str, Member, dict[str, Any]]]:
-        found: list[tuple[str, Member, dict[str, Any]]] = []
+    async def _to_check_off(self) -> list[tuple[str, Member, dict[str, Any], date]]:
+        """What a cycle starting checks off, whose each is, and the day it's for: the
+        owner's day (F37a, bug #189: a run at 12:08 am is still Michael's Sunday until his
+        day ends at 4 am), not the calendar's."""
+        found: list[tuple[str, Member, dict[str, Any], date]] = []
         wall = self.services.maybe(keys.wall_routines)
         if wall is not None:
             try:
@@ -174,21 +176,23 @@ class Dishwasher:
                     (
                         f"{record.title} on the wall",
                         member or self._admin(),
-                        {"routine": record.routine_id, "day": today.isoformat()},
+                        {"routine": record.routine_id, "day": record.day.isoformat()},
+                        record.day,
                     )
                 )
         rows = self.db.query(
             "SELECT id FROM tasks WHERE status IN ('open', 'snoozed') "
-            f"AND {self.board.shown()} "  # F26c: a split task's parts, not it
-            "AND (due_on IS NULL OR due_on <= ?)",
-            (today.isoformat(),),
+            f"AND {self.board.shown()}"  # F26c: a split task's parts, not it
         )
         for row in rows:
             task = self.board.get(row["id"])
             if not title_matches(WORDS, task.title):
                 continue
+            day = self.board._doer_today(task)
+            if task.due_on is not None and task.due_on > day:
+                continue
             member = self.store.get_member(task.assignee) if task.assignee else self._admin()
-            found.append((task.title, member, {"task": task.id}))
+            found.append((task.title, member, {"task": task.id}, day))
         return found
 
     async def _execute(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
