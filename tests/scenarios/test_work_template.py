@@ -1,13 +1,14 @@
-"""CR12: the work template: one person's working day, with no household in it."""
+"""CR12: the work template: one person's working day, with no household in it.
+SL5: in Slack, its only chat."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-from tests.fakes.telegram_api import FakeTelegram
+from tests.fakes.slack_api import MICHAEL, FakeSlack
 from tests.fixtures.family import SeededFamily
-from tests.scenarios.harness import Scenario
+from tests.scenarios.slack_harness import SlackScenario
 from themi.accounts import SYSTEM, AccountStore, Role
 from themi.config import load_config, load_template, resolve_modules
 from themi.settings import Settings
@@ -16,7 +17,6 @@ from themi.storage import open_database
 from themi.storage.secrets import Cipher, generate_key
 
 HOUSEHOLD_WORDS = re.compile(r"\b(washer|pantry|partners?|chores?|family)\b", re.IGNORECASE)
-MICHAEL_TELEGRAM_ID = 7001
 
 
 def work_family(tmp_path: Path) -> SeededFamily:
@@ -26,17 +26,17 @@ def work_family(tmp_path: Path) -> SeededFamily:
     return SeededFamily(store, workspace, michael, michael)
 
 
-def work_app(tmp_path: Path, telegram: FakeTelegram, env: dict[str, str] | None = None) -> Scenario:
+def work_app(tmp_path: Path, slack: FakeSlack, env: dict[str, str] | None = None) -> SlackScenario:
     (tmp_path / "themi.toml").write_text('template = "work"\n')
     settings = Settings.from_mapping({"THEMI_SECRET_KEY": generate_key(), **(env or {})})
     config = load_config(tmp_path / "themi.toml")
     modules = resolve_modules(config, settings)
-    return Scenario(
-        work_family(tmp_path), telegram, modules=modules, template=load_template(config.template)
+    return SlackScenario(
+        work_family(tmp_path), slack, modules, template=load_template(config.template)
     )
 
 
-def said_to_the_model(scenario: Scenario) -> list[str]:
+def said_to_the_model(scenario: SlackScenario) -> list[str]:
     """The system prompt and every description of the tools it can be sent."""
     tools = scenario.app.services.tools
     texts = [scenario.app.services.system_text()]
@@ -49,10 +49,10 @@ def said_to_the_model(scenario: Scenario) -> list[str]:
 
 
 def test_the_work_template_says_nothing_about_a_household(
-    tmp_path: Path, fake_telegram: FakeTelegram
+    tmp_path: Path, fake_slack: FakeSlack
 ) -> None:
     google = {"GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret"}
-    scenario = work_app(tmp_path, fake_telegram, google)
+    scenario = work_app(tmp_path, fake_slack, google)
     names = [m for m in scenario.app.services.tools.group_names()]
     assert {"calendar", "email"} <= set(names) and "recipes" not in names
     found = {
@@ -84,18 +84,23 @@ def test_every_rewording_names_something_that_exists() -> None:
     assert set(template.tools) <= every_tool
 
 
-async def test_a_working_day(tmp_path: Path, fake_telegram: FakeTelegram) -> None:
-    """Boot from themi.toml, pair Michael, add a task with a due time, get its nudge, done."""
-    scenario = work_app(tmp_path, fake_telegram)
+async def test_a_working_day(tmp_path: Path, fake_slack: FakeSlack) -> None:
+    """Boot from themi.toml with Slack as the only chat: Michael says hello and is paired by
+    his Slack email, adds a task with a due time, gets its nudge, taps Done, and the card
+    changes where it is. A question in a thread is answered there; /themi runs commands."""
+    scenario = work_app(tmp_path, fake_slack)
+    assert list(scenario.app.channel.channels) == ["slack"]
+    store = scenario.app.store
+    michael = store.member_by_name("Michael")
+    assert michael is not None
+    store.set_email(SYSTEM, michael.id, "michael@work.test")
+    scenario.use_scripted_models(michael)
     await scenario.start()
     try:
-        store = scenario.app.store
-        michael = store.member_by_name("Michael")
-        assert michael is not None
-        code = store.create_invite(SYSTEM, michael.id)
-        fake_telegram.send_text(MICHAEL_TELEGRAM_ID, f"/start {code}")
-        await scenario.app.channel.poll_once()
-        assert store.get_member(michael.id).telegram_user_id == MICHAEL_TELEGRAM_ID
+        assert await scenario.say("hello") == [
+            "Hi Michael! You're connected to Themi here in Slack."
+        ]
+        assert store.identity(michael.id, "slack") == MICHAEL
         scenario.primary.queue_tool_call(
             "create_task",
             {
@@ -112,14 +117,33 @@ async def test_a_working_day(tmp_path: Path, fake_telegram: FakeTelegram) -> Non
             },
         )
         scenario.primary.queue_text("I'll remind you at 2.")
-        await scenario.say("Michael", "Remind me to send the quarterly report at 2")
+        replies = await scenario.say("Remind me to send the quarterly report at 2")
+        assert "I'll remind you at 2." in replies
         await scenario.advance(hours=5, minutes=1)  # 14:01
-        nudge = [t for t in scenario.inbox("Michael") if "quarterly report" in t]
+        nudge = [t for t in scenario.inbox() if "quarterly report" in t]
         assert nudge and nudge[-1].startswith("Due today: Send the quarterly report")
-        assert "Done" in scenario.last_buttons("Michael")
-        await scenario.tap("Michael", "Done")
+        assert "Done" in scenario.last_buttons()
+        await scenario.tap("Done")
         board = scenario.app.services.get(TaskBoard)
         assert not any(t.title == "Send the quarterly report" for t in board.open_for(michael))
+        assert fake_slack.calls("chat.update"), "the card changes where it is"
+
+        # A question in a thread under Themi's nudge is answered in that thread.
+        thread = fake_slack.posts(MICHAEL)[0]
+        parent = scenario.app.db.scalar(
+            "SELECT ts FROM slack_messages WHERE member_id = ? ORDER BY id DESC LIMIT 1",
+            (michael.id,),
+        )
+        assert thread and parent
+        scenario.primary.queue_text("Nothing else is due today.")
+        assert await scenario.say("anything else today?", thread_ts=parent) == [
+            "Nothing else is due today."
+        ]
+        assert fake_slack.posts(MICHAEL)[-1]["thread_ts"] == parent
+
+        # /themi site: a command, run through the agent, its link sent back in Slack.
+        site = await scenario.command("site")
+        assert site and "http://themi.test/login/" in site[-1]
     finally:
         await scenario.stop()
 

@@ -73,7 +73,10 @@ STRENGTH_LABELS = {
     2: "Standard: also soften instructions",
     3: "Strict: soften anything that sounds like a must",
 }
-EXPIRED_LINK = "Sign-in links work once, for 10 minutes. Sending /site to Themi gets a fresh one."
+EXPIRED_LINK = (
+    "Sign-in links work once, for 10 minutes. Sending /site to Themi (/themi site in Slack) "
+    "gets a fresh one."
+)
 
 
 # RC1a: the cookbook page runs Google's file picker, the one page that loads Google's own
@@ -87,6 +90,22 @@ PICKER_POLICY = (
     "https://content.googleapis.com; "
     "connect-src 'self' https://*.googleapis.com https://accounts.google.com; "
 )
+
+
+# The chat channels where /site (Slack: `/themi site`) sends a sign-in link (SL5).
+SITE_LINK_CHANNELS = frozenset({"telegram", "slack"})
+
+
+def sign_in_hint(channels: set[str]) -> str:
+    """How to get a sign-in link, in the words of the chats this Themi has (SL5)."""
+    ways = []
+    if "telegram" in channels:
+        ways.append("/site to Themi in Telegram")
+    if "slack" in channels:
+        ways.append("/themi site in Slack")
+    if not ways:
+        return "Sign in with a passkey or Google below."
+    return f"Sending {' or '.join(ways)} gets you a sign-in link."
 
 
 def security_headers(response: Response, form_targets: str = "") -> None:
@@ -251,7 +270,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             request,
             "message.html",
             title="You're signed out",
-            body="Sending /site to Themi in Telegram gets you a sign-in link.",
+            body=sign_in_hint(set(app.channel.channels)),
             offer_google=True,
             offer_passkey=Passkeys(app.store).any(),  # SP7b
         )
@@ -288,7 +307,7 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
         setup_steps = finish_setting_up(report) if member.is_admin else []
         if (
             member.is_admin
-            and "telegram" not in member.channels
+            and not set(member.channels) & SITE_LINK_CHANNELS
             and not Passkeys(app.store).of(member)
         ):  # SP7b: no /site link for them, so a passkey is their way back in
             setup_steps.append(
@@ -514,7 +533,9 @@ def finish_setting_up(report: StartReport) -> list[tuple[str, str]]:
         for s in report.modules.values()
         if s.kind == "channel" and s.state == "on" and s.name != "web_chat"
     ]
-    if not chats:
+    if not chats and "slack" in report.modules and "telegram" not in report.modules:
+        steps.append(("Set up Slack, so you can chat with Themi there.", "/modules/slack"))
+    elif not chats:
         steps.append(("Set up a way to chat from a phone, like Telegram.", "/modules/telegram"))
     for status in report.modules.values():
         if status.state != "not_set_up" or status.kind == "channel":

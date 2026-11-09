@@ -171,6 +171,7 @@ def build_runtime(
     elif connectors is not None and config is not None:  # CR16: any setup, on the fakes
         from themi.app import family_modules
 
+        config = _chat_in_the_simulator(config)
         on_fakes = {m.name: m for m in family_modules(**connectors)}
         modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
         template = load_template(config.template)
@@ -649,3 +650,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\nCancelled; nothing was saved.", file=sys.stderr)
         return 1
     return 0
+
+
+def _chat_in_the_simulator(config: InstanceConfig) -> InstanceConfig:
+    """SL5: on the fakes, people chat through the simulator, which plays Telegram. A setup
+    whose chat is Slack (the work template's) chats there instead; Slack has no fake to
+    run against outside the tests."""
+    from dataclasses import replace
+
+    from themi.config import load_template
+
+    names = (set(load_template(config.template).modules) | set(config.added)) - set(config.removed)
+    if "slack" not in names or "telegram" in names:
+        return config
+    return replace(
+        config,
+        added=(*(n for n in config.added if n != "slack"), "telegram"),
+        removed=(*config.removed, "slack"),
+    )

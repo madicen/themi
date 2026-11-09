@@ -505,6 +505,7 @@ class SlackChannel:
         """A message (with buttons) in the member's DM with Themi; its id. Slack has no
         family group, so `chat_id` is ignored."""
         channel = await self._dm(member)
+        text = self.as_slack_commands(text)
         group_id, tokens = store_tokens(self.db, member, buttons, anyone=anyone)
         params: dict[str, Any] = {
             "channel": channel,
@@ -538,6 +539,7 @@ class SlackChannel:
         if found is None:
             raise ValueError(f"no Slack message {message_id}")
         channel, ts = found
+        text = self.as_slack_commands(text)
         group_id, tokens = store_tokens(self.db, member, buttons, anyone=anyone)
         await self.bot.call(
             "chat.update",
@@ -557,6 +559,15 @@ class SlackChannel:
         """Slack's command is `/themi`, in the app's manifest; the menu is kept so `/themi`
         alone can list what goes after it."""
         self._commands = list(commands)
+
+    def as_slack_commands(self, text: str) -> str:
+        """Themi's words name chat commands as Telegram types them ("/pause"); in Slack
+        they go after /themi ("/themi pause")."""
+        names = sorted((re.escape(name) for name, _ in self._commands), key=len, reverse=True)
+        if not names:
+            return text
+        pattern = rf"(?<![\w/])/({'|'.join(names)})\b"
+        return re.sub(pattern, r"/themi \1", text)
 
     async def send_photo(
         self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"

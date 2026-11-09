@@ -418,3 +418,20 @@ secret key) into the folder. Then, in the new folder:
 
 `docker compose run --rm themi config show` prints what it's made of;
 `themi setup --check --dir .` tries its services again.
+
+### A work Themi on Slack (SL5)
+
+The work template talks in Slack direct messages, not Telegram, so it needs no bot from
+@BotFather. Instead:
+
+1. Get the Slack app approved and made: the Slack module's guide on the Modules page
+   (Modules, Slack) has the steps for a company workspace, what to tell the workspace admin
+   and IT, and the app manifest to paste.
+2. Paste the bot token (`xoxb-`) and app-level token (`xapp-`) into the Slack module and
+   press **Test**, or set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` in `.env`.
+3. On the Family page, set your email to your work address. When you first say hello to
+   Themi in Slack, it pairs you by that email; otherwise send it the code from the same page.
+4. Restart. Slack connects over Socket Mode, an outbound connection: nothing about Slack
+   needs the Funnel port. The website still does, for `/themi site` sign-in links.
+
+Commands go after `/themi` in Slack: `/themi pause`, `/themi site`; `/themi` alone lists them.

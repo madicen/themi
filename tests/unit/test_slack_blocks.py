@@ -51,3 +51,18 @@ def test_slack_tokens_never_reach_the_logs() -> None:
     line = "using xoxb-1234-5678-abcdEFGH and xapp-1-A0-123-abc and xoxp-99-88-77-xyz"
     assert "xoxb-1234" not in redact(line) and "xapp-1" not in redact(line)
     assert "xoxp-99" not in redact(line)
+
+
+def test_the_sign_in_hint_names_the_chats_this_themi_has() -> None:
+    from themi.web.site import sign_in_hint
+
+    assert (
+        sign_in_hint({"telegram"}) == "Sending /site to Themi in Telegram gets you a sign-in link."
+    )
+    assert sign_in_hint({"slack", "web_chat"}) == (
+        "Sending /themi site in Slack gets you a sign-in link."
+    )
+    assert "/site to Themi in Telegram or /themi site in Slack" in sign_in_hint(
+        {"telegram", "slack"}
+    )
+    assert "passkey" in sign_in_hint({"web_chat"})

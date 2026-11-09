@@ -361,7 +361,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SL2 | Slack: receiving and pairing | Slack | [x] 2026-11-08 |
 | SL3 | Slack: buttons, edits and threads | Slack | [x] 2026-11-08 |
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
-| SL5 | Slack: the work template on Slack | Slack | [ ] |
+| SL5 | Slack: the work template on Slack | Slack | [x] 2026-11-08 |
 | SL6 | Slack: status sync | Slack | [ ] |
 
 ## Fixed technical choices
@@ -16447,7 +16447,7 @@ Notes (2026-11-08):
   goes (it becomes `/pause` for the agent); SL5's scenario runs a command end to end.
 
 ### SL5 · Slack: the work template on Slack
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SL4
 - `work.toml` has `slack` in place of `telegram`; the persona says Slack; the website's
   lines that name Telegram name the channel the setup has (`/themi site` in Slack).
@@ -16455,6 +16455,28 @@ Depends on: SL4
 Tests: the working-day scenario over Slack (pair by email, a task with a due time, its
 nudge, "Done" tapped, the card edited); the household-words test; work goldens updated if
 they change (said in the commit), family goldens identical.
+
+Notes (2026-11-08):
+- `work.toml`: `slack` in place of `telegram`; the persona says Slack direct messages; the
+  core rule about timing (`core.rules-don-t-change`) and `propose_rule` name `/themi site`
+  and `/themi pause`.
+- The Slack channel writes command names in anything it sends the Slack way ("/pause" is
+  "/themi pause"), from the menu the app publishes, so every module's replies read right
+  without rewording them.
+- Website: the signed-out page names the chats this Themi has (`sign_in_hint`), the
+  expired-link page mentions `/themi site`, the "Finish setting up" card points a
+  Slack-only setup at the Slack module, and the passkey nudge isn't shown to someone on
+  Slack (they have `/themi site`).
+- `make dev` on the fakes: the simulator plays Telegram, and Slack has no fake outside the
+  tests, so a setup whose chat is Slack chats through the simulator there instead
+  (`cli._chat_in_the_simulator`, the fakes path only).
+- DEPLOY.md section 12 gained "A work Themi on Slack". (Section 12 still describes `themi
+  setup`, removed in SP8a; not changed here.)
+- Tests changed for moved wiring: test_work_template runs on Slack through a new
+  `tests/scenarios/slack_harness.py` (the working day now also covers email pairing, a
+  thread answer and `/themi site`); test_google_scopes builds the work app with the Slack
+  fake; test_dev_setups expects the simulator's Telegram in place of Slack. Family goldens
+  identical; there are no work goldens.
 
 ### SL6 · Slack: status sync
 Status: [ ]

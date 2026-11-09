@@ -507,3 +507,17 @@ async def test_slash_themi_runs_a_chat_command(family: SeededFamily, fake_slack:
     await channel.dispatch(fake_slack.slash(STRANGER, "pause"))
     assert len(recorder.events) == 2
     assert fake_slack.calls("chat.postEphemeral")[-1]["user"] == STRANGER
+
+
+async def test_commands_in_themis_words_are_written_the_slack_way(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel = make_channel(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    await channel.publish_commands([("pause", "Pause"), ("site", "Sign in")])
+    await channel.send_text(
+        erin, "Paused. Send /pause off to undo, or see https://themi.test/site."
+    )
+    assert fake_slack.texts(MICHAEL) == [
+        "Paused. Send /themi pause off to undo, or see https://themi.test/site."
+    ]
