@@ -615,8 +615,11 @@ class AccountStore:
             )
         return code
 
-    def redeem_invite(self, code: str, telegram_user_id: int) -> Member:
-        """Pairs a Telegram account with the invited member. Works once, within 24 hours."""
+    def redeem_invite(
+        self, code: str, telegram_user_id: int | str, channel: str = TELEGRAM
+    ) -> Member:
+        """Pairs an account on a channel (a Telegram user id by default; SL2: a Slack user
+        id with `channel="slack"`) with the invited member. Works once, within 24 hours."""
         now = clock.now()
         with self.db.transaction():
             row = self.db.one(
@@ -625,13 +628,13 @@ class AccountStore:
             )
             if row is None or _parse_dt(row["expires_at"]) <= now:
                 raise InviteError("that code isn't valid; ask an admin for a new one")
-            existing = self.member_by_telegram(telegram_user_id)
+            existing = self.member_by_identity(channel, str(telegram_user_id))
             if existing is not None and existing.id != row["member_id"]:
-                raise InviteError("this Telegram account is already paired with someone else")
+                raise InviteError("this account is already paired with someone else")
             self.db.execute(
                 "UPDATE invites SET used_at = ? WHERE code_hash = ?", (_iso(now), row["code_hash"])
             )
-            self.set_identity(row["member_id"], TELEGRAM, str(telegram_user_id))  # CR20a2
+            self.set_identity(row["member_id"], channel, str(telegram_user_id))  # CR20a2
             self.db.execute(
                 "UPDATE members SET updated_at = ? WHERE id = ?", (_iso(now), row["member_id"])
             )

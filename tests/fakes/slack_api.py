@@ -13,6 +13,7 @@ gets Slack's `invalid_auth`. Errors can be queued per method with `fail`.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import queue
 import threading
@@ -245,8 +246,12 @@ class FakeSlack:
                     await asyncio.sleep(0.005)
                     continue
                 if item == "disconnect":
+                    # As Slack does: a warning, then time for the client to move over.
                     await websocket.send_json({"type": "disconnect", "reason": "refresh_requested"})
-                    await websocket.close()
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(asyncio.shield(reader), timeout=2)
+                    with contextlib.suppress(RuntimeError):
+                        await websocket.close()
                     return
                 await websocket.send_json(item)
         finally:

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from typing import Any
 
@@ -27,6 +28,18 @@ def escape(text: str) -> str:
 def unescape(text: str) -> str:
     """What someone wrote, as they wrote it (Slack escapes the same three)."""
     return text.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+
+
+_LINK = re.compile(r"<((?:https?|mailto):[^|>]+)(?:\|([^>]*))?>")
+_MENTION = re.compile(r"<[@#!]([^|>]+)(?:\|([^>]*))?>")
+
+
+def plain(text: str) -> str:
+    """A message's mrkdwn as words: links as their address (`mailto:` dropped), mentions as
+    their label (or the bare id), then unescaped."""
+    text = _LINK.sub(lambda m: m.group(1).removeprefix("mailto:"), text)
+    text = _MENTION.sub(lambda m: m.group(2) or m.group(1), text)
+    return unescape(text)
 
 
 def sections(text: str) -> list[dict[str, Any]]:

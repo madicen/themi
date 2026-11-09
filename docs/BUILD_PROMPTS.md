@@ -358,7 +358,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
 | SL1 | Slack: the module, settings and sending | Slack | [x] 2026-11-08 |
-| SL2 | Slack: receiving and pairing | Slack | [ ] |
+| SL2 | Slack: receiving and pairing | Slack | [x] 2026-11-08 |
 | SL3 | Slack: buttons, edits and threads | Slack | [ ] |
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [ ] |
 | SL5 | Slack: the work template on Slack | Slack | [ ] |
@@ -16361,7 +16361,7 @@ Notes (2026-11-08):
   tests/unit/test_slack_blocks.py, two in test_module_manifest.
 
 ### SL2 · Slack: receiving and pairing
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: SL1
 - The Socket Mode loop: `apps.connections.open`, a WebSocket, every envelope acked at once,
   reconnect on `disconnect` or a dropped socket with backoff (injected sleep).
@@ -16374,6 +16374,22 @@ Depends on: SL1
 Tests: a DM reaches the agent and the reply comes back; a resent event is dropped; a
 stranger is ignored; email pairing writes the identity; an invite code pairs; the socket
 loop acks and reconnects against the fake.
+
+Notes (2026-11-08):
+- `SlackChannel.run`: one connection at a time (`apps.connections.open`, then the socket);
+  each envelope is queued, then acked, and a worker hands envelopes to `dispatch` in order,
+  so a slow reply never holds up the 3-second ack. A lost ack is harmless: Slack's repeat
+  is dropped by `slack_seen_events` (migration 0002 on the `slack` track). `disconnect`
+  reconnects at once; a failed connection backs off (injected sleep). On stop, envelopes
+  already acked are still handled.
+- Deviation: a stranger isn't silent as on Telegram. In a company workspace anyone can DM
+  the app, and someone whose Themi email isn't their Slack one needs to know about the code,
+  so they get one line saying how to pair (it counts towards the wrong-code limit, so it
+  can't be used to make Themi talk endlessly). Only their user id is logged.
+- Text arrives as words: links as their address, mentions as their label, unescaped
+  (`slack_blocks.plain`).
+- `AccountStore.redeem_invite(code, id, channel=...)`: any channel, Telegram by default.
+- Pairing by email doesn't take an address from someone already on Slack as another user.
 
 ### SL3 · Slack: buttons, edits and threads
 Status: [ ]

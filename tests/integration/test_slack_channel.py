@@ -4,13 +4,21 @@ socket, a real WebSocket)."""
 from __future__ import annotations
 
 import asyncio
+import logging
+from typing import Any
 
 import pytest
 
-from tests.fakes.slack_api import APP_TOKEN, BOT_TOKEN, MICHAEL, FakeSlack
+from tests.fakes.slack_api import APP_TOKEN, BOT_TOKEN, MICHAEL, STRANGER, FakeSlack
 from tests.fixtures.family import SeededFamily
-from themi.accounts import Member
-from themi.channels.slack import NAME, SlackChannel
+from themi.accounts import SYSTEM, Member
+from themi.channels.events import InboundEvent
+from themi.channels.slack import (
+    BAD_CODE_TEXT,
+    NAME,
+    NOT_PAIRED_TEXT,
+    SlackChannel,
+)
 from themi.channels.slack_api import SlackError
 from themi.standard.slack import SlackModule
 from themi.storage import migrations
@@ -125,3 +133,166 @@ async def test_the_test_button_says_which_token_failed(fake_slack: FakeSlack) ->
     assert bad_app is not None and "app-level token" in bad_app and "bot token" not in bad_app
     missing = await SlackModule(Secret(BOT_TOKEN), None).check()
     assert missing is not None and "both tokens" in missing
+
+
+# ----- SL2: receiving and pairing ---------------------------------------------------------
+
+
+class Recorder:
+    """Collects events; optionally stops the socket loop when one arrives."""
+
+    def __init__(self) -> None:
+        self.events: list[InboundEvent] = []
+        self.stop: asyncio.Event | None = None
+        self.after = 1
+
+    async def handle(self, event: InboundEvent, channel: Any) -> None:
+        self.events.append(event)
+        if self.stop is not None and len(self.events) >= self.after:
+            self.stop.set()
+
+
+def listening(
+    family: SeededFamily, fake: FakeSlack, **kwargs: Any
+) -> tuple[SlackChannel, Recorder]:
+    channel = make_channel(family, fake, **kwargs)
+    recorder = Recorder()
+    channel.handler = recorder
+    channel.bot_user_id = "UTHEMI"
+    return channel, recorder
+
+
+async def test_a_dm_from_a_member_reaches_the_agent(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    envelope = fake_slack.dm(
+        MICHAEL, "Move standup to <https://cal.test/x|the calendar> &amp; tell <@U42|Priya>"
+    )
+    await channel.dispatch(envelope)
+    [event] = recorder.events
+    assert event.kind == "text" and event.member.id == erin.id
+    assert event.text == "Move standup to https://cal.test/x & tell Priya"
+    ts = envelope["payload"]["event"]["ts"]
+    assert event.message_id == channel.message_id("DMICHAEL", ts)
+    assert (
+        family.db.scalar(
+            "SELECT text FROM message_log WHERE member_id = ? AND direction = 'in'", (erin.id,)
+        )
+        == event.text
+    )
+
+
+async def test_a_repeated_event_is_dropped(family: SeededFamily, fake_slack: FakeSlack) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    envelope = fake_slack.dm(MICHAEL, "once")
+    await channel.dispatch(envelope)
+    await channel.dispatch(envelope)  # Slack's retry: the same event id
+    assert [e.text for e in recorder.events] == ["once"]
+
+
+async def test_bots_edits_and_other_conversations_are_ignored(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    await channel.dispatch(fake_slack.dm(MICHAEL, "edited", subtype="message_changed"))
+    from_bot = fake_slack.dm(MICHAEL, "echo")
+    from_bot["payload"]["event"]["bot_id"] = "BTHEMI"
+    await channel.dispatch(from_bot)
+    in_channel = fake_slack.dm(MICHAEL, "in a channel")
+    in_channel["payload"]["event"]["channel_type"] = "channel"
+    await channel.dispatch(in_channel)
+    assert recorder.events == []
+
+
+async def test_someone_whose_slack_email_is_a_members_is_paired(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    family.store.set_email(SYSTEM, family.erin.id, "Michael@Work.test")
+    await channel.dispatch(fake_slack.dm(MICHAEL, "hello"))
+    assert family.store.identity(family.erin.id, NAME) == MICHAEL
+    assert fake_slack.texts(MICHAEL) == [
+        f"Hi {family.erin.name}! You're connected to Themi here in Slack."
+    ]
+    assert recorder.events == []  # the hello paired them; it isn't a request
+    await channel.dispatch(fake_slack.dm(MICHAEL, "now a request"))
+    assert [e.text for e in recorder.events] == ["now a request"]
+
+
+async def test_email_pairing_can_be_turned_off(family: SeededFamily, fake_slack: FakeSlack) -> None:
+    channel, _ = listening(family, fake_slack, pair_by_email=False)
+    family.store.set_email(SYSTEM, family.erin.id, "michael@work.test")
+    await channel.dispatch(fake_slack.dm(MICHAEL, "hello"))
+    assert family.store.identity(family.erin.id, NAME) is None
+    assert fake_slack.texts(MICHAEL) == [NOT_PAIRED_TEXT]
+
+
+async def test_an_invite_code_pairs_and_wrong_codes_are_limited(
+    family: SeededFamily, fake_slack: FakeSlack, caplog: pytest.LogCaptureFixture
+) -> None:
+    from datetime import timedelta
+
+    from themi import clock
+
+    clock.freeze(clock.now())
+    channel, _ = listening(family, fake_slack)
+    caplog.set_level(logging.INFO)
+    for _ in range(5):
+        await channel.dispatch(fake_slack.dm(STRANGER, "AAAA-BBBB"))
+    assert fake_slack.texts(STRANGER) == [BAD_CODE_TEXT] * 5
+    code = family.store.create_invite(SYSTEM, family.husband.id)
+    await channel.dispatch(fake_slack.dm(STRANGER, code))  # blocked for the hour
+    assert family.store.identity(family.husband.id, NAME) is None
+    assert "AAAA-BBBB" not in caplog.text and STRANGER in caplog.text
+    clock.advance(timedelta(hours=1, minutes=1))
+    await channel.dispatch(fake_slack.dm(STRANGER, code.lower()))
+    assert family.store.identity(family.husband.id, NAME) == STRANGER
+    assert fake_slack.texts(STRANGER)[-1].startswith(f"Hi {family.husband.name}!")
+
+
+async def test_a_stranger_hears_how_to_pair_and_what_they_said_isnt_logged(
+    family: SeededFamily, fake_slack: FakeSlack, caplog: pytest.LogCaptureFixture
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    caplog.set_level(logging.DEBUG)
+    await channel.dispatch(fake_slack.dm(STRANGER, "what's my salary"))
+    assert recorder.events == []
+    assert fake_slack.texts(STRANGER) == [NOT_PAIRED_TEXT]
+    assert "salary" not in caplog.text
+
+
+async def test_the_socket_acks_hands_on_and_reconnects(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    channel, recorder = listening(family, fake_slack)
+    on_slack(family, family.erin)
+    stop = asyncio.Event()
+    recorder.stop, recorder.after = stop, 2
+    first = fake_slack.dm(MICHAEL, "over the socket")
+    second = fake_slack.dm(MICHAEL, "after a reconnect")
+    fake_slack.push(first)
+    fake_slack.disconnect()
+    fake_slack.push(second)
+    await asyncio.wait_for(channel.run(stop), timeout=10)
+    assert [e.text for e in recorder.events] == ["over the socket", "after a reconnect"]
+    assert {first["envelope_id"], second["envelope_id"]} <= set(fake_slack.acked())
+    assert fake_slack.state.connections == 2
+    assert channel.last_poll_at is not None
+
+
+async def test_a_failed_connection_backs_off_and_tries_again(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    sleep = NoSleep()
+    channel, recorder = listening(family, fake_slack, sleep=sleep)
+    on_slack(family, family.erin)
+    stop = asyncio.Event()
+    recorder.stop = stop
+    fake_slack.fail("apps.connections.open", "internal_error", times=2)
+    fake_slack.push(fake_slack.dm(MICHAEL, "got through"))
+    await asyncio.wait_for(channel.run(stop), timeout=10)
+    assert len(sleep.waits) == 2 and [e.text for e in recorder.events] == ["got through"]
