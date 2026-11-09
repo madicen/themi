@@ -161,7 +161,27 @@ class ModuleContext:
     def periodic(self, name: str, every: timedelta, run: Callable[[], Awaitable[object]]) -> None:
         if any(job.name == name for job in self.jobs):
             raise ModuleError(f"periodic job {name} is added twice (last by {self._who()})")
+        if self._current:  # a module's: it waits for the family (the core's never do)
+            run = self._once_claimed(run)
         self.jobs.append(PeriodicTask(name, every, run))
+
+    def _once_claimed(
+        self, run: Callable[[], Awaitable[object]]
+    ) -> Callable[[], Awaitable[object]]:
+        """A module's job does nothing until there's a family. Before the claim (SP7a)
+        there's nobody for it to act for, though .env can already have turned it on."""
+        store = self.services.store
+        claimed = False
+
+        async def job() -> object:
+            nonlocal claimed
+            if not claimed:
+                claimed = store.get_family() is not None
+                if not claimed:
+                    return None
+            return await run()
+
+        return job
 
     def tool(self, t: Tool) -> None:
         self.services.tools.register(t)

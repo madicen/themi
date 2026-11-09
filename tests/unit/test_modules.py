@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
 import pytest
 
 from tests.fakes.modules import bare_services
-from tests.fixtures.family import SeededFamily
+from tests.fixtures.family import SeededFamily, seed_family
+from themi.accounts import AccountStore
 from themi.modules import Module, ModuleContext, ModuleError, order
 from themi.scheduler import Scheduler
 from themi.standard.breaks import Breaks, BreaksModule
@@ -128,6 +130,35 @@ def test_jobs_are_collected_and_a_name_twice_is_refused(family: SeededFamily) ->
     assert [(j.name, j.every) for j in ctx.jobs] == [("tasks.resurface", timedelta(minutes=15))]
     with pytest.raises(ModuleError, match=r"tasks\.resurface is added twice"):
         ctx.periodic("tasks.resurface", timedelta(hours=1), run)
+
+
+async def test_a_modules_jobs_wait_for_the_family_and_the_cores_do_not(
+    store: AccountStore,
+) -> None:
+    ran: list[str] = []
+
+    def job(name: str) -> Callable[[], Awaitable[None]]:
+        async def run() -> None:
+            ran.append(name)
+
+        return run
+
+    class Wall(Module):
+        name = "wall"
+
+        def install(self, ctx: ModuleContext) -> None:
+            ctx.periodic("wall.sync", timedelta(minutes=1), job("wall.sync"))
+
+    ctx = ModuleContext(bare_services(store))
+    ctx.periodic("outbox.flush", timedelta(seconds=30), job("outbox.flush"))
+    ctx.load(Wall())
+    for j in ctx.jobs:
+        await j.run()
+    assert ran == ["outbox.flush"]  # no family yet: nobody for the wall to act for
+    seed_family(store)
+    for j in ctx.jobs:
+        await j.run()
+    assert ran == ["outbox.flush", "outbox.flush", "wall.sync"]
 
 
 def test_the_scheduler_is_there_only_when_given(family: SeededFamily) -> None:
