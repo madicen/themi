@@ -25,6 +25,10 @@ make lint        # ruff, pyright, and the clock check
 `make test-live` and `make evals` talk to real services and need test-account keys;
 they never run by default.
 
+CI splits the tests across runners, balanced by the times in `.test_durations`. After
+adding or speeding up a lot of tests, run `make durations` and commit the file. New tests
+still run before you do; the halves just get less even.
+
 ### Trying Themi on this computer
 
 `make dev` runs Themi against a Telegram simulator, so you can chat with it without a bot
