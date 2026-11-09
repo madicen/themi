@@ -12,6 +12,7 @@ import httpx
 import pytest
 
 from tests.fakes.telegram_api import FakeTelegram
+from tests.fixtures.db import migrated_file
 from themi.cli import build_runtime
 from themi.config import InstanceConfig
 from themi.runtime import Runtime
@@ -56,6 +57,7 @@ async def boot(
         settings = runner.dev_settings(
             tmp_path, fake_telegram.base_url.removesuffix("/bot"), {"THEMI_DEV_HTTP_PORT": "8081"}
         )
+        migrated_file(settings.db_path).close()  # the migrations' time saved, nothing else
         runner.seed(settings, "", config.template if config else "family")
         fakes = DevFakes(tmp_path / FAKES_FILE)
         fakes.start(runner.site_urls(settings))

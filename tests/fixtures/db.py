@@ -9,6 +9,7 @@ migrations again. Tests of the migrations themselves still build databases by ha
 from __future__ import annotations
 
 from functools import cache
+from pathlib import Path
 
 from themi.storage import open_database
 from themi.storage.db import Database
@@ -24,3 +25,16 @@ def migrated_db() -> Database:
     db = Database(":memory:")
     db.copy_from(_template())
     return db
+
+
+def migrated_file(path: str | Path) -> Database:
+    """`open_database(path)` for a test, without paying for the migrations on a new file:
+    a missing file starts as a copy of the template, so there's nothing left to apply. An
+    existing file is opened (and migrated) as it is."""
+    if not Path(path).exists():
+        new = Database(path)
+        try:
+            new.copy_from(_template())
+        finally:
+            new.close()
+    return open_database(path)
