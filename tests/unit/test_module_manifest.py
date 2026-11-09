@@ -167,3 +167,17 @@ def test_an_account_check_turns_true_once_linked(family: SeededFamily) -> None:
     assert linked(known["home_connect"], services) is True
     assert linked(known["thinq"], services) is False
     assert linked(known["tasks"], services) is None  # nothing to link
+
+
+def test_a_fenced_block_is_shown_as_it_is() -> None:
+    html = render("Paste this:\n\n```\nscopes:\n  - chat:write <b>\n```\n\nThen save.")
+    assert "<pre><code>scopes:\n  - chat:write &lt;b&gt;</code></pre>" in html
+    assert "<p>Then save.</p>" in html
+
+
+def test_slacks_guide_shows_the_manifest_it_ships() -> None:
+    from themi.standard.slack import MANIFEST, SlackModule
+
+    text = guide(SlackModule)
+    assert text is not None
+    assert MANIFEST.read_text().strip() in text

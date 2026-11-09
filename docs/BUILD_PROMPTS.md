@@ -357,7 +357,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SP8 | Migration and retirement | Setup portal | [x] 2026-11-08 (split) |
 | SP8a | "Move to Themi", `themi setup` removed, docs and .env.example | Setup portal | [x] 2026-11-08 |
 | SP8b | `themi install`: the host script, with Tailscale Funnel | Setup portal | [x] 2026-11-08 |
-| SL1 | Slack: the module, settings and sending | Slack | [ ] |
+| SL1 | Slack: the module, settings and sending | Slack | [x] 2026-11-08 |
 | SL2 | Slack: receiving and pairing | Slack | [ ] |
 | SL3 | Slack: buttons, edits and threads | Slack | [ ] |
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [ ] |
@@ -16321,7 +16321,7 @@ client over httpx and a Socket Mode loop over `websockets` (already installed, t
 google-genai) do the same with nothing new to install.
 
 ### SL1 · Slack: the module, settings and sending
-Status: [ ]
+Status: [x] 2026-11-08
 Depends on: CR20b, SP5
 Read first: the plan's "Slack app design" and "Module shape"; `themi/standard/telegram.py`,
 `themi/standard/web_chat.py`, `themi/channels/base.py`, `tests/fakes/telegram_api.py`.
@@ -16338,6 +16338,27 @@ Read first: the plan's "Slack app design" and "Module shape"; `themi/standard/te
 - The log redactor learns `xox?-` and `xapp-` tokens.
 Tests: the fake Slack API; send maps an integer id to a `ts`; escaping; Test tells a bad bot
 token from a bad app token; redaction.
+
+Notes (2026-11-08):
+- `themi/channels/slack_api.py` (`SlackApi`, `SlackError`): form posts over httpx, `ok`
+  checked, 429 waits `Retry-After`, 5xx and network errors back off; `download` sends the
+  token only to Slack's hosts (or the API's own, for the fake); `upload` for SL4.
+- `themi/channels/slack_blocks.py`: escaping, sections split under 3000 characters, button
+  rows as `actions` blocks, the emoji-name map (every reaction Themi's features read or send).
+- `themi/channels/buttons.py`: callback tokens, `button_rows` and the "not yours" / "already
+  handled" rules, moved out of the Telegram channel so Slack shares them. The names are
+  still importable from `themi.channels.telegram`.
+- `SlackChannel` (`themi/channels/slack.py`): sends always carry blocks (a section, plus
+  buttons); `slack_messages` maps integer ids both ways; `slack_dm_channels` remembers each
+  member's DM. `typing` and `publish_commands` do nothing.
+- `SlackModule` (`themi/standard/slack.py`, kind channel, its own track `slack`), its guide
+  (`standard/setup/slack.md`, the plan's company-workspace steps) and the manifest it shows
+  (`standard/slack_manifest.yaml`; a test checks the guide shows the file). Guide Markdown
+  learned fenced blocks for it.
+- `websockets` is now a direct dependency (it was already installed through google-genai).
+- Tests changed for moved wiring: test_module_kinds lists `slack` among the channels.
+  New: tests/fakes/slack_api.py, tests/integration/test_slack_channel.py,
+  tests/unit/test_slack_blocks.py, two in test_module_manifest.
 
 ### SL2 · Slack: receiving and pairing
 Status: [ ]

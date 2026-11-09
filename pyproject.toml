@@ -20,6 +20,7 @@ dependencies = [
     "curl_cffi>=0.17",  # CatGenie: its cloud drops requests that don't look like a phone (CG1a)
     "python-dateutil>=2.9",  # chore schedules as RFC 5545 recurrence rules (F7)
     "webauthn>=2.7,<3",  # SP7b: passkeys for admins without Telegram (Duo Labs' py_webauthn)
+    "websockets>=14",  # SL2: Slack's Socket Mode
 ]
 
 [project.optional-dependencies]
@@ -112,6 +113,7 @@ reminders = "themi.standard.reminders:RemindersModule"
 roborock = "themi_home.home_modules:RoborockModule"
 routines = "themi.standard.routines:RoutinesModule"
 safeway = "themi_home.safeway:SafewayModule"
+slack = "themi.standard.slack:SlackModule"
 spending = "themi_home.spending:SpendingModule"
 takeout = "themi_home.takeout:TakeoutModule"
 spotify = "themi_home.home_modules:SpotifyModule"
@@ -168,6 +170,8 @@ themi = [
     "standard/setup/*.md",  # SP3a: the modules' setup guides
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
     "standard/task_parts_schema/*.sql",  # F26c: task parts' own track
+    "standard/slack_schema/*.sql",  # SL1: Slack's message ids
+    "standard/slack_manifest.yaml",  # SL1: the Slack app, as its guide shows it
     "templates/*.toml",
     "web/templates/*.html",
     "web/templates/*/*.html",

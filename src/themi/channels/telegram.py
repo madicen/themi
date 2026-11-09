@@ -24,12 +24,10 @@ start say so (bug #143).
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import random
 import re
-import secrets
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta
@@ -58,6 +56,15 @@ from telegram.request import HTTPXRequest
 
 from themi import clock
 from themi.accounts import AccountStore, InviteError, Member
+from themi.channels.buttons import (  # SL3: shared with Slack; the names stay importable here
+    ALREADY_HANDLED_TEXT,
+    NOT_YOURS_TEXT,
+    Tap,
+    button_rows,
+    claim,
+    note_message,
+    store_tokens,
+)
 from themi.channels.events import (
     Button,
     ButtonPress,
@@ -77,20 +84,6 @@ log = logging.getLogger(__name__)
 
 ALLOWED_UPDATES = ["message", "callback_query", "message_reaction"]
 OFFSET_KEY = "telegram.offset"
-BUTTON_TTL = timedelta(days=7)
-# Erin's idea #80: more than a couple of buttons go on several rows, two a row, or three
-# when every label is short ("Yes", "No", "Later").
-SHORT_LABEL = 8
-
-
-def button_rows(labels: Sequence[str]) -> list[list[int]]:
-    """Which buttons (by index) go on each row."""
-    if len(labels) <= 2:
-        return [list(range(len(labels)))]
-    per_row = 3 if all(len(label) <= SHORT_LABEL for label in labels) else 2
-    return [list(range(i, min(i + per_row, len(labels)))) for i in range(0, len(labels), per_row)]
-
-
 PAIRING_FAILURE_LIMIT = 5
 PAIRING_WINDOW = timedelta(hours=1)
 TYPING_REFRESH_SECONDS = 4.5  # Telegram shows "typing" for about 5 s per action
@@ -101,8 +94,6 @@ PICTURE_LOG = "[a picture]"
 PAIRED_TEXT = "Hi {name}! This chat is now connected to Themi."
 ALREADY_PAIRED_TEXT = "You're already connected. Nothing more to set up here."
 BAD_CODE_TEXT = "That code didn't work. An admin can make a fresh one with `themi invite`."
-NOT_YOURS_TEXT = "That one isn't yours to answer."
-ALREADY_HANDLED_TEXT = "Already taken care of."
 LINK_COMMAND = "/familygroup"
 GROUP_LINKED_TEXT = (
     "This is the family group now. Here I only read messages meant for me (start with "
@@ -571,23 +562,16 @@ class TelegramChannel:
             log.info("Ignoring a button tap from unknown Telegram user %s", query.from_user.id)
             await self._answer(query)
             return
-        row = self.store.db.one("SELECT * FROM callback_tokens WHERE token = ?", (query.data,))
-        if row is None or (row["member_id"] != member.id and not row["anyone"]):
-            await self._answer(query, NOT_YOURS_TEXT if row else ALREADY_HANDLED_TEXT)
-            return
-        if row["used_at"] is not None or datetime.fromisoformat(row["expires_at"]) <= clock.now():
-            await self._answer(query, ALREADY_HANDLED_TEXT)
-            return
-        if not row["anyone"]:  # a keyboard for everyone is the handler's to close
-            # One answer per keyboard: the other buttons on it stop working too.
-            self.store.db.execute(
-                "UPDATE callback_tokens SET used_at = ? WHERE group_id = ? AND used_at IS NULL",
-                (clock.now().isoformat(), row["group_id"]),
+        tap = claim(self.store.db, query.data or "", member)
+        if not isinstance(tap, Tap):
+            await self._answer(
+                query, NOT_YOURS_TEXT if tap == "not yours" else ALREADY_HANDLED_TEXT
             )
+            return
         await self._answer(query)
-        message_id = query.message.message_id if query.message is not None else row["message_id"]
-        self.store.log_message(member.id, "in", f"[tapped: {row['label']}]", "button", message_id)
-        press = ButtonPress(row["label"], row["kind"], json.loads(row["payload"]), message_id)
+        message_id = query.message.message_id if query.message is not None else tap.message_id
+        self.store.log_message(member.id, "in", f"[tapped: {tap.label}]", "button", message_id)
+        press = ButtonPress(tap.label, tap.kind, tap.payload, message_id)
         chat_id = query.message.chat.id if query.message is not None else member.telegram_user_id
         event = InboundEvent(
             "button",
@@ -689,11 +673,7 @@ class TelegramChannel:
                 chat_id, text, reply_markup=markup, link_preview_options=preview
             )
         )
-        if group_id is not None:
-            self.store.db.execute(
-                "UPDATE callback_tokens SET message_id = ? WHERE group_id = ?",
-                (sent.message_id, group_id),
-            )
+        note_message(self.store.db, group_id, sent.message_id)
         self.store.log_message(member.id, "out", text, kind, sent.message_id)
         return sent.message_id
 
@@ -716,11 +696,7 @@ class TelegramChannel:
                 text, chat_id=chat, message_id=message_id, reply_markup=markup
             )
         )
-        if group_id is not None:
-            self.store.db.execute(
-                "UPDATE callback_tokens SET message_id = ? WHERE group_id = ?",
-                (message_id, group_id),
-            )
+        note_message(self.store.db, group_id, message_id)
         self.store.log_message(member.id, "out", text, "edit", message_id)
 
     async def react(self, member: Member, message_id: int, emoji: str) -> None:
@@ -760,29 +736,13 @@ class TelegramChannel:
     ) -> tuple[str | None, InlineKeyboardMarkup | None]:
         if not buttons:
             return None, None
-        group_id = secrets.token_urlsafe(9)
-        now = clock.now()
+        group_id, tokens = store_tokens(self.store.db, member, buttons, anyone=anyone)
         made = []
-        for button in buttons:
-            if button.web_app is not None:  # BD3a: opens the page; nothing comes back
+        for button, token in zip(buttons, tokens, strict=True):
+            if token is None:  # BD3a: a Mini App button opens the page; nothing comes back
+                assert button.web_app is not None
                 made.append(InlineKeyboardButton(button.label, web_app=WebAppInfo(button.web_app)))
                 continue
-            token = secrets.token_urlsafe(12)  # Telegram allows 64 bytes of callback data
-            self.store.db.execute(
-                "INSERT INTO callback_tokens (token, group_id, member_id, label, kind, payload, "
-                "created_at, expires_at, anyone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    token,
-                    group_id,
-                    member.id,
-                    button.label,
-                    button.kind,
-                    json.dumps(button.payload),
-                    now.isoformat(),
-                    (now + BUTTON_TTL).isoformat(),
-                    int(anyone),
-                ),
-            )
             made.append(InlineKeyboardButton(button.label, callback_data=token))
         rows = [[made[i] for i in row] for row in button_rows([b.label for b in buttons])]
         return group_id, InlineKeyboardMarkup(rows)
