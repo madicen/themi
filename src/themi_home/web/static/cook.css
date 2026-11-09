@@ -29,9 +29,10 @@ body.cook-page { --cook-tap: 64px; --cook-text: 2rem; overflow-x: hidden;
 .cook-line { margin: 0; font-size: 1.2rem; }
 .cook-peek { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
 .cook-page button { min-height: var(--cook-tap); min-width: var(--cook-tap); font-size: 1.15rem; }
-.cook-moves { display: flex; gap: var(--space-3); margin-top: auto; }
-.cook-moves form { flex: 1 1 0; }
-.cook-moves button { width: 100%; font-size: 1.35rem; }
+/* side by side; at big text on a phone they take a row each (bug 2026-11-08: they ran off) */
+.cook-moves { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: auto; }
+.cook-moves form { flex: 1 1 7rem; min-width: 0; }
+.cook-moves button { width: 100%; font-size: 1.35rem; overflow-wrap: anywhere; }
 .cook-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .cook-list form { margin: 0; }
 .cook-item { width: 100%; text-align: left; font-size: 1.3rem; background: var(--card); color: var(--fg);

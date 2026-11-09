@@ -201,6 +201,11 @@ async def test_the_biggest_text_fits_a_phone(scenario: Scenario) -> None:
         assert await tab.value(LAYOUT) == ""
         await tab.value("document.querySelector('.cook-size button[value=down]').click()")
         assert await until(lambda: tab.value("document.body.dataset.textSize === '170'"))
+    # Bug 2026-11-08: since A+ scales the whole screen, the Back and All done buttons ran off
+    # CI's Chrome by 3 px at 390 (its fonts are wider). A smaller phone, with room to spare.
+    scenario.app.store.save_preferences(erin, erin.id, CookingPreferences, cooking_text_size=200)
+    async with page_in_chrome(scenario, erin, ".cook-moves", width=360, height=780) as tab:
+        assert await tab.value(LAYOUT) == ""
 
 
 SIZES = (
