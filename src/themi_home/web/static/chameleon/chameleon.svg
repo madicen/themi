@@ -22,5 +22,7 @@
   <g class="prop prop-broom"><path class="prop-line" d="M104 60 L 84 102"/><path d="M78 98 L 92 104 L 86 110 L 72 106 Z"/></g>
   <g class="prop prop-easel"><path class="prop-line" d="M118 60 L 112 104 M128 60 L 134 104 M123 56 L 123 104"/><rect x="110" y="58" width="26" height="22" rx="1"/><path class="prop-paint" d="M114 74 C 118 66, 124 72, 130 64"/><path class="prop-line" d="M104 78 L 112 70"/></g>
   <g class="prop prop-pencil"><path class="prop-line" d="M100 84 L 114 72"/><path class="prop-paper" d="M98 90 L 126 86 L 128 98 L 100 102 Z"/><path class="prop-line" d="M104 94 C 108 90, 112 96, 118 92"/></g>
+  <g class="prop prop-apron"><path d="M58 60 C 66 56, 80 56, 88 60 L 90 84 C 78 88, 64 88, 54 84 Z"/><path class="prop-line" d="M58 60 C 70 50, 82 48, 92 52 M64 72 L 82 72"/></g>
+  <g class="prop prop-spoon"><path class="prop-line" d="M104 82 L 128 58"/><path d="M126 52 C 132 48, 138 54, 134 60 C 130 64, 124 60, 126 52 Z"/></g>
   <g class="cham-zz"><path class="prop-line" d="M118 28 L 126 28 L 118 36 L 126 36 M128 16 L 134 16 L 128 22 L 134 22"/></g>
 </svg>

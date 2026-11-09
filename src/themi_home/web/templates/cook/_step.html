@@ -1,6 +1,5 @@
 {# CK1: the step, or this phase's list, tappable to tick. #}
 {% from "cook/_act.html" import act %}
-{% if state.line %}<p class="cook-line" data-field="line">{{ state.line }}</p>{% endif %}
 {% if state.phase == "ready" %}
   <h1 class="cook-title">Before anything else</h1>
   <ul class="cook-list">

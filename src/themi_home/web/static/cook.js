@@ -89,6 +89,7 @@
     var shown = main();
     if (!shown || String(state.id) !== shown.dataset.session) { reload(); return; }
     if (state.drawn !== shown.dataset.drawn) view();
+    company(state);
     if (window.themiCook && window.themiCook.onState) window.themiCook.onState(state);
   }
 
@@ -165,6 +166,95 @@
     }).then(function () {}, function () {});
   });
 
+  // CK5: the company bar, kept live from the state: the scene, Themi's line, Ask Themi
+  function company(state) {
+    var scene = document.querySelector(".cook-scene");
+    if (scene && state.scene) scene.dataset.state = state.scene;
+    var line = document.querySelector('[data-live="line"]');
+    if (line && line.textContent !== state.line) line.textContent = state.line || "";
+    var list = document.querySelector(".cook-chat ol");
+    var chat = state.chat || [];
+    if (list && list.dataset.count !== String(chat.length)) {
+      list.dataset.count = String(chat.length);
+      list.textContent = "";
+      chat.forEach(function (said) {
+        var li = document.createElement("li");
+        li.className = said.who;
+        li.textContent = said.text;
+        list.appendChild(li);
+      });
+      list.scrollTop = list.scrollHeight;
+    }
+  }
+  function chatOpen(on) {
+    var panel = document.querySelector(".cook-chat");
+    if (!panel) return;
+    panel.hidden = !on;
+    body.classList.toggle("drawer-open", on || drawerOpen);
+    if (on) { var input = panel.querySelector("input[name=text]"); if (input) input.focus(); }
+  }
+  document.addEventListener("click", function (event) {
+    var t = event.target;
+    if (!t.closest) return;
+    if (t.closest(".cook-chat-open")) chatOpen(true);
+    else if (t.closest(".cook-chat-close")) chatOpen(false);
+  });
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (!form.closest) return;
+    if (form.closest(".cook-chat")) {
+      event.preventDefault();
+      var data = new URLSearchParams(new FormData(form)).toString();
+      form.reset();
+      fetch(form.getAttribute("action"), {
+        method: "POST", body: data, credentials: "same-origin",
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) { if (s) redraw(s); }, function (e) { report("ask failed: " + e); });
+    } else if (form.closest(".cook-spotify")) {
+      event.preventDefault();
+      var said = document.querySelector(".cook-spotify .session-spotify-said");
+      var sent = new URLSearchParams(new FormData(form));
+      sent.set("action", event.submitter && event.submitter.value ? event.submitter.value : "play");
+      fetch(form.getAttribute("action"), {
+        method: "POST", body: sent.toString(), credentials: "same-origin",
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "fetch" })
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) { if (said) said.textContent = s && s.said ? s.said : "That didn't reach Spotify. Try again in a moment."; },
+              function () { if (said) said.textContent = "That didn't reach Spotify. Try again in a moment."; });
+    }
+  });
+
+  // CK5: the built-in loop, as on the body double page; nothing plays until they tap Play
+  function music() {
+    var box = document.querySelector(".cook-music");
+    if (!box) return;
+    var audio = box.querySelector("audio"), play = box.querySelector(".session-play");
+    var sound = box.querySelector("select"), volume = box.querySelector("input[type=range]");
+    audio.volume = Number(volume.value) / 100;
+    function save(fields) {
+      fields.csrf = body.dataset.csrf;
+      fetch("/session/music", {
+        method: "POST", credentials: "same-origin",
+        headers: auth({ "Content-Type": "application/x-www-form-urlencoded" }),
+        body: new URLSearchParams(fields).toString()
+      }).then(function () {}, function () {});
+    }
+    function shown(on) { play.textContent = on ? "Pause" : "Play"; play.setAttribute("aria-pressed", on ? "true" : "false"); }
+    play.addEventListener("click", function () {
+      if (audio.paused) audio.play().then(function () { shown(true); }, function () { shown(false); });
+      else { audio.pause(); shown(false); }
+    });
+    sound.addEventListener("change", function () {
+      var playing = !audio.paused;
+      audio.src = sound.options[sound.selectedIndex].dataset.src;
+      if (playing) audio.play().then(function () {}, function () { shown(false); });
+      save({ sound: sound.value });
+    });
+    volume.addEventListener("input", function () { audio.volume = Number(volume.value) / 100; });
+    volume.addEventListener("change", function () { save({ volume: volume.value }); });
+  }
+
   // CK2: what a tap says once ("Now for 6."), for a few seconds
   var saidTimer = null;
   function say(text) {
@@ -194,7 +284,7 @@
   document.addEventListener("submit", function (event) {
     var form = event.target;
     if (!form.closest || !form.closest("#cook")) return;
-    if (form.dataset.local) return;  // a form the page handles itself
+    if (form.dataset.local || !form.closest("#cook")) return;  // a form handled elsewhere
     event.preventDefault();
     post(form, null, event.submitter);
   });
@@ -225,6 +315,7 @@
 
   window.themiCook = window.themiCook || {};
   window.themiCook.alerts = alerts;
+  window.themiCook.chatOpen = chatOpen;
   window.themiCook.post = post;
   window.themiCook.poll = poll;
   window.themiCook.view = view;
@@ -236,6 +327,7 @@
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
+  music();
   alerts();
   tick();
   setInterval(tick, 1000);

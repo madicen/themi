@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.accounts import Member
 from themi.localtime import to_utc_iso
+from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
 from themi_home.cooking_links import shown
 from themi_home.cooking_timers import PRESETS
 from themi_home.quantities import NeedsYield, fraction, scale_for
@@ -156,6 +157,15 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     out["presets"] = list(PRESETS)
     out["chime_volume"] = cooking.preferences(viewer.id).cooking_chime_volume
     out["buttons"] = buttons(session, recipe)
+    out["scene"] = pick_cooking_state(
+        now=now,
+        timer_running=bool(running),
+        cheer_until=session.ended_at + CHEER_FOR
+        if session.ended_at is not None and session.outcome == "finished"
+        else None,
+    )  # CK5: the chameleon
+    out["chat"] = cooking.page_chat(session)
+    out["music"] = music(cooking, session, viewer)
     out["drawn"] = drawn(out)
     for timer in out["timers"]:  # the count before the page's script runs: not in `drawn`
         timer["text"] = span(seconds_left(timer["ends_at"]))
@@ -221,6 +231,25 @@ def now_words(said: str, factor: float) -> str:
     return f"Now {words} the recipe." if words in ("half", "double", "triple") else f"Now {words}."
 
 
+def music(cooking: Cooking, session: Session, viewer: Member) -> dict[str, Any] | None:
+    """CK5: the body double page's music, with BD5c's suggestion for cooking."""
+    from themi.core import keys
+    from themi_home.body_double_music import DEFAULTS, LOOPS
+
+    bd = cooking.services.maybe(keys.body_double)
+    if bd is None:
+        return None
+    found = dict(bd.music_state(viewer))
+    usual = DEFAULTS["cooking"].removeprefix("builtin:")
+    name = LOOPS[found["sound"]].name
+    found["offer"] = (
+        f"Some {name.lower()} while you cook?" if found["sound"] == usual
+        else f"{name} again, like last time?"
+    )  # fmt: skip
+    found["spotify"] = cooking.playlists.get(session.id, [])
+    return found
+
+
 def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
     """The owner's timers: running, or fired and not yet tapped on the screen."""
     if cooking.timers is None:
@@ -268,10 +297,14 @@ def buttons(session: Session, recipe: Recipe) -> list[dict[str, str]]:
     return out
 
 
+UNDRAWN = ("now", "drawn", "scene", "chat", "music", "line")  # the company bar's, kept live
+
+
 def drawn(out: dict[str, Any]) -> str:
-    """A short fingerprint of what the screen shows (not the clock), so the page redraws
-    only when something changed: a move, or a timer firing between moves."""
-    shown = {k: v for k, v in out.items() if k not in ("now", "drawn")}
+    """A short fingerprint of what the regions show (not the clock), so the page redraws
+    them only when something changed: a move, or a timer firing between moves. The company
+    bar (the scene, Themi's line, music, Ask Themi) isn't redrawn: its music keeps playing."""
+    shown = {k: v for k, v in out.items() if k not in UNDRAWN}
     return hashlib.sha256(json.dumps(shown, sort_keys=True).encode()).hexdigest()[:12]
 
 

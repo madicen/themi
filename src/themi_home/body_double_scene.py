@@ -10,6 +10,9 @@ this says which animation state it shows, as a flag in the page's state:
 - during a work block on a chores or tidying job, a sweep: one minute in every four;
 - `idle` otherwise (in Silent Anchor's scene, that's reading).
 
+CK5: the cook screen's scene (`pick_cooking_state`): watching from a stool by the counter;
+stirring while a timer runs; cheering for a moment after [All done].
+
 Never random: the same moment gives the same state, so it's tested like anything else.
 """
 
@@ -17,7 +20,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-FLAGS = ("idle", "sweeping", "dozing", "painting", "stretching", "doodling", "cheering")
+FLAGS = ("idle", "sweeping", "dozing", "painting", "stretching", "doodling", "cheering",
+         "watching", "stirring")  # fmt: skip
 RELAXED = ("dozing", "painting", "stretching", "doodling")
 CHEER_FOR = timedelta(seconds=20)
 RELAXED_EVERY = 2  # minutes
@@ -46,3 +50,12 @@ def pick_state(
     if phase == "work" and category in SWEEPY and minutes % SWEEP_EVERY == SWEEP_EVERY - 1:
         return "sweeping"
     return "idle"
+
+
+def pick_cooking_state(
+    *, now: datetime, timer_running: bool, cheer_until: datetime | None = None
+) -> str:
+    """CK5: the chameleon on the cook screen."""
+    if cheer_until is not None and now < cheer_until:
+        return "cheering"
+    return "stirring" if timer_running else "watching"

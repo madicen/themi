@@ -140,6 +140,7 @@
   "POST /safeway/products/forget",
   "POST /safeway/products/search",
   "POST /session/chat",
+  "POST /session/cook/chat",
   "POST /session/cook/chime",
   "POST /session/cook/{session_id}/act",
   "POST /session/music",

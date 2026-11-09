@@ -243,6 +243,7 @@ class CookingTimers:
             priority=Priority.URGENT,  # they set it: it rings in quiet hours too
             kind=KIND,  # to their own chat: a group message waits for everyone to be free
         )
+        await self.cooking.timer_line(row["session_id"], row["label"] or f"step {row['step']}")
 
     def cancel_all(self, member: Member) -> int:
         return self.db.update(

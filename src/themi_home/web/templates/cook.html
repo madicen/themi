@@ -11,8 +11,11 @@
 {# CK1: the cook screen, one full screen propped up while cooking. The regions are partials
    under cook/, drawn again from /session/cook/view when the state changes. #}
 <body class="session-page cook-page" data-signed-in="1" data-csrf="{{ csrf }}" data-session="{{ session_token }}" data-now="{{ state.now }}">
-<main id="cook" class="cook" aria-live="polite">
+<main class="cook">
+<div id="cook" aria-live="polite">
 {% include "cook/_main.html" %}
+</div>
+{% include "cook/_company.html" %}
 </main>
 <p class="cook-said" role="status" aria-live="polite" hidden></p>
 <div class="cook-pulse" aria-hidden="true"></div>

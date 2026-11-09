@@ -47,13 +47,15 @@ def routes(kit: Kit) -> APIRouter:
         response.headers["X-Themi-Page"] = "session"  # may be framed by Telegram's web app
         return response
 
-    def current_state(member: Any) -> dict[str, Any]:
+    def current_state(member: Any, *, seen: bool = False) -> dict[str, Any]:
         """The session going on, in the plan's order: a body double session, else cooking,
-        else none."""
+        else none. `seen`: the cook screen asked (CK5: Themi's lines go to chat too)."""
         bd = body_double()
         state = bd.state(member) if bd is not None else {"active": False}
         if not state.get("active") and cooking() is not None:
             state = cooking().state(member)
+            if seen and state.get("active"):
+                cooking().seen(member)
         return state
 
     @router.get("/session", response_class=HTMLResponse)
@@ -118,7 +120,7 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/session/state")
     def session_state(request: Request) -> JSONResponse:
         signed = kit.current(request)
-        state = current_state(signed.member)
+        state = current_state(signed.member, seen=True)
         return JSONResponse(state, headers={"Cache-Control": "no-store"})
 
     # ----- CK1: the cook screen ---------------------------------------------------------------
@@ -134,6 +136,20 @@ def routes(kit: Kit) -> APIRouter:
             return Response(status_code=204)
         return page(request, "cook/_main.html", member=signed.member, csrf=signed.csrf_token,
                     state=state)  # fmt: skip
+
+    @router.post("/session/cook/chat")
+    async def cook_chat(request: Request) -> Response:
+        """CK5: Ask Themi on the cook screen, as their own chat with Themi (answers show in
+        the drawer and in Telegram)."""
+        signed, form = await kit.checked(request)
+        member = app.store.get_member(signed.member.id)
+        event = cooking().page_chat_event(member, str(form.get("text", ""))) if cooking() else None
+        handler = getattr(app.channel, "handler", None)
+        if event is not None and handler is not None:
+            await handler.handle(event, app.channel)
+        if request.headers.get("X-Requested-With") == "fetch":
+            return JSONResponse(current_state(member), headers={"Cache-Control": "no-store"})
+        return kit.redirect("/session")
 
     @router.post("/session/cook/chime")
     async def cook_chime(request: Request) -> Response:
@@ -199,11 +215,20 @@ def routes(kit: Kit) -> APIRouter:
 
         bd = body_double()
         session = bd.current(signed.member) if bd is not None else None
-        if bd is None or session is None or app.services.maybe(keys.music) is None:
+        cooking_state = (
+            current_state(signed.member) if session is None and cooking() is not None else {}
+        )  # CK5: Spotify on the cook screen too
+        if app.services.maybe(keys.music) is None or (
+            session is None and cooking_state.get("kind") != "cooking"
+        ):
             return kit.redirect("/session")
         action = str(form.get("action", ""))
         if action == "play":
-            kept = {p["uri"]: p for p in bd.state(signed.member).get("spotify", [])}
+            playlists = (
+                bd.state(signed.member).get("spotify", []) if bd is not None and session is not None
+                else (cooking_state.get("music") or {}).get("spotify", [])
+            )  # fmt: skip
+            kept = {p["uri"]: p for p in playlists}
             chosen = kept.get(str(form.get("uri", "")))
             if chosen is None:  # only their own, as read for this session
                 return Response(status_code=400)
@@ -222,7 +247,7 @@ def routes(kit: Kit) -> APIRouter:
             requested=True,
         )  # fmt: skip
         if request.headers.get("X-Requested-With") == "fetch":  # what Spotify said, on the page
-            state = {**bd.state(signed.member), "said": outcome.message}
+            state = {**current_state(signed.member), "said": outcome.message}
             return JSONResponse(state, headers={"Cache-Control": "no-store"})
         return kit.redirect("/session")
 
