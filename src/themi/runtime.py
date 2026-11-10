@@ -145,7 +145,7 @@ class Runtime:
             tasks.append(
                 asyncio.create_task(self.app.channel.run(self.stop_event), name="telegram")
             )
-        log.info("Themi is running")
+        log.info("Themi is running at %s", self.app.services.site_url)
         try:
             stopper = asyncio.create_task(self.stop_event.wait())
             waiting = {*tasks, stopper}

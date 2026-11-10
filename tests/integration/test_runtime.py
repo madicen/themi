@@ -137,6 +137,8 @@ def test_themi_run_as_a_process_starts_and_stops_on_sigterm(tmp_path: Path) -> N
             process.kill()
     assert process.returncode == 0, stderr
     assert "Stopped" in stderr
+    assert f"Themi is running at http://localhost:{port}" in stderr  # where to open it
+    assert f"Open its website (http://localhost:{port})" in stderr  # with the claim code
     assert (tmp_path / "themi.db").exists()
 
 

@@ -219,13 +219,15 @@ def build_runtime(
         **options,
     )
     from themi.accounts.claim import CODE_FILE, Claim
+    from themi.web import site_base_url
 
     claim = Claim(app.store)
     if claim.needed():  # SP7a: a new Themi, claimed on its website
         code = claim.make(settings.db_path.parent)
         log.warning(
-            "Nobody has set up this Themi yet. Open its website and enter the claim code "
-            "%s (it's also in %s).",
+            "Nobody has set up this Themi yet. Open its website (%s) and enter the claim "
+            "code %s (it's also in %s).",
+            site_base_url(settings.public_url, settings.http_host, settings.http_port),
             code,
             settings.db_path.parent / CODE_FILE,
         )
