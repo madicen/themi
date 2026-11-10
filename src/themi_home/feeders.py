@@ -20,23 +20,41 @@ From the feeders' events (Tuya, `themi_home.connectors.tuya`):
 
 People see words, never codes. A problem marked done isn't raised again until the feeder
 stops showing it.
+
+Feeding now (F39a, bug #194: "Feed Juneau" went on Things to Buy): `feed_pet` dispenses
+portions from the feeder named for the pet (the SmartLife app's name), or from each with
+"all". It's a side effect, so it goes through the trust tiers ("pet_feed"): asked in so
+many words, it's their yes. Tuya's `manual_feed` (1 to 12 portions on the family's model)
+is the only command Themi sends a feeder.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Any
 
 from themi import clock
 from themi.accounts import Device, Member
+from themi.autonomy import ExecutionContext
 from themi.channels.outbox import Button, Priority
 from themi.core import keys
 from themi.core.services import Services
+from themi.core.tools import Proposal, ToolContext, ToolDeclined, ToolFailed, staged_tool
 from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
-from themi_home.connectors.tuya import FAULT, FOOD, JAMMED, OUT, FeederEvent, TuyaWatcher
+from themi_home.connectors.tuya import (
+    FAULT,
+    FOOD,
+    JAMMED,
+    OUT,
+    DeviceOffline,
+    FeederEvent,
+    TuyaError,
+    TuyaWatcher,
+)
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +79,12 @@ WAIT = timedelta(minutes=10)  # a problem's first nudge waits this long
 LATER_FOR = 60  # minutes: Later asks again in an hour
 URGENT = (JAMMED,)  # with OUT: a meal would be missed
 EFFORT = -0.5  # a small chore, for the energy model
+FEED_CATEGORY, FEED_EXECUTOR = "pet_feed", "devices.feed"  # F39a
+MOST_PORTIONS = 12  # the family's feeders take 1 to 12; a feeder's own range is kept too
+EVERY = frozenset({"all", "every", "each", "both", "all of them", "everyone", "the cats"})
+FEED_WORDS = re.compile(r"\b(?:feed|fed|dispens\w*|portions?|kibble|food|meal)\b", re.I)
+GENERIC = re.compile(r"^(?:the |my |our )?(?:cats?|dogs?|pets?|kitty|feeders?)$")
+NO_FEEDERS = "No pet feeder is linked to Themi, so nothing can be fed from here."
 
 
 class Feeders:
@@ -73,6 +97,8 @@ class Feeders:
 
     def install(self) -> None:
         self.services.provide(keys.feeders, self)
+        self.services.autonomy.executors.register(FEED_EXECUTOR)(self._execute_feed)
+        self.services.tools.register(feed_pet)
         self.watcher.listeners.append(self.on_event)
         self.watcher.broken_listeners.append(self._broken)
         self.board.own_nudges.append(self._nudge)
@@ -249,6 +275,70 @@ class Feeders:
             lines.append(f"Open chore: {task.title}, {whose}, {when}.")
         return lines
 
+    # ----- feeding now (F39a) -------------------------------------------------------------
+
+    def which(self, named: str) -> list[Device]:
+        """The feeders `named` means: the pet's (or feeder's) name as said, "all", or, with
+        just one feeder, "the cat". ToolFailed, naming them, when it's not clear."""
+        feeders = self.watcher.devices("feeder")
+        if not feeders:
+            raise ToolFailed(NO_FEEDERS, reply=NO_FEEDERS)
+        key = _key(named)
+        if key in EVERY:
+            return feeders
+        if not key or GENERIC.match(key):
+            if len(feeders) == 1:
+                return feeders
+            raise ToolFailed(f"Which feeder? The linked ones: {_names(feeders)}.")
+        exact = [d for d in feeders if _key(d.name) == key]
+        if exact:
+            return exact
+        close = [d for d in feeders if key in _key(d.name) or _key(d.name) in key]
+        if close:
+            return close
+        raise ToolFailed(f"No feeder is called {named!r}. The linked ones: {_names(feeders)}.")
+
+    def asked(self, text: str, named: str, devices: list[Device]) -> bool:
+        """Their own words asked for this feeding (never the model's say-so): a word of
+        feeding, and each feeder named, or "all", or "the cat" with just one feeder."""
+        if not FEED_WORDS.search(text):
+            return False
+        said = f" {_plain(text)} "
+        if _key(named) in EVERY:
+            return any(f" {word} " in said for word in EVERY if " " not in word) or (
+                "cats" in said or "dogs" in said or "pets" in said
+            )
+        if len(self.watcher.devices("feeder")) == 1 and len(devices) == 1:
+            return True
+        return all(f" {_key(d.name)} " in said or f" {_key(d.name)}s " in said for d in devices)
+
+    async def _execute_feed(self, payload: dict[str, Any], ctx: ExecutionContext) -> str:
+        """Feeds each; raises when none could be, so the action is failed and can be tried
+        again (never "done" with nothing fed)."""
+        portions = int(payload.get("portions") or 1)
+        fed: list[str] = []
+        missed: list[str] = []
+        for device_id in payload["devices"]:
+            device = self._device(int(device_id))
+            if device is None:
+                missed.append("a feeder that isn't linked any more")
+                continue
+            try:
+                sent = await self.watcher.feed(device, portions)
+            except DeviceOffline:
+                missed.append(f"{device.name}'s (offline)")
+                continue
+            except TuyaError as exc:
+                log.warning("Couldn't feed from %s: %s", device.name, exc)
+                missed.append(f"{device.name}'s (couldn't be reached)")
+                continue
+            fed.append(f"Fed {device.name}: {sent} portion{'s' if sent != 1 else ''}.")
+        if not fed:
+            raise FeedFailed(f"No feeder dispensed: {', '.join(missed)}")
+        if missed:
+            fed.append(f"Nothing came out of {_names_and(missed)} feeder.")
+        return " ".join(fed)
+
     # ----- small things -------------------------------------------------------------------
 
     def _withdraw(self, task: Task, member: Member) -> None:
@@ -309,3 +399,63 @@ def _the(name: str) -> str:
 
 def _cap(words: str) -> str:
     return words[0].upper() + words[1:]
+
+
+def _key(name: str) -> str:
+    """ "Juneau's feeder" and "juneau" alike: lower case, no "feeder", no possessive."""
+    key = " ".join(re.sub(r"[^\w' ]+", " ", name.lower().replace("\u2019", "'")).split())
+    key = re.sub(r"(?:'s)?\s*(?:cat |pet )?feeders?$", "", key).strip()
+    return re.sub(r"'s$", "", key).strip()
+
+
+def _plain(text: str) -> str:
+    """Their words, lower case, with no possessives or punctuation: "feed juneau s" -> no:
+    "Feed Juneau's" -> "feed juneau"."""
+    text = re.sub(r"'s\b", "", text.lower().replace("\u2019", "'"))
+    return " ".join(re.sub(r"[^\w ]+", " ", text).split())
+
+
+def _names(devices: list[Device]) -> str:
+    return ", ".join(d.name for d in devices)
+
+
+def _names_and(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+class FeedFailed(Exception):
+    """No feeder dispensed: the action fails, and is still there to try again."""
+
+
+@staged_tool(
+    "feed_pet",
+    "Dispense food now from a pet feeder, when they ask ('feed Juneau', 'give Merlin a "
+    "portion', 'feed the cats'). feeder: the pet's or feeder's name as they said it, or "
+    "'all'; blank when there's just one. portions: how many, 1 unless they said. This is "
+    "the feeder, never a list or a task: 'Feed Juneau' is never added to a list.",
+    {
+        "feeder": {"type": "string", "default": ""},
+        "portions": {"type": "integer", "minimum": 1, "maximum": MOST_PORTIONS, "default": 1},
+    },
+)
+async def feed_pet(ctx: ToolContext, args: dict[str, Any]) -> Proposal:
+    feeders = ctx.services.maybe(keys.feeders)
+    if feeders is None:
+        raise ToolDeclined(NO_FEEDERS)
+    named = str(args.get("feeder") or "")
+    devices = feeders.which(named)
+    offline = [d.name for d in devices if feeders.watcher.states().get(d.id) == "offline"]
+    if offline and len(offline) == len(devices):
+        said = f"{_names_and(offline)}'s feeder is offline, so nothing can come out right now."
+        raise ToolFailed(said, reply=said)
+    portions = int(args.get("portions") or 1)
+    names = _names_and([d.name for d in devices])
+    each = f"{portions} portion{'s' if portions != 1 else ''}"
+    return Proposal(
+        FEED_CATEGORY,
+        f"Feed {names} {each} from the feeder",
+        FEED_EXECUTOR,
+        {"devices": [d.id for d in devices], "portions": portions},
+        requested=feeders.asked(ctx.request_text, named, devices),
+        said=f"Fed {names}: {each}." if len(devices) == 1 else None,
+    )

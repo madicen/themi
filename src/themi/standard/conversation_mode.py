@@ -78,7 +78,8 @@ DOING = (
     r"add|put|remind|schedule|book|mark|tick|check off|cross off|complete|cancel|delete|"
     r"remove|move|reschedule|order|buy|set|start|stop|turn|pause|resume|snooze|assign|give|"
     r"hand|tell|send|archive|text|email|reply|make time|block|clear|undo|change|rename|"
-    r"show|list|find|look up|search|google|plan|log|note|track|record|done|finished|cook|bake"
+    r"show|list|find|look up|search|google|plan|log|note|track|record|done|finished|cook|bake|"
+    r"feed|dispense"  # F39a, bug #194: "Feed Juneau" is the feeder's, never a list's
 )
 REQUEST = re.compile(
     _LEAD + rf"(?:{_POLITE})?(?:{DOING})\b"

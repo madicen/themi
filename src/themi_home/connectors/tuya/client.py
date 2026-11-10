@@ -16,15 +16,18 @@ Its API (developer.tuya.com, checked 2026-11-04):
   point's reports) gives its feeding log.
 - Answers come as `{"success": true, "result": ...}` or `{"success": false, "code", "msg"}`.
   The trial plan lapses unless it's extended on Tuya's site (28841002 and kin).
+- `POST /v1.0/devices/{id}/commands` with `{"commands": [{"code", "value"}]}` sets a
+  writable data point (the specification's `functions`); the body's SHA-256 is signed.
+  F39a: the only command sent is a feeder's `manual_feed` (portions), when someone asks.
 
 `TuyaClient` is only the wire. `TuyaAccount` keeps the project's secret, encrypted.
-Read-only: nothing here sends a feeder a command.
 """
 
 from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import secrets
 from dataclasses import dataclass, field
@@ -203,16 +206,33 @@ class TuyaClient:
                 return sorted(logs, key=lambda entry: int(entry.get("event_time") or 0))
             params = {**params, "start_row_key": page["current_row_key"]}
 
+    # ----- commanding (F39a) -----------------------------------------------------------
+
+    async def command(self, device_id: str, code: str, value: Any) -> None:
+        """Set one writable data point (`manual_feed` to 2: two portions, now)."""
+        await self._call(
+            "POST",
+            f"/v1.0/devices/{device_id}/commands",
+            body={"commands": [{"code": code, "value": value}]},
+        )
+
     # ----- the wire ---------------------------------------------------------------------
 
-    async def _call(self, method: str, path: str, params: dict[str, Any] | None = None) -> Any:
+    async def _call(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> Any:
+        content = json.dumps(body, separators=(",", ":")).encode() if body is not None else b""
         await self._ensure_token()
         try:
-            return await self._send(method, path, params, self._token)
+            return await self._send(method, path, params, self._token, content)
         except _TokenGone:
             self._token = ""
             await self._ensure_token()
-            return await self._send(method, path, params, self._token)
+            return await self._send(method, path, params, self._token, content)
 
     async def _ensure_token(self) -> None:
         now = clock.now()
@@ -233,7 +253,14 @@ class TuyaClient:
         lasts = timedelta(seconds=int(result.get("expire_time") or 0))
         self._token_until = now + max(lasts - TOKEN_EARLY, timedelta(0))
 
-    async def _send(self, method: str, path: str, params: dict[str, Any] | None, token: str) -> Any:
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None,
+        token: str,
+        content: bytes = b"",
+    ) -> Any:
         t = str(_ms(clock.now()))
         nonce = secrets.token_hex(16)
         headers = {
@@ -246,18 +273,21 @@ class TuyaClient:
                 self._secret.reveal(),
                 t,
                 nonce,
-                string_to_sign(method, url_for(path, params)),
+                string_to_sign(method, url_for(path, params), content),
                 token,
             ),
         }
         if token:
             headers["access_token"] = token
+        if content:
+            headers["Content-Type"] = "application/json"
         try:
             response = await self._http.request(
                 method,
                 path,
                 params=sorted((k, str(v)) for k, v in (params or {}).items()),
                 headers=headers,
+                content=content or None,
             )
         except httpx.HTTPError as exc:
             raise TuyaError(f"Tuya couldn't be reached ({type(exc).__name__})") from exc
@@ -372,6 +402,9 @@ class TuyaAccount:
         self, device_id: str, codes: list[str], since: datetime, until: datetime
     ) -> list[dict[str, Any]]:
         return await self._with_client(lambda c: c.reports(device_id, codes, since, until))
+
+    async def command(self, device_id: str, code: str, value: Any) -> None:
+        await self._with_client(lambda c: c.command(device_id, code, value))
 
     def broken(self, why: str) -> bool:
         """The keys stopped working: kept as the problem until linked again. True the first
