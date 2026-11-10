@@ -127,6 +127,10 @@
     "group": "email",
     "spec": "edf54ccbaf4b"
   },
+  "feed_pet": {
+    "group": "devices",
+    "spec": "8c802a73cc4d"
+  },
   "fill_safeway_cart": {
     "group": "pantry",
     "spec": "1a0b134907eb"
@@ -221,7 +225,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "6beaf1af8e82"
+    "spec": "fcc0f0a9c22f"
   },
   "move_list_item": {
     "group": "core",

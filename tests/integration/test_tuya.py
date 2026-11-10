@@ -11,11 +11,13 @@ import pytest
 from tests.fakes.tuya import ACCESS_ID, SECRET, FakeTuya
 from tests.fixtures.family import SeededFamily
 from themi import clock
+from themi.accounts import Device
 from themi.cli import main
 from themi_home.connectors.tuya import (
     FOOD,
     LOW,
     OUT,
+    DeviceOffline,
     FeederEvent,
     KeyRejected,
     RateLimited,
@@ -27,7 +29,7 @@ from themi_home.connectors.tuya.watch import write_captures
 
 pytestmark = pytest.mark.usefixtures("frozen_clock")
 
-FEEDER, FAULTY, FOUNTAIN = "ebfeeder1", "ebfeeder2", "ebfountain3"
+FEEDER, FAULTY, FOUNTAIN, JUNEAU = "ebfeeder1", "ebfeeder2", "ebfountain3", "ebjuneau4"
 
 
 def watcher_for(family: SeededFamily, fake: FakeTuya) -> TuyaWatcher:
@@ -251,3 +253,37 @@ def test_the_capture_command_needs_tuya_linked(
     monkeypatch.setattr(cli, "_store", lambda: family.store)
     assert main(["tuya", "capture"]) == 1
     assert "Link Tuya on the website's Accounts page first." in capsys.readouterr().err
+
+
+# ----- feeding now (F39a, bug #194) -----------------------------------------------------
+
+
+def feeder(watcher: TuyaWatcher, external_id: str) -> Device:
+    return next(d for d in watcher.devices() if d.external_id == external_id)
+
+
+async def test_feeding_sends_a_signed_manual_feed(
+    family: SeededFamily, linked: TuyaWatcher, pets: FakeTuya
+) -> None:
+    pets.add_feeder(JUNEAU, "Juneau", "family")  # the family's model, from its capture
+    await linked.link(family.erin, ACCESS_ID, SECRET, "us")
+    assert await linked.feed(feeder(linked, JUNEAU), 2) == 2
+    assert pets.commands[JUNEAU] == [{"code": "manual_feed", "value": 2}]  # the fake checks the
+    assert f"POST /v1.0/devices/{JUNEAU}/commands" in pets.calls  # body's in the signature
+
+
+async def test_feeding_keeps_to_the_feeders_range(linked: TuyaWatcher, pets: FakeTuya) -> None:
+    assert await linked.feed(feeder(linked, FEEDER), 30) == 12  # its spec: 1 to 12
+    assert pets.commands[FEEDER] == [{"code": "manual_feed", "value": 12}]
+
+
+async def test_feeding_an_offline_or_unfeedable_one_says_so(
+    linked: TuyaWatcher, pets: FakeTuya
+) -> None:
+    pets.offline(FEEDER)
+    with pytest.raises(DeviceOffline):
+        await linked.feed(feeder(linked, FEEDER), 1)
+    pets.specs[FAULTY] = {"category": "cwwsq", "functions": [], "status": []}
+    with pytest.raises(TuyaError, match="doesn't take a feed-now command"):
+        await linked.feed(feeder(linked, FAULTY), 1)
+    assert pets.commands == {}

@@ -44,6 +44,7 @@ CAN_BE_AUTOMATIC = {
     "email_keep",
     "dishwasher_done",
     "vacuum_home",
+    "pet_feed",  # F39a: feeding a pet now; asked in so many words, that's their yes
     "vacuum_done",
     "routine_item_add",
     "server_control",  # D3a: asked for on the website, so it runs at once

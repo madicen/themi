@@ -84,6 +84,7 @@
     "cozyla.add_routine",
     "cozyla.put_list",
     "devices.dishwasher_done",
+    "devices.feed",
     "devices.vacuum_done",
     "devices.vacuum_home",
     "gmail.archive",
