@@ -262,6 +262,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F38a | Feedback: events with no title are never twins | Feedback | [ ] |
 | F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
+| F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13007,6 +13008,47 @@ Data: on the Pi, run `themi feedback --not-wrong 316` and mark replies 314 and 3
 `themi feedback --wrong-tool 314 <tool>` and `... 315 <tool>`, the tool F32b moves routine
 items with. Ask Michael before labelling. Those replies predate the fix, so their mark has to
 be set by hand first (an UPDATE of `marked_at`, with Michael's OK).
+
+### F39a · Feedback (2026-11-09): "Feed Juneau" dispenses from Juneau's feeder
+Status: [x] 2026-11-10
+Depends on: 32, P1, P2b, CM1a
+Read first: `themi_home/feeders.py`, `themi_home/connectors/tuya/` (client, watch, events);
+`themi/core/tools.py` (`@staged_tool`, `Proposal.requested`); the DEVICES group in
+`themi_home/home_groups.py`. Bug #194 (Michael, Mon 9 Nov 10:11 pm): "that should have
+dispensed food from Juneau's named feeder".
+
+What the Pi shows: reply 410. "Feed Juneau" was offered only core and schedules (none of
+the DEVICES words matched), and no tool could feed a pet anyway: the Tuya connector was
+read-only. So the model called `add_to_list` and put "Feed Juneau" on Things to Buy
+(action 607). Michael gave it a 👎. Tuya was linked at 10:10 pm that night. The three
+feeders, Juneau, Merlin and Mimikos, are all one model (`drfffce9jdtayqty`, "宠物喂食器-5G").
+A capture (2026-11-10, now `tests/fixtures/tuya/captured/`) shows Tuya's standard
+`manual_feed` (Integer, 1 to 12 portions) among its writable `functions`, plus `feed_state`,
+`feed_report`, `battery_percentage`, `switch` and `slow_feed`. It has no food level and no
+fault point.
+
+Built:
+- `TuyaClient.command` / `TuyaAccount.command`: `POST /v1.0/devices/{id}/commands`, with
+  the JSON body's SHA-256 signed. `events.feed_command(spec)` finds the writable feed-now
+  point (`manual_feed`, or a model's own integer point by name) and its range, and
+  `TuyaWatcher.feed(device, portions)` sends it, kept within range.
+- `feed_pet` (`@staged_tool`, DEVICES group): `feeder` (the pet's or feeder's name as said,
+  "all", or blank with one feeder) and `portions` (default 1). It goes through a new "pet_feed"
+  category (family, Tier 1, can become automatic). `requested` is checked against their own
+  words: a feeding word, and each feeder named (or "all"/"cats"). So "Feed Juneau" runs at
+  once with "Fed Juneau: 1 portion.", and the model feeding a pet unasked gets a card. A
+  feeder last read as offline is said at once with nothing staged. One that fails
+  mid-command leaves the action failed, to try again, never "done".
+- Routing: `\bfeed\b|dispens` in the DEVICES words, two examples, and "feed|dispense" among
+  conversation mode's request verbs (Erin's chat mode sends it to the tools).
+- The fake answers `/commands` like Tuya does: only a writable point, only a value in range.
+  `add_feeder(..., "family")` serves the captured model.
+
+Notes: golden `tools.json` and `handlers.json` gained `feed_pet` and `devices.feed`
+(`more_tools`'s spec too, since it lists the DEVICES description). That's expected for a new
+tool. `test_autonomy`'s category list gained `pet_feed`. There's no double-feeding guard yet:
+the feeding log is only read hourly, so "fed 5 minutes ago" can't be known reliably. A
+follow-up could read `feed_report` right after a command. Mark #194 reviewed once live.
 
 ## Conversation mode
 
