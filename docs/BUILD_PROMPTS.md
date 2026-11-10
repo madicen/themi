@@ -259,6 +259,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
+| F38a | Feedback: events with no title are never twins | Feedback | [ ] |
+| F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
+| F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -12850,6 +12853,158 @@ Notes (2026-11-09):
   new [Not ever] button. Golden files: `handlers.json` (the `not_ever` button) and
   `tools.json` (`unskip_email_sender`), both as the prompt says.
 - Setup: restart `themi run` (migration 0157).
+
+### F38a · Feedback (2026-11-09): events with no title are never twins
+Status: [ ]
+Depends on: F34e
+Read first: `themi_google/calendar_twins.py` (`alike`, `pairs`, the same-title-and-times
+merge in `_one`); `themi_google/connectors/gcal/busy.py` (where an untitled event becomes
+"(no title)"); F34e's notes and F37b's (`same_booking`, `_same_title`). From Michael's bug
+#190 (2026-11-09, 8:26 am, "calendar events without names are not duplicates").
+
+What the Pi shows: at 4:06 am Themi queued calendar_twin card 1674 for Michael, sent at 8
+am: "These look like the same thing, on Mon 09 Nov: (no title), 11:30 am-3 pm; (no title),
+12-1 pm". Both are on his work calendar (michael.madicen@stackadapt.com), which shows Themi
+no titles, so busy.py stores each one as the literal "(no title)". `alike` compares
+`name_key` of the titles, finds them equal, and the two overlap, so they count as one
+thing. All five "Not the same" answers in `calendar_twins` (rows 2-6, 7-9 Nov) are pairs
+like this; the only real pair (row 1, Erin's "ND psych in person") had titles. There's a
+worse case waiting: two untitled events at the very same times on one calendar would pass
+the "same title, times and place" test and be **merged on their own**, with no card.
+
+Build:
+- Bug fix: start with the failing test below.
+- One test of "this event has no title" (`untitled(title)`, next to `name_key`): empty or
+  blank, or "(no title)" as busy.py writes it. Keep busy.py's placeholder as the one
+  constant, used by both.
+- `alike` is false when either event is untitled: with no title there's nothing to say
+  they're one thing. That covers the card, the auto-merge and the "guess" setting.
+- F37b's `same_booking` doesn't count "same title on the same day" when either side is
+  untitled. Its place and name tests still apply.
+- Anything else that keys an event by its title (`travel._event_key`: title and place)
+  falls back to the event id for an untitled event, so two untitled events at one place
+  don't share a heads-up.
+
+Tests: start with a failing one. Card 1674's pair (two "(no title)" events overlapping on
+one calendar) gives no pair. Two untitled events with the same times on one calendar aren't
+merged. "(no title)" against "Dentist" isn't a pair. "Dentist" and "Dentist cleaning" still
+are, and so is Erin's "ND psych in person" with "Return Patient Visit with …, MD". An email
+booking at an untitled event's start with nothing else in common is still offered.
+Scenario: Michael's work calendar has three untitled meetings overlapping on Monday. No
+"same thing" card comes.
+
+Data: none needed (every untitled pair on the Pi is answered "apart" already). Mark #190
+reviewed once live.
+
+### F38b · Feedback (2026-11-09): the leave heads-up breaks through everything
+Status: [ ]
+Depends on: K4, F18f
+Read first: `themi_google/travel.py` (the module docstring, `_consider`, `_send` and its
+`deadline=now`); `themi/channels/outbox.py` (`_earliest`, `ANSWER_KINDS`, `expires`,
+`sent_today`); F18f's notes on #91 (getting ready counted in when it's sent); the plan's K4
+section. From Michael's bug #191 (2026-11-09, 5:01 pm, "this message for leaving for an
+event should not respect quiet hours or message limitations. Should also double check that
+it would have been sent with enough time to get ready").
+
+What the Pi shows: "Samuel | Craig, Gina, and 2 more people" was at noon Mon 9 Nov at 1
+Hacker Way, on both calendars. At 11:27:02 am the `travel.heads_up` job worked out a 17 min
+drive: leave by 11:43, getting ready (15 min) from 11:28. So the timing was right. It
+recorded both heads-ups and queued outbox 1683 (Erin) and 1684 (Michael), both `normal`,
+`kind` travel, `deadline` 11:27:02. Erin's went at 11:27:03. Michael's got `send_after` 5 pm
+and went at 5:00:08 pm, five hours after the event started. `_earliest` lets an overdue
+deadline past the daily limit and the receptivity check, but it still calls `free_from`, and
+Michael's busy times are Mon-Fri 9-5 (his work calendar also had untitled busy events over
+noon). Quiet hours would hold it the same way, which is what Michael is asking about. Nothing
+stops a heads-up going after its event, either. On Sun 1 Nov, 965 and 966 were also held
+17 min past their send time.
+
+Decided (Michael, 2026-11-09, bug #191): the leave heads-up isn't held by anything: quiet
+hours, busy times, the daily limit or a pause. If the plan's K4 says otherwise, this decision wins; note it in the plan.
+
+Build:
+- Bug fix: start with the failing test below.
+- The travel kind goes through like `ANSWER_KINDS`: no quiet hours, busy times, calendar
+  busy events, daily limit or pauses (Michael: "prompts to get to events should break
+  through everything"), and it doesn't count toward the day's messages. Send it as
+  `Priority.URGENT` with kind travel, or give travel its own entry in `_earliest` before the
+  pause check. Either way, say why in a comment. Switching the heads-up off
+  (`leave_heads_up`) is still how they stop it.
+- `_send` gives the message `expires` at the event's start: a heads-up still waiting then
+  (a Telegram outage) is dropped, never sent after the event.
+- The getting-ready check: the message is queued no later than leave-by minus getting ready
+  (the job's `SLACK` says it can be up to 3 min early), and it now goes when it's queued.
+  When the job first sees an event after getting ready should have started (Themi was
+  restarted, the event was just added), the message still goes at once and says so: "leave
+  around 11:43 am, so start getting ready now" when leave-by hasn't passed, and "time to
+  head out" (as now) when it has.
+- `drive_time`'s "The heads-up to get ready comes then" stays as it is, and is now true. Update
+  the module docstring ("quiet hours hold it only until then" is wrong now).
+
+Tests: start with a failing one. Michael's case: busy times Mon-Fri 9-5, quiet hours
+21:30-08:00, daily limit 3 used up, an event at noon with a 17 min drive. The heads-up goes
+at 11:27, not at 5 pm. An event at 7 am (getting ready from 6:28 inside quiet hours) gets its
+heads-up at 6:28. A heads-up isn't counted in `sent_today`. A paused member still gets it on
+time. One still unsent at the event's start (sending fails) is dropped. A heads-up the job first sees 5 min after getting ready
+should have started says "start getting ready now". With the clock frozen across a day of
+job runs, every heads-up is queued between leave-by minus getting ready minus `SLACK` and
+leave-by minus getting ready.
+Scenario: Michael, in his busy time with his limit used up, has a noon meeting 17 min away.
+At 11:28 he gets "…: leave around 11:43 am." and nothing comes after noon.
+
+Data: none needed. Mark #191 reviewed once live.
+
+### F38c · Feedback (2026-11-09): a 👎 on a card marks the reply that made it, and a 👎 taken back clears its mark
+Status: [ ]
+Depends on: P4, S5, F32b
+Read first: `themi/standard/wrong_replies.py` (`reply_for_message`, `on_reaction`, why cards
+are left out); `themi/standard/reactions.py` (`CARDS`, the upsert); `ApprovalsUI.on_reaction`
+in `themi/core/approvals.py` (only approve and snooze emoji do anything); the `themi
+feedback` report of a marked reply. From Michael's 👎 on reply 316, explained 2026-11-09:
+"The first two responses … were marked as bad because they are … The third time, themi did
+the right thing and I gave it a thumbs up emoji."
+
+What the Pi shows: bug #171's three tries (Fri 6 Nov, 10:44-10:45 am, fixed since by F32b).
+Replies 314 and 315 each staged a wrong card, outbox 1385 and 1386 (kind `approval`,
+`reply_id` 314 and 315, pending_actions 512 and 513, "replace vacuum water for the evening
+routine, just today"). Michael gave both a 👎. Nothing was recorded: `reply_for_message`
+skips cards, `reactions.py` skips cards, and approvals ignores 👎, so the cards stayed
+open until he declined them on the website at 4:39 pm. Reply 316 (outbox 1388) did the right
+thing. Its `marked_at` is 10:48:44 am, and message_reactions row 14 (👍 on 1388) is
+10:48:46. So 1388 got a 👎 that was replaced by 👍 two seconds later (most likely a slip in
+Telegram's reaction picker). `on_reaction` only looks at what was added, so the mark stayed
+and `themi feedback` shows the one good reply as wrong.
+
+Build:
+- Bug fix: start with the failing tests below.
+- A 👎 on a card that a model reply made (an outbox row of a `CARDS` kind with a `reply_id`)
+  marks that reply wrong, the same as on a chat reply. Cards Themi made on its own (no
+  `reply_id`: triage, nudges) are still left out.
+- The same 👎 also declines the card (`Decision.DECLINE`), edited to "{summary}\nLeft as
+  is.", like a "no". A 👎 on a card means the card is wrong, so it shouldn't stay open.
+  For F26b's shared card, the 👎 declines all of it, the way its approve reaction approves
+  all of it.
+- When a 👎 is removed or replaced on a message, the mark on its reply is cleared if it
+  hasn't been labelled yet. A labelled reply keeps its label. `Reaction` has only `added`
+  today: add `removed` (old minus new, from Telegram's `message_reaction` update, which
+  carries both lists, and from Slack's `reaction_removed`). Every handler keeps reading
+  `added` as before.
+- `themi feedback`'s report of a marked reply made by a card shows the card's text and its
+  buttons' outcome ("declined by the 👎"), not only chat text.
+- `reactions.py` stays as it is for cards (the 👍/👎 balance is about chat messages and
+  nudges).
+
+Tests: start with failing ones. A 👎 on card 1385's shape (`approval`, `reply_id` 314)
+marks reply 314 and declines its action, with the edited card. A 👎 on a triage card with
+no `reply_id` marks nothing (and does decline it). A 👎 then 👍 on a chat reply leaves it
+unmarked, with the 👍 recorded. A 👎 removed after `--wrong-tool` labelled it keeps the label.
+A 👎 on F26b's shared card declines every action in it and marks the reply.
+Scenario: Michael asks for something, Themi stages the wrong card, and he gives it a 👎.
+The card says "Left as is." and `themi feedback` lists that reply as wrong.
+
+Data: on the Pi, run `themi feedback --not-wrong 316` and mark replies 314 and 315 with
+`themi feedback --wrong-tool 314 <tool>` and `... 315 <tool>`, the tool F32b moves routine
+items with. Ask Michael before labelling. Those replies predate the fix, so their mark has to
+be set by hand first (an UPDATE of `marked_at`, with Michael's OK).
 
 ## Conversation mode
 
