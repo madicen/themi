@@ -304,6 +304,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
 | CK10 | Cooking companion: full screen in Telegram | Cooking companion | [x] 2026-11-08 |
 | CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
+| CK12 | Cooking companion: the tablet layout | Cooking companion | [~] |
+| CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -15135,6 +15137,66 @@ Notes:
   not planned yet.
 
 ---
+
+### CK12 · Cooking companion: the tablet layout
+Status: [~]
+Depends on: CK11
+Read first: the plan's Features "The tablet layout (CK12)", "Amounts" (ticks) and "Phrasing
+and energy" (the timer bar exception); Michael's reference design of 2026-11-09 (a dark
+two-column cook screen: step strip on top, the step card on the left, "On the stove" and
+"Ingredients for this step" cards on the right, a footer with the wake-lock note, Voice
+control and Need help?). Decisions with Michael on 2026-11-09: step titles come from a
+model call; ingredient ticks show on the screen only; the timer bar stays.
+- Step titles: `themi_home.cooking_titles.StepTitles`, one structured call per recipe on
+  the recipes route (`themi.ai.router`, the recipe in an `as_data` block), cached in a new
+  `cooking_titles` table (recipe_id, hash, data, created_at; the hash is `cooking_links`'
+  digest) in the cooking track's own migration. Each title is 1 to 3 words, at most 24
+  characters; one that's longer, missing, or a failed call falls back to the step's first
+  words (`fallback_title`). Ensured in `Cooking.prepare` in any phase, so the titles are
+  ready by the steps. No model: fallbacks only.
+- `Cooking.state` gains `strip_steps` (one per recipe step: number, title, done, current)
+  in the cook phase, and the step gains `title`, `headline` (its first sentence) and `rest`.
+  The timers gain `minutes` (their whole length) for "of 8:00" and the bar. Amounts gain
+  `added` and `total` for "2 of 5 added".
+- Ticks on the screen only: a `use` tap saves the session (`Cooking.save`) without
+  redrawing the chat card.
+- Layout from 900 px wide in landscape: the step strip across the top (tap to `goto`),
+  the step card on the left (pill, timer chips, headline, body, tip from the look-ahead
+  strip, [Back], "Next: <title>", the main move), and on the right "On the stove" (timers
+  side by side, the bar emptying as it counts, +1 +5 Cancel, [+ Add]) and "Ingredients for
+  this step" (checkboxes, amounts on the right). A footer: "Screen stays awake while you
+  cook" once the wake lock took, [Voice control] (CK8's button), [Need help?] (Ask Themi).
+  Phones and portrait keep the stacked layout with the same parts.
+- Look: a warm dark palette as the default dark theme, with a serif display face (a
+  vendored woff2, served from the site, no font CDN) for the recipe name and headline.
+  Light and kitchen themes keep the layout. 64 px taps, 28 px headline at least.
+- No framework or build step: `cook.js` keeps drawing the regions from the server, and
+  also moves the timer bars each second.
+Tests: unit tests for titles (cached, too long falls back, failed call falls back, the
+recipe in a data block, a changed recipe asks again), the strip in the state, a `use` tap
+not editing the chat card (fake outbox), headline and rest split; browser tests at 1180,
+1024, 768 and 390 px (no sideways scroll, the strip on one row, the cards side by side
+in landscape and stacked in portrait), a strip tap jumping to that step, a timer bar
+shrinking. Existing layout tests keep passing.
+
+### CK13 · Cooking companion: quiet chat while a screen is open
+Status: [ ]
+Depends on: CK12, BD3a
+Read first: the plan's "How it fits the codebase" ("Quiet chat while a screen is open")
+and Company; `Cooking.say`, `Cooking.seen`, `BodyDouble._ask`. Decision with Michael on
+2026-11-09: chat stays quiet while a mini app is open, but a timer's urgent "Time's up"
+still goes to Telegram.
+- While the cook screen is open (`screen_open`), Themi's lines go to the screen only: the
+  boundary lines, the stuck line, "what's after this?" when asked from the page, and the
+  wrap-up offers (today `Cooking.say` sends to chat only when the screen is open: turn
+  that round). The chat card is still edited in place.
+- The body double page records when it last asked for its state, as the cook screen does.
+  While it's open, the block-end check-in is shown on the page and not sent. If the page
+  goes quiet with the question unanswered, it's sent to chat then (a job, on the clock).
+- A timer's "Time's up" Telegram line is unchanged.
+Tests: unit tests for each line with the screen open and closed; a scenario: a body
+double sprint with the page open ends its block, nothing reaches chat, the page closes,
+and the check-in arrives; a cooking timer firing with the screen open still sends.
 
 ## Core refactor
 
