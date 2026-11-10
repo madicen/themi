@@ -96,6 +96,10 @@ async def test_the_state_in_every_phase(scenario: Scenario, cooking: Cooking) ->
     assert first["step"] == {
         "index": 0, "label": "1", "text": "Drain and discard water from soaked cashews.",
         "group": "", "words": "Step 1 of 3", "first": True, "last": False, "folded": False,
+        # CK12: the headline, the rest, and the strip's title (the prep reply gave none:
+        # the step's first words)
+        "headline": "Drain and discard water from soaked cashews.", "rest": "",
+        "title": "Drain and discard",
     }  # fmt: skip
     assert first["peek"].startswith("Next, step 2: Blend cashews and all other ingredients")
     assert [b["label"] for b in first["buttons"]] == ["Next"]

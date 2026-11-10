@@ -1,5 +1,6 @@
-{# CK5: company in the kitchen: Themi the chameleon by the counter, Themi's line, music,
-   and Ask Themi. Drawn once with the page and kept live by cook.js (not redrawn with the
+{# CK5/CK12: company in the kitchen: Themi the chameleon by the counter, Themi's line and
+   music in a slim bar, then the footer: the wake lock's note, push-to-talk and [Need help?]
+   (Ask Themi). Drawn once with the page and kept live by cook.js (not redrawn with the
    regions), so the music keeps playing. #}
 <section class="cook-company" aria-label="Themi">
   <div class="session-scene cook-scene" data-mode="cooking" data-state="{{ state.scene }}">
@@ -8,13 +9,6 @@
   </div>
   <div class="cook-company-side">
     <p class="cook-line" data-live="line">{{ state.line }}</p>
-    <button type="button" class="cook-chat-open">Ask Themi</button>
-    {% if state.view.voice %}
-    <div class="cook-voice">
-      <button type="button" class="cook-mic" data-on="1" aria-pressed="false" hidden>Hold to talk</button>
-      <p class="cook-heard muted" role="status" aria-live="polite"></p>
-    </div>
-    {% endif %}
     {% if state.music %}
     <section class="cook-music session-music" aria-label="Music">
       <p class="muted cook-music-offer">{{ state.music.offer }}</p>
@@ -42,6 +36,18 @@
     {% endif %}
   </div>
 </section>
+<footer class="cook-foot">
+  <p class="cook-awake" hidden><svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Screen stays awake while you cook</p>
+  <div class="cook-foot-moves">
+    {% if state.view.voice %}
+    <div class="cook-voice">
+      <p class="cook-heard muted" role="status" aria-live="polite"></p>
+      <button type="button" class="cook-mic" data-on="1" aria-pressed="false" hidden><svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Hold to talk</button>
+    </div>
+    {% endif %}
+    <button type="button" class="cook-chat-open"><svg class="cook-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.5v.01"/></svg>Need help?</button>
+  </div>
+</footer>
 <section class="cook-chat session-chat" aria-label="Ask Themi" hidden>
   <ol>{% for line in state.chat %}<li class="{{ line.who }}">{{ line.text }}</li>{% endfor %}</ol>
   <form method="post" action="/session/cook/chat" data-local="1">

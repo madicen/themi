@@ -1,10 +1,10 @@
 {# CK1: one tap on the cook screen, a form posted to the session's act route. #}
-{% macro act(state, csrf, action, label, extra={}, cls="", move="", pressed=None) -%}
+{% macro act(state, csrf, action, label, extra={}, cls="", move="", pressed=None, aria="") -%}
 <form method="post" action="/session/cook/{{ state.id }}/act"{% if move %} data-move="{{ move }}"{% endif %}>
   <input type="hidden" name="csrf" value="{{ csrf }}">
   <input type="hidden" name="seq" value="{{ state.seq }}">
   <input type="hidden" name="action" value="{{ action }}">
   {% for k, v in extra.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">
-  {% endfor %}<button class="{{ cls }}"{% if pressed is not none %} aria-pressed="{{ 'true' if pressed else 'false' }}"{% endif %}>{{ label }}</button>
+  {% endfor %}<button class="{{ cls }}"{% if aria %} aria-label="{{ aria }}"{% endif %}{% if pressed is not none %} aria-pressed="{{ 'true' if pressed else 'false' }}"{% endif %}>{{ label }}</button>
 </form>
 {%- endmacro %}
