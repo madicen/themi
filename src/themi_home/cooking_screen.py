@@ -21,10 +21,10 @@ from themi import clock
 from themi.accounts import Member
 from themi.localtime import to_utc_iso
 from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
-from themi_home.cooking_links import shown
+from themi_home.cooking_links import MORE, shown
 from themi_home.cooking_timers import PRESETS
 from themi_home.cooking_wrap import WRAP_TAPS
-from themi_home.quantities import NeedsYield, fraction, scale_for
+from themi_home.quantities import AMOUNT, BRACKET, LEADING_WORDS, NeedsYield, fraction, scale_for
 
 if TYPE_CHECKING:
     from themi_home.cooking import Cooking, Session
@@ -41,6 +41,7 @@ OPTIONAL = re.compile(
     re.IGNORECASE,
 )  # CK7: a step that can be left out
 SCALES = (("½", "half", 0.5), ("1\u00d7", "", 1.0), ("2\u00d7", "double", 2.0))  # CK2's switcher
+HEADLINE_MAX = 90  # characters: a longer first sentence stays in the body (CK12)
 
 
 @dataclass(frozen=True)
@@ -106,6 +107,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         "now": to_utc_iso(now),
         "phase": session.phase,
         "recipe": recipe.name,
+        "section": recipe.subsection or recipe.section,  # CK12: the header's quiet line
+        "step_total": len(recipe.steps),
         "heading": cooking.heading(session, recipe),
         "scale_words": scale_words(session.scale_said, session.scale),
         "scales": scales(session, recipe),
@@ -125,6 +128,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         },
         "skip_checklist": lighter and session.phase == "gather",
         "steps": [],
+        "strip_steps": [],
+        "next_title": "",
     }
     if session.phase == "ready":
         out["ahead"] = [
@@ -151,16 +156,26 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     elif session.phase == "cook" and parts:
         n = min(session.step, len(parts) - 1)
         part = parts[n]
+        titles = cooking.titles.titles(recipe)  # CK12: the step strip
+        here = step_index(part.label)
+        headline, rest = split_headline(part.text)
         out["step"] = {
             "index": n,
             "label": part.label,
             "text": part.text,
+            "headline": headline,
+            "rest": rest,
+            "title": titles[here] if here < len(titles) else "",
             "group": part.group,
             "words": f"Step {part.label} of {len(recipe.steps)}",
             "first": n == 0,
             "last": n >= len(parts) - 1,
             "folded": lighter and bool(OPTIONAL.search(part.text)),
         }
+        out["strip_steps"] = [
+            {"n": i + 1, "title": title, "done": i < here, "current": i == here}
+            for i, title in enumerate(titles)
+        ]
         if prefs.cooking_steps_view == "all":
             out["steps"] = [
                 {"label": p.label, "text": p.text, "current": i == n,
@@ -171,6 +186,10 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
         if n + 1 < len(parts):
             nxt = parts[n + 1]
             out["peek"] = f"Next, step {nxt.label}: {nxt.text}"
+            after = step_index(nxt.label)
+            out["next_title"] = (
+                titles[after] if after != here and after < len(titles) else f"step {nxt.label}"
+            )
         if cooking.timers is not None:
             from themi_home.cooking_timers import durations
 
@@ -205,10 +224,21 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
     )  # CK5: the chameleon
     out["chat"] = cooking.page_chat(session)
     out["music"] = music(cooking, session, viewer)
+    out["meta"] = meta(out)
     out["drawn"] = drawn(out)
     for timer in out["timers"]:  # the count before the page's script runs: not in `drawn`
-        timer["text"] = span(seconds_left(timer["ends_at"]))
+        left = seconds_left(timer["ends_at"])
+        timer["text"] = span(left)
+        timer["of"] = span(timer["seconds"])
     return out
+
+
+def meta(out: dict[str, Any]) -> str:
+    """CK12: the header's quiet line: "for 4 · 6 steps · Dinner"."""
+    batch = out["scale_words"] or (f"for {out['scales']['for']}" if out["scales"]["for"] else "")
+    total = out["step_total"]
+    count = f"{total} step{'' if total == 1 else 's'}" if total else ""
+    return " \u00b7 ".join(part for part in (batch, count, out["section"]) if part)
 
 
 def step_index(label: str) -> int:
@@ -227,7 +257,9 @@ def amounts(
     links = cooking.links.links(recipe, cooking.groceries.known(recipe))
 
     def line(n: int) -> dict[str, Any]:
-        return {"n": n, "line": shown(scaled[n], units), "used": n in session.used}
+        text = shown(scaled[n], units)
+        name, amount = name_and_amount(text)
+        return {"n": n, "line": text, "name": name, "amount": amount, "used": n in session.used}
 
     groups: list[dict[str, Any]] = []
     for n, source in enumerate(recipe.ingredients):
@@ -235,7 +267,40 @@ def amounts(
             groups.append({"group": source.group, "lines": []})
         groups[-1]["lines"].append(line(n))
     uses = [line(n) for n in links.get(step_index(label), []) if n < len(scaled)]
-    return {"uses": uses, "groups": groups, "units": units}
+    added = sum(1 for a in uses if a["used"])  # CK12: "2 of 5 added"
+    return {"uses": uses, "groups": groups, "units": units, "added": added, "total": len(uses)}
+
+
+def name_and_amount(line: str) -> tuple[str, str]:
+    """CK12: "2 cloves garlic, minced" as ("Garlic, minced", "2 cloves"), for the ingredient
+    card's two columns. A line with no amount up front is all name."""
+    prefix = LEADING_WORDS.match(line)
+    start = prefix.end() if prefix else 0
+    found = AMOUNT.match(line, start)
+    if found is None:
+        return line, ""
+    end = found.end()
+    bracket = BRACKET.match(line, end)
+    if bracket is not None:
+        end = bracket.end()
+    while more := MORE.match(line, end):  # "1 Tbsp + 1 tsp": one amount
+        end = more.end()
+    name = (line[:start] + line[end:]).strip(" ,;:-")
+    name = re.sub(r"^of\s+", "", name, flags=re.IGNORECASE)
+    if not name:
+        return line, ""
+    return name[:1].upper() + name[1:], line[start:end].strip()
+
+
+def split_headline(text: str) -> tuple[str, str]:
+    """CK12: the step's first sentence, set large, and the rest under it, words unchanged.
+    One sentence, or a first one too long to read as a headline: all of it is the headline."""
+    from themi_home.cooking import SENTENCE
+
+    first, *more = SENTENCE.split(text.strip(), maxsplit=1)
+    if not more or len(first) > HEADLINE_MAX:
+        return text.strip(), ""
+    return first, more[0]
 
 
 def scale_words(said: str, factor: float) -> str:
@@ -305,6 +370,7 @@ def timers(cooking: Cooking, session: Session) -> list[dict[str, Any]]:
             "label": row["label"] or f"Step {row['step']}",
             "ends_at": row["ends_at"],
             "fired": row["fired_at"] is not None,
+            "seconds": round(float(row["minutes"]) * 60),  # CK12: "of 8:00", and the bar
         }
         for row in rows
     ]
@@ -406,7 +472,7 @@ async def act(
             session.used.remove(n)
         else:
             session.used.append(n)
-        await cooking.show(session)
+        cooking.save(session)  # CK12: a tick shows on the screen only, not on the chat's card
     elif action in ("tick", "untick"):
         tick(session, str(form.get("list", "gather")), _int(form.get("n")), action == "tick")
         await cooking.show(session)
