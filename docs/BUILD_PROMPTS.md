@@ -304,7 +304,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK8 | Cooking companion: push-to-talk | Cooking companion | [x] 2026-11-08 |
 | CK10 | Cooking companion: full screen in Telegram | Cooking companion | [x] 2026-11-08 |
 | CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
-| CK12 | Cooking companion: the tablet layout | Cooking companion | [~] |
+| CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
 | CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [ ] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
@@ -15139,7 +15139,7 @@ Notes:
 ---
 
 ### CK12 · Cooking companion: the tablet layout
-Status: [~]
+Status: [x] 2026-11-09
 Depends on: CK11
 Read first: the plan's Features "The tablet layout (CK12)", "Amounts" (ticks) and "Phrasing
 and energy" (the timer bar exception); Michael's reference design of 2026-11-09 (a dark
@@ -15160,7 +15160,7 @@ model call; ingredient ticks show on the screen only; the timer bar stays.
   `added` and `total` for "2 of 5 added".
 - Ticks on the screen only: a `use` tap saves the session (`Cooking.save`) without
   redrawing the chat card.
-- Layout from 900 px wide in landscape: the step strip across the top (tap to `goto`),
+- Layout from 700 px wide in landscape: the step strip across the top (tap to `goto`),
   the step card on the left (pill, timer chips, headline, body, tip from the look-ahead
   strip, [Back], "Next: <title>", the main move), and on the right "On the stove" (timers
   side by side, the bar emptying as it counts, +1 +5 Cancel, [+ Add]) and "Ingredients for
@@ -15178,6 +15178,43 @@ not editing the chat card (fake outbox), headline and rest split; browser tests 
 1024, 768 and 390 px (no sideways scroll, the strip on one row, the cards side by side
 in landscape and stacked in portrait), a strip tap jumping to that step, a timer bar
 shrinking. Existing layout tests keep passing.
+
+Notes (2026-11-09):
+- Deviation (plan updated): the titles come with the prep call (`PREP_SCHEMA` gained
+  `titles`, `PREP_SYSTEM` asks for them with `cooking_titles.TITLES_RULE`), so a recipe costs
+  no extra call; whatever it gives is checked and stored in `cooking_titles` (migration
+  `cooking_schema/0002_titles.sql`), a missing or bad title as the step's first words. A
+  recipe whose prep was cached before CK12 gets one titles-only call from
+  `Cooking.prepare` (cook phase); a failed one stores first words, so it never asks again.
+  A prep call that failed stores nothing and shows first words.
+- Deviation (plan updated): the side-by-side layout starts at 700 px in landscape, as CK7's
+  did, not 900, so a small landscape tablet keeps it. On a tablet in landscape the step card
+  sizes to its words and is sticky, so Back and Next stay on the screen while the side
+  cards scroll.
+- State: `strip_steps`, `next_title`, `meta` ("for 4 · 6 steps · Dinner"), `section`,
+  `step_total`; the step's `headline` (first sentence, at most 90 characters) and `rest`;
+  each timer's `seconds` and `of`; amounts' `added`, `total`, and each line's `name` and
+  `amount` (`name_and_amount`, which keeps "1 Tbsp + 1 tsp" together).
+- A `use` tap now saves the session without redrawing the chat card (the card never
+  showed those ticks, so this only drops a silent edit).
+- Look: `cook.css` gained warm light and dark palettes (`auto` follows the device with
+  them), `--step` colours for the current step, cards, and DM Serif Display (OFL, vendored
+  at `themi_home/web/static/fonts/` with its licence) for the recipe name and headline. The
+  kitchen theme keeps its high contrast.
+- Layout parts: the scale switcher is now a small menu in the header ("As written ⌄");
+  a timer's Cancel shows as ✕ (its label says "Cancel <timer>"); the look-ahead is a tip
+  in the step card (`cook/_tip.html`); Peek is "Next: <title> ›", tapped open for the
+  text; [Need help?] opens Ask Themi; the footer's "Screen stays awake" shows only while
+  the wake lock holds. Phones and portrait show the strip as numbers with this step's title.
+- `cook.js` sets the timer bars' widths each second (the CSP allows no inline styles),
+  ticks an ingredient before the server answers, and keeps the current step in view when
+  the strip scrolls. No framework, no build step.
+- Tests: `tests/unit/test_cook_tablet.py`, `tests/integration/test_cook_tablet_browser.py`,
+  and 1180 x 820 added to the layout test. Changed: `test_the_state_in_every_phase`'s exact
+  step dict gained the three new keys (`headline`, `rest`, `title`).
+- Checked by eye in headless Chrome at 1180, 1024, 768 and 390 px, light and dark. Worth a
+  look on the real tablet.
+- Setup: none beyond a restart (the migration runs at start).
 
 ### CK13 · Cooking companion: quiet chat while a screen is open
 Status: [ ]
