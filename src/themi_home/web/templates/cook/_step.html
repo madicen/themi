@@ -1,5 +1,6 @@
 {# CK1: the step, or this phase's list, tappable to tick. #}
 {% from "cook/_act.html" import act %}
+{% if not state.step %}{% include "cook/_tip.html" %}{% endif %}
 {% if state.phase == "ready" %}
   <h1 class="cook-title">Before anything else</h1>
   <ul class="cook-list">
@@ -26,7 +27,12 @@
   {% endfor %}
   </ul>
 {% elif state.step %}
-  <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
+  <div class="cook-step-top">
+    <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
+    {% if state.offers %}<div class="cook-offers">
+    {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
+    </div>{% endif %}
+  </div>
   {% if state.steps %}
   <ol class="cook-all-steps">
   {% for st in state.steps %}
@@ -40,13 +46,10 @@
   {% elif state.step.folded %}
   <details class="cook-fold"><summary>(Optional) 1 more</summary><blockquote class="cook-text">{{ state.step.text }}</blockquote></details>
   {% else %}
-  <blockquote class="cook-text">{{ state.step.text }}</blockquote>
+  <blockquote class="cook-text"><p class="cook-headline">{{ state.step.headline }}</p>{% if state.step.rest %}<p class="cook-rest">{{ state.step.rest }}</p>{% endif %}</blockquote>
   {% endif %}
-  {% if state.offers %}<div class="cook-offers">
-  {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% endfor %}
-  </div>{% endif %}
-  {% if state.peek %}<p class="cook-peek muted">{{ state.peek }}</p>{% endif %}
-  {% include "cook/_amounts.html" %}
+  {% include "cook/_tip.html" %}
+  {% if state.peek %}<details class="cook-peek" data-keep-open="peek"><summary>Next: {{ state.next_title or "the next step" }}</summary><p>{{ state.peek }}</p></details>{% endif %}
 {% elif state.phase == "done" %}
   <h1 class="cook-title">{{ "All done." if state.outcome == "finished" else "Stopped cooking." }}</h1>
   {% if state.ask_timers %}

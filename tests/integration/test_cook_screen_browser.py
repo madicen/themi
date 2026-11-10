@@ -129,6 +129,7 @@ async def test_reduced_motion_is_a_steady_border(scenario: Scenario) -> None:
 
 
 # CK7: the main screen (a tablet propped up in landscape), a tablet upright, and a phone.
+# CK12: and an 11-inch tablet in landscape (1180 x 820).
 LAYOUT = (
     "(() => {"
     " const w = window.innerWidth, out = [];"
@@ -153,7 +154,7 @@ LAYOUT = (
 )
 
 
-@pytest.mark.parametrize(("width", "height"), [(1024, 768), (768, 1024), (390, 844)])
+@pytest.mark.parametrize(("width", "height"), [(1180, 820), (1024, 768), (768, 1024), (390, 844)])
 async def test_the_layout_fits(scenario: Scenario, width: int, height: int) -> None:
     clock.unfreeze()
     await to_step_three(scenario)

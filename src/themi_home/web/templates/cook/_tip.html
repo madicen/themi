@@ -1,0 +1,8 @@
+{# CK4/CK12: the look-ahead, a quiet tip in the step's card: an offer with [Done] [Later],
+   or what the next step needs ready while this one simmers. #}
+{% from "cook/_act.html" import act %}
+{% if state.strip %}<div class="cook-strip" data-kind="{{ state.strip.kind }}">
+  <svg class="cook-tip-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.4L19 10l-5.2 1.6L12 17l-1.8-5.4L5 10l5.2-1.6z"/></svg>
+  <p>{{ state.strip.text }}</p>
+  {% if state.strip.kind == "offer" %}<div class="cook-strip-moves">{{ act(state, csrf, "ahead_done", "Done", {"key": state.strip.key}) }}{{ act(state, csrf, "ahead_later", "Later", {"key": state.strip.key}) }}</div>{% endif %}
+</div>{% endif %}

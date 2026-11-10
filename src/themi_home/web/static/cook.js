@@ -56,7 +56,12 @@
     for (var i = 0; i < cards.length; i++) {
       var left = cards[i].querySelector(".cook-timer-left");
       if (!left || cards[i].dataset.fired) continue;
-      left.textContent = words(Date.parse(cards[i].dataset.ends) - now);
+      var ms = Date.parse(cards[i].dataset.ends) - now;
+      left.textContent = words(ms);
+      // CK12: the bar empties as the timer counts (the page's CSP allows no inline styles,
+      // so the width is set here)
+      var bar = cards[i].querySelector(".cook-bar span"), whole = Number(cards[i].dataset.seconds) * 1000;
+      if (bar && whole > 0) bar.style.width = (Math.max(0, Math.min(1, ms / whole)) * 100).toFixed(1) + "%";
     }
     var soonest = document.querySelector(".cook-soonest");
     if (soonest) soonest.textContent = soonest.dataset.ends ? words(Date.parse(soonest.dataset.ends) - now) : "";
@@ -77,6 +82,7 @@
         box.innerHTML = html;
         box.querySelectorAll("details[data-keep-open]").forEach(function (d) { if (open[d.dataset.keepOpen]) d.open = true; });
         drawer(drawerOpen);
+        stripInView();
         fullscreenButton();
         alerts();
         tick();
@@ -353,6 +359,33 @@
     saidTimer = setTimeout(function () { el.hidden = true; }, 4000);
   }
 
+  // CK12: the step strip scrolls sideways on its own when the steps don't fit, keeping the
+  // current one in view (without moving the page up or down)
+  function stripInView() {
+    var strip = document.querySelector(".cook-steps");
+    var here = strip && strip.querySelector("li.current");
+    if (!here || strip.scrollWidth <= strip.clientWidth) return;
+    strip.scrollLeft = here.offsetLeft - (strip.clientWidth - here.offsetWidth) / 2;
+  }
+
+  // CK12: an ingredient ticks the moment it's tapped; the post and the redraw follow
+  function ticked(form) {
+    var button = form.querySelector(".cook-amount");
+    if (!button) return;
+    var on = button.getAttribute("aria-pressed") !== "true";
+    var n = form.querySelector("input[name=n]").value;
+    document.querySelectorAll("form .cook-amount").forEach(function (b) {
+      var f = b.closest("form");
+      if (f && f.querySelector("input[name=n]").value === n) b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    var card = document.querySelector(".cook-amounts"), added = card && card.querySelector(".cook-added");
+    if (added) {
+      var lines = card.querySelectorAll(".cook-checks .cook-amount");
+      var count = card.querySelectorAll('.cook-checks .cook-amount[aria-pressed="true"]').length;
+      added.textContent = count + " of " + lines.length + " added";
+    }
+  }
+
   // CK2: the All ingredients drawer, kept open across redraws
   var drawerOpen = false;
   function drawer(on) {
@@ -373,6 +406,8 @@
     if (!form.closest || !form.closest("#cook")) return;
     if (form.dataset.local || !form.closest("#cook")) return;  // a form handled elsewhere
     event.preventDefault();
+    var what = form.querySelector("input[name=action]");
+    if (what && what.value === "use") ticked(form);
     post(form, null, event.submitter);
   });
 
@@ -437,9 +472,17 @@
   if (tg) tg.onChange(fullscreenButton);
 
   var lock = null;
+  function awake(on) { // CK12: the footer says so, only while the lock holds
+    var note = document.querySelector(".cook-awake");
+    if (note) note.hidden = !on;
+  }
   function hold() { // keep the screen on, where the browser offers it
     if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
-    navigator.wakeLock.request("screen").then(function (l) { lock = l; }, function () {});
+    navigator.wakeLock.request("screen").then(function (l) {
+      lock = l;
+      awake(true);
+      if (l && l.addEventListener) l.addEventListener("release", function () { awake(false); });
+    }, function () { awake(false); });
   }
 
   window.themiCook = window.themiCook || {};
@@ -458,6 +501,7 @@
 
   document.addEventListener("visibilitychange", function () { hold(); if (document.visibilityState === "visible") poll(); });
   hold();
+  stripInView();
   fullscreenButton();
   setupVoice();
   music();

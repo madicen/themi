@@ -1,22 +1,37 @@
-{# CK2: the amounts this step uses, scaled; a tap marks a line used. [All ingredients]
-   opens every line, grouped as the recipe groups them. #}
+{# CK2/CK12: "Ingredients for this step", scaled: a tap ticks a line off (on the screen only,
+   not the chat's card). [All ingredients] opens every line, grouped as the recipe groups
+   them. #}
 {% from "cook/_act.html" import act %}
-<section class="cook-amounts" aria-label="Amounts">
+{% macro line(a) -%}
+<form method="post" action="/session/cook/{{ state.id }}/act">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="seq" value="{{ state.seq }}">
+  <input type="hidden" name="action" value="use">
+  <input type="hidden" name="n" value="{{ a.n }}">
+  <button class="cook-item cook-amount" aria-pressed="{{ 'true' if a.used else 'false' }}" aria-label="{{ a.line }}"><span class="cook-box" aria-hidden="true"></span><span class="cook-name">{{ a.name }}</span>{% if a.amount %}<span class="cook-qty">{{ a.amount }}</span>{% endif %}</button>
+</form>
+{%- endmacro %}
+<section class="cook-amounts cook-card" aria-label="Ingredients for this step">
+  <div class="cook-card-head">
+    <div><h2>Ingredients</h2><p class="cook-card-sub">For this step</p></div>
+    {% if state.amounts.total %}<p class="cook-added">{{ state.amounts.added }} of {{ state.amounts.total }} added</p>{% endif %}
+  </div>
   {% if state.amounts.uses %}
-  <h2>This step uses</h2>
-  <ul class="cook-list">
-  {% for a in state.amounts.uses %}<li>{{ act(state, csrf, "use", a.line, {"n": a.n}, cls="cook-item cook-amount", pressed=a.used) }}</li>
+  <ul class="cook-list cook-checks">
+  {% for a in state.amounts.uses %}<li>{{ line(a) }}</li>
   {% endfor %}
   </ul>
+  {% else %}
+  <p class="cook-card-sub cook-none">Nothing new to add in this step.</p>
   {% endif %}
   <button type="button" class="cook-all-open">All ingredients</button>
 </section>
 <div class="cook-drawer" role="dialog" aria-label="All ingredients" hidden>
   <div class="cook-drawer-head"><h2>All ingredients</h2><button type="button" class="cook-drawer-close">Close</button></div>
-  <ul class="cook-list">
+  <ul class="cook-list cook-checks">
   {% for g in state.amounts.groups %}
     {% if g.group %}<li class="cook-group">{{ g.group }}</li>{% endif %}
-    {% for a in g.lines %}<li>{{ act(state, csrf, "use", a.line, {"n": a.n}, cls="cook-item cook-amount", pressed=a.used) }}</li>
+    {% for a in g.lines %}<li>{{ line(a) }}</li>
     {% endfor %}
   {% endfor %}
   </ul>
