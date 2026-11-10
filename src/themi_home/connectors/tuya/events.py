@@ -151,6 +151,45 @@ def state_word(reading: FeederReading) -> str:
     return "; ".join(part for part in (said, *rest) if part) or "fine"
 
 
+@dataclass(frozen=True)
+class FeedCommand:
+    """How to feed now (F39a): the writable data point and its portions' range."""
+
+    code: str
+    least: int = 1
+    most: int = 12
+
+    def clamp(self, portions: int) -> int:
+        return max(self.least, min(self.most, portions))
+
+
+FEED_NOW = re.compile(r"manual_?feed|quick_?feed|feed_?now|meal_?now")
+
+
+def feed_command(spec: dict[str, Any] | None) -> FeedCommand | None:
+    """The specification's writable "feed now" point: Tuya's standard `manual_feed`, or a
+    model's own by name, as long as it takes a number of portions. None: it can't be fed
+    from here."""
+    functions = [p for p in (spec or {}).get("functions", []) if isinstance(p, dict)]
+    found = [p for p in functions if str(p.get("code") or "") == "manual_feed"] or [
+        p for p in functions if FEED_NOW.search(str(p.get("code") or "").lower())
+    ]
+    for point in found:
+        if str(point.get("type") or "").lower() != "integer":
+            continue
+        values = point.get("values")
+        if isinstance(values, str):
+            try:
+                values = json.loads(values)
+            except ValueError:
+                values = {}
+        values = values if isinstance(values, dict) else {}
+        least = int(values.get("min") or 1) if _is_number(values.get("min")) else 1
+        most = int(values["max"]) if _is_number(values.get("max")) else 12
+        return FeedCommand(str(point["code"]), max(1, least), max(1, least, most))
+    return None
+
+
 def words(label: str) -> str:
     """ "motor_fault" -> "motor fault"."""
     return re.sub(r"[_\-]+", " ", re.sub(r"([a-z])([A-Z])", r"\1 \2", label)).strip().lower()

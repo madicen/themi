@@ -31,7 +31,14 @@ from themi_home.connectors.tuya.client import (
     TuyaDevice,
     TuyaError,
 )
-from themi_home.connectors.tuya.events import FeederEvent, FeederReading, read_status, state_word
+from themi_home.connectors.tuya.events import (
+    FeedCommand,
+    FeederEvent,
+    FeederReading,
+    feed_command,
+    read_status,
+    state_word,
+)
 
 log = logging.getLogger(__name__)
 
@@ -141,6 +148,31 @@ class TuyaWatcher:
             raise
         await self._saw(device, reading)
         return reading
+
+    # ----- feeding now (F39a) ------------------------------------------------------------
+
+    async def feed_command(self, device: Device) -> FeedCommand | None:
+        """How it's fed now, from its specification (kept, or read). None: it can't be."""
+        row = self.db.one("SELECT spec FROM tuya_devices WHERE device_id = ?", (device.id,))
+        spec = json.loads(row["spec"]) if row and row["spec"] else None
+        if spec is None:
+            spec = await self.account.specification(device.external_id)
+        return feed_command(spec)
+
+    async def feed(self, device: Device, portions: int) -> int:
+        """Dispense `portions` now (kept within what it takes). Returns the portions sent.
+        TuyaError when it can't be fed or reached."""
+        command = await self.feed_command(device)
+        if command is None:
+            raise TuyaError(f"{device.name} doesn't take a feed-now command from Themi.")
+        sent = command.clamp(portions)
+        try:
+            await self.account.command(device.external_id, command.code, sent)
+        except KeyRejected as exc:
+            await self._broken(str(exc))
+            raise
+        log.info("Fed %s: %s portion(s)", device.name, sent)
+        return sent
 
     def last_fed(self, device: Device) -> tuple[datetime, int] | None:
         row = self.db.one(

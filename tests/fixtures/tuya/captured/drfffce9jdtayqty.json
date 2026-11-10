@@ -1,0 +1,90 @@
+{
+ "captured_at": "2026-11-10T06:14:04.033899+00:00",
+ "category": "cwwsq",
+ "product_id": "drfffce9jdtayqty",
+ "product_name": "\u5ba0\u7269\u5582\u98df\u5668-5G",
+ "reading": {
+  "level": null,
+  "problems": {},
+  "said": "fine",
+  "unknown": []
+ },
+ "specification": {
+  "category": "cwwsq",
+  "functions": [
+   {
+    "code": "manual_feed",
+    "type": "Integer",
+    "values": "{\"min\":1,\"max\":12,\"scale\":0,\"step\":1}"
+   },
+   {
+    "code": "switch",
+    "type": "Boolean",
+    "values": "{}"
+   },
+   {
+    "code": "slow_feed",
+    "type": "Boolean",
+    "values": "{}"
+   }
+  ],
+  "status": [
+   {
+    "code": "manual_feed",
+    "type": "Integer",
+    "values": "{\"min\":1,\"max\":12,\"scale\":0,\"step\":1}"
+   },
+   {
+    "code": "feed_state",
+    "type": "Enum",
+    "values": "{\"range\":[\"standby\",\"feeding\",\"done\"]}"
+   },
+   {
+    "code": "battery_percentage",
+    "type": "Integer",
+    "values": "{\"unit\":\"%\",\"min\":0,\"max\":100,\"scale\":0,\"step\":1}"
+   },
+   {
+    "code": "feed_report",
+    "type": "Integer",
+    "values": "{\"min\":0,\"max\":12,\"scale\":0,\"step\":1}"
+   },
+   {
+    "code": "switch",
+    "type": "Boolean",
+    "values": "{}"
+   },
+   {
+    "code": "slow_feed",
+    "type": "Boolean",
+    "values": "{}"
+   }
+  ]
+ },
+ "status": [
+  {
+   "code": "manual_feed",
+   "value": 1
+  },
+  {
+   "code": "feed_state",
+   "value": "standby"
+  },
+  {
+   "code": "battery_percentage",
+   "value": 100
+  },
+  {
+   "code": "feed_report",
+   "value": 0
+  },
+  {
+   "code": "switch",
+   "value": true
+  },
+  {
+   "code": "slow_feed",
+   "value": false
+  }
+ ]
+}

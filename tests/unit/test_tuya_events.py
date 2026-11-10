@@ -10,7 +10,13 @@ from tests.fakes.tuya import payload
 from themi_home.connectors.tuya import FAULT, FOOD, JAMMED, LOW, OUT
 from themi_home.connectors.tuya import events as tuya_events
 from themi_home.connectors.tuya.client import sign, string_to_sign, url_for
-from themi_home.connectors.tuya.events import read_status, state_word, words
+from themi_home.connectors.tuya.events import (
+    FeedCommand,
+    feed_command,
+    read_status,
+    state_word,
+    words,
+)
 
 # Tuya's worked examples (developer.tuya.com, "Signature algorithm", read 2026-11-04).
 ACCESS_ID = "1KAD46OrT9HafiKdsXeg"
@@ -153,3 +159,28 @@ def test_a_models_own_mapping_wins(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_words() -> None:
     assert words("motor_fault") == "motor fault"
     assert words("FoodShortage") == "food shortage"
+
+
+# ----- feeding now (F39a) ---------------------------------------------------------------
+
+
+def test_the_family_feeders_are_fed_with_manual_feed() -> None:
+    spec = payload("captured/drfffce9jdtayqty")["specification"]  # captured 2026-11-10
+    command = feed_command(spec)
+    assert command == FeedCommand("manual_feed", 1, 12)
+    assert command is not None
+    assert (command.clamp(0), command.clamp(3), command.clamp(40)) == (1, 3, 12)
+
+
+def test_a_models_own_feed_now_point_and_one_that_cant_be_fed() -> None:
+    own = {
+        "functions": [
+            {"code": "quick_feed", "type": "Boolean", "values": "{}"},
+            {"code": "feed_now", "type": "Integer", "values": '{"min":1,"max":5}'},
+        ]
+    }
+    assert feed_command(own) == FeedCommand("feed_now", 1, 5)  # a flag can't say how many
+    assert feed_command({"functions": [{"code": "light", "type": "Boolean"}]}) is None
+    assert feed_command(None) is None
+    # The status set isn't writable: only `functions` are commands.
+    assert feed_command({"status": [{"code": "manual_feed", "type": "Integer"}]}) is None

@@ -39,6 +39,8 @@ ERIN = Member(
         "what's for dinner?",
         "Groceries. eggs",
         "Hardware: wood glue",
+        "Feed Juneau",  # F39a, bug #194: the feeder's, never a list's
+        "please dispense a portion for Merlin",
     ],
 )
 def test_requests_go_to_the_tool_agent(text: str) -> None:

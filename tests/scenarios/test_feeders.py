@@ -14,7 +14,7 @@ import pytest
 from tests.fakes.tuya import ACCESS_ID, SECRET, FakeTuya
 from tests.fixtures.web import csrf_of, flash, sign_in
 from tests.scenarios.harness import Scenario
-from tests.scenarios.test_appliance_status import ask, tool_names
+from tests.scenarios.test_appliance_status import ask, tool_names, tool_result
 from themi import clock
 from themi.accounts import SYSTEM
 from themi.core import keys
@@ -253,3 +253,88 @@ async def test_a_lapsed_plan_tells_the_admins_once(scenario: Scenario, feeders: 
     told = [t for t in scenario.inbox("Erin") if t.startswith("Tuya stopped answering")]
     assert len(told) == 1 and "extend it on Tuya's site" in told[0]
     assert scenario.inbox("Husband") == []  # not an admin
+
+
+# ----- feeding now (F39a, bug #194: "Feed Juneau" went on Things to Buy) ------------------
+
+JUNEAU = "ebjuneau3"
+
+
+@pytest.fixture
+async def juneau(scenario: Scenario, feeders: FakeTuya) -> FakeTuya:
+    """Juneau's feeder too: the family's own model (from its capture), named for the cat."""
+    feeders.add_feeder(JUNEAU, "Juneau", "family")
+    watcher = scenario.app.services.maybe(keys.tuya)
+    assert watcher is not None
+    await watcher.link(scenario.member("Erin"), ACCESS_ID, SECRET, "us")
+    return feeders
+
+
+async def feed(
+    scenario: Scenario, text: str, args: dict[str, object], *, done: bool = False
+) -> str:
+    """`done`: fed as asked, which is the whole answer (the turn ends there, P2b)."""
+    scenario.primary.queue_tool_call("feed_pet", args)
+    if not done:
+        scenario.primary.queue_text("Here's how it went.")
+    return " ".join(await scenario.say("Husband", text))
+
+
+async def test_feed_juneau_dispenses_from_juneaus_feeder(
+    scenario: Scenario, juneau: FakeTuya
+) -> None:
+    said = await feed(scenario, "Feed Juneau", {"feeder": "Juneau"}, done=True)
+    assert "feed_pet" in tool_names(scenario)  # "feed" chose the devices group
+    assert juneau.commands == {JUNEAU: [{"code": "manual_feed", "value": 1}]}
+    assert "Fed Juneau: 1 portion." in said
+    action = scenario.app.db.one("SELECT * FROM pending_actions WHERE category = 'pet_feed'")
+    assert action is not None and action["status"] == "done"  # asked: their yes
+    lists = scenario.app.db.scalar("SELECT COUNT(*) FROM list_items WHERE name LIKE '%Juneau%'")
+    assert not lists
+
+
+async def test_portions_and_every_feeder(scenario: Scenario, juneau: FakeTuya) -> None:
+    args = {"feeder": "Juneau's feeder", "portions": 2}
+    said = await feed(scenario, "Give Juneau's feeder 2 portions", args, done=True)
+    assert juneau.commands[JUNEAU] == [{"code": "manual_feed", "value": 2}]
+    assert "Fed Juneau: 2 portions." in said
+    await feed(scenario, "Feed all the cats", {"feeder": "all"}, done=True)
+    assert set(juneau.commands) == {FEEDER, MOCHI, JUNEAU}
+
+
+async def test_the_cat_with_three_feeders_asks_which(scenario: Scenario, juneau: FakeTuya) -> None:
+    await feed(scenario, "Feed the cat", {"feeder": "the cat"})
+    assert "Which feeder? The linked ones: Cat Feeder, Mochi's feeder, Juneau." in tool_result(
+        scenario
+    )
+    assert juneau.commands == {}
+
+
+async def test_an_offline_feeder_says_nothing_can_come_out(
+    scenario: Scenario, juneau: FakeTuya
+) -> None:
+    juneau.offline(JUNEAU)
+    await scenario.run_periodic("devices.feeders")  # read as offline
+    said = await feed(scenario, "Feed Juneau", {"feeder": "Juneau"})
+    assert "Juneau's feeder is offline, so nothing can come out right now." in said
+    assert juneau.commands == {}
+    assert scenario.app.db.one("SELECT 1 FROM pending_actions") is None
+
+
+async def test_one_that_drops_off_fails_and_can_be_tried_again(
+    scenario: Scenario, juneau: FakeTuya
+) -> None:
+    juneau.offline(JUNEAU)  # since the last read
+    await feed(scenario, "Feed Juneau", {"feeder": "Juneau"})
+    assert "Tried but it failed" in tool_result(scenario)  # never "done" with nothing fed
+    action = scenario.app.db.one("SELECT * FROM pending_actions WHERE category = 'pet_feed'")
+    assert action is not None and action["status"] == "failed"
+    assert juneau.commands == {}
+
+
+async def test_the_model_feeding_on_its_own_waits_for_a_yes(
+    scenario: Scenario, juneau: FakeTuya
+) -> None:
+    await feed(scenario, "Juneau's been meowing all evening", {"feeder": "Juneau"})
+    assert "Staged for approval" in tool_result(scenario)  # their words didn't ask for it
+    assert juneau.commands == {}

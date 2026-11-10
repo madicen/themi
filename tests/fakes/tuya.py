@@ -2,6 +2,8 @@
 
     fake_tuya.add_feeder("ebfeeder1", "Cat Feeder")             # standard, plenty of food
     fake_tuya.add_feeder("ebfeeder2", "Mochi's feeder", "fault")  # its own fault bitmap
+    fake_tuya.add_feeder("ebfeeder3", "Juneau", "family")  # the family's model, as captured
+    fake_tuya.commands["ebfeeder3"]      # what Themi told it: [{"code", "value"}] (F39a)
     fake_tuya.set_status("ebfeeder1", "standard_low")  # a payload in tests/fixtures/tuya
     fake_tuya.fed("ebfeeder1", 2, at)                  # a feeding in its log
     fake_tuya.offline("ebfeeder1")       # the next status read answers 2001
@@ -34,6 +36,7 @@ ACCESS_ID = "p9xq7acc3ss1d000"
 SECRET = "f4k3s3cr3tf4k3s3cr3tf4k3s3cr3t00"
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "tuya"
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+FAMILY_MODEL = "drfffce9jdtayqty"  # the family's feeders (captured 2026-11-10)
 
 
 def payload(name: str) -> Any:
@@ -55,6 +58,7 @@ class FakeTuya(Snapshots):
         self.lapsed = False
         self.page_size: int | None = None  # set to page device lists and logs
         self.offline_devices: set[str] = set()
+        self.commands: dict[str, list[dict[str, Any]]] = {}  # device -> commands it was sent
         self._limited = 0
         self.transport = httpx.MockTransport(self._handle)
 
@@ -65,7 +69,14 @@ class FakeTuya(Snapshots):
 
     def add_feeder(self, device_id: str, name: str, kind: str = "standard") -> None:
         """A feeder in the linked app account: `kind` "standard" (Tuya's codes, with a food
-        level) or "fault" (its own fault bitmap)."""
+        level), "fault" (its own fault bitmap) or "family" (the family's own model, from its
+        capture: `manual_feed`, no food level)."""
+        if kind == "family":
+            captured = payload(f"captured/{FAMILY_MODEL}")
+            self.add_device(device_id, name, "cwwsq", FAMILY_MODEL)
+            self.specs[device_id] = captured["specification"]
+            self.statuses[device_id] = captured["status"]
+            return
         product = {"standard": "pqxstdfeeder01", "fault": "pqxfaultfeed02"}[kind]
         self.add_device(device_id, name, "cwwsq", product, f"{kind}_spec")
         self.set_status(device_id, "standard_plenty" if kind == "standard" else "fault_none")
@@ -161,6 +172,8 @@ class FakeTuya(Snapshots):
                 if device_id in self.offline_devices:
                     return _error(2001, "device is offline")
                 return _ok(self.statuses[device_id])
+            if what == "commands" and method == "POST":
+                return self._command(device_id, json.loads(request.content or b"{}"))
             if what == "logs":
                 assert query["type"] == "7"
                 since, until = int(query["start_time"]), int(query["end_time"])
@@ -172,6 +185,27 @@ class FakeTuya(Snapshots):
                 ]
                 return self._page(logs, query, "logs", "current_row_key", "start_row_key")
         return _error(1108, "uri path invalid")
+
+    def _command(self, device_id: str, body: dict[str, Any]) -> httpx.Response:
+        """Like the real one: only a writable data point, only a value in its range."""
+        if device_id in self.offline_devices:
+            return _error(2001, "device is offline")
+        writable = {
+            str(f["code"]): f for f in self.specs[device_id].get("functions", []) if "code" in f
+        }
+        for command in body.get("commands") or []:
+            point = writable.get(str(command.get("code")))
+            if point is None:
+                return _error(2008, "command or value not support")
+            if point.get("type") == "Integer":
+                bounds = json.loads(point.get("values") or "{}")
+                value = command.get("value")
+                if not isinstance(value, int) or not bounds.get("min", 0) <= value <= bounds.get(
+                    "max", value
+                ):
+                    return _error(501, "param is illegal")
+        self.commands.setdefault(device_id, []).extend(body.get("commands") or [])
+        return _ok(True)
 
     def _new_token(self) -> httpx.Response:
         access, refresh = secrets.token_hex(16), secrets.token_hex(16)
