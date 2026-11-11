@@ -8,18 +8,22 @@ around 2:20." It's worked out from:
 - the event's place, found on the map once and remembered (`geocodes`);
 - the drive: TomTom with live traffic, arriving at the start, when there's a key; else a
   rough estimate from the distance, which the message says;
+- where it starts (F41d, bug #199): home, unless an event of theirs with a place ends 90
+  minutes or less before, the same day ("Drop off kid at in-laws", then the appointment):
+  then from there, "leave there around …". `drive_time` can also be told where from;
 - the person's "getting ready takes" (default 15 minutes).
 
 The `travel.heads_up` job (every 5 minutes) looks at the next day's events. A rough estimate
 (no network) says when an event is close; then the drive is looked up properly, and when
 "leave by" minus getting ready has come, the message goes through the outbox at normal
-priority with the leave time as its deadline: quiet hours hold it only until then. One per
+priority. (F38b makes it unheld by quiet hours, busy times and limits.) One per
 event and start time, so a moved event gets a new one. The person can switch it off.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
@@ -59,6 +63,33 @@ MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look e
 SLACK = timedelta(minutes=3)  # the job runs every 5 minutes: send a little early, not late
 RETRY_NOT_FOUND = timedelta(days=1)
 LOOK_AHEAD_ON_REQUEST = timedelta(days=14)  # as far as calendars are read (K1)
+# F41d (bug #199): an event with a place ending this soon before the next is where they'll
+# drive from, not home.
+BACK_TO_BACK = timedelta(minutes=90)
+STOP = timedelta(minutes=15)  # F41d: a drop-off or pick-up, at the stop
+
+
+@dataclass(frozen=True)
+class Origin:
+    """Where a drive starts: home (no `label`), a place they named, or the event before."""
+
+    place: Place
+    label: str = ""  # "Drop off kid at in-laws (790 La Para Ave)"; "" for home
+
+    @property
+    def words(self) -> str:
+        return f"from {self.label}" if self.label else "from home"
+
+
+@dataclass(frozen=True)
+class Stop:
+    """F41d: a stop on the way to an event ("drop off our kid at my in-laws before"), timed
+    from the drives, and Themi's own lines on when to leave."""
+
+    starts: datetime
+    ends: datetime
+    lines: tuple[str, ...]
+    keys: tuple[str, ...]  # the leave times the lines name, for F41c
 
 
 class TravelPreferences(Preferences):
@@ -144,35 +175,37 @@ class TravelHeadsUps:
             return False
         if self._too_far(address or "", home, place) is not None:
             return False
-        rough = timedelta(minutes=estimate(home, place).minutes)
+        start = await self._before(member, entry) or Origin(home)  # F41d: back to back
+        rough = timedelta(minutes=estimate(start.place, place).minutes)
         if now < entry.starts_at - rough - ready - MARGIN:
             return False  # not close yet: no lookup
         try:
-            route = await self.client.route(home, place, entry.starts_at)
+            route = await self.client.route(start.place, place, entry.starts_at)
         except TravelError as exc:
             log.info("No route to an event for member %s (%s); estimating", member.id, exc)
-            route = estimate(home, place)
+            route = estimate(start.place, place)
         leave_by = entry.starts_at - timedelta(minutes=route.minutes)
         if now < leave_by - ready - SLACK:
             return False
-        await self._send(member, entry, route.minutes, route.traffic, leave_by, now)
+        await self._send(member, entry, route.minutes, route.traffic, leave_by, now, start)
         return True
 
     async def _send(
         self, member: Member, entry: Entry, minutes: int, traffic: bool, leave_by: datetime,
-        now: datetime,
+        now: datetime, start: Origin | None = None,
     ) -> None:  # fmt: skip
         tz = self._tz()
         how = "with traffic" if traffic else "(a rough guess, without traffic)"
+        there = " there" if start is not None and start.label else ""
         when = (
-            f"leave around {_clock(leave_by.astimezone(tz))}"
+            f"leave{there} around {_clock(leave_by.astimezone(tz))}"
             if leave_by > now
             else "time to head out"
         )
-        text = (
-            f"{entry.title} at {_clock(entry.starts_at.astimezone(tz))}, about "
-            f"{_duration(minutes)} {how}: {when}."
-        )
+        drive = f"{_duration(minutes)} {how}"
+        if start is not None and start.label:  # F41d: from the event before
+            drive = f"{_duration(minutes)} {start.words} {how}"
+        text = f"{entry.title} at {_clock(entry.starts_at.astimezone(tz))}, about {drive}: {when}."
         self.db.execute(
             "INSERT INTO travel_headsups (member_id, event_id, starts_at, sent_at) "
             "VALUES (?, ?, ?, ?)",
@@ -205,8 +238,9 @@ class TravelHeadsUps:
         return min(found, key=lambda f: f[1].starts_at) if found else None
 
     async def drive_to_event(
-        self, viewer: Member, owner: Member, entry: Entry, ctx: ToolContext | None = None
-    ) -> str:
+        self, viewer: Member, owner: Member, entry: Entry, ctx: ToolContext | None = None,
+        start_from: str = "",
+    ) -> str:  # fmt: skip
         """The drive to `entry`, for the model. With `ctx` (the drive_time tool), the leave
         line is also said by Themi itself, word for word (F41c, bug #199: the model cut
         "leave around 12:43 pm, and start getting ready around 12:28 pm" to "Leave at
@@ -232,7 +266,10 @@ class TravelHeadsUps:
             return as_data("calendars", line) + "\nIts address wasn't found on the map."
         if (far := self._too_far(address, found[1], place)) is not None:
             return as_data("calendars", line) + "\n" + far
-        route = await self._route(found[1], place, entry.starts_at)
+        start = await self.origin(viewer, owner, entry, start_from)
+        if isinstance(start, str):
+            return as_data("calendars", line) + "\n" + start
+        route = await self._route(start.place, place, entry.starts_at)
         leave_by = entry.starts_at - timedelta(minutes=route.minutes)
         ready = leave_by - timedelta(
             minutes=self.services.store.preferences(
@@ -249,16 +286,18 @@ class TravelHeadsUps:
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
         heads_up = self._heads_up_words(viewer, owner, leave_by, now)
         if ctx is not None:
-            said, leave = self._leave_line(whose, entry, route, leave_by, ready, now, how)
+            said, leave = self._leave_line(whose, entry, route, leave_by, ready, now, how, start)
             ctx.done.append(said)
             ctx.done_keys.append(leave)
+        if start.label:
+            plan = plan.replace("leave around", "leave there around")
         return as_data("calendars", line) + (
-            f"\nAbout {_duration(route.minutes)} from home {how}: {plan}.{heads_up}"
+            f"\nAbout {_duration(route.minutes)} {start.words} {how}: {plan}.{heads_up}"
         )
 
     def _leave_line(
         self, whose: str, entry: Entry, route: Route, leave_by: datetime, ready: datetime,
-        now: datetime, how: str,
+        now: datetime, how: str, start: Origin,
     ) -> tuple[str, str]:  # fmt: skip
         """ "ND psych in person at 1 pm: about 17 min with traffic. Leave around 12:43 pm;
         start getting ready around 12:28 pm." and the leave time it names. Every leave time
@@ -267,12 +306,14 @@ class TravelHeadsUps:
         leave = _clock(leave_by.astimezone(tz))
         head = f"{whose}{entry.title} at {_clock(entry.starts_at.astimezone(tz))}"
         drive = f"about {_duration(route.minutes)} {how}"
-        # The reply's own "Leave at 12:43." (no am or pm) is the same time.
-        key = leave.rsplit(" ", 1)[0] if ":" in leave else leave
+        if start.label:  # F41d
+            drive = f"about {_duration(route.minutes)} {start.words} {how}"
+        there = " there" if start.label else ""
+        key = _key(leave)
         if leave_by <= now:
-            return f"{head}: {drive}. Time to leave now.", key
-        start = "now" if ready <= now else f"around {_clock(ready.astimezone(tz))}"
-        return f"{head}: {drive}. Leave around {leave}; start getting ready {start}.", key
+            return f"{head}: {drive}. Time to leave{there} now.", key
+        begin = "now" if ready <= now else f"around {_clock(ready.astimezone(tz))}"
+        return f"{head}: {drive}. Leave{there} around {leave}; start getting ready {begin}.", key
 
     def _heads_up_words(
         self, viewer: Member, owner: Member, leave_by: datetime, now: datetime
@@ -296,7 +337,9 @@ class TravelHeadsUps:
             f"about {when}."
         )
 
-    async def drive_to_address(self, address: str, member: Member | None = None) -> str:
+    async def drive_to_address(
+        self, address: str, member: Member | None = None, start_from: str = ""
+    ) -> str:
         found = self.home()
         if found is None:
             raise TravelError("there's no home address yet (the Family page on the website)")
@@ -311,10 +354,140 @@ class TravelHeadsUps:
             return f"{address} wasn't found on the map. Adding the city might help."
         if (far := self._too_far(address, found[1], place)) is not None:
             return far
-        route = await self._route(found[1], place, clock.now())
+        start: Origin | str = Origin(found[1])
+        if start_from and member is not None:  # F41d: from somewhere else
+            start = await self._named_origin(member, start_from, clock.now())
+            if isinstance(start, str):
+                return start
+        assert isinstance(start, Origin)
+        route = await self._route(start.place, place, clock.now())
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
         where = address if said == address else f"{said} ({address})"
-        return f"To {where}: about {_duration(route.minutes)} from home {how}, leaving now."
+        return f"To {where}: about {_duration(route.minutes)} {start.words} {how}, leaving now."
+
+    # ----- where a drive starts (F41d) -----------------------------------------------------
+
+    async def origin(
+        self, viewer: Member, owner: Member, entry: Entry, start_from: str = ""
+    ) -> Origin | str:
+        """Where the drive to `entry` starts: the place they said, else the event of the
+        owner's that ends just before it (back to back), else home. Words when the place
+        they said can't be found."""
+        found = self.home()
+        assert found is not None
+        if start_from.strip():
+            return await self._named_origin(viewer, start_from, entry.starts_at)
+        return await self._before(owner, entry) or Origin(found[1])
+
+    async def _named_origin(self, member: Member, said: str, before: datetime) -> Origin | str:
+        """`from`: an event's words (one of theirs that day, before `before`), a named place
+        ("in-laws") or an address."""
+        said = " ".join(said.split())
+        found = self.home()
+        if found is not None and self.address_for(member, said) == found[0]:
+            return Origin(found[1])  # "home"
+        event = self._event_before(member, said, before)
+        if event is not None and event.location:
+            address = self.address_for(member, event.location)
+            place = await self._place(address) if address else None
+            if place is not None:
+                return Origin(place, f"{event.title} ({_short(address or '')})")
+        address = self.address_for(member, said)
+        if address is None:
+            return NOT_SURE_TEXT.format(phrase=said)
+        place = await self._place(address)
+        if place is None:
+            return f"{said} wasn't found on the map. Adding the city might help."
+        label = said if address == said else f"{_the(said)} ({_short(address)})"
+        return Origin(place, label)
+
+    def _event_before(self, member: Member, words: str, before: datetime) -> Entry | None:
+        reader = self.services.maybe(keys.calendars)
+        if reader is None:
+            return None
+        found = [
+            entry
+            for owner in reader.visible_to(member)
+            for entry in reader.entries(owner, before - timedelta(hours=12), before)
+            if not entry.all_day and title_matches(words, entry.title)
+        ]
+        return max(found, key=lambda e: e.ends_at) if found else None
+
+    async def _before(self, owner: Member, entry: Entry) -> Origin | None:
+        """The owner's event with a place that ends 90 minutes or less before `entry`
+        starts, the same day: they'll drive from there (F41d)."""
+        reader = self.services.maybe(keys.calendars)
+        home = self.home()
+        if reader is None or home is None:
+            return None
+        tz = self._tz()
+        day = entry.starts_at.astimezone(tz).date()
+        candidates = [
+            e
+            for e in reader.entries(owner, entry.starts_at - BACK_TO_BACK, entry.starts_at)
+            if not e.all_day and not e.video and e.location
+            and e.starts_at < entry.starts_at
+            and entry.starts_at - BACK_TO_BACK <= e.ends_at <= entry.starts_at
+            and e.ends_at.astimezone(tz).date() == day
+            and (e.title, e.starts_at) != (entry.title, entry.starts_at)
+        ]  # fmt: skip
+        for before in sorted(candidates, key=lambda e: e.ends_at, reverse=True):
+            address = self.address_for(owner, before.location)
+            place = await self._place(address) if address else None
+            if place is None or distance_km(home[1], place) < AT_HOME_KM:
+                continue
+            return Origin(place, f"{before.title} ({_short(address or '')})")
+        return None
+
+    async def stop_before(self, member: Member, words: str, address: str, said: str) -> Stop | str:
+        """F41d: a stop at `address` on the way to their next event matching `words`,
+        worked back from it: leave the stop in time to drive there, 15 minutes at the stop,
+        leave home in time to drive to the stop, and getting ready before that. Words when
+        it can't be worked out (the time is then asked, never made up)."""
+        found = self.next_event(member, words)
+        home = self.home()
+        if found is None:
+            return f'No upcoming event matches "{words}", so the stop can\'t be timed from it.'
+        if home is None:
+            return "There's no home address yet, so the drives can't be worked out."
+        _, entry = found
+        target = self.address_for(member, entry.location) if entry.location else None
+        there = await self._place(target) if target else None
+        stop = await self._place(address)
+        if there is None or stop is None:
+            what = entry.title if there is None else said or address
+            return f"{what}'s place wasn't found on the map, so the stop can't be timed."
+        tz = self._tz()
+        onward = await self._route(stop, there, entry.starts_at)
+        leave_stop = entry.starts_at - timedelta(minutes=onward.minutes)
+        arrive = leave_stop - STOP
+        inward = await self._route(home[1], stop, arrive)
+        leave_home = arrive - timedelta(minutes=inward.minutes)
+        ready = leave_home - timedelta(
+            minutes=self.services.store.preferences(
+                member.id, TravelPreferences
+            ).getting_ready_minutes
+        )
+        now = clock.now()
+        name = _the(said) if said and not any(c.isdigit() for c in said) else _short(address)
+        home_part = (
+            "Leave home now"
+            if leave_home <= now
+            else f"Leave home around {_clock(leave_home.astimezone(tz))}"
+            + (
+                " (start getting ready now)"
+                if ready <= now
+                else f" (start getting ready around {_clock(ready.astimezone(tz))})"
+            )
+        )
+        line = (
+            f"{home_part} to reach {name} by {_clock(arrive.astimezone(tz))}; leave there "
+            f"around {_clock(leave_stop.astimezone(tz))} for {entry.title} at "
+            f"{_clock(entry.starts_at.astimezone(tz))}."
+        )
+        keys_said = (_key(_clock(leave_home.astimezone(tz))),
+                     _key(_clock(leave_stop.astimezone(tz))))  # fmt: skip
+        return Stop(arrive, leave_stop, (line,), keys_said)
 
     def private_partners(self, viewer: Member) -> list[str]:
         """The others whose event details this person can't see (K1's setting)."""
@@ -412,6 +585,24 @@ def _clock(moment: datetime) -> str:
     return moment.strftime("%I:%M %p").lstrip("0").replace(":00 ", " ").lower()
 
 
+def _key(leave: str) -> str:
+    """ "12:43 pm" → "12:43": the reply's own "Leave at 12:43." is the same time (F41c)."""
+    return leave.rsplit(" ", 1)[0] if ":" in leave else leave
+
+
+def _short(address: str) -> str:
+    """ "790 La Para Ave, Palo Alto, CA 94306" → "790 La Para Ave"."""
+    return address.split(",")[0].strip()
+
+
+def _the(phrase: str) -> str:
+    """ "In-laws" → "the in-laws"; "my parent's house" stays."""
+    lower = phrase.strip()
+    if lower.lower().split(" ", 1)[0] in ("the", "my", "our", "their", "his", "her"):
+        return lower
+    return f"the {lower[:1].lower()}{lower[1:]}"
+
+
 def _duration(minutes: int) -> str:
     if minutes < 60:
         return f"{minutes} min"
@@ -421,16 +612,23 @@ def _duration(minutes: int) -> str:
 
 @tool(
     "drive_time",
-    "How long the drive from home takes, and when to leave: to their next event whose title "
-    "has these words (event: 'pediatrics'; timed for arriving at its start, with traffic "
-    "where it can), or to an address (address; leaving now). One of the two, the other ''.",
-    {"event": {"type": "string"}, "address": {"type": "string"}},
+    "How long the drive takes, and when to leave: to their next event whose title has these "
+    "words (event: 'pediatrics'; timed for arriving at its start, with traffic where it can), "
+    "or to an address (address; leaving now). One of the two, the other ''. from: where "
+    "they'll leave from, when it isn't home: a place they named ('in-laws'), an address, or "
+    "an event's words; '' for home (an event of theirs ending just before is used then).",
+    {
+        "event": {"type": "string"},
+        "address": {"type": "string"},
+        "from": {"type": "string", "default": ""},
+    },
 )
 async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
     travel = ctx.services.maybe(keys.travel)
     if travel is None:
         raise ToolFailed("Travel times aren't set up.")
     words, address = str(args["event"]).strip(), " ".join(str(args["address"]).split())
+    start_from = " ".join(str(args.get("from") or "").split())
     try:
         if words:
             found = travel.next_event(ctx.member, words)
@@ -445,7 +643,7 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
                 raise ToolFailed(
                     f'No upcoming event of theirs matches "{words}" in the next two weeks.' + hidden
                 )
-            result = await travel.drive_to_event(ctx.member, *found, ctx)
+            result = await travel.drive_to_event(ctx.member, *found, ctx, start_from)
             if ctx.done:  # F41c: the leave line is Themi's own
                 result += (
                     f'\nThemi tells them itself, word for word: "{ctx.done[-1]}" Don\'t say '
@@ -453,7 +651,7 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
                 )
             return result
         if address:
-            return await travel.drive_to_address(address, ctx.member)
+            return await travel.drive_to_address(address, ctx.member, start_from)
     except TravelError as exc:
         raise ToolFailed(f"No drive time: {exc}.") from exc
     raise ToolFailed("Which event, or which address?")

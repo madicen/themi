@@ -269,7 +269,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [x] 2026-11-11 |
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
-| F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [ ] |
+| F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13374,7 +13374,7 @@ conversation; the test checks the context before "Recent conversation:". New tes
 of `test_travel.py`. No golden file changed.
 
 ### F41d · Feedback (2026-11-11): a stop on the way: drives from where they'll be, not home
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: K4, F38b, F41c
 Read first: `themi_google/travel.py` (the module docstring, `_consider`, `drive_to_event`,
 `drive_to_address`, `drive_time`); `add_calendar_event` in `themi_google/events.py` and its
@@ -13442,6 +13442,22 @@ leave-by the heads-up comes, and for the appointment the heads-up drives from th
 Data: Michael's drop-off event (action 645, 12-1 pm on 11 Nov) has passed: nothing to fix.
 Decided here, not with Michael yet: back-to-back means 90 minutes, and a drop-off or pick-up
 takes 15 minutes at the stop. Mark #199 reviewed once F41c and F41d are both live.
+
+Notes: built before F38b (still `[ ]`); nothing here needs it. Until F38b, a heads-up can
+still be held by busy times or the daily limit, as outbox 1799 was. `travel.py`: `Origin`
+(place and label), `origin` (`from`, else `_before`, the back-to-back event, else home),
+`_named_origin` (an event's words that day, a named place, an address; "home" is home),
+`stop_before` → `Stop` (times and Themi's line). Back to back: 90 minutes (`BACK_TO_BACK`),
+the same local day, with a place not at home. The heads-up text from there: "ND psych in
+person at 1 pm, about 9 min from Drop off kid at in-laws (790 La Para Ave) with traffic:
+leave there around 12:51 pm." `drive_time` takes `from`. `add_calendar_event` takes
+`before`: with no start and end, `_stop` times the stop, and `Proposal.then`/`then_keys`
+carry the leave line after the done line (F41c drops the model's repeat of it). A stop that
+can't be timed (no event, no place found) fails with "Ask them what time, and don't make
+one up." and adds nothing. "With neither a time nor `before`, the tool asks": left to the
+tool description ("never make a time up") and `unread`; empty start and end still mean all
+day. The fake gets `leg(a, b, minutes)`. Golden `tools.json` changed for the two new
+arguments (expected). New tests at the end of `test_travel.py`; none changed.
 
 ## Conversation mode
 

@@ -104,6 +104,10 @@ class Proposal:
     requested: bool = False
     expires: datetime | None = None  # no use after then: an unanswered card lapses (#64)
     said: str | None = None  # the reply when it's done straight away (ToolContext.replies)
+    # F41d: Themi's own lines after the done line, when it's done straight away (a stop's
+    # leave times), and the words that mark the model's lines as saying them again.
+    then: tuple[str, ...] = ()
+    then_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -581,6 +585,8 @@ class ToolRegistry:
             ctx.done.append(outcome.message)
             if subject := done_subject(outcome.message):
                 ctx.done_keys.append(subject)
+            ctx.done.extend(proposal.then)
+            ctx.done_keys.extend(proposal.then_keys)
             return (
                 f"Done automatically (action {action.id}), and Themi tells them itself, word "
                 f'for word: "{outcome.message}" Don\'t say it again; reply only about '

@@ -63,6 +63,7 @@ from themi_google.connectors.google import CALENDAR_SCOPE
 
 if TYPE_CHECKING:
     from themi.core.services import Services
+    from themi_google.travel import Stop
     from themi_google.triage import Verdict
 
 log = logging.getLogger(__name__)
@@ -1122,7 +1123,9 @@ def _not_for_tasks(ctx: ToolContext) -> None:
     "replaces it; to change an event already made, use change_calendar_event. From a "
     "picture (a flyer, a ticket): unread names what it needs that the picture doesn't show "
     "(the year, the start time), and details keeps a ticket's booking or confirmation "
-    "number as written.",
+    "number as written. A stop on the way to another event with no time said ('drop the "
+    "kid at my in-laws before the appointment'): before has that event's words and start "
+    "and end stay '', so Themi times it from the drives; never make a time up.",
     {
         "title": {"type": "string"},
         "date": {"type": "string"},
@@ -1139,6 +1142,11 @@ def _not_for_tasks(ctx: ToolContext) -> None:
             "type": "string",
             "default": "",
             "description": "A booking or confirmation number, as written, or ''.",
+        },
+        "before": {  # F41d
+            "type": "string",
+            "default": "",
+            "description": "A stop before another event with no time said: its words, or ''.",
         },
     },
 )
@@ -1157,8 +1165,15 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
     meal = MEAL.search(name_key(title))
     if meal and not start.strip():
         start, end = MEALS[meal.group(1)], ""
-    when = parse_when(args["date"], start, end, events._today(), events._tz())
-    location = _located(ctx, " ".join(str(args["location"]).split())[:200])
+    said_location = " ".join(str(args["location"]).split())[:200]
+    location = _located(ctx, said_location)
+    before = " ".join(str(args.get("before") or "").split())
+    stop = None
+    if before and not start.strip() and not end.strip():  # F41d: timed from the drives
+        stop = await _stop(ctx, before, location, said_location)
+        when = When(stop.starts, stop.ends, False)
+    else:
+        when = parse_when(args["date"], start, end, events._today(), events._tz())
     calendar = str(args["calendar"])
     where = "the family calendar" if calendar == "family" else "your calendar"
     tz = events._tz()
@@ -1186,8 +1201,26 @@ async def add_calendar_event(ctx: ToolContext, args: dict[str, Any]) -> Proposal
         payload,
     )
     asked = asked_for(title, ctx.request_text) or answers_event_question(ctx, title, when, tz)
+    if stop is not None:
+        proposal = replace(proposal, then=stop.lines, then_keys=stop.keys)
     # Over by then, it's no use (bug #90's thread: Tuesday's card still waited on Thursday).
     return replace(proposal, requested=asked, expires=when.ends)
+
+
+async def _stop(ctx: ToolContext, before: str, address: str, said: str) -> Stop:
+    """F41d (bug #199): the stop's time, worked back from the event it comes before."""
+    from themi_google.travel import Stop as Planned
+
+    travel = ctx.services.maybe(keys.travel)
+    if travel is None or not address:
+        raise ToolFailed(
+            "The stop can't be timed from the drives (no travel times, or no place for it). "
+            "Ask them what time, and don't make one up."
+        )
+    planned = await travel.stop_before(ctx.member, before, address, said)
+    if not isinstance(planned, Planned):
+        raise ToolFailed(f"{planned} Ask them what time, and don't make one up.")
+    return planned
 
 
 CALENDAR_ARG = {"type": "string", "enum": ["", "mine", "family"]}
