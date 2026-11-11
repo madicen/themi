@@ -8,6 +8,7 @@ from datetime import date, time, timedelta
 
 from tests.scenarios.harness import Scenario
 from themi import clock
+from themi.ai.types import ToolResult
 from themi.channels.pauses import EVERYTHING
 from themi.core import keys
 from themi.standard.praise import PRAISE, TasksPreferences
@@ -60,10 +61,8 @@ async def test_everyone_starts_with_morning_afternoon_and_evening(scenario: Scen
         ("Afternoon", time(12), time(17)),
         ("Evening", time(17), None),
     ]
-    assert routines(scenario).describe(erin) == (
-        "Erin's routines in Themi: Morning (8 am to 12 pm): nothing on it yet. "
-        "Afternoon (12 pm to 5 pm): nothing on it yet. Evening (5 pm to an hour before your "
-        "quiet hours): nothing on it yet."
+    assert routines(scenario).describe(erin) == (  # F40a: one plain line when all are empty
+        "Erin's routines in Themi have nothing on them for today, Wednesday 21 October."
     )
 
 
@@ -352,3 +351,83 @@ async def test_an_add_in_a_removal_message_is_declined(scenario: Scenario) -> No
     assert evening_items(scenario) == ["Refill cat feeders"]
     (result,) = tool_results(scenario, "add_routine_item")
     assert result.startswith("Refill cat feeders is already on the Evening routine")
+
+
+# ----- F40a, bug #195: "What's my routine for tomorrow?" --------------------------------
+
+MON = date(2026, 10, 26)
+
+
+def michaels_evening(scenario: Scenario) -> None:
+    """Michael's evening on the Pi: bins on Tuesdays, Take Meds ticked tonight."""
+    add(scenario, "Husband", "Evening", "Cycle Dishwasher")
+    add(scenario, "Husband", "Evening", "Take out bins", days=(1,))
+    add(scenario, "Husband", "Evening", "Take Meds")
+    add(scenario, "Husband", "Evening", "Cover the birdcage")
+
+
+async def at_night(scenario: Scenario, day: date) -> None:
+    target = clock.now().replace(year=day.year, month=day.month, day=day.day, hour=23, minute=7)
+    clock.advance(target - clock.now())
+
+
+async def test_tomorrows_routine_lists_tomorrows_items(scenario: Scenario) -> None:
+    michaels_evening(scenario)
+    await at_night(scenario, MON)
+    michael = scenario.member("Husband")
+    r = routines(scenario)
+    evening = r.find(michael, "Evening")
+    assert evening is not None
+    meds = next(i for i in r.items(evening) if i.title == "Take Meds")
+    r.tick(meds, MON)
+
+    assert r.describe(michael, MON + timedelta(days=1)) == (
+        "Husband's routines in Themi for Tuesday 27 October: Evening (5 pm to an hour before "
+        "your quiet hours): Cycle Dishwasher, Take out bins, Take Meds, Cover the birdcage. "
+        "Morning and Afternoon have nothing on them that day."
+    )
+    assert r.describe(michael, MON + timedelta(days=2)) == (
+        "Husband's routines in Themi for Wednesday 28 October: Evening (5 pm to an hour "
+        "before your quiet hours): Cycle Dishwasher, Take Meds, Cover the birdcage. "
+        "Morning and Afternoon have nothing on them that day."
+    )
+    assert r.describe(michael) == (
+        "Husband's routines in Themi for today, Monday 26 October: Evening (5 pm to an hour "
+        "before your quiet hours): Cycle Dishwasher, Take Meds (done), Cover the birdcage. "
+        "Morning and Afternoon have nothing on them today."
+    )
+
+
+async def test_asked_in_chat_for_tomorrow(scenario: Scenario) -> None:
+    michaels_evening(scenario)
+    await at_night(scenario, MON)
+    scenario.primary.queue_tool_call("show_routines", {"day": "tomorrow"})
+    scenario.primary.queue_text("Tomorrow evening: dishwasher, bins, meds, birdcage.")
+    await scenario.say("Husband", "What's my routine for tomorrow?")
+    result = [
+        block
+        for message in scenario.primary.last_request.messages
+        for block in message.content
+        if isinstance(block, ToolResult)
+    ][-1].content
+    assert result.startswith("Husband's routines in Themi for Tuesday 27 October: Evening")
+    assert "Take out bins," in result and "(on Tuesdays)" not in result
+    assert "done" not in result.split(":", 1)[1].split(".")[0]
+
+
+async def test_the_day_argument_reads_weekdays_and_dates(scenario: Scenario) -> None:
+    from themi.standard.routines import routine_day
+
+    assert routine_day("", MON) == MON
+    assert routine_day("today", MON) == MON
+    assert routine_day("Tomorrow", MON) == MON + timedelta(days=1)
+    assert routine_day("wednesday", MON) == MON + timedelta(days=2)
+    assert routine_day("Monday", MON) == MON  # its own name: today
+    assert routine_day("2026-10-30", MON) == date(2026, 10, 30)
+
+
+async def test_nothing_at_all_that_day_is_one_plain_line(scenario: Scenario) -> None:
+    erin = scenario.member("Erin")
+    assert routines(scenario).describe(erin, WED + timedelta(days=1)) == (
+        "Erin's routines in Themi have nothing on them for Thursday 22 October."
+    )

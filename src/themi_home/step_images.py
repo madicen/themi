@@ -259,8 +259,10 @@ class StepPictures:
 
 
 def _folder(db_path: str) -> Path:
+    """Next to the database; an in-memory one (tests) gets a temp folder of its own, made
+    only when a picture is saved (one per app had filled /tmp with empty folders)."""
     if db_path == ":memory:":
-        return Path(tempfile.mkdtemp(prefix="themi-step-images-"))
+        return Path(tempfile.gettempdir()) / f"themi-step-images-{secrets.token_hex(6)}"
     return Path(db_path).parent / "step_images"
 
 

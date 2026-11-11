@@ -49,9 +49,11 @@ def routes(kit: Kit) -> APIRouter:
 
     def current_state(member: Any, *, seen: bool = False) -> dict[str, Any]:
         """The session going on, in the plan's order: a body double session, else cooking,
-        else none. `seen`: the cook screen asked (CK5: Themi's lines go to chat too)."""
+        else none. `seen`: the page asked, so it's open and chat stays quiet (CK13)."""
         bd = body_double()
         state = bd.state(member) if bd is not None else {"active": False}
+        if seen and state.get("active") and bd is not None:
+            bd.seen(member)
         if not state.get("active") and cooking() is not None:
             state = cooking().state(member)
             if seen and state.get("active"):

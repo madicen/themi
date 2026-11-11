@@ -104,7 +104,31 @@ class Dishwasher:
                 return started
             if await self._saw(device, state):
                 started += 1
+            if state == RUN and self._ends_unknown(device):  # F40b: once a cycle, for Home
+                try:
+                    seconds = await self.account.seconds_left(device.external_id)
+                except HomeConnectError as exc:
+                    log.info("Couldn't read the dishwasher's time left: %s", exc)
+                    continue
+                if seconds is not None:
+                    self._note_ends(device, round(seconds / 60))
         return started
+
+    def _note_ends(self, device: Device, minutes: int) -> None:
+        """F40b: the running cycle should end `minutes` from now (as LG's `note_ends`)."""
+        self.db.execute(
+            "UPDATE appliance_cycles SET ends_at = ? WHERE device_id = ? AND ended_at IS NULL",
+            (to_utc_iso(clock.now() + timedelta(minutes=minutes)), device.id),
+        )
+
+    def _ends_unknown(self, device: Device) -> bool:
+        return bool(
+            self.db.scalar(
+                "SELECT COUNT(*) FROM appliance_cycles "
+                "WHERE device_id = ? AND ended_at IS NULL AND ends_at IS NULL",
+                (device.id,),
+            )
+        )
 
     async def read(self, device: Device) -> tuple[str, int | None]:
         """F20b, asked how it's doing: its state read now (and kept, as a poll would), and
@@ -112,7 +136,10 @@ class Dishwasher:
         state = await self.account.operation_state(device.external_id)
         await self._saw(device, state)
         seconds = await self.account.seconds_left(device.external_id) if state == RUN else None
-        return state, None if seconds is None else round(seconds / 60)
+        minutes = None if seconds is None else round(seconds / 60)
+        if minutes is not None:
+            self._note_ends(device, minutes)  # F40b
+        return state, minutes
 
     async def _saw(self, device: Device, state: str) -> bool:
         """Note the state; True if a cycle started. Offline says nothing either way."""

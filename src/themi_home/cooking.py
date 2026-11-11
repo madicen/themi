@@ -69,7 +69,6 @@ KIND = "cooking"
 PAUSE_TOPIC = "cooking"  # RC3b: nudges and check-ins wait while cooking
 LEFT_AFTER = timedelta(hours=3)
 ENDED_SHOWN = timedelta(hours=3)  # CK3/CK6: an ended session's screen, at most this long
-LINE_KIND = "cooking_company"  # CK5: Themi's lines at the boundaries
 STUCK_AFTER = timedelta(minutes=20)  # CK5: on one step, no tap, no timer: one line, once
 SCREEN_OPEN = timedelta(minutes=2)  # the cook screen asked for its state this recently
 CHEER_FOR = timedelta(seconds=20)
@@ -660,7 +659,7 @@ class Cooking:
         self.playlists[session.id] = ranked(found, "cooking", None)
 
     def seen(self, member: Member) -> None:
-        """The cook screen asked for its state: it's open, so Themi's lines go to chat too."""
+        """The cook screen asked for its state: it's open, so chat stays quiet (CK13)."""
         from themi_home import cooking_screen
 
         session = cooking_screen.session_for(self, member)
@@ -674,18 +673,14 @@ class Cooking:
         at = self.db.scalar("SELECT page_at FROM cooking_sessions WHERE id = ?", (session.id,))
         return bool(at) and clock.now() - datetime.fromisoformat(str(at)) <= SCREEN_OPEN
 
-    async def say(self, session: Session, text: str, *, send: bool = True) -> None:
-        """Themi's line at a boundary: on the screen's line, and through the outbox when
-        the screen is open (a chat-only session's card says enough)."""
+    async def say(self, session: Session, text: str) -> None:
+        """Themi's line at a boundary: on the screen's line only. CK13 (bug #192): with the
+        screen open, chat stays quiet; without it, the chat card says enough (CK5)."""
         session.line = text
         self.db.execute(
             "UPDATE cooking_sessions SET line = ?, line_at = ? WHERE id = ?",
             (text, to_utc_iso(clock.now()), session.id),
         )
-        if send and self.screen_open(session):
-            await self.services.outbox.send(
-                self._owner(session), text, priority=Priority.REPLY, kind=LINE_KIND
-            )
 
     def start_line(self, session: Session, recipe: Recipe) -> str:
         from themi_home.cooking_screen import scale_words
@@ -702,7 +697,7 @@ class Cooking:
         """A timer ended: the screen says so (RC3c's urgent message already went)."""
         session = self.get(session_id) if session_id is not None else None
         if session is not None:
-            await self.say(session, f"Time's up: {label}.", send=False)
+            await self.say(session, f"Time's up: {label}.")
 
     async def stuck(self) -> int:
         """Scheduler job: 20 minutes on one step with no tap and no timer running, BD1b's
@@ -751,7 +746,14 @@ class Cooking:
             return None
         self.services.store.log_message(member.id, "in", text, "chat", None)
         return InboundEvent(
-            "text", member, member.telegram_user_id or 0, None, clock.now(), 0, text=text
+            "text",
+            member,
+            member.telegram_user_id or 0,
+            None,
+            clock.now(),
+            0,
+            text=text,
+            from_page=True,
         )
 
     async def prepare(self, member: Member) -> None:
@@ -924,8 +926,8 @@ class Cooking:
             in_group=session.in_group,
         )  # fmt: skip
         session.phase = "done"
-        await self.say(session, DONE_LINE, send=False)  # CK5: the card said it already
-        if self.timers is not None:
+        await self.say(session, DONE_LINE)  # CK5: the card said it already
+        if self.timers is not None and not self.screen_open(session):  # CK13: the screen asks
             await self.timers.ask_on_end(self._owner(session))
 
     async def remind_tomorrow(self, session: Session) -> None:
@@ -1015,16 +1017,16 @@ class Cooking:
                 return False  # "back" or "what's next" before the steps: the model answers
             await self.show(session, fresh=True)
         elif action == "repeat":
-            await self.show(session, fresh=True)
+            await self.show(session, fresh=not event.from_page)
         elif action == "peek":
-            await self.peek(session)
+            await self.peek(session, on_page=event.from_page)
         elif action == "skip" and session.phase == "prep":
             await self.after_prep(session)
-            await self.show(session, fresh=True)
+            await self.show(session, fresh=not event.from_page)
         elif action == "skip" and session.phase != "cook":
-            await self.advance(session, "skip", fresh=True)
-        else:
-            await self.advance(session, action, fresh=True)
+            await self.advance(session, "skip", fresh=not event.from_page)
+        else:  # CK13: from the page, the chat card is edited in place, never sent again
+            await self.advance(session, action, fresh=not event.from_page)
         return True
 
     def typed(self, said: str) -> str | None:
@@ -1032,8 +1034,9 @@ class Cooking:
             return f"goto:{int(found.group(1))}"
         return TYPED.get(said)
 
-    async def peek(self, session: Session) -> None:
-        """ "What's after this?": the next step, said once, without moving the card."""
+    async def peek(self, session: Session, *, on_page: bool = False) -> None:
+        """ "What's after this?": the next step, said once, without moving the card. Asked
+        on the cook screen, it's the screen's line, not a chat message (CK13)."""
         recipe = self.recipes.get(session.recipe_id)
         assert recipe is not None
         parts = step_parts(recipe)
@@ -1043,6 +1046,9 @@ class Cooking:
             text = f"After this, step {nxt.label}:\n> {nxt.text}"
         else:
             text = "That's the last step."
+        if on_page:
+            await self.say(session, text.replace(":\n> ", ": "))
+            return
         await self.services.outbox.send(member, text, priority=Priority.REPLY, kind=KIND)
 
     async def on_cook_button(self, event: InboundEvent) -> None:

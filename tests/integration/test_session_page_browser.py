@@ -9,10 +9,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
+import time
 import urllib.request
 from collections.abc import AsyncIterator
 from typing import Any
@@ -33,7 +36,22 @@ from themi.web import HealthSources, create_app
 from themi.web.kit import SiteContext
 
 CHROME = shutil.which("google-chrome") or shutil.which("chromium")
+CHROME_PROFILE_PREFIX = "themi-chrome-"  # tests/conftest.py sweeps up any a crash left
 pytestmark = pytest.mark.skipif(CHROME is None, reason="needs Chrome or Chromium")
+
+
+def stop_chrome(chrome: subprocess.Popen[bytes], profile: str) -> None:
+    """Stop Chrome and every helper it started (the network service went on writing into
+    the profile after the main process died), then delete its profile."""
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(chrome.pid, signal.SIGKILL)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        chrome.wait(timeout=10)
+    for _ in range(20):  # a helper's last write can land just after the group is killed
+        shutil.rmtree(profile, ignore_errors=True)
+        if not os.path.exists(profile):
+            return
+        time.sleep(0.05)
 
 
 def free_port() -> int:
@@ -45,9 +63,10 @@ def free_port() -> int:
 class Tab:
     """Just enough of the Chrome DevTools protocol to load a page and run a line in it."""
 
-    def __init__(self, ws: Any) -> None:
+    def __init__(self, ws: Any, profile: str = "") -> None:
         self.ws = ws
         self.n = 0
+        self.profile = profile  # its Chrome's profile folder, deleted when Chrome stops
 
     async def call(self, method: str, **params: Any) -> dict[str, Any]:
         self.n += 1
@@ -97,13 +116,18 @@ async def page_in_chrome(
     serving = asyncio.create_task(server.serve())
     debug = free_port()
     errors = tempfile.TemporaryFile()  # noqa: SIM115 - closed in the finally below
+    # Each Chrome gets its own profile, deleted when it exits (they were left behind, tens
+    # of MB each, and filled the disk on 2026-11-10). Chrome's own temp files go in it too.
+    profile = tempfile.mkdtemp(prefix=CHROME_PROFILE_PREFIX)
     # --no-sandbox: CI runners (Ubuntu 24.04) block the user namespaces Chrome's sandbox
     # needs, so it exited at once there; this Chrome only ever loads our own local page.
     chrome = subprocess.Popen(
         [CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
-         f"--remote-debugging-port={debug}", f"--user-data-dir={tempfile.mkdtemp()}",
+         "--no-first-run", "--disable-breakpad", "--disk-cache-size=1",
+         f"--remote-debugging-port={debug}", f"--user-data-dir={profile}",
          *([f"--window-size={width},{height}"] if width else []), "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=errors,
+        stdout=subprocess.DEVNULL, stderr=errors, env={**os.environ, "TMPDIR": profile},
+        start_new_session=True,  # its own process group: its helpers are stopped with it
     )  # fmt: skip
     try:
         assert await until(lambda: asyncio.sleep(0, server.started))
@@ -126,7 +150,7 @@ async def page_in_chrome(
             said = errors.read().decode(errors="replace").strip().splitlines()[-3:]
             pytest.skip(f"Chrome didn't start (exit {chrome.poll()}): {' | '.join(said)}")
         async with websockets.connect(pages[0]["webSocketDebuggerUrl"], max_size=None) as ws:
-            tab = Tab(ws)
+            tab = Tab(ws, profile)
             if before:
                 await tab.call("Page.enable")
                 await tab.call("Page.addScriptToEvaluateOnNewDocument", source=before)
@@ -142,10 +166,23 @@ async def page_in_chrome(
             ))  # fmt: skip
             yield tab
     finally:
-        chrome.kill()
+        stop_chrome(chrome, profile)
         errors.close()
         server.should_exit = True
         await serving
+
+
+async def test_chrome_leaves_no_profile_behind(scenario: Scenario) -> None:
+    """2026-11-10: each Chrome's profile was left in the temp folder and filled the disk.
+    Only its own profile is looked at: other workers' Chromes share the temp folder."""
+    clock.unfreeze()
+    erin = scenario.member("Erin")
+    await start(scenario, "Sit with me while I do the dishes", mode="quiet", minutes=30)
+    async with page_in_chrome(scenario, erin, ".session") as tab:
+        profile = tab.profile
+        assert os.path.basename(profile).startswith(CHROME_PROFILE_PREFIX)
+        assert os.path.isdir(profile)  # its own, while it runs
+    assert not os.path.exists(profile)
 
 
 async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:

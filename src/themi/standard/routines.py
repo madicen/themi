@@ -473,18 +473,31 @@ class Routines:
 
     # ----- small things -------------------------------------------------------------------
 
-    def describe(self, member: Member) -> str:
+    def describe(self, member: Member, day: date | None = None) -> str:
+        """Their routines for one day (F40a, bug #195): that day first, only the items that
+        apply that day, "done" only today, and the empty routines named once at the end."""
         today = self.today(member)
-        lines = []
+        day = day or today
+        which = f"today, {day:%A %-d %B}" if day == today else f"{day:%A %-d %B}"
+        lines, empty = [], []
         for routine in self.of(member):
             items = [
-                f"{i.title}{' (done today)' if self.ticked(i, today) else ''}"
-                + ("" if i.applies(today) else f" ({i.when()})")
+                f"{i.title}{' (done)' if day == today and self.ticked(i, day) else ''}"
                 for i in self.items(routine)
+                if i.applies(day)
             ]
-            listed = ", ".join(items) if items else "nothing on it yet"
-            lines.append(f"{routine.name} ({self.window(routine, member)}): {listed}.")
-        return f"{member.name}'s routines in Themi: " + " ".join(lines)
+            if not items:
+                empty.append(routine.name)
+                continue
+            lines.append(f"{routine.name} ({self.window(routine, member)}): {', '.join(items)}.")
+        if not lines:
+            return f"{member.name}'s routines in Themi have nothing on them for {which}."
+        if empty:
+            that = "today" if day == today else "that day"
+            verb = "has" if len(empty) == 1 else "have"
+            them = "it" if len(empty) == 1 else "them"
+            lines.append(f"{and_list(empty)} {verb} nothing on {them} {that}.")
+        return f"{member.name}'s routines in Themi for {which}: " + " ".join(lines)
 
     def _end(self, routine: Routine, member: Member, now: datetime) -> datetime:
         if routine.ends is not None:
@@ -563,14 +576,37 @@ def _days(names: list[Any]) -> tuple[int, ...]:
 ROUTINE_ARG = {"type": "string", "description": "The routine's name, e.g. 'Morning'."}
 
 
+def routine_day(said: str, today: date) -> date:
+    """F40a: the day show_routines was asked about: '' or 'today', 'tomorrow', a weekday
+    (its next one, today for today's own name) or a date, YYYY-MM-DD."""
+    text = said.strip().lower()
+    if text in ("", "today", "tonight"):
+        return today
+    if text == "tomorrow":
+        return today + timedelta(days=1)
+    match = [i for i, d in enumerate(DAY_NAMES) if text[:3] and d.lower().startswith(text[:3])]
+    if match:
+        return today + timedelta(days=(match[0] - today.weekday()) % 7)
+    from themi.standard.tasks import day_arg
+
+    try:
+        return day_arg(said.strip(), today)
+    except ValueError as exc:
+        raise ToolFailed(f"{said} isn't a day: say today, tomorrow, a weekday or a date.") from exc
+
+
 @tool(
     "show_routines",
-    "Read this person's routines kept in Themi: each routine's name and window, and its "
-    "items (which are done today). Themi checks each one as its window ends.",
-    {},
+    "Read this person's routines kept in Themi for one day: each routine's name and window, "
+    "and that day's items (which are done, today). Themi checks each one as its window "
+    "ends. day: '' for today, 'tomorrow', a weekday or YYYY-MM-DD ('what's my routine "
+    "tomorrow?': 'tomorrow').",
+    {"day": {"type": "string"}},
 )
 async def show_routines(ctx: ToolContext, args: dict[str, Any]) -> str:
-    return _routines(ctx).describe(ctx.member) + " Say it in words, as a short list."
+    routines = _routines(ctx)
+    day = routine_day(str(args.get("day") or ""), routines.today(ctx.member))
+    return routines.describe(ctx.member, day) + " Say it in words, as a short list."
 
 
 @tool(

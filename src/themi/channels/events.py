@@ -75,6 +75,7 @@ class InboundEvent:
     reaction: Reaction | None = None
     reply_to_message_id: int | None = None  # the message this one replies to (Telegram's Reply)
     in_group: bool = False  # said in the family group (34b): answered there
+    from_page: bool = False  # CK13: typed or said on a session page, not in Telegram
 
     @property
     def pictures(self) -> tuple[Picture, ...]:

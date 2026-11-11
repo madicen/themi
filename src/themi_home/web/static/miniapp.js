@@ -92,6 +92,26 @@
   };
 
   if (!inTelegram) return;
+
+  // F40c, idea #193: "Open in browser" opens this page in the phone's own browser, signed in
+  // with a fresh one-time ticket (the page's own session asks for it).
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest && event.target.closest(".open-in-browser");
+    if (!button || button.disabled) return;
+    var body = document.body;
+    var headers = { "X-CSRF-Token": body.dataset.csrf || "" };
+    if (body.dataset.session) headers["X-Themi-Session"] = body.dataset.session;
+    button.disabled = true;
+    fetch("/session/ticket", { method: "POST", credentials: "same-origin", headers: headers })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        button.disabled = false;
+        if (t && t.ticket) {
+          send("web_app_open_link", { url: location.origin + "/session?ticket=" + encodeURIComponent(t.ticket) });
+        }
+      }, function () { button.disabled = false; });
+  });
+
   send("web_app_ready");
   send("web_app_expand");
   if (!document.body || !document.body.classList.contains("cook-page")) return;

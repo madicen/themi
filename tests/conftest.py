@@ -47,6 +47,31 @@ LAYER_MARKERS = {
 }
 
 
+STALE_TEMP = 3600  # seconds: a leftover this old is from a run that has ended
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Sweep the temp folders a crashed or killed run left behind (the browser tests'
+    Chrome profiles and the step pictures of in-memory apps), so test runs can't slowly
+    fill the disk (2026-11-10).
+    Only ones older than an hour: a run going on at the same time keeps its own."""
+    import shutil
+    import tempfile
+    import time
+    from pathlib import Path
+
+    if hasattr(session.config, "workerinput"):  # xdist: the controller sweeps, once
+        return
+    cutoff = time.time() - STALE_TEMP
+    temp = Path(tempfile.gettempdir())
+    for left in [*temp.glob("themi-chrome-*"), *temp.glob("themi-step-images-*")]:
+        try:
+            if left.is_dir() and left.stat().st_mtime < cutoff:
+                shutil.rmtree(left, ignore_errors=True)
+        except OSError:
+            continue
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--run-live", action="store_true", help="run tests that hit real services")
     parser.addoption("--run-evals", action="store_true", help="run AI behaviour evals")

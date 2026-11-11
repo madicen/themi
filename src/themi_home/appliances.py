@@ -101,9 +101,9 @@ class Appliances:
                 lines.append(f"{device.name}: {state}")
                 continue
             state = HOME_CONNECT.get(state, state)
-            if state == RUNNING:
-                since = self._cycle(device, "started_at", open_only=True)
-                lines.append(f"{device.name}: running" + (f" since {since}" if since else ""))
+            if state == RUNNING:  # F40b, idea #196: when it'll finish, never when it began
+                ends = self._ends(device)
+                lines.append(f"{device.name}: running" + (f", done around {ends}" if ends else ""))
             elif state == FINISHED:
                 ended = self._cycle(device, "ended_at")
                 lines.append(f"{device.name}: finished" + (f" at {ended}" if ended else ""))
@@ -200,7 +200,8 @@ class Appliances:
             said = "running" + (f" since {since}" if since else "")
             if minutes is None:
                 return f"{said}; it doesn't say how long is left"
-            return f"{said}, {_minutes(minutes)} left"
+            done = self._local_words(clock.now() + timedelta(minutes=minutes))
+            return f"{said}, {_minutes(minutes)} left, done around {done}"
         if state == FINISHED:
             ended = self._cycle(device, "ended_at")
             return "finished" + (f" at {ended}" if ended else "") + ", not running now"
@@ -230,6 +231,17 @@ class Appliances:
             (device.id,),
         )
         return self._local_words(datetime.fromisoformat(row["at"])) if row else None
+
+    def _ends(self, device: Device) -> str | None:
+        """F40b: when its running cycle should end, in words, if that's still ahead."""
+        at = self.db.scalar(
+            "SELECT ends_at FROM appliance_cycles WHERE device_id = ? AND ended_at IS NULL "
+            "ORDER BY id DESC LIMIT 1",
+            (device.id,),
+        )
+        if not at or datetime.fromisoformat(str(at)) <= clock.now():
+            return None
+        return self._local_words(datetime.fromisoformat(str(at)))
 
     def _day_words(self, moment: datetime) -> str:
         """ "" today, " yesterday", or " on Monday 2 November"."""

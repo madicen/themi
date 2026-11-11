@@ -187,6 +187,10 @@ pythonpath = ["src", "."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
+# tmp_path folders: only a failed test's is kept, for the last run alone (2026-11-10: test
+# runs were filling the disk).
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1
 filterwarnings = [
     # google-genai uses a typing alias Python 3.15 deprecates; not ours to fix.
     "ignore:.*_UnionGenericAlias.*:DeprecationWarning",

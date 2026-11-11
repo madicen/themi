@@ -56,7 +56,7 @@ async def say(cooking: Cooking, member: Member, session: Session, heard: str) ->
         return Heard(words)
     event = InboundEvent(
         "text", member, member.telegram_user_id or 0, None, clock.now(), 0, text=phrase,
-        in_group=session.in_group and session.member_id != member.id,
+        in_group=session.in_group and session.member_id != member.id, from_page=True,
     )  # fmt: skip
     timers = cooking.timers
     said = ""
