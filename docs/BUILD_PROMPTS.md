@@ -266,7 +266,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
-| F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [ ] |
+| F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [x] 2026-11-11 |
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [ ] |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [ ] |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [ ] |
@@ -13197,7 +13197,7 @@ are in `test_cook_miniapp_browser.py` (headless Chrome, Telegram faked). No gold
 changed. Still to decide with Michael: whether a chat button is wanted too.
 
 ### F41a · Feedback (2026-11-10): the Whoosh's sani-solution is cleans left, not a percent
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: CG1a, CG1b
 Read first: `themi_home/connectors/catgenie/events.py` (the docstring, `read_device`,
 `problems`, `state_word`, `LOW_PERCENT`); `themi_home/litter_box.py` (`_left`, the cartridge
@@ -13241,6 +13241,15 @@ Data: none needed (the next poll stores the unit). Decided here, not with Michae
 Related, not this prompt: on 2026-11-11 at 07:41 one box reported the error `'6'` ("Themi
 has no words for"). Nothing showed it to anyone, but "it shows an error (6)" would. A capture
 while it shows that state would give `CODES` its words.
+
+Notes: `sani_unit(fwVersion)` in `catgenie/events.py` (major 100 or more: `CLEANS`, else
+`PERCENT`); `LitterBoxReading.sani_unit` and `odd_sani` (a percent over 100, left out of
+`sani_left` and logged once by the watcher). `sani_words` gives "477 cleans of sani-solution
+left" ("1 clean"). Migration 0162 adds `litter_states.sani_unit` ('%' by default); the next
+poll fills it. The task says "(about 30 cleans left)". Fixture `device_whoosh.json` is the
+Pi's capture with ids and addresses replaced; the fake's `add_box` takes the fixture name.
+New tests in `test_catgenie_events.py` and `test_litter_box.py`; none changed. No golden
+file changed.
 
 ### F41b · Feedback (2026-11-11): cooking started on the website stays on the screen
 Status: [ ]

@@ -10,6 +10,7 @@ from themi_home.connectors.catgenie.client import (
 )
 from themi_home.connectors.catgenie.events import (
     ALERT,
+    CLEANS,
     ERROR,
     GRANULES,
     LOW,
@@ -26,6 +27,7 @@ from themi_home.connectors.catgenie.watch import (
 
 __all__ = [
     "ALERT",
+    "CLEANS",
     "ERROR",
     "GRANULES",
     "LOW",

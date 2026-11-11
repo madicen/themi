@@ -6,6 +6,10 @@ in its models and test fixtures (read 2026-11-04). `tests/fakes/catgenie.py` ser
 
 - `device.json`: one entry of `GET device/device/v2`'s `thingList`: a CatGenie A.I.,
   connected, idle, with 39% sani-solution left and no errors.
+- `device_whoosh.json`: a CatGenie Whoosh (`fwVersion` 100.4.14R), captured from the family's
+  own box on 2026-11-11 (F41a, bug #197), with its ids, name and addresses replaced. Its
+  `remainingSaniSolution` (477) is **cleans left**, as the app shows it, not a percent.
+  The A.I. (`fwVersion` 8.x, `device.json`) reports a percent.
 - `notification.json`: one entry of `GET notification/v1/push/user`'s `notifications`. Its
   `data` is JSON text; `type` 24 with an empty `errorType` is the package's one sample, and
   nothing says what 24 means.

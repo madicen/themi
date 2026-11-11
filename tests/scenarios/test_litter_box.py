@@ -305,3 +305,35 @@ async def test_a_refused_sign_in_tells_the_admins_once(
     told = [t for t in scenario.inbox("Erin") if t.startswith("CatGenie stopped answering")]
     assert len(told) == 1 and "Link the litter box again" in told[0]
     assert scenario.inbox("Husband") == []  # not an admin
+
+
+# ----- F41a, bug #197: the Whoosh counts cleans, not a percent -----------------------------
+
+WHOOSH = "SFU0000001"
+
+
+async def test_the_whoosh_says_cleans_left_and_runs_low_at_thirty(
+    scenario: Scenario, fake_catgenie: FakeCatGenie, site: httpx.AsyncClient
+) -> None:
+    fake_catgenie.add_box(WHOOSH, "Whoosh", "device_whoosh")
+    watcher = scenario.app.services.get(keys.catgenie)
+    await watcher.send_code(PHONE)
+    await watcher.link(scenario.member("Erin"), PHONE, CODE)
+    fake_catgenie.set(WHOOSH, sani=31)
+    await scenario.run_periodic("devices.litter_box")
+    await sign_in(scenario, site, "Erin")
+    page = await site.get("/accounts")
+    assert "Whoosh · ready, 31 cleans of sani-solution left" in page.text
+    assert "31%" not in page.text
+    tired(scenario)
+    fake_catgenie.set(WHOOSH, sani=30)
+    clock.advance(timedelta(minutes=10))
+    await scenario.run_periodic("devices.litter_box")
+    assert tasks(scenario)[0][0] == "Change the Whoosh's sani-solution cartridge"
+    assert await scenario.advance(minutes=10) == [
+        "The Whoosh is running low on sani-solution (about 30 cleans left). Swap in a new "
+        "cartridge when you can?"
+    ]
+    home = await site.get("/")
+    assert "30 cleans of sani-solution left" in home.text
+    assert "30%" not in home.text

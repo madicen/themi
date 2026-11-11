@@ -14,13 +14,16 @@ from themi_home.connectors.catgenie.client import (
     unaes,
 )
 from themi_home.connectors.catgenie.events import (
+    CLEANS,
     ERROR,
     LOW,
     OUT,
+    PERCENT,
     SOLUTION,
     error_words,
     read_alert,
     read_device,
+    sani_unit,
     state_word,
 )
 
@@ -94,3 +97,49 @@ def test_the_app_encodings_round_trip() -> None:
     assert unaes(time_field(1_761_062_400_000)).startswith("1761062400000-")
     assert render_path("facade/v1/mobile-user/refreshToken/v2") == "mobile-user/refreshToken/v2"
     assert render_path("/device/device/v2") == "device/device/v2"
+
+
+# ----- F41a, bug #197: the Whoosh counts cleans ---------------------------------------------
+
+
+def test_the_whoosh_reads_cleans_left_never_a_percent() -> None:
+    reading = read_device(payload("device_whoosh"))  # the family's own, 2026-11-11
+    assert (reading.sani_left, reading.sani_unit) == (477, CLEANS)
+    assert state_word(reading) == "ready, 477 cleans of sani-solution left"
+    assert "%" not in state_word(reading)
+    assert reading.problems == {}
+
+
+def test_the_ai_still_reads_a_percent() -> None:
+    reading = read_device(box(remainingSaniSolution=56, fwVersion="8.7.205R"))
+    assert reading.sani_unit == PERCENT
+    assert state_word(reading) == "ready, 56% sani-solution left"
+
+
+def test_the_whoosh_runs_low_at_thirty_cleans_and_out_at_none() -> None:
+    def whoosh(left: int) -> dict[str, str]:
+        raw = payload("device_whoosh")
+        raw["remainingSaniSolution"] = left
+        return read_device(raw).problems
+
+    assert whoosh(31) == {}
+    assert whoosh(30) == {SOLUTION: LOW}
+    assert whoosh(0) == {SOLUTION: OUT}
+    raw = payload("device_whoosh")
+    raw["remainingSaniSolution"] = 1
+    assert state_word(read_device(raw)) == "ready, 1 clean of sani-solution left"
+
+
+def test_the_unit_comes_from_the_firmware() -> None:
+    assert sani_unit("100.4.14R") == CLEANS
+    assert sani_unit("101.0") == CLEANS
+    assert sani_unit("8.7.205R") == PERCENT
+    assert sani_unit(None) == PERCENT  # unreadable: a percent, as before
+    assert sani_unit("R?") == PERCENT
+
+
+def test_a_percent_over_a_hundred_shows_no_level() -> None:
+    reading = read_device(box(remainingSaniSolution=140))
+    assert (reading.sani_left, reading.odd_sani) == (None, 140)
+    assert state_word(reading) == "ready"
+    assert reading.problems == {}

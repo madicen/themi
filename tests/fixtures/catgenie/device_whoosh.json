@@ -1,0 +1,81 @@
+{
+ "manufacturerId": "SFU0000001",
+ "name": "Whoosh",
+ "macAddress": "000000000002",
+ "activationDateFromDesired": "2026-05-01T23:36:31.253",
+ "activeErrors": [],
+ "bleConnectionId": "000000000002",
+ "configuration": {
+  "activation": {
+   "count": 178,
+   "date": "2026-05-01T23:36:31.253",
+   "state": 3
+  },
+  "autoLock": 300,
+  "binaryElements": {
+   "EXTRA_SHAKE": false,
+   "EXTRA_WASH": true
+  },
+  "catDelay": 300,
+  "catSense": 16,
+  "childLock": 1,
+  "dndFrom": "",
+  "dndTo": "",
+  "dstFrom": "03-08 10:00:00",
+  "dstTo": "11-01 09:00:00",
+  "extraDry": false,
+  "heater": {
+   "model": 1,
+   "tempOutRef": 161
+  },
+  "lng": {
+   "act": "enUS",
+   "des": ""
+  },
+  "manual": 0,
+  "mode": 0,
+  "pumpPctT": 100,
+  "schedule": [],
+  "timezone": "-08:00",
+  "volumeLevel": 2,
+  "water": {
+   "fillMax": 75,
+   "fillMin": 30,
+   "senseClean": 300,
+   "senseDetect": 1900
+  }
+ },
+ "connectionMode": "WIFI",
+ "connectionModifiedTime": "2026-11-10T02:41:53.491",
+ "countryCode": 1,
+ "cpLastFwStatus": "OK",
+ "creationTime": "2025-11-21T06:14:50.042",
+ "dome": false,
+ "fanShutter": false,
+ "fwVersion": "100.4.14R",
+ "hwRevision": "V1",
+ "inBlacklist": null,
+ "lastClean": "2026-11-11T17:51:07",
+ "lastUpdatedTime": null,
+ "lgLastFwStatus": "OK",
+ "lowHeater": false,
+ "mainErrorType": null,
+ "mbLastFwStatus": "OK",
+ "operationStatus": {
+  "progress": 255,
+  "state": 0
+ },
+ "parentId": null,
+ "pumpTypeEnum": "PEGASUS",
+ "remainingSaniSolution": 477,
+ "reportedStatus": "connected",
+ "scaleId": null,
+ "selectedLang": null,
+ "serviceLevel": "Deluxe",
+ "state": 0,
+ "status": 2,
+ "tagType": 1,
+ "tempOutRefFromDesired": 161,
+ "type": 0,
+ "updateGroup": {}
+}
