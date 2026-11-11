@@ -263,6 +263,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
+| F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [ ] |
+| F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [ ] |
+| F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13050,6 +13053,112 @@ tool. `test_autonomy`'s category list gained `pet_feed`. There's no double-feedi
 the feeding log is only read hourly, so "fed 5 minutes ago" can't be known reliably. A
 follow-up could read `feed_report` right after a command. Mark #194 reviewed once live.
 
+### F40a · Feedback (2026-11-09): "What's my routine for tomorrow?" is answered for tomorrow
+Status: [ ]
+Depends on: F34j
+Read first: `themi/standard/routines.py` (`Routines.describe`, `Item.applies`, `Item.when`,
+`show_routines`, `member_day`). From Michael's bug #195 (2026-11-09, 11:07 pm, "that's
+simply incorrect").
+
+What the Pi shows: reply 413. Michael asked "What's my routine for tomorrow?" and
+`show_routines` (it takes no arguments) answered "Michael's routines in Themi: Morning (8 am
+to 12 pm): nothing on it yet. Afternoon (12 pm to 5 pm): nothing on it yet. Evening (5 pm to
+an hour before your quiet hours): Cycle Dishwasher, Take out bins (on Tuesdays), Take Meds
+(done today), Cover the birdcage." Gemini flash-lite said "You have no items on your
+routines for tomorrow yet." The result opens with two "nothing on it yet" lines, can't be
+asked about a day, and marks a Tuesday item "(on Tuesdays)" even when tomorrow is Tuesday.
+"(done today)" means nothing for tomorrow either.
+
+Build:
+- Bug fix: start with the failing test below.
+- `show_routines` gets a `day` argument: '' for today, 'tomorrow', a weekday name or a date
+  (the same parsing other day arguments use). It's their day (`member_day`), not the
+  family's date.
+- `describe(member, day)` says which day it's for first ("For Tuesday 10 Nov:"), lists only
+  the items that apply that day, and says "done" only for today. Routines with nothing that
+  day are left out of the list and named once at the end ("Morning and Afternoon have nothing
+  on them."). With nothing at all that day it says so plainly.
+- The tool's description says it can be asked about another day, so "tomorrow" fills it.
+
+Tests: start with a failing one. Michael's routines as on the Pi, asked on Monday night
+for tomorrow: the result lists the four evening items with Take out bins and no "(on
+Tuesdays)", and starts with the day. Asked for Wednesday, bins is left out. Today's done
+item still says done; tomorrow's doesn't. All empty: one plain line. Golden `tools.json`
+changes for the new argument (expected).
+Scenario: Michael asks "What's my routine for tomorrow?" on a Monday night and hears the
+evening items, bins included.
+
+Data: none needed. Mark #195 reviewed once live.
+
+### F40b · Feedback (2026-11-09): a running washer or dryer shows when it will finish
+Status: [ ]
+Depends on: 30, F20b, W2
+Read first: `themi_home/appliances.py` (`at_a_glance`, `_words`, `_cycle`);
+`themi_home/connectors/thinq/watch.py` (`poll`, `read`, `_saw`) and `events.minutes_left`;
+the dishwasher's `read` (Home Connect's minutes); migration 0074 (`appliance_cycles`). From
+Michael's idea #196 (2026-11-09, 11:13 pm, "on the home page, a running washer and dryer
+shouldn't list the time they started, but the time they will finish").
+
+What the Pi shows: reply 414. Asked in chat, the washer read "running since 11:01 pm, 5
+minutes left". The website's Home shows "Washer: running since 11:01 pm". `at_a_glance`
+never reads an appliance (the page mustn't wait), and nothing keeps the minutes left: only
+`device_states.state` and the cycle's `started_at` are stored. So Home has no finish time
+to show.
+
+Build:
+- A migration adds `ends_at` to `appliance_cycles`. Every read that has minutes left (a
+  ThinQ poll or `read`, a push if it carries LG's timer, the dishwasher's read) sets the open
+  cycle's `ends_at` to now plus those minutes. With no minutes, it's left as it was.
+- Home: a running appliance with an `ends_at` still ahead shows "Washer: running, done
+  around 11:16 pm". With none (or one already past): "Washer: running". It never shows the
+  start time. Finished is unchanged ("finished at …").
+- In chat, `_words` also gives the time ("5 minutes left, done around 11:16 pm"), so the
+  model never has to work it out.
+
+Tests: a poll with 15 minutes left stores `ends_at`. Home says "done around" that time and
+never "since". An `ends_at` in the past, or none, shows plain "running". A new cycle doesn't
+carry the old one's `ends_at`. The dishwasher works the same. The chat wording has the time.
+Scenario: the washer starts at 11:01 pm with 15 minutes left. Michael opens Home and sees
+"Washer: running, done around 11:16 pm".
+
+Data: none needed. Mark #196 reviewed once live.
+
+### F40c · Feedback (2026-11-09): a Mini App can open in the phone's browser
+Status: [ ]
+Depends on: BD3a, CK1
+Read first: `themi/web/auth.py` (login links), `/login/{token}` in `themi/web/site.py`,
+`themi.web.session_pages` and `POST /session/telegram`, `themi_home/web/static/miniapp.js`
+(the Mini App events it already sends); Telegram's Mini App event `web_app_open_link`. From
+Michael's idea #193 (2026-11-09, 9:47 pm, "allow the mini apps to launch in an external
+browser").
+
+What the Pi shows: idea #193, sent while cooking from [Open in kitchen view] (session 11,
+Vegan Pumpkin Donuts). The cook screen and the body double page open only inside Telegram's
+Mini App frame. Their sign-in is Telegram's `tgWebAppData`, so the same `/session` opened in
+a browser has no session unless that browser was signed in already.
+
+Build:
+- Both Mini App pages get an "Open in browser" link in the header, shown only inside
+  Telegram (where `tgWebAppData` was present).
+- Tapping it posts (CSRF-checked) to `/session/browser-link`, which makes an ordinary
+  one-time login link for the signed-in member that goes on to `/session`. The page then
+  sends `web_app_open_link` with that URL, so the phone's own browser opens it.
+- Login links can carry a `next` that's a same-site path (anything else is ignored and goes
+  to `/`). The Continue step stays, so a link preview still can't burn it.
+- The browser shows the same live screen (it reads the same session and `seq`), so taps in
+  either place stay in step.
+
+Tests: `/session/browser-link` without a session is 403, with one gives a working single-use
+link whose Continue lands on `/session`. An outside `next` (`https://…`, `//…`) goes to `/`.
+The header link isn't drawn without Telegram's data. A tap in the browser after one in the
+Mini App with an old `seq` does nothing.
+Scenario: Michael, cooking in the Mini App, taps "Open in browser". His browser opens the cook
+screen on the same step, signed in, and Next there moves the chat card.
+
+Data: none needed. Decided here, not with Michael yet: the link lives inside the Mini App
+rather than as a second chat button, since a plain URL button opens Telegram's in-app
+browser on most phones. Mark #193 reviewed once live.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -15264,7 +15373,10 @@ Depends on: CK12, BD3a
 Read first: the plan's "How it fits the codebase" ("Quiet chat while a screen is open")
 and Company; `Cooking.say`, `Cooking.seen`, `BodyDouble._ask`. Decision with Michael on
 2026-11-09: chat stays quiet while a mini app is open, but a timer's urgent "Time's up"
-still goes to Telegram.
+still goes to Telegram. Michael's bug #192 (2026-11-09, 9:47 pm, "I was using kitchen view
+from the site and the messages were still coming through on telegram") is this prompt:
+sessions 11 and 12 sent "Gathering first", "Prep next" and "On to the steps" to chat while
+the screen was open. Mark #192 reviewed once CK13 is live.
 - While the cook screen is open (`screen_open`), Themi's lines go to the screen only: the
   boundary lines, the stuck line, "what's after this?" when asked from the page, and the
   wrap-up offers (today `Cooking.say` sends to chat only when the screen is open: turn
