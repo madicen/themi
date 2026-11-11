@@ -677,6 +677,8 @@ class TaskBoard:
         woke = datetime(local.year, local.month, local.day, end.hour, end.minute, tzinfo=tz)
         if not woke <= local < woke + MORNING_LIST_WITHIN:
             return False
+        if self.outbox.tray is not None and self.outbox.tray.morning_on(member):
+            return False  # MM3: the morning message's Today's tasks is their list
         tasks: list[Task] = []
         seen: set[int] = set()
         for row in rows:  # already in their order (T1)
@@ -706,6 +708,20 @@ class TaskBoard:
                 "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
             )
         return True
+
+    async def send_list(self, member: Member, tasks: list[Task]) -> None:
+        """The morning list, asked for (MM3: Today's tasks on the morning message): a reply,
+        so it's sent now and not counted. It's their nudge for each task on it."""
+        text, buttons = self._list_message(tasks, self._today())
+        result = await self.outbox.send(
+            member, text, priority=Priority.REPLY, kind="task_summary", buttons=buttons
+        )
+        if result.outbox_id is None:
+            return
+        for task in tasks:
+            self.db.execute(
+                "UPDATE tasks SET prompt_outbox_id = ? WHERE id = ?", (result.outbox_id, task.id)
+            )
 
     def _list_message(self, tasks: list[Task], today: date) -> tuple[str, list[Button]]:
         ids = [t.id for t in tasks]

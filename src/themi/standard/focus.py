@@ -159,12 +159,17 @@ class Focus:
         self.services.button_handlers["focus"] = self.on_button
 
     def pick(
-        self, member: Member, among: Collection[int] | None = None, times: int = 1
+        self,
+        member: Member,
+        among: Collection[int] | None = None,
+        times: int = 1,
+        count: int | None = None,
     ) -> tuple[list[Task], list[Task]]:
         """Today's few for now, and the rest: medicines, a time today, urgent and important,
         then the lightest. `among`: only what was on the list they were looking at. Their own
         number of them, and fewer than there are; asked again (`times` 2), the lightest one;
-        a third time, none. Medicines always."""
+        a third time, none. Medicines always. `count`: that many, whatever their number
+        (MM4: Just one thing on the morning message)."""
         today = self.summary.today(member)
         now = clock.now()
 
@@ -193,6 +198,8 @@ class Focus:
             if times == 1
             else max(3 - times, 0)
         )
+        if count is not None:
+            few = count
         cut = max(few, len(medicines))
         return due[:cut], due[cut:]
 
@@ -226,7 +233,12 @@ class Focus:
         return f"{text}\n{kept}"
 
     async def send(
-        self, member: Member, *, spread: bool = False, among: list[int] | None = None
+        self,
+        member: Member,
+        *,
+        spread: bool = False,
+        among: list[int] | None = None,
+        count: int | None = None,
     ) -> str:
         """The few for now; the rest spread out at once (`spread`), or offered to be."""
         buttons: list[Button] = []
@@ -234,7 +246,7 @@ class Focus:
         if spread:
             text = await self.spread_now(member, among, times)
         else:
-            few, rest = self.pick(member, among, times)
+            few, rest = self.pick(member, among, times, count)
             text = self.text(member, few, rest)
             if few and rest:
                 which = {"list": among, "times": times}

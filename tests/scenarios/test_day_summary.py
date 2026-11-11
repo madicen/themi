@@ -187,10 +187,16 @@ async def test_the_morning_summary(scenario: Scenario, linked: FakeGcal) -> None
         erin, erin.id, DaySummaryPreferences, morning_summary="08:30"
     )
     await scenario.run_periodic("calendar.morning")  # 9 am: today's is due, and goes
-    summaries = [t for t in scenario.inbox("Erin") if t.startswith("Wed 21 Oct:")]
-    assert summaries == [TODAY]
+    # MM1: since the morning message, the calendar only; the tasks are behind a button
+    morning = (
+        "Good morning, Erin.\nWed 21 Oct:\n"
+        "- 10-11 am: Dentist (at Smile Dental)\n"
+        "- 12-1 pm: Standup (video call)"
+    )
+    assert [t for t in scenario.inbox("Erin") if t.startswith("Good morning")] == [morning]
+    assert "Today's tasks" in scenario.last_buttons("Erin")
     await scenario.run_periodic("calendar.morning")
-    assert len([t for t in scenario.inbox("Erin") if t.startswith("Wed 21 Oct:")]) == 1  # once
+    assert len([t for t in scenario.inbox("Erin") if t.startswith("Good morning")]) == 1  # once
 
 
 async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
@@ -202,7 +208,7 @@ async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
     )
     clock.advance(timedelta(hours=21))  # Thursday 6 am, in her quiet hours; nothing on
     await scenario.run_periodic("calendar.morning")
-    assert scenario.app.db.query("SELECT 1 FROM outbox WHERE kind = 'summary'") == []
+    assert scenario.app.db.query("SELECT 1 FROM outbox WHERE kind = 'morning'") == []
 
     scenario.app.store.save_preferences(
         erin, erin.id, DaySummaryPreferences, morning_summary_empty=True
@@ -210,9 +216,9 @@ async def test_a_summary_set_in_quiet_hours_waits_and_empty_days_are_skipped(
     clock.advance(timedelta(days=1))  # Friday 6 am
     await scenario.run_periodic("calendar.morning")
     (row,) = scenario.app.db.query(
-        "SELECT status, send_after, text FROM outbox WHERE kind = 'summary'"
+        "SELECT status, send_after, text FROM outbox WHERE kind = 'morning'"
     )
-    assert row["text"] == "Fri 23 Oct: nothing on the calendar, nothing due."
+    assert row["text"] == "Good morning, Erin. Nothing on the calendar today."  # MM1
     assert row["status"] == "queued"  # until her quiet hours end
     assert datetime.fromisoformat(row["send_after"]) == datetime(2026, 10, 23, 8, tzinfo=PACIFIC)
 
