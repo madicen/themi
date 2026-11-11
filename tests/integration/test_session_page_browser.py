@@ -63,9 +63,10 @@ def free_port() -> int:
 class Tab:
     """Just enough of the Chrome DevTools protocol to load a page and run a line in it."""
 
-    def __init__(self, ws: Any) -> None:
+    def __init__(self, ws: Any, profile: str = "") -> None:
         self.ws = ws
         self.n = 0
+        self.profile = profile  # its Chrome's profile folder, deleted when Chrome stops
 
     async def call(self, method: str, **params: Any) -> dict[str, Any]:
         self.n += 1
@@ -149,7 +150,7 @@ async def page_in_chrome(
             said = errors.read().decode(errors="replace").strip().splitlines()[-3:]
             pytest.skip(f"Chrome didn't start (exit {chrome.poll()}): {' | '.join(said)}")
         async with websockets.connect(pages[0]["webSocketDebuggerUrl"], max_size=None) as ws:
-            tab = Tab(ws)
+            tab = Tab(ws, profile)
             if before:
                 await tab.call("Page.enable")
                 await tab.call("Page.addScriptToEvaluateOnNewDocument", source=before)
@@ -171,21 +172,17 @@ async def page_in_chrome(
         await serving
 
 
-def chrome_profiles() -> set[str]:
-    from pathlib import Path
-
-    return {p.name for p in Path(tempfile.gettempdir()).glob(f"{CHROME_PROFILE_PREFIX}*")}
-
-
 async def test_chrome_leaves_no_profile_behind(scenario: Scenario) -> None:
-    """2026-11-10: each Chrome's profile was left in the temp folder and filled the disk."""
+    """2026-11-10: each Chrome's profile was left in the temp folder and filled the disk.
+    Only its own profile is looked at: other workers' Chromes share the temp folder."""
     clock.unfreeze()
     erin = scenario.member("Erin")
-    await start(scenario, "the dishes", mode="silent")
-    before = chrome_profiles()
-    async with page_in_chrome(scenario, erin, ".session") as _tab:
-        assert len(chrome_profiles() - before) == 1  # its own, while it runs
-    assert chrome_profiles() - before == set()
+    await start(scenario, "Sit with me while I do the dishes", mode="quiet", minutes=30)
+    async with page_in_chrome(scenario, erin, ".session") as tab:
+        profile = tab.profile
+        assert os.path.basename(profile).startswith(CHROME_PROFILE_PREFIX)
+        assert os.path.isdir(profile)  # its own, while it runs
+    assert not os.path.exists(profile)
 
 
 async def test_go_on_the_page_moves_the_session(scenario: Scenario) -> None:
