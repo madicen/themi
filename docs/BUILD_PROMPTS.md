@@ -266,6 +266,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
+| F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [ ] |
+| F41b | Feedback: cooking started on the website stays on the screen | Feedback | [ ] |
+| F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [ ] |
+| F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13191,6 +13195,185 @@ page) and sends `web_app_open_link` with `/session?ticket=…`. The button is CS
 unless the page is `.in-telegram`. Outside Telegram it isn't shown and has no handler. Tests
 are in `test_cook_miniapp_browser.py` (headless Chrome, Telegram faked). No golden file
 changed. Still to decide with Michael: whether a chat button is wanted too.
+
+### F41a · Feedback (2026-11-10): the Whoosh's sani-solution is cleans left, not a percent
+Status: [ ]
+Depends on: CG1a, CG1b
+Read first: `themi_home/connectors/catgenie/events.py` (the docstring, `read_device`,
+`problems`, `state_word`, `LOW_PERCENT`); `themi_home/litter_box.py` (`_left`, the cartridge
+task's words, "a new cartridge closes it"); `litter_states.sani_left`; the fixtures README in
+`tests/fixtures/catgenie`. From Michael's bug #197 (2026-11-10, 11:55 pm, "the litter box is
+listing 480% sani solution", with a screenshot of Home).
+
+What the Pi shows: two CatGenies. "AI - CGU7225298" (`fwVersion` 8.7.205R, `serviceLevel`
+Classic) reports `remainingSaniSolution` 56, a percent. "Whoosh - SFU8011679h" (`fwVersion`
+100.4.14R, Deluxe) reports 477 (480 the night before, 178 cleans so far). Home says "ready,
+480% sani-solution left". Michael checked the app on 2026-11-11: for the Whoosh it shows **477
+cleans left** before the cartridge needs changing. So `LOW_PERCENT` (20) would only call it
+low at 20 cleans, and the cartridge task would say "about 477% left". A capture from
+2026-11-11 (`themi catgenie capture`) has both reports.
+
+Build:
+- Bug fix: start with the failing test below.
+- The Whoosh's report from the Pi goes into `tests/fixtures/catgenie` as a second device, with
+  ids, names and numbers left out as the capture does. The README says which model each is.
+- `read_device` tells the two apart by `fwVersion`: major version 100 or more is the Whoosh,
+  which counts cleans. A version it can't read stays a percent (as now). `LitterBoxReading`
+  gets `sani_unit` ("%" or "cleans"). The number is stored as reported (`sani_left`), and a
+  migration adds `litter_states.sani_unit`.
+- Words: "ready, 477 cleans of sani-solution left" (Home, the Accounts page,
+  `appliance_status`); the cartridge task "(about 12 cleans left)". Never a percent over 100:
+  a percent reading over 100 shows no level, and is logged once.
+- Running low for the Whoosh: 30 cleans or fewer (`LOW_CLEANS`, about ten days at its three
+  cleans a day). Out is 0, as now. A new cartridge (the number going up) still closes the task.
+- Update the events docstring: `remainingSaniSolution` is a percent on the A.I. (8.x) and
+  cleans left on the Whoosh (100.x).
+
+Tests: start with a failing one: the Whoosh fixture at 477 reads "477 cleans of
+sani-solution left", never "%". The A.I. fixture still reads "56% sani-solution left". The
+Whoosh at 30 is running low, at 31 isn't, at 0 is out. A percent device reporting 140 shows
+no level. The cartridge task's words use the unit.
+Scenario: the Whoosh drops from 31 to 30 cleans. One "Change the Whoosh's sani-solution
+cartridge (about 30 cleans left)" task appears. Home says "30 cleans of sani-solution left".
+
+Data: none needed (the next poll stores the unit). Decided here, not with Michael yet: low at
+30 cleans. Mark #197 reviewed once live.
+Related, not this prompt: on 2026-11-11 at 07:41 one box reported the error `'6'` ("Themi
+has no words for"). Nothing showed it to anyone, but "it shows an error (6)" would. A capture
+while it shows that state would give `CODES` its words.
+
+### F41b · Feedback (2026-11-11): cooking started on the website stays on the screen
+Status: [ ]
+Depends on: CK13, RC4
+Read first: `POST /recipes/{recipe_id}/cook` in `themi_home/web/recipe_pages.py`;
+`Cooking.start`, `Cooking.show`, `Cooking.screen_open` and every `show(...)` caller in
+`themi_home/cooking.py`; `cooking_screen.py` (taps); CK13's notes; the cooking plan's "Quiet
+chat while a screen is open". From Michael's bug #198 (2026-11-11, 10:50 am, "using kitchen
+view from my computer still sends messages to telegram"). #192 was the same complaint, and
+CK13 quieted the lines but not the card.
+
+What the Pi shows: at 10:49 am Michael pressed Cook on Pancakes on the website (no tool ran;
+session 16). `cook` calls `Cooking.start`, which `show`s the card. That sent outbox 1789
+"Cooking Pancakes. Before anything else: preheat the oven to 200°F." to Telegram, and every
+tap on the screen after that edited it (gather, prep, steps 1-3, "Stopped cooking"). The
+site's redirect even says "Cooking: the same card is in your chat."
+
+Decided (Michael, 2026-11-11, bug #198): a session started from the website never posts to
+chat. It lives on the screen only. Chat gets nothing about it unless they ask Themi there.
+This goes beyond the plan's "the chat card is still edited in place", which stays true for a
+session started in chat. The plan's "Quiet chat while a screen is open" paragraph says so
+(added 2026-11-11).
+
+Build:
+- Bug fix: start with the failing test below.
+- A migration adds `cooking_sessions.from_page` (0/1). `Cooking.start(..., from_page=True)`
+  from the website's Cook button. `show` for such a session renders nothing to chat (no
+  `card.show`, `message_id` stays null). Every other place that would send to chat for it
+  is skipped too: the start line already goes to the screen. A timer's urgent "Time's up"
+  still goes to Telegram (CK13's decision), and so do the wrap-up offers if the screen is
+  closed when the session ends. Check each `show`/`card`/outbox caller.
+- Asked in Telegram ("what step am I on?", "next"), Themi answers there as now. If the
+  answer would move the session, it moves it and edits nothing (there's no card).
+- The site's redirect says "Cooking Pancakes on this screen." and nothing about chat.
+- A session started in chat, then opened in kitchen view, is unchanged (CK13).
+
+Tests: start with a failing one: POST `/recipes/{id}/cook` starts a session and nothing is
+queued in the outbox. Taps (tick, next, skip, goto, stop) on it queue and edit nothing. A
+cooking timer firing still sends its "Time's up". "next" typed in Telegram moves it and
+answers in chat. A session started in chat still gets its card and edits.
+Scenario: Michael presses Cook on Pancakes on his computer, ticks the ingredients, steps
+through, and stops. His Telegram chat gets nothing.
+
+Data: none needed. Mark #198 reviewed once live (and #192, from CK13).
+
+### F41c · Feedback (2026-11-11): what Themi did on its own is always in the reply
+Status: [ ]
+Depends on: 28, F21b, F34d
+Read first: `themi/core/tools.py` (`_stage`, "Done automatically", `ctx.done`,
+`ctx.replies`); `themi/core/agent.py` (the end of the loop: `_done_first`, `_without_done`,
+`_honest`, `_repeats_card`); `themi/standard/tasks.py` (`ctx.done.append`, which already
+does this for a task marked done). From Michael's bug #199 (2026-11-11, 11:43 am, "that was
+an awful attempt at addressing that series of requests") and his 👎 on reply 426.
+
+What the Pi shows: reply 426. Michael: "We need to drop off our kid at my in-laws before we
+go to that appointment. Please add that to our calendar and recalculate the drive times
+(especially since we'll leave from my in-laws to go to the appointment)". The model ran
+`add_calendar_event` ("Done automatically (action 645): On your calendar: Drop off kid at
+in-laws, Wed 11 Nov, 12-1 pm (at 790 La Para Ave, Palo Alto, CA 94306)") and `drive_time`
+(17 min from home, leaving now). The whole reply was "Leave at 12:43 PM.", word for word
+the previous turn's answer (reply 425). It never said the event was added, or when.
+
+Build:
+- Bug fix: start with the failing test below.
+- `_stage`: an action done automatically adds its `outcome.message` to `ctx.done` (as
+  marking a task done does), and the tool result tells the model "Themi tells them itself,
+  word for word: …; don't say it again". `_done_first` puts it first in the reply. Skip the
+  ones whose `proposal.said` already reaches them (`ctx.replies`), so nothing is said twice.
+- A reply that is word for word the last thing Themi said to this person in this chat (the
+  previous reply, within the hour) is dropped when tools ran this turn. What's left is the
+  done lines. If nothing is left, it's "Done." or `TANGLED_TEXT` as now.
+- Check the pantry's own "Done automatically:" lines (`pantry.py`) aren't doubled.
+
+Tests: start with a failing one: reply 426's turn, faked: the model calls
+`add_calendar_event` (auto-done) and `drive_time`, then answers "Leave at 12:43 PM.", which
+it also said last turn. The reply starts with "On your calendar: Drop off kid at in-laws,
+Wed 11 Nov, 12-1 pm …" and doesn't repeat "Leave at 12:43 PM.". An auto-done change whose
+`said` is set isn't said twice. A staged one (card) isn't put in `done`. A task marked done
+is unchanged.
+Scenario: Michael asks for an event to be added and the model's text leaves it out. The
+reply still says it's on his calendar.
+
+Data: none needed. Mark #199 reviewed once F41c and F41d are both live.
+
+### F41d · Feedback (2026-11-11): a stop on the way: drives from where they'll be, not home
+Status: [ ]
+Depends on: K4, F38b, F41c
+Read first: `themi_google/travel.py` (the module docstring, `_consider`, `drive_to_event`,
+`drive_to_address`, `drive_time`); `add_calendar_event` in `themi_google/events.py` and its
+named places (`themi.standard.places`, "In-laws" found as 790 La Para Ave); F38b (the
+heads-up isn't held by anything). Same report as F41c (bug #199, reply 426).
+
+What the Pi shows:
+- `drive_time` only drives from home. Asked to "recalculate … since we'll leave from my
+  in-laws", the model could only ask for home to Quarry Rd again (17 min, "leaving now").
+- The heads-up job also drives from home for every event. So the 1 pm ND psych heads-up
+  still said to leave home at 12:43, though they'd be at the in-laws from 12.
+- The drop-off was made 12-1 pm. Michael gave no time, so the model made one up, and it runs
+  right up to the 1 pm appointment with no time left to drive there.
+- The drop-off's own heads-up (outbox 1799, "leave around 11:50 am") was held until 8 am the
+  next day. F38b fixes that; it isn't part of this prompt.
+
+Build:
+- `drive_time` gets `from`: an address, a named place ("in-laws") or an event's words, ''
+  for home. The answer says where from: "From the in-laws (790 La Para Ave): about 9 min with
+  traffic. Leave there around 12:51 pm." Getting ready isn't counted when leaving from
+  somewhere other than home.
+- Back-to-back events: when one of theirs with a place ends 90 minutes or less before the
+  next one with a place starts (the same day, both timed), the next one's drive is from the
+  first one's place. That holds for `drive_time` (event) and for the heads-up job. The
+  heads-up then says "leave the in-laws around 12:51 pm" with no "start getting ready". The
+  first event's drive is from home as now.
+- `add_calendar_event` gets `before`: an event's words. With no start and end, the new
+  event becomes a 15-minute stop that ends when they must leave it for that event (its start
+  minus the drive from the stop's place). The answer says the time it worked out. With
+  neither a time nor `before`, a timed thing still isn't guessed: the tool asks for the time
+  (as `unread` does).
+- Update the tool descriptions and the travel docstring.
+
+Tests: `drive_time` from "in-laws" to the ND psych event times from 790 La Para Ave
+(TomTom faked) and says "from the in-laws". Two events, 12:36-12:51 at the in-laws and 1 pm
+at Quarry Rd: the heads-up for the second drives from the in-laws and has no getting-ready
+line. With a 2-hour gap it drives from home. `add_calendar_event` with `before: "ND psych"`
+and no times makes a stop ending at 1 pm minus the drive. With no time and no `before` it
+asks.
+Scenario: Michael's request from reply 426, with the model faked to call `add_calendar_event`
+(before "ND psych", location "In-laws") and `drive_time` (event "ND psych", from "in-laws").
+The reply has the drop-off's time and "leave the in-laws around …". At the drop-off's
+leave-by the heads-up comes, and for the appointment the heads-up drives from the in-laws.
+
+Data: Michael's drop-off event (action 645, 12-1 pm on 11 Nov) has passed: nothing to fix.
+Decided here, not with Michael yet: back-to-back means 90 minutes, and a stop with no time
+is 15 minutes. Mark #199 reviewed once F41c and F41d are both live.
 
 ## Conversation mode
 
