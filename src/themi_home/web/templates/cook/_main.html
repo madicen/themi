@@ -17,6 +17,7 @@
         <button name="text_size" value="up" aria-label="Bigger text">A+</button>
       </form>
       <button type="button" class="cook-fullscreen" aria-pressed="false" hidden>Full screen</button>
+      <button type="button" class="open-in-browser">Open in browser</button>{# F40c: in Telegram only #}
       {% if not state.ended %}{{ act(state, csrf, "stop", "Stop", cls="cook-stop") }}{% endif %}
     </div>
   </header>

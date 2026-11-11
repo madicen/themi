@@ -265,7 +265,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
-| F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [ ] |
+| F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13142,7 +13142,7 @@ every time it's asked. Home says "Washer: running, done around 9:24 am" or plain
 No golden file changed.
 
 ### F40c · Feedback (2026-11-09): a Mini App can open in the phone's browser
-Status: [ ]
+Status: [x] 2026-11-10
 Depends on: BD3a, CK1
 Read first: `themi/web/auth.py` (login links), `/login/{token}` in `themi/web/site.py`,
 `themi.web.session_pages` and `POST /session/telegram`, `themi_home/web/static/miniapp.js`
@@ -13176,6 +13176,16 @@ screen on the same step, signed in, and Next there moves the chat card.
 Data: none needed. Decided here, not with Michael yet: the link lives inside the Mini App
 rather than as a second chat button, since a plain URL button opens Telegram's in-app
 browser on most phones. Mark #193 reviewed once live.
+
+Notes: deviation, simpler than the Build above. No `/session/browser-link` and no login
+`next`: the session pages already have both halves. `POST /session/ticket` (CSRF-checked,
+the page's own session) makes a one-time ticket, and `GET /session?ticket=` signs a browser
+in with it (and drops it from the address). So `miniapp.js` handles a click on
+`.open-in-browser` (on the cook screen's tools, beside Full screen, and under the body double
+page) and sends `web_app_open_link` with `/session?ticket=…`. The button is CSS-hidden
+unless the page is `.in-telegram`. Outside Telegram it isn't shown and has no handler. Tests
+are in `test_cook_miniapp_browser.py` (headless Chrome, Telegram faked). No golden file
+changed. Still to decide with Michael: whether a chat button is wanted too.
 
 ## Conversation mode
 
