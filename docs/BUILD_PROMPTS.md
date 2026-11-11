@@ -377,6 +377,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
 | SL5 | Slack: the work template on Slack | Slack | [x] 2026-11-08 |
 | SL6 | Slack: status sync | Slack | [x] 2026-11-08 |
+| MM1 | Morning message: greeting and calendar only | Morning message | [x] 2026-11-11 |
+| MM2 | Morning message: the morning tray | Morning message | [x] 2026-11-11 |
+| MM3 | Morning message: Today's tasks and Email | Morning message | [x] 2026-11-11 |
+| MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
+| MM5 | Morning message: a weather line when it's noteworthy | Morning message | [ ] deferred |
 
 ## Fixed technical choices
 
@@ -17495,3 +17500,110 @@ Notes (2026-11-08):
   own token change their status. `SLACK_USER_TOKEN` is optional; Test tries it when set.
 - The manifest asks for the user scopes `users.profile:write` and `dnd:write`, so an
   existing install has to be reinstalled (and re-approved) to give the user token.
+
+## Morning message
+
+Design source: the [Themi Morning Message Plan](https://claude.ai/artifact/LNbbgK5EV6rsTMXk2J6cja).
+Read it with the Claude Docs tools, like the other plans. Michael's decisions in the doc
+(2026-11-11):
+
+- The fourth button is Just one thing.
+- What's still in a tray comes back once, at noon, in one message with the same buttons
+  (5 pm when a busy time covers noon). It counts once; no other push.
+- On for both of them, replacing the day summary, at each person's current
+  `morning_summary` time. Nothing to migrate: anyone with that time set gets the new message.
+- Strictly calendar. A weather line only when it's noteworthy is a follow-up (MM5), since it
+  needs a weather source.
+
+### MM1 · Morning message: greeting and calendar only
+Status: [x] 2026-11-11
+Depends on: K2
+Read first: the plan's "The morning message"; `DaySummary.items`.
+- The morning message is a greeting, the date and today's calendar events, built without the
+  AI. No tasks, check-ins or plan amounts; events Themi put there for a task ("task:",
+  "task-block:") are left out. Nothing on: "Good morning, Erin. Nothing on the calendar
+  today."
+- It goes at the `morning_summary` time, with that time as its deadline (bug #57).
+Tests: the day summary scenarios for the new text; the morning message scenarios.
+
+Notes:
+- `themi.standard.morning.MorningMessage`, installed by the day summary module (no new
+  module: the setting is the day summary's). `DaySummary.morning` moved there;
+  `DaySummary.items(tasks=False)` is the calendar alone.
+- The message's kind is `morning` (it was `summary`); a refresher builds it again as it
+  goes, so a message held by quiet hours is true at 8 am.
+- Greetings alternate by date ("Good morning, Erin." / "Morning, Erin.").
+
+### MM2 · Morning message: the morning tray
+Status: [x] 2026-11-11
+Depends on: MM1
+Read first: the plan's "The morning tray" and "The cold-call budget"; `Outbox.flush`.
+- From the start of the day until the morning message goes, proactive `normal`/`low`
+  messages wait in a tray (`outbox.tray`: tasks, email, other) instead of going.
+- A tap releases a tray as replies: sent now, not counted.
+- No morning message (setting off, or past `SEND_WITHIN`): no tray, and anything held goes
+  back to the normal flow.
+Tests: outbox unit tests for holding, releasing and expiry; scenarios for urgent and
+timed messages, the setting off, and a missed morning.
+
+Notes:
+- Migration 0161: `outbox.tray`, and `morning_summaries.outbox_id`, `tapped`, `recap_at`.
+  A held row keeps status `queued` (the column has a CHECK); the flush skips rows with a
+  tray. `Outbox.release` sends a tray as replies, `untray` puts it back.
+- Deviation from the plan, by necessity: the plan says a held message with a deadline today
+  leaves the tray at its deadline. In the code nearly every proactive message has a
+  deadline as a cap on waiting for a good window (task nudges: 9 am on the due date;
+  approval cards: two hours), so that rule would bring the flurry back by 9 am. Instead a
+  message whose deadline was within 5 minutes of when it was made (meant to go at once: a
+  timely approval) is never held, and the noon recap is the safety net for the rest. The
+  plan doc is updated to say so.
+- Never held: urgent, replies, answer kinds, group questions, `reminder`, `routine`,
+  `break`, `focus`, `system`, `slow_notice`, a medicine's nudge, a nudge for a task with a
+  time today.
+- Email tray: kinds `email` and `email_audit`, approval cards from email (an approval group,
+  or a card whose action is `email_*` or `calendar_from_email`), and the email audit task's
+  nudge.
+
+### MM3 · Morning message: Today's tasks and Email
+Status: [x] 2026-11-11
+Depends on: MM2
+Read first: the plan's "The buttons".
+- The `morning` button kind. Today's tasks sends the morning list (today's due tasks and
+  any held nudges, a tick each) as a reply; Email releases the email tray.
+- A tap edits the message to drop that button. A tap on an older day's message says so and
+  answers with today's.
+- The morning-list bundler stands down for anyone with the morning message on.
+Tests: the morning message scenarios.
+
+Notes:
+- `TaskBoard.send_list` sends the list as a reply and makes it each task's nudge, as the
+  bundler did. Held task nudges are withdrawn when the list goes.
+- Buttons are kept live by the edit: a tap uses up the message's tokens, and the edit
+  makes new ones for the buttons left. Email sends each held card as its own reply (not
+  one combined message as the plan sketched): the cards keep their own buttons.
+
+### MM4 · Morning message: Everything else, Just one thing, the noon recap, settings
+Status: [x] 2026-11-11
+Depends on: MM3
+Read first: the plan's "The buttons", "Edge cases" and Michael's decisions above.
+- Everything else releases the other tray; Just one thing is `focus_now` with one.
+- The noon recap (`calendar.morning_recap`, every 5 minutes): what still waits, once, at
+  noon or 5 pm when a busy time covers noon.
+- The settings page says "A good-morning message with today's calendar, and the rest when I
+  want it".
+Tests: scenarios for each tap and the count, the recap at noon, at 5 pm, and not at all
+when everything was looked at.
+
+Notes:
+- `Focus.send(count=)` / `Focus.pick(count=)`.
+- Golden files: a `morning` button handler and the `calendar.morning_recap` job, as this
+  prompt says.
+- Tests changed for wording this track changed on purpose: the day summary scenarios'
+  morning text, bug #57's scenario (`test_on_time`), and the website's settings wording.
+- Turned on for Michael and Erin: nothing to do, their `morning_summary` times carry over.
+
+### MM5 · Morning message: a weather line when it's noteworthy
+Status: [ ] deferred (Michael, 2026-11-11: after MM4, needs a weather source)
+Depends on: MM4
+- One line under the calendar only when the day's weather is noteworthy (rain, freezing).
+  Needs a weather connector first; nothing on fair days.
