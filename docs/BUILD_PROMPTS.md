@@ -13366,20 +13366,36 @@ Build:
   first one's place. That holds for `drive_time` (event) and for the heads-up job. The
   heads-up then says "leave the in-laws around 12:51 pm" and comes at getting-ready time, as
   every heads-up does. The first event's drive is from home as now.
-- `add_calendar_event` gets `before`: an event's words. With no start and end, the new
-  event becomes a 15-minute stop that ends when they must leave it for that event (its start
-  minus the drive from the stop's place). Its done line (F41c) says the time it worked out,
-  and the leave times change: when to leave home for the stop and when to leave the stop,
-  each with when to start getting ready. Themi says these itself, after the done line. With
-  neither a time nor `before`, a timed thing still isn't guessed: the tool asks for the time
-  (as `unread` does).
+- `add_calendar_event` gets `before`: an event's words. With no start and end, the stop is
+  timed from what Themi knows, never given a default hour (Michael, 2026-11-11: "the event
+  should be timed with the available knowledge"). Worked back from the event it comes before:
+  1. Leave the stop = the event's start minus the drive from the stop's place to the event's
+     place (TomTom, arriving at the start, with traffic).
+  2. Arrive at the stop = leave the stop minus the time there (15 minutes for a drop-off or
+     pick-up).
+  3. Leave home = arrive at the stop minus the drive from home to the stop (arriving then).
+  4. Start getting ready = leave home minus their "getting ready takes".
+  The event is the stop, from arriving to leaving (12:36-12:51 pm in reply 426's case), at the
+  stop's place. Its done line (F41c) says that time. Then Themi says the leave times itself,
+  each with when to start getting ready: "Leave home around 12:26 pm (start getting ready
+  around 12:11 pm) to reach the in-laws by 12:36; leave there around 12:51 pm for ND psych at
+  1 pm." The heads-ups follow the same chain (the back-to-back rule above). If a place isn't
+  known or a drive can't be found, the stop isn't guessed: Themi asks what time (as `unread`
+  does), saying what it couldn't find. With neither a time nor `before`, a timed thing still
+  isn't guessed: the tool asks for the time.
+- The tool description tells the model: "before X" with no time → `before`, not a start and
+  end it made up.
 - Update the tool descriptions and the travel docstring.
 
 Tests: `drive_time` from "in-laws" to the ND psych event times from 790 La Para Ave
 (TomTom faked) and says "from the in-laws" and when to start getting ready. Two events,
 12:36-12:51 at the in-laws and 1 pm at Quarry Rd: the heads-up for the second drives from
 the in-laws, says when to start getting ready, and comes at that time. With a 2-hour gap it drives from home. `add_calendar_event` with `before: "ND psych"`
-and no times makes a stop ending at 1 pm minus the drive. With no time and no `before` it
+and no times: drives home → in-laws 10 min and in-laws → Quarry Rd 9 min (faked), getting
+ready 15 min. The stop is 12:36-12:51 pm at 790 La Para Ave, and the reply says leave home
+12:26, start getting ready 12:11, leave the in-laws 12:51. Neither end is on the hour unless
+the drives make it so. A stop whose place can't be found asks for the time and adds
+nothing. With no time and no `before` it
 asks.
 Scenario: Michael's request from reply 426, with the model faked to call `add_calendar_event`
 (before "ND psych", location "In-laws") and `drive_time` (event "ND psych", from "in-laws").
@@ -13388,8 +13404,8 @@ leave the in-laws, each with when to start getting ready. At the drop-off's
 leave-by the heads-up comes, and for the appointment the heads-up drives from the in-laws.
 
 Data: Michael's drop-off event (action 645, 12-1 pm on 11 Nov) has passed: nothing to fix.
-Decided here, not with Michael yet: back-to-back means 90 minutes, and a stop with no time
-is 15 minutes. Mark #199 reviewed once F41c and F41d are both live.
+Decided here, not with Michael yet: back-to-back means 90 minutes, and a drop-off or pick-up
+takes 15 minutes at the stop. Mark #199 reviewed once F41c and F41d are both live.
 
 ## Conversation mode
 
