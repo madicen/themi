@@ -263,7 +263,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
-| F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [ ] |
+| F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [ ] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -13054,7 +13054,7 @@ the feeding log is only read hourly, so "fed 5 minutes ago" can't be known relia
 follow-up could read `feed_report` right after a command. Mark #194 reviewed once live.
 
 ### F40a · Feedback (2026-11-09): "What's my routine for tomorrow?" is answered for tomorrow
-Status: [ ]
+Status: [x] 2026-11-10
 Depends on: F34j
 Read first: `themi/standard/routines.py` (`Routines.describe`, `Item.applies`, `Item.when`,
 `show_routines`, `member_day`). From Michael's bug #195 (2026-11-09, 11:07 pm, "that's
@@ -13089,6 +13089,15 @@ Scenario: Michael asks "What's my routine for tomorrow?" on a Monday night and h
 evening items, bins included.
 
 Data: none needed. Mark #195 reviewed once live.
+
+Notes: `show_routines` takes `day` (`routine_day`: '', today, tomorrow, a weekday, or
+YYYY-MM-DD through `tasks.day_arg`). `Routines.describe(member, day)` reads "Michael's
+routines in Themi for Tuesday 27 October: Evening (…): Cycle Dishwasher, Take out bins, …
+Morning and Afternoon have nothing on them that day." Today's says "for today, Monday 26
+October" and "(done)". All empty: "… have nothing on them for …". Changed the existing
+`test_everyone_starts_with_morning_afternoon_and_evening` expectation: its all-empty
+wording is the one this prompt replaces. Golden `tools.json` changed for the new argument
+(expected). The scenario family's second member is "Husband", so the tests use that name.
 
 ### F40b · Feedback (2026-11-09): a running washer or dryer shows when it will finish
 Status: [ ]
