@@ -49,10 +49,12 @@ async def test_each_phrase(scenario: Scenario, site: httpx.AsyncClient, cooking:
     assert state["step"]["label"] == "2"
     state = (await say(site, csrf, session_id, "go to step three")).json()
     assert state["step"]["label"] == "3"
-    cards = len(scenario.inbox("Erin"))
+    cards, edits = len(scenario.inbox("Erin")), len(scenario.edits("Erin"))
     await say(site, csrf, session_id, "Repeat")
-    assert len(scenario.inbox("Erin")) == cards + 1  # the step again, as typed "repeat"
-    assert scenario.inbox("Erin")[-1].startswith("Alfredo Sauce: step 3 of 3")
+    # CK13: said on the screen, the chat card is edited in place, not sent again
+    assert len(scenario.inbox("Erin")) == cards
+    assert len(scenario.edits("Erin")) == edits + 1
+    assert scenario.edits("Erin")[-1]["text"].startswith("Alfredo Sauce: step 3 of 3")
     await site.post(f"/session/cook/{session_id}/act", headers={"X-Requested-With": "fetch"},
                     data={"csrf": csrf, "action": "timer", "minutes": "10", "step": "3",
                           "seq": str(cooking.get(session_id).seq)})  # type: ignore[union-attr]  # fmt: skip

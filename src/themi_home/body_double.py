@@ -74,6 +74,7 @@ MODE_WORDS = {
 }  # fmt: skip
 OPEN_ENDED = timedelta(hours=4)  # an open session asks how it went after this long
 LEFT_AFTER = timedelta(hours=1)  # a question with no answer: the session waits this long
+PAGE_OPEN = timedelta(minutes=2)  # CK13: the page asked for its state this recently
 LONGER = 15  # minutes: Silent Anchor's [A bit longer]
 MAX_MINUTES = 8 * 60
 
@@ -346,8 +347,42 @@ class BodyDouble:
         if session.pause_id is not None:
             self.pauses.move(session.pause_id, until + LEFT_AFTER)
 
-    def _schedule(self, session: Session, at: datetime) -> None:
-        self.jobs.enqueue(JOB, {"session": session.id, "seq": session.seq}, run_after=at)
+    def _schedule(self, session: Session, at: datetime, **extra: Any) -> None:
+        self.jobs.enqueue(JOB, {"session": session.id, "seq": session.seq, **extra}, run_after=at)
+
+    # ----- CK13: the page open, chat quiet ------------------------------------------------------
+
+    def seen(self, member: Member) -> None:
+        """The session page asked for its state: it's open, so its questions stay on it."""
+        session = self.current(member)
+        if session is not None:
+            self.db.execute(
+                "UPDATE body_double_sessions SET page_at = ? WHERE id = ?",
+                (to_utc_iso(clock.now()), session.id),
+            )
+
+    def _page_seen(self, session: Session) -> datetime | None:
+        at = self.db.scalar("SELECT page_at FROM body_double_sessions WHERE id = ?", (session.id,))
+        return datetime.fromisoformat(str(at)) if at else None
+
+    def page_open(self, session: Session) -> bool:
+        seen = self._page_seen(session)
+        return seen is not None and clock.now() - seen <= PAGE_OPEN
+
+    async def _held_check(self, session: Session) -> None:
+        """A question shown only on the page: still open, look again once it could have gone
+        quiet; gone quiet with no answer, it goes to chat now."""
+        held = self.db.scalar(
+            "SELECT ask_held FROM body_double_sessions WHERE id = ?", (session.id,)
+        )
+        if session.phase != "asking" or not held:
+            return
+        seen = self._page_seen(session)
+        if seen is not None and clock.now() - seen <= PAGE_OPEN:
+            self._schedule(session, seen + PAGE_OPEN + timedelta(seconds=1), held=1)
+            return
+        self.db.execute("UPDATE body_double_sessions SET ask_held = 0 WHERE id = ?", (session.id,))
+        await self._send_ask(session)
 
     # ----- starting -------------------------------------------------------------------------
 
@@ -559,6 +594,9 @@ class BodyDouble:
             return
         if int(payload.get("seq", -1)) != session.seq:
             return  # something changed since: a newer job carries it
+        if payload.get("held"):  # CK13: a question held on the open page
+            await self._held_check(session)
+            return
         if session.mode == GUIDED and self.guided is not None and session.phase != "asking":
             await self.guided.on_job(session)
             return
@@ -616,6 +654,18 @@ class BodyDouble:
         session = self._set(session, phase="asking", asking=asking, phase_ends_at=now)
         self._hold(session, now)
         self._schedule(session, now + LEFT_AFTER)
+        if self.page_open(session):  # CK13: shown on the page; to chat if it goes quiet
+            self.db.execute(
+                "UPDATE body_double_sessions SET ask_held = 1 WHERE id = ?", (session.id,)
+            )
+            seen = self._page_seen(session) or now
+            self._schedule(session, seen + PAGE_OPEN + timedelta(seconds=1), held=1)
+            return
+        self.db.execute("UPDATE body_double_sessions SET ask_held = 0 WHERE id = ?", (session.id,))
+        await self._send_ask(session)
+
+    async def _send_ask(self, session: Session) -> None:
+        now = clock.now()
         text, buttons = self.question(session)
         member = self._owner(session)
         result = await self.services.outbox.send(

@@ -309,7 +309,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | CK10 | Cooking companion: full screen in Telegram | Cooking companion | [x] 2026-11-08 |
 | CK11 | Cooking companion: the kitchen tablet | Cooking companion | [x] 2026-11-08 |
 | CK12 | Cooking companion: the tablet layout | Cooking companion | [x] 2026-11-09 |
-| CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [ ] |
+| CK13 | Cooking companion: quiet chat while a screen is open | Cooking companion | [x] |
 | CR1 | Core refactor: the module contract, loader and golden files | Core refactor | [x] 2026-11-07 |
 | CR2a | Core refactor: standard modules onto the contract | Core refactor | [x] 2026-11-07 |
 | CR2b | Core refactor: home features onto the contract | Core refactor | [x] 2026-11-07 |
@@ -15396,7 +15396,7 @@ Notes (2026-11-09):
 - Setup: none beyond a restart (the migration runs at start).
 
 ### CK13 · Cooking companion: quiet chat while a screen is open
-Status: [ ]
+Status: [x] 2026-11-10
 Depends on: CK12, BD3a
 Read first: the plan's "How it fits the codebase" ("Quiet chat while a screen is open")
 and Company; `Cooking.say`, `Cooking.seen`, `BodyDouble._ask`. Decision with Michael on
@@ -15416,6 +15416,29 @@ the screen was open. Mark #192 reviewed once CK13 is live.
 Tests: unit tests for each line with the screen open and closed; a scenario: a body
 double sprint with the page open ends its block, nothing reaches chat, the page closes,
 and the check-in arrives; a cooking timer firing with the screen open still sends.
+
+Notes:
+- `Cooking.say` now only sets the screen's line; it never sends (the `cooking_company`
+  kind is gone). Read with the plan ("Themi's lines go to the screen only" while open), the
+  prompt's "turn that round" was taken as: open, screen only; closed, the chat card says
+  enough, as CK5 had it. So nothing new reaches a chat-only cook. With the screen open, the
+  "There's a timer still running" question isn't sent either (the screen asks it,
+  `ask_timers`).
+- `InboundEvent.from_page`: set by `Cooking.page_chat_event` (Ask Themi) and the mic
+  (`cooking_voice.say`). From the page, "what's after this?" is the screen's line, a typed
+  or said move edits the chat card in place rather than sending it again, and a timer
+  phrase ("cancel the timer") is answered on the screen. Typed in Telegram, all of these
+  are answered in Telegram as before. Other Ask Themi questions still answer in both places
+  (the model's reply goes through the outbox).
+- Body double: migration 0160 adds `page_at` and `ask_held`. `/session/state` records the
+  page as seen (`BodyDouble.seen`). A block-end question asked while the page is open is
+  held (`ask_held`) and re-checked by a job just after the page could have gone quiet (2
+  minutes, `PAGE_OPEN`). If unanswered by then, it goes to chat. Guided mode's stuck nudge
+  is unchanged.
+- Changed tests: two CK5 asserts in `test_cook_company.py` (lines to chat while open, the
+  behaviour this prompt reverses) and CK8's voice "Repeat" in `test_cook_voice.py` (it sent
+  a fresh step card; from the screen it's now an edit). New: `test_quiet_page.py`.
+- Mark #192 reviewed once live.
 
 ## Core refactor
 

@@ -323,6 +323,10 @@ class CookingTimers:
             )
         else:
             return False
+        session = self.cooking.current(member) if event.from_page else None
+        if session is not None:  # CK13: said on the cook screen, answered there
+            await self.cooking.say(session, reply)
+            return True
         await self.services.outbox.send(member, reply, priority=Priority.REPLY, kind=KIND)
         return True
 

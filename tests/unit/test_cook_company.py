@@ -1,5 +1,5 @@
 """CK5: company in the kitchen: the chameleon's cooking states, Themi's lines at the
-boundaries (to chat only while the screen is open), the stuck line once and never while a
+boundaries (on the screen only, CK13), the stuck line once and never while a
 timer runs, music with BD5c's suggestion, and Spotify on the cook screen. The clock starts
 Wednesday 21 October 2026, 9 am."""
 
@@ -90,7 +90,8 @@ async def test_the_start_line_and_phase_lines(scenario: Scenario, cooking: Cooki
     scenario.primary.queue_structured({"jobs": [{"text": "Garlic: peel", "line": 3,
                                                  "tool": "knife"}]})  # fmt: skip
     await tap(cooking, scenario, session.id, "next")
-    assert scenario.inbox("Erin")[-1] == "Prep next, then the steps."
+    assert cooking.state(erin)["line"] == "Prep next, then the steps."
+    assert len(scenario.inbox("Erin")) == sent  # CK13 (bug #192): open, chat stays quiet
 
 
 async def test_the_scene_follows_the_timers(scenario: Scenario, cooking: Cooking) -> None:
@@ -122,7 +123,7 @@ async def test_the_stuck_line_once(scenario: Scenario, cooking: Cooking) -> None
     clock.advance(timedelta(minutes=2))
     cooking.seen(erin)
     assert await cooking.stuck() == 1
-    assert scenario.inbox("Erin")[-1] == STUCK_TEXT
+    assert STUCK_TEXT not in scenario.inbox("Erin")  # CK13: on the open screen only
     assert cooking.state(erin)["line"] == STUCK_TEXT
     await tap(cooking, scenario, session_id, "next")
     clock.advance(timedelta(minutes=25))
