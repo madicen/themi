@@ -10,6 +10,7 @@ from themi_home.connectors.thinq.client import region_url
 from themi_home.connectors.thinq.events import (
     minutes_left,
     parts,
+    push_minutes,
     read_push,
     read_report,
     state_word,
@@ -64,6 +65,13 @@ def test_pushes() -> None:
     assert read_push(payload("push_timer_only")) == {}
     assert read_push({"pushType": "DEVICE_PUSH", "deviceId": "x", "pushCode": "DOOR_OPEN"}) == {}
     assert read_push({"pushType": "DEVICE_STATUS", "report": {}}) == {}
+
+
+def test_push_minutes() -> None:
+    """F40b: a status push's timer, even one that says nothing about running."""
+    assert push_minutes(payload("push_timer_only")) == {"lg-washer-1": 30}
+    assert push_minutes(payload("push_washing_complete")) == {}
+    assert push_minutes({"pushType": "DEVICE_STATUS", "report": {}}) == {}
 
 
 def test_words() -> None:

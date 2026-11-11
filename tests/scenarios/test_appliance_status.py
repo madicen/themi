@@ -107,3 +107,77 @@ async def test_the_dishwasher_and_its_time_left(
     fake_home_connect.set_state(DISHWASHER, "Ready")
     said = await ask(scenario, "Is the dishwasher still running?", "dishwasher")
     assert "not running" in said
+
+
+# ----- F40b, idea #196: Home says when a running appliance will finish ------------------
+
+
+def at_a_glance(scenario: Scenario) -> list[str]:
+    appliances = scenario.app.services.maybe(keys.appliances)
+    assert appliances is not None
+    lines = appliances.at_a_glance()
+    assert lines is not None
+    return lines
+
+
+async def test_home_says_when_the_washer_will_finish(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    laundry_room.set_state(WASHER, "washer_running")  # 24 minutes left
+    await scenario.run_periodic("devices.thinq")
+    assert at_a_glance(scenario) == ["Washer: running, done around 9:24 am"]
+    clock.advance(timedelta(minutes=30))  # past it, and no read since
+    assert at_a_glance(scenario) == ["Washer: running"]
+
+
+async def test_home_never_shows_the_start_time(scenario: Scenario, laundry_room: FakeThinq) -> None:
+    laundry_room.set_run_state(WASHER, "RUNNING")  # no timer in this report
+    await scenario.run_periodic("devices.thinq")
+    clock.advance(timedelta(minutes=20))
+    assert at_a_glance(scenario) == ["Washer: running"]
+
+
+async def test_a_new_cycle_doesnt_keep_the_last_ones_finish(
+    scenario: Scenario, laundry_room: FakeThinq
+) -> None:
+    laundry_room.set_state(WASHER, "washer_running")
+    await scenario.run_periodic("devices.thinq")
+    clock.advance(timedelta(minutes=30))
+    laundry_room.set_state(WASHER, "washer_end")
+    await scenario.run_periodic("devices.thinq")
+    assert at_a_glance(scenario) == ["Washer: finished at 9:30 am"]
+    clock.advance(timedelta(hours=1))
+    laundry_room.set_run_state(WASHER, "RUNNING")
+    await scenario.run_periodic("devices.thinq")
+    assert at_a_glance(scenario) == ["Washer: running"]
+
+
+async def test_chat_says_the_finish_time_too(scenario: Scenario, laundry_room: FakeThinq) -> None:
+    laundry_room.set_state(WASHER, "washer_running")
+    said = await ask(scenario, "How much longer on the washer?", "washer")
+    assert "24 minutes left, done around 9:24 am" in said
+
+
+async def test_home_says_when_the_dishwasher_will_finish(
+    scenario: Scenario,
+    site: httpx.AsyncClient,
+    fake_home_connect: FakeHomeConnect,
+) -> None:
+    fake_home_connect.add_appliance(DISHWASHER, "Dishwasher", "Dishwasher")
+    await link(scenario, site, fake_home_connect)
+    fake_home_connect.set_state(DISHWASHER, "Run", seconds_left=2700)
+    await scenario.run_periodic("devices.dishwasher")
+    assert at_a_glance(scenario) == ["Dishwasher: running, done around 9:45 am"]
+
+
+async def test_a_timer_push_moves_the_finish(scenario: Scenario, laundry_room: FakeThinq) -> None:
+    from tests.fakes.thinq import payload
+
+    await scenario.run_periodic("devices.thinq_push")  # pushes connected
+    laundry_room.push_state(WASHER, "RUNNING")  # no timer in it
+    await scenario.run_periodic("devices.thinq_push")
+    assert at_a_glance(scenario) == ["Washer: running"]
+    clock.advance(timedelta(minutes=5))
+    laundry_room.push(payload("push_timer_only"))  # 30 minutes left now
+    await scenario.run_periodic("devices.thinq_push")
+    assert at_a_glance(scenario) == ["Washer: running, done around 9:35 am"]

@@ -264,7 +264,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
-| F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [ ] |
+| F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -13100,7 +13100,7 @@ wording is the one this prompt replaces. Golden `tools.json` changed for the new
 (expected). The scenario family's second member is "Husband", so the tests use that name.
 
 ### F40b · Feedback (2026-11-09): a running washer or dryer shows when it will finish
-Status: [ ]
+Status: [x] 2026-11-10
 Depends on: 30, F20b, W2
 Read first: `themi_home/appliances.py` (`at_a_glance`, `_words`, `_cycle`);
 `themi_home/connectors/thinq/watch.py` (`poll`, `read`, `_saw`) and `events.minutes_left`;
@@ -13131,6 +13131,15 @@ Scenario: the washer starts at 11:01 pm with 15 minutes left. Michael opens Home
 "Washer: running, done around 11:16 pm".
 
 Data: none needed. Mark #196 reviewed once live.
+
+Notes: migration 0159 adds `appliance_cycles.ends_at`. LG: `note_ends` in `thinq/watch.py` runs from `_saw` (after the listeners open the cycle) for a
+poll, a `read` and a status push (`events.push_minutes`); a timer-only push moves a running
+cycle's end too. Home Connect: the dishwasher's poll reads `seconds_left` once per cycle
+(only while its `ends_at` is unknown, to spare the daily call budget), and `read` updates it
+every time it's asked. Home says "Washer: running, done around 9:24 am" or plain
+"running"; chat says "24 minutes left, done around 9:24 am" (it still says "since" there).
+`_saw` now runs the end note even when the state didn't change; what it returns is the same.
+No golden file changed.
 
 ### F40c · Feedback (2026-11-09): a Mini App can open in the phone's browser
 Status: [ ]

@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from themi import clock
 from themi.accounts import AccountStore, Device, Member
 from themi.localtime import to_utc_iso
+from themi.storage.db import Database
 from themi_home.connectors.thinq.client import (
     DeviceOffline,
     RateLimited,
@@ -28,10 +29,12 @@ from themi_home.connectors.thinq.client import (
     TokenRejected,
 )
 from themi_home.connectors.thinq.events import (
+    RUNNING,
     TOWER,
     ApplianceEvent,
     minutes_left,
     parts,
+    push_minutes,
     read_push,
     read_report,
 )
@@ -97,8 +100,14 @@ class ThinqWatcher:
         await self.push.keep_up(sorted(_lg_ids(self.devices())))
         events = 0
         for message in self.push.drain():
-            for external_id, state in read_push(message).items():
-                events += await self._saw(external_id, state)
+            minutes = push_minutes(message)  # F40b: a status push can carry LG's timer
+            states = read_push(message)
+            for external_id, state in states.items():
+                events += await self._saw(external_id, state, minutes.get(external_id))
+            for external_id, left in minutes.items():  # a timer-only push: a running cycle's
+                device = next((d for d in self.devices() if d.external_id == external_id), None)
+                if external_id not in states and device is not None:
+                    note_ends(self.db, device.id, clock.now(), left)
         return events
 
     async def poll(self) -> int:
@@ -129,8 +138,9 @@ class ThinqWatcher:
             except ThinqError as exc:
                 log.warning("Couldn't read an LG appliance: %s", exc)
                 continue
+            minutes = minutes_left(lg_id, kind, report)
             for external_id, state in read_report(lg_id, kind, report).items():
-                events += await self._saw(external_id, state)
+                events += await self._saw(external_id, state, minutes.get(external_id))
         return events
 
     async def read(self, device: Device) -> tuple[str | None, int | None]:
@@ -140,11 +150,12 @@ class ThinqWatcher:
         kind = TOWER if part else ""
         report = await self.account.state(lg_id)
         state = read_report(lg_id, kind, report).get(device.external_id)
+        minutes = minutes_left(lg_id, kind, report).get(device.external_id)
         if state is not None:
-            await self._saw(device.external_id, state)
-        return state, minutes_left(lg_id, kind, report).get(device.external_id)
+            await self._saw(device.external_id, state, minutes)
+        return state, minutes
 
-    async def _saw(self, external_id: str, state: str) -> int:
+    async def _saw(self, external_id: str, state: str, minutes: int | None = None) -> int:
         device = next((d for d in self.devices() if d.external_id == external_id), None)
         if device is None:
             return 0
@@ -156,15 +167,25 @@ class ThinqWatcher:
             "seen_at = excluded.seen_at",
             (device.id, state, to_utc_iso(now)),
         )
-        if before is None or before["state"] == state:
-            return 0
-        event = ApplianceEvent(device.id, device.appliance, state, now)
-        for listener in self.listeners:
-            try:
-                await listener(event)
-            except Exception:
-                log.exception("An appliance listener failed for %s", event)
-        return 1
+        changed = before is not None and before["state"] != state
+        if changed:
+            event = ApplianceEvent(device.id, device.appliance, state, now)
+            for listener in self.listeners:
+                try:
+                    await listener(event)
+                except Exception:
+                    log.exception("An appliance listener failed for %s", event)
+        if minutes is not None and state == RUNNING:  # F40b: after the cycle is opened
+            note_ends(self.db, device.id, now, minutes)
+        return 1 if changed else 0
+
+
+def note_ends(db: Database, device_id: int, now: datetime, minutes: int) -> None:
+    """F40b: the running cycle should end `minutes` from now (the latest read wins)."""
+    db.execute(
+        "UPDATE appliance_cycles SET ends_at = ? WHERE device_id = ? AND ended_at IS NULL",
+        (to_utc_iso(now + timedelta(minutes=minutes)), device_id),
+    )
 
 
 def _lg_ids(devices: list[Device]) -> dict[str, str]:

@@ -169,3 +169,11 @@ def read_push(message: dict[str, Any]) -> dict[str, str]:
             return {}
         return {f"{device_id}:{part}" if kind == TOWER else device_id: FINISHED}
     return {}
+
+
+def push_minutes(message: dict[str, Any]) -> dict[str, int]:
+    """F40b: the time left in a status push, as `minutes_left` (other pushes say none)."""
+    device_id, kind = str(message.get("deviceId") or ""), str(message.get("deviceType") or "")
+    if not device_id or message.get("pushType") != "DEVICE_STATUS":
+        return {}
+    return minutes_left(device_id, kind, message.get("report"))
