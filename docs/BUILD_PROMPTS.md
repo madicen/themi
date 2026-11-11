@@ -13313,15 +13313,27 @@ Build:
   previous reply, within the hour) is dropped when tools ran this turn. What's left is the
   done lines. If nothing is left, it's "Done." or `TANGLED_TEXT` as now.
 - Check the pantry's own "Done automatically:" lines (`pantry.py`) aren't doubled.
+- Leave times are said by Themi too (Michael, 2026-11-11, on #199: the reply "needed more
+  confirmation … that the new event had been added (and when) as well as the new time to
+  leave"). A `drive_time` answer with a leave time goes into `ctx.done` word for word, after
+  any done lines. Its line always has when to start getting ready, from their "getting ready
+  takes" setting: "ND psych in person at 1 pm: about 17 min with traffic. Leave around 12:43
+  pm; start getting ready around 12:28 pm." (`drive_to_event` already works this out; reply
+  425's model cut it to "Leave at 12:43 PM."). So reply 426 would have been: "On your
+  calendar: Drop off kid at in-laws, …" then the new leave time(s).
 
 Tests: start with a failing one: reply 426's turn, faked: the model calls
 `add_calendar_event` (auto-done) and `drive_time`, then answers "Leave at 12:43 PM.", which
 it also said last turn. The reply starts with "On your calendar: Drop off kid at in-laws,
-Wed 11 Nov, 12-1 pm …" and doesn't repeat "Leave at 12:43 PM.". An auto-done change whose
+Wed 11 Nov, 12-1 pm …", then the `drive_time` line with its leave time and "start getting
+ready around", and doesn't repeat "Leave at 12:43 PM." on its own. A `drive_time` answer
+the model shortens still reaches them whole, getting ready included (20 min set: 20 min
+before leaving). An address drive ("leaving now") has no getting-ready line. An auto-done change whose
 `said` is set isn't said twice. A staged one (card) isn't put in `done`. A task marked done
 is unchanged.
-Scenario: Michael asks for an event to be added and the model's text leaves it out. The
-reply still says it's on his calendar.
+Scenario: Michael asks for an event to be added and the drive worked out again, and the
+model's text leaves both out. The reply says it's on his calendar, with its time, and when
+to leave and start getting ready.
 
 Data: none needed. Mark #199 reviewed once F41c and F41d are both live.
 
@@ -13346,29 +13358,33 @@ What the Pi shows:
 Build:
 - `drive_time` gets `from`: an address, a named place ("in-laws") or an event's words, ''
   for home. The answer says where from: "From the in-laws (790 La Para Ave): about 9 min with
-  traffic. Leave there around 12:51 pm." Getting ready isn't counted when leaving from
-  somewhere other than home.
+  traffic. Leave there around 12:51 pm; start getting ready around 12:36 pm." Every leave
+  time says when to start getting ready, from their "getting ready takes" setting (Michael,
+  2026-11-11), wherever they leave from.
 - Back-to-back events: when one of theirs with a place ends 90 minutes or less before the
   next one with a place starts (the same day, both timed), the next one's drive is from the
   first one's place. That holds for `drive_time` (event) and for the heads-up job. The
-  heads-up then says "leave the in-laws around 12:51 pm" with no "start getting ready". The
-  first event's drive is from home as now.
+  heads-up then says "leave the in-laws around 12:51 pm" and comes at getting-ready time, as
+  every heads-up does. The first event's drive is from home as now.
 - `add_calendar_event` gets `before`: an event's words. With no start and end, the new
   event becomes a 15-minute stop that ends when they must leave it for that event (its start
-  minus the drive from the stop's place). The answer says the time it worked out. With
+  minus the drive from the stop's place). Its done line (F41c) says the time it worked out,
+  and the leave times change: when to leave home for the stop and when to leave the stop,
+  each with when to start getting ready. Themi says these itself, after the done line. With
   neither a time nor `before`, a timed thing still isn't guessed: the tool asks for the time
   (as `unread` does).
 - Update the tool descriptions and the travel docstring.
 
 Tests: `drive_time` from "in-laws" to the ND psych event times from 790 La Para Ave
-(TomTom faked) and says "from the in-laws". Two events, 12:36-12:51 at the in-laws and 1 pm
-at Quarry Rd: the heads-up for the second drives from the in-laws and has no getting-ready
-line. With a 2-hour gap it drives from home. `add_calendar_event` with `before: "ND psych"`
+(TomTom faked) and says "from the in-laws" and when to start getting ready. Two events,
+12:36-12:51 at the in-laws and 1 pm at Quarry Rd: the heads-up for the second drives from
+the in-laws, says when to start getting ready, and comes at that time. With a 2-hour gap it drives from home. `add_calendar_event` with `before: "ND psych"`
 and no times makes a stop ending at 1 pm minus the drive. With no time and no `before` it
 asks.
 Scenario: Michael's request from reply 426, with the model faked to call `add_calendar_event`
 (before "ND psych", location "In-laws") and `drive_time` (event "ND psych", from "in-laws").
-The reply has the drop-off's time and "leave the in-laws around …". At the drop-off's
+The reply says the drop-off is on the calendar and when, then when to leave home and when to
+leave the in-laws, each with when to start getting ready. At the drop-off's
 leave-by the heads-up comes, and for the appointment the heads-up drives from the in-laws.
 
 Data: Michael's drop-off event (action 645, 12-1 pm on 11 Nov) has passed: nothing to fix.
