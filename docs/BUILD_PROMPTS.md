@@ -268,7 +268,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
 | F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [x] 2026-11-11 |
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
-| F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [ ] |
+| F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -13308,7 +13308,7 @@ this prompt removes; it now asserts neither. New tests in `test_recipe_pages.py`
 file changed.
 
 ### F41c · Feedback (2026-11-11): what Themi did on its own is always in the reply
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: 28, F21b, F34d
 Read first: `themi/core/tools.py` (`_stage`, "Done automatically", `ctx.done`,
 `ctx.replies`); `themi/core/agent.py` (the end of the loop: `_done_first`, `_without_done`,
@@ -13357,6 +13357,21 @@ model's text leaves both out. The reply says it's on his calendar, with its time
 to leave and start getting ready.
 
 Data: none needed. Mark #199 reviewed once F41c and F41d are both live.
+
+Notes: deviation, narrower than the Build: only calendar changes done automatically
+(`SAID_ALWAYS`, executors starting `calendar.`) go into `ctx.done`. A list add's done line
+was said twice ("Added milk to the grocery list." over the model's "Milk's on the grocery
+list."), so everything else keeps the model's words as before. `ToolContext.done_keys`: an
+event's title (`done_subject`) and a leave time ("12:43", no am/pm). `_not_again` in
+`agent.py` drops reply lines naming one, and drops a reply that's word for word
+`said_before` when tools ran ("Done." if nothing's left and nothing was done). `drive_time`
+for an event adds Themi's own leave line: "ND psych in person at 1 pm: about 17 min with
+traffic. Leave around 12:43 pm; start getting ready around 12:28 pm." ("start getting ready
+now" once that's passed, "Time to leave now." after leave-by). An address drive has no leave
+line. Changed test: `test_asked_for_its_made_at_once_and_read_back` asserted "Dentist"
+nowhere in the next turn's context. The reply now says it, so it's in the recent
+conversation; the test checks the context before "Recent conversation:". New tests at the end
+of `test_travel.py`. No golden file changed.
 
 ### F41d · Feedback (2026-11-11): a stop on the way: drives from where they'll be, not home
 Status: [ ]

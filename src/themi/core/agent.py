@@ -43,6 +43,7 @@ from themi.core.prompts import build_system, build_turn
 from themi.core.routing import recent_groups
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.tools import PICTURE_GROUPS, ToolContext, twins_text
+from themi.core.wording import name_key
 from themi.energy.remarks import energy_remark
 from themi.localtime import start_of_local_day, to_local, to_utc_iso
 from themi.standard import focus
@@ -230,6 +231,23 @@ SAID_DONE = re.compile(r"^\W*marked\s+(?:as\s+)?done\b", re.IGNORECASE)
 
 def _without_done(reply: str) -> str:
     return "\n".join(line for line in reply.split("\n") if not SAID_DONE.match(line)).strip()
+
+
+def _not_again(reply: str, ctx: ToolContext) -> str:
+    """F41c (bug #199, reply 426): the reply's lines that say a done line again (its event,
+    its leave time) are dropped, and so is a reply that's word for word Themi's last message
+    to them ("Leave at 12:43 PM." twice) when tools ran this turn."""
+    if ctx.calls and ctx.said_before and _same_words(reply, ctx.said_before):
+        return ""
+    if not ctx.done_keys:
+        return reply
+    keys = [f" {name_key(k)} " for k in ctx.done_keys if name_key(k)]
+    kept = [line for line in reply.split("\n") if not any(k in f" {name_key(line)} " for k in keys)]
+    return "\n".join(kept).strip()
+
+
+def _same_words(a: str, b: str) -> bool:
+    return name_key(a) == name_key(b) != ""
 
 
 def _done_first(done: Sequence[str], reply: str) -> str:
@@ -730,6 +748,7 @@ class Agent:
                         return _done_first(ctx.done, "")
                     reply = _honest(reply, waiting, ctx.outcomes)
                     reply = self._not_updated(reply, ctx)
+                    reply = _not_again(reply, ctx) or ("" if ctx.done else "Done.")
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break

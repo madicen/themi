@@ -84,7 +84,9 @@ async def test_asked_for_its_made_at_once_and_read_back(
     scenario.primary.queue_text("Okay.")
     await scenario.say("Erin", "thanks")
     context = scenario.primary.last_request.messages[0].content[0].text  # type: ignore[union-attr]
-    assert "Dentist" not in context  # Tuesday is beyond today and tomorrow
+    # Tuesday is beyond today and tomorrow. F41c: the reply said it was made, so it's in
+    # the recent conversation, never in the calendar part of the context.
+    assert "Dentist" not in context.partition("Recent conversation:")[0]
     rows = scenario.app.db.query("SELECT title, source FROM calendar_entries")
     assert [(r["title"], r["source"][:6]) for r in rows] == [("Dentist", "event:")]  # known now
 

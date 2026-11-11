@@ -204,7 +204,13 @@ class TravelHeadsUps:
         ]
         return min(found, key=lambda f: f[1].starts_at) if found else None
 
-    async def drive_to_event(self, viewer: Member, owner: Member, entry: Entry) -> str:
+    async def drive_to_event(
+        self, viewer: Member, owner: Member, entry: Entry, ctx: ToolContext | None = None
+    ) -> str:
+        """The drive to `entry`, for the model. With `ctx` (the drive_time tool), the leave
+        line is also said by Themi itself, word for word (F41c, bug #199: the model cut
+        "leave around 12:43 pm, and start getting ready around 12:28 pm" to "Leave at
+        12:43 PM.", and then said it again after the plan had changed)."""
         found = self.home()
         if found is None:
             raise TravelError("there's no home address yet (the Family page on the website)")
@@ -242,9 +248,31 @@ class TravelHeadsUps:
                 plan += f", and start getting ready around {_clock(ready.astimezone(tz))}"
         how = "with traffic" if route.traffic else "(a rough guess, without traffic)"
         heads_up = self._heads_up_words(viewer, owner, leave_by, now)
+        if ctx is not None:
+            said, leave = self._leave_line(whose, entry, route, leave_by, ready, now, how)
+            ctx.done.append(said)
+            ctx.done_keys.append(leave)
         return as_data("calendars", line) + (
             f"\nAbout {_duration(route.minutes)} from home {how}: {plan}.{heads_up}"
         )
+
+    def _leave_line(
+        self, whose: str, entry: Entry, route: Route, leave_by: datetime, ready: datetime,
+        now: datetime, how: str,
+    ) -> tuple[str, str]:  # fmt: skip
+        """ "ND psych in person at 1 pm: about 17 min with traffic. Leave around 12:43 pm;
+        start getting ready around 12:28 pm." and the leave time it names. Every leave time
+        says when to start getting ready (Michael, 2026-11-11)."""
+        tz = self._tz()
+        leave = _clock(leave_by.astimezone(tz))
+        head = f"{whose}{entry.title} at {_clock(entry.starts_at.astimezone(tz))}"
+        drive = f"about {_duration(route.minutes)} {how}"
+        # The reply's own "Leave at 12:43." (no am or pm) is the same time.
+        key = leave.rsplit(" ", 1)[0] if ":" in leave else leave
+        if leave_by <= now:
+            return f"{head}: {drive}. Time to leave now.", key
+        start = "now" if ready <= now else f"around {_clock(ready.astimezone(tz))}"
+        return f"{head}: {drive}. Leave around {leave}; start getting ready {start}.", key
 
     def _heads_up_words(
         self, viewer: Member, owner: Member, leave_by: datetime, now: datetime
@@ -417,7 +445,13 @@ async def drive_time(ctx: ToolContext, args: dict[str, Any]) -> str:
                 raise ToolFailed(
                     f'No upcoming event of theirs matches "{words}" in the next two weeks.' + hidden
                 )
-            return await travel.drive_to_event(ctx.member, *found)
+            result = await travel.drive_to_event(ctx.member, *found, ctx)
+            if ctx.done:  # F41c: the leave line is Themi's own
+                result += (
+                    f'\nThemi tells them itself, word for word: "{ctx.done[-1]}" Don\'t say '
+                    "the times again."
+                )
+            return result
         if address:
             return await travel.drive_to_address(address, ctx.member)
     except TravelError as exc:
