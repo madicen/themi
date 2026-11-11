@@ -37,7 +37,7 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (FollowUpsModule, FollowUps, [TasksModule], set()),
     (RemindersModule, Reminders, [TasksModule], {"tasks.day_end", "tasks.overdue"}),
     (BusinessHoursModule, BusinessHours, [TasksModule], {"tasks.closing"}),
-    (DaySummaryModule, DaySummary, [TasksModule], {"calendar.morning"}),
+    (DaySummaryModule, DaySummary, [TasksModule], {"calendar.morning", "calendar.morning_recap"}),
     (FocusModule, Focus, [TasksModule, DaySummaryModule], set()),
     (TakingModule, Taking, [TasksModule], set()),
     (GuidesModule, Guides, [], set()),

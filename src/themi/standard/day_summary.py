@@ -4,9 +4,8 @@
   the partner's events too when they share them (K1's setting). Or the partner's day
   ("what's on her plate?", bug #126): their tasks, and their events if they share them.
 - A morning message, if the person wants one (`morning_summary`, a time; off by
-  default): put together here, without the AI, and sent through the outbox, so quiet
-  hours and the daily limit apply as to any of Themi's messages. Days with nothing on
-  are skipped unless the person asked for those too.
+  default): since MM1, a good-morning greeting and today's calendar only, with buttons for
+  the rest (`themi.standard.morning`).
 
 Events come from K1's calendar reader; tasks from the task board: anything due that day
 (or still open from before, for today), the time of a check-in, the week's amount of a
@@ -43,8 +42,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-SEND_WITHIN = timedelta(hours=3)  # a summary missed by more than this (Themi was down) is skipped
-
 
 class DaySummaryPreferences(Preferences):
     """CR7b1: a summary of their day (K2)."""
@@ -76,12 +73,19 @@ class DaySummary:
     # ----- what's on ----------------------------------------------------------------------
 
     def items(
-        self, member: Member, day: date, *, partner: bool = False, viewer: Member | None = None
+        self,
+        member: Member,
+        day: date,
+        *,
+        partner: bool = False,
+        viewer: Member | None = None,
+        tasks: bool = True,
     ) -> list[str]:
         """What's on, one line each, in the order of the day: all-day events, then events and
         tasks with a time (on a day gone by, what was done too), then tasks for any time.
         `viewer`: who it's for, when not `member` (their partner): `member`'s events only if
-        they share them."""
+        they share them. `tasks=False` (the morning message, MM1): the calendar alone, and
+        not the events Themi put there for tasks (a task's copy, a block of time for it)."""
         viewer = viewer or member
         tz = self._tz()
         start = datetime(day.year, day.month, day.day, tzinfo=tz)
@@ -94,6 +98,9 @@ class DaySummary:
                 for e in reader.entries(owner, start, start + timedelta(days=1)):
                     if e.event_id and (e.calendar_id, e.event_id) in seen:
                         continue  # one calendar both read (bug #43)
+                    if not tasks and str(e.source or "").startswith("task"):
+                        continue  # "task:12", "task-block:12": tasks by the side door
+
                     seen.add((e.calendar_id, e.event_id))
                     whose = (
                         # F34d, reply 321: "(Madicen Family)" was taken for a place
@@ -105,7 +112,7 @@ class DaySummary:
                     )
                     text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
                     lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
-        for task in self.due(member, day):
+        for task in self.due(member, day) if tasks else []:
             at = self.board.time_of(task)
             when = (
                 datetime(day.year, day.month, day.day, at.hour, at.minute, tzinfo=tz)
@@ -116,7 +123,7 @@ class DaySummary:
             if day < self.today(member):
                 text += " (still open)"
             lines.append(((1, when) if when else (2, start), text))
-        if day < self.today(member):  # bug #105: what happened that day, done things included
+        if tasks and day < self.today(member):  # bug #105: what happened, done things too
             names = {m.id: m.name for m in self.services.store.list_members()}
             for done in self.board.done_between(member, start, start + timedelta(days=1)):
                 by = f" by {names[done.by]}" if done.by not in (None, member.id) else ""
@@ -177,51 +184,6 @@ class DaySummary:
     def heading(self, member: Member, day: date, viewer: Member | None = None) -> str:
         whose = f"{member.name}, " if viewer is not None and viewer.id != member.id else ""
         return f"{whose}{day:%a %d %b}"
-
-    # ----- the morning message ------------------------------------------------------------
-
-    async def morning(self) -> int:
-        """Scheduler job: send each morning summary that's due. Returns how many went."""
-        tz = self._tz()
-        now = clock.now().astimezone(tz)
-        sent = 0
-        for member in self.services.store.list_members():
-            at = self.services.store.preferences(member.id, DaySummaryPreferences).morning_summary
-            if at is None or not member.reachable:
-                continue
-            due_at = datetime(now.year, now.month, now.day, at.hour, at.minute, tzinfo=tz)
-            if not due_at <= now < due_at + SEND_WITHIN or self._sent(member, now.date()):
-                continue
-            self.db.execute(
-                "INSERT INTO morning_summaries (member_id, day) VALUES (?, ?)",
-                (member.id, now.date().isoformat()),
-            )
-            text = self.text(member, now.date(), partner=True)
-            if text is None:
-                if not self.services.store.preferences(
-                    member.id, DaySummaryPreferences
-                ).morning_summary_empty:
-                    continue
-                text = f"{now:%a %d %b}: nothing on the calendar, nothing due."
-            await self.services.outbox.send(
-                member,
-                text,
-                priority=Priority.NORMAL,
-                kind="summary",
-                dedupe_key=f"summary-{member.id}-{now.date().isoformat()}",
-                deadline=due_at,  # the time they chose: the daily limit doesn't hold it (#57)
-                expires=datetime(now.year, now.month, now.day, tzinfo=tz) + timedelta(days=1),
-            )
-            sent += 1
-        return sent
-
-    def _sent(self, member: Member, day: date) -> bool:
-        return bool(
-            self.db.one(
-                "SELECT 1 FROM morning_summaries WHERE member_id = ? AND day = ?",
-                (member.id, day.isoformat()),
-            )
-        )
 
     def today(self, member: Member | None = None) -> date:
         """The family's date, or the day it is for `member` (F34j: their rollover)."""
@@ -317,6 +279,11 @@ class DaySummaryModule(Module):
     requires = ("tasks",)
 
     def install(self, ctx: ModuleContext) -> None:
+        from themi.standard.morning import MorningMessage
+
         summary = ctx.provide(DaySummary(ctx.services, ctx.get(TaskBoard)))
         summary.install()
-        ctx.periodic("calendar.morning", timedelta(minutes=5), summary.morning)
+        morning = ctx.provide(MorningMessage(ctx.services, summary, ctx.get(TaskBoard)))
+        morning.install()
+        ctx.periodic("calendar.morning", timedelta(minutes=5), morning.morning)
+        ctx.periodic("calendar.morning_recap", timedelta(minutes=5), morning.recap)

@@ -5,6 +5,7 @@
   "burnout.hand_over": 3600,
   "calendar.busy": 900,
   "calendar.morning": 300,
+  "calendar.morning_recap": 300,
   "checkins.reviews": 900,
   "cooking.expire": 900,
   "cooking.stuck": 300,

@@ -63,7 +63,7 @@ async def test_the_summary_comes_at_its_time_past_the_daily_limit(scenario: Scen
     await use_up_the_limit(scenario, "Husband")
     await until(scenario, date(2026, 10, 21), 10)
     await scenario.run_periodic("calendar.morning")
-    assert any(t.startswith("Wed 21 Oct:") for t in scenario.inbox("Husband"))
+    assert any(t.startswith("Good morning, Husband.") for t in scenario.inbox("Husband"))  # MM1
 
 
 async def test_a_message_too_late_to_be_any_use_is_dropped(scenario: Scenario) -> None:

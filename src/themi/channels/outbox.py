@@ -17,6 +17,12 @@ moment is dropped, never sent late (a day's summary, bug #57).
 A kind with a bundler (task nudges) may go as one message when several are
 waiting at once: the bundler sends it and takes back the ones it covers.
 
+The morning tray (MM2): while a person's morning message is due and not yet sent, the
+`tray` hook may hold a proactive `normal` or `low` message in a tray ("tasks", "email",
+"other") instead of sending it. It stays queued, out of the flush, until `release` sends
+it as a reply (a tap on the morning message: not counted) or `untray` puts it back in the
+normal flow.
+
 The family group (34b): a reply to something said in the group goes back to the group,
 and `to_group=True` sends a question to the family there. A group question waits until
 everyone in the family is free at once (quiet hours, busy times, their pauses, a good
@@ -143,6 +149,17 @@ class ReceptivityProvider(Protocol):
         ...
 
 
+class TrayHold(Protocol):
+    def tray_for(self, member: Member, row: dict[str, Any], now: datetime) -> str | None:
+        """The tray a proactive message waits in this morning, or None to send it as usual."""
+        ...
+
+    def morning_on(self, member: Member) -> bool:
+        """Whether the person's mornings start with the morning message (MM3: the morning
+        list's bundler stands down then)."""
+        ...
+
+
 class AlwaysReceptive:
     """Until the energy engine exists (prompt 19): any time outside quiet hours is fine."""
 
@@ -188,6 +205,8 @@ class Outbox:
         self.bundlers: dict[str, Bundler] = {}
         self.refreshers: dict[str, Refresher] = {}
         self.family_group = FamilyGroup(store.db)
+        # MM2: holds the morning's proactive messages behind the morning message's buttons.
+        self.tray: TrayHold | None = None
 
     @property
     def _tz(self) -> str:
@@ -265,6 +284,8 @@ class Outbox:
                 int(to_group),
             ),
         )
+        if when <= now and self._put_in_tray(self._row(outbox_id), now):
+            return OutboxResult("queued", outbox_id)
         if when > now:
             log.info(
                 "Queued %s message %s for member %s until %s",
@@ -299,9 +320,12 @@ class Outbox:
         """Send whatever is due. Returns how many went out. Run it from the scheduler."""
         now = clock.now()
         rows = self.store.db.query(
-            "SELECT * FROM outbox WHERE status = 'queued' AND send_after <= ?",
+            "SELECT * FROM outbox WHERE status = 'queued' AND tray IS NULL AND send_after <= ?",
             (to_utc_iso(now),),
         )
+        # MM2: first the morning's messages go in the tray, so a morning message going in
+        # this same flush is built knowing what's behind its buttons.
+        rows = [r for r in rows if not self._put_in_tray(r, now)]
         rows.sort(key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], r["id"]))
         rows = self._in_their_order(rows)
         sent = 0
@@ -336,6 +360,86 @@ class Outbox:
             if (await self._deliver(row)).status == "sent":
                 sent += 1
         return sent
+
+    # ----- the morning tray (MM2) ---------------------------------------------
+
+    def _put_in_tray(self, row: dict[str, Any], now: datetime) -> bool:
+        """Hold a proactive message for the morning message's buttons, if the tray takes
+        it. Urgent messages, replies, answers and group questions never wait there."""
+        if self.tray is None or row.get("tray") or row["chat_id"] is not None:
+            return False
+        if Priority(row["priority"]) not in (Priority.NORMAL, Priority.LOW):
+            return False
+        if row["kind"] in ANSWER_KINDS:
+            return False
+        member = self.store.get_member(row["member_id"])
+        tray = self.tray.tray_for(member, row, now)
+        if tray is None:
+            return False
+        self.store.db.execute("UPDATE outbox SET tray = ? WHERE id = ?", (tray, row["id"]))
+        log.info("Held message %s for member %s in the %s tray", row["id"], member.id, tray)
+        return True
+
+    def trayed(self, member_id: int, tray: str | None = None) -> list[dict[str, Any]]:
+        """What waits in a person's trays (or one tray), oldest first. Messages past their
+        `expires` are dropped first, as the flush would."""
+        self.store.db.execute(
+            "DELETE FROM outbox WHERE member_id = ? AND status = 'queued' AND tray IS NOT NULL "
+            "AND expires_at IS NOT NULL AND expires_at <= ?",
+            (member_id, to_utc_iso(clock.now())),
+        )
+        if tray is None:
+            return self.store.db.query(
+                "SELECT * FROM outbox WHERE member_id = ? AND status = 'queued' "
+                "AND tray IS NOT NULL ORDER BY id",
+                (member_id,),
+            )
+        return self.store.db.query(
+            "SELECT * FROM outbox WHERE member_id = ? AND status = 'queued' AND tray = ? "
+            "ORDER BY id",
+            (member_id, tray),
+        )
+
+    async def release(self, member: Member, tray: str) -> int:
+        """Send what waits in a tray now, as replies to the tap that asked for it: no quiet
+        hours, busy times or daily limit, and not counted. Each is brought up to date by its
+        kind's refresher first. Returns how many went."""
+        sent = 0
+        rows = self.trayed(member.id, tray)
+        rows = self._in_their_order(
+            sorted(rows, key=lambda r: (_PRIORITY_ORDER[Priority(r["priority"])], r["id"]))
+        )
+        for row in rows:
+            self.store.db.execute(
+                "UPDATE outbox SET tray = NULL, priority = 'reply', send_after = ? WHERE id = ?",
+                (to_utc_iso(clock.now()), row["id"]),
+            )
+            fresh = self._refreshed(member, {**row, "tray": None, "priority": "reply"})
+            if fresh is not None and (await self._deliver(fresh)).status == "sent":
+                sent += 1
+        return sent
+
+    def tray_waiting(self, member_id: int) -> int:
+        """Put what's due to go to a person now in the tray, if it takes it: the morning
+        message is about to be built. Returns how many went in."""
+        now = clock.now()
+        rows = self.store.db.query(
+            "SELECT * FROM outbox WHERE member_id = ? AND status = 'queued' AND tray IS NULL "
+            "AND send_after <= ?",
+            (member_id, to_utc_iso(now)),
+        )
+        return sum(self._put_in_tray(row, now) for row in rows)
+
+    def untray(self, member_id: int, tray: str | None = None) -> int:
+        """Put held messages back in the normal flow (the morning message never went, or
+        it was turned off). They keep their priority and are counted as usual."""
+        rows = self.trayed(member_id, tray)
+        for row in rows:
+            self.store.db.execute(
+                "UPDATE outbox SET tray = NULL, send_after = ? WHERE id = ?",
+                (to_utc_iso(clock.now()), row["id"]),
+            )
+        return len(rows)
 
     def _refreshed(self, member: Member, row: dict[str, Any]) -> dict[str, Any] | None:
         """The row as its kind's refresher has it now, or None (taken back: nothing left)."""

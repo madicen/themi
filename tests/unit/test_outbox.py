@@ -500,3 +500,67 @@ async def test_a_reaction_needs_a_sender_that_can_react(
 
     sender.react = broken  # type: ignore[attr-defined]
     assert not await outbox.react(family.erin, 5, "✍")
+
+
+class TrayAll:
+    """MM2: a tray hook that holds every proactive message, in a tray named by its kind."""
+
+    def __init__(self) -> None:
+        self.on = True
+
+    def tray_for(self, member: Member, row: dict, now: datetime) -> str | None:
+        return row["kind"] if self.on else None
+
+    def morning_on(self, member: Member) -> bool:
+        return self.on
+
+
+async def test_the_morning_tray_holds_proactive_messages_until_a_tap_releases_them(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    clock.freeze(at(21, 9))
+    outbox.tray = TrayAll()
+    held = await outbox.send(family.erin, "A dinner idea.", priority=Priority.NORMAL, kind="meal")
+    assert held.status == "queued"
+    assert (await outbox.send(family.erin, "Leak!", priority=Priority.URGENT)).status == "sent"
+    assert (await outbox.send(family.erin, "Sure.", priority=Priority.REPLY)).status == "sent"
+    assert await outbox.flush() == 0  # out of the flush while it waits
+    assert [r["tray"] for r in outbox.trayed(family.erin.id)] == ["meal"]
+    assert outbox.sent_today(family.erin.id) == 1  # the urgent one
+    assert await outbox.release(family.erin, "meal") == 1
+    assert sender.texts()[-1] == "A dinner idea."
+    assert outbox.sent_today(family.erin.id) == 1  # asked for: a reply, not counted
+    assert outbox.trayed(family.erin.id) == []
+
+
+async def test_the_tray_takes_messages_as_they_come_due_and_untray_puts_them_back(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    clock.freeze(at(21, 22))  # quiet hours: it waits for 8 am
+    tray = TrayAll()
+    outbox.tray = tray
+    assert (await outbox.send(family.erin, "Feeders low.", priority=Priority.LOW)).status == (
+        "queued"
+    )
+    assert outbox.trayed(family.erin.id) == []
+    clock.freeze(at(22, 8))
+    assert await outbox.flush() == 0
+    assert len(outbox.trayed(family.erin.id)) == 1
+    tray.on = False
+    assert outbox.untray(family.erin.id) == 1
+    assert await outbox.flush() == 1
+    assert sender.texts() == ["Feeders low."]
+    assert outbox.sent_today(family.erin.id) == 1  # back in the usual flow: counted
+
+
+async def test_a_held_message_past_its_expiry_is_dropped(
+    family: SeededFamily, outbox: Outbox, sender
+) -> None:
+    clock.freeze(at(21, 9))
+    outbox.tray = TrayAll()
+    await outbox.send(
+        family.erin, "Today only.", priority=Priority.NORMAL, kind="deal", expires=at(21, 10)
+    )
+    clock.freeze(at(21, 11))
+    assert outbox.trayed(family.erin.id) == []
+    assert await outbox.release(family.erin, "deal") == 0
