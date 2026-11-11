@@ -26,7 +26,7 @@ TASK_LABELS = {
     AITask.EMAIL_TRIAGE: "Email triage",
     AITask.STRUCTURED_MISC: "Other quick jobs (meal ideas, call scripts)",
     AITask.TRANSCRIPTION: "Voice notes",
-    AITask.EMBEDDING: "Choosing which tools a message needs (embeddings, Gemini only)",
+    AITask.EMBEDDING: "Choosing which tools a message needs (an embedding model, not a chat one)",
     AITask.CHAT: "Conversation mode: the chat reply",
     AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
     AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",

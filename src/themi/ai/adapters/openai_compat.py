@@ -188,7 +188,20 @@ class OpenAICompatProvider:
     async def embed(
         self, texts: Sequence[str], *, kind: CallKind = CallKind.INTERACTIVE
     ) -> Embeddings:
-        raise CapabilityError(f"{self.name}: embeddings aren't supported here yet")
+        """`/v1/embeddings` with the route's model: an embedding model such as Ollama's
+        qwen3-embedding or nomic-embed-text, or OpenAI's text-embedding-3-small."""
+        result = await self._call(
+            self._client.embeddings.create(
+                model=self.model, input=list(texts), encoding_format="float"
+            )
+        )
+        data = sorted(result.data or (), key=lambda e: e.index)
+        vectors = tuple(tuple(e.embedding or ()) for e in data)
+        if len(vectors) != len(texts) or not all(vectors):
+            raise MalformedOutputError(
+                f"{self.name} returned {len(vectors)} embeddings for {len(texts)} texts"
+            )
+        return Embeddings(vectors, self.name, self.model)
 
     async def image(
         self, prompt: str, size: str = IMAGE_SIZE, *, kind: CallKind = CallKind.BACKGROUND
