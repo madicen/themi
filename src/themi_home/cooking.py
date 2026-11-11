@@ -28,6 +28,7 @@ import hashlib
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -261,6 +262,7 @@ class Session:
     wrap: dict[str, Any] = field(default_factory=dict)  # CK3/CK6: after the end, once each
     ended_at: datetime | None = None
     outcome: str | None = None
+    from_page: bool = False  # F41b: started on the website; no chat card unless asked there
 
 
 def _session(row: dict[str, Any]) -> Session:
@@ -289,6 +291,7 @@ def _session(row: dict[str, Any]) -> Session:
         wrap=json.loads(row["wrap"]),
         ended_at=_when(row["ended_at"]),
         outcome=row["outcome"],
+        from_page=bool(row["from_page"]),
     )
 
 
@@ -503,6 +506,7 @@ class Cooking:
         scale: float = 1.0,
         scale_said: str = "",
         in_group: bool = False,
+        from_page: bool = False,
     ) -> Session:
         for old in self.db.query(
             "SELECT * FROM cooking_sessions WHERE ended_at IS NULL AND member_id = ?", (member.id,)
@@ -515,11 +519,12 @@ class Cooking:
         session_id = self.db.execute(
             "INSERT INTO cooking_sessions (member_id, recipe_id, scale, scale_said, phase, step, "
             "in_group, gathered, prep, ahead, started_at, last_tap_at, energy_at_start, "
-            "hour_of_week, step_since) VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?, ?, ?, ?)",
+            "hour_of_week, step_since, from_page) "
+            "VALUES (?, ?, ?, ?, ?, 0, ?, '[]', '[]', ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id, recipe.id, scale, scale_said, "ready" if ahead else "gather",
                 int(in_group), json.dumps(ahead), now, now, energy,
-                hour_of_week(clock.now(), self._tz()), now,
+                hour_of_week(clock.now(), self._tz()), now, int(from_page),
             ),
         )  # fmt: skip
         session = self.get(session_id)
@@ -800,11 +805,21 @@ class Cooking:
     async def show(self, session: Session, *, fresh: bool = False) -> None:
         text, buttons = await self.render(session)
         buttons = [*buttons, *self.open_button()]
+        await self._to_card(session, text, buttons, fresh=fresh)
+        self._save(session)
+
+    async def _to_card(
+        self, session: Session, text: str, buttons: Sequence[Button], *, fresh: bool = False
+    ) -> None:
+        """The chat's card, sent or edited in place. F41b (bug #198): a session started on
+        the website has no card until they ask about it in chat (`fresh`, from a typed
+        message there); from then on it's edited like any other."""
+        if session.from_page and session.message_id is None and not fresh:
+            return
         session.message_id = await self.card.show(
             self._owner(session), text, buttons, message_id=session.message_id,
             in_group=session.in_group, fresh=fresh,
         )  # fmt: skip
-        self._save(session)
 
     # ----- moving on ------------------------------------------------------------------------
 
@@ -854,11 +869,9 @@ class Cooking:
         assert recipe is not None
         if action == "stop":
             self.end(session, "stopped")
-            await self.card.show(
-                self._owner(session), f"Stopped cooking {recipe.name}.", (),
-                message_id=session.message_id, in_group=session.in_group, fresh=fresh,
-            )  # fmt: skip
-            if self.timers is not None:
+            await self._to_card(session, f"Stopped cooking {recipe.name}.", (), fresh=fresh)
+            screen_only = session.from_page and self.screen_open(session)  # F41b: it asks
+            if self.timers is not None and not screen_only:
                 await self.timers.ask_on_end(self._owner(session))
             return
         before = session.phase
@@ -921,10 +934,7 @@ class Cooking:
         text = f"{recipe.name}, all done. Enjoy it!"
         if buttons:
             text += "\nKeep this one in the cookbook?"
-        await self.card.show(
-            self._owner(session), text, buttons, message_id=session.message_id,
-            in_group=session.in_group,
-        )  # fmt: skip
+        await self._to_card(session, text, buttons)
         session.phase = "done"
         await self.say(session, DONE_LINE)  # CK5: the card said it already
         if self.timers is not None and not self.screen_open(session):  # CK13: the screen asks
@@ -952,13 +962,11 @@ class Cooking:
             deadline=when + timedelta(hours=1),
             buttons=[Button("Cook this", "recipe", {"action": "cook", "id": recipe.id})],
         )
-        await self.card.show(
-            member,
+        await self._to_card(
+            session,
             f"{recipe.name} tomorrow, then: I'll bring it back at 5 pm. Tonight works for "
             f"{overnight}.",
             (),
-            message_id=session.message_id,
-            in_group=session.in_group,
         )
 
     # ----- taps and typing ------------------------------------------------------------------

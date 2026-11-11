@@ -267,7 +267,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
 | F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [x] 2026-11-11 |
-| F41b | Feedback: cooking started on the website stays on the screen | Feedback | [ ] |
+| F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [ ] |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -13252,7 +13252,7 @@ New tests in `test_catgenie_events.py` and `test_litter_box.py`; none changed. N
 file changed.
 
 ### F41b · Feedback (2026-11-11): cooking started on the website stays on the screen
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: CK13, RC4
 Read first: `POST /recipes/{recipe_id}/cook` in `themi_home/web/recipe_pages.py`;
 `Cooking.start`, `Cooking.show`, `Cooking.screen_open` and every `show(...)` caller in
@@ -13294,6 +13294,18 @@ Scenario: Michael presses Cook on Pancakes on his computer, ticks the ingredient
 through, and stops. His Telegram chat gets nothing.
 
 Data: none needed. Mark #198 reviewed once live (and #192, from CK13).
+
+Notes: migration 0163 adds `cooking_sessions.from_page`; the website's Cook passes
+`from_page=True`. Every chat card write goes through `Cooking._to_card`, which skips a
+from-page session while it has no card and the write isn't `fresh`. A message typed in
+Telegram ("next", "repeat") is `fresh`, so it sends the card there. From then on that card is
+edited in place like any other (taps make no sound). Stopping a from-page session with the
+screen open doesn't send "There's a timer still running" (the screen asks). "Remind me
+tomorrow" still schedules its message, as asked. The redirect says "Cooking Pancakes on this
+screen." (the cook screen shows no flash, so no test reads it). Changed test:
+`test_cook_this_opens_the_cook_screen` asserted the card in chat and its edit, the behaviour
+this prompt removes; it now asserts neither. New tests in `test_recipe_pages.py`. No golden
+file changed.
 
 ### F41c · Feedback (2026-11-11): what Themi did on its own is always in the reply
 Status: [ ]

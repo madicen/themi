@@ -228,7 +228,8 @@ def routes(kit: Kit) -> APIRouter:
         if problem:
             return kit.redirect(f"/recipes/{recipe_id}", problem)
         member = app.store.get_member(signed.member.id)
-        await cooking.start(member, recipe, scale=factor, scale_said=said)
-        return kit.redirect("/session", "Cooking: the same card is in your chat.")
+        # F41b (bug #198): started here, it stays on the screen; chat hears nothing of it
+        await cooking.start(member, recipe, scale=factor, scale_said=said, from_page=True)
+        return kit.redirect("/session", f"Cooking {recipe.name} on this screen.")
 
     return router
