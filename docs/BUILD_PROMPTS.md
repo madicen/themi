@@ -253,7 +253,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [x] 2026-11-07 |
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
-| F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
+| F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [x] 2026-11-12 |
 | F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [x] 2026-11-11 |
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [x] 2026-11-11 |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
@@ -12473,7 +12473,7 @@ Notes (2026-11-07):
   ~/shots`, then copy the folder off the Pi (scp).
 
 ### F35a · Idea (2026-11-07): Themi's pronouns, chosen by the family
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: 15, W4 (settings pages)
 Read first: prompts.py (the system prompt says who Themi is and "how it speaks");
 conversation_mode.py's system prompt; the plan's PDA phrasing rules. From Erin's idea #176
@@ -12505,6 +12505,24 @@ chosen pronoun; "just the name" leaves no pronoun in the templates; the default 
 for a household that hasn't chosen.
 Scenario: Erin sets they/them on the website, and Michael's next relay from Themi uses it.
 Data: mark #176 reviewed once live.
+
+Notes (2026-11-12):
+- Built with the stand-in list (it/its, she/her, he/him, they/them, just the name), since
+  Erin's list hasn't come. Her list replaces `CHOICES` and `WORDS` in `themi.core.pronouns`.
+- One household setting (`PronounSettings`, module "themi", stored in
+  `household_settings`, no migration). Anyone in the family may change it, not only an
+  admin: say so if it should be admin-only.
+- There's no "/settings" chat command, so chat has `set_themi_pronouns` (core tool), which
+  says "Done. I'll go by she/her." itself and ends the turn. The website: My settings, a
+  "How Themi is spoken of" section after phrasing.
+- Both system prompts get one line for any choice but it/its (so the default's prompt, and
+  the golden file, are as before). Relays are the model's own words, so they follow it.
+- Fixed texts with Themi in the third person were few: the tiers page heading ("on its
+  own") and the update page ("when it's back") use the `themi_words()` template global.
+  Admin and setup texts (claim page, modules page, an autonomy error) still say "it".
+- Golden: tools.json gained `set_themi_pronouns`. test_settings_form lists the new field and
+  section.
+- Setup: restart `themi run`. Mark #176 reviewed once Erin has picked (or sent her list).
 
 ### F36a · Feedback (2026-11-08): in conversation mode, an add to a list and a correction to a draft rule go to the tools
 Status: [x] 2026-11-11

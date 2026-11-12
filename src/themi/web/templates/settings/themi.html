@@ -1,0 +1,12 @@
+{# F35a: Themi's pronouns, one choice for the whole family (a core section). #}
+{% from "_row.html" import row %}
+  {% call(part) row("How Themi is spoken of", meta=pronoun_choices[themi_pronouns], id="themi") %}{% if part == "body" %}
+    <label>Themi's pronouns
+      <select name="themi_pronouns">
+        {% for key, label in pronoun_choices.items() %}
+        <option value="{{ key }}" {% if key == themi_pronouns %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="muted">One choice for everyone here. Themi talks about itself as "I"; this is for when anyone else does.</p>
+  {% endif %}{% endcall %}

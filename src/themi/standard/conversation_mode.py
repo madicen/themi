@@ -38,7 +38,7 @@ from themi.accounts.preferences import Preferences
 from themi.ai.settings import AITask
 from themi.ai.types import Message
 from themi.channels.outbox import Priority
-from themi.core import keys, listening
+from themi.core import keys, listening, pronouns
 from themi.core.agent import CLAIMS_DONE
 from themi.core.prompts import PHRASING_WORDS, day_note
 from themi.localtime import to_local
@@ -444,7 +444,8 @@ class ConversationMode:
             signals=[] if in_burnout else listening.signals(text, member),
         )
         client = s.router.client_for(member.id, AITask.CHAT)
-        response = await client.chat(CHAT_SYSTEM, [Message.user(turn)])
+        system = pronouns.with_line(CHAT_SYSTEM, pronouns.chosen(s.store))  # F35a
+        response = await client.chat(system, [Message.user(turn)])
         return honest(listening.trimmed(response.text.strip(), text), text)
 
 

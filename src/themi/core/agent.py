@@ -36,7 +36,7 @@ from themi.ai.types import ImageBlock, Message, TextBlock
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
-from themi.core import keys, listening, partner
+from themi.core import keys, listening, partner, pronouns
 from themi.core.approvals import ASK_TEXT
 from themi.core.capabilities import PICTURES, VOICE_NOTES
 from themi.core.prompts import build_system, build_turn
@@ -650,7 +650,7 @@ class Agent:
             pinned,
             personal_rules=personal,
             owner=member.name,
-            base=services.system_text(),
+            base=pronouns.with_line(services.system_text(), pronouns.chosen(services.store)),
         )
         history = self._history(member, event)
         turn = build_turn(

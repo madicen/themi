@@ -36,6 +36,7 @@ from themi.connectors.travel import TravelClient
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.prompts import CORE_RULES
+from themi.core.pronouns import set_themi_pronouns
 from themi.core.routing import EmbeddingRouter
 from themi.core.rules import Rulebook
 from themi.core.services import Services
@@ -380,6 +381,7 @@ def build_app(
     approvals.install(services)
     rulebook = ctx.provide(Rulebook(services.autonomy, outbox))
     rulebook.install(services)
+    services.tools.register(set_themi_pronouns)  # F35a
     ctx.provide(energy)  # core, until the energy model becomes a module
     agent = ctx.provide(Agent(services))  # reads services per message, so it can come first
     channel.handler = agent

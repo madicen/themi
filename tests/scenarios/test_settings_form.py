@@ -29,6 +29,7 @@ ADDED = {
     "cooking_theme": "CK7", "cooking_units": "CK7", "cooking_voice": "CK8",
     "expense_ask_after_hours": "EX2b", "expense_review_day": "EX2b",
     "expense_review_time": "EX2b",
+    "themi_pronouns": "F35a",
 }  # fmt: skip
 
 
@@ -94,7 +95,9 @@ async def section_ids(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
 SECTIONS = [
     "quiet", "limit", "breaks", "body-double", "chart", "day-summary", "calendars", "lists",
     "expenses",  # EX2b, the spending module's
-    "email", "phrasing", "pda", "tracking",
+    "email", "phrasing",
+    "themi",  # F35a, the core's
+    "pda", "tracking",
 ]  # fmt: skip
 
 

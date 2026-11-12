@@ -439,6 +439,10 @@
     "group": "schedules",
     "spec": "ae223ff614a9"
   },
+  "set_themi_pronouns": {
+    "group": "core",
+    "spec": "a0154230a93e"
+  },
   "set_urgent_senders": {
     "group": "email",
     "spec": "fbedfea5573d"

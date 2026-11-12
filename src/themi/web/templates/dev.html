@@ -17,7 +17,7 @@
   {% elif server.in_progress %}
   <p>{{ "Update" if server.in_progress.action == "update" else "Restart" }} asked for
     {{ server.in_progress.asked_at | local_time }}: {{ state_words[server.in_progress.state] }}.
-    Themi stops for a minute or two while it happens; you'll get a message when it's back.</p>
+    Themi stops for a minute or two while it happens; you'll get a message when {{ themi_words().back }}.</p>
   {% else %}
   <p class="muted">Themi only asks: the runner on the server stops it, pulls the release,
   copies the database, starts it again and waits until it's healthy. If the new version
