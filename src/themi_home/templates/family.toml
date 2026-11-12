@@ -45,6 +45,7 @@ modules = [
     "taking",
     "guides",
     "recipes",
+    "expense_sync",  # EX4a: expense sheets in Google Sheets (after the cookbook: both use Drive)
     "cookbook_save",
     "recipe_groceries",
     "recipe_ideas",

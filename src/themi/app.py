@@ -115,6 +115,7 @@ from themi_home.connectors.tuya import TuyaConfig
 from themi_home.cookbook_save import CookbookSaveModule
 from themi_home.cooking import CookingModule
 from themi_home.cooking_timers import CookingTimersModule
+from themi_home.expense_sync import ExpenseSyncModule
 from themi_home.groceries import GroceriesModule
 from themi_home.home_modules import (
     CatGenieModule,
@@ -225,6 +226,7 @@ def family_modules(
         TakingModule(),
         GuidesModule(),
         RecipesModule(google),  # RC1a: the cookbook doc
+        ExpenseSyncModule(google),  # EX4a: after the cookbook, which uses Drive too
         CookbookSaveModule(),  # RC5
         RecipeGroceriesModule(),  # RC2a
         RecipeIdeasModule(),  # RC7

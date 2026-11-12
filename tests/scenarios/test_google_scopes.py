@@ -56,8 +56,16 @@ def test_the_family_asks_for_everything_as_before(scenario: Scenario) -> None:
 def test_without_the_cookbook_drive_isnt_asked(
     family: SeededFamily, fake_telegram: FakeTelegram, fake_google: FakeGoogle
 ) -> None:
-    dependents = {"recipes", "cookbook_save", "recipe_groceries", "recipe_ideas", "cooking",
-                  "web_recipes", "meals"}  # fmt: skip
+    dependents = {
+        "recipes",
+        "cookbook_save",
+        "recipe_groceries",
+        "recipe_ideas",
+        "cooking",
+        "web_recipes",
+        "meals",
+        "expense_sync",
+    }  # fmt: skip — EX4a: expense sheets use Drive too
     modules = family_modules(**connector_options(google=fake_google))
     gone = {m.name for m in modules if m.name in dependents}
     while needing := [m for m in modules if m.name not in gone and gone & set(m.requires)]:

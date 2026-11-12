@@ -88,3 +88,24 @@ async def test_the_real_cookbook_reads(token: Secret) -> None:
     assert {"Breakfast", "Entrees", "Desserts", "References"} <= {s for s, _ in parsed.sections}
     biryani = next(r for r in parsed.recipes if r.name == "Biryani")
     assert biryani.steps and "two Ingredients headings" in biryani.needs_look
+
+
+@pytest.mark.skipif(
+    not os.environ.get("THEMI_LIVE_SHEETS"),
+    reason="set THEMI_LIVE_SHEETS=1 (the refresh token needs drive.file and the Sheets API on)",
+)
+async def test_a_spreadsheet_round_trip(token: Secret) -> None:
+    """EX4a: make a spreadsheet, a tab, rows by their hidden id, a colour and a note. It's
+    left in the test account's Drive, named so it's easy to find and delete."""
+    from themi_google.connectors.gsheets import Cell, SheetsClient
+
+    async def source() -> Secret:
+        return token
+
+    sheets = SheetsClient("https://sheets.googleapis.com", source, lambda: None)
+    sid, (tab, *_) = await sheets.create("Themi live test (safe to delete)", ["Business"])
+    await sheets.add_tab(sid, "Mileage", 1)
+    assert [t.title for t in await sheets.tabs(sid)] == ["Business", "Mileage"]
+    await sheets.upsert(sid, tab, ["Amount"], {"1": [Cell(12.5, "a note", (0.85, 0.94, 0.83))]})
+    await sheets.upsert(sid, tab, ["Amount"], {"1": [Cell(13)]})
+    assert await sheets.ids(sid, "Business") == ["", "1"]

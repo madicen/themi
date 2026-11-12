@@ -288,7 +288,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [x] 2026-11-11 |
 | EX2b | Expense sheets: when Themi asks | Expense sheets | [x] 2026-11-11 |
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [x] 2026-11-11 |
-| EX4a | Google Sheets connector | Expense sheets | [ ] |
+| EX4a | Google Sheets connector | Expense sheets | [x] 2026-11-11 |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
@@ -14596,7 +14596,7 @@ Notes (2026-11-11):
 - No migration.
 
 ### EX4a · Google Sheets connector
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1a, 21, 11
 Read first: the plan's Integrations and Trust tiers; 21's notes (linking and scopes); this
 section's intro.
@@ -14612,6 +14612,33 @@ section's intro.
 - `tests/fakes/gsheets_api.py`: a fake Sheets API holding cells, colours and notes.
 Tests: unit tests for the client against the fake, scope checks, the trust category;
 live smoke test (opt-in, `tests/live`).
+
+Notes (2026-11-11):
+- Deviation, from the core refactor: `themi_google.connectors.gsheets` (the Google pack's
+  connectors), not `themi.connectors.gsheets`. `SheetsClient`: `create`, `tabs`, `batch`,
+  `add_tab`, `ids` (column A), `upsert` (header, rows by their hidden id, rows taken out, in
+  one batch); request builders for the rest (`update_sheet`, `delete_sheet`...). Retries as
+  the Gmail client's: a 401 refreshes once; 429/503 raise `SheetsRateLimited` with Google's
+  wait and the caller backs off (EX4b's queue). 403/404 are `SheetsNotFound` (gone, or not
+  Themi's under drive.file).
+- RC1a had added `drive.file` already. A new module, `expense_sync` (a connector, needs
+  spending, Google optional; its own track: 0001 adds the category), declares
+  `ScopeNeed("expense sheets", drive.file)`, so an account without it reads "Link again for
+  the cookbook and expense sheets"; nothing else changes for it. It sits after `recipes` in
+  the family template so that wording keeps the cookbook first. `GOOGLE_SHEETS_URL`
+  overrides the endpoint (fakes only).
+- Trust category `expense_sheet_sync` ("Keep your expense sheets up to date in Google
+  Sheets"): each person's own, Tier 1, may become automatic. The one-approval-a-day rule is
+  EX4b's queue.
+- Fake: `tests/fakes/gsheets_api.py` (`fake_gsheets`), cells with values, notes and
+  colours, hidden columns, tab order, drive.file by owner. The fake Telegram API also keeps an
+  upload's name now (EX3).
+- Tests changed for the new module, as for takeout before it: the planner's "removed with
+  spending" and the menu's "left out with spending" add `expense_sync`; "without the
+  cookbook Drive isn't asked" leaves `expense_sync` out too (it needs Drive as well).
+- README "Google Cloud setup" steps 2 and 13 (the Sheets API, and what linking again means),
+  and a line in DEPLOY.md. Live: `test_a_spreadsheet_round_trip` with `THEMI_LIVE_SHEETS=1`.
+- Setup (Michael): turn on the Google Sheets API in the family's Cloud project; restart.
 
 ### EX4b · Expense sheets: keeping Google Sheets in step
 Status: [ ]
