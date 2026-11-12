@@ -260,7 +260,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
 | F38a | Feedback: events with no title are never twins | Feedback | [x] 2026-11-11 |
-| F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
+| F38b | Feedback: the leave heads-up breaks through everything | Feedback | [x] 2026-11-11 |
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
@@ -12923,7 +12923,7 @@ Notes (2026-11-11):
 - Setup: none (no migration). Mark #190 reviewed once deployed.
 
 ### F38b · Feedback (2026-11-09): the leave heads-up breaks through everything
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: K4, F18f
 Read first: `themi_google/travel.py` (the module docstring, `_consider`, `_send` and its
 `deadline=now`); `themi/channels/outbox.py` (`_earliest`, `ANSWER_KINDS`, `expires`,
@@ -12978,6 +12978,21 @@ Scenario: Michael, in his busy time with his limit used up, has a noon meeting 1
 At 11:28 he gets "…: leave around 11:43 am." and nothing comes after noon.
 
 Data: none needed. Mark #191 reviewed once live.
+
+Notes (2026-11-11):
+- The outbox has `TRAVEL_KIND` in `BREAKTHROUGH_KINDS`: `_earliest` returns now for it
+  (before quiet hours, busy times, calendar blocks, the limit, receptivity and pauses), the
+  gate and the morning tray skip it, and `sent_today` leaves it out (`UNCOUNTED_KINDS`). It
+  stays `normal` priority, so it isn't an alert.
+- `_send` sets `expires` at the event's start. A heads-up first seen after getting ready
+  should have started says "leave around 11:43 am, so start getting ready now".
+- Deviation: `SLACK` was 3 min with the job every 5 min, so a heads-up could come up to 2 min
+  late (the day-long test found it). `SLACK` is now `JOB_EVERY` (5 min), so one comes up to
+  5 min early, never late. Five existing travel tests moved their clock stops to match
+  (`SLACK`, and the new "start getting ready now" when the test jumped past it).
+- The plan has no K4 section; its outbox rule ("Urgent messages bypass both") now says the
+  leave heads-up does too.
+- Setup: restart `themi run`. Mark #191 reviewed once deployed.
 
 ### F38c · Feedback (2026-11-09): a 👎 on a card marks the reply that made it, and a 👎 taken back clears its mark
 Status: [ ]

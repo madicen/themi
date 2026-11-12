@@ -15,8 +15,10 @@ around 2:20." It's worked out from:
 
 The `travel.heads_up` job (every 5 minutes) looks at the next day's events. A rough estimate
 (no network) says when an event is close; then the drive is looked up properly, and when
-"leave by" minus getting ready has come, the message goes through the outbox at normal
-priority. (F38b makes it unheld by quiet hours, busy times and limits.) One per
+"leave by" minus getting ready has come (up to `SLACK` early), the message goes through the
+outbox at once (F38b, bug #191): quiet hours, busy times, the daily limit and pauses don't
+hold it, it isn't counted, and one still unsent when the event starts is dropped. One first
+seen after getting ready should have started says "start getting ready now". One per
 event and start time, so a moved event gets a new one. The person can switch it off.
 """
 
@@ -33,7 +35,7 @@ from pydantic import field_validator
 from themi import clock
 from themi.accounts import Member
 from themi.accounts.preferences import Preferences
-from themi.channels.outbox import Priority
+from themi.channels.outbox import TRAVEL_KIND, Priority
 from themi.connectors.travel import (
     Place,
     Route,
@@ -46,6 +48,7 @@ from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences, Entry
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
 from themi.standard.places import NOT_SURE_TEXT, named_place
@@ -60,7 +63,11 @@ LOOK_AHEAD = timedelta(hours=24)
 AT_HOME_KM = 0.5  # closer than this is home: nothing to drive to
 FAR_KM = 100  # a place named with no street or town found further away is checked first
 MARGIN = timedelta(minutes=45)  # traffic can be worse than the estimate: look early
-SLACK = timedelta(minutes=3)  # the job runs every 5 minutes: send a little early, not late
+JOB_EVERY = timedelta(minutes=5)  # how often `travel.heads_up` runs
+# Send a little early, never late (F38b): with the job every 5 minutes, a heads-up is queued
+# at most this long before getting ready starts. It was 3 minutes, which let one come up to
+# 2 minutes late.
+SLACK = JOB_EVERY
 RETRY_NOT_FOUND = timedelta(days=1)
 LOOK_AHEAD_ON_REQUEST = timedelta(days=14)  # as far as calendars are read (K1)
 # F41d (bug #199): an event with a place ending this soon before the next is where they'll
@@ -197,11 +204,20 @@ class TravelHeadsUps:
         tz = self._tz()
         how = "with traffic" if traffic else "(a rough guess, without traffic)"
         there = " there" if start is not None and start.label else ""
+        ready = timedelta(
+            minutes=self.services.store.preferences(
+                member.id, TravelPreferences
+            ).getting_ready_minutes
+        )
         when = (
             f"leave{there} around {_clock(leave_by.astimezone(tz))}"
             if leave_by > now
             else "time to head out"
         )
+        if leave_by > now and now > leave_by - ready:
+            # F38b: first seen after getting ready should have started (Themi restarted, the
+            # event just added): it still goes at once, and says so.
+            when += ", so start getting ready now"
         drive = f"{_duration(minutes)} {how}"
         if start is not None and start.label:  # F41d: from the event before
             drive = f"{_duration(minutes)} {start.words} {how}"
@@ -215,8 +231,8 @@ class TravelHeadsUps:
             member,
             text,
             priority=Priority.NORMAL,
-            kind="travel",
-            deadline=now,  # getting ready starts now; held to leave_by, it left no time (#91)
+            kind=TRAVEL_KIND,  # F38b: breaks through quiet hours, busy times, limits, pauses
+            expires=entry.starts_at,  # still waiting at the start (an outage): of no use then
             dedupe_key=f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}",
         )
 
@@ -574,6 +590,10 @@ class TravelHeadsUps:
 
     @staticmethod
     def _event_key(entry: Entry) -> str:
+        """Title and place; for an untitled event its id (F38a), so two untitled events at
+        one place don't share a heads-up."""
+        if untitled(entry.title) and entry.event_id:
+            return f"id:{entry.event_id}"[:200]
         return name_key(f"{entry.title} {entry.location}")[:200]
 
     def _tz(self) -> ZoneInfo:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -115,7 +116,7 @@ async def test_without_a_key_its_a_rough_guess(
     fake_travel.place("Smile Dental", 37.780, -122.420)
     await travel.set_home(HOME)
     fake_gcal.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
-    assert await at(scenario, 14, 30) == [
+    assert await at(scenario, 14, 20) == [  # F38b: at 2:30 it's late, and says so
         "Dentist at 3 pm, about 25 min (a rough guess, without traffic): leave around 2:35 pm."
     ]
     assert fake_travel.count("nominatim") == 2 and fake_travel.count("route") == 0
@@ -131,7 +132,7 @@ async def test_a_moved_event_gets_a_new_one_and_settings_count(
     )
     erin = scenario.member("Erin")
     scenario.app.store.save_preferences(erin, erin.id, TravelPreferences, getting_ready_minutes=30)
-    assert len(await at(scenario, 15, 50)) == 1  # leave 4:25, get ready from 3:55
+    assert len(await at(scenario, 15, 45)) == 1  # leave 4:25, get ready from 3:55 (F38b: SLACK 5)
     assert (await at(scenario, 15, 55))[-1] == (
         "Dentist at 5 pm, about 35 min with traffic: leave around 4:25 pm."
     )
@@ -145,7 +146,7 @@ async def test_a_failed_route_falls_back_to_an_estimate(
 ) -> None:
     ready.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
     fake_travel.fail("route", 500)
-    assert await at(scenario, 14, 30) == [
+    assert await at(scenario, 14, 20) == [  # F38b: at 2:30 it's late, and says so
         "Dentist at 3 pm, about 25 min (a rough guess, without traffic): leave around 2:35 pm."
     ]
 
@@ -447,11 +448,11 @@ async def test_back_to_back_the_next_drive_is_from_the_first_place(
 ) -> None:
     in_laws.add_event(ERIN, local(12, 36), local(12, 51), summary="Drop off kid at in-laws",
                       location=IN_LAWS)  # fmt: skip
-    assert await at(scenario, 12, 7) == []  # SLACK: up to 3 minutes early
+    assert await at(scenario, 12, 5) == []  # SLACK: up to 5 minutes early (F38b)
     assert await at(scenario, 12, 11) == [
         "Drop off kid at in-laws at 12:36 pm, about 10 min with traffic: leave around 12:26 pm."
     ]
-    assert len(await at(scenario, 12, 32)) == 1  # leave the in-laws 12:51, get ready 12:36
+    assert len(await at(scenario, 12, 30)) == 1  # leave the in-laws 12:51, get ready 12:36
     assert (await at(scenario, 12, 36))[-1] == (
         "ND psych in person at 1 pm, about 9 min from Drop off kid at in-laws (790 La Para "
         "Ave) with traffic: leave there around 12:51 pm."
@@ -512,3 +513,117 @@ async def test_a_stop_whose_place_isnt_found_asks_and_adds_nothing(
     assert "the stop can't be timed" in tool_result(scenario)
     assert "Ask them what time" in tool_result(scenario)
     assert "Pick up cake" not in on_primary(in_laws)
+
+
+# ----- F38b (bug #191): the leave heads-up breaks through everything --------------------
+
+
+def sent_at(scenario: Scenario) -> list[datetime]:
+    rows = scenario.app.db.query(
+        "SELECT sent_at FROM outbox WHERE kind = 'travel' AND status = 'sent' ORDER BY id"
+    )
+    return [datetime.fromisoformat(r["sent_at"]).astimezone(PACIFIC) for r in rows]
+
+
+def michaels_day(scenario: Scenario) -> None:
+    """Busy Mon-Fri 9-5, quiet hours 21:30-08:00, the day's messages used up."""
+    from datetime import time
+
+    from themi.accounts import SYSTEM, BusyTime
+
+    erin = scenario.member("Erin")
+    scenario.app.store.update_settings(
+        SYSTEM, erin.id, busy_times=[BusyTime((0, 1, 2, 3, 4), time(9), time(17))],
+        quiet_start=time(21, 30), quiet_end=time(8),
+    )  # fmt: skip
+    scenario.app.db.execute("UPDATE members SET daily_limit = 0 WHERE id = ?", (erin.id,))
+
+
+async def test_bug_191_the_heads_up_isnt_held_by_busy_times_or_the_limit(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    michaels_day(scenario)
+    fake_travel.minutes = 17
+    ready.add_event(ERIN, local(12), local(13), summary="Samuel", location="Smile Dental")
+    await at(scenario, 11, 25)  # leave 11:43, getting ready from 11:28
+    assert sent_at(scenario) == [datetime(2026, 10, 21, 11, 25, tzinfo=PACIFIC)]
+    assert any(t.startswith("Samuel at 12 pm") for t in scenario.inbox("Erin"))
+    assert scenario.app.outbox.sent_today(scenario.member("Erin").id) == 0  # not counted
+    await at(scenario, 17, 5)
+    assert len(sent_at(scenario)) == 1  # nothing after noon
+
+
+async def test_a_7_am_event_gets_its_heads_up_in_quiet_hours(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    michaels_day(scenario)
+    fake_travel.minutes = 17
+    ready.add_event(ERIN, local(7, day=22), local(8, day=22), summary="Run club",
+                    location="Smile Dental")  # fmt: skip
+    await at(scenario, 6, 25, day=22)  # getting ready from 6:28
+    assert sent_at(scenario) == [datetime(2026, 10, 22, 6, 25, tzinfo=PACIFIC)]
+
+
+async def test_a_paused_person_still_gets_it_on_time(scenario: Scenario, ready: FakeGcal) -> None:
+    from themi.channels.pauses import EVERYTHING
+
+    erin = scenario.member("Erin")
+    scenario.app.outbox.pauses.pause(erin, EVERYTHING, datetime(2026, 10, 21, 20, tzinfo=PACIFIC))
+    ready.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    await at(scenario, 14, 10)
+    assert sent_at(scenario) == [datetime(2026, 10, 21, 14, 10, tzinfo=PACIFIC)]
+
+
+async def test_one_still_unsent_at_the_event_is_dropped(
+    scenario: Scenario, ready: FakeGcal, fake_telegram: Any
+) -> None:
+    ready.add_event(ERIN, local(15), local(16), summary="Dentist", location="Smile Dental")
+    fake_telegram.fail("sendMessage", times=1000)
+    await at(scenario, 14, 10)
+    assert sent_at(scenario) == []
+    clock.advance(datetime(2026, 10, 21, 15, 1, tzinfo=PACIFIC) - clock.now())
+    await scenario.app.outbox.flush()
+    assert scenario.app.db.query("SELECT id FROM outbox WHERE kind = 'travel'") == []
+
+
+async def test_first_seen_after_getting_ready_should_have_started(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    fake_travel.minutes = 17
+    clock.advance(datetime(2026, 10, 21, 11, 33, tzinfo=PACIFIC) - clock.now())
+    ready.add_event(ERIN, local(12), local(13), summary="Samuel", location="Smile Dental")
+    assert await at(scenario, 11, 33) == [
+        "Samuel at 12 pm, about 17 min with traffic: leave around 11:43 am, so start getting "
+        "ready now."
+    ]
+    ready.add_event(ERIN, local(15), local(16), summary="Late", location="Smile Dental")
+    assert (await at(scenario, 14, 50))[-1] == (
+        "Late at 3 pm, about 17 min with traffic: time to head out."
+    )
+
+
+async def test_across_a_day_every_heads_up_is_queued_in_time(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    from datetime import timedelta
+
+    from themi_google.travel import SLACK
+
+    fake_travel.minutes = 17
+    starts = [(10, 1), (11, 0), (12, 2), (12, 59), (14, 3), (15, 4), (16, 30), (19, 11)]
+    for hour, minute in starts:
+        ready.add_event(ERIN, local(hour, minute), local(hour + 1, minute),
+                        summary=f"Thing {hour}:{minute:02}", location="Smile Dental")  # fmt: skip
+    for step in range(12 * 12):  # every 5 min from 9 am to 9 pm
+        moment = datetime(2026, 10, 21, 9, tzinfo=PACIFIC) + timedelta(minutes=5 * step)
+        clock.advance(moment - clock.now())
+        await scenario.run_periodic("calendar.busy")
+        await scenario.run_periodic("travel.heads_up")
+    rows = scenario.app.db.query("SELECT text, created_at FROM outbox WHERE kind = 'travel'")
+    assert len(rows) == len(starts)
+    for (hour, minute), row in zip(
+        starts, sorted(rows, key=lambda r: r["created_at"]), strict=True
+    ):
+        get_ready = datetime(2026, 10, 21, hour, minute, tzinfo=PACIFIC) - timedelta(minutes=32)
+        queued = datetime.fromisoformat(row["created_at"])
+        assert get_ready - SLACK <= queued <= get_ready, row["text"]
