@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 ROLLOUTS = ("off", "trial", "on")
+THINGS_TO_BUY_NAME = "Things to Buy"
 ON_TEXT = (
     "Conversation mode is on. I'll just chat, and pick out anything to do in the background "
     "(a ✍️ on your message means I noted something). Asking me to add or check something "
@@ -99,7 +100,8 @@ HOUSEHOLD = re.compile(
     r"\b(?:list|lists|task|tasks|chore|chores|plate|todo|to-do|calendar|schedule|event|"
     r"appointment|reminder|reminders|laundry|washer|dryer|dishwasher|vacuum|robot|feeder|"
     r"feeders|litter|email|emails|inbox|bill|bills|grocer\w*|pantry|cart|safeway|"
-    r"meal|dinner|lunch|breakfast|routine|check-?in|due|overdue|approval)\b"
+    r"meal|dinner|lunch|breakfast|routine|check-?in|due|overdue|approval|"
+    r"buy|purchase|things to get)\b"  # F36a: "what do I need to buy?" reads the list
     r"|\bwhat(?:'s| is| do (?:i|we) have)\b[^.!?]*\b(?:today|tonight|tomorrow|this week)\b",
     re.IGNORECASE,
 )
@@ -131,6 +133,22 @@ CHANGE = re.compile(
     r"weekend|next week|this week|(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b",
     re.IGNORECASE,
 )
+# F36a, idea #185: "That rule is too general. Specifically for ..." while her draft was open
+# went to chat, and the draft kept its broader wording.
+CORRECTION = re.compile(
+    r"\brule\b|\btoo (?:general|broad|vague|narrow|strict)\b|\bspecifically\b|\bonly for\b"
+    r"|\binstead\b|\bnot quite\b|\bthat'?s not what i meant\b|\bnot what i meant\b",
+    re.IGNORECASE,
+)
+# F36a: the message looked like something to keep, so a reply cut to nothing says nothing
+# was done ("Got it." sounded like a yes).
+KEEP = re.compile(
+    r"\b(?:add|put|need|buy|get|grab|order|remember|note|save|keep track|track|don'?t forget|"
+    r"remind|research|someday|list)\b",
+    re.IGNORECASE,
+)
+NOT_KEPT_TEXT = "I haven't put that anywhere yet. Want me to?"
+HEARD_TEXT = "Mm, I hear you."
 TITLE_FILLER = frozenset(
     "for the and with from away out off get put take make clean call check do set up go "
     "into onto some our my your her his their".split()
@@ -155,6 +173,19 @@ def names_open_task(text: str, titles: Sequence[str]) -> bool:
 
 LIST_PREFIX = re.compile(r"^\s*([\w' ]{2,40})\s*[.:]\s+\S")  # F21a: "Groceries. milk"
 GROCERY_NAMES = ("groceries", "grocery", "grocery list", "shopping", "shopping list")
+# F36a: words a near list name keeps for F36b to read ("Things to research buy").
+SOMEDAY_WORDS = frozenset({"research", "someday", "later"})
+
+
+def near_list_name(prefix: str, name: str) -> bool:
+    """ "Things to research buy" names Things to Buy: every word of the name over two letters
+    is in the prefix, in order, with other words between allowed."""
+    wanted = [w for w in name_key(name).split() if len(w) > 2]
+    if not wanted:
+        return False
+    words = iter(name_key(prefix).split())
+    return all(any(w == key for w in words) for key in wanted)
+
 
 CHAT_SYSTEM = """\
 You are Themi, a household assistant for one family, chatting with them over Telegram.
@@ -197,8 +228,17 @@ def offered(services: Services, member: Member) -> bool:
     )
 
 
-def is_request(text: str, list_names: Sequence[str] = (), open_titles: Sequence[str] = ()) -> bool:
-    """Does the message ask Themi to do or look up something? Those go to the tool agent."""
+def is_request(
+    text: str,
+    list_names: Sequence[str] = (),
+    open_titles: Sequence[str] = (),
+    *,
+    open_draft: bool = False,
+) -> bool:
+    """Does the message ask Themi to do or look up something? Those go to the tool agent.
+    `open_draft`: they have a draft rule open, so a correction to it goes too (F36a)."""
+    if open_draft and CORRECTION.search(text):
+        return True
     if REQUEST.search(text) or TOGETHER.search(text) or BODY_DOUBLE.search(text):
         return True
     if ABILITY.search(text) or RULE.search(text) or names_open_task(text, open_titles):
@@ -206,15 +246,20 @@ def is_request(text: str, list_names: Sequence[str] = (), open_titles: Sequence[
     if HOUSEHOLD.search(text) and QUESTION.search(text):
         return True
     prefix = LIST_PREFIX.match(text)
+    if prefix is None:
+        return False
+    said = prefix.group(1).strip().lower()
     names = {n.strip().lower() for n in (*list_names, *GROCERY_NAMES)}
-    return bool(prefix and prefix.group(1).strip().lower() in names)
+    return said in names or any(near_list_name(said, n) for n in list_names)
 
 
 SENTENCE = re.compile(r"(?<=[.!?])\s+")
 
 
-def honest(reply: str) -> str:
-    """Sentences saying something was done are dropped: nothing was, in this reply."""
+def honest(reply: str, message: str = "") -> str:
+    """Sentences saying something was done are dropped: nothing was, in this reply. Cut to
+    nothing, it says so where `message` looked like something to keep, and otherwise only
+    acknowledges (F36a: "Got it." sounded like a yes)."""
     if not CLAIMS_DONE.search(reply):
         return reply
     lines = []
@@ -224,7 +269,9 @@ def honest(reply: str) -> str:
             lines.append(" ".join(kept))
     text = "\n".join(lines).strip()
     log.info("A chat reply lost a claim it did something: %s", redact(reply))  # F34b
-    return text or "Got it."
+    if text:
+        return text
+    return NOT_KEPT_TEXT if KEEP.search(message) or LIST_PREFIX.match(message) else HEARD_TEXT
 
 
 def build_chat_turn(
@@ -331,7 +378,10 @@ class ConversationMode:
         """Does this message get the chat reply, rather than the tool agent?"""
         if in_group or not self.is_on(member):
             return False
-        return not is_request(text, self._list_names(), self._open_titles(member))
+        drafts = self.services.rulebook.drafts(member) if self.services.rulebook else []
+        return not is_request(
+            text, self._list_names(), self._open_titles(member), open_draft=bool(drafts)
+        )
 
     def after_reply(
         self,
@@ -359,7 +409,10 @@ class ConversationMode:
 
     def _list_names(self) -> list[str]:
         rows = self.services.store.db.query("SELECT name FROM lists")
-        return [r["name"] for r in rows]
+        names = [r["name"] for r in rows]
+        if self.services.maybe(keys.buying) is not None and THINGS_TO_BUY_NAME not in names:
+            names.append(THINGS_TO_BUY_NAME)  # made on first use (L2a): named before then
+        return names
 
     def modes(self, member: Member) -> list[str]:
         found = []
@@ -392,7 +445,7 @@ class ConversationMode:
         )
         client = s.router.client_for(member.id, AITask.CHAT)
         response = await client.chat(CHAT_SYSTEM, [Message.user(turn)])
-        return honest(listening.trimmed(response.text.strip(), text))
+        return honest(listening.trimmed(response.text.strip(), text), text)
 
 
 class ConversationModeModule(Module):

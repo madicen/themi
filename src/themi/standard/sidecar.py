@@ -15,6 +15,7 @@ spec's extraction schema maps onto them:
 - state_updates → remember_fact
 - mode_toggles → start_burnout, end_burnout (their own words only, F22d), pause_messages,
   resume_messages
+- list adds → add_to_list, add_to_things_to_buy (F36a)
 
 The message, reply and history are data inside delimited blocks, never instructions, so
 something pasted in (an email) is acted on only when the person's own words ask for it.
@@ -65,6 +66,10 @@ SIDECAR_TOOLS = (
     "end_burnout",
     "pause_messages",
     "resume_messages",
+    # F36a: an add said in passing that the routing still missed. Staged under list_add as
+    # ever, so an item only inferred waits for their yes.
+    "add_to_list",
+    "add_to_things_to_buy",
 )
 NEEDS_SHOWN_TASK = frozenset({"complete_task", "cancel_task", "snooze_task"})
 SAYS_ITSELF = frozenset({"start_burnout", "end_burnout"})  # their message goes to the person
@@ -89,6 +94,8 @@ ITEM_LABELS = {
     "end_burnout": "Burnout mode off",
     "pause_messages": "Paused",
     "resume_messages": "Resumed",
+    "add_to_list": "On a list",
+    "add_to_things_to_buy": "On Things to Buy",
 }
 UNDO_WITHIN = timedelta(hours=1)
 UNDONE_TEXT = "Taken back: {what}. Noted as one I got wrong."
@@ -114,6 +121,9 @@ Call a tool only when {name}'s own words in this turn say it:
   won't be today, or say when instead ("no run today, maybe tomorrow").
 - add_calendar_event: a plan with a day and a time ("dinner at Sam's Saturday at 7").
 - remember_fact: a lasting fact worth knowing later ("the vet is closed Mondays now").
+- add_to_things_to_buy or add_to_list: something they say they need to buy, or want on
+  one of their lists ("need to buy more AA batteries", "Things to research buy. dog bed").
+  Food goes to neither.
 - start_burnout only when they ask for burnout mode themselves; end_burnout when they say
   they're out of it; pause_messages or resume_messages when they ask for a break from a
   kind of Themi's messages, or for them back.
@@ -386,6 +396,9 @@ class Sidecar:
         tool = str(item["tool"])
         label = ITEM_LABELS.get(tool) or tool.replace("_", " ")
         detail = str(args.get("title") or args.get("fact") or args.get("topic") or "")
+        if not detail and isinstance(args.get("items"), list):  # F36a: list adds
+            names = [i.get("name", "") if isinstance(i, dict) else str(i) for i in args["items"]]
+            detail = ", ".join(n for n in names if n)
         board = self.services.maybe(keys.taskboard)
         if not detail and board is not None and isinstance(args.get("task_id"), int):
             with suppress(Exception):

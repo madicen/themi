@@ -254,7 +254,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
-| F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
+| F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [x] 2026-11-11 |
 | F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
@@ -12507,7 +12507,7 @@ Scenario: Erin sets they/them on the website, and Michael's next relay from Them
 Data: mark #176 reviewed once live.
 
 ### F36a · Feedback (2026-11-08): in conversation mode, an add to a list and a correction to a draft rule go to the tools
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: CM1a, CM1b, F34a, L2a
 Read first: F34a's notes (`is_request` and what it already sends to the tool agent); CM1b's
 notes (`SIDECAR_TOOLS`); F34b's notes (`honest`). From Erin's ideas #185 (2026-11-08,
@@ -12572,6 +12572,20 @@ Data: rule 29 is still a draft on the Pi; Erin is setting it aside (only she can
 person it affects), since F36b builds what she asked for. Re-add the VNS device and the
 washable dog bed once F36b is live, as hers and for research. Mark #185 and #186 reviewed
 once live (with F36b).
+
+Notes (2026-11-11):
+- `is_request`: a list prefix near a list's name (`near_list_name`: every word over two
+  letters, in order, others between); buying words ("buy", "purchase", "things to get") in
+  `HOUSEHOLD`; and, with `open_draft=True` (they have a draft rule), `CORRECTION` words.
+  The whole message goes to the tool agent, so "research"/"someday"/"later" reach F36b's
+  model as said (`SOMEDAY_WORDS` names them). "Things to Buy" counts as a list name before
+  the list exists (it's made on first use).
+- The sidecar has `add_to_list` and `add_to_things_to_buy` (staged as ever), with a prompt
+  line. Two sidecar eval cases added (batteries; "buy a boat someday" stays nothing).
+- `honest(reply, message)`: cut to nothing, it's "I haven't put that anywhere yet. Want me
+  to?" when the message looked like something to keep, else "Mm, I hear you.". Changed
+  test: the unit test that expected "Got it." now expects "Mm, I hear you.".
+- Setup: none (no migration). Data as above, once F36b is live.
 
 ### F36b · Idea (2026-11-08): someday and research buys on Things to Buy, for the person who added them
 Status: [ ]

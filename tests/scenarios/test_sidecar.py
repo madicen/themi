@@ -68,6 +68,7 @@ async def test_a_task_said_in_passing_is_picked_out(scenario: Scenario) -> None:
     assert {t.name for t in request.tools} <= {
         "create_task", "complete_task", "cancel_task", "snooze_task", "add_calendar_event",
         "remember_fact", "start_burnout", "end_burnout", "pause_messages", "resume_messages",
+        "add_to_list", "add_to_things_to_buy",  # F36a
     }  # fmt: skip
     turn = request.messages[0].text
     assert "<data>" in turn and "Erin: ugh, I need to call the vet Thursday" in turn
@@ -218,3 +219,27 @@ async def test_a_tool_that_isnt_set_up_doesnt_borrow_the_last_outcome(
     [row] = logged(scenario)
     outcomes = {i["tool"]: i["outcome"] for i in json.loads(row["items"])}
     assert outcomes == {"create_task": "ok", "add_calendar_event": "failed"}
+
+
+# ----- F36a: the sidecar adds to a list said in passing ---------------------------------
+
+
+def things_to_buy(scenario: Scenario) -> list[tuple[str, str]]:
+    rows = scenario.app.db.query(
+        "SELECT i.name, m.name AS who FROM list_items i JOIN lists l ON l.id = i.list_id "
+        "LEFT JOIN members m ON m.id = i.added_by WHERE l.purpose = 'things_to_buy' "
+        "AND i.done = 0 ORDER BY i.id"
+    )
+    return [(r["name"], r["who"]) for r in rows]
+
+
+async def test_the_sidecar_can_add_to_a_list_and_reacts(scenario: Scenario) -> None:
+    await chat_on(scenario)
+    await chat(
+        scenario,
+        "ugh we keep running out of AA batteries, need to buy more",
+        "Batteries always vanish.",
+        ("add_to_things_to_buy", {"items": [{"name": "AA batteries", "store": ""}]}),
+    )
+    assert ("AA batteries", "Erin") in things_to_buy(scenario)
+    assert reactions(scenario) == [REACTION]
