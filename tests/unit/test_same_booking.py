@@ -46,3 +46,16 @@ def test_only_overlapping_is_two_events() -> None:
 def test_the_same_times_or_the_same_title_that_day() -> None:
     assert same_booking("Piano", "", VISIT, event("Lesson", at(12), at(13)), PACIFIC)
     assert same_booking("Dentist", "", VISIT, event("Dentist", at(15), at(16)), PACIFIC)
+
+
+def test_an_untitled_event_isnt_the_same_title_that_day() -> None:
+    # F38a: "(no title)" matches nothing by its title, so a booking later that day isn't it.
+    assert not same_booking("(no title)", "", VISIT, event("(no title)", at(15), at(16)), PACIFIC)
+    assert not same_booking("Dentist", "", VISIT, event("(no title)", at(15), at(16)), PACIFIC)
+
+
+def test_a_booking_at_an_untitled_events_start_with_nothing_in_common_is_offered() -> None:
+    untitled = event("(no title)", at(12), at(12, 30))
+    assert not same_booking("Dentist", "Smile Dental", VISIT, untitled, PACIFIC)
+    there = event("(no title)", at(12), at(12, 30), "1 Hacker Way")  # the place still counts
+    assert same_booking("Meta visit", "1 Hacker Way", VISIT, there, PACIFIC)

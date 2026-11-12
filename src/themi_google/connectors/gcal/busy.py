@@ -38,6 +38,7 @@ from themi.core.calendar_view import (  # CR10b1: the shapes everyone shares
     event_line,
 )
 from themi.core.prompts import as_data
+from themi.core.wording import NO_TITLE
 from themi.localtime import to_utc_iso
 from themi_google.connectors.gcal.sync import CalendarSync
 from themi_google.connectors.google import CALENDAR_SCOPE
@@ -76,7 +77,7 @@ def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
     all_day = begins[1]
     return {
         "event_id": str(event.get("id", "")),
-        "title": " ".join(str(event.get("summary") or "(no title)").split())[:MAX_TEXT],
+        "title": " ".join(str(event.get("summary") or NO_TITLE).split())[:MAX_TEXT],
         "location": location,
         "starts_at": begins[0],
         "ends_at": ends[0],

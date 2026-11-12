@@ -157,3 +157,15 @@ async def test_best_guess_merges_says_where_and_can_be_undone(
     assert back["summary"] == "ND psych in person"
     assert on_primary(linked)[VISIT]["end"]["dateTime"].startswith("2026-10-28T13:30")
     assert await read(scenario) == []  # not asked about again
+
+
+async def test_untitled_meetings_are_never_the_same_thing(
+    scenario: Scenario, linked: FakeGcal
+) -> None:
+    """F38a (bug #190): a work calendar that shows Themi no titles. Three untitled meetings
+    overlapping on Monday, two of them at the very same times: no card, nothing merged."""
+    linked.add_event(ERIN, local(11, 30, day=26), local(15, day=26), summary="")
+    linked.add_event(ERIN, local(12, day=26), local(13, day=26), summary="")
+    linked.add_event(ERIN, local(12, day=26), local(13, day=26), summary="")
+    assert await read(scenario) == []
+    assert len(linked.events(ERIN, ERIN)) == 3

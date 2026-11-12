@@ -259,7 +259,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
-| F38a | Feedback: events with no title are never twins | Feedback | [ ] |
+| F38a | Feedback: events with no title are never twins | Feedback | [x] 2026-11-11 |
 | F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
 | F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
@@ -12872,7 +12872,7 @@ Notes (2026-11-09):
 - Setup: restart `themi run` (migration 0157).
 
 ### F38a · Feedback (2026-11-09): events with no title are never twins
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: F34e
 Read first: `themi_google/calendar_twins.py` (`alike`, `pairs`, the same-title-and-times
 merge in `_one`); `themi_google/connectors/gcal/busy.py` (where an untitled event becomes
@@ -12912,6 +12912,15 @@ Scenario: Michael's work calendar has three untitled meetings overlapping on Mon
 
 Data: none needed (every untitled pair on the Pi is answered "apart" already). Mark #190
 reviewed once live.
+
+Notes (2026-11-11):
+- `untitled(title)` and the one constant `NO_TITLE` live in `themi.core.wording`, next to
+  `name_key` (busy.py imports `NO_TITLE`; core can't import the Google module, so the
+  constant moved rather than staying in busy.py).
+- `alike` is false when either side is untitled, so no card, no auto-merge, no guess.
+  `same_booking`'s "same title that day" skips untitled events; its same-times, place and
+  name tests still apply. `travel._event_key` uses `id:<event_id>` for an untitled event.
+- Setup: none (no migration). Mark #190 reviewed once deployed.
 
 ### F38b · Feedback (2026-11-09): the leave heads-up breaks through everything
 Status: [ ]
