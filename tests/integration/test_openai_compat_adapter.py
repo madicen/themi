@@ -201,3 +201,47 @@ async def test_a_picture_goes_as_a_data_url(fake_ai: FakeAIServer) -> None:
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}"}},
         ],
     }
+
+
+# ----- embeddings: Ollama, LM Studio and OpenAI all serve /v1/embeddings ---------------
+
+
+def openai_embeddings(*vectors: list[float], reverse: bool = False) -> dict:
+    data = [{"object": "embedding", "index": i, "embedding": v} for i, v in enumerate(vectors)]
+    return {
+        "object": "list",
+        "data": data[::-1] if reverse else data,
+        "model": "qwen3-embedding",
+        "usage": {"prompt_tokens": 4, "total_tokens": 4},
+    }
+
+
+async def test_embeddings_one_vector_per_text(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue(openai_embeddings([0.6, 0.8], [1.0, 0.0]))
+    ollama = OpenAICompatProvider.ollama("qwen3-embedding", base_url=f"{fake_ai.url}/v1")
+    got = await ollama.embed(["lie down for a bit", "oat milk"])
+    assert got.vectors == ((0.6, 0.8), (1.0, 0.0))
+    assert (got.provider, got.model) == ("ollama", "qwen3-embedding")
+    (request,) = fake_ai.requests
+    assert request.path == "/v1/embeddings"
+    assert request.json["model"] == "qwen3-embedding"
+    assert request.json["input"] == ["lie down for a bit", "oat milk"]
+    assert request.json["encoding_format"] == "float"
+
+
+async def test_embeddings_come_back_in_the_texts_order(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue(openai_embeddings([0.6, 0.8], [1.0, 0.0], reverse=True))
+    got = await provider(fake_ai).embed(["first", "second"])
+    assert got.vectors == ((0.6, 0.8), (1.0, 0.0))
+
+
+async def test_embeddings_errors_map_like_chat(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue(openai_error("model busy"), status=503)
+    with pytest.raises(RetryableError):
+        await provider(fake_ai).embed(["hi"])
+
+
+async def test_too_few_embeddings_is_malformed(fake_ai: FakeAIServer) -> None:
+    fake_ai.queue(openai_embeddings([1.0]))
+    with pytest.raises(MalformedOutputError):
+        await provider(fake_ai).embed(["one", "two"])

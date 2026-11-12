@@ -22,6 +22,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from datetime import time
 from pathlib import Path
 from typing import Any
@@ -41,9 +42,10 @@ from themi.core import keys
 from themi.modules import StartReport
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
-from themi.web import icons
+from themi.web import icons, welcome
 from themi.web.auth import COOKIE_NAME
 from themi.web.kit import HERE, AdminsOnly, Kit, NotSignedIn, SiteContext, static_file
+from themi.web.welcome import SITE_LINK_CHANNELS
 
 __all__ = ["SiteContext", "install_site"]
 
@@ -92,8 +94,8 @@ PICKER_POLICY = (
 )
 
 
-# The chat channels where /site (Slack: `/themi site`) sends a sign-in link (SL5).
-SITE_LINK_CHANNELS = frozenset({"telegram", "slack"})
+# The chat channels where /site (Slack: `/themi site`) sends a sign-in link (SL5): in
+# welcome.py, which its steps need too.
 
 
 def sign_in_hint(channels: set[str]) -> str:
@@ -169,7 +171,16 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
 
     kit = Kit(ctx)
     modules_pages = ctx.app.services.web_pages
-    menu = Menu([*CORE_MENU, *(entry for pages in modules_pages for entry in pages.menu)])
+    services = ctx.app.services
+    names = words(services.start_report.template if services.start_report else "family")
+    kit.templates.env.globals["words"] = names
+    menu = Menu(
+        [
+            *core_menu(services, names),
+            *(entry for pages in modules_pages for entry in pages.menu),
+        ],
+        names,
+    )
     kit.templates.env.globals["menu_bar"] = menu.bar
     google = ctx.app.services.maybe(keys.google)
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
@@ -346,9 +357,24 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
     @router.get("/", response_class=HTMLResponse)
     def dashboard(request: Request) -> HTMLResponse:
         session = kit.current(request)
+        steps = welcome.steps(app, session.member, kit.templates.env.globals["words"])
+        if welcome.shown(app, session.member, steps):  # a new Themi: setting it up
+            return kit.with_flash(
+                request,
+                "welcome.html",
+                session,
+                steps=steps,
+                ready=welcome.ready(steps),
+            )
         return kit.with_flash(
             request, "dashboard.html", session, **dashboard_values(session.member)
         )
+
+    @router.post("/welcome/done")
+    async def welcome_done(request: Request) -> Response:
+        await kit.checked(request, admin=True)
+        welcome.dismiss(app)
+        return kit.redirect("/", "The rest of setting up is on Home, and on Modules.")
 
     @router.post("/actions/{action_id}/{decision}")
     async def decide(request: Request, action_id: int, decision: str) -> Response:
@@ -614,6 +640,48 @@ CORE_MENU = (
         icon=icons.DEV,
     ),
 )
+# What the core's pages call the people and the place. The family template's words; any
+# other Themi (one person at work, or built up from empty) gets plainer ones.
+FAMILY_WORDS = {
+    "family": "Family",
+    "family_hint": "The household and its people",
+    "household": "Household",
+    "name": "Family name",
+}
+PLAIN_WORDS = {
+    "family": "People",
+    "family_hint": "Who uses this Themi, and its name",
+    "household": "This Themi",
+    "name": "Name",
+}
+
+
+def words(template: str) -> dict[str, str]:
+    return FAMILY_WORDS if template == "family" else PLAIN_WORDS
+
+
+def core_menu(services: Any, names: dict[str, str]) -> list[MenuEntry]:
+    """The core's entries for this Themi: the Accounts ones only when a module puts
+    something there (a new Themi has no Google), and the Family page in its words."""
+    sections = services.accounts_sections
+    shown = {
+        "/accounts": any(not s.household for s in sections),
+        "/accounts#household": any(s.household for s in sections),
+    }
+    entries = []
+    for entry in CORE_MENU:
+        if not shown.get(entry.href, True):
+            continue
+        if entry.href == "/family":
+            entry = replace(
+                entry, label=names["family"], hint=names["family_hint"], bar_label=names["family"]
+            )
+        entries.append(entry)
+    return entries
+
+
+# An admin's bar on a Themi with no main pages of its own yet (only Home): setting it up.
+SETUP_BAR = ("/modules", "/dev")
 BAR_FULL_TEXT = "The bar holds four pages, and More. Unpin one first, then pin this one."
 NOT_A_PAGE = "Only pages from the More page can go on the bar."
 
@@ -622,7 +690,8 @@ class Menu:
     """The More page and the bottom bar (W1, F28c), from the core's entries and the loaded
     modules' (CR4)."""
 
-    def __init__(self, entries: Sequence[MenuEntry]) -> None:
+    def __init__(self, entries: Sequence[MenuEntry], names: dict[str, str] | None = None) -> None:
+        self.group_names = {"Household": (names or FAMILY_WORDS)["household"]}
         hrefs = [e.href for e in entries]
         twice = sorted({h for h in hrefs if hrefs.count(h) > 1})
         if twice:
@@ -634,8 +703,13 @@ class Menu:
         """The bar's own pages (Home, Tasks, Lists for the family): the default bar."""
         return [(e.href, e.label, e.hint) for e in self.entries if e.group == "Main"]
 
-    def default_bar(self) -> tuple[str, ...]:
-        return tuple(href for href, _, _ in self.main_pages())
+    def default_bar(self, member: Member | None = None) -> tuple[str, ...]:
+        """The main pages; for an admin of a Themi with none but Home, Modules and
+        Development too (a new Themi, being set up)."""
+        main = tuple(href for href, _, _ in self.main_pages())
+        if member is not None and member.is_admin and main == ("/",):
+            return (*main, *(href for href in SETUP_BAR if href in self.by_href))
+        return main
 
     def more_groups(self, member: Member) -> list[tuple[str, list[tuple[str, str, str]]]]:
         """The More page (W1): every page past the bottom bar's, grouped; empty groups
@@ -648,7 +722,7 @@ class Menu:
                 if e.group == group and (member.is_admin or not e.admin_only)
             ]
             if links:
-                groups.append((group, links))
+                groups.append((self.group_names.get(group, group), links))
         return groups
 
     def pinnable(self, member: Member) -> dict[str, str]:
@@ -663,7 +737,7 @@ class Menu:
         """The pages on this member's bar, in order: their choice, less any they can no
         longer open (an admin page after the role changed, a module turned off)."""
         pages = self.pinnable(member)
-        chosen = self.default_bar() if member.menu_bar is None else member.menu_bar
+        chosen = self.default_bar(member) if member.menu_bar is None else member.menu_bar
         return [href for href in chosen if href in pages]
 
     def bar(self, member: Member, path: str) -> list[dict[str, Any]]:

@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% from "_row.html" import row %}
-{% block title %}Family · Themi{% endblock %}
+{% block title %}{{ words.family }} · Themi{% endblock %}
 {% block content %}
-<h1>Family</h1>
+<h1>{{ words.family }}</h1>
 {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<p class="muted">Appliances, the vacuum and the family calendar are on
-<a href="/accounts#household">Accounts</a>.</p>
+{% if household_connections %}<p class="muted">Appliances, the vacuum and the family calendar are on
+<a href="/accounts#household">Accounts</a>.</p>{% endif %}
 
-<h2>Household</h2>
+<h2>{{ words.household }}</h2>
 <form method="post" action="/family" class="card">
   <input type="hidden" name="csrf" value="{{ csrf }}">
-  <label>Family name <input name="name" value="{{ family.name }}" required></label>
+  <label>{{ words.name }} <input name="name" value="{{ family.name }}" required></label>
   <label>Timezone <input name="timezone" value="{{ family.timezone }}" required></label>
   {% if household.spending %}<label>Monthly takeout budget ($) <input name="budget" inputmode="decimal" value="{{ budget }}"></label>{% endif %}
   {% if household.pantry %}<label>Staples (one per line)

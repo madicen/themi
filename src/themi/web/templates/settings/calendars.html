@@ -1,6 +1,13 @@
-{# CR7d: a section of the settings form, the core's. #}
+{# CR7d: a section of the settings form, the core's: a row for each module that's on. #}
 {% from "_row.html" import row %}
-  {% call(part) row("My calendars", meta=("Good-morning message at " ~ (prefs.day_summary.morning_summary | clock)) if prefs.day_summary and prefs.day_summary.morning_summary else "No good-morning message", id="calendars") %}{% if part == "body" %}
+{% if prefs.day_summary %}{% set summary = prefs.day_summary %}
+  {% call(part) row("Good-morning message", meta=("Each morning at " ~ (summary.morning_summary | clock)) if summary.morning_summary else "Off", id="day-summary") %}{% if part == "body" %}
+    <label>A good-morning message with today's calendar, and the rest when I want it, at <input type="time" name="morning_summary" value="{{ summary.morning_summary.strftime('%H:%M') if summary.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
+    <label class="check"><input type="checkbox" name="morning_summary_empty" {% if summary.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on and nothing waiting, too</label>
+  {% endif %}{% endcall %}
+{% endif %}
+{% if prefs.calendar or prefs.travel %}
+  {% call(part) row("My calendars", meta=("Only I see what's on them" if prefs.calendar.calendar_details == "me" else "My partner sees them too") if prefs.calendar else "Getting ready takes " ~ prefs.travel.getting_ready_minutes ~ " minutes", id="calendars") %}{% if part == "body" %}
     {% if prefs.calendar %}<label>Who sees what's on my calendars
       <select name="calendar_details">
         <option value="me" {% if prefs.calendar.calendar_details == "me" %}selected{% endif %}>Just me</option>
@@ -14,17 +21,20 @@
         <option value="keep" {% if prefs.calendar.calendar_twins == "keep" %}selected{% endif %}>Keep both</option>
       </select>
     </label>{% endif %}
-    {% if prefs.day_summary %}<label>A good-morning message with today's calendar, and the rest when I want it, at <input type="time" name="morning_summary" value="{{ prefs.day_summary.morning_summary.strftime('%H:%M') if prefs.day_summary.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
-    <label class="check"><input type="checkbox" name="morning_summary_empty" {% if prefs.day_summary.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on and nothing waiting, too</label>{% endif %}
-    {% if prefs.travel %}<label class="check"><input type="checkbox" name="leave_heads_up" {% if prefs.travel.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>{% endif %}
+    {% if prefs.travel %}<label class="check"><input type="checkbox" name="leave_heads_up" {% if prefs.travel.leave_heads_up %}checked{% endif %}> Tell me when to start getting ready for things I have to drive to</label>
+    <label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ prefs.travel.getting_ready_minutes }}"> minutes</label>{% endif %}
     {% if prefs.calendar %}<label class="check"><input type="checkbox" name="setup_note" {% if prefs.calendar.setup_note %}checked{% endif %}> When Themi starts an event earlier to give me set-up time, note the real start in its description</label>{% endif %}
-    {% if prefs.lists %}<label>Lists with sub-items show their levels as
+    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">Accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
+  {% endif %}{% endcall %}
+{% endif %}
+{% if prefs.lists %}
+  {% call(part) row("Lists", meta={"dashes": "Sub-items with dashes", "bullets": "Sub-items as indented bullets", "numbers": "Sub-items numbered"}[prefs.lists.list_style], id="lists") %}{% if part == "body" %}
+    <label>Lists with sub-items show their levels as
       <select name="list_style">
         <option value="dashes" {% if prefs.lists.list_style == "dashes" %}selected{% endif %}>Dashes (- , -- )</option>
         <option value="bullets" {% if prefs.lists.list_style == "bullets" %}selected{% endif %}>Indented bullets</option>
         <option value="numbers" {% if prefs.lists.list_style == "numbers" %}selected{% endif %}>Numbers (1., 1.1.)</option>
       </select>
-    </label>{% endif %}
-    {% if prefs.travel %}<label>Getting ready takes <input type="number" name="getting_ready_minutes" min="0" max="120" value="{{ prefs.travel.getting_ready_minutes }}"> minutes</label>{% endif %}
-    <p class="muted">Themi reads the calendars you choose on <a href="/accounts">Accounts</a>: titles, places and times, never descriptions or who's invited. Either way, Themi waits while you're busy.</p>
+    </label>
   {% endif %}{% endcall %}
+{% endif %}

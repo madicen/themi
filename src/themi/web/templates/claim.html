@@ -13,8 +13,9 @@
       <input id="code" name="code" autocomplete="off" autocapitalize="characters" required placeholder="ABCD-EFGH">
     </div>
     <div class="field">
-      <label for="household">The household's name</label>
-      <input id="household" name="household" value="{{ values.household or '' }}" required placeholder="The Smiths">
+      <label for="household">A name for this Themi</label>
+      <input id="household" name="household" value="{{ values.household or '' }}" required placeholder="The Smiths" aria-describedby="household-hint">
+      <span class="muted" id="household-hint">Your family's name, or for just you, something like "Sam's work".</span>
     </div>
     <div class="field">
       <label for="timezone">Timezone</label>

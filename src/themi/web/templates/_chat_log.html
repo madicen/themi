@@ -1,0 +1,48 @@
+{# WC1: the website chat's conversation. The page polls it (chat.js stops while the tab is
+   hidden); the answer is 204 until something here changes. #}
+<div id="chat-log" class="chat" data-version="{{ version }}"
+     hx-get="/chat/log?v={{ version }}" hx-trigger="every 2s" hx-swap="outerHTML">
+  {% for message in messages %}
+  <div class="chat-message chat-{{ message.direction }}" id="m{{ message.id }}"{% if loop.last %} data-latest{% endif %}>
+    <div class="chat-bubble">
+      {% if message.quote %}<blockquote class="chat-quote">{{ message.quote }}</blockquote>{% endif %}
+      <p>{{ message.text }}</p>
+      {% if message.edited %}<span class="chat-edited">edited</span>{% endif %}
+      {% if message.direction == "in" and message.reactions %}
+      <span class="chat-reacted" title="Themi's reaction">{{ message.reactions | join("") }}</span>
+      {% endif %}
+    </div>
+    {% if message.buttons %}
+    <div class="buttons">
+      {% for label in message.buttons %}
+      <form method="post" action="/chat/{{ message.id }}/{{ loop.index0 }}"
+            hx-post="/chat/{{ message.id }}/{{ loop.index0 }}" hx-target="#chat-log" hx-swap="outerHTML">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="small">{{ label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="chat-actions">
+      {% if message.direction == "out" %}
+      <form method="post" action="/chat/{{ message.id }}/react"
+            hx-post="/chat/{{ message.id }}/react" hx-target="#chat-log" hx-swap="outerHTML">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        {% for emoji in reactions %}
+        {% set on = emoji in message.reactions %}
+        <button class="chat-react{% if on %} on{% endif %}" name="emoji" value="{{ emoji }}"
+                aria-pressed="{{ 'true' if on else 'false' }}"
+                title="{{ 'Take off your ' ~ emoji if on else reaction_titles[emoji] }}">{{ emoji }}</button>
+        {% endfor %}
+      </form>
+      {% endif %}
+      <a class="chat-reply" href="/chat?reply={{ message.id }}#say" data-reply="{{ message.id }}"
+         data-quote="{{ message.text | truncate(80) }}" title="Reply to this message (for example with /bug)">↩ Reply</a>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">Nothing yet. Write to Themi as you would in a chat app.</p>
+  {% endfor %}
+  {% if notice %}<div class="flash" role="status">{{ notice }}</div>{% endif %}
+  <div class="chat-typing" aria-live="polite">{% if typing %}Themi is typing…{% endif %}</div>
+</div>

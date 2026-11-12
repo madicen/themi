@@ -88,6 +88,8 @@ def test_run_without_a_telegram_token_starts_and_says_what_telegram_needs(tmp_pa
     env = {**_env(tmp_path), "THEMI_HTTP_PORT": str(port)}
     env.pop("TELEGRAM_BOT_TOKEN", None)
     env.pop("THEMI_DISABLE_TELEGRAM", None)
+    # The family template, which has Telegram (a new Themi with no file starts empty)
+    (tmp_path / "themi.toml").write_text('template = "family"\n')
     process = subprocess.Popen(
         [sys.executable, "-m", "themi", "run"],
         env=env,
@@ -130,7 +132,7 @@ def test_login_link_prints_a_working_url(tmp_path) -> None:
         [sys.executable, "-m", "themi", "login-link", "Erin"], check=True, **run
     )
     url = result.stdout.strip()
-    assert url.startswith("http://127.0.0.1:8080/login/")
+    assert url.startswith("http://localhost:8080/login/")
     missing = subprocess.run(
         [sys.executable, "-m", "themi", "login-link", "Nobody"], check=False, **run
     )

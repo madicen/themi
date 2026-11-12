@@ -77,8 +77,10 @@ def create_app(sources: HealthSources, site: SiteContext | None = None) -> FastA
 
 
 def site_base_url(public_url: str, host: str, port: int) -> str:
-    """Where people reach the website: the public URL if set, else the local address."""
+    """Where people reach the website: the public URL if set, else the local address.
+    On this computer that's `localhost`, not 127.0.0.1: browsers count only localhost as
+    secure without HTTPS, and passkeys need a secure site (SP7b)."""
     if public_url:
         return public_url.rstrip("/")
-    shown = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    shown = "localhost" if host in ("0.0.0.0", "", "127.0.0.1", "::1") else host
     return f"http://{shown}:{port}"

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from themi.config import InstanceConfig
     from themi.runtime import Runtime
     from themi.settings import Settings
+    from themi.storage.db import Database
 
 log = logging.getLogger(__name__)
 
@@ -156,7 +157,7 @@ def build_runtime(
     template = None
     report = None
     options: dict[str, Any] = {}
-    from themi.config import config_path, load_config, load_template, resolve_start
+    from themi.config import load_template, resolve_start
     from themi.modules.store import ModuleSecrets
 
     # SP1: a module's problem leaves it off and Themi starts; Telegram with no token is
@@ -176,7 +177,7 @@ def build_runtime(
         modules, report = resolve_start(config, settings, given=on_fakes, unavailable=unavailable)
         template = load_template(config.template)
     else:  # CR5a: the modules themi.toml (or the family template) names
-        config = config or load_config(config_path(settings.environment or None))
+        config = config or _instance_config(settings, db)
         modules, report = resolve_start(config, settings, unavailable=unavailable, stored=stored)
         template = load_template(config.template)
     if config is not None and not settings.public_url and config.core.get("public_url"):
@@ -218,13 +219,15 @@ def build_runtime(
         **options,
     )
     from themi.accounts.claim import CODE_FILE, Claim
+    from themi.web import site_base_url
 
     claim = Claim(app.store)
     if claim.needed():  # SP7a: a new Themi, claimed on its website
         code = claim.make(settings.db_path.parent)
         log.warning(
-            "Nobody has set up this Themi yet. Open its website and enter the claim code "
-            "%s (it's also in %s).",
+            "Nobody has set up this Themi yet. Open its website (%s) and enter the claim "
+            "code %s (it's also in %s).",
+            site_base_url(settings.public_url, settings.http_host, settings.http_port),
             code,
             settings.db_path.parent / CODE_FILE,
         )
@@ -295,7 +298,13 @@ def _run() -> None:
         runtime.install_signal_handlers()
         await runtime.run()
 
-    asyncio.run(main())
+    from themi.runtime import PortInUse
+
+    try:
+        asyncio.run(main())
+    except PortInUse as exc:
+        log.error("%s", exc)
+        raise SystemExit(1) from None
     if runtime.restart_requested:  # SP6: asked for on the Modules page
         from themi.runtime import reexec
 
@@ -650,6 +659,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\nCancelled; nothing was saved.", file=sys.stderr)
         return 1
     return 0
+
+
+def _instance_config(settings: Settings, db: Database) -> InstanceConfig:
+    """themi.toml. With none, an install from before the setup portal (it has a family) is
+    the family template, as it always was. A new Themi (no family yet) starts with only
+    the core and the web chat, and the file is written so it stays that way once claimed:
+    the admin builds it up on the Modules page."""
+    from themi.config import (
+        InstanceConfig,
+        beside_database,
+        config_path,
+        load_config,
+        write_config,
+    )
+
+    env = settings.environment or None
+    path = config_path(env)
+    if path is None and db.one("SELECT 1 FROM family WHERE id = 1") is None:
+        path = beside_database(env)
+        write_config(InstanceConfig(template="empty", added=("web_chat",)), path)
+        log.info("A new Themi: it starts with only its core and the web chat (%s)", path)
+    return load_config(path)
 
 
 def _chat_in_the_simulator(config: InstanceConfig) -> InstanceConfig:

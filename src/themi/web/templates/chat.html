@@ -1,30 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Chat · Themi{% endblock %}
 {% block content %}
-{# CR20b: the web_chat module's page: talking with Themi on the website #}
+{# CR20b: the web_chat module's page: talking with Themi on the website. WC1: it updates
+   itself, sends without reloading, and has reactions and replies (chat.js). #}
 <h1>Chat</h1>
-<div class="chat">
-  {% for message in messages %}
-  <div class="chat-message chat-{{ message.direction }}" {% if loop.last %}id="latest"{% endif %}>
-    <p>{{ message.text }}</p>
-    {% if message.buttons %}
-    <div class="buttons">
-      {% for label in message.buttons %}
-      <form method="post" action="/chat/{{ message.id }}/{{ loop.index0 }}">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button class="small">{{ label }}</button>
-      </form>
-      {% endfor %}
-    </div>
-    {% endif %}
-  </div>
-  {% else %}
-  <p class="muted">Nothing yet. Write to Themi as you would in a chat app.</p>
-  {% endfor %}
-</div>
-<form method="post" action="/chat" class="chat-say">
+{% include "_chat_log.html" %}
+<form method="post" action="/chat" class="chat-say" id="say"
+      hx-post="/chat" hx-target="#chat-log" hx-swap="outerHTML">
   <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="reply_to" value="{{ reply_to or '' }}">
+  <div class="chat-replying"{% if not reply_to %} hidden{% endif %}>
+    <span>Replying to “<span class="chat-replying-quote">{{ reply_quote }}</span>”</span>
+    <a class="chat-replying-cancel" href="/chat" aria-label="Don't reply" title="Don't reply">✕</a>
+  </div>
   <label>Message <textarea name="text" rows="2" required></textarea></label>
   <button class="primary">Send</button>
 </form>
+<script src="{{ asset('chat.js') }}" defer></script>
 {% endblock %}

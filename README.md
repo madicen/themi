@@ -64,6 +64,10 @@ opens the management site signed in as that person.
   simulator's Erin and Husband. It holds the family's real messages and email, so
   `make dev-reset` deletes it too.
 
+`make fresh` runs a brand-new Themi as someone installing it would meet it: a claim code in
+its log, the key page, an empty Modules page, at <http://localhost:8080>. Its data is in
+`data/fresh/` and it doesn't read `.env`. `make fresh-reset` (with it stopped) starts it over.
+
 ### Rules worth knowing
 
 - Read time only through `themi.clock` (`tools/check_clock.py` enforces it), so tests can
@@ -74,9 +78,9 @@ opens the management site signed in as that person.
 
 1. Run `themi run`. A new Themi makes its own secret key (next to its database) and prints a
    claim code. It starts the scheduler and the website (`/health` on port 8080).
-2. Open the website (<http://localhost:8080>) and enter the claim code: you name the
-   household and become its first admin. Save the secret key it shows you: without it,
-   stored tokens, keys and backups can't be decrypted.
+2. Open the website (<http://localhost:8080>) and enter the claim code: you give it a
+   name (your family's, or your own for a work Themi) and become its first admin. Save the
+   secret key it shows you: without it, stored tokens, keys and backups can't be decrypted.
 3. On the **Modules** page, turn on what you want and fill in what each needs, with its
    guide beside it: the Telegram bot's token, an AI provider, Google and the rest. Then
    press **Restart** on the same page.

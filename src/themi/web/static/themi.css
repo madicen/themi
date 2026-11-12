@@ -364,6 +364,43 @@ body.session-page { min-height: 100vh; min-height: 100dvh; }
 @keyframes stretch { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(1.06, .94); } }
 @keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10%); } }
 
+/* WC1: the website chat (/chat): theirs on the right, Themi's on the left, buttons and
+   reactions under Themi's, the box kept at the bottom of the screen */
+.chat { display: flex; flex-direction: column; gap: var(--space-3); padding-bottom: var(--space-2); }
+.chat-message { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.chat-message.chat-in { align-items: flex-end; }
+.chat-bubble { position: relative; max-width: 85%; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius); background: var(--card); border: 1px solid var(--line); overflow-wrap: anywhere; }
+.chat-in .chat-bubble { background: var(--info-bg); border-color: transparent; }
+.chat-bubble p { margin: 0; white-space: pre-line; }
+.chat-quote { margin: 0 0 var(--space-1); padding-left: var(--space-2); border-left: 3px solid var(--accent);
+  color: var(--muted); font-size: .9rem; }
+.chat-edited { color: var(--muted); font-size: .8rem; margin-left: var(--space-1); }
+.chat-reacted { position: absolute; bottom: -.7rem; left: -.6rem; background: var(--card);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0 .3rem; font-size: .9rem; }
+.chat-message .buttons { max-width: 85%; }
+.chat-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.chat-actions form { display: flex; gap: 2px; margin: 0; }
+button.chat-react { min-height: 32px; min-width: 36px; padding: 0 .35rem; font-size: 1rem; line-height: 1;
+  background: transparent; border: 1px solid transparent; border-radius: 999px; opacity: .55; }
+button.chat-react:hover, button.chat-react:focus-visible { opacity: 1; border-color: var(--line); }
+button.chat-react.on { opacity: 1; background: var(--soft); border-color: var(--accent); }
+a.chat-reply { color: var(--muted); font-size: .85rem; text-decoration: none; padding: .3rem .4rem; }
+a.chat-reply:hover, a.chat-reply:focus-visible { color: var(--fg); text-decoration: underline; }
+.chat-typing { min-height: 1.5rem; color: var(--muted); font-style: italic; font-size: .95rem; }
+.chat-say { position: sticky; bottom: calc(var(--bar) + var(--safe-bottom)); background: var(--bg);
+  padding: var(--space-2) 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2);
+  border-top: 1px solid var(--line); }
+.chat-say label { flex: 1 1 12rem; margin: 0; }
+.chat-say textarea { width: 100%; resize: vertical; }
+.chat-replying { flex: 1 1 100%; display: flex; justify-content: space-between; align-items: center;
+  gap: var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--accent);
+  background: var(--soft); border-radius: var(--radius-sm); font-size: .9rem; color: var(--muted); }
+.chat-replying[hidden] { display: none; }
+.chat-replying > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-replying-cancel { text-decoration: none; color: var(--fg); padding: 0 var(--space-2); }
+@media (min-width: 900px) { .chat-say { bottom: 0; } }
+
 /* break chat on the page: a bubble over most of it, the countdown kept in a corner */
 .session-chat { position: fixed; inset: 3.5rem var(--space-3) var(--space-3); z-index: 20; display: flex;
   flex-direction: column; gap: var(--space-2); background: var(--card); border: 2px solid var(--line);
@@ -417,3 +454,17 @@ body.chatting .session-scene .session-timer { position: fixed; z-index: 30; top:
 .settings-form .check { display: inline-flex; gap: var(--space-1); align-items: center; font-weight: normal; }
 .module-action { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin: var(--space-2) 0; }
 .key { white-space: pre-wrap; word-break: break-all; font-size: 1.05rem; padding: var(--space-3); background: var(--card); border: 1px dashed var(--line); border-radius: var(--radius-sm); }
+
+/* ----- the welcome page: a new Themi's setting up ----- */
+a.button.small { min-height: 36px; padding: .3rem .8rem; font-size: .9rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.welcome-steps { list-style: none; padding: 0; }
+.welcome-step { display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line); }
+.welcome-step:last-child { border-bottom: none; }
+.welcome-step .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.welcome-mark { flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center;
+  justify-content: center; font-size: .9rem; font-weight: 600; border: 1px solid var(--line); color: var(--muted); }
+.welcome-step.done .welcome-mark { background: var(--good-bg); color: var(--good); border-color: transparent; }
+.welcome-step.done .row-title { color: var(--muted); }
+.welcome-done { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; margin-top: var(--space-5); }

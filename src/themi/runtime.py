@@ -9,9 +9,11 @@ accepting requests, and only then is the database closed.
 from __future__ import annotations
 
 import asyncio
+import errno
 import logging
 import os
 import signal
+import socket
 import sys
 from datetime import timedelta
 from typing import NoReturn
@@ -29,6 +31,11 @@ log = logging.getLogger(__name__)
 SCHEDULER_TICK = timedelta(seconds=15)
 SHUTDOWN_GRACE_SECONDS = 30
 RESTART_AFTER_SECONDS = 1.0
+
+
+class PortInUse(Exception):
+    """The website's port is taken (often by another Themi): said plainly, before anything
+    else starts."""
 
 
 def reexec() -> NoReturn:
@@ -103,7 +110,23 @@ class Runtime:
         for sig in (signal.SIGTERM, signal.SIGINT):
             loop.add_signal_handler(sig, self.stop)
 
+    def _bind(self) -> socket.socket:
+        """The website's socket, taken first: a port in use stops Themi with one plain line
+        instead of uvicorn's exit after everything else has started."""
+        config = self.server.config
+        try:
+            family = socket.AF_INET6 if ":" in config.host else socket.AF_INET
+            return socket.create_server((config.host, config.port), family=family)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            raise PortInUse(
+                f"Port {config.port} is already in use, perhaps by another Themi. Stop that, "
+                "or give this one another port with THEMI_HTTP_PORT."
+            ) from None
+
     async def run(self) -> None:
+        sock = self._bind()
         if self.telegram_enabled:
             await self.app.channel.start()
             try:
@@ -113,7 +136,7 @@ class Runtime:
         else:
             log.warning("Telegram is disabled (THEMI_DISABLE_TELEGRAM); not polling")
         tasks = [
-            asyncio.create_task(self.server.serve(), name="http"),
+            asyncio.create_task(self.server.serve(sockets=[sock]), name="http"),
             asyncio.create_task(
                 self.scheduler.run_forever(self.stop_event, self.scheduler_tick), name="scheduler"
             ),
@@ -122,7 +145,7 @@ class Runtime:
             tasks.append(
                 asyncio.create_task(self.app.channel.run(self.stop_event), name="telegram")
             )
-        log.info("Themi is running")
+        log.info("Themi is running at %s", self.app.services.site_url)
         try:
             stopper = asyncio.create_task(self.stop_event.wait())
             waiting = {*tasks, stopper}

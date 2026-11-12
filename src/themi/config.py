@@ -2,7 +2,8 @@
 
 `themi.toml` holds choices and plain settings; secrets stay in `.env`. With no file,
 Themi is the family template, built from today's environment variables, so an existing
-install changes nothing.
+install changes nothing. A new Themi (no family yet) gets a file instead: the empty
+template and the web chat (`themi run` writes it; the setup portal plan).
 
     template = "family"
     modules = ["-safeway", "+travel"]   # leave one out, add one

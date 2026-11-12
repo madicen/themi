@@ -150,7 +150,7 @@ messages get lost.
    database are encrypted with it. Then `chmod 600 .env`. Keep a copy in your password
    manager; it's the one file the Pi can't be rebuilt without.
 3. **Google**: in the OAuth client, add the redirect URI
-   `https://themi.<tailnet>.ts.net/auth/google/callback` (keep the 127.0.0.1 one for local
+   `https://themi.<tailnet>.ts.net/auth/google/callback` (keep the localhost one for local
    work). Linked accounts keep working; the address only matters for new links and sign-in.
 4. **The switch** (a few minutes of Themi being away):
    - here: stop `themi run`;

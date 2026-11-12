@@ -31,7 +31,9 @@ THEMI_LOG_LEVEL=INFO
 
 # Which tools each model call gets: "groups" (the core and the groups a message calls for),
 # "all" (every tool; P5, to compare speed and accuracy) or "embeddings" (P7b: groups by
-# meaning as well as by words, plus the groups used in the last few replies; needs Gemini).
+# meaning as well as by words, plus the groups used in the last few replies; needs an
+# embedding model for the embedding task on the AI page: Gemini, or one Ollama, LM Studio
+# or OpenAI serves, such as qwen3-embedding).
 # THEMI_TOOL_ROUTING=groups
 
 # Conversation mode (CM1a-c): a plain chat reply, with tasks picked out in the background.
