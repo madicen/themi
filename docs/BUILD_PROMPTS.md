@@ -255,7 +255,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
 | F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
 | F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [x] 2026-11-11 |
-| F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
+| F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [x] 2026-11-11 |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
@@ -12588,7 +12588,7 @@ Notes (2026-11-11):
 - Setup: none (no migration). Data as above, once F36b is live.
 
 ### F36b · Idea (2026-11-08): someday and research buys on Things to Buy, for the person who added them
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: F36a, L2a, L2b
 Read first: L2a's and L2b's notes (Things to Buy, `item_homes`, `ThingsToBuy.from_store`);
 F30d's notes (looking things up online); the plan's PDA phrasing rules. From Erin's idea
@@ -12650,6 +12650,31 @@ gets a short list of options from the fake web search.
 
 Data: once live, set aside or retire Erin's rule 29 if it's still there, and re-add the VNS
 device and the washable dog bed as her someday items. Mark #185 reviewed once live.
+
+Notes (2026-11-11):
+- Built on the prompt's assumptions, still Erin's to confirm: one kind ("someday", research
+  included), a nudge a week at most. Changing either is a constant in `themi_home.buying`
+  (`SOMEDAY_EVERY`) or a second flag.
+- Migration 0166: `list_items.someday` and `someday_asked_at`. `add_to_things_to_buy` takes
+  `someday` per item, kept only when `SOMEDAY_SAID` is in their own message (not the one
+  before). A someday prefix ("someday: X", "research buy: X") counts as asking, so it goes
+  straight on.
+- `Lists.describe`: "Things to Buy: anywhere: batteries. Someday (Erin's): washable dog
+  bed." `from_store` (the Safeway cart) leaves out someday items not added by the cart's
+  person. `set_someday` (core group) makes one ordinary or someday, with a new name and
+  store. The Lists page shows "Someday (Erin's)" and a "For someday" / "Buy as usual"
+  toggle per Things to Buy item.
+- `buying.someday` job (hourly): for each person with a someday item of theirs a week old,
+  and no someday nudge in the last week, one `low` message (kind `someday`, expires in a
+  day) about the least recently asked one, with [Look into it now] (a reply button: the
+  agent searches with `search_web`), [Keep it for someday], [Not needed] (takes it off).
+  Skipped in burnout mode or while paused; `someday` is in burnout's held kinds too.
+- On the wall the item keeps its plain name (no tags there).
+- Golden files changed as the prompt says: the `buying.someday` job, the `someday` button,
+  the Lists route, `set_someday` and `add_to_things_to_buy`'s spec, and the prompt line.
+- Setup: restart `themi run` (migration 0166). Data: set aside or retire Erin's rule 29,
+  then re-add the VNS device and the washable dog bed as her someday items. Mark #185 and
+  #186 reviewed.
 
 ### F37a · Feedback (2026-11-09): the dishwasher ticks the routine on the owner's day
 Status: [x] 2026-11-09

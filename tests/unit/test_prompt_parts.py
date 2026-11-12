@@ -13,7 +13,7 @@ from themi.modules.prompt import PromptFragment, compose_system
 from themi.standard import follow_ups, lists, memory, tasks
 from themi_cozyla import cozyla_modules
 from themi_google import connector_modules, google_modules
-from themi_home import appliances, liaison, spending
+from themi_home import appliances, buying, liaison, spending
 
 EVERY_MODULE_RULES = (
     *tasks.PROMPT_RULES,
@@ -22,6 +22,7 @@ EVERY_MODULE_RULES = (
     *cozyla_modules.CHORE_PROMPT_RULES,  # CR21c: the wall's pack
     *google_modules.CALENDAR_PROMPT_RULES,
     *connector_modules.TRAVEL_PROMPT_RULES,
+    *buying.PROMPT_RULES,  # F36b
     *liaison.PROMPT_RULES,
     *spending.PROMPT_RULES,
     *lists.PROMPT_RULES,

@@ -33,7 +33,7 @@
   },
   "add_to_things_to_buy": {
     "group": "core",
-    "spec": "a2c91c4604b3"
+    "spec": "0be1bdfc9259"
   },
   "add_to_wall_routine": {
     "group": "wall",
@@ -418,6 +418,10 @@
   "set_sender_levels": {
     "group": "email",
     "spec": "ba497fbe6207"
+  },
+  "set_someday": {
+    "group": "core",
+    "spec": "2565166b9421"
   },
   "set_task_importance": {
     "group": "schedules",

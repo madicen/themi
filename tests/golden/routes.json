@@ -109,6 +109,7 @@
   "POST /lists/{list_id}/clear",
   "POST /lists/{list_id}/delete",
   "POST /lists/{list_id}/items/{item_id}/remove",
+  "POST /lists/{list_id}/items/{item_id}/someday",
   "POST /lists/{list_id}/items/{item_id}/store",
   "POST /lists/{list_id}/items/{item_id}/tick",
   "POST /login/{token}",

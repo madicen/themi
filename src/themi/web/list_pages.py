@@ -48,6 +48,7 @@ def routes(kit: Kit) -> APIRouter:
             session,
             lists=found,
             stores={nl.id: lists().stores(nl) for nl in found if nl.purpose},
+            someday={nl.id: _whose(lists(), nl) for nl in found if nl.purpose},
             groceries=groceries.needed() if groceries else None,
             opened=opened,
         )
@@ -110,6 +111,18 @@ def routes(kit: Kit) -> APIRouter:
         buying.forget_store(item.name)
         return back(nl, f"Forgot where {item.name} comes from.")
 
+    @router.post("/lists/{list_id}/items/{item_id}/someday")
+    async def set_someday(request: Request, list_id: int, item_id: int) -> Response:
+        """F36b: a thing to buy for someday (research included), or an ordinary one again."""
+        session, form = await kit.checked(request)
+        nl = mine(session.member, list_id)
+        item = item_of(nl, item_id) if nl else None
+        if item is None or nl is None or not nl.purpose:
+            return kit.redirect("/lists", "That item isn't on a list you can see.")
+        on = form.get("on") == "1"
+        lists().set_someday(item, on)
+        return back(nl, f"{item.name}: for someday." if on else f"{item.name}: to buy as usual.")
+
     @router.post("/lists/{list_id}/clear")
     async def clear_ticked(request: Request, list_id: int) -> Response:
         session, _ = await kit.checked(request)
@@ -129,3 +142,11 @@ def routes(kit: Kit) -> APIRouter:
         return kit.redirect("/lists", f"Deleted the list {nl.name}.")
 
     return router
+
+
+def _whose(lists: Lists, nl: NamedList) -> dict[int, str]:
+    """F36b: someday item id -> "Someday (Erin's)", for the page."""
+    return {
+        item_id: f"Someday ({lists.name_of(who)}'s)" if lists.name_of(who) else "Someday"
+        for item_id, who in lists.someday(nl).items()
+    }
