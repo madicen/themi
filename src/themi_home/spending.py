@@ -37,6 +37,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
 from themi_google.connectors.gmail.parse import web_link
 from themi_home import home_groups
+from themi_home.expense_fill import FILL_EVERY, ExpenseFill
 from themi_home.expense_sheets import ExpenseSheets
 from themi_home.expenses import Entry, Expenses, Value
 
@@ -49,7 +50,6 @@ KINDS = ("takeout", "eating_out", "other")
 KIND_WORDS = {"takeout": "takeout", "eating_out": "eating out", "other": "other"}
 SAME_MEAL = timedelta(days=2)  # a receipt and a chat spend this close, same amount: one meal
 MAX_CENTS = 10_000_00
-RECEIPT_CONFIDENCE = 0.95  # amount, date and vendor read from the receipt itself
 
 
 @dataclass(frozen=True)
@@ -149,36 +149,17 @@ class Spending:
         return self.get(entry.id)
 
     def from_receipt(
-        self, member: Member, email_id: int, place: str, cents: int, when: datetime
+        self, member: Member, email_id: int, place: str, cents: int, when: datetime, text: str = ""
     ) -> Spend | None:
-        """A takeout receipt from email. Said in chat already: the receipt joins it."""
-        if cents <= 0 or self.expenses.entry_for_email(email_id) is not None:
+        """A takeout receipt from email. Said in chat already: the receipt joins it (EX2a:
+        `ExpenseFill.receipt`, which fills any expense sheet's entries in)."""
+        fill = self.services.maybe(keys.expense_fill)
+        if cents <= 0 or fill is None:
             return None
-        on = when.astimezone(self._tz()).date()
-        same = self._same_meal(cents, "takeout", on, "chat")
-        if same is not None:
-            self.expenses.attach_email(same.id, email_id)
-            return self.get(same.id)
-        ref = self._gmail_id(email_id)
-        quote = f"{place} {money(cents)}".strip()
-
-        def read(value: Any) -> Value:
-            return Value.filled(value, RECEIPT_CONFIDENCE, "email_receipt", ref, quote)
-
-        values = {
-            "amount": read(cents),
-            "date": read(on.isoformat()),
-            "category": read("takeout"),
-        }
-        if place[:80]:
-            values["vendor"] = read(place[:80])
-        entry = self.expenses.add(
-            self.expenses.takeout_sheet(), member, values, origin="email", email_id=email_id
-        )
+        entry = fill.receipt(member, email_id, "takeout", place, cents, when, text or money(cents))
+        if entry is None or entry.sheet_id not in self.expenses.builtin_sheet_ids():
+            return None
         return self.get(entry.id)
-
-    def _gmail_id(self, email_id: int) -> str:
-        return str(self.db.scalar("SELECT gmail_id FROM emails WHERE id = ?", (email_id,)) or "")
 
     def _same_meal(self, cents: int, kind: str, on: date, source: str) -> Spend | None:
         """The latest spend from `source` with that amount and kind within two days: from
@@ -464,4 +445,8 @@ class SpendingModule(Module):
         )
         expenses = ctx.provide(Expenses(ctx.services.store.db))
         ctx.provide(Spending(ctx.services, expenses)).install()
-        ctx.provide(ExpenseSheets(ctx.services, expenses)).install()  # EX1b
+        sheets = ctx.provide(ExpenseSheets(ctx.services, expenses))
+        sheets.install()  # EX1b
+        fill = ctx.provide(ExpenseFill(ctx.services, expenses, sheets))
+        fill.install()  # EX2a
+        ctx.periodic("expenses.fill", FILL_EVERY, fill.run)

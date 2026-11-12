@@ -285,7 +285,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [x] 2026-11-11 |
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [x] 2026-11-11 |
-| EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
+| EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [x] 2026-11-11 |
 | EX2b | Expense sheets: when Themi asks | Expense sheets | [ ] |
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
@@ -14463,7 +14463,7 @@ Notes (2026-11-11):
 - Setup: restart (core 0164, spending track 0002).
 
 ### EX2a · Expense sheets: filling in from receipts, calendars and chat
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1b, 23, 25, K1
 Read first: 23's notes (`ReceiptFound`); the pantry's receipt reader (`total_cents`);
 K1's notes (what Themi keeps from calendars); this section's intro (confidence by code,
@@ -14487,6 +14487,36 @@ Tests: unit tests for the matcher (amounts, dates, vendor names), the quote chec
 (a made-up value becomes null), the confidence table; scenarios: a lunch said in chat then
 its receipt filling the amount quietly, a receipt for a meal never mentioned. Evals:
 receipts from the fixture set, every filled value quoted.
+
+Notes (2026-11-11):
+- Deviation, from the core refactor: `themi_home.expense_matching` (not
+  `themi.core.expense_matching`) and `themi_home.expense_fill.ExpenseFill`
+  (`keys.expense_fill`), in the spending module.
+- Receipts: the pantry now hands every takeout, shopping and grocery receipt to
+  `ExpenseFill.receipt` (X1's `Spending.from_receipt` goes through it too). A match needs the
+  date within two days and each of amount and vendor the entry has to agree; the receipt's
+  own text naming the entry's place counts ("Your order from Thai Place" from DoorDash). It
+  fills only empty values; what the person said stays. No match: a takeout receipt makes an
+  entry on the household's sheet; others only on a custom sheet whose keywords it has.
+- The quote check for receipts is code's own: the total is kept only when the receipt has it
+  written (`amount_line`, the line kept as the evidence), the vendor only when it's named
+  (else nothing). A total that isn't written but whose line prices all are is their sum
+  (X1's fallback). The receipt reader's schema didn't change.
+- Test changed: X1's scenario `test_a_takeout_receipt_counts_once` sent a second receipt
+  whose email said $25.50 while the scripted model read $31.00. That's the made-up value
+  EX2a drops, so the email now says $31.00 (its input only; every assertion is the same).
+- Calendars: `expenses.fill` (every 10 minutes) looks at entries of the last three days with
+  no vendor (or no purpose, on a business sheet) and the person's `calendar_entries` that
+  day. An event fits when it's a meal (lunch, dinner, coffee...) or names a client already on
+  their sheets (client / who was there). Exactly one place that day, or nothing. The
+  reference is "calendar|event", a link on the website.
+- Chat: an entry said in chat is read once, five minutes or more after it was made, with
+  their messages from half an hour either side (`STRUCTURED_MISC`, in a data block). A value
+  is kept only when its quote is in the chat and the value is in its quote. Misses are
+  logged, never shown.
+- No new messages: fills are quiet. Spending track 0003 adds
+  `expense_entries.context_checked_at`. Eval cases: `tests/evals/receipt_cases.json`.
+- Setup: restart (spending track 0003).
 
 ### EX2b · Expense sheets: when Themi asks
 Status: [ ]

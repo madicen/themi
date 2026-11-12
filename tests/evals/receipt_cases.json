@@ -1,0 +1,20 @@
+[
+  {"sender": "DoorDash <no-reply@doordash.com>", "subject": "Your order from Thai Place",
+   "text": "Order from Thai Place\nPad see ew $16.50\nSpring rolls $7.00\nDelivery fee $2.99\nDasher tip $5.00\nTotal charged $33.84",
+   "kind": "takeout", "total": 3384},
+  {"sender": "Merit <receipts@meritsf.com>", "subject": "Your receipt from Merit",
+   "text": "Merit\n2 guests\nBurrata 14.00\nSteak frites 58.00\nTip 12.20\nTotal: 84.20\nVisa ending 4421",
+   "kind": "takeout", "total": 8420},
+  {"sender": "Uber Eats <uber@uber.com>", "subject": "Your Tuesday evening order with Uber Eats",
+   "text": "Thanks for ordering, Erin\nNopalito\nCarnitas burrito x2 $27.00\nService fee $3.10\nTip $6.00\nTotal $38.62\nPaid with Mastercard",
+   "kind": "takeout", "total": 3862},
+  {"sender": "The Home Depot <HomeDepotReceipt@homedepot.com>", "subject": "Your In-Store Purchase Receipt",
+   "text": "THE HOME DEPOT #0628\nBEHR ULTRA 1GAL EGGSHELL  $42.98\nPURDY 2.5IN BRUSH  $15.97\nSUBTOTAL 58.95\nSALES TAX 5.16\nTOTAL $64.11",
+   "kind": "shopping", "total": 6411},
+  {"sender": "Square <receipts@squareup.com>", "subject": "Receipt from Ritual Coffee",
+   "text": "Ritual Coffee Roasters\nCortado $5.25\nMorning bun $4.75\nTip $2.00\nTotal $12.00",
+   "kind": "takeout", "total": 1200},
+  {"sender": "Grubhub <orders@eat.grubhub.com>", "subject": "Your order from Golden Dragon is confirmed",
+   "text": "Golden Dragon\nKung pao chicken 1 x $15.95\nFried rice 1 x $11.50\nTotal $31.86 (includes fees, tax and tip)",
+   "kind": "takeout", "total": 3186}
+]

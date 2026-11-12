@@ -43,7 +43,7 @@ CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[st
     (GroceriesModule, GroceryList, [], set()),
     (SafewayModule, SafewayCart, [GroceriesModule], {"safeway.expire"}),
     (BuyingModule, ThingsToBuy, [ListsModule], set()),
-    (SpendingModule, Spending, [], set()),
+    (SpendingModule, Spending, [], {"expenses.fill"}),  # EX2a: filling sheets in
     (PantryModule, Pantry, [GroceriesModule], {"pantry.predict"}),
     (MealsModule, Meals, [GroceriesModule, PantryModule], {"meals.nudges"}),  # 35a
     (

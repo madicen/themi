@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from themi_home.cookbook_save import CookbookSave
     from themi_home.cooking import Cooking
     from themi_home.dishwasher import Dishwasher
+    from themi_home.expense_fill import ExpenseFill
     from themi_home.expense_sheets import ExpenseSheets
     from themi_home.expenses import Expenses
     from themi_home.feeders import Feeders
@@ -114,6 +115,7 @@ buying: Key[ThingsToBuy] = Key("ThingsToBuy")
 spending: Key[Spending] = Key("Spending")
 expenses: Key[Expenses] = Key("Expenses")  # EX1a
 expense_sheets: Key[ExpenseSheets] = Key("ExpenseSheets")  # EX1b
+expense_fill: Key[ExpenseFill] = Key("ExpenseFill")  # EX2a
 takeout: Key[Takeout] = Key("Takeout")  # 35a
 safeway: Key[SafewayCart] = Key("SafewayCart")
 breaks: Key[Breaks] = Key("Breaks")

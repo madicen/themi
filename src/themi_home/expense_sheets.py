@@ -445,8 +445,10 @@ class ExpenseSheets:
     def find_sheet(self, member: Member, name: str) -> Sheet:
         """A sheet they can see, by its number, its title, or its book's ("business"). Raises
         ToolFailed naming their sheets when it's not clear."""
-        sheets = self.expenses.visible_sheets(member)
         name = " ".join(name.lower().split())
+        if _words(name) & {"business", "work"}:
+            self.expenses.business_sheet(member)  # theirs is made when first needed
+        sheets = self.expenses.visible_sheets(member)
         if name.isdigit():
             found = [s for s in sheets if s.id == int(name)]
             if found:

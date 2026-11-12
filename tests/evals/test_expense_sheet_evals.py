@@ -6,11 +6,15 @@
   should, an Amount (money) and Date (date) when it's spending, the fields the request names,
   and nothing counted as spending that isn't money (mileage, income).
 - Estimates: "pretty sure" and "maybe" end as the person's estimate, never as checked.
+- Receipts (EX2a, `receipt_cases.json`, written fresh): each becomes an entry with its total,
+  and every value filled from it is quoted from the receipt word for word.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 
 from tests.evals.pacing import PacedFactory
 from tests.evals.providers import EvalBackend
@@ -18,7 +22,12 @@ from tests.evals.runner import use_backend
 from tests.fakes.telegram_api import FakeTelegram
 from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
+from themi import clock
+from themi.accounts.store import SYSTEM
 from themi.core import keys
+from themi.localtime import to_utc_iso
+from themi.storage.secrets import Secret
+from themi_home.expense_matching import quoted
 from themi_home.expenses import FieldDef
 
 # (the request, its mode, whether it counts as spending, words some field label must have)
@@ -127,3 +136,65 @@ async def test_expense_sheet_estimates(
         await scenario.stop()
     print(f"\nexpense sheet estimates: {len(ESTIMATES) - len(misses)}/{len(ESTIMATES)}")
     assert not misses, "; ".join(misses)
+
+
+# EX2a: receipts read by a real model, each one's filled values quoted from the receipt.
+RECEIPTS = json.loads((Path(__file__).parent / "receipt_cases.json").read_text())
+
+
+async def test_expense_sheet_receipts(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    eval_backend: EvalBackend,
+    eval_factory: PacedFactory,
+) -> None:
+    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    use_backend(scenario, eval_backend)
+    await scenario.start()
+    misses = []
+    try:
+        db = scenario.app.db
+        pantry = scenario.app.services.maybe(keys.pantry)
+        expenses = scenario.app.services.maybe(keys.expenses)
+        assert pantry is not None and expenses is not None
+        erin = scenario.member("Erin")
+        account = scenario.app.store.add_linked_account(
+            SYSTEM, erin.id, "gmail", "erin@example.com", Secret("1//eval")
+        )
+        expenses.make_sheet(
+            expenses.make_book("Kitchen project", None), "Kitchen project", "custom",
+            [FieldDef("amount", "Amount", "money", critical=True),
+             FieldDef("date", "Date", "date", critical=True), FieldDef("vendor", "Vendor", "text")],
+            keywords=("paint", "brush"),
+        )  # fmt: skip
+        for n, case in enumerate(RECEIPTS):
+            name, _, address = case["sender"].partition(" <")
+            now = to_utc_iso(clock.now())
+            email_id = db.execute(
+                "INSERT INTO emails (account_id, gmail_id, thread_id, from_name, from_address, "
+                "subject, body_text, category, received_at, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'receipt', ?, ?)",
+                (account.id, f"g{n}", f"t{n}", name, address.rstrip(">"), case["subject"],
+                 case["text"], now, now),
+            )  # fmt: skip
+            await pantry.read_receipt(email_id)
+            entry = expenses.entry_for_email(email_id)
+            source = f"{name}\n{case['subject']}\n{case['text']}"
+            if entry is None:
+                misses.append(f"{case['subject']}: no entry")
+                continue
+            if entry.get("amount") != case["total"]:
+                misses.append(f"{case['subject']}: amount {entry.get('amount')}")
+            for key, value in entry.values.items():
+                if key in ("date", "category") or value.value is None:
+                    continue
+                if not quoted(value.evidence, source):
+                    misses.append(f"{case['subject']}: {key} quoted {value.evidence!r}")
+            if eval_backend.pace:
+                await asyncio.sleep(eval_backend.pace)
+    finally:
+        await scenario.stop()
+    print(f"\nexpense sheet receipts: {len(RECEIPTS) - len(misses)}/{len(RECEIPTS)}")
+    for miss in misses:
+        print("  missed", miss)
+    assert len(misses) <= 1, "; ".join(misses)
