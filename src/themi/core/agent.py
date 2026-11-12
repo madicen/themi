@@ -349,8 +349,9 @@ class Agent:
 
     async def _handle(self, event: InboundEvent, channel: Channel) -> None:
         member = self.services.store.get_member(event.member.id)  # settings may have changed
-        if self.services.outcomes is not None:
-            self.services.outcomes.observe(member, event)
+        taken_back = event.reaction is not None and not event.reaction.added  # F38c
+        if self.services.outcomes is not None and not taken_back:
+            self.services.outcomes.observe(member, event)  # a reaction taken off answers nothing
         if event.kind == "reaction" and event.reaction is not None:
             self.services.calibrator.observe_reaction(member, event.reaction.added)
             for handler in self.services.reaction_handlers:

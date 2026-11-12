@@ -306,6 +306,18 @@ class Scenario:
         message_id = target["telegram_message_id"]
         return await self._collect(name, lambda c: self.telegram.react(c, message_id, [emoji]))
 
+    async def change_reaction(
+        self, name: str, to_text: str, new: list[str], old: list[str]
+    ) -> list[str]:
+        """Their reaction on the message with exactly `to_text` goes from `old` to `new` (F38c:
+        a 👎 replaced, or taken back with `new=[]`)."""
+        message_id = self.app.db.scalar(
+            "SELECT telegram_message_id FROM message_log WHERE member_id = ? AND direction = "
+            "'out' AND text = ? ORDER BY id DESC LIMIT 1",
+            (self.member(name).id, to_text),
+        )
+        return await self._collect(name, lambda c: self.telegram.react(c, message_id, new, old))
+
     # ----- the family group (34b) ---------------------------------------------
 
     def group_texts(self) -> list[str]:

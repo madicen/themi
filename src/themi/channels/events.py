@@ -54,6 +54,9 @@ class ButtonPress:
 class Reaction:
     added: tuple[str, ...]  # emoji newly added to the message
     message_id: int
+    # F38c: emoji taken off it (old minus new). Every handler reads `added` as before; a
+    # change that only took one off comes with `added` empty.
+    removed: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

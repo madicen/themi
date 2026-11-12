@@ -50,6 +50,8 @@ APPROVAL_TTL = timedelta(days=3)
 CARD_WITHIN = timedelta(hours=2)  # a card waits at most this long for a good moment (F15b)
 APPROVE_REACTIONS = frozenset({"✅", "👍", "👌"})
 SNOOZE_REACTIONS = frozenset({"💤", "⏰"})
+DECLINE_REACTION = "👎"  # F38c
+DECLINED_BY_REACTION = "declined by the 👎"
 
 ASK_TEXT = "{summary}\nGo ahead, or not now?"
 RETRY_TEXT = "{summary}\nThis one didn't go through earlier. Try again, or leave it?"
@@ -198,6 +200,10 @@ class ApprovalsUI:
         ):
             member = self.store.get_member(row["member_id"])
             message_id = self.outbox.message_id(row["outbox_id"])
+            self.db.execute(  # F38c: how the card ended, for `themi feedback`
+                "UPDATE outbox SET card_outcome = COALESCE(card_outcome, ?) WHERE id = ?",
+                (action.status, row["outbox_id"]),
+            )
             if message_id is None:
                 self.outbox.cancel(row["outbox_id"])  # never went out: no need now
             else:
@@ -278,13 +284,27 @@ class ApprovalsUI:
             decision = Decision.APPROVE
         elif emoji & SNOOZE_REACTIONS:
             decision = Decision.SNOOZE
+        elif DECLINE_REACTION in emoji:
+            # F38c: a 👎 on a card says the card is wrong, so it doesn't stay open: a "no".
+            decision = Decision.DECLINE
         else:
             return
-        if await self.groups.on_reaction(event.member, event.reaction.message_id, decision):
+        message_id = event.reaction.message_id
+        if await self.groups.on_reaction(event.member, message_id, decision):
+            self._declined_by_reaction(event.member.id, message_id, decision)
             return
-        action_id = self._action_for_message(event.member.id, event.reaction.message_id)
+        action_id = self._action_for_message(event.member.id, message_id)
         if action_id is not None:
             await self.resolve(action_id, decision, event.member)
+            self._declined_by_reaction(event.member.id, message_id, decision)
+
+    def _declined_by_reaction(self, member_id: int, message_id: int, decision: Decision) -> None:
+        if decision is Decision.DECLINE:
+            self.db.execute(
+                "UPDATE outbox SET card_outcome = ? WHERE member_id = ? "
+                "AND telegram_message_id = ?",
+                (DECLINED_BY_REACTION, member_id, message_id),
+            )
 
     def _action_for_message(self, member_id: int, message_id: int) -> int | None:
         row = self.db.one(

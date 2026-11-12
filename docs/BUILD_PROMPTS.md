@@ -261,7 +261,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
 | F38a | Feedback: events with no title are never twins | Feedback | [x] 2026-11-11 |
 | F38b | Feedback: the leave heads-up breaks through everything | Feedback | [x] 2026-11-11 |
-| F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
+| F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [x] 2026-11-11 |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
@@ -12995,7 +12995,7 @@ Notes (2026-11-11):
 - Setup: restart `themi run`. Mark #191 reviewed once deployed.
 
 ### F38c · Feedback (2026-11-09): a 👎 on a card marks the reply that made it, and a 👎 taken back clears its mark
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: P4, S5, F32b
 Read first: `themi/standard/wrong_replies.py` (`reply_for_message`, `on_reaction`, why cards
 are left out); `themi/standard/reactions.py` (`CARDS`, the upsert); `ApprovalsUI.on_reaction`
@@ -13046,6 +13046,25 @@ Data: on the Pi, run `themi feedback --not-wrong 316` and mark replies 314 and 3
 `themi feedback --wrong-tool 314 <tool>` and `... 315 <tool>`, the tool F32b moves routine
 items with. Ask Michael before labelling. Those replies predate the fix, so their mark has to
 be set by hand first (an UPDATE of `marked_at`, with Michael's OK).
+
+Notes (2026-11-11):
+- `Reaction.removed` (old minus new). Telegram now hands on a removal-only update (it
+  dropped them before), logged nowhere and with `added` empty; Slack's `reaction_removed`
+  does the same. The agent doesn't count a removal as answering a nudge (`outcomes`) or as
+  a calibration signal.
+- `reply_for_message` includes cards. `WrongReplies.on_reaction` marks on a 👎 added, and
+  clears an unlabelled mark when a 👎 is removed or replaced.
+- Approvals reads 👎 as `Decision.DECLINE` (the card edits to "{summary}\nLeft as is."); on
+  F26b's shared card it's "no" for all of it.
+- Migration 0165: `outbox.card_outcome`, set to "declined by the 👎" or the action's status
+  when the card is edited. `themi feedback`'s report shows "Card: <text> (<outcome>)".
+- Changed tests: P4's `test_cards_and_nudges_arent_marked` became
+  `test_a_card_made_by_a_reply_is_marked_and_nudges_arent` (the prompt reverses it), and
+  `test_reactions_report_only_new_emoji` now expects the removal event.
+- Setup: restart `themi run` (migration 0165). Slack: add the `reaction_removed` bot event
+  to the app (the manifest has it). Data, with Michael's OK: `themi feedback --not-wrong 316`,
+  set `marked_at` on 314 and 315 by hand, then `--wrong-tool 314 <tool>` and `... 315 <tool>`
+  with F32b's routine-item tool.
 
 ### F39a · Feedback (2026-11-09): "Feed Juneau" dispenses from Juneau's feeder
 Status: [x] 2026-11-10

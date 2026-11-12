@@ -318,9 +318,12 @@ async def test_reactions_report_only_new_emoji(
     fake_telegram.react(ERIN_TELEGRAM_ID, message_id, new=["✅"], old=["✅"])  # no change
     fake_telegram.react(ERIN_TELEGRAM_ID, message_id, new=[], old=["✅"])  # removed
     await channel.poll_once()
-    (event,) = recorder.events
+    # F38c: a removal now comes too, with `added` empty and what was taken off in `removed`.
+    event, taken_back = recorder.events
     assert event.kind == "reaction" and event.reaction is not None
     assert event.reaction.added == ("✅",) and event.reaction.message_id == message_id
+    assert taken_back.reaction is not None
+    assert (taken_back.reaction.added, taken_back.reaction.removed) == ((), ("✅",))
 
 
 async def test_polling_asks_for_reaction_updates(

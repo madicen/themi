@@ -427,7 +427,8 @@ class ApprovalGroups:
         return row["id"] if row else None
 
     async def on_reaction(self, member: Member, message_id: int, decision: Decision) -> bool:
-        """✅ or 💤 on a group's message answers what's in it. False: not a group's."""
+        """✅, 💤 or 👎 (F38c) on a group's message answers all of what's in it. False: not a
+        group's."""
         group_id = self.group_for_message(member.id, message_id)
         if group_id is None:
             return False
@@ -435,7 +436,8 @@ class ApprovalGroups:
         if len(lines) == 1:
             await self.ui.resolve(lines[0].id, decision, member)
         else:
-            await self.answer(group_id, "all" if decision is Decision.APPROVE else "later", member)
+            answer = {Decision.APPROVE: "all", Decision.DECLINE: "no"}.get(decision, "later")
+            await self.answer(group_id, answer, member)
         return True
 
     # ----- a bare "yes" -----------------------------------------------------------------

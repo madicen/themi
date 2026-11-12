@@ -450,3 +450,20 @@ async def test_my_settings_lists_skipped_senders_and_brings_them_back(
     assert saved.status_code == 303
     await pause(scenario, inbox, "2054-11-23")
     assert calendar_statuses(scenario) == ["declined", "pending"]
+
+
+async def test_a_thumbs_down_on_the_shared_card_declines_all_of_it_and_marks_its_reply(
+    scenario: Scenario, inbox: FakeGmail
+) -> None:
+    """F38c: the 👎 declines every action in F26b's message, as ✅ approves them all."""
+    await burst(scenario, inbox)
+    db = scenario.app.db
+    erin = scenario.member("Erin")
+    reply_id = db.execute(
+        "INSERT INTO replies (member_id, started_at) VALUES (?, '2026-10-21T16:00:00+00:00')",
+        (erin.id,),
+    )
+    db.execute("UPDATE outbox SET reply_id = ? WHERE kind = 'approval'", (reply_id,))
+    await scenario.react("Erin", "👎")
+    assert [s for _, s, _ in statuses(scenario)] == ["declined"] * 5
+    assert db.scalar("SELECT marked_at FROM replies WHERE id = ?", (reply_id,)) is not None

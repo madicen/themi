@@ -238,7 +238,7 @@ class SlackChannel:
         event = payload.get("event") or {}
         if event.get("type") == "message":
             await self._on_message(event)
-        elif event.get("type") == "reaction_added":
+        elif event.get("type") in ("reaction_added", "reaction_removed"):
             await self._on_reaction(event)
 
     def _first_time(self, event_id: str) -> bool:
@@ -358,7 +358,9 @@ class SlackChannel:
             return
         emoji = slack_blocks.emoji_for(str(event.get("reaction") or ""))
         message_id = self.message_id(str(item["channel"]), str(item["ts"]), member)
-        self.store.log_message(member.id, "in", f"[reacted {emoji}]", "reaction", message_id)
+        taken_back = event.get("type") == "reaction_removed"  # F38c
+        if not taken_back:
+            self.store.log_message(member.id, "in", f"[reacted {emoji}]", "reaction", message_id)
         await self._hand_on(
             InboundEvent(
                 "reaction",
@@ -367,7 +369,9 @@ class SlackChannel:
                 message_id,
                 clock.now(),
                 0,
-                reaction=Reaction((emoji,), message_id),
+                reaction=Reaction(
+                    () if taken_back else (emoji,), message_id, (emoji,) if taken_back else ()
+                ),
             )
         )
 
