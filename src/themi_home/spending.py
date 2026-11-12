@@ -37,6 +37,7 @@ from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
 from themi_google.connectors.gmail.parse import web_link
 from themi_home import home_groups
+from themi_home.expense_asks import ASK_EVERY, ExpenseAsks, SpendingPreferences
 from themi_home.expense_fill import FILL_EVERY, ExpenseFill
 from themi_home.expense_sheets import ExpenseSheets
 from themi_home.expenses import Entry, Expenses, Value
@@ -424,6 +425,7 @@ class SpendingModule(Module):
     summary = "Keeps track of takeout, eating out and business expenses."
     tool_groups = (home_groups.SPENDING,)
     household = SpendingSettings
+    preferences = SpendingPreferences  # EX2b: when Themi asks about expense sheets
     migrations = Path(__file__).parent / "spending_schema"  # EX1a: expense sheets
 
     def install(self, ctx: ModuleContext) -> None:
@@ -450,3 +452,7 @@ class SpendingModule(Module):
         fill = ctx.provide(ExpenseFill(ctx.services, expenses, sheets))
         fill.install()  # EX2a
         ctx.periodic("expenses.fill", FILL_EVERY, fill.run)
+        asks = ctx.provide(ExpenseAsks(ctx.services, expenses, sheets))
+        asks.install()  # EX2b
+        ctx.periodic("expenses.ask", ASK_EVERY, asks.run)
+        ctx.settings_section("settings/expenses.html", 62)

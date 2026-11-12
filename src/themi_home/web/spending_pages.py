@@ -92,7 +92,22 @@ def routes(kit: Kit) -> APIRouter:
             business_total=money(sum(s.amount_cents for s in spends if s.business)),
             takeout_page=app.services.maybe(keys.takeout) is not None,  # 35a
             books=books(session.member),  # EX1b
+            needs=needs_filling(session.member),  # EX2b
         )
+
+    def needs_filling(member: Any) -> list[dict[str, Any]]:
+        asks = app.services.maybe(keys.expense_asks)
+        if asks is None:
+            return []
+        return [
+            {
+                "sheet": sheet,
+                "what": sheets().describe(entry, sheet).split(": ", 1)[1],
+                "entry": entry,
+                "missing": ", ".join(f.label for f in missing),
+            }
+            for entry, sheet, missing in asks.needs_filling(member)
+        ]
 
     @router.get("/spending/business.csv")
     def business_csv(request: Request) -> Response:

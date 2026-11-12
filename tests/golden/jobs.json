@@ -24,6 +24,7 @@
   "email.senders": 21600,
   "email.triage": 60,
   "energy.expire_outcomes": 900,
+  "expenses.ask": 900,
   "expenses.fill": 600,
   "feedback.forget_pictures": 86400,
   "gmail.poll": 60,

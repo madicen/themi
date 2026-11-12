@@ -21,6 +21,16 @@ emails are added on their own.</p>
 <a href="/spending/business.csv?month={{ month.strftime('%Y-%m') }}">Download as CSV</a></p>
 <p><a href="/spending?month={{ previous.strftime('%Y-%m') }}">← {{ previous.strftime("%B %Y") }}</a></p>
 
+{% if needs %}
+<h2>Needs filling in</h2>
+<div class="rows">
+  {% for n in needs %}
+  <p class="row-plain"><span class="row-main"><span class="row-title"><a href="/spending/sheets/{{ n.sheet.id }}#entry-{{ n.entry.id }}">expense {{ n.entry.id }}</a>: {{ n.what }}</span>
+    <span class="row-meta">{{ n.sheet.title }} · no {{ n.missing | lower }} yet</span></span></p>
+  {% endfor %}
+</div>
+{% endif %}
+
 <h2>Expense sheets</h2>
 <p class="muted">Each spreadsheet holds one or more sheets. Ask Themi in chat to start one
 ("start a sheet for business travel", "add a mileage tab to the business spreadsheet").</p>

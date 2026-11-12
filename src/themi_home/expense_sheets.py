@@ -63,6 +63,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+Shown = str | tuple[str, list[Button]] | None  # what an entry button's message says now
 BUTTON = "expense_sheet"  # the proposal card's buttons
 ENTRY_BUTTON = "expense"  # buttons on a message about an entry ([Looks right], [Skip])
 MAX_TABS = 5
@@ -267,7 +268,8 @@ class ExpenseSheets:
         # EX4b: told of each tab added to a book that exists.
         self.tab_listeners: list[Callable[[Member, Sheet], Awaitable[None]]] = []
         # EX2b: an entry action ([Skip], an answer) other than verify, by action name.
-        self.entry_actions: dict[str, Callable[[InboundEvent, Entry], Awaitable[str | None]]] = {}
+        # It returns what the message says now (with its buttons, when they change), or None.
+        self.entry_actions: dict[str, Callable[[InboundEvent, Entry], Awaitable[Shown]]] = {}
 
     def install(self) -> None:
         s = self.services
@@ -565,7 +567,7 @@ class ExpenseSheets:
         except ToolFailed:
             return
         action = str(payload.get("action") or "verify")
-        text: str | None
+        text: Shown
         if action == "verify":
             if not self.can_check(member, entry, sheet):
                 return
@@ -577,7 +579,8 @@ class ExpenseSheets:
         else:
             return
         if text and event.button.message_id is not None:
-            await self.services.outbox.edit(member, event.button.message_id, text)
+            words, buttons = (text, ()) if isinstance(text, str) else text
+            await self.services.outbox.edit(member, event.button.message_id, words, buttons)
 
 
 def calendar_ref(calendar_id: str, event_id: str) -> str:

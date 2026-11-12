@@ -17,6 +17,7 @@
     "day_end",
     "email_audit",
     "expense",
+    "expense_review",
     "expense_sheet",
     "focus",
     "inbox_setup",
@@ -131,6 +132,7 @@
   ],
   "text_handlers": [
     "ExpenseSheets.on_text",
+    "ExpenseAsks.on_text",
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"

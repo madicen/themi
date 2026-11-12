@@ -8,12 +8,14 @@
 - Estimates: "pretty sure" and "maybe" end as the person's estimate, never as checked.
 - Receipts (EX2a, `receipt_cases.json`, written fresh): each becomes an entry with its total,
   and every value filled from it is quoted from the receipt word for word.
+- Questions (EX2b): shielded for the strictest, gentlest person, they stay offers.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 
 from tests.evals.pacing import PacedFactory
@@ -24,6 +26,7 @@ from tests.fixtures.family import SeededFamily
 from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.accounts.store import SYSTEM
+from themi.channels.pda import find_demands
 from themi.core import keys
 from themi.localtime import to_utc_iso
 from themi.storage.secrets import Secret
@@ -198,3 +201,37 @@ async def test_expense_sheet_receipts(
     for miss in misses:
         print("  missed", miss)
     assert len(misses) <= 1, "; ".join(misses)
+
+
+# EX2b: Themi's questions about expense sheets, as a person at the strictest shielding with
+# gentle phrasing gets them: offers, never "you need to".
+QUESTIONS = [
+    "What did eating out at Merit on Tue 20 Oct come to?",
+    "For the $40.00 one on Kitchen project on Tue 20 Oct: what was the vendor?",
+    "Business expenses with something still empty, whenever suits:\n"
+    "- Merit on Wed 21 Oct (Business): no amount yet",
+]
+NEED_TO = re.compile(r"\byou (?:need|have|must|should)\b|\bmake sure\b|\bdon'?t forget\b", re.I)
+
+
+async def test_expense_sheet_questions(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    eval_backend: EvalBackend,
+    eval_factory: PacedFactory,
+) -> None:
+    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    use_backend(scenario, eval_backend)
+    await scenario.start()
+    misses = []
+    try:
+        erin = scenario.app.store.update_settings(
+            SYSTEM, scenario.member("Erin").id, pda_enabled=True, pda_strength=3, phrasing="gentle"
+        )
+        for text in QUESTIONS:
+            shielded = await scenario.app.outbox.shield.apply(text, erin)
+            if NEED_TO.search(shielded.text) or find_demands(shielded.text, 3):
+                misses.append(f"{text!r} -> {shielded.text!r}")
+    finally:
+        await scenario.stop()
+    assert not misses, "; ".join(misses)

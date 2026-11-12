@@ -286,7 +286,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [x] 2026-11-11 |
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [x] 2026-11-11 |
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [x] 2026-11-11 |
-| EX2b | Expense sheets: when Themi asks | Expense sheets | [ ] |
+| EX2b | Expense sheets: when Themi asks | Expense sheets | [x] 2026-11-11 |
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
@@ -14519,7 +14519,7 @@ Notes (2026-11-11):
 - Setup: restart (spending track 0003).
 
 ### EX2b · Expense sheets: when Themi asks
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX2a
 Read first: the plan's Module behaviour A (PDA) and B (timing); B1's notes (breaks); this
 section's intro (the table).
@@ -14538,6 +14538,31 @@ section's intro (the table).
 Tests: unit tests per row of the spec's table with a frozen clock, the cancel, Skip;
 scenarios: a dinner asked about the next day, a business week's review, a receipt landing
 in time so nothing is asked. Evals: the questions read as offers, no "you need to".
+
+Notes (2026-11-11):
+- `themi_home.expense_asks.ExpenseAsks` (`keys.expense_asks`), job `expenses.ask` every 15
+  minutes. What was asked is in `expense_asks` (spending track 0004).
+- Deviation, from the core refactor: the settings are the spending module's preferences
+  (`SpendingPreferences`: `expense_ask_after_hours` 24, `expense_review_day` friday,
+  `expense_review_time` 15:00), not `members` columns; My settings → "Expense sheets".
+- Personal and custom sheets: the oldest entry of theirs (two weeks back at most) with a key
+  field empty after the wait is asked about, once, NORMAL priority (the receptivity picks the
+  moment), one question open at a time. Business sheets never get these. A typed answer is
+  taken when it's a Reply to the question, or a bare amount for an amount question ("$84.20",
+  "it was 84 with the tip"); "about 40" is their estimate. [Skip] marks the entry skipped for
+  good, and it leaves the "Needs filling in" list too.
+- Takeback: a receipt that fills the field cancels a queued question (`Outbox.cancel`, via
+  `ExpenseFill.receipt_listeners`); the outbox's refresher for kind `expense` drops one
+  whose field was filled another way just before it goes.
+- The review: kind `expense_review`, once per ISO week, from their day and time on. Kinds
+  `expense` and `expense_review` are in the break, body double, cooking and burnout pauses,
+  so both wait until after (a break is rest). A tap uses a message's whole set of buttons,
+  so a tapped entry's question comes as a reply and the review is edited to the rest of its
+  buttons and [Later] (`ExpenseSheets.entry_actions` may return new buttons).
+- Tests changed for additions: the settings form's field list and section order gain
+  EX2b's (the file lists each prompt's additions), the home modules' Spending case gains
+  `expenses.ask`, the key count 70.
+- Setup: restart (spending track 0004).
 
 ### EX3 · Expense sheets: CSV export with an audit trail
 Status: [ ]
