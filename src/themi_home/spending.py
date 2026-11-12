@@ -21,6 +21,7 @@ import io
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import ZoneInfo
 
@@ -32,11 +33,12 @@ from themi.accounts.household import HouseholdSettings
 from themi.accounts.setup import parse_money_to_cents
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
-from themi.localtime import to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.modules.prompt import PromptFragment
 from themi_google.connectors.gmail.parse import web_link
 from themi_home import home_groups
+from themi_home.expense_sheets import ExpenseSheets
+from themi_home.expenses import Entry, Expenses, Value
 
 if TYPE_CHECKING:
     from themi.core.services import Services
@@ -47,6 +49,7 @@ KINDS = ("takeout", "eating_out", "other")
 KIND_WORDS = {"takeout": "takeout", "eating_out": "eating out", "other": "other"}
 SAME_MEAL = timedelta(days=2)  # a receipt and a chat spend this close, same amount: one meal
 MAX_CENTS = 10_000_00
+RECEIPT_CONFIDENCE = 0.95  # amount, date and vendor read from the receipt itself
 
 
 @dataclass(frozen=True)
@@ -65,14 +68,6 @@ class Spend:
 
 def money(cents: int) -> str:
     return f"${cents / 100:,.2f}"
-
-
-def _spend(row: dict[str, Any]) -> Spend:
-    return Spend(
-        row["id"], row["member_id"], row["amount_cents"], row["place"], row["kind"],
-        bool(row["business"]), row["note"], date.fromisoformat(row["spent_on"]),
-        row["email_id"], row["source"],
-    )  # fmt: skip
 
 
 def month_of(text: str, today: date) -> date:
@@ -105,10 +100,14 @@ class SpendingSettings(HouseholdSettings):
 
 
 class Spending:
-    def __init__(self, services: Services) -> None:
+    """X1's spending, kept on the built-in expense sheets (EX1a): a spend is an entry on
+    the household's "Takeout & eating out" sheet, or on the person's own Business one."""
+
+    def __init__(self, services: Services, expenses: Expenses | None = None) -> None:
         self.services = services
         self.store = services.store
         self.db = services.store.db
+        self.expenses = expenses or Expenses(self.db)
 
     def install(self) -> None:
         self.services.provide(keys.spending, self)
@@ -136,47 +135,80 @@ class Spending:
                 f"Already logged from the receipt email: {self.describe(same)}. Nothing new "
                 "was added."
             )
-        spend_id = self.db.execute(
-            "INSERT INTO spending (member_id, amount_cents, place, kind, business, note, "
-            "spent_on, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'chat', ?)",
-            (member.id, cents, place[:80], kind, int(business), note[:200], on.isoformat(),
-             to_utc_iso(clock.now())),
-        )  # fmt: skip
-        return self.get(spend_id)
+        sheet = self.expenses.business_sheet(member) if business else self.expenses.takeout_sheet()
+        values = {
+            "amount": Value.said(cents),
+            "date": Value.said(on.isoformat()),
+            "category": Value.said(kind),
+        }
+        if place[:80]:
+            values["vendor"] = Value.said(place[:80])
+        if note[:200]:
+            values["note"] = Value.said(note[:200])
+        entry = self.expenses.add(sheet, member, values, origin="chat")
+        return self.get(entry.id)
 
     def from_receipt(
         self, member: Member, email_id: int, place: str, cents: int, when: datetime
     ) -> Spend | None:
         """A takeout receipt from email. Said in chat already: the receipt joins it."""
-        if cents <= 0 or self.db.one("SELECT 1 FROM spending WHERE email_id = ?", (email_id,)):
+        if cents <= 0 or self.expenses.entry_for_email(email_id) is not None:
             return None
         on = when.astimezone(self._tz()).date()
         same = self._same_meal(cents, "takeout", on, "chat")
         if same is not None:
-            self.db.execute("UPDATE spending SET email_id = ? WHERE id = ?", (email_id, same.id))
+            self.expenses.attach_email(same.id, email_id)
             return self.get(same.id)
-        spend_id = self.db.execute(
-            "INSERT INTO spending (member_id, amount_cents, place, kind, business, note, "
-            "spent_on, email_id, source, created_at) "
-            "VALUES (?, ?, ?, 'takeout', 0, '', ?, ?, 'email', ?)",
-            (member.id, cents, place[:80], on.isoformat(), email_id, to_utc_iso(clock.now())),
+        ref = self._gmail_id(email_id)
+        quote = f"{place} {money(cents)}".strip()
+
+        def read(value: Any) -> Value:
+            return Value.filled(value, RECEIPT_CONFIDENCE, "email_receipt", ref, quote)
+
+        values = {
+            "amount": read(cents),
+            "date": read(on.isoformat()),
+            "category": read("takeout"),
+        }
+        if place[:80]:
+            values["vendor"] = read(place[:80])
+        entry = self.expenses.add(
+            self.expenses.takeout_sheet(), member, values, origin="email", email_id=email_id
         )
-        return self.get(spend_id)
+        return self.get(entry.id)
+
+    def _gmail_id(self, email_id: int) -> str:
+        return str(self.db.scalar("SELECT gmail_id FROM emails WHERE id = ?", (email_id,)) or "")
 
     def _same_meal(self, cents: int, kind: str, on: date, source: str) -> Spend | None:
-        unmatched = "email_id IS NULL" if source == "chat" else "email_id IS NOT NULL"
-        row = self.db.one(
-            f"SELECT * FROM spending WHERE source = ? AND {unmatched} AND amount_cents = ? "
-            "AND kind = ? AND spent_on BETWEEN ? AND ? ORDER BY id DESC",
-            (source, cents, kind, (on - SAME_MEAL).isoformat(), (on + SAME_MEAL).isoformat()),
-        )
-        return _spend(row) if row else None
+        """The latest spend from `source` with that amount and kind within two days: from
+        chat with no receipt yet, or from a receipt."""
+        found = [
+            s
+            for s in self._between(on - SAME_MEAL, on + SAME_MEAL + timedelta(days=1))
+            if s.source == source
+            and (s.email_id is None) == (source == "chat")
+            and s.amount_cents == cents
+            and s.kind == kind
+        ]
+        return max(found, key=lambda s: s.id) if found else None
 
     def get(self, spend_id: int) -> Spend:
-        row = self.db.one("SELECT * FROM spending WHERE id = ?", (spend_id,))
-        if row is None:
+        entry = self.expenses.entry(spend_id)
+        if entry.removed_at is not None or entry.sheet_id not in self.expenses.builtin_sheet_ids():
             raise InvalidValue(f"there's no spend {spend_id}")
-        return _spend(row)
+        return self._spend(entry)
+
+    def _spend(self, entry: Entry) -> Spend:
+        sheet = self.expenses.sheet(entry.sheet_id)
+        on = entry.get("date")
+        return Spend(
+            entry.id, entry.member_id, int(entry.get("amount") or 0),
+            str(entry.get("vendor") or ""), str(entry.get("category") or "other"),
+            sheet.builtin == "business", str(entry.get("note") or ""),
+            date.fromisoformat(on) if on else entry.created_at.date(), entry.email_id,
+            entry.origin,
+        )  # fmt: skip
 
     def _editable(self, spend_id: int, member: Member) -> Spend:
         """Their own; an admin may also fix the household's (never another's business ones)."""
@@ -186,27 +218,34 @@ class Spending:
         return spend
 
     def mark_business(self, spend_id: int, member: Member, business: bool) -> Spend:
+        """Business or not is which sheet it's on: their Business one, or the household's."""
         spend = self._editable(spend_id, member)
-        self.db.execute("UPDATE spending SET business = ? WHERE id = ?", (int(business), spend.id))
+        if spend.business != business:
+            owner = self.store.get_member(spend.member_id)
+            sheet = (
+                self.expenses.business_sheet(owner) if business else self.expenses.takeout_sheet()
+            )
+            self.expenses.move(spend.id, sheet)
         return self.get(spend.id)
 
     def remove(self, spend_id: int, member: Member) -> Spend:
         spend = self._editable(spend_id, member)
-        self.db.execute("DELETE FROM spending WHERE id = ?", (spend.id,))
+        self.expenses.remove(spend.id)
         return spend
 
     # ----- reading them -------------------------------------------------------------------
+
+    def _between(self, start: date, end: date) -> list[Spend]:
+        """Spends on the built-in sheets dated from `start` up to (not including) `end`."""
+        entries = self.expenses.entries(self.expenses.builtin_sheet_ids(), start, end)
+        return [self._spend(e) for e in entries if e.get("amount")]
 
     def month(
         self, first: date, *, kind: str | None = None, business_of: Member | None = None
     ) -> list[Spend]:
         """A month's spends, oldest first: one kind (the household's), or one person's
         business expenses, or the household's takeout and eating out plus `business_of`'s."""
-        rows = self.db.query(
-            "SELECT * FROM spending WHERE spent_on >= ? AND spent_on < ? ORDER BY spent_on, id",
-            (first.isoformat(), _next_month(first).isoformat()),
-        )
-        spends = [_spend(r) for r in rows]
+        spends = sorted(self._between(first, _next_month(first)), key=lambda s: (s.spent_on, s.id))
         if kind == "business":
             assert business_of is not None
             return [s for s in spends if s.business and s.member_id == business_of.id]
@@ -385,6 +424,14 @@ PROMPT_RULES = (
 - Money spent ("just spent $51.97 on DoorDash", "a business lunch") is log_spending,
   never a list item; say back the month's takeout it reports.""",
     ),
+    PromptFragment(
+        "spending.expense-sheets",
+        "act",
+        181,
+        """\
+- Spending for one of their own expense sheets (a project, travel, mileage: names in
+  expense_summary) is add_expense; a new kind of thing to track is make_expense_sheet.""",
+    ),
 )
 
 
@@ -396,6 +443,7 @@ class SpendingModule(Module):
     summary = "Keeps track of takeout, eating out and business expenses."
     tool_groups = (home_groups.SPENDING,)
     household = SpendingSettings
+    migrations = Path(__file__).parent / "spending_schema"  # EX1a: expense sheets
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry
@@ -414,4 +462,6 @@ class SpendingModule(Module):
                 icon=icons.SPENDING,
             ),
         )
-        ctx.provide(Spending(ctx.services)).install()
+        expenses = ctx.provide(Expenses(ctx.services.store.db))
+        ctx.provide(Spending(ctx.services, expenses)).install()
+        ctx.provide(ExpenseSheets(ctx.services, expenses)).install()  # EX1b
