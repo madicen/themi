@@ -283,8 +283,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
-| EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
-| EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
+| EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [x] 2026-11-11 |
+| EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [x] 2026-11-11 |
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
 | EX2b | Expense sheets: when Themi asks | Expense sheets | [ ] |
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
@@ -14357,7 +14357,7 @@ Open decisions (defaults used until Michael says otherwise):
 - The spec's author isn't recorded here yet.
 
 ### EX1a · Expense sheets: the data model, with X1 moved onto it
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: X1
 Read first: this section's intro; X1's notes; the plan's Integrations ("Receipts and
 spending") and Module behaviour D (the takeout budget).
@@ -14386,8 +14386,29 @@ the doc).
 Tests: every X1 test passes unchanged; unit tests for the migration on a copy with chat,
 email and business rows; values keep their lineage.
 
+Notes (2026-11-11):
+- The plan's wording isn't in the doc yet: writing to it was refused in this session (the
+  doc tools needed a permission). The proposed lines are in the session report for Michael
+  to check and add (Integrations: "Expense sheets"; Module behaviour D: "Expense sheets").
+- Deviation, from the core refactor: the code lives in the home pack, not the core.
+  `themi_home.expenses` (not `themi.core.expenses`); the tables are the spending module's own
+  migration track (`src/themi_home/spending_schema/0001_expense_sheets.sql`), not a core
+  migration. `keys.expenses` finds it.
+- Each spend became an entry with the same id, so "spend 3" still names it. Entries carry
+  `origin` (chat, email, website) and `email_id` (the receipt attached, unique), so X1's "one
+  receipt is one meal" stays as it was. Said in chat: `verified`, 1.0, `direct_user_input`.
+  From a receipt: `unverified`, 0.95, `email_receipt`, the Gmail id as the reference.
+- Business or not is which sheet it's on: `mark_business` moves the entry between the
+  household's sheet and its owner's Business sheet. Values whose field the other sheet lacks
+  stay behind (`Expenses.move`). X1's "other" kind is a category on the household sheet.
+- `spending` is a read-only view now (dropped from the spending track; X1's 0060 is left as
+  it was). A later release drops the view.
+- `Expenses.change_listeners` hear (entry, sheet) for every change, and both sheets on a
+  move: EX4b's sync queue listens there.
+- Setup: restart (applies the spending track's 0001).
+
 ### EX1b · Expense sheets: making and filling them in, in chat and on the website
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1a, W1
 Read first: BD1b (the proposed-steps pattern); X1's notes (the Spending page); this
 section's intro.
@@ -14414,6 +14435,32 @@ tabs (a mileage tab not counted as spending); scenarios: making a "Business trav
 in chat and adding to it, an estimate later verified, a business book with expenses, income
 and mileage tabs (idea #167). Evals: field
 proposals for ten sheet requests; "pretty sure" and "maybe" read as estimates.
+
+Notes (2026-11-11):
+- `themi_home.expense_sheets.ExpenseSheets` (`keys.expense_sheets`), installed by the
+  spending module. Proposals are kept in `expense_proposals` (spending track 0002); the card
+  ends the turn (`ctx.cards`), and the text after [Change it] is taken by its text handler
+  for six hours. A business proposal is always the person's own; "shared" (we, our) makes it
+  the household's.
+- The AI task `expense_sheet_fields` needed core migration 0164 (the routes table checks task
+  names); everyone starts with their quick-jobs chain, as BD1b.
+- Confidence for an estimate comes from their words in code (`SURE_WORDS`: "pretty sure" 0.8,
+  "maybe" 0.5, "90% sure" 0.9, "about"/"around" 0.7). An amount said with such words is an
+  estimate even when the model didn't flag it. A field with no value given is left out.
+- A said amount with no date is dated today, as X1's spends are (said now).
+- Routing with no sheet named (`ExpenseSheets.route`): "for work"/business/client words go
+  to Business; else the sheet with the longest keyword match (theirs first); else the tool
+  asks which sheet (the turn's model is the "cheap model call").
+- Extra tool: `change_expense_sheet` (rename, move, put away a tab), since tabs can be
+  renamed, reordered and archived from chat too. All in X1's "spending" group.
+- Who checks: whoever the entry is for, or the sheet's owner. [Looks right] is the `expense`
+  button (`action: verify`); EX2a/EX2b put it on their messages, and `entry_actions` lets them
+  add their own actions.
+- Website: Spending lists the books and their tabs; `/spending/sheets/<id>` shows a sheet a
+  month at a time with each value's status as a word and mark (✓ ◐ ≈ ○), its source (Gmail,
+  the calendar event, as links) and how sure, a "Looks right" tick, a form to add one, and
+  for the owner (an admin for the household's) the field editor and the sheet's settings.
+- Setup: restart (core 0164, spending track 0002).
 
 ### EX2a · Expense sheets: filling in from receipts, calendars and chat
 Status: [ ]

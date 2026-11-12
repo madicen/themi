@@ -31,6 +31,7 @@ TASK_LABELS = {
     AITask.SIDECAR: "Conversation mode: picking out tasks in the background",
     AITask.RECIPES: "Recipes: reading ingredients, prep and recipe pages",
     AITask.BODY_DOUBLE_STEPS: "Body double: steps for a guided session",
+    AITask.EXPENSE_SHEET_FIELDS: "Expense sheets: the fields a new sheet has",
     AITask.STEP_IMAGE: "Pictures for guided steps (Gemini or OpenAI image models)",
 }
 KIND_LABELS = {

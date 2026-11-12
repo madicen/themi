@@ -187,10 +187,11 @@ MAINTENANCE = ToolGroup(
 
 SPENDING = ToolGroup(
     name="spending",
-    description="money spent: takeout, eating out, business expenses",
+    description="money spent: takeout, eating out, business expenses, expense sheets",
     words=(
         "spent|spend|paid|\\$|expense|budget|takeout|take-out|doordash|door dash|uber "
-        "eats|eating out|ate out|restaurant|receipt|cost"
+        "eats|eating out|ate out|restaurant|receipt|cost|spreadsheet|sheet|mileage|miles|"
+        "reimburs|track what"
     ),
     examples=(
         "We spent $30 on burgers",
@@ -205,12 +206,22 @@ SPENDING = ToolGroup(
         "Are we over our eating out budget?",
         "Lunch out with a client, $60",
         "Show me what we spent this week",
+        "Start a sheet for business travel",
+        "Add a mileage tab to the business spreadsheet",
+        "About $40 on paint for the kitchen project, pretty sure",
+        "The Merit one is right",
     ),
     tools=(
         "log_spending",
         "spending_summary",
         "mark_business_expense",
         "remove_spending",
+        "make_expense_sheet",
+        "change_expense_sheet",
+        "add_expense",
+        "verify_expense",
+        "move_expense",
+        "expense_summary",
     ),
     order=120,
 )

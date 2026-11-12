@@ -1,0 +1,129 @@
+"""EX1b: expense sheets with a real model. Opt-in, like the other evals:
+
+    make evals EVAL_ARGS='-k expense_sheet'
+
+- `expense_sheet_fields`: ten sheet requests, each passing when the proposal has the mode it
+  should, an Amount (money) and Date (date) when it's spending, the fields the request names,
+  and nothing counted as spending that isn't money (mileage, income).
+- Estimates: "pretty sure" and "maybe" end as the person's estimate, never as checked.
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+from tests.evals.pacing import PacedFactory
+from tests.evals.providers import EvalBackend
+from tests.evals.runner import use_backend
+from tests.fakes.telegram_api import FakeTelegram
+from tests.fixtures.family import SeededFamily
+from tests.scenarios.harness import Scenario
+from themi.core import keys
+from themi_home.expenses import FieldDef
+
+# (the request, its mode, whether it counts as spending, words some field label must have)
+REQUESTS: list[tuple[str, str, bool, tuple[str, ...]]] = [
+    ("start a sheet for business travel", "business", True, ("purpose",)),
+    ("track what we spend on the kitchen project", "custom", True, ()),
+    ("a sheet for the kids' school costs, with which kid", "personal", True, ("kid",)),
+    ("keep track of my mileage for work", "business", False, ("mile",)),
+    ("track the dog's vet bills and what each visit was for", "personal", True, ("vet", "for")),
+    ("a sheet for client lunches with who came", "business", True, ("who",)),
+    ("track our holiday spending, by person", "personal", True, ("person",)),
+    ("log the freelance income I get, by client", "business", False, ("client",)),
+    ("track gifts we buy this year and who they're for", "personal", True, ("for",)),
+    ("a budget sheet for the garden makeover, with the store", "custom", True, ("store",)),
+]
+NEEDED = 8
+
+
+def problems(data: dict, mode: str, spending: bool, words: tuple[str, ...]) -> list[str]:
+    found = []
+    sheets = data["sheets"]
+    if len(sheets) != 1:
+        return [f"{len(sheets)} sheets"]
+    sheet = sheets[0]
+    labels = [f["label"].lower() for f in sheet["fields"]]
+    types = {f["label"].lower(): f["type"] for f in sheet["fields"]}
+    if sheet["mode"] != mode and not (
+        mode in ("personal", "custom") and sheet["mode"] != "business"
+    ):
+        found.append(f"mode {sheet['mode']}")
+    if spending and (types.get("amount") != "money" or types.get("date") != "date"):
+        found.append(f"no amount and date: {labels}")
+    if sheet["counts_as_spending"] != spending:
+        found.append(f"counts as spending: {sheet['counts_as_spending']}")
+    for word in words:
+        if not any(word in label for label in labels):
+            found.append(f"no field with {word!r}: {labels}")
+    return found
+
+
+async def test_expense_sheet_fields(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    eval_backend: EvalBackend,
+    eval_factory: PacedFactory,
+) -> None:
+    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    use_backend(scenario, eval_backend)
+    await scenario.start()
+    misses = []
+    try:
+        sheets = scenario.app.services.maybe(keys.expense_sheets)
+        assert sheets is not None
+        erin = scenario.member("Erin")
+        for request, mode, spending, words in REQUESTS:
+            data = await sheets._ask(erin, request, None, None, "")
+            if data is None:
+                misses.append(f"{request}: no proposal")
+            elif found := problems(data, mode, spending, words):
+                misses.append(f"{request}: {'; '.join(found)}")
+            if eval_backend.pace:
+                await asyncio.sleep(eval_backend.pace)
+    finally:
+        await scenario.stop()
+    print(f"\nexpense sheet fields: {len(REQUESTS) - len(misses)}/{len(REQUESTS)}")
+    for miss in misses:
+        print("  missed", miss)
+    assert len(REQUESTS) - len(misses) >= NEEDED, "; ".join(misses)
+
+
+ESTIMATES = [
+    ("About $40 on paint for the kitchen project, pretty sure", 0.8),
+    ("Maybe $25 on brushes for the kitchen project", 0.5),
+]
+
+
+async def test_expense_sheet_estimates(
+    family: SeededFamily,
+    fake_telegram: FakeTelegram,
+    eval_backend: EvalBackend,
+    eval_factory: PacedFactory,
+) -> None:
+    scenario = Scenario(family, fake_telegram, real_models=True, provider_factory=eval_factory)
+    use_backend(scenario, eval_backend)
+    await scenario.start()
+    misses = []
+    try:
+        expenses = scenario.app.services.maybe(keys.expenses)
+        assert expenses is not None
+        sheet = expenses.make_sheet(
+            expenses.make_book("Kitchen project", None), "Kitchen project", "custom",
+            [FieldDef("amount", "Amount", "money", critical=True),
+             FieldDef("date", "Date", "date", critical=True), FieldDef("what", "What", "text")],
+            keywords=("kitchen", "paint", "brushes"),
+        )  # fmt: skip
+        for said, sure in ESTIMATES:
+            before = {e.id for e in expenses.entries([sheet.id])}
+            await scenario.say("Erin", said)
+            new = [e for e in expenses.entries([sheet.id]) if e.id not in before]
+            amount = new[0].values.get("amount") if new else None
+            if amount is None or amount.status != "user_estimate" or amount.confidence != sure:
+                misses.append(f"{said}: {amount}")
+            if eval_backend.pace:
+                await asyncio.sleep(eval_backend.pace)
+    finally:
+        await scenario.stop()
+    print(f"\nexpense sheet estimates: {len(ESTIMATES) - len(misses)}/{len(ESTIMATES)}")
+    assert not misses, "; ".join(misses)
