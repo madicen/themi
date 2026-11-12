@@ -1,7 +1,11 @@
 {
   "add_calendar_event": {
     "group": "calendar",
-    "spec": "002b728fa7ec"
+    "spec": "dda68ebae981"
+  },
+  "add_expense": {
+    "group": "spending",
+    "spec": "f6726818b756"
   },
   "add_follow_up": {
     "group": "core",
@@ -71,6 +75,10 @@
     "group": "wall",
     "spec": "3b0f1bac2b57"
   },
+  "change_expense_sheet": {
+    "group": "spending",
+    "spec": "3f01f6abc00b"
+  },
   "choose_session_sound": {
     "group": "body_double",
     "spec": "a263c17250fb"
@@ -109,7 +117,7 @@
   },
   "drive_time": {
     "group": "calendar",
-    "spec": "3f3ef516ab38"
+    "spec": "419fc28b589f"
   },
   "end_body_double": {
     "group": "body_double",
@@ -126,6 +134,10 @@
   "expect_email": {
     "group": "email",
     "spec": "edf54ccbaf4b"
+  },
+  "expense_summary": {
+    "group": "spending",
+    "spec": "d2222da971b2"
   },
   "feed_pet": {
     "group": "devices",
@@ -215,6 +227,10 @@
     "group": "core",
     "spec": "7e337da5fd34"
   },
+  "make_expense_sheet": {
+    "group": "spending",
+    "spec": "7aa74028bb9c"
+  },
   "mark_business_expense": {
     "group": "spending",
     "spec": "1211298076cc"
@@ -225,7 +241,11 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "fcc0f0a9c22f"
+    "spec": "f6b1c6e3e7e8"
+  },
+  "move_expense": {
+    "group": "spending",
+    "spec": "0b16a43bed8d"
   },
   "move_list_item": {
     "group": "core",
@@ -246,6 +266,10 @@
   "propose_rule": {
     "group": "core",
     "spec": "7c3fea3908ae"
+  },
+  "put_in_google_sheets": {
+    "group": "spending",
+    "spec": "a833ead55ff0"
   },
   "put_list_on_wall": {
     "group": "lists",
@@ -334,6 +358,10 @@
   "search_web": {
     "group": "web",
     "spec": "95c8809db2f4"
+  },
+  "send_expense_sheet": {
+    "group": "spending",
+    "spec": "69e87ef3c239"
   },
   "send_step_picture": {
     "group": "body_double",
@@ -510,5 +538,9 @@
   "update_task": {
     "group": "core",
     "spec": "313c2d5bdd14"
+  },
+  "verify_expense": {
+    "group": "spending",
+    "spec": "7ac8fb3712ef"
   }
 }

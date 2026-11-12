@@ -89,6 +89,7 @@ class GoogleConfig:
     tasks_url: str = "https://tasks.googleapis.com"
     docs_url: str = "https://docs.googleapis.com"  # RC1a: the cookbook
     drive_url: str = "https://www.googleapis.com"  # RC1a: a file's version, before reading it
+    sheets_url: str = "https://sheets.googleapis.com"  # EX4a: expense sheets
     # RC1a: Google's file picker on the website (a browser key limited to the Picker API, and
     # the Cloud project's number). Without them the cookbook page offers a pasted link only.
     picker_api_key: str = ""

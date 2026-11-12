@@ -20,4 +20,27 @@ emails are added on their own.</p>
 <p>Your business expenses this month: {{ business_total }}.
 <a href="/spending/business.csv?month={{ month.strftime('%Y-%m') }}">Download as CSV</a></p>
 <p><a href="/spending?month={{ previous.strftime('%Y-%m') }}">← {{ previous.strftime("%B %Y") }}</a></p>
+
+{% if needs %}
+<h2>Needs filling in</h2>
+<div class="rows">
+  {% for n in needs %}
+  <p class="row-plain"><span class="row-main"><span class="row-title"><a href="/spending/sheets/{{ n.sheet.id }}#entry-{{ n.entry.id }}">expense {{ n.entry.id }}</a>: {{ n.what }}</span>
+    <span class="row-meta">{{ n.sheet.title }} · no {{ n.missing | lower }} yet</span></span></p>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Expense sheets</h2>
+<p class="muted">Each spreadsheet holds one or more sheets. Ask Themi in chat to start one
+("start a sheet for business travel", "add a mileage tab to the business spreadsheet").</p>
+<div class="rows">
+  {% for b in books %}
+  <p class="row-plain"><span class="row-main"><span class="row-title">{{ b.book.title }}</span>
+    <span class="row-meta">{% if b.book.member_id %}Yours{% else %}The household's{% endif %} ·
+    {% for t in b.tabs %}<a href="/spending/sheets/{{ t.id }}">{{ t.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span></span></p>
+  {% else %}
+  <p class="empty muted">No expense sheets yet.</p>
+  {% endfor %}
+</div>
 {% endblock %}

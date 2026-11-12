@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% from "_row.html" import row %}
+{% block title %}{{ sheet.title }} · Themi{% endblock %}
+{% block content %}
+<p><a href="/spending">← Spending</a></p>
+<h1>{{ sheet.title }}, {{ month.strftime("%B %Y") }}</h1>
+<nav class="tabs" aria-label="Spreadsheets and their sheets">
+  {% for b in books %}
+  <p><strong>{{ b.book.title }}</strong>:
+    {% for t in b.tabs %}{% if t.id == sheet.id %}<span aria-current="page">{{ t.title }}</span>{% else %}<a href="/spending/sheets/{{ t.id }}?month={{ month.strftime('%Y-%m') }}">{{ t.title }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+  {% endfor %}
+</nav>
+<p class="muted">{% if sheet.member_id %}Only you see this sheet.{% else %}The household's sheet.{% endif %}
+{% if not sheet.counts_as_spending %} It isn't counted as spending.{% endif %}
+Marks: ✓ checked · ◐ filled in by Themi · ≈ your estimate · ○ missing.</p>
+
+<div class="rows">
+  {% for r in rows %}
+  {% call(part) row("expense " ~ r.entry.id ~ ": " ~ (r.cells | selectattr("text") | map(attribute="text") | join(" · ")), meta=r.who ~ (" · checked" if r.checked else ""), id="entry-" ~ r.entry.id) %}
+  {% if part == "body" %}
+    <dl class="values">
+      {% for f in fields %}{% set c = r.cells[loop.index0] %}
+      <dt>{{ f.label }}</dt>
+      <dd>{% if c.text %}{{ c.text }}{% else %}<span class="muted">empty</span>{% endif %}
+        {% if c.word %}<span class="status status-{{ c.status }}"><span aria-hidden="true">{{ c.mark }}</span> {{ c.word }}</span>{% endif %}
+        {% if c.source %}<span class="muted"> · from {% if c.link %}<a href="{{ c.link }}" rel="noopener noreferrer" target="_blank">{{ c.source }}</a>{% else %}{{ c.source }}{% endif %}{% if c.confidence %}, {{ c.confidence }}{% endif %}</span>{% endif %}</dd>
+      {% endfor %}
+    </dl>
+    {% if r.can_check and not r.checked %}
+    <form method="post" action="/spending/sheets/{{ sheet.id }}/check/{{ r.entry.id }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="primary">✓ Looks right</button>
+    </form>
+    {% endif %}
+  {% endif %}
+  {% endcall %}
+  {% else %}
+  <p class="empty muted">Nothing on it this month.</p>
+  {% endfor %}
+  <details class="add">
+    <summary>Add one</summary>
+    <form method="post" action="/spending/sheets/{{ sheet.id }}/entries">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% for f in fields %}
+      <label>{{ f.label }}{% if f.type == "money" %} ($){% endif %}
+        {% if f.type == "choice" %}<select name="field_{{ f.key }}"><option value=""></option>{% for c in f.choices %}<option>{{ c }}</option>{% endfor %}</select>
+        {% elif f.type == "date" %}<input type="date" name="field_{{ f.key }}">
+        {% else %}<input type="text" name="field_{{ f.key }}"{% if f.type in ("money", "number") %} inputmode="decimal"{% endif %}>{% endif %}</label>
+      {% endfor %}
+      <button class="primary">Add it</button>
+    </form>
+  </details>
+</div>
+{% for t in totals %}<p>Total {{ t.label | lower }}: {{ t.total }}.</p>{% endfor %}
+{% if sheet.csv_enabled %}<p><a href="/expenses/{{ sheet.id }}.csv?from={{ month.strftime('%Y-%m-01') }}">Download this month as CSV</a></p>{% endif %}
+<p><a href="/spending/sheets/{{ sheet.id }}?month={{ previous.strftime('%Y-%m') }}">← {{ previous.strftime("%B %Y") }}</a></p>
+
+{% if can_change %}
+<h2>Fields</h2>
+<div class="rows">
+  {% for f in fields %}
+  {% call(part) row(f.label, meta=f.type ~ (" · key field" if f.critical else ""), id="field-" ~ f.key) %}
+  {% if part == "body" %}
+    <form method="post" action="/spending/sheets/{{ sheet.id }}/fields/{{ f.key }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Name <input type="text" name="label" maxlength="60" value="{{ f.label }}" required></label>
+      <label><input type="checkbox" name="critical"{% if f.critical %} checked{% endif %}> A key field (worth filling in)</label>
+      <button class="primary">Save</button>
+    </form>
+    <div class="danger-zone buttons">
+      <form method="post" action="/spending/sheets/{{ sheet.id }}/fields/{{ f.key }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="remove" value="yes">
+        <button class="danger">Remove {{ f.label }}</button>
+      </form>
+    </div>
+  {% endif %}
+  {% endcall %}
+  {% endfor %}
+  <details class="add">
+    <summary>A new field</summary>
+    <form method="post" action="/spending/sheets/{{ sheet.id }}/fields">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Name <input type="text" name="label" maxlength="60" required></label>
+      <label>Kind <select name="type">{% for t in field_types %}<option>{{ t }}</option>{% endfor %}</select></label>
+      <label>Choices, for a choice (with commas between) <input type="text" name="choices"></label>
+      <label><input type="checkbox" name="critical"> A key field (worth filling in)</label>
+      <button class="primary">Add it</button>
+    </form>
+  </details>
+</div>
+
+<h2>This sheet</h2>
+<form method="post" action="/spending/sheets/{{ sheet.id }}/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label>Name <input type="text" name="title" maxlength="80" value="{{ sheet.title }}" required></label>
+  <label>Its place in {{ book.title }} (1 is first) <input type="number" name="position" min="1" value="{{ sheet.position + 1 }}"></label>
+  <label>Words that put an entry on it (with commas between) <input type="text" name="keywords" value="{{ sheet.keywords | join(', ') }}"></label>
+  <label><input type="checkbox" name="prompt"{% if sheet.prompt_on_missing_critical %} checked{% endif %}> Ask about a key field that's still empty</label>
+  <label><input type="checkbox" name="csv"{% if sheet.csv_enabled %} checked{% endif %}> Offer it as CSV</label>
+  <button class="primary">Save</button>
+</form>
+{% if not sheet.builtin %}
+<div class="danger-zone buttons">
+  <form method="post" action="/spending/sheets/{{ sheet.id }}/settings">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="archive" value="yes">
+    <button class="danger">Put {{ sheet.title }} away</button>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

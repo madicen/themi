@@ -49,7 +49,9 @@ def spend(amount: str, place: str, kind: str = "takeout", business: bool = False
 
 
 async def receipt(scenario: Scenario, fake: FakeGmail, total: int = 2550) -> int:
-    (email,) = await arrive(scenario, fake, DOORDASH)
+    # EX2a: a total is kept only when the receipt has it written, so the email says it.
+    text = DOORDASH["text"] if total == 2550 else f"Pad thai $18.00\nTotal ${total / 100:.2f}"
+    (email,) = await arrive(scenario, fake, {**DOORDASH, "text": text})
     scenario.primary.queue_structured({"results": [verdict(email, "receipt", "DoorDash")]})
     scenario.primary.queue_structured(
         {

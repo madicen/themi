@@ -371,16 +371,27 @@ class Pantry:
                 self._purchase(line, email_id, vendor, purchased_at)
             if self.services.maybe(keys.safeway) is not None:  # 35c: Safeway's words for the item
                 self._teach_safeway(lines, vendor)
-        spending = self.services.maybe(keys.spending)
-        if data.get("kind") == "takeout" and spending is not None:  # X1: the month's takeout
+        fill = self.services.maybe(keys.expense_fill)
+        if data.get("kind") in ("takeout", "shopping", "grocery") and fill is not None:
+            # X1: the month's takeout; EX2a: any receipt may fill an expense sheet in. What
+            # the model read is kept only when the receipt has it written.
             total = data.get("total_cents")
-            if not isinstance(total, int) or total <= 0:
-                total = sum(
-                    int(line.get("price_cents") or 0)
-                    for line in lines
-                    if isinstance(line.get("price_cents"), int)
-                )
-            spending.from_receipt(member, email_id, vendor, total, purchased_at)
+            prices = tuple(
+                int(line["price_cents"])
+                for line in lines
+                if isinstance(line.get("price_cents"), int) and line["price_cents"] > 0
+            )
+            fill.receipt(
+                member,
+                email_id,
+                str(data["kind"]),
+                vendor,
+                total if isinstance(total, int) and total > 0 else None,
+                purchased_at,
+                f"{row['from_name']}\n{row['subject']}\n{row['body_text'][:RECEIPT_CHARS]}",
+                items=tuple(str(line.get("name", "")) for line in lines),
+                prices=prices,
+            )
         if data.get("kind") in ("grocery", "shopping") and buying is not None:
             # L2a: things to buy that it bought are ticked off, and their store learned.
             buying.bought([str(line.get("name", "")) for line in lines], vendor, member)

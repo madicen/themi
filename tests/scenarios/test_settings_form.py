@@ -27,6 +27,8 @@ BEFORE_CR7A = [
 ADDED = {
     "cooking_chime_volume": "CK7", "cooking_steps_view": "CK7", "cooking_text_size": "CK7",
     "cooking_theme": "CK7", "cooking_units": "CK7", "cooking_voice": "CK8",
+    "expense_ask_after_hours": "EX2b", "expense_review_day": "EX2b",
+    "expense_review_time": "EX2b",
 }  # fmt: skip
 
 
@@ -90,8 +92,9 @@ async def section_ids(scenario: Scenario, site: httpx.AsyncClient) -> list[str]:
 
 # CR7d: the sections, in the order the page had before they came from modules.
 SECTIONS = [
-    "quiet", "limit", "breaks", "body-double", "chart", "calendars", "email", "phrasing",
-    "pda", "tracking",
+    "quiet", "limit", "breaks", "body-double", "chart", "calendars",
+    "expenses",  # EX2b, the spending module's
+    "email", "phrasing", "pda", "tracking",
 ]  # fmt: skip
 
 

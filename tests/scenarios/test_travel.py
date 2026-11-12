@@ -13,6 +13,7 @@ from tests.fakes.google_oauth import FakeGoogle
 from tests.fakes.travel import FakeTravel
 from tests.fixtures.web import flash, sign_in
 from tests.scenarios.harness import Scenario
+from tests.scenarios.test_calendar_events import on_primary
 from tests.scenarios.test_triage import ERIN, link
 from themi import clock
 from themi.core import keys
@@ -327,3 +328,187 @@ async def test_a_private_partner_calendar_is_said_so(
     """#155's thread: Michael asked about tutoring "on Erin's calendar"."""
     result = await ask(scenario, "Husband", "tutoring", "")
     assert "Erin keeps calendar details private, so those events aren't searched" in result
+
+
+# ----- F41c, bug #199: what Themi did, and when to leave, are in the reply -------------------
+
+REQUEST_426 = (
+    "We need to drop off our kid at my in-laws before we go to that appointment. Please add "
+    "that to our calendar and recalculate the drive times (especially since we'll leave from "
+    "my in-laws to go to the appointment)"
+)
+
+
+async def test_reply_426_says_the_new_event_and_not_the_old_answer_again(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    ready.add_event(ERIN, local(13), local(14), summary="ND psych in person",
+                    location="Smile Dental")  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_text("Leave at 12:25 PM.")
+    assert await scenario.say("Erin", "What time do we need to leave?") == ["Leave at 12:25 PM."]
+    scenario.primary.queue_tool_calls([
+        ("add_calendar_event", {"title": "Drop off kid at in-laws", "date": "2026-10-21",
+                                "start": "12:00", "end": "13:00", "location": "Next door",
+                                "calendar": "mine", "details": "", "unread": ""}, None),
+        ("drive_time", {"event": "", "address": "Smile Dental"}, None),
+    ])  # fmt: skip
+    scenario.primary.queue_text("Leave at 12:25 PM.")  # word for word the last answer
+    replies = await scenario.say("Erin", REQUEST_426)
+    assert replies == [
+        "On your calendar: Drop off kid at in-laws, Wed 21 Oct, 12-1 pm (at Next door)."
+    ]
+
+
+async def test_drive_time_says_when_to_leave_and_get_ready_itself(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    erin = scenario.member("Erin")
+    scenario.app.store.save_preferences(erin, erin.id, TravelPreferences, getting_ready_minutes=20)
+    ready.add_event(ERIN, local(13), local(14), summary="ND psych in person",
+                    location="Smile Dental")  # fmt: skip
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call("drive_time", {"event": "ND psych", "address": ""})
+    scenario.primary.queue_text("Leave at 12:25 PM.")  # the model cut it short
+    replies = await scenario.say("Erin", "What time do we need to leave?")
+    assert replies == [
+        "ND psych in person at 1 pm: about 35 min with traffic. Leave around 12:25 pm; start "
+        "getting ready around 12:05 pm."
+    ]
+
+
+async def test_a_drive_to_an_address_has_no_leave_line(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    scenario.primary.queue_tool_call("drive_time", {"event": "", "address": "Smile Dental"})
+    scenario.primary.queue_text("About 35 minutes from home.")
+    assert await scenario.say("Erin", "How far is Smile Dental?") == ["About 35 minutes from home."]
+
+
+async def test_an_event_made_and_its_drive_both_said(
+    scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    scenario.primary.queue_tool_call(
+        "add_calendar_event",
+        {"title": "Dentist", "date": "2026-10-21", "start": "15:00", "end": "",
+         "location": "Smile Dental", "calendar": "mine", "details": "", "unread": ""},
+    )  # fmt: skip
+    scenario.primary.queue_tool_call("drive_time", {"event": "dentist", "address": ""})
+    scenario.primary.queue_text("Added the dentist at 3. Leave at 2:25.")
+    replies = await scenario.say(
+        "Erin", "Put the dentist on my calendar today at 3 at Smile Dental, and when do I leave?"
+    )
+    assert replies == [
+        "On your calendar: Dentist, Wed 21 Oct, 3-4 pm (at Smile Dental).\n"
+        "Dentist at 3 pm: about 35 min with traffic. Leave around 2:25 pm; start getting "
+        "ready around 2:10 pm."
+    ]
+
+
+# ----- F41d, bug #199: a stop on the way; drives from where they'll be ----------------------
+
+IN_LAWS = "790 La Para Ave, Palo Alto, CA 94306"
+
+
+@pytest.fixture
+def in_laws(scenario: Scenario, ready: FakeGcal, fake_travel: FakeTravel) -> FakeGcal:
+    """Erin's in-laws (Husband's parents) on the map; home → in-laws 10 min, in-laws →
+    Smile Dental 9 min, home → Smile Dental 35. ND psych at 1 pm at Smile Dental."""
+    fake_travel.place(IN_LAWS, 37.75, -122.45)
+    remember(scenario, f"Husband's parents live at {IN_LAWS}.")
+    fake_travel.leg(HOME, IN_LAWS, 10)
+    fake_travel.leg(IN_LAWS, "Smile Dental", 9)
+    ready.add_event(ERIN, local(13), local(14), summary="ND psych in person",
+                    location="Smile Dental")  # fmt: skip
+    return ready
+
+
+async def test_drive_time_from_the_in_laws(
+    scenario: Scenario, in_laws: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(
+        "drive_time", {"event": "ND psych", "address": "", "from": "in-laws"}
+    )
+    scenario.primary.queue_text("Leave at 12:51.")
+    replies = await scenario.say("Erin", "When do we leave the in-laws for ND psych?")
+    assert replies == [
+        "ND psych in person at 1 pm: about 9 min from the in-laws (790 La Para Ave) with "
+        "traffic. Leave there around 12:51 pm; start getting ready around 12:36 pm."
+    ]
+    assert (
+        "About 9 min from the in-laws (790 La Para Ave) with traffic: leave there around "
+        "12:51 pm" in tool_result(scenario)
+    )
+
+
+async def test_back_to_back_the_next_drive_is_from_the_first_place(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    in_laws.add_event(ERIN, local(12, 36), local(12, 51), summary="Drop off kid at in-laws",
+                      location=IN_LAWS)  # fmt: skip
+    assert await at(scenario, 12, 7) == []  # SLACK: up to 3 minutes early
+    assert await at(scenario, 12, 11) == [
+        "Drop off kid at in-laws at 12:36 pm, about 10 min with traffic: leave around 12:26 pm."
+    ]
+    assert len(await at(scenario, 12, 32)) == 1  # leave the in-laws 12:51, get ready 12:36
+    assert (await at(scenario, 12, 36))[-1] == (
+        "ND psych in person at 1 pm, about 9 min from Drop off kid at in-laws (790 La Para "
+        "Ave) with traffic: leave there around 12:51 pm."
+    )
+
+
+async def test_two_hours_apart_its_from_home(scenario: Scenario, in_laws: FakeGcal) -> None:
+    in_laws.add_event(ERIN, local(10, 30), local(10, 45), summary="Drop off kid at in-laws",
+                      location=IN_LAWS)  # fmt: skip
+    await at(scenario, 10, 30)
+    assert (await at(scenario, 12, 10))[-1] == (
+        "ND psych in person at 1 pm, about 35 min with traffic: leave around 12:25 pm."
+    )
+
+
+async def test_reply_426_the_stop_is_timed_from_the_drives(
+    scenario: Scenario, in_laws: FakeGcal, fake_travel: FakeTravel
+) -> None:
+    """The scenario: Michael's request, with the model calling add_calendar_event with
+    `before` and no times. The stop is 12:36-12:51 pm, and the leave times follow."""
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(
+        "add_calendar_event",
+        {"title": "Drop off kid at in-laws", "date": "2026-10-21", "start": "", "end": "",
+         "location": "in-laws", "calendar": "mine", "details": "", "unread": "",
+         "before": "ND psych"},
+    )  # fmt: skip
+    scenario.primary.queue_text("Leave at 12:26.")
+    replies = await scenario.say("Erin", REQUEST_426)
+    assert replies == [
+        f"On your calendar: Drop off kid at in-laws, Wed 21 Oct, 12:36-12:51 pm (at {IN_LAWS}).\n"
+        "Leave home around 12:26 pm (start getting ready around 12:11 pm) to reach the in-laws "
+        "by 12:36 pm; leave there around 12:51 pm for ND psych in person at 1 pm."
+    ]
+    event = on_primary(in_laws)["Drop off kid at in-laws"]
+    assert event["start"]["dateTime"] == local(12, 36)
+    assert event["end"]["dateTime"] == local(12, 51)
+    # The heads-ups follow the same chain: home at 12:11, the in-laws at 12:36.
+    assert (await at(scenario, 12, 11))[-1].endswith("leave around 12:26 pm.")
+    assert (await at(scenario, 12, 36))[-1] == (
+        "ND psych in person at 1 pm, about 9 min from Drop off kid at in-laws (790 La Para "
+        "Ave) with traffic: leave there around 12:51 pm."
+    )
+
+
+async def test_a_stop_whose_place_isnt_found_asks_and_adds_nothing(
+    scenario: Scenario, in_laws: FakeGcal
+) -> None:
+    await scenario.run_periodic("calendar.busy")
+    scenario.primary.queue_tool_call(
+        "add_calendar_event",
+        {"title": "Pick up cake", "date": "2026-10-21", "start": "", "end": "",
+         "location": "Nowhere Bakery, Faraway", "calendar": "mine", "details": "",
+         "unread": "", "before": "ND psych"},
+    )  # fmt: skip
+    scenario.primary.queue_text("What time should I put it at?")
+    await scenario.say("Erin", "Add picking up the cake before ND psych")
+    assert "the stop can't be timed" in tool_result(scenario)
+    assert "Ask them what time" in tool_result(scenario)
+    assert "Pick up cake" not in on_primary(in_laws)

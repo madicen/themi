@@ -29,6 +29,7 @@ pytest_plugins = [
     "tests.fakes.travel",
     "tests.fakes.search",
     "tests.fakes.gdocs_api",
+    "tests.fakes.gsheets_api",
     "tests.fakes.ourgroceries",
     "tests.fakes.keep",
     "tests.fakes.s3_api",

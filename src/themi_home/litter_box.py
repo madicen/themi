@@ -40,6 +40,7 @@ from themi.localtime import in_quiet_hours, to_local, to_utc_iso
 from themi.standard.tasks import Task, TaskBoard, TaskChange, clock_words
 from themi_home.connectors.catgenie import (
     ALERT,
+    CLEANS,
     ERROR,
     GRANULES,
     OUT,
@@ -348,10 +349,16 @@ class LitterBox:
             self.services.outbox.cancel(queued["id"])
 
     def _left(self, row: dict[str, Any]) -> str:
-        left = self.db.scalar(
-            "SELECT sani_left FROM litter_states WHERE device_id = ?", (row["device_id"],)
+        state = self.db.one(
+            "SELECT sani_left, sani_unit FROM litter_states WHERE device_id = ?",
+            (row["device_id"],),
         )
-        return f" (about {left}% left)" if left is not None else ""
+        if state is None or state["sani_left"] is None:
+            return ""
+        left = int(state["sani_left"])
+        if state["sani_unit"] == CLEANS:  # F41a: the Whoosh counts cleans
+            return f" (about {left} clean{'' if left == 1 else 's'} left)"
+        return f" (about {left}% left)"
 
     def _timezone(self) -> str:
         family = self.store.get_family()

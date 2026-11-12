@@ -39,6 +39,7 @@ class GoogleSettings(ModuleSettings):
     tasks_url: str = env_field("GOOGLE_TASKS_URL", "")
     docs_url: str = env_field("GOOGLE_DOCS_URL", "")
     drive_url: str = env_field("GOOGLE_DRIVE_URL", "")
+    sheets_url: str = env_field("GOOGLE_SHEETS_URL", "")  # EX4a
     # RC1a: not endpoints, but strings for the same config: Google's file picker.
     picker_api_key: str = env_field(
         "GOOGLE_PICKER_API_KEY", "", label="Picker API key, for choosing the cookbook"
@@ -68,6 +69,7 @@ class GoogleSettings(ModuleSettings):
                 "tasks_url",
                 "docs_url",
                 "drive_url",
+                "sheets_url",
                 "picker_api_key",
                 "project_number",
             )

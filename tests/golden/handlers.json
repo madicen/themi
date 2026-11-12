@@ -16,6 +16,10 @@
     "cooking_timer",
     "day_end",
     "email_audit",
+    "expense",
+    "expense_gsheet",
+    "expense_review",
+    "expense_sheet",
     "focus",
     "inbox_setup",
     "meal",
@@ -88,6 +92,8 @@
     "devices.feed",
     "devices.vacuum_done",
     "devices.vacuum_home",
+    "expense_sheet_create",
+    "expense_sheet_sync",
     "gmail.archive",
     "gmail.forward",
     "gmail.label",
@@ -128,6 +134,8 @@
     "WrongReplies.on_reaction"
   ],
   "text_handlers": [
+    "ExpenseSheets.on_text",
+    "ExpenseAsks.on_text",
     "Cooking.on_text",
     "CookingTimers.on_text",
     "GuidedSteps.on_text"

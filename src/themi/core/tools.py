@@ -58,6 +58,9 @@ class ToolContext:
     # opens with them, word for word (bugs #111, #112: the model dropped the warm word, and
     # the phrasing rewrite dropped the rest).
     done: list[str] = field(default_factory=list)
+    # F41c (bug #199): words that mark a line of the model's reply as one of `done` again
+    # (an event's title, a leave time): such lines are dropped, since `done` says it.
+    done_keys: list[str] = field(default_factory=list)
     # What a tool said to them itself (a list add's confirmation, why it couldn't): when
     # every call this turn left one, they're the reply, and the model's words aren't sent
     # (bug #118: "Added to the list. Enjoy the sun." after an item about a sunny day).
@@ -101,6 +104,10 @@ class Proposal:
     requested: bool = False
     expires: datetime | None = None  # no use after then: an unanswered card lapses (#64)
     said: str | None = None  # the reply when it's done straight away (ToolContext.replies)
+    # F41d: Themi's own lines after the done line, when it's done straight away (a stop's
+    # leave times), and the words that mark the model's lines as saying them again.
+    then: tuple[str, ...] = ()
+    then_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -571,8 +578,34 @@ class ToolRegistry:
                 ctx.replies.append(proposal.said)
                 if proposal.requested:
                     ctx.asked.append(proposal.said)
-            return f"Done automatically (action {action.id}): {outcome.message}"
+            if proposal.said or not proposal.executor.startswith(SAID_ALWAYS):
+                return f"Done automatically (action {action.id}): {outcome.message}"
+            # F41c (bug #199): a calendar change made on its own is always said, word for
+            # word, with its time (the model's "Leave at 12:43 PM." left the new event out)
+            ctx.done.append(outcome.message)
+            if subject := done_subject(outcome.message):
+                ctx.done_keys.append(subject)
+            ctx.done.extend(proposal.then)
+            ctx.done_keys.extend(proposal.then_keys)
+            return (
+                f"Done automatically (action {action.id}), and Themi tells them itself, word "
+                f'for word: "{outcome.message}" Don\'t say it again; reply only about '
+                "anything else they asked."
+            )
         return f"Tried but it failed (action {action.id}); it can be retried: {outcome.message}"
+
+
+# F41c: changes whose done line Themi says itself. Others (a list add: "Milk's on the
+# grocery list.") are said well enough in the model's own words.
+SAID_ALWAYS = ("calendar.",)
+
+
+def done_subject(message: str) -> str:
+    """What a done line is about ("On your calendar: Drop off kid at in-laws, Wed 11 Nov…"
+    → "Drop off kid at in-laws"), when it's four letters or more; else ''."""
+    _, colon, rest = message.partition(": ")
+    subject = (rest if colon else message).split(",")[0].split(" (")[0].strip().rstrip(".")
+    return subject if len(subject) >= 4 else ""
 
 
 _INTEGER = re.compile(r"[+-]?\d+")

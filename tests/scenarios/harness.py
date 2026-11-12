@@ -31,6 +31,7 @@ from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gdocs_api import FakeGdocs
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.gsheets_api import FakeGsheets
 from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
@@ -109,6 +110,7 @@ class Scenario:
         runner: FakeRunner | None = None,
         search: FakeSearch | None = None,
         gdocs: FakeGdocs | None = None,
+        gsheets: FakeGsheets | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -151,6 +153,7 @@ class Scenario:
                 gcal=gcal,
                 gtasks=gtasks,
                 gdocs=gdocs,
+                gsheets=gsheets,
                 ourgroceries=ourgroceries,
                 cozyla=cozyla,
                 travel=travel,
@@ -454,6 +457,7 @@ async def scenario(
         runner=optional("fake_runner"),
         search=optional("fake_search"),
         gdocs=optional("fake_gdocs"),
+        gsheets=optional("fake_gsheets"),
     )
     await s.start()
     yield s

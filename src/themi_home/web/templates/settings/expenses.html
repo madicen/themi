@@ -1,0 +1,10 @@
+{# EX2b: a section of the settings form, the spending module's: when Themi asks about expense sheets. #}
+{% from "_row.html" import row %}
+  {% if prefs.spending %}{% set ex = prefs.spending %}{% call(part) row("Expense sheets", meta="Business review " ~ ex.expense_review_day | capitalize ~ " " ~ ex.expense_review_time.strftime("%H:%M"), id="expenses") %}{% if part == "body" %}
+    <label>When a key field (an amount) is still empty, ask after <input type="number" name="expense_ask_after_hours" min="1" max="168" value="{{ ex.expense_ask_after_hours }}" required> hours</label>
+    <p class="muted">Receipts often come a few hours after the meal, so Themi waits, and asks only once.</p>
+    <label>Business expenses with something empty come up once a week, on
+      <select name="expense_review_day">{% for d in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] %}<option value="{{ d }}"{% if d == ex.expense_review_day %} selected{% endif %}>{{ d | capitalize }}</option>{% endfor %}</select>
+      at <input type="time" name="expense_review_time" value="{{ ex.expense_review_time.strftime('%H:%M') }}" required></label>
+    <p class="muted">Never during a break or a session with Themi: it waits until after.</p>
+  {% endif %}{% endcall %}{% endif %}

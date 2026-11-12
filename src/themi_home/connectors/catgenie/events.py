@@ -7,7 +7,9 @@ models, checked 2026-11-04):
 - `operationStatus`: `state` (1 while cleaning), `progress` (0-100, 255 when idle) and
   `error` (text, empty when fine).
 - `activeErrors`: a list whose entries nobody has documented yet.
-- `remainingSaniSolution`: the cartridge's sani-solution left, in %.
+- `remainingSaniSolution`: the cartridge's sani-solution left. On the A.I. (`fwVersion` 8.x)
+  it's a percent. On the Whoosh (`fwVersion` 100.x) it's how many cleans are left, as its app
+  shows it (F41a, bug #197: "480% sani-solution").
 - `lastClean`, and `configuration.activation.count`: its cleaning cycles, ever.
 
 There's no granule (litter) level: the granules' chore counts cycles instead
@@ -29,6 +31,9 @@ from typing import Any
 ERROR, ALERT, SOLUTION, GRANULES = "error", "alert", "solution", "granules"
 LOW, OUT = "running low on sani-solution", "out of sani-solution"
 LOW_PERCENT = 20  # sani-solution left at or under this is running low (as the feeders' food)
+LOW_CLEANS = 30  # the Whoosh: cleans left at or under this (about ten days at three a day)
+PERCENT, CLEANS = "%", "cleans"
+WHOOSH_FIRMWARE = 100  # a firmware major version this high or more counts cleans (F41a)
 GRANULES_TEXT = "due a granule top-up"
 
 # An error code (as the box or an alert gives it) -> words. From captures only.
@@ -45,7 +50,9 @@ class LitterBoxReading:
     cleaning: bool = False
     progress: int | None = None  # % through a clean, while cleaning
     last_clean: datetime | None = None
-    sani_left: int | None = None  # %
+    sani_left: int | None = None  # in `sani_unit`
+    sani_unit: str = PERCENT  # PERCENT, or CLEANS on the Whoosh
+    odd_sani: int | None = None  # a percent over 100, left out of `sani_left` (logged once)
     cycles: int | None = None  # cleaning cycles ever
     errors: tuple[str, ...] = ()  # codes, as it reports them
 
@@ -55,9 +62,10 @@ class LitterBoxReading:
         found: dict[str, str] = {}
         if self.errors:
             found[ERROR] = "; ".join(error_words(e) for e in self.errors)
+        low = LOW_CLEANS if self.sani_unit == CLEANS else LOW_PERCENT
         if self.sani_left is not None and self.sani_left <= 0:
             found[SOLUTION] = OUT
-        elif self.sani_left is not None and self.sani_left <= LOW_PERCENT:
+        elif self.sani_left is not None and self.sani_left <= low:
             found[SOLUTION] = LOW
         return found
 
@@ -97,12 +105,17 @@ def read_device(raw: dict[str, Any]) -> LitterBoxReading:
     progress = _int(status.get("progress"))
     errors = [str(status.get("error") or "").strip()]
     errors += [_label(entry) for entry in raw.get("activeErrors") or []]
+    unit = sani_unit(raw.get("fwVersion"))
+    sani = _int(raw.get("remainingSaniSolution"))
+    odd = sani if unit == PERCENT and sani is not None and sani > 100 else None
     return LitterBoxReading(
         online=str(raw.get("reportedStatus") or "").lower() == "connected",
         cleaning=cleaning,
         progress=progress if cleaning and progress is not None and 0 <= progress <= 100 else None,
         last_clean=_time(raw.get("lastClean")),
-        sani_left=_int(raw.get("remainingSaniSolution")),
+        sani_left=None if odd is not None else sani,
+        sani_unit=unit,
+        odd_sani=odd,
         cycles=_int(activation.get("count")),
         errors=tuple(dict.fromkeys(e for e in errors if e.lower() not in NOT_AN_ERROR)),
     )
@@ -127,6 +140,19 @@ def read_alert(raw: dict[str, Any]) -> Alert:
     )
 
 
+def sani_unit(firmware: Any) -> str:
+    """CLEANS for the Whoosh (firmware 100.x or later), else PERCENT (also when unreadable)."""
+    found = re.match(r"\s*(\d+)", str(firmware or ""))
+    return CLEANS if found and int(found.group(1)) >= WHOOSH_FIRMWARE else PERCENT
+
+
+def sani_words(left: int, unit: str) -> str:
+    """ "56% sani-solution left", or on the Whoosh "477 cleans of sani-solution left"."""
+    if unit == CLEANS:
+        return f"{left} clean{'' if left == 1 else 's'} of sani-solution left"
+    return f"{left}% sani-solution left"
+
+
 def error_words(code: str) -> str:
     """ "it shows an error (heater fault)" until a capture gives the code its words."""
     if code in CODES:
@@ -144,7 +170,7 @@ def state_word(reading: LitterBoxReading) -> str:
     else:
         said = "ready"
     if reading.sani_left is not None:
-        said += f", {reading.sani_left}% sani-solution left"
+        said += ", " + sani_words(reading.sani_left, reading.sani_unit)
     if reading.errors:
         said += "; " + "; ".join(error_words(e) for e in reading.errors)
     return said

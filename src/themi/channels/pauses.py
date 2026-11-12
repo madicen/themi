@@ -32,12 +32,19 @@ TOPICS: dict[str, frozenset[str]] = {
     "approvals": frozenset({"approval", "rule"}),
     # notes passed on from your partner, and questions for you both (34b)
     "notes": frozenset({"relay", "alignment"}),
-    "break": frozenset({"task", "task_summary", "habit", "routine", "review"}),  # B1
+    # B1; EX2b: questions about expense sheets wait out a break too (a break is rest)
+    "break": frozenset(
+        {"task", "task_summary", "habit", "routine", "review", "expense", "expense_review"}
+    ),
     # RC3b: while cooking with Themi, nudges and check-ins wait; replies, approvals, urgent
     # alerts and their own timers still come.
-    "cooking": frozenset({"task", "task_summary", "habit", "routine", "review"}),
+    "cooking": frozenset(
+        {"task", "task_summary", "habit", "routine", "review", "expense", "expense_review"}
+    ),
     # BD1a: while someone keeps them company on a job, the same wait as a break.
-    "body_double": frozenset({"task", "task_summary", "habit", "routine", "review"}),
+    "body_double": frozenset(
+        {"task", "task_summary", "habit", "routine", "review", "expense", "expense_review"}
+    ),
     # F22d: whatever asks something of them; replies, alerts, their own reminders, meals
     # and travel heads-ups still come.
     "burnout": frozenset(
@@ -60,6 +67,8 @@ TOPICS: dict[str, frozenset[str]] = {
             "takeout",
             "safeway",
             "alignment",
+            "expense",  # EX2b
+            "expense_review",
         }
     ),
     EVERYTHING: frozenset(),  # every proactive message

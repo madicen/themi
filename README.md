@@ -113,8 +113,9 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
 1. **Project.** At <https://console.cloud.google.com>, create a project (for example
    "Themi Household").
 2. **APIs.** Under *APIs & Services → Library*, enable the **Gmail API**, the
-   **Google Calendar API**, the **Google Tasks API**, and for the cookbook (RC1a) the
-   **Google Docs API**, the **Google Drive API** and the **Google Picker API**.
+   **Google Calendar API**, the **Google Tasks API**, for the cookbook (RC1a) the
+   **Google Docs API**, the **Google Drive API** and the **Google Picker API**, and for
+   expense sheets (EX4a) the **Google Sheets API**.
 3. **Consent screen.** Under *Google Auth Platform → Branding*, give the app a name
    ("Themi") and a support email. Under *Audience*, choose **External**.
 4. **Scopes.** Under *Data Access*, add `openid`, `.../auth/userinfo.email`,
@@ -163,6 +164,11 @@ Each family uses its own Google Cloud project. It's free, and takes about 15 min
    Put them in `.env` as `GOOGLE_PICKER_API_KEY` and `GOOGLE_PROJECT_NUMBER`, restart, then
    on *Accounts* open the account's *Choose the family cookbook* and pick the doc. An
    account linked before this needs linking again (with Google Drive ticked).
+13. **Expense sheets in Google Sheets (EX4a).** With the Google Sheets API on, Themi makes
+   each expense spreadsheet in the linked account a person chooses and keeps it up to date.
+   It uses the same `drive.file` scope, so it can open only the spreadsheets it made. An
+   account without Google Drive allowed shows *Link again for expense sheets* on *Accounts*;
+   nothing else changes for it.
 
 To try the flow without a Google project, run the fake Google with
 `.venv/bin/python -m tests.fakes.google_oauth` and copy the settings it prints into `.env`.

@@ -47,6 +47,7 @@ class AITask(StrEnum):
     RECIPES = "recipes"  # RC2a-RC4a: reading ingredients, prep and recipes from pages
     BODY_DOUBLE_STEPS = "body_double_steps"  # BD1b: proposed steps for a guided session
     STEP_IMAGE = "step_image"  # BD4a: a picture for each step of a guided session
+    EXPENSE_SHEET_FIELDS = "expense_sheet_fields"  # EX1b: the fields a new expense sheet has
 
 
 ADAPTER_KINDS: tuple[str, ...] = get_args(AdapterKind)

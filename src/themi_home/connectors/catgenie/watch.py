@@ -188,6 +188,10 @@ class CatGenieWatcher:
             if code not in self._logged:
                 self._logged.add(code)
                 log.warning("The litter box reported %r, which Themi has no words for", code)
+        odd = f"sani:{reading.odd_sani}" if reading.odd_sani is not None else ""
+        if odd and odd not in self._logged:  # F41a: a percent over 100 shows no level
+            self._logged.add(odd)
+            log.warning("The litter box reported %s%% sani-solution; left out", reading.odd_sani)
         self._keep_word(device, state_word(reading))
         for listener in self.reading_listeners:
             try:
@@ -208,12 +212,13 @@ class CatGenieWatcher:
                 current[ALERT] = str(row["alert"])
         if row is None:  # the starting point
             self.db.execute(
-                "INSERT INTO litter_states (device_id, problems, sani_left, cycles, seen_at) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO litter_states (device_id, problems, sani_left, sani_unit, cycles, "
+                "seen_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     device.id,
                     json.dumps(current),
                     reading.sani_left,
+                    reading.sani_unit,
                     reading.cycles,
                     to_utc_iso(now),
                 ),
@@ -221,9 +226,16 @@ class CatGenieWatcher:
             return 0
         before: dict[str, str] = json.loads(row["problems"])
         self.db.execute(
-            "UPDATE litter_states SET problems = ?, sani_left = ?, cycles = ?, seen_at = ? "
-            "WHERE device_id = ?",
-            (json.dumps(current), reading.sani_left, reading.cycles, to_utc_iso(now), device.id),
+            "UPDATE litter_states SET problems = ?, sani_left = ?, sani_unit = ?, cycles = ?, "
+            "seen_at = ? WHERE device_id = ?",
+            (
+                json.dumps(current),
+                reading.sani_left,
+                reading.sani_unit,
+                reading.cycles,
+                to_utc_iso(now),
+                device.id,
+            ),
         )
         events = [
             LitterBoxEvent(device.id, kind, detail, now, gone=True)

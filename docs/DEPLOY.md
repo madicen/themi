@@ -41,7 +41,9 @@ them sooner or later, most of them from the local setup in the README:
   and every backup. **Without it, the backups can't be read.** Keep a copy in a password
   manager, away from the server.
 - The **Google OAuth client** id and secret (README: "Google Cloud setup"). Its redirect
-  address changes in step 6.
+  address changes in step 6. For expense sheets in Google Sheets (EX4a), the project also
+  needs the **Google Sheets API** turned on and the `drive.file` scope on the consent
+  screen's *Data Access* (README steps 2, 4 and 13).
 - A **Gemini API key**, or another AI backend, for each person.
 - Optionally, the OurGroceries login.
 

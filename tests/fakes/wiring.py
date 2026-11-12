@@ -18,6 +18,7 @@ from tests.fakes.gcal_api import FakeGcal
 from tests.fakes.gdocs_api import FakeGdocs
 from tests.fakes.gmail_api import FakeGmail
 from tests.fakes.google_oauth import FakeGoogle
+from tests.fakes.gsheets_api import FakeGsheets
 from tests.fakes.gtasks_api import FakeGtasks
 from tests.fakes.home_connect import FakeHomeConnect
 from tests.fakes.keep import FakeKeep
@@ -43,6 +44,7 @@ def connector_options(
     gcal: FakeGcal | None = None,
     gtasks: FakeGtasks | None = None,
     gdocs: FakeGdocs | None = None,
+    gsheets: FakeGsheets | None = None,
     ourgroceries: FakeOurGroceries | None = None,
     cozyla: FakeCozyla | None = None,
     travel: FakeTravel | None = None,
@@ -57,7 +59,7 @@ def connector_options(
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
     return {
-        "google": google_config(google, gmail, gcal, gtasks, gdocs),
+        "google": google_config(google, gmail, gcal, gtasks, gdocs, gsheets),
         "grocery_list": ourgroceries,
         "cozyla": cozyla_client(cozyla, timezone) if cozyla else None,
         "travel": travel.client() if travel else None,
@@ -78,11 +80,13 @@ def google_config(
     gcal: FakeGcal | None,
     gtasks: FakeGtasks | None = None,
     gdocs: FakeGdocs | None = None,
+    gsheets: FakeGsheets | None = None,
 ) -> GoogleConfig | None:
     config = gmail.config() if gmail else google.config() if google else None
     config = gcal.config(config) if gcal else config
     config = gtasks.config(config) if gtasks else config
-    return gdocs.config(config) if gdocs else config
+    config = gdocs.config(config) if gdocs else config
+    return gsheets.config(config) if gsheets else config
 
 
 def wall_list(fake: FakeCozyla) -> int:

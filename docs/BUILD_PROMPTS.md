@@ -266,6 +266,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
 | F40c | Feedback: a Mini App can open in the phone's browser | Feedback | [x] |
+| F41a | Feedback: the Whoosh's sani-solution is cleans left, not a percent | Feedback | [x] 2026-11-11 |
+| F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
+| F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
+| F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -279,13 +283,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
 | BD5b | Spotify: playing their own music | Body double | [x] 2026-11-06 |
 | BD5c | Body double: music that suits the task | Body double | [x] 2026-11-06 |
-| EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [ ] |
-| EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [ ] |
-| EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [ ] |
-| EX2b | Expense sheets: when Themi asks | Expense sheets | [ ] |
-| EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
-| EX4a | Google Sheets connector | Expense sheets | [ ] |
-| EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
+| EX1a | Expense sheets: the data model, with X1 moved onto it | Expense sheets | [x] 2026-11-11 |
+| EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [x] 2026-11-11 |
+| EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [x] 2026-11-11 |
+| EX2b | Expense sheets: when Themi asks | Expense sheets | [x] 2026-11-11 |
+| EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [x] 2026-11-11 |
+| EX4a | Google Sheets connector | Expense sheets | [x] 2026-11-11 |
+| EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [x] 2026-11-11 |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
@@ -13192,6 +13196,269 @@ unless the page is `.in-telegram`. Outside Telegram it isn't shown and has no ha
 are in `test_cook_miniapp_browser.py` (headless Chrome, Telegram faked). No golden file
 changed. Still to decide with Michael: whether a chat button is wanted too.
 
+### F41a · Feedback (2026-11-10): the Whoosh's sani-solution is cleans left, not a percent
+Status: [x] 2026-11-11
+Depends on: CG1a, CG1b
+Read first: `themi_home/connectors/catgenie/events.py` (the docstring, `read_device`,
+`problems`, `state_word`, `LOW_PERCENT`); `themi_home/litter_box.py` (`_left`, the cartridge
+task's words, "a new cartridge closes it"); `litter_states.sani_left`; the fixtures README in
+`tests/fixtures/catgenie`. From Michael's bug #197 (2026-11-10, 11:55 pm, "the litter box is
+listing 480% sani solution", with a screenshot of Home).
+
+What the Pi shows: two CatGenies. "AI - CGU7225298" (`fwVersion` 8.7.205R, `serviceLevel`
+Classic) reports `remainingSaniSolution` 56, a percent. "Whoosh - SFU8011679h" (`fwVersion`
+100.4.14R, Deluxe) reports 477 (480 the night before, 178 cleans so far). Home says "ready,
+480% sani-solution left". Michael checked the app on 2026-11-11: for the Whoosh it shows **477
+cleans left** before the cartridge needs changing. So `LOW_PERCENT` (20) would only call it
+low at 20 cleans, and the cartridge task would say "about 477% left". A capture from
+2026-11-11 (`themi catgenie capture`) has both reports.
+
+Build:
+- Bug fix: start with the failing test below.
+- The Whoosh's report from the Pi goes into `tests/fixtures/catgenie` as a second device, with
+  ids, names and numbers left out as the capture does. The README says which model each is.
+- `read_device` tells the two apart by `fwVersion`: major version 100 or more is the Whoosh,
+  which counts cleans. A version it can't read stays a percent (as now). `LitterBoxReading`
+  gets `sani_unit` ("%" or "cleans"). The number is stored as reported (`sani_left`), and a
+  migration adds `litter_states.sani_unit`.
+- Words: "ready, 477 cleans of sani-solution left" (Home, the Accounts page,
+  `appliance_status`); the cartridge task "(about 12 cleans left)". Never a percent over 100:
+  a percent reading over 100 shows no level, and is logged once.
+- Running low for the Whoosh: 30 cleans or fewer (`LOW_CLEANS`, about ten days at its three
+  cleans a day). Out is 0, as now. A new cartridge (the number going up) still closes the task.
+- Update the events docstring: `remainingSaniSolution` is a percent on the A.I. (8.x) and
+  cleans left on the Whoosh (100.x).
+
+Tests: start with a failing one: the Whoosh fixture at 477 reads "477 cleans of
+sani-solution left", never "%". The A.I. fixture still reads "56% sani-solution left". The
+Whoosh at 30 is running low, at 31 isn't, at 0 is out. A percent device reporting 140 shows
+no level. The cartridge task's words use the unit.
+Scenario: the Whoosh drops from 31 to 30 cleans. One "Change the Whoosh's sani-solution
+cartridge (about 30 cleans left)" task appears. Home says "30 cleans of sani-solution left".
+
+Data: none needed (the next poll stores the unit). Decided here, not with Michael yet: low at
+30 cleans. Mark #197 reviewed once live.
+Related, not this prompt: on 2026-11-11 at 07:41 one box reported the error `'6'` ("Themi
+has no words for"). Nothing showed it to anyone, but "it shows an error (6)" would. A capture
+while it shows that state would give `CODES` its words.
+
+Notes: `sani_unit(fwVersion)` in `catgenie/events.py` (major 100 or more: `CLEANS`, else
+`PERCENT`); `LitterBoxReading.sani_unit` and `odd_sani` (a percent over 100, left out of
+`sani_left` and logged once by the watcher). `sani_words` gives "477 cleans of sani-solution
+left" ("1 clean"). Migration 0162 adds `litter_states.sani_unit` ('%' by default); the next
+poll fills it. The task says "(about 30 cleans left)". Fixture `device_whoosh.json` is the
+Pi's capture with ids and addresses replaced; the fake's `add_box` takes the fixture name.
+New tests in `test_catgenie_events.py` and `test_litter_box.py`; none changed. No golden
+file changed.
+
+### F41b · Feedback (2026-11-11): cooking started on the website stays on the screen
+Status: [x] 2026-11-11
+Depends on: CK13, RC4
+Read first: `POST /recipes/{recipe_id}/cook` in `themi_home/web/recipe_pages.py`;
+`Cooking.start`, `Cooking.show`, `Cooking.screen_open` and every `show(...)` caller in
+`themi_home/cooking.py`; `cooking_screen.py` (taps); CK13's notes; the cooking plan's "Quiet
+chat while a screen is open". From Michael's bug #198 (2026-11-11, 10:50 am, "using kitchen
+view from my computer still sends messages to telegram"). #192 was the same complaint, and
+CK13 quieted the lines but not the card.
+
+What the Pi shows: at 10:49 am Michael pressed Cook on Pancakes on the website (no tool ran;
+session 16). `cook` calls `Cooking.start`, which `show`s the card. That sent outbox 1789
+"Cooking Pancakes. Before anything else: preheat the oven to 200°F." to Telegram, and every
+tap on the screen after that edited it (gather, prep, steps 1-3, "Stopped cooking"). The
+site's redirect even says "Cooking: the same card is in your chat."
+
+Decided (Michael, 2026-11-11, bug #198): a session started from the website never posts to
+chat. It lives on the screen only. Chat gets nothing about it unless they ask Themi there.
+This goes beyond the plan's "the chat card is still edited in place", which stays true for a
+session started in chat. The plan's "Quiet chat while a screen is open" paragraph says so
+(added 2026-11-11).
+
+Build:
+- Bug fix: start with the failing test below.
+- A migration adds `cooking_sessions.from_page` (0/1). `Cooking.start(..., from_page=True)`
+  from the website's Cook button. `show` for such a session renders nothing to chat (no
+  `card.show`, `message_id` stays null). Every other place that would send to chat for it
+  is skipped too: the start line already goes to the screen. A timer's urgent "Time's up"
+  still goes to Telegram (CK13's decision), and so do the wrap-up offers if the screen is
+  closed when the session ends. Check each `show`/`card`/outbox caller.
+- Asked in Telegram ("what step am I on?", "next"), Themi answers there as now. If the
+  answer would move the session, it moves it and edits nothing (there's no card).
+- The site's redirect says "Cooking Pancakes on this screen." and nothing about chat.
+- A session started in chat, then opened in kitchen view, is unchanged (CK13).
+
+Tests: start with a failing one: POST `/recipes/{id}/cook` starts a session and nothing is
+queued in the outbox. Taps (tick, next, skip, goto, stop) on it queue and edit nothing. A
+cooking timer firing still sends its "Time's up". "next" typed in Telegram moves it and
+answers in chat. A session started in chat still gets its card and edits.
+Scenario: Michael presses Cook on Pancakes on his computer, ticks the ingredients, steps
+through, and stops. His Telegram chat gets nothing.
+
+Data: none needed. Mark #198 reviewed once live (and #192, from CK13).
+
+Notes: migration 0163 adds `cooking_sessions.from_page`; the website's Cook passes
+`from_page=True`. Every chat card write goes through `Cooking._to_card`, which skips a
+from-page session while it has no card and the write isn't `fresh`. A message typed in
+Telegram ("next", "repeat") is `fresh`, so it sends the card there. From then on that card is
+edited in place like any other (taps make no sound). Stopping a from-page session with the
+screen open doesn't send "There's a timer still running" (the screen asks). "Remind me
+tomorrow" still schedules its message, as asked. The redirect says "Cooking Pancakes on this
+screen." (the cook screen shows no flash, so no test reads it). Changed test:
+`test_cook_this_opens_the_cook_screen` asserted the card in chat and its edit, the behaviour
+this prompt removes; it now asserts neither. New tests in `test_recipe_pages.py`. No golden
+file changed.
+
+### F41c · Feedback (2026-11-11): what Themi did on its own is always in the reply
+Status: [x] 2026-11-11
+Depends on: 28, F21b, F34d
+Read first: `themi/core/tools.py` (`_stage`, "Done automatically", `ctx.done`,
+`ctx.replies`); `themi/core/agent.py` (the end of the loop: `_done_first`, `_without_done`,
+`_honest`, `_repeats_card`); `themi/standard/tasks.py` (`ctx.done.append`, which already
+does this for a task marked done). From Michael's bug #199 (2026-11-11, 11:43 am, "that was
+an awful attempt at addressing that series of requests") and his 👎 on reply 426.
+
+What the Pi shows: reply 426. Michael: "We need to drop off our kid at my in-laws before we
+go to that appointment. Please add that to our calendar and recalculate the drive times
+(especially since we'll leave from my in-laws to go to the appointment)". The model ran
+`add_calendar_event` ("Done automatically (action 645): On your calendar: Drop off kid at
+in-laws, Wed 11 Nov, 12-1 pm (at 790 La Para Ave, Palo Alto, CA 94306)") and `drive_time`
+(17 min from home, leaving now). The whole reply was "Leave at 12:43 PM.", word for word
+the previous turn's answer (reply 425). It never said the event was added, or when.
+
+Build:
+- Bug fix: start with the failing test below.
+- `_stage`: an action done automatically adds its `outcome.message` to `ctx.done` (as
+  marking a task done does), and the tool result tells the model "Themi tells them itself,
+  word for word: …; don't say it again". `_done_first` puts it first in the reply. Skip the
+  ones whose `proposal.said` already reaches them (`ctx.replies`), so nothing is said twice.
+- A reply that is word for word the last thing Themi said to this person in this chat (the
+  previous reply, within the hour) is dropped when tools ran this turn. What's left is the
+  done lines. If nothing is left, it's "Done." or `TANGLED_TEXT` as now.
+- Check the pantry's own "Done automatically:" lines (`pantry.py`) aren't doubled.
+- Leave times are said by Themi too (Michael, 2026-11-11, on #199: the reply "needed more
+  confirmation … that the new event had been added (and when) as well as the new time to
+  leave"). A `drive_time` answer with a leave time goes into `ctx.done` word for word, after
+  any done lines. Its line always has when to start getting ready, from their "getting ready
+  takes" setting: "ND psych in person at 1 pm: about 17 min with traffic. Leave around 12:43
+  pm; start getting ready around 12:28 pm." (`drive_to_event` already works this out; reply
+  425's model cut it to "Leave at 12:43 PM."). So reply 426 would have been: "On your
+  calendar: Drop off kid at in-laws, …" then the new leave time(s).
+
+Tests: start with a failing one: reply 426's turn, faked: the model calls
+`add_calendar_event` (auto-done) and `drive_time`, then answers "Leave at 12:43 PM.", which
+it also said last turn. The reply starts with "On your calendar: Drop off kid at in-laws,
+Wed 11 Nov, 12-1 pm …", then the `drive_time` line with its leave time and "start getting
+ready around", and doesn't repeat "Leave at 12:43 PM." on its own. A `drive_time` answer
+the model shortens still reaches them whole, getting ready included (20 min set: 20 min
+before leaving). An address drive ("leaving now") has no getting-ready line. An auto-done change whose
+`said` is set isn't said twice. A staged one (card) isn't put in `done`. A task marked done
+is unchanged.
+Scenario: Michael asks for an event to be added and the drive worked out again, and the
+model's text leaves both out. The reply says it's on his calendar, with its time, and when
+to leave and start getting ready.
+
+Data: none needed. Mark #199 reviewed once F41c and F41d are both live.
+
+Notes: deviation, narrower than the Build: only calendar changes done automatically
+(`SAID_ALWAYS`, executors starting `calendar.`) go into `ctx.done`. A list add's done line
+was said twice ("Added milk to the grocery list." over the model's "Milk's on the grocery
+list."), so everything else keeps the model's words as before. `ToolContext.done_keys`: an
+event's title (`done_subject`) and a leave time ("12:43", no am/pm). `_not_again` in
+`agent.py` drops reply lines naming one, and drops a reply that's word for word
+`said_before` when tools ran ("Done." if nothing's left and nothing was done). `drive_time`
+for an event adds Themi's own leave line: "ND psych in person at 1 pm: about 17 min with
+traffic. Leave around 12:43 pm; start getting ready around 12:28 pm." ("start getting ready
+now" once that's passed, "Time to leave now." after leave-by). An address drive has no leave
+line. Changed test: `test_asked_for_its_made_at_once_and_read_back` asserted "Dentist"
+nowhere in the next turn's context. The reply now says it, so it's in the recent
+conversation; the test checks the context before "Recent conversation:". New tests at the end
+of `test_travel.py`. No golden file changed.
+
+### F41d · Feedback (2026-11-11): a stop on the way: drives from where they'll be, not home
+Status: [x] 2026-11-11
+Depends on: K4, F38b, F41c
+Read first: `themi_google/travel.py` (the module docstring, `_consider`, `drive_to_event`,
+`drive_to_address`, `drive_time`); `add_calendar_event` in `themi_google/events.py` and its
+named places (`themi.standard.places`, "In-laws" found as 790 La Para Ave); F38b (the
+heads-up isn't held by anything). Same report as F41c (bug #199, reply 426).
+
+What the Pi shows:
+- `drive_time` only drives from home. Asked to "recalculate … since we'll leave from my
+  in-laws", the model could only ask for home to Quarry Rd again (17 min, "leaving now").
+- The heads-up job also drives from home for every event. So the 1 pm ND psych heads-up
+  still said to leave home at 12:43, though they'd be at the in-laws from 12.
+- The drop-off was made 12-1 pm. Michael gave no time, so the model made one up, and it runs
+  right up to the 1 pm appointment with no time left to drive there.
+- The drop-off's own heads-up (outbox 1799, "leave around 11:50 am") was held until 8 am the
+  next day. F38b fixes that; it isn't part of this prompt.
+
+Build:
+- `drive_time` gets `from`: an address, a named place ("in-laws") or an event's words, ''
+  for home. The answer says where from: "From the in-laws (790 La Para Ave): about 9 min with
+  traffic. Leave there around 12:51 pm; start getting ready around 12:36 pm." Every leave
+  time says when to start getting ready, from their "getting ready takes" setting (Michael,
+  2026-11-11), wherever they leave from.
+- Back-to-back events: when one of theirs with a place ends 90 minutes or less before the
+  next one with a place starts (the same day, both timed), the next one's drive is from the
+  first one's place. That holds for `drive_time` (event) and for the heads-up job. The
+  heads-up then says "leave the in-laws around 12:51 pm" and comes at getting-ready time, as
+  every heads-up does. The first event's drive is from home as now.
+- `add_calendar_event` gets `before`: an event's words. With no start and end, the stop is
+  timed from what Themi knows, never given a default hour (Michael, 2026-11-11: "the event
+  should be timed with the available knowledge"). Worked back from the event it comes before:
+  1. Leave the stop = the event's start minus the drive from the stop's place to the event's
+     place (TomTom, arriving at the start, with traffic).
+  2. Arrive at the stop = leave the stop minus the time there (15 minutes for a drop-off or
+     pick-up).
+  3. Leave home = arrive at the stop minus the drive from home to the stop (arriving then).
+  4. Start getting ready = leave home minus their "getting ready takes".
+  The event is the stop, from arriving to leaving (12:36-12:51 pm in reply 426's case), at the
+  stop's place. Its done line (F41c) says that time. Then Themi says the leave times itself,
+  each with when to start getting ready: "Leave home around 12:26 pm (start getting ready
+  around 12:11 pm) to reach the in-laws by 12:36; leave there around 12:51 pm for ND psych at
+  1 pm." The heads-ups follow the same chain (the back-to-back rule above). If a place isn't
+  known or a drive can't be found, the stop isn't guessed: Themi asks what time (as `unread`
+  does), saying what it couldn't find. With neither a time nor `before`, a timed thing still
+  isn't guessed: the tool asks for the time.
+- The tool description tells the model: "before X" with no time → `before`, not a start and
+  end it made up.
+- Update the tool descriptions and the travel docstring.
+
+Tests: `drive_time` from "in-laws" to the ND psych event times from 790 La Para Ave
+(TomTom faked) and says "from the in-laws" and when to start getting ready. Two events,
+12:36-12:51 at the in-laws and 1 pm at Quarry Rd: the heads-up for the second drives from
+the in-laws, says when to start getting ready, and comes at that time. With a 2-hour gap it drives from home. `add_calendar_event` with `before: "ND psych"`
+and no times: drives home → in-laws 10 min and in-laws → Quarry Rd 9 min (faked), getting
+ready 15 min. The stop is 12:36-12:51 pm at 790 La Para Ave, and the reply says leave home
+12:26, start getting ready 12:11, leave the in-laws 12:51. Neither end is on the hour unless
+the drives make it so. A stop whose place can't be found asks for the time and adds
+nothing. With no time and no `before` it
+asks.
+Scenario: Michael's request from reply 426, with the model faked to call `add_calendar_event`
+(before "ND psych", location "In-laws") and `drive_time` (event "ND psych", from "in-laws").
+The reply says the drop-off is on the calendar and when, then when to leave home and when to
+leave the in-laws, each with when to start getting ready. At the drop-off's
+leave-by the heads-up comes, and for the appointment the heads-up drives from the in-laws.
+
+Data: Michael's drop-off event (action 645, 12-1 pm on 11 Nov) has passed: nothing to fix.
+Decided here, not with Michael yet: back-to-back means 90 minutes, and a drop-off or pick-up
+takes 15 minutes at the stop. Mark #199 reviewed once F41c and F41d are both live.
+
+Notes: built before F38b (still `[ ]`); nothing here needs it. Until F38b, a heads-up can
+still be held by busy times or the daily limit, as outbox 1799 was. `travel.py`: `Origin`
+(place and label), `origin` (`from`, else `_before`, the back-to-back event, else home),
+`_named_origin` (an event's words that day, a named place, an address; "home" is home),
+`stop_before` → `Stop` (times and Themi's line). Back to back: 90 minutes (`BACK_TO_BACK`),
+the same local day, with a place not at home. The heads-up text from there: "ND psych in
+person at 1 pm, about 9 min from Drop off kid at in-laws (790 La Para Ave) with traffic:
+leave there around 12:51 pm." `drive_time` takes `from`. `add_calendar_event` takes
+`before`: with no start and end, `_stop` times the stop, and `Proposal.then`/`then_keys`
+carry the leave line after the done line (F41c drops the model's repeat of it). A stop that
+can't be timed (no event, no place found) fails with "Ask them what time, and don't make
+one up." and adds nothing. "With neither a time nor `before`, the tool asks": left to the
+tool description ("never make a time up") and `unread`; empty start and end still mean all
+day. The fake gets `leg(a, b, minutes)`. Golden `tools.json` changed for the two new
+arguments (expected). New tests at the end of `test_travel.py`; none changed.
+
 ## Conversation mode
 
 From the spec "Themi AI Agent: Conversation Mode & Silent Sidecar State Engine" (shared
@@ -14090,7 +14357,7 @@ Open decisions (defaults used until Michael says otherwise):
 - The spec's author isn't recorded here yet.
 
 ### EX1a · Expense sheets: the data model, with X1 moved onto it
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: X1
 Read first: this section's intro; X1's notes; the plan's Integrations ("Receipts and
 spending") and Module behaviour D (the takeout budget).
@@ -14119,8 +14386,29 @@ the doc).
 Tests: every X1 test passes unchanged; unit tests for the migration on a copy with chat,
 email and business rows; values keep their lineage.
 
+Notes (2026-11-11):
+- The plan's wording isn't in the doc yet: writing to it was refused in this session (the
+  doc tools needed a permission). The proposed lines are in the session report for Michael
+  to check and add (Integrations: "Expense sheets"; Module behaviour D: "Expense sheets").
+- Deviation, from the core refactor: the code lives in the home pack, not the core.
+  `themi_home.expenses` (not `themi.core.expenses`); the tables are the spending module's own
+  migration track (`src/themi_home/spending_schema/0001_expense_sheets.sql`), not a core
+  migration. `keys.expenses` finds it.
+- Each spend became an entry with the same id, so "spend 3" still names it. Entries carry
+  `origin` (chat, email, website) and `email_id` (the receipt attached, unique), so X1's "one
+  receipt is one meal" stays as it was. Said in chat: `verified`, 1.0, `direct_user_input`.
+  From a receipt: `unverified`, 0.95, `email_receipt`, the Gmail id as the reference.
+- Business or not is which sheet it's on: `mark_business` moves the entry between the
+  household's sheet and its owner's Business sheet. Values whose field the other sheet lacks
+  stay behind (`Expenses.move`). X1's "other" kind is a category on the household sheet.
+- `spending` is a read-only view now (dropped from the spending track; X1's 0060 is left as
+  it was). A later release drops the view.
+- `Expenses.change_listeners` hear (entry, sheet) for every change, and both sheets on a
+  move: EX4b's sync queue listens there.
+- Setup: restart (applies the spending track's 0001).
+
 ### EX1b · Expense sheets: making and filling them in, in chat and on the website
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1a, W1
 Read first: BD1b (the proposed-steps pattern); X1's notes (the Spending page); this
 section's intro.
@@ -14148,8 +14436,34 @@ in chat and adding to it, an estimate later verified, a business book with expen
 and mileage tabs (idea #167). Evals: field
 proposals for ten sheet requests; "pretty sure" and "maybe" read as estimates.
 
+Notes (2026-11-11):
+- `themi_home.expense_sheets.ExpenseSheets` (`keys.expense_sheets`), installed by the
+  spending module. Proposals are kept in `expense_proposals` (spending track 0002); the card
+  ends the turn (`ctx.cards`), and the text after [Change it] is taken by its text handler
+  for six hours. A business proposal is always the person's own; "shared" (we, our) makes it
+  the household's.
+- The AI task `expense_sheet_fields` needed core migration 0164 (the routes table checks task
+  names); everyone starts with their quick-jobs chain, as BD1b.
+- Confidence for an estimate comes from their words in code (`SURE_WORDS`: "pretty sure" 0.8,
+  "maybe" 0.5, "90% sure" 0.9, "about"/"around" 0.7). An amount said with such words is an
+  estimate even when the model didn't flag it. A field with no value given is left out.
+- A said amount with no date is dated today, as X1's spends are (said now).
+- Routing with no sheet named (`ExpenseSheets.route`): "for work"/business/client words go
+  to Business; else the sheet with the longest keyword match (theirs first); else the tool
+  asks which sheet (the turn's model is the "cheap model call").
+- Extra tool: `change_expense_sheet` (rename, move, put away a tab), since tabs can be
+  renamed, reordered and archived from chat too. All in X1's "spending" group.
+- Who checks: whoever the entry is for, or the sheet's owner. [Looks right] is the `expense`
+  button (`action: verify`); EX2a/EX2b put it on their messages, and `entry_actions` lets them
+  add their own actions.
+- Website: Spending lists the books and their tabs; `/spending/sheets/<id>` shows a sheet a
+  month at a time with each value's status as a word and mark (✓ ◐ ≈ ○), its source (Gmail,
+  the calendar event, as links) and how sure, a "Looks right" tick, a form to add one, and
+  for the owner (an admin for the household's) the field editor and the sheet's settings.
+- Setup: restart (core 0164, spending track 0002).
+
 ### EX2a · Expense sheets: filling in from receipts, calendars and chat
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1b, 23, 25, K1
 Read first: 23's notes (`ReceiptFound`); the pantry's receipt reader (`total_cents`);
 K1's notes (what Themi keeps from calendars); this section's intro (confidence by code,
@@ -14174,8 +14488,38 @@ Tests: unit tests for the matcher (amounts, dates, vendor names), the quote chec
 its receipt filling the amount quietly, a receipt for a meal never mentioned. Evals:
 receipts from the fixture set, every filled value quoted.
 
+Notes (2026-11-11):
+- Deviation, from the core refactor: `themi_home.expense_matching` (not
+  `themi.core.expense_matching`) and `themi_home.expense_fill.ExpenseFill`
+  (`keys.expense_fill`), in the spending module.
+- Receipts: the pantry now hands every takeout, shopping and grocery receipt to
+  `ExpenseFill.receipt` (X1's `Spending.from_receipt` goes through it too). A match needs the
+  date within two days and each of amount and vendor the entry has to agree; the receipt's
+  own text naming the entry's place counts ("Your order from Thai Place" from DoorDash). It
+  fills only empty values; what the person said stays. No match: a takeout receipt makes an
+  entry on the household's sheet; others only on a custom sheet whose keywords it has.
+- The quote check for receipts is code's own: the total is kept only when the receipt has it
+  written (`amount_line`, the line kept as the evidence), the vendor only when it's named
+  (else nothing). A total that isn't written but whose line prices all are is their sum
+  (X1's fallback). The receipt reader's schema didn't change.
+- Test changed: X1's scenario `test_a_takeout_receipt_counts_once` sent a second receipt
+  whose email said $25.50 while the scripted model read $31.00. That's the made-up value
+  EX2a drops, so the email now says $31.00 (its input only; every assertion is the same).
+- Calendars: `expenses.fill` (every 10 minutes) looks at entries of the last three days with
+  no vendor (or no purpose, on a business sheet) and the person's `calendar_entries` that
+  day. An event fits when it's a meal (lunch, dinner, coffee...) or names a client already on
+  their sheets (client / who was there). Exactly one place that day, or nothing. The
+  reference is "calendar|event", a link on the website.
+- Chat: an entry said in chat is read once, five minutes or more after it was made, with
+  their messages from half an hour either side (`STRUCTURED_MISC`, in a data block). A value
+  is kept only when its quote is in the chat and the value is in its quote. Misses are
+  logged, never shown.
+- No new messages: fills are quiet. Spending track 0003 adds
+  `expense_entries.context_checked_at`. Eval cases: `tests/evals/receipt_cases.json`.
+- Setup: restart (spending track 0003).
+
 ### EX2b · Expense sheets: when Themi asks
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX2a
 Read first: the plan's Module behaviour A (PDA) and B (timing); B1's notes (breaks); this
 section's intro (the table).
@@ -14195,8 +14539,33 @@ Tests: unit tests per row of the spec's table with a frozen clock, the cancel, S
 scenarios: a dinner asked about the next day, a business week's review, a receipt landing
 in time so nothing is asked. Evals: the questions read as offers, no "you need to".
 
+Notes (2026-11-11):
+- `themi_home.expense_asks.ExpenseAsks` (`keys.expense_asks`), job `expenses.ask` every 15
+  minutes. What was asked is in `expense_asks` (spending track 0004).
+- Deviation, from the core refactor: the settings are the spending module's preferences
+  (`SpendingPreferences`: `expense_ask_after_hours` 24, `expense_review_day` friday,
+  `expense_review_time` 15:00), not `members` columns; My settings → "Expense sheets".
+- Personal and custom sheets: the oldest entry of theirs (two weeks back at most) with a key
+  field empty after the wait is asked about, once, NORMAL priority (the receptivity picks the
+  moment), one question open at a time. Business sheets never get these. A typed answer is
+  taken when it's a Reply to the question, or a bare amount for an amount question ("$84.20",
+  "it was 84 with the tip"); "about 40" is their estimate. [Skip] marks the entry skipped for
+  good, and it leaves the "Needs filling in" list too.
+- Takeback: a receipt that fills the field cancels a queued question (`Outbox.cancel`, via
+  `ExpenseFill.receipt_listeners`); the outbox's refresher for kind `expense` drops one
+  whose field was filled another way just before it goes.
+- The review: kind `expense_review`, once per ISO week, from their day and time on. Kinds
+  `expense` and `expense_review` are in the break, body double, cooking and burnout pauses,
+  so both wait until after (a break is rest). A tap uses a message's whole set of buttons,
+  so a tapped entry's question comes as a reply and the review is edited to the rest of its
+  buttons and [Later] (`ExpenseSheets.entry_actions` may return new buttons).
+- Tests changed for additions: the settings form's field list and section order gain
+  EX2b's (the file lists each prompt's additions), the home modules' Spending case gains
+  `expenses.ask`, the key count 70.
+- Setup: restart (spending track 0004).
+
 ### EX3 · Expense sheets: CSV export with an audit trail
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1b
 Read first: X1's notes (`business.csv`).
 - `/expenses/<sheet id>.csv?from=YYYY-MM-DD&to=YYYY-MM-DD` (default this month): one row
@@ -14209,8 +14578,25 @@ Read first: X1's notes (`business.csv`).
 Tests: unit tests for the columns, permissions, the date range, CSV quoting (vendor names
 with commas); a scenario of the file sent in chat.
 
+Notes (2026-11-11):
+- `themi_home.expense_export`. Columns: `expense` (its number, for the audit trail), the
+  fields, then each field's status (the website's words: Checked, Filled in by Themi, Your
+  estimate, Missing for an empty key field) and confidence (0.95), then `source` (the
+  entry's source types, in field order) and `source link` (each link, space between).
+  Money as 84.20, dates as YYYY-MM-DD.
+- `from` and `to` are both kept; `from` alone is that month; neither is this month. A sheet
+  that isn't theirs, or with CSV off, is a 404 (as if it weren't there); a bad range a 400.
+  The sheet page's "Download this month as CSV" links to it.
+- Chat: `send_expense_sheet` (sheet, month) in the spending group. `Outbox.send_document`
+  (and the Telegram channel's and the channel set's), sent now as a reply with its caption
+  shielded, like BD4b's pictures; the file is the turn's answer (`ctx.cards`). The fake
+  Telegram API answers `sendDocument` and keeps an upload's name, and a document's text.
+- `/spending/business.csv` is X1's, unchanged, now read from the Business sheet (a test
+  says so).
+- No migration.
+
 ### EX4a · Google Sheets connector
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1a, 21, 11
 Read first: the plan's Integrations and Trust tiers; 21's notes (linking and scopes); this
 section's intro.
@@ -14227,8 +14613,35 @@ section's intro.
 Tests: unit tests for the client against the fake, scope checks, the trust category;
 live smoke test (opt-in, `tests/live`).
 
+Notes (2026-11-11):
+- Deviation, from the core refactor: `themi_google.connectors.gsheets` (the Google pack's
+  connectors), not `themi.connectors.gsheets`. `SheetsClient`: `create`, `tabs`, `batch`,
+  `add_tab`, `ids` (column A), `upsert` (header, rows by their hidden id, rows taken out, in
+  one batch); request builders for the rest (`update_sheet`, `delete_sheet`...). Retries as
+  the Gmail client's: a 401 refreshes once; 429/503 raise `SheetsRateLimited` with Google's
+  wait and the caller backs off (EX4b's queue). 403/404 are `SheetsNotFound` (gone, or not
+  Themi's under drive.file).
+- RC1a had added `drive.file` already. A new module, `expense_sync` (a connector, needs
+  spending, Google optional; its own track: 0001 adds the category), declares
+  `ScopeNeed("expense sheets", drive.file)`, so an account without it reads "Link again for
+  the cookbook and expense sheets"; nothing else changes for it. It sits after `recipes` in
+  the family template so that wording keeps the cookbook first. `GOOGLE_SHEETS_URL`
+  overrides the endpoint (fakes only).
+- Trust category `expense_sheet_sync` ("Keep your expense sheets up to date in Google
+  Sheets"): each person's own, Tier 1, may become automatic. The one-approval-a-day rule is
+  EX4b's queue.
+- Fake: `tests/fakes/gsheets_api.py` (`fake_gsheets`), cells with values, notes and
+  colours, hidden columns, tab order, drive.file by owner. The fake Telegram API also keeps an
+  upload's name now (EX3).
+- Tests changed for the new module, as for takeout before it: the planner's "removed with
+  spending" and the menu's "left out with spending" add `expense_sync`; "without the
+  cookbook Drive isn't asked" leaves `expense_sync` out too (it needs Drive as well).
+- README "Google Cloud setup" steps 2 and 13 (the Sheets API, and what linking again means),
+  and a line in DEPLOY.md. Live: `test_a_spreadsheet_round_trip` with `THEMI_LIVE_SHEETS=1`.
+- Setup (Michael): turn on the Google Sheets API in the family's Cloud project; restart.
+
 ### EX4b · Expense sheets: keeping Google Sheets in step
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX4a, EX1b
 Read first: EX4a's notes; this section's intro.
 - When a book is made (or "put this in Google Sheets" for one that already exists),
@@ -14249,6 +14662,41 @@ Read first: EX4a's notes; this section's intro.
 Tests: unit tests for the queue, the cell formatting per status, an update not adding a
 second row, a new sheet becoming a tab; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
 from amber to green, a deleted spreadsheet.
+
+Notes (2026-11-11):
+- All in `themi_home.expense_sync` (`ExpenseSync`, `keys.expense_sync`), the `expense_sync`
+  module; its track's 0002 adds `expense_book_links` (who, which account, a day of failures
+  said) and the queue `expense_sync` (entry, sheet, wanted at, attempts, done at; entry 0
+  is the sheet itself: its tab and header).
+- Offering: a book made in chat asks "Put Kitchen project in Google Sheets? Which account
+  should it live in?" with a button per account that allows Drive, and [Not now]; only when
+  Google is set up and they have such an account (no nagging otherwise). For one that
+  exists: the tool `put_in_google_sheets`. Picking the account is their yes for making it
+  (`stage(..., requested=True)`, executor `expense_sheet_create`): the spreadsheet, a tab
+  per sheet, everything written. Then, unless it's automatic for them already, "Keep this
+  spreadsheet up to date on its own?" [Yes, always] (a locked personal rule,
+  `Rulebook.grant_automatic`) [Ask me]. A household book's copy lives in the account of the
+  person who asked, under their own trust category.
+- The queue is filled from `Expenses.change_listeners` (only for books in Google Sheets),
+  one waiting row per entry; drained by `expense_sync.drain` every 5 minutes. Automatic:
+  written now. Asking: one action per sheet ("Update Kitchen project in Google Sheets (2
+  changes)", executor `expense_sheet_sync`, payload sheet and day); while it's open nothing
+  more is asked; once it's done, the rest of that day's changes are written without asking;
+  declined or lapsed, not asked again that day.
+- Failures back off 1, 5, 15 minutes, 1 and 6 hours (longer when Google says so). A day of
+  failures: one message with the reason in plain words; a sync that works clears it.
+- Cells: hidden column A (the entry id), the fields, Status. Money as a number (84.2), a
+  date as written. Each value's background: green checked, amber filled in by Themi, blue
+  their estimate, red an empty key field ("Missing" in the cell). Each note: "Filled in by
+  Themi, from a receipt email. 95% sure. <link>." The Status column is the least sure value.
+- Deleted in Google: the book forgets the spreadsheet and the owner hears once; changes
+  aren't queued after; `put_in_google_sheets` makes a new one with everything. A tab deleted
+  there is made again with every row; renamed or moved in Themi, it follows; archived in
+  Themi, its tab is deleted (unless it's the only one). `archive_sheet` now tells the
+  change listeners.
+- No account question for a book's new tab: it joins the spreadsheet at the next drain.
+- Setup: restart (expense_sync track 0001-0002). Each person who wants it links a Google
+  account with Drive allowed (most have it for the cookbook).
 
 ## Recipes
 
