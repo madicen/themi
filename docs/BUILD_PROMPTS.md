@@ -381,11 +381,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | SL4 | Slack: pictures, voice clips, reactions, `/themi` | Slack | [x] 2026-11-08 |
 | SL5 | Slack: the work template on Slack | Slack | [x] 2026-11-08 |
 | SL6 | Slack: status sync | Slack | [x] 2026-11-08 |
+| SL7 | Slack: "Add to Themi" from a message (To-dos sync parked) | Slack | parked |
 | MM1 | Morning message: greeting and calendar only | Morning message | [x] 2026-11-11 |
 | MM2 | Morning message: the morning tray | Morning message | [x] 2026-11-11 |
 | MM3 | Morning message: Today's tasks and Email | Morning message | [x] 2026-11-11 |
 | MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
 | MM5 | Morning message: a weather line when it's noteworthy | Morning message | [ ] deferred |
+| WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 
 ## Fixed technical choices
 
@@ -17949,6 +17951,20 @@ Notes (2026-11-08):
 - The manifest asks for the user scopes `users.profile:write` and `dnd:write`, so an
   existing install has to be reinstalled (and re-approved) to give the user token.
 
+### SL7 · Slack: "Add to Themi" from a message (To-dos sync parked)
+Status: parked (2026-11-12)
+Depends on: SL6
+From /idea #1 (2026-11-10): "have themi sync with the slack todo list". Michael means
+Slack's To-dos (Later, renamed in October 2026). Slack has no public API for them: the
+2023 changelog says items saved for Later are invisible to apps and `stars.*` is frozen,
+and the official Slack MCP server has no tool for them. Third-party MCP servers reach them
+through the web app's internal `saved.*` methods with a browser session, which Themi won't
+use. Full sync waits for an official API.
+- When picked up: a way to turn a Slack message into a Themi task from Slack itself. Either
+  a message shortcut ("Add to Themi", a `message_action` through SL2's dispatcher) or an
+  agreed emoji reaction on any message the bot can see. The task links back to the message
+  (`chat.getPermalink`). Decide which with Michael first.
+
 ## Morning message
 
 Design source: the [Themi Morning Message Plan](https://claude.ai/artifact/LNbbgK5EV6rsTMXk2J6cja).
@@ -18055,3 +18071,60 @@ Status: [ ] deferred (Michael, 2026-11-11: after MM4, needs a weather source)
 Depends on: MM4
 - One line under the calendar only when the day's weather is noteworthy (rain, freezing).
   Needs a weather connector first; nothing on fair days.
+
+## Website chat
+
+From /idea #2 (2026-11-12): "The website chat should be improved with the features that
+exist in the simulator". The simulator is `tools/dev/simulator.html`; the website chat is
+CR20b's `themi/standard/web_chat.py`. The simulator's dev tools (skipping time, the
+control panel, the Shadow Calendar's numbers, Copy session) stay in the simulator.
+
+### WC1 · Website chat: live, typing, reactions, replies, edits
+Status: [x] 2026-11-12
+Depends on: CR20b
+Read first: `themi/standard/web_chat.py`, `templates/chat.html`, `tools/dev/simulator.html`,
+`themi/channels/base.py` (`Reactions`), `tests/scenarios/test_web_chat.py`.
+- Live: the conversation is a fragment (`GET /chat/log`) the page polls with htmx while the
+  tab is visible. The page sends the version it has (the newest id and change), and the
+  answer is 204 when nothing changed, so an idle page swaps nothing.
+- Sending with htmx doesn't reload: the message is kept and shown at once, and the agent
+  answers in a background task the channel keeps hold of. Without JavaScript the form posts
+  and redirects as before, answering before the redirect.
+- "Themi is typing…" while the channel's `typing` block runs for that member.
+- Edits show "edited" (`edited_at`).
+- Reactions: under each of Themi's messages, 👍 👎 ✅ 💤 (one at a time, as on Telegram; a
+  second tap takes it off). Adding one is a `reaction` event, so approvals, 👎 marks,
+  reply verdicts and snoozes work as in Telegram. The channel implements `react`, so
+  Themi's own 👀 and ✍ show on their messages.
+- Reply: ↩ on any message sets the message the next one replies to (shown above the box,
+  with ✕ to drop it). The event carries `reply_to_message_id` (so `/bug` as a reply works)
+  and the bubble shows a quote of what it answered.
+- Bubbles: theirs on the right, Themi's on the left, buttons under Themi's, works at phone
+  width.
+- Not in this prompt: pictures and voice (sending files from the site, `send_photo`).
+Tests: htmx send returns at once and the answer appears in the log; 204 when nothing
+changed; typing shows while the agent runs; an edit shows "edited"; a ✅ on an approval
+card approves it; Themi's reaction shows; a reply carries `reply_to_message_id` and
+shows its quote; someone else's message can't be reacted to or replied to.
+
+Notes (2026-11-12):
+- `_chat_log.html` is the conversation; `chat.html` includes it. Its `data-version` is a
+  hash of what it shows (messages, edits, reactions, typing, a notice), so `GET
+  /chat/log?v=` answers 204 without rendering while nothing changed.
+- The site's CSP forbids inline scripts and htmx's eval-based trigger filters, so the
+  behaviour is in `static/chat.js`: no polling while the tab is hidden (cancelled in
+  `htmx:beforeRequest`), staying at the bottom only when you were there, Enter sends
+  (Shift+Enter for a new line), ↩ Reply without a reload.
+- `WebChatChannel.receive(..., wait=False)` and `press(..., wait=False)` hand the event on
+  in a task the channel keeps (`settle()` waits for them; `stop()` calls it). Plain form
+  posts still wait, so the page works without JavaScript; ↩ is then a link
+  (`/chat?reply=ID`).
+- Migration 0002 on the `web_chat` track: `reactions` (on Themi's message, the member's;
+  on theirs, Themi's) and `reply_to`. `react_as` only offers 👍 👎 ✅ 💤.
+- Taps on buttons answer with the log under htmx too, and don't wait for the agent.
+- `make test-all` locally: 4 tests in test_settings, test_dev_setups and test_dev_fakes
+  fail on Michael's machine because they read the working copy's `data/dev/themi.toml`
+  and `data/secret.key`; they pass in a copy without `data/`. Unrelated to WC1, but those
+  tests should get an isolated working directory (follow-up).
+- Not done: pictures and voice from the site. Not checked in a real browser (no Chrome
+  here); try `make fresh` and /chat.
