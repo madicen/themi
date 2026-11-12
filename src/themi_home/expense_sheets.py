@@ -284,6 +284,7 @@ class ExpenseSheets:
             verify_expense,
             move_expense,
             expense_summary,
+            send_expense_sheet,
         ):
             s.tools.register(t)
 
@@ -863,3 +864,32 @@ async def expense_summary(ctx: ToolContext, args: dict[str, Any]) -> str:
     if not sheet.counts_as_spending:
         lines.append("This sheet isn't counted as spending.")
     return "\n".join(lines)
+
+
+@tool(
+    "send_expense_sheet",
+    "Send one of their expense sheets as a CSV file in chat ('send me the travel sheet for "
+    "October'). sheet: its name; month: 'YYYY-MM', or '' for this one. The file has each "
+    "value's status, how sure Themi is, and where it came from.",
+    {"sheet": {"type": "string"}, "month": {"type": "string"}},
+)
+async def send_expense_sheet(ctx: ToolContext, args: dict[str, Any]) -> str:
+    from themi_home import expense_export as export
+    from themi_home.spending import month_of
+
+    sheets = _sheets(ctx)
+    sheet = sheets.find_sheet(ctx.member, str(args.get("sheet") or ""))
+    if not sheet.csv_enabled:
+        raise ToolFailed(f"{sheet.title} isn't offered as CSV (its settings on the website).")
+    first = month_of(str(args.get("month") or ""), sheets.today())
+    start, end = export.month_range(first)
+    text = export.sheet_csv(sheets, sheet, start, end)
+    count = len(text.splitlines()) - 1
+    caption = f"{sheet.title}, {first:%B %Y}: {count} {'entry' if count == 1 else 'entries'}."
+    sent = await ctx.services.outbox.send_document(
+        ctx.member, text.encode("utf-8"), export.filename(sheet, start, end), caption
+    )
+    if sent is None:
+        raise ToolFailed("The file couldn't be sent just now. The website's Spending page has it.")
+    ctx.cards.append(f"expense sheet {sheet.id} as a file")
+    return f"Sent the file: {caption}"

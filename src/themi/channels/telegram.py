@@ -651,6 +651,20 @@ class TelegramChannel:
                                sent.message_id)  # fmt: skip
         return sent.message_id
 
+    async def send_document(
+        self, member: Member, data: bytes, filename: str, caption: str = "", *,
+        kind: str = "document",
+    ) -> int:  # fmt: skip
+        """A file they asked for (EX3: an expense sheet's CSV), to their own chat."""
+        sent = await self._with_flood_retry(
+            lambda: self.bot.send_document(
+                _chat_id(member), data, filename=filename, caption=caption or None
+            )
+        )
+        self.store.log_message(member.id, "out", f"[file {filename}] {caption}".strip(), kind,
+                               sent.message_id)  # fmt: skip
+        return sent.message_id
+
     async def publish_commands(self, commands: Sequence[tuple[str, str]]) -> None:
         """Show the commands in Telegram's menu: (name without slash, description)."""
         await self.bot.set_my_commands([BotCommand(name, words) for name, words in commands])

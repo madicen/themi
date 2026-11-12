@@ -287,7 +287,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX1b | Expense sheets: making and filling them in, in chat and on the website | Expense sheets | [x] 2026-11-11 |
 | EX2a | Expense sheets: filling in from receipts, calendars and chat | Expense sheets | [x] 2026-11-11 |
 | EX2b | Expense sheets: when Themi asks | Expense sheets | [x] 2026-11-11 |
-| EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [ ] |
+| EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [x] 2026-11-11 |
 | EX4a | Google Sheets connector | Expense sheets | [ ] |
 | EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
@@ -14565,7 +14565,7 @@ Notes (2026-11-11):
 - Setup: restart (spending track 0004).
 
 ### EX3 · Expense sheets: CSV export with an audit trail
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX1b
 Read first: X1's notes (`business.csv`).
 - `/expenses/<sheet id>.csv?from=YYYY-MM-DD&to=YYYY-MM-DD` (default this month): one row
@@ -14577,6 +14577,23 @@ Read first: X1's notes (`business.csv`).
   gains `send_document` (fake in `tests/fakes/telegram_api.py`).
 Tests: unit tests for the columns, permissions, the date range, CSV quoting (vendor names
 with commas); a scenario of the file sent in chat.
+
+Notes (2026-11-11):
+- `themi_home.expense_export`. Columns: `expense` (its number, for the audit trail), the
+  fields, then each field's status (the website's words: Checked, Filled in by Themi, Your
+  estimate, Missing for an empty key field) and confidence (0.95), then `source` (the
+  entry's source types, in field order) and `source link` (each link, space between).
+  Money as 84.20, dates as YYYY-MM-DD.
+- `from` and `to` are both kept; `from` alone is that month; neither is this month. A sheet
+  that isn't theirs, or with CSV off, is a 404 (as if it weren't there); a bad range a 400.
+  The sheet page's "Download this month as CSV" links to it.
+- Chat: `send_expense_sheet` (sheet, month) in the spending group. `Outbox.send_document`
+  (and the Telegram channel's and the channel set's), sent now as a reply with its caption
+  shielded, like BD4b's pictures; the file is the turn's answer (`ctx.cards`). The fake
+  Telegram API answers `sendDocument` and keeps an upload's name, and a document's text.
+- `/spending/business.csv` is X1's, unchanged, now read from the Business sheet (a test
+  says so).
+- No migration.
 
 ### EX4a · Google Sheets connector
 Status: [ ]

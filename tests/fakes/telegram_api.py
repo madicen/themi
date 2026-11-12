@@ -319,7 +319,11 @@ class FakeTelegram:
         params: dict[str, Any] = {}
         for key, value in form.items():
             if not isinstance(value, str):  # an upload (BD4b's pictures): its size is kept
-                params[f"{key}_bytes"] = len(await value.read())
+                data = await value.read()
+                params[f"{key}_bytes"] = len(data)
+                params[f"{key}_name"] = value.filename or ""  # EX3: a file's name and text
+                if key == "document":
+                    params["document_text"] = data.decode("utf-8", "replace")
                 continue
             try:
                 params[key] = json.loads(value)
@@ -379,6 +383,19 @@ class FakeTelegram:
                 "from": BOT_USER,
                 "caption": params.get("caption", ""),
                 "photo": [{"file_id": "p1", "file_unique_id": "up1", "width": 1, "height": 1}],
+            }
+        if method == "sendDocument":  # EX3
+            return {
+                "message_id": next(self._message_ids),
+                "date": next(self._dates),
+                "chat": self._chat(int(params["chat_id"]), "private"),
+                "from": BOT_USER,
+                "caption": params.get("caption", ""),
+                "document": {
+                    "file_id": "d1",
+                    "file_unique_id": "ud1",
+                    "file_name": params.get("document_name", ""),
+                },
             }
         if method == "getFile":
             file_id = params["file_id"]

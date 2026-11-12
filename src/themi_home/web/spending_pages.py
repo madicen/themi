@@ -21,6 +21,7 @@ from themi.accounts import InvalidValue
 from themi.core import keys
 from themi.core.tools import ToolFailed
 from themi.web.kit import Kit
+from themi_home import expense_export as export
 from themi_home.expense_sheets import ExpenseSheets, parse_value, show
 from themi_home.expenses import (
     FIELD_TYPES,
@@ -117,6 +118,28 @@ def routes(kit: Kit) -> APIRouter:
             spending().business_csv(session.member, first),
             media_type="text/csv",
             headers={"Content-Disposition": f'attachment; filename="business-{first:%Y-%m}.csv"'},
+        )
+
+    @router.get("/expenses/{sheet_id}.csv")
+    def sheet_csv(request: Request, sheet_id: int) -> Response:
+        """EX3: a sheet as CSV, with each value's status, how sure, and where it came from."""
+        found = visible(request, sheet_id)
+        if found is None or not found[1].csv_enabled:
+            return Response("There's no such sheet to download.", status_code=404)
+        _, sheet = found
+        try:
+            start, end = export.read_range(
+                request.query_params.get("from", ""),
+                request.query_params.get("to", ""),
+                sheets().today(),
+            )
+        except export.RangeError as exc:
+            return Response(f"{exc}.", status_code=400)
+        name = export.filename(sheet, start, end)
+        return Response(
+            export.sheet_csv(sheets(), sheet, start, end),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
     def visible(request: Request, sheet_id: int) -> tuple[Any, Sheet] | None:

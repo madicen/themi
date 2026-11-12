@@ -508,6 +508,23 @@ class Outbox:
             log.exception("A picture for member %s couldn't be sent", member.id)
             return None
 
+    async def send_document(
+        self, member: Member, data: bytes, filename: str, caption: str = "", *,
+        kind: str = "document",
+    ) -> int | None:  # fmt: skip
+        """A file they asked for (EX3: an expense sheet as CSV), sent now as a reply. The
+        caption is shielded like any message. None when the channel can't send files or it
+        failed."""
+        send = getattr(self.sender, "send_document", None)
+        if send is None:
+            return None
+        try:
+            shielded = await self.shield.apply(caption, member, kind=CallKind.INTERACTIVE)
+            return await send(member, data, filename, shielded.text, kind=kind)
+        except Exception:
+            log.exception("A file for member %s couldn't be sent", member.id)
+            return None
+
     async def _deliver(self, row: dict[str, Any]) -> OutboxResult:
         if row["id"] in self._sending:
             return OutboxResult("queued", row["id"])

@@ -155,6 +155,15 @@ class ChannelSet:
             raise NotImplementedError("this channel can't send pictures")
         return await send(member, photo, caption, kind=kind)
 
+    async def send_document(
+        self, member: Member, data: bytes, filename: str, caption: str = "", *,
+        kind: str = "document",
+    ) -> int:  # fmt: skip
+        send: Any = getattr(self.channel_for(member), "send_document", None)
+        if send is None:
+            raise NotImplementedError("this channel can't send files")
+        return await send(member, data, filename, caption, kind=kind)
+
     async def react(self, member: Member, message_id: int, emoji: str) -> None:
         react: Any = getattr(self.channel_for(member), "react", None)
         if react is not None:

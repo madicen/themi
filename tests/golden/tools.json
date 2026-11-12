@@ -355,6 +355,10 @@
     "group": "web",
     "spec": "95c8809db2f4"
   },
+  "send_expense_sheet": {
+    "group": "spending",
+    "spec": "69e87ef3c239"
+  },
   "send_step_picture": {
     "group": "body_double",
     "spec": "fb190e49bee3"

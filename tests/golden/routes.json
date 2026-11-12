@@ -15,6 +15,7 @@
   "GET /claim/key",
   "GET /dev",
   "GET /email/noise",
+  "GET /expenses/{sheet_id}.csv",
   "GET /family",
   "GET /guides",
   "GET /health",

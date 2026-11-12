@@ -210,6 +210,7 @@ SPENDING = ToolGroup(
         "Add a mileage tab to the business spreadsheet",
         "About $40 on paint for the kitchen project, pretty sure",
         "The Merit one is right",
+        "Send me the travel sheet for October",
     ),
     tools=(
         "log_spending",
@@ -222,6 +223,7 @@ SPENDING = ToolGroup(
         "verify_expense",
         "move_expense",
         "expense_summary",
+        "send_expense_sheet",
     ),
     order=120,
 )
