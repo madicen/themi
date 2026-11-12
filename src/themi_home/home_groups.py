@@ -211,6 +211,7 @@ SPENDING = ToolGroup(
         "About $40 on paint for the kitchen project, pretty sure",
         "The Merit one is right",
         "Send me the travel sheet for October",
+        "Put the kitchen project in Google Sheets",
     ),
     tools=(
         "log_spending",
@@ -224,6 +225,7 @@ SPENDING = ToolGroup(
         "move_expense",
         "expense_summary",
         "send_expense_sheet",
+        "put_in_google_sheets",
     ),
     order=120,
 )

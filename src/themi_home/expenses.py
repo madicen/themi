@@ -453,6 +453,7 @@ class Expenses:
             raise InvalidValue("a built-in sheet stays")
         now = to_utc_iso(clock.now())
         self.db.execute("UPDATE expense_sheets SET archived_at = ? WHERE id = ?", (now, sheet_id))
+        self._sheet_changed(sheet_id)  # EX4b: its tab in Google Sheets goes
         if not self.sheets(sheet.book_id):
             self.db.execute(
                 "UPDATE expense_books SET archived_at = ? WHERE id = ?", (now, sheet.book_id)

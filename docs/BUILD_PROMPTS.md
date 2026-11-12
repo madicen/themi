@@ -289,7 +289,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | EX2b | Expense sheets: when Themi asks | Expense sheets | [x] 2026-11-11 |
 | EX3 | Expense sheets: CSV export with an audit trail | Expense sheets | [x] 2026-11-11 |
 | EX4a | Google Sheets connector | Expense sheets | [x] 2026-11-11 |
-| EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [ ] |
+| EX4b | Expense sheets: keeping Google Sheets in step | Expense sheets | [x] 2026-11-11 |
 | RC1a | Recipes: the cookbook, read from Google Docs | Recipes | [x] 2026-11-06 |
 | RC1b | Recipes: finding and showing one in chat | Recipes | [x] 2026-11-06 |
 | RC2a | Recipes: ingredients onto the grocery list | Recipes | [x] 2026-11-06 |
@@ -14641,7 +14641,7 @@ Notes (2026-11-11):
 - Setup (Michael): turn on the Google Sheets API in the family's Cloud project; restart.
 
 ### EX4b · Expense sheets: keeping Google Sheets in step
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: EX4a, EX1b
 Read first: EX4a's notes; this section's intro.
 - When a book is made (or "put this in Google Sheets" for one that already exists),
@@ -14662,6 +14662,41 @@ Read first: EX4a's notes; this section's intro.
 Tests: unit tests for the queue, the cell formatting per status, an update not adding a
 second row, a new sheet becoming a tab; scenarios: a receipt fill reaching the spreadsheet, a verify turning the cells
 from amber to green, a deleted spreadsheet.
+
+Notes (2026-11-11):
+- All in `themi_home.expense_sync` (`ExpenseSync`, `keys.expense_sync`), the `expense_sync`
+  module; its track's 0002 adds `expense_book_links` (who, which account, a day of failures
+  said) and the queue `expense_sync` (entry, sheet, wanted at, attempts, done at; entry 0
+  is the sheet itself: its tab and header).
+- Offering: a book made in chat asks "Put Kitchen project in Google Sheets? Which account
+  should it live in?" with a button per account that allows Drive, and [Not now]; only when
+  Google is set up and they have such an account (no nagging otherwise). For one that
+  exists: the tool `put_in_google_sheets`. Picking the account is their yes for making it
+  (`stage(..., requested=True)`, executor `expense_sheet_create`): the spreadsheet, a tab
+  per sheet, everything written. Then, unless it's automatic for them already, "Keep this
+  spreadsheet up to date on its own?" [Yes, always] (a locked personal rule,
+  `Rulebook.grant_automatic`) [Ask me]. A household book's copy lives in the account of the
+  person who asked, under their own trust category.
+- The queue is filled from `Expenses.change_listeners` (only for books in Google Sheets),
+  one waiting row per entry; drained by `expense_sync.drain` every 5 minutes. Automatic:
+  written now. Asking: one action per sheet ("Update Kitchen project in Google Sheets (2
+  changes)", executor `expense_sheet_sync`, payload sheet and day); while it's open nothing
+  more is asked; once it's done, the rest of that day's changes are written without asking;
+  declined or lapsed, not asked again that day.
+- Failures back off 1, 5, 15 minutes, 1 and 6 hours (longer when Google says so). A day of
+  failures: one message with the reason in plain words; a sync that works clears it.
+- Cells: hidden column A (the entry id), the fields, Status. Money as a number (84.2), a
+  date as written. Each value's background: green checked, amber filled in by Themi, blue
+  their estimate, red an empty key field ("Missing" in the cell). Each note: "Filled in by
+  Themi, from a receipt email. 95% sure. <link>." The Status column is the least sure value.
+- Deleted in Google: the book forgets the spreadsheet and the owner hears once; changes
+  aren't queued after; `put_in_google_sheets` makes a new one with everything. A tab deleted
+  there is made again with every row; renamed or moved in Themi, it follows; archived in
+  Themi, its tab is deleted (unless it's the only one). `archive_sheet` now tells the
+  change listeners.
+- No account question for a book's new tab: it joins the spreadsheet at the next drain.
+- Setup: restart (expense_sync track 0001-0002). Each person who wants it links a Google
+  account with Drive allowed (most have it for the cookbook).
 
 ## Recipes
 

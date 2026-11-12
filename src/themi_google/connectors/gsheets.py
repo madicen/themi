@@ -16,7 +16,7 @@ backs off (as the Gmail client's callers do): the client itself never waits.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -153,7 +153,7 @@ def append_cells(tab_id: int, rows: Sequence[Sequence[Cell]]) -> dict[str, Any]:
 def upsert_requests(
     tab_id: int,
     header: Sequence[str],
-    rows: dict[str, Sequence[Cell]],
+    rows: Mapping[str, Sequence[Cell]],
     existing: Sequence[str],
     *,
     remove: Sequence[str] = (),
@@ -234,7 +234,7 @@ class SheetsClient:
         spreadsheet_id: str,
         tab: Tab,
         header: Sequence[str],
-        rows: dict[str, Sequence[Cell]],
+        rows: Mapping[str, Sequence[Cell]],
         *,
         remove: Sequence[str] = (),
     ) -> None:

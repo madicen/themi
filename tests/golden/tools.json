@@ -267,6 +267,10 @@
     "group": "core",
     "spec": "7c3fea3908ae"
   },
+  "put_in_google_sheets": {
+    "group": "spending",
+    "spec": "a833ead55ff0"
+  },
   "put_list_on_wall": {
     "group": "lists",
     "spec": "849519f508b9"
