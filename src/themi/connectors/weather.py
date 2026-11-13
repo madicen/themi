@@ -30,7 +30,7 @@ OPEN_METEO_URL = "https://api.open-meteo.com"
 NWS_URL = "https://api.weather.gov"
 ALERT_KINDS = ("Warning", "Watch", "Advisory")  # not statements or outlooks
 USER_AGENT = "Themi household assistant (self-hosted; one family)"
-TIMEOUT = 20.0
+TIMEOUT = 8.0  # per phase (connect, read): both inside the portal Test's 20 s wait
 HOURLY = (
     "precipitation_probability",
     "precipitation",

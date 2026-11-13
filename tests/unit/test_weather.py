@@ -12,9 +12,11 @@ from tests.fakes.modules import module_context
 from tests.fakes.weather import FakeWeather
 from tests.fixtures.family import SeededFamily
 from themi import clock
+from themi.connectors import weather as weather_client
 from themi.connectors.weather import Forecast
 from themi.core import keys
 from themi.modules.base import ModuleSetup
+from themi.modules.portal import TEST_WITHIN
 from themi.modules.settings import SettingsProblem, read_settings
 from themi.standard.weather import Weather, WeatherModule, WeatherSettings
 from themi.storage.migrations import current_version
@@ -132,6 +134,13 @@ async def test_test_fetches_one_forecast_and_says_what_went_wrong() -> None:
     assert await module.check() == (
         "The weather service didn't answer: the weather service said 503"
     )
+
+
+def test_a_stalled_service_gives_its_own_reason_before_test_gives_up() -> None:
+    """Bug 2026-11-13: Open-Meteo hung in the TLS handshake and Test said only "didn't
+    answer within 20 seconds". httpx's limit is per phase, so connecting and reading
+    together must finish inside Test's wait for the client's own reason to be shown."""
+    assert 2 * weather_client.TIMEOUT < TEST_WITHIN
 
 
 # ----- the stored forecast ---------------------------------------------------------------
