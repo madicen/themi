@@ -56,7 +56,7 @@ CALENDAR = ToolGroup(
         "calendar|appointment|meeting|event|today|tomorrow|tonight|yesterday|(?:morni"
         "ng|afternoon|evening)(?!s?\\s+routines?)|day look|what'?s on|monday|tuesday|w"
         "ednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|block|t"
-        "ime for|find (?:me )?time|summary"
+        "ime for|find (?:me )?time|summary|my week|the week|week ahead"
     ),
     examples=(
         "What's on my calendar today?",
@@ -72,6 +72,7 @@ CALENDAR = ToolGroup(
         "Find me a free hour this week for the taxes",
         "Set aside Sunday afternoon for meal prep",
         "What's coming up next week?",
+        "Show me my week",
     ),
     tools=(
         "add_calendar_event",
@@ -83,6 +84,7 @@ CALENDAR = ToolGroup(
         "drive_time",
         "block_time_for_task",
         "find_time_for_task",
+        "show_week",  # DC6
     ),
     order=20,
 )

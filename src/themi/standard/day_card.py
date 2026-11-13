@@ -201,16 +201,20 @@ class DayCard:
             name=member.name,
             day=day,
             start=start,
-            events=tuple(self._events(member, day, start)),
+            events=tuple(self.events(member, day, start)),
             weather=self._weather(start),
             waiting=self._waiting(member, day),
         )
 
-    def _events(self, member: Member, day: date, start: datetime) -> list[CardEvent]:
+    def events(
+        self, member: Member, day: date, start: datetime, *, travel: bool = True
+    ) -> list[CardEvent]:
+        """The day's events as the card draws them; `travel=False` without lead-ins (the
+        week ahead, DC6)."""
         summary = self.services.maybe(keys.day_summary)
         if summary is None:
             return []
-        travel = self.services.maybe(keys.travel)
+        travel_times = self.services.maybe(keys.travel) if travel else None
         tz = self._tz()
         out: list[CardEvent] = []
         for i, (entry, whose) in enumerate(summary.events(member, day, partner=True)):
@@ -230,7 +234,7 @@ class DayCard:
                     all_day=entry.all_day,
                 )
             )
-            lead = self._lead_in(travel, member, entry, kind, start)
+            lead = self._lead_in(travel_times, member, entry, kind, start)
             if lead is not None:
                 leave = entry.starts_at.astimezone(tz) - timedelta(minutes=lead)
                 out.append(

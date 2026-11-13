@@ -396,7 +396,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC3 | Day card: the day card | Day card | [x] 2026-11-13 |
 | DC4 | Day card: pictures in the outbox | Day card | [x] 2026-11-13 |
 | DC5 | Day card: the morning picture | Day card | [x] 2026-11-13 |
-| DC6 | Day card: the week ahead | Day card | [ ] |
+| DC6 | Day card: the week ahead | Day card | [x] 2026-11-13 |
 | DC7 | Day card: today on the website | Day card | [ ] |
 | DC8 | Day card: weather on request | Day card | [ ] |
 | DC9 | Day card: the chore chart | Day card | [ ] |
@@ -18573,12 +18573,27 @@ Notes:
   is, from WX1).
 
 ### DC6 · Day card: the week ahead
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC5
 Read first: the plan's "Other uses".
 - WX1's forecast to 7 days (daily fields only past day 2); a week layout and template;
   "show my week" and `/week`, on request only.
 Tests: golden SVGs, a scenario.
+
+Notes:
+- WX1's call now asks for 7 forecast days (`FORECAST_DAYS`), hourly for all of them, and
+  the daily `weather_code` and `precipitation_probability_max`: `Day` gained `code` and
+  `chance` (0 in a forecast stored before). The fake weather serves yesterday and seven
+  days, and `day(..., code=)`. Test changed for wiring this prompt moved: the client test's
+  hour count (24 x 8) and `forecast_days` "7".
+- `themi.standard.week_card`: `WeekCard` (`drawings.week_card`) with `data`, `svg`, `png`
+  and `send` (the picture as a reply, captioned "Your week ahead."; the week in words
+  when it can't be drawn or the channel shows no pictures). A landscape card, 840 x 560
+  drawn at 1680 x 1120: seven columns on one hour axis (8 am to 9 pm, wider for an earlier
+  or later event), today's column shaded. `DayCard.events(..., travel=False)` is shared.
+- The `show_week` tool (in the calendar group, which gained "my week", "the week", "week
+  ahead" and an example) and `/week`. Golden files changed as this prompt says: tools.json
+  gains `show_week`, handlers.json gains `/week`.
 
 ### DC7 · Day card: today on the website
 Status: [ ]

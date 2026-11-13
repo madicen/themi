@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from pydantic import field_validator
 
 from themi.accounts.preferences import Preferences
+from themi.core import groups, keys
+from themi.core.tools import ToolContext, ToolFailed, tool
 from themi.drawing.render import Renderer
 from themi.drawing.svg import write_svg
 from themi.modules import Module
@@ -43,8 +45,6 @@ class DrawingsPreferences(Preferences):
     @classmethod
     def on_form(cls, services: Any, member: Any) -> set[str] | None:
         """Shown in the good-morning message's row: not there without it."""
-        from themi.core import keys
-
         return None if services.maybe(keys.day_summary) is not None else set()
 
     @field_validator("picture_counts")
@@ -67,10 +67,12 @@ class Drawings:
 
     def __init__(self, services: Services, renderer: Renderer | None = None) -> None:
         from themi.standard.day_card import DayCard  # it reads this module's preferences
+        from themi.standard.week_card import WeekCard
 
         self.services = services
         self.renderer = renderer or Renderer()
         self.day_card = DayCard(services)  # DC3
+        self.week_card = WeekCard(services, self.day_card)  # DC6
 
     def install(self) -> None:
         pass
@@ -82,11 +84,31 @@ class Drawings:
             return None
         return await self.day_card.png(member, self.day_card.today(member))
 
+    async def week_command(self, member: Member, text: str) -> None:
+        """`/week` (DC6)."""
+        await self.week_card.send(member)
+
     def svg(self, template: str, extra: Sequence[Path] = (), **values: Any) -> str:
         return write_svg(template, extra, **values)
 
     async def png(self, svg: str, width: int | None = None) -> bytes | None:
         return await self.renderer.png(svg, width)
+
+
+@tool(
+    "show_week",
+    "Sends them a picture of their week ahead: the next seven days' events at their times, "
+    "and each day's weather. For 'show me my week', 'what does my week look like?'. It's "
+    "sent to them as it is: don't describe it; a short line at most. Never mention energy.",
+    {},
+)
+async def show_week(ctx: ToolContext, args: dict[str, Any]) -> str:
+    drawings = ctx.services.maybe(keys.drawings)
+    if drawings is None:
+        raise ToolFailed("Pictures aren't set up.")
+    pictured = await drawings.week_card.send(ctx.member)
+    ctx.answered.append("show_week")
+    return "Sent their week as a picture." if pictured else "Sent their week, in words."
 
 
 class DrawingsModule(Module):
@@ -97,6 +119,7 @@ class DrawingsModule(Module):
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences
+    tool_groups = (groups.CALENDAR,)  # show_week (DC6)
 
     def __init__(self, renderer: Renderer | None = None) -> None:
         self.renderer = renderer
@@ -114,3 +137,5 @@ class DrawingsModule(Module):
         drawings = ctx.provide(Drawings(ctx.services, self.renderer))
         drawings.install()
         ctx.services.outbox.pictures[DAY_CARD] = drawings.morning_picture  # DC5
+        ctx.tool(show_week)  # DC6
+        ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")

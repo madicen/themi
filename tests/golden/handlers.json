@@ -46,6 +46,7 @@
     "rules",
     "familygroup",
     "break",
+    "week",
     "burnout",
     "bodydouble",
     "pause",
@@ -70,7 +71,8 @@
     "/resume",
     "/rules",
     "/site",
-    "/tracking"
+    "/tracking",
+    "/week"
   ],
   "event_commands": [
     "/bug",

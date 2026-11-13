@@ -475,6 +475,10 @@
     "group": "wall",
     "spec": "f8ff3c412b5a"
   },
+  "show_week": {
+    "group": "calendar",
+    "spec": "587b1600a30e"
+  },
   "skip_round": {
     "group": "core",
     "spec": "e4389017e9db"
