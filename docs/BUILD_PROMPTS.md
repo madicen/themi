@@ -388,7 +388,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
 | WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [x] 2026-11-12 |
 | WX2 | Weather: what's noteworthy | Weather | [x] 2026-11-12 |
-| WX3 | Weather: NWS alerts in the US | Weather | [ ] |
+| WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [ ] |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 
@@ -18253,7 +18253,7 @@ Notes:
   before noon, else "tonight".
 
 ### WX3 · Weather: NWS alerts in the US
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: WX2
 Read first: the plan's rank 1 rule and its edge cases.
 - `alerts/active?point=lat,lon` each refresh when alerts are on. `auto`: one `points`
@@ -18263,6 +18263,18 @@ Read first: the plan's rank 1 rule and its edge cases.
   Open-Meteo rules running.
 Tests: on the fake transport: a warning, an advisory outside the window, a statement
 skipped, outside the US, NWS down.
+
+Notes:
+- `WeatherClient.in_us` and `alerts` (`Accept: application/geo+json`). Kept: `status`
+  Actual, not a Cancel, an event ending in Warning, Watch or Advisory; it runs from
+  `onset` (else `effective`) to `ends` (else `expires`).
+- Migration 0002 on the `weather` track: `weather_home` (the place asked about, and
+  whether it's in the US). A failed `points` call is tried again next refresh.
+- The line: the gravest alert in force during the waking day (warning, then watch, then
+  advisory, then the earliest): "Winter Storm Warning from 6 pm." or, when it's already in
+  force, "Heat Advisory in effect today." NWS failing gives no alerts (logged once).
+- Tests changed for wiring this prompt moved: WX1's track version (now 2) and the moved
+  home test (the last call is now the alerts call).
 
 ### MM5 · Morning message: a weather line when it's noteworthy
 Status: [ ]

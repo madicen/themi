@@ -1,9 +1,13 @@
-"""Today's weather at home (WX1; the Themi Weather Module Plan).
+"""Today's weather at home (WX1, WX3; the Themi Weather Module Plan).
 
 Open-Meteo's forecast: no key, no account, free for personal home automation. One call
 gives yesterday, today and tomorrow, hour by hour, in °F, inches and mph (the rules are in
 those units; °C only changes the words). Plain HTTP over `httpx`; tests hand in a transport
 (`tests/fakes/weather.py`).
+
+In the US, the National Weather Service's active warnings, watches and advisories for the
+point (WX3): no key, public domain. `in_us` asks NWS's `points` once per address: it
+answers 404 outside the US.
 
 The User-Agent is generic, as the travel connector's is: no family details leave the house.
 """
@@ -23,6 +27,8 @@ from themi.http import tls
 log = logging.getLogger(__name__)
 
 OPEN_METEO_URL = "https://api.open-meteo.com"
+NWS_URL = "https://api.weather.gov"
+ALERT_KINDS = ("Warning", "Watch", "Advisory")  # not statements or outlooks
 USER_AGENT = "Themi household assistant (self-hosted; one family)"
 TIMEOUT = 20.0
 HOURLY = (
@@ -37,7 +43,9 @@ DAILY = ("temperature_2m_max", "temperature_2m_min")
 
 
 class WeatherError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status  # the HTTP status, when the service answered with one
 
 
 @dataclass(frozen=True)
@@ -87,8 +95,37 @@ class Forecast:
         )
 
 
+@dataclass(frozen=True)
+class Alert:
+    """An NWS warning, watch or advisory in force at the point."""
+
+    event: str  # "Winter Storm Warning"
+    starts: datetime
+    ends: datetime | None  # None: until further notice
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "event": self.event,
+            "starts": self.starts.isoformat(),
+            "ends": self.ends.isoformat() if self.ends else None,
+        }
+
+    @classmethod
+    def from_json(cls, body: dict[str, Any]) -> Alert:
+        ends = body.get("ends")
+        return cls(
+            body["event"],
+            datetime.fromisoformat(body["starts"]),
+            datetime.fromisoformat(ends) if ends else None,
+        )
+
+
 class WeatherSource(Protocol):
     async def forecast(self, lat: float, lon: float, timezone: str) -> Forecast: ...
+
+    async def in_us(self, lat: float, lon: float) -> bool: ...
+
+    async def alerts(self, lat: float, lon: float) -> list[Alert]: ...
 
 
 class WeatherClient:
@@ -96,9 +133,11 @@ class WeatherClient:
         self,
         *,
         open_meteo_url: str = OPEN_METEO_URL,
+        nws_url: str = NWS_URL,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self.open_meteo_url = open_meteo_url.rstrip("/")
+        self.nws_url = nws_url.rstrip("/")
         self._transport = transport
 
     async def forecast(self, lat: float, lon: float, timezone: str) -> Forecast:
@@ -123,13 +162,37 @@ class WeatherClient:
         except (KeyError, TypeError, ValueError, IndexError) as exc:
             raise WeatherError("the forecast's answer wasn't one Themi could read") from exc
 
-    async def _get(self, url: str, params: dict[str, str]) -> Any:
+    async def in_us(self, lat: float, lon: float) -> bool:
+        """Whether NWS forecasts for this point: a 404 means it's outside the US."""
+        try:
+            await self._get(f"{self.nws_url}/points/{lat:.4f},{lon:.4f}", {}, nws=True)
+        except WeatherError as exc:
+            if exc.status == 404:
+                return False
+            raise
+        return True
+
+    async def alerts(self, lat: float, lon: float) -> list[Alert]:
+        """The warnings, watches and advisories in force at this point now."""
+        body = await self._get(
+            f"{self.nws_url}/alerts/active", {"point": f"{lat:.4f},{lon:.4f}"}, nws=True
+        )
+        try:
+            features = body["features"]
+            return [a for a in (_alert(f.get("properties") or {}) for f in features) if a]
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise WeatherError("the weather warnings' answer wasn't one Themi could read") from exc
+
+    async def _get(self, url: str, params: dict[str, str], *, nws: bool = False) -> Any:
         try:
             async with httpx.AsyncClient(
                 verify=tls(),
                 timeout=TIMEOUT,
                 transport=self._transport,
-                headers={"User-Agent": USER_AGENT},
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "application/geo+json" if nws else "application/json",
+                },
             ) as client:
                 response = await client.get(url, params=params)
         except httpx.HTTPError as exc:
@@ -137,7 +200,9 @@ class WeatherClient:
                 f"couldn't reach the weather service ({type(exc).__name__})"
             ) from exc
         if response.status_code != 200:
-            raise WeatherError(f"the weather service said {response.status_code}")
+            raise WeatherError(
+                f"the weather service said {response.status_code}", response.status_code
+            )
         try:
             return response.json()
         except ValueError as exc:
@@ -176,3 +241,21 @@ def _parse(body: Any, tz: ZoneInfo) -> Forecast:
     if not hours:
         raise ValueError("no hours")
     return Forecast(tuple(hours), tuple(days))
+
+
+def _alert(p: dict[str, Any]) -> Alert | None:
+    """A warning, watch or advisory that's real and not cancelled; None for the rest."""
+    event = str(p.get("event") or "")
+    if p.get("status") != "Actual" or p.get("messageType") == "Cancel":
+        return None
+    if not event.endswith(ALERT_KINDS):
+        return None
+    starts = p.get("onset") or p.get("effective")
+    if not starts:
+        return None
+    ends = p.get("ends") or p.get("expires")
+    return Alert(
+        event,
+        datetime.fromisoformat(starts),
+        datetime.fromisoformat(ends) if ends else None,
+    )

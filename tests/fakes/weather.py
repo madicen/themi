@@ -1,9 +1,11 @@
-"""A fake weather service for WX1-WX3: Open-Meteo's forecast.
+"""A fake weather service for WX1-WX3: Open-Meteo's forecast and NWS's alerts.
 
     fake_weather.span(0, 14, 18, chance=80, rain=0.1, code=61)  # rain today, 2 pm to 6 pm
     fake_weather.hour(0, 7, code=66)                             # freezing rain at 7 am
     fake_weather.day(-1, high=70)                                # yesterday's high
     fake_weather.fail("forecast", 500)                           # the next forecast fails
+    fake_weather.alert("Winter Storm Warning", 18, None)         # NWS: from 6 pm today
+    fake_weather.in_us = False                                   # NWS: `points` says 404
 
 Days count from today (-1 is yesterday), hours are local and say when the hour starts.
 Everything else is a fair day: no rain, 60°F, light wind. The scenario harness hands Themi
@@ -39,6 +41,8 @@ class FakeWeather:
     def __init__(self) -> None:
         self.hours: dict[tuple[int, int], dict[str, Any]] = {}
         self.days: dict[int, dict[str, float]] = {}
+        self.alerts: list[dict[str, Any]] = []  # NWS alerts' properties
+        self.in_us = True
         self.calls: list[tuple[str, dict[str, str]]] = []
         self._failures: Counter[str] = Counter()
         self.transport = httpx.MockTransport(self._handle)
@@ -57,11 +61,40 @@ class FakeWeather:
         if low is not None:
             self.days.setdefault(day, {})["low"] = low
 
+    def alert(
+        self,
+        event: str,
+        start: int,
+        end: int | None,
+        *,
+        day: int = 0,
+        status: str = "Actual",
+        message_type: str = "Alert",
+        tz: str = "America/Los_Angeles",
+    ) -> None:
+        """An alert from `start` o'clock to `end` o'clock (None: no end given) on today+day."""
+        local = clock.now().astimezone(ZoneInfo(tz)).date() + timedelta(days=day)
+        midnight = datetime(local.year, local.month, local.day, tzinfo=ZoneInfo(tz))
+        self.alerts.append(
+            {
+                "event": event,
+                "status": status,
+                "messageType": message_type,
+                "onset": (midnight + timedelta(hours=start)).isoformat(),
+                "ends": None if end is None else (midnight + timedelta(hours=end)).isoformat(),
+                "expires": None,
+            }
+        )
+
     def fail(self, kind: str = "forecast", status: int = 500, times: int = 1) -> None:
         self._failures[f"{kind}:{status}"] += times
 
     def client(self) -> WeatherClient:
-        return WeatherClient(open_meteo_url="https://open-meteo.test", transport=self.transport)
+        return WeatherClient(
+            open_meteo_url="https://open-meteo.test",
+            nws_url="https://nws.test",
+            transport=self.transport,
+        )
 
     def count(self, kind: str = "forecast") -> int:
         return sum(1 for k, _ in self.calls if k == kind)
@@ -76,15 +109,34 @@ class FakeWeather:
 
     def _handle(self, request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
+        assert "Themi" in request.headers.get("User-Agent", "")
+        if request.url.host == "nws.test":
+            return self._nws(request, params)
         if request.url.host != "open-meteo.test" or request.url.path != "/v1/forecast":
             return httpx.Response(404)
-        assert "Themi" in request.headers.get("User-Agent", "")
         self.calls.append(("forecast", params))
         failed = self._failure("forecast")
         if failed is not None:
             return failed
         assert params["temperature_unit"] == "fahrenheit" and params["past_days"] == "1"
         return _json(self._forecast(ZoneInfo(params["timezone"])))
+
+    def _nws(self, request: httpx.Request, params: dict[str, str]) -> httpx.Response:
+        assert request.headers.get("Accept") == "application/geo+json"
+        if request.url.path.startswith("/points/"):
+            self.calls.append(("points", params))
+            failed = self._failure("points")
+            if failed is not None:
+                return failed
+            return _json({"properties": {}}) if self.in_us else httpx.Response(404)
+        if request.url.path == "/alerts/active":
+            self.calls.append(("alerts", params))
+            failed = self._failure("alerts")
+            if failed is not None:
+                return failed
+            features = [{"type": "Feature", "properties": p} for p in self.alerts]
+            return _json({"type": "FeatureCollection", "features": features})
+        return httpx.Response(404)
 
     def _forecast(self, tz: ZoneInfo) -> dict[str, Any]:
         today = clock.now().astimezone(tz).date()

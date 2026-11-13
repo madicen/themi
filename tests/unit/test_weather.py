@@ -112,7 +112,7 @@ def test_settings_that_make_no_sense_are_refused(env: dict[str, str], problem: s
 
 def test_the_module_brings_its_own_track_and_an_hourly_refresh(family: SeededFamily) -> None:
     ctx, _ = load(family, FakeWeather())
-    assert current_version(family.db, "weather") == 1
+    assert current_version(family.db, "weather") == 2  # WX3: whether home is in the US
     assert [(j.name, j.every) for j in ctx.jobs] == [("weather.refresh", timedelta(hours=1))]
 
 
@@ -211,7 +211,8 @@ async def test_a_moved_home_is_asked_about_on_the_next_refresh(family: SeededFam
     await weather.refresh()
     set_home(family, 45.52, -122.68)
     await weather.refresh()
-    assert fake.calls[-1][1]["latitude"] == "45.5200"
+    forecasts = [params for kind, params in fake.calls if kind == "forecast"]
+    assert forecasts[-1]["latitude"] == "45.5200"
 
 
 async def test_ensure_today_fetches_only_when_theres_no_usable_forecast(
@@ -254,3 +255,77 @@ async def test_the_line_uses_the_settings(family: SeededFamily) -> None:
     _, weather = load(family, fake, WeatherSettings(rain_chance=40, units="C"))
     await weather.refresh()
     assert weather.line(MORNING.replace(hour=7)) == "Rain likely from about 2 pm, high 18°C."
+
+
+# ----- WX3: NWS's alerts in the US -------------------------------------------------------
+
+
+async def test_alerts_are_kept_with_the_forecast_and_us_is_asked_once(
+    family: SeededFamily,
+) -> None:
+    fake = FakeWeather()
+    fake.alert("Winter Storm Warning", 18, None)
+    set_home(family)
+    _, weather = load(family, fake)
+    await weather.refresh()
+    await weather.refresh()
+    assert (fake.count("points"), fake.count("alerts")) == (1, 2)
+    assert fake.calls[-1][1] == {"point": "37.7000,-122.4000"}
+    assert [a.event for a in weather.latest_alerts()] == ["Winter Storm Warning"]
+    assert weather.line(MORNING.replace(hour=7)) == "Winter Storm Warning from 6 pm."
+
+
+async def test_outside_the_us_alerts_are_never_asked_for(family: SeededFamily) -> None:
+    fake = FakeWeather()
+    fake.in_us = False
+    set_home(family, 51.5, -0.12)
+    _, weather = load(family, fake)
+    await weather.refresh()
+    await weather.refresh()
+    assert (fake.count("points"), fake.count("alerts")) == (1, 0)
+    set_home(family, 37.7, -122.4)  # moved: asked about again
+    fake.in_us = True
+    await weather.refresh()
+    assert (fake.count("points"), fake.count("alerts")) == (2, 1)
+
+
+async def test_alerts_on_skips_the_us_check_and_off_asks_nothing(family: SeededFamily) -> None:
+    fake = FakeWeather()
+    set_home(family)
+    _, weather = load(family, fake, WeatherSettings(alerts="on"))
+    await weather.refresh()
+    assert (fake.count("points"), fake.count("alerts")) == (0, 1)
+    off = FakeWeather()
+    _, weather = load(family, off, WeatherSettings(alerts="off"))
+    await weather.refresh()
+    assert (off.count("points"), off.count("alerts"), off.count()) == (0, 0, 1)
+
+
+async def test_nws_down_leaves_the_forecasts_own_rules(
+    family: SeededFamily, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake = FakeWeather()
+    fake.span(0, 14, 18, chance=80, rain=0.1)
+    fake.alert("Flood Watch", 12, 20)
+    fake.fail("alerts", 503, times=2)
+    set_home(family)
+    _, weather = load(family, fake)
+    caplog.set_level(logging.WARNING, logger="themi.standard.weather")
+    assert await weather.refresh() is True
+    assert await weather.refresh() is True
+    assert weather.latest_alerts() == []
+    assert weather.line(MORNING.replace(hour=7)) == "Rain likely from about 2 pm, high 65°F."
+    assert len([r for r in caplog.records if "warnings didn't come" in r.getMessage()]) == 1
+    await weather.refresh()
+    assert weather.line(MORNING.replace(hour=7)) == "Flood Watch from noon."
+
+
+async def test_the_us_check_failing_is_tried_again_next_time(family: SeededFamily) -> None:
+    fake = FakeWeather()
+    fake.fail("points", 500)
+    set_home(family)
+    _, weather = load(family, fake)
+    await weather.refresh()
+    assert family.db.one("SELECT 1 FROM weather_home") is None
+    await weather.refresh()
+    assert (fake.count("points"), fake.count("alerts")) == (2, 1)

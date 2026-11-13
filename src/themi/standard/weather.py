@@ -4,7 +4,10 @@ The `weather` module keeps today's forecast for the family's home (K4's `family_
 one stored row, refreshed each hour, so the morning message reads it without a network
 call. One forecast for the household: the same line for everyone.
 
-- Open-Meteo's forecast (`themi.connectors.weather`): no key, no account.
+- Open-Meteo's forecast (`themi.connectors.weather`): no key, no account. In the US, the
+  National Weather Service's warnings, watches and advisories too (WX3; `WEATHER_ALERTS`:
+  `auto` asks NWS once per home address whether it's in the US). NWS failing alone leaves
+  the forecast's own rules running.
 - A forecast older than `FRESH` isn't used. A refresh that fails keeps the last good one,
   and is logged once for the outage. Nothing about it ever reaches the family.
 - Off until it's turned on; without a home address it does nothing (the Modules page says
@@ -16,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -24,7 +28,14 @@ from zoneinfo import ZoneInfo
 from pydantic import field_validator
 
 from themi import clock
-from themi.connectors.weather import Forecast, WeatherClient, WeatherError, WeatherSource
+from themi.connectors.weather import (
+    ALERT_KINDS,
+    Alert,
+    Forecast,
+    WeatherClient,
+    WeatherError,
+    WeatherSource,
+)
 from themi.localtime import to_utc_iso
 from themi.modules import Module
 from themi.modules.base import AccountNeed, ModuleSetup
@@ -105,6 +116,7 @@ class Weather:
         self.settings = settings
         self.db = services.store.db
         self._down = False  # a failure is logged once, until a refresh works again
+        self._alerts_down = False
 
     def install(self) -> None:
         pass
@@ -137,18 +149,57 @@ class Weather:
         if self._down:
             log.info("weather: the forecast is back")
         self._down = False
+        alerts = await self._alerts(*home)
         today = self.today()
         self.db.execute(
-            "INSERT INTO weather_forecasts (day, fetched_at, forecast) VALUES (?, ?, ?) "
+            "INSERT INTO weather_forecasts (day, fetched_at, forecast, alerts) "
+            "VALUES (?, ?, ?, ?) "
             "ON CONFLICT(day) DO UPDATE SET fetched_at = excluded.fetched_at, "
-            "forecast = excluded.forecast",
-            (today.isoformat(), to_utc_iso(clock.now()), json.dumps(forecast.to_json())),
+            "forecast = excluded.forecast, alerts = excluded.alerts",
+            (
+                today.isoformat(),
+                to_utc_iso(clock.now()),
+                json.dumps(forecast.to_json()),
+                json.dumps([a.to_json() for a in alerts]),
+            ),
         )
         self.db.execute(
             "DELETE FROM weather_forecasts WHERE day < ?",
             ((today - timedelta(days=1)).isoformat(),),
         )
         return True
+
+    async def _alerts(self, lat: float, lon: float) -> list[Alert]:
+        """NWS's alerts at home, when they're on (WX3); none when NWS doesn't answer."""
+        mode = self.settings.alerts
+        if mode == "off":
+            return []
+        try:
+            if mode == "auto" and not await self._in_us(lat, lon):
+                return []
+            alerts = await self.source.alerts(lat, lon)
+        except WeatherError as exc:
+            if not self._alerts_down:
+                log.warning("weather: the weather warnings didn't come: %s", exc)
+            self._alerts_down = True
+            return []
+        self._alerts_down = False
+        return alerts
+
+    async def _in_us(self, lat: float, lon: float) -> bool:
+        row = self.db.one("SELECT lat, lon, in_us FROM weather_home WHERE id = 1")
+        if row is not None and (row["lat"], row["lon"]) == (lat, lon):
+            return bool(row["in_us"])
+        in_us = await self.source.in_us(lat, lon)
+        self.db.execute(
+            "INSERT INTO weather_home (id, lat, lon, in_us) VALUES (1, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, "
+            "in_us = excluded.in_us",
+            (lat, lon, int(in_us)),
+        )
+        if not in_us:
+            log.info("weather: home is outside the US, so there are no NWS warnings")
+        return in_us
 
     async def ensure_today(self, timeout: float = ENSURE_TIMEOUT) -> None:
         """A refresh when there's no usable forecast (Themi just started), waiting at most
@@ -163,15 +214,21 @@ class Weather:
     def _latest_row(self) -> dict[str, Any] | None:
         return self.db.one("SELECT * FROM weather_forecasts ORDER BY fetched_at DESC LIMIT 1")
 
+    def _fresh_row(self) -> dict[str, Any] | None:
+        row = self._latest_row()
+        if row is None or clock.now() - datetime.fromisoformat(row["fetched_at"]) > FRESH:
+            return None
+        return row
+
     def latest(self) -> Forecast | None:
         """The newest forecast fetched within `FRESH`, or None."""
-        row = self._latest_row()
-        if row is None:
-            return None
-        fetched = datetime.fromisoformat(row["fetched_at"])
-        if clock.now() - fetched > FRESH:
-            return None
-        return Forecast.from_json(json.loads(row["forecast"]))
+        row = self._fresh_row()
+        return Forecast.from_json(json.loads(row["forecast"])) if row else None
+
+    def latest_alerts(self) -> list[Alert]:
+        """NWS's alerts as of the newest fresh forecast (WX3)."""
+        row = self._fresh_row()
+        return [Alert.from_json(a) for a in json.loads(row["alerts"])] if row else []
 
     def line(self, start: datetime) -> str | None:
         """The weather line for the waking day from `start` (the morning message's time)
@@ -183,7 +240,7 @@ class Weather:
         end = datetime(local.year, local.month, local.day, DAY_ENDS.hour, tzinfo=self.tz())
         if local >= end:
             return None
-        return noteworthy(forecast, local, end, self.settings)
+        return noteworthy(forecast, local, end, self.settings, self.latest_alerts())
 
 
 # ----- what's noteworthy (WX2) -------------------------------------------------------------
@@ -225,19 +282,39 @@ def _speed(mph: float, units: str) -> str:
     return f"{round(mph * 1.609)} km/h" if units == "C" else f"{round(mph)} mph"
 
 
+def _alert_line(alerts: Sequence[Alert], start: datetime, end: datetime) -> str | None:
+    """Rank 1 (WX3): the gravest NWS alert in force during the waking day."""
+    during = [a for a in alerts if a.starts < end and (a.ends is None or a.ends > start)]
+    if not during:
+        return None
+
+    def gravity(a: Alert) -> tuple[int, datetime]:
+        kind = next(i for i, k in enumerate(ALERT_KINDS) if a.event.endswith(k))
+        return (kind, a.starts)
+
+    alert = min(during, key=gravity)
+    if alert.starts <= start:
+        return f"{alert.event} in effect today."
+    return f"{alert.event} from {_clock(alert.starts.astimezone(start.tzinfo))}."
+
+
 def noteworthy(
     forecast: Forecast,
     start: datetime,
     end: datetime,
     settings: WeatherSettings,
+    alerts: Sequence[Alert] = (),
 ) -> str | None:
     """The one line for the waking day from `start` to `end`, or None on a fair day. The
-    first rule that holds gives it (the plan's table, ranks 2 to 9). Thresholds are in °F,
-    inches and mph; `settings.units` changes only the words. A statement of the weather,
-    never advice."""
+    first rule that holds gives it (the plan's table: NWS's alerts, then ranks 2 to 9).
+    Thresholds are in °F, inches and mph; `settings.units` changes only the words. A
+    statement of the weather, never advice."""
     hours = [h for h in forecast.hours if h.at + timedelta(hours=1) > start and h.at < end]
     if not hours:
         return None
+    official = _alert_line(alerts, start, end)
+    if official:
+        return official
     day = start.date()
     today, yesterday = forecast.day(day), forecast.day(day - timedelta(days=1))
     units = settings.units

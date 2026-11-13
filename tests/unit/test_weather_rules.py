@@ -36,8 +36,10 @@ async def line(
     start: datetime = SEVEN,
     settings: WeatherSettings | None = None,
 ) -> str | None:
-    forecast = await fake.client().forecast(37.7, -122.4, "America/Los_Angeles")
-    return noteworthy(forecast, start, NINE_PM, settings or WeatherSettings())
+    client = fake.client()
+    forecast = await client.forecast(37.7, -122.4, "America/Los_Angeles")
+    alerts = await client.alerts(37.7, -122.4)
+    return noteworthy(forecast, start, NINE_PM, settings or WeatherSettings(), alerts)
 
 
 async def test_a_fair_day_has_no_line(fake: FakeWeather) -> None:
@@ -174,3 +176,40 @@ async def test_celsius_changes_only_the_words(fake: FakeWeather) -> None:
     assert await line(fake, settings=c) == "Gusty, up to 72 km/h this afternoon."
     fake.span(0, 10, 14, snow=0.5, chance=90, rain=0.05)
     assert await line(fake, settings=c) == "Snow from about 10 am, around 5 cm."
+
+
+# ----- WX3: NWS's alerts ------------------------------------------------------------------
+
+
+async def test_a_warning_comes_first(fake: FakeWeather) -> None:
+    fake.span(0, 14, 18, chance=80, rain=0.1, code=95)
+    fake.alert("Winter Storm Warning", 18, None)
+    assert await line(fake) == "Winter Storm Warning from 6 pm."
+
+
+async def test_an_alert_already_in_force(fake: FakeWeather) -> None:
+    fake.alert("Heat Advisory", 0, 20, day=0)
+    assert await line(fake) == "Heat Advisory in effect today."
+
+
+async def test_warnings_before_watches_before_advisories(fake: FakeWeather) -> None:
+    fake.alert("Wind Advisory", 9, 18)
+    fake.alert("Flood Watch", 10, 20)
+    assert await line(fake) == "Flood Watch from 10 am."
+    fake.alert("Flood Warning", 15, 23)
+    assert await line(fake) == "Flood Warning from 3 pm."
+
+
+async def test_alerts_outside_the_waking_day_dont_count(fake: FakeWeather) -> None:
+    fake.alert("Frost Advisory", 1, 6)  # over before the morning message
+    fake.alert("Winter Storm Watch", 22, None)  # after 9 pm
+    fake.alert("Gale Warning", 2, 9, day=1)  # tomorrow
+    assert await line(fake) is None
+
+
+async def test_statements_tests_and_cancellations_are_skipped(fake: FakeWeather) -> None:
+    fake.alert("Special Weather Statement", 9, 18)
+    fake.alert("Hazardous Weather Outlook", 9, 18)
+    fake.alert("Tornado Warning", 9, 18, status="Test")
+    fake.alert("Flood Warning", 9, 18, message_type="Cancel")
+    assert await line(fake) is None
