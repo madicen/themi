@@ -395,7 +395,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
 | DC3 | Day card: the day card | Day card | [x] 2026-11-13 |
 | DC4 | Day card: pictures in the outbox | Day card | [x] 2026-11-13 |
-| DC5 | Day card: the morning picture | Day card | [ ] |
+| DC5 | Day card: the morning picture | Day card | [x] 2026-11-13 |
 | DC6 | Day card: the week ahead | Day card | [ ] |
 | DC7 | Day card: today on the website | Day card | [ ] |
 | DC8 | Day card: weather on request | Day card | [ ] |
@@ -18538,7 +18538,7 @@ Notes:
   form upload carries).
 
 ### DC5 · Day card: the morning picture
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC3, DC4
 Read first: the plan's "Decisions for Michael"; `MorningMessage.morning`, `_refresh`,
 `_edit`.
@@ -18549,6 +18549,28 @@ Read first: the plan's "Decisions for Michael"; `MorningMessage.morning`, `_refr
 - The settings page mentions the picture, and the weather (MM5's follow-up).
 Tests: `tests/scenarios/test_morning_picture.py`: on, off (text unchanged), quiet hours,
 the renderer failing (text alone), a tap editing the caption, Slack, the website chat.
+
+Notes:
+- `MorningMessage.picture(member)`: `"day_card"` when drawings are loaded and their
+  `picture_morning` is on (the default). The drawings module registers
+  `outbox.pictures["day_card"] = Drawings.morning_picture`, which draws today's card as
+  the message goes and checks `picture_morning` again (turned off while it waited: words).
+  The noon recap stays words.
+- `_edit` needed no change: DC4's `Outbox.edit` sends a caption edit for a message that
+  went as a picture.
+- The settings row now reads "A good-morning message with today's calendar (and the
+  weather, when it's worth knowing), and the rest when I want it" (MM5's follow-up); the
+  picture's own settings sit in the same row (DC3).
+- Slack and the website chat are covered by DC4's outbox tests (picture then words; words
+  alone) and a `ChannelSet.caption_limit` test here, rather than by full scenarios.
+- Harness (wiring this prompt moved): a picture's caption is a message in
+  `FakeTelegram.sent_texts` and `Scenario.advance`; `tap` finds buttons under pictures
+  and caption edits; `edits()` includes caption edits (as `text`); `pictures(name)` is
+  new. The morning message scenarios pass unchanged with the picture on.
+- Setup for Michael: nothing. Drawings are in the family template, so after the update
+  both of you get the picture; each can turn it off, or pick dots/numbers/nothing and
+  light/dark, on the Settings page. The weather column needs the weather module on (it
+  is, from WX1).
 
 ### DC6 · Day card: the week ahead
 Status: [ ]

@@ -49,6 +49,7 @@ from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.localtime import free_from, to_utc_iso
 from themi.standard.day_summary import DaySummary, DaySummaryPreferences
+from themi.standard.drawings import DAY_CARD, DrawingsPreferences
 from themi.standard.tasks import TaskBoard
 
 if TYPE_CHECKING:
@@ -229,6 +230,14 @@ class MorningMessage:
             or self._empty_ok(member)
         )
 
+    def picture(self, member: Member) -> str | None:
+        """DC5: the day card goes with it, when drawings are on and they haven't turned the
+        picture off. Drawn as it goes, so it's as up to date as the words."""
+        if self.services.maybe(keys.drawings) is None:
+            return None
+        prefs = self.services.store.preferences(member.id, DrawingsPreferences)
+        return DAY_CARD if prefs.picture_morning else None
+
     def has_events(self, member: Member, day: date) -> bool:
         return bool(self.summary.items(member, day, partner=True, tasks=False))
 
@@ -306,6 +315,7 @@ class MorningMessage:
                 dedupe_key=f"morning-{member.id}-{today.isoformat()}",
                 deadline=due_at,  # the time they chose: the daily limit doesn't hold it (#57)
                 expires=datetime(today.year, today.month, today.day, tzinfo=tz) + timedelta(days=1),
+                picture=self.picture(member),
             )
             self.db.execute(
                 "UPDATE morning_summaries SET outbox_id = ? WHERE member_id = ? AND day = ?",

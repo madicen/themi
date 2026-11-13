@@ -22,10 +22,12 @@ from themi.drawing.svg import write_svg
 from themi.modules import Module
 
 if TYPE_CHECKING:
+    from themi.accounts import Member
     from themi.core.services import Services
     from themi.modules.context import ModuleContext
 
 NAME = "drawings"
+DAY_CARD = "day_card"  # the morning message's picture (DC5), as the outbox knows it
 COUNTS = ("dots", "numbers", "hide")
 THEMES = ("light", "dark")
 
@@ -73,6 +75,13 @@ class Drawings:
     def install(self) -> None:
         pass
 
+    async def morning_picture(self, member: Member, row: dict[str, Any]) -> bytes | None:
+        """The outbox's `day_card` (DC5): today's card as the morning message goes, unless
+        they turned the picture off while it waited."""
+        if not self.services.store.preferences(member.id, DrawingsPreferences).picture_morning:
+            return None
+        return await self.day_card.png(member, self.day_card.today(member))
+
     def svg(self, template: str, extra: Sequence[Path] = (), **values: Any) -> str:
         return write_svg(template, extra, **values)
 
@@ -102,4 +111,6 @@ class DrawingsModule(Module):
         return None
 
     def install(self, ctx: ModuleContext) -> None:
-        ctx.provide(Drawings(ctx.services, self.renderer)).install()
+        drawings = ctx.provide(Drawings(ctx.services, self.renderer))
+        drawings.install()
+        ctx.services.outbox.pictures[DAY_CARD] = drawings.morning_picture  # DC5
