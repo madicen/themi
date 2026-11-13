@@ -389,7 +389,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [x] 2026-11-12 |
 | WX2 | Weather: what's noteworthy | Weather | [x] 2026-11-12 |
 | WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
-| MM5 | Morning message: a weather line when it's noteworthy | Weather | [ ] |
+| MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 
 ## Fixed technical choices
@@ -18277,7 +18277,7 @@ Notes:
   home test (the last call is now the alerts call).
 
 ### MM5 · Morning message: a weather line when it's noteworthy
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: WX2 (WX3 adds alerts to the line when it's done)
 Read first: the plan's "The line in the morning message"; `MorningMessage.text`,
 `_refresh` and `morning`.
@@ -18288,6 +18288,17 @@ Read first: the plan's "The line in the morning message"; `MorningMessage.text`,
 - A weather line alone is reason enough to send the message (the plan's Decision 2).
 Tests: scenarios for a rainy morning, a fair morning (text unchanged), a nothing-on morning
 with rain, quiet hours updating the line, the fetch failed, the module off.
+
+Notes:
+- `MorningMessage.weather_line(member, day)`: `Weather.line` from their morning time (not
+  from when it's sent), so a message held by quiet hours keeps the whole morning in view.
+  `_worth_sending` is the one test, for the morning job and the refresher alike.
+- The module off is the morning message scenarios as they were (no `fake_weather`); they
+  pass unchanged. Scenarios: `tests/scenarios/test_morning_weather.py`.
+- Setup for Michael: turn Weather on on the Modules page, with the home address set on
+  the Family page. Nothing else: no account, no key.
+- Follow-up, not done: the settings page still says "A good-morning message with today's
+  calendar, and the rest when I want it"; it could mention the weather.
 
 ## Website chat
 

@@ -1,11 +1,13 @@
-"""The morning message (MM1-MM4; the Themi Morning Message Plan).
+"""The morning message (MM1-MM5; the Themi Morning Message Plan).
 
 One message starts the day, at the person's `morning_summary` time: a greeting, the date
-and today's calendar events, nothing else, with up to four buttons for the rest:
+and today's calendar events, a weather line only when the day's weather is worth knowing
+(MM5, with the weather module), with up to four buttons for the rest:
 
     Good morning, Erin.
     Wed 21 Oct:
     - 10-11 am: Dentist (at Smile Dental)
+    Rain likely from about 2 pm, high 58°F.
 
     [Today's tasks] [Email]
     [Everything else] [Just one thing]
@@ -28,6 +30,8 @@ and today's calendar events, nothing else, with up to four buttons for the rest:
 - Nothing tapped by noon: one message, with the same buttons for what still waits (or at
   5 pm when a busy time covers noon). It counts once; there's no other push. What's still in
   a tray after that waits for tomorrow's morning message.
+- The weather line is a statement, never advice, and is rebuilt with the message. A
+  noteworthy line alone is reason enough to send the message.
 - No morning message (the setting's off, or Themi was down past `SEND_WITHIN`): no tray;
   anything left in one goes back to the normal flow.
 """
@@ -197,13 +201,33 @@ class MorningMessage:
     # ----- the message ---------------------------------------------------------------------
 
     def text(self, member: Member, day: date) -> str:
-        """The greeting, then the day's calendar (MM1), without the AI."""
+        """The greeting, then the day's calendar (MM1) and the weather when it's worth
+        knowing (MM5), without the AI."""
         greeting = GREETINGS[day.toordinal() % len(GREETINGS)].format(name=member.name)
         events = self.summary.items(member, day, partner=True, tasks=False)
+        weather = self.weather_line(member, day)
+        tail = f"\n{weather}" if weather else ""
         if not events:
-            return f"{greeting} {NOTHING_ON_TEXT}"
+            return f"{greeting} {NOTHING_ON_TEXT}{tail}"
         lines = "\n".join(f"- {e}" for e in events)
-        return f"{greeting}\n{day:%a %d %b}:\n{lines}"
+        return f"{greeting}\n{day:%a %d %b}:\n{lines}{tail}"
+
+    def weather_line(self, member: Member, day: date) -> str | None:
+        """MM5: the day's weather from their morning time, when it's noteworthy; None
+        without the weather module, on a fair day, or with no forecast to go on."""
+        weather = self.services.maybe(keys.weather)
+        at = self._at(member)
+        if weather is None or at is None:
+            return None
+        return weather.line(self._on(day, at))
+
+    def _worth_sending(self, member: Member, day: date, offers: list[str]) -> bool:
+        return bool(
+            offers
+            or self.has_events(member, day)
+            or self.weather_line(member, day)
+            or self._empty_ok(member)
+        )
 
     def has_events(self, member: Member, day: date) -> bool:
         return bool(self.summary.items(member, day, partner=True, tasks=False))
@@ -234,7 +258,7 @@ class MorningMessage:
         if day != self._today():
             return None
         offers = self.offers(member, day)
-        if not offers and not self.has_events(member, day) and not self._empty_ok(member):
+        if not self._worth_sending(member, day, offers):
             return None
         return self.text(member, day), self.buttons(offers, day)
 
@@ -267,8 +291,11 @@ class MorningMessage:
                 self.outbox.untray(member.id)  # Themi was down: nothing is lost, it all goes
                 continue
             self.outbox.tray_waiting(member.id)
+            weather = self.services.maybe(keys.weather)
+            if weather is not None:
+                await weather.ensure_today()  # Themi just started: a forecast first
             offers = self.offers(member, today)
-            if not offers and not self.has_events(member, today) and not self._empty_ok(member):
+            if not self._worth_sending(member, today, offers):
                 continue
             result = await self.outbox.send(
                 member,
