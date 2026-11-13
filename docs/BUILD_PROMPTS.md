@@ -391,6 +391,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
+| DC1 | Day card: the picture renderer | Day card | [ ] |
+| DC2 | Day card: the day's layout | Day card | [ ] |
+| DC3 | Day card: the day card | Day card | [ ] |
+| DC4 | Day card: pictures in the outbox | Day card | [ ] |
+| DC5 | Day card: the morning picture | Day card | [ ] |
+| DC6 | Day card: the week ahead | Day card | [ ] |
+| DC7 | Day card: today on the website | Day card | [ ] |
 
 ## Fixed technical choices
 
@@ -18356,3 +18363,104 @@ Notes (2026-11-12):
   tests should get an isolated working directory (follow-up).
 - Not done: pictures and voice from the site. Not checked in a real browser (no Chrome
   here); try `make fresh` and /chat.
+
+## Day card
+
+Design source: the [Themi Day Card Plan](https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H).
+Read it with the Claude Docs tools, like the other plans. A picture of the day, drawn by
+code (no image model), sent with the morning message: events at their times, the weather
+on the same hours, a quiet sign of what's waiting. SVG from Jinja2 templates, made into a
+PNG by resvg, with bundled fonts (Atkinson Hyperlegible) and icons (Meteocons), all free.
+
+Waiting for Michael's decisions in the doc ("Decisions for Michael"). Until he picks, the
+doc's recommendations stand: one photo message with the text as caption (DC4); `dots` for
+what's waiting (DC3); Michael only at first (DC5); task blocks and travel on the card (DC3).
+
+### DC1 · Day card: the picture renderer
+Status: [ ]
+Depends on: MM5
+Read first: the plan's "How it's drawn" and "How it fits Themi".
+- `themi/pictures/`: `assets/` (fonts, Meteocons, their licence files), `svg.py` (a
+  Jinja2 environment with XML autoescape; templates in `pictures/templates/`), `render.py`
+  (`to_png(svg, width) -> bytes | None` with resvg through `resvg-py`, given only the
+  bundled fonts, in `asyncio.to_thread` with a 5 s timeout; any failure is None, logged
+  once a day).
+- `tools/dev/font_widths.py` (fontTools, dev only) writes `assets/widths.json`; a
+  `text_width(text, size, weight)` helper reads it.
+- The `pictures` module (kind `feature`, off until turned on), the renderer on
+  `keys.pictures`.
+- Check the `resvg-py` wheel installs in the arm64 image. If it doesn't, CairoSVG with
+  `libcairo2` in the Dockerfile, and say so in Notes.
+Tests: escaping (`<script>`, an `href` in a title, `&`, emoji), the same SVG gives the same
+bytes twice, a broken renderer gives None, `text_width` against known strings.
+Golden files: the new module.
+
+### DC2 · Day card: the day's layout
+Status: [ ]
+Depends on: DC1
+Read first: the plan's "What the family sees".
+- `themi/pictures/layout.py`, pure: the window (morning time or first event, to 9 pm),
+  minutes to y, overlapping events packed into columns, all-day strip, titles shortened
+  with "…" to fit, a short event's title beside its block.
+Tests: window edges, events crossing them, two and three columns, all-day, a 10-minute
+event, 1 and 12 events; Hypothesis: no two blocks overlap, every block is in the frame.
+
+### DC3 · Day card: the day card
+Status: [ ]
+Depends on: DC2, WX3
+Read first: the plan's "What the family sees" and "Testing".
+- `themi/standard/day_card.py`: `DayCard.data(member, day) -> DayCardData` from the
+  calendar (`DaySummary`), `Weather.latest` and `Weather.line`, travel's estimates, task
+  blocks and the tray counts, each through `services.maybe`.
+- The `day_card.svg` template (light and dark), WMO codes to Meteocons, the alert band,
+  the weather column, the waiting chips.
+- Member settings `PICTURE_MORNING`, `PICTURE_COUNTS` (`dots`, `numbers`, `hide`),
+  `PICTURE_THEME` (`light`, `dark`) on the settings page.
+- `themi picture day_card --member NAME --day YYYY-MM-DD --out FILE`; a "Show the morning
+  picture" button in the simulator.
+- Never energy, no red for overdue.
+Tests: golden SVGs in `tests/golden/pictures/` (busy day, empty day, rain with an alert,
+dark, each `PICTURE_COUNTS`), the clock frozen.
+
+### DC4 · Day card: pictures in the outbox
+Status: [ ]
+Depends on: DC1
+Read first: the plan's "The outbox carries the picture"; `Outbox._deliver_now`,
+`Pictures`, `TelegramChannel.send_photo` and `edit_text`.
+- Migration: `outbox.picture` (a registered picture's name or NULL);
+  `Outbox.pictures[name](member, row) -> bytes | None`, drawn at delivery.
+- `Pictures.send_photo` gains `buttons`; `edit_caption` (Telegram `edit_message_caption`);
+  the message log records a photo message.
+- A row with a picture: one photo message with the text as caption and the buttons, when
+  the channel can and the text fits (1024 characters on Telegram); otherwise the picture,
+  then the text with the buttons. One row, counted once. No picture (failed, or a channel
+  without pictures, like the website chat): the text alone.
+- Slack: the picture, then the text with its buttons.
+Tests: outbox and channel tests for each case above, fakes in `tests/fakes`.
+
+### DC5 · Day card: the morning picture
+Status: [ ]
+Depends on: DC3, DC4
+Read first: the plan's "Decisions for Michael"; `MorningMessage.morning`, `_refresh`,
+`_edit`.
+- The morning message's row carries `picture="day_card"` when the module and the
+  member's `PICTURE_MORNING` are on. `_edit` uses `edit_caption` for a photo message; a tap
+  never changes the picture.
+- The settings page mentions the picture, and the weather (MM5's follow-up).
+Tests: `tests/scenarios/test_morning_picture.py`: on, off (text unchanged), quiet hours,
+the renderer failing (text alone), a tap editing the caption, Slack, the website chat.
+
+### DC6 · Day card: the week ahead
+Status: [ ]
+Depends on: DC5
+Read first: the plan's "Other uses".
+- WX1's forecast to 7 days (daily fields only past day 2); a week layout and template;
+  "show my week" and `/week`, on request only.
+Tests: golden SVGs, a scenario.
+
+### DC7 · Day card: today on the website
+Status: [ ]
+Depends on: DC3
+Read first: the plan's "Other uses".
+- The day card's SVG inline on the member's own dashboard, no PNG.
+Tests: a web test for the page, and that no one else can see it.
