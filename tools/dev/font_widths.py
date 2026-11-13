@@ -20,6 +20,7 @@ FONTS = {
     "regular": "AtkinsonHyperlegible-Regular.ttf",
     "bold": "AtkinsonHyperlegible-Bold.ttf",
 }
+EMOJI = "TwemojiMozilla.ttf"  # DC12: what resvg falls back to for emoji
 # Basic Latin, Latin-1, and the punctuation Themi writes: ellipsis, bullet, middle dot,
 # degree, en and em dash, curly quotes, times, arrow.
 EXTRA = [
@@ -56,8 +57,25 @@ def widths(path: Path) -> dict[str, object]:
     }
 
 
+def emoji_ranges(path: Path) -> list[list[int]]:
+    """The emoji font's characters, as runs [first, last] (each one em wide; DC12)."""
+    points = sorted((TTFont(path).getBestCmap() or {}).keys())
+    runs: list[list[int]] = []
+    for point in points:
+        if point < 0x2000:
+            continue  # letters and punctuation: Atkinson's
+        if runs and point == runs[-1][1] + 1:
+            runs[-1][1] = point
+        else:
+            runs.append([point, point])
+    return runs
+
+
 def main() -> None:
-    table = {weight: widths(ASSETS / "fonts" / name) for weight, name in FONTS.items()}
+    table: dict[str, object] = {
+        weight: widths(ASSETS / "fonts" / name) for weight, name in FONTS.items()
+    }
+    table["emoji"] = emoji_ranges(ASSETS / "fonts" / EMOJI)
     out = ASSETS / "widths.json"
     out.write_text(json.dumps(table, ensure_ascii=False, sort_keys=True, indent=0) + "\n")
     print(f"Wrote {out}")

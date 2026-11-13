@@ -181,3 +181,68 @@ def test_rendering_runs_off_the_event_loop() -> None:
 
     assert asyncio.run(Renderer(convert).png("<svg/>")) == b"png"
     assert seen == [False]
+
+
+# ----- emoji (DC12) -----------------------------------------------------------------------
+
+
+def _pixels(png: bytes) -> list[tuple[int, int, int, int]]:
+    """The PNG's pixels (RGBA), read with the standard library."""
+    import zlib
+
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    width, height = struct.unpack(">II", png[16:24])
+    data, at = b"", 8
+    while at < len(png):
+        length = struct.unpack(">I", png[at : at + 4])[0]
+        kind = png[at + 4 : at + 8]
+        if kind == b"IDAT":
+            data += png[at + 8 : at + 8 + length]
+        at += 12 + length
+    raw = zlib.decompress(data)
+    stride, rows, prev = width * 4, [], bytearray(width * 4)
+    for y in range(height):
+        kind, line = (
+            raw[y * (stride + 1)],
+            bytearray(raw[y * (stride + 1) + 1 : (y + 1) * (stride + 1)]),
+        )
+        for i in range(stride):
+            left = line[i - 4] if i >= 4 else 0
+            up, corner = prev[i], prev[i - 4] if i >= 4 else 0
+            if kind == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif kind == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif kind == 3:
+                line[i] = (line[i] + (left + up) // 2) & 0xFF
+            elif kind == 4:
+                p = left + up - corner
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - corner)
+                pred = left if pa <= pb and pa <= pc else up if pb <= pc else corner
+                line[i] = (line[i] + pred) & 0xFF
+        rows.append(bytes(line))
+        prev = line
+    return [tuple(row[i : i + 4]) for row in rows for i in range(0, stride, 4)]  # type: ignore[misc]
+
+
+def test_an_emoji_in_a_title_draws_in_color() -> None:
+    page = '<rect width="60" height="40" fill="white"/>'
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40">{page}'
+        '<text x="10" y="30" font-family="Atkinson Hyperlegible" font-size="28">X</text></svg>'
+    )
+    blank = to_png(f'<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40">{page}</svg>')
+    tooth = to_png(svg.replace(">X<", ">\U0001f9b7<"))  # 🦷, which Atkinson doesn't have
+    assert tooth != blank
+    cake = _pixels(to_png(svg.replace(">X<", ">\U0001f382<")))  # 🎂: pink and yellow
+    assert any(abs(r - g) > 60 or abs(g - b) > 60 for r, g, b, a in cake if a)
+
+
+def test_an_emoji_is_measured_as_one_em() -> None:
+    assert text_width("\U0001f9b7", 20) == 20
+    assert text_width("\U0001f44d\U0001f3fd", 20) == 20  # 👍🏽: a skin tone joins it
+    assert text_width("\U0001f468‍\U0001f469‍\U0001f467", 20) == 20  # one family
+    assert text_width("\U0001f1fa\U0001f1f8", 20) == 20  # a flag: two letters, one picture
+    assert text_width("❤️", 20) == 20  # ❤️: the variation selector adds nothing
+    cut = fit("Birthday \U0001f382\U0001f382\U0001f382\U0001f382 party at the park", 14, 100)
+    assert text_width(cut, 14) <= 100

@@ -402,6 +402,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC9 | Day card: the chore chart | Day card | [x] 2026-11-13 |
 | DC10 | Day card: the recipe card | Day card | [x] 2026-11-13 |
 | DC11 | Day card: the step-up plan | Day card | [x] 2026-11-13 |
+| DC12 | Day card: emoji in pictures | Day card | [x] 2026-11-13 |
 
 ## Fixed technical choices
 
@@ -18691,3 +18692,34 @@ Notes:
   naming the task was taken for a task nudge by the message shield ("Up next: …"). Without
   a picture, the plan is read back in words; a task with no plan is declined plainly.
 - Golden files: tools.json gains `show_step_plan`.
+
+### DC12 · Day card: emoji in pictures
+Status: [x] 2026-11-13
+Depends on: DC1
+From Michael (2026-11-13): the bundled font has no emoji, so an emoji in an event title or
+a recipe drew as nothing.
+- Bundle Twemoji Mozilla (Twitter's emoji as a COLR color font, 1.5 MB; the code Apache 2.0,
+  the art CC BY 4.0, credited in its licence file). resvg falls back to it for any
+  character Atkinson Hyperlegible doesn't have, so templates don't change.
+- The width table learns the emoji font's characters (one em each; joiners and variation
+  selectors none), so titles with emoji are fitted to their space.
+Tests: an emoji in a title draws (not blank), in color; emoji widths; the golden files
+don't change.
+
+Notes:
+- `assets/fonts/TwemojiMozilla.ttf` (twemoji-colr v0.7.0) with
+  `TwemojiMozilla-LICENSE.md` (Apache 2.0 for the font's code; the art CC BY 4.0, credited
+  to the Twemoji project). `render.FONT_FILES` takes every bundled .ttf, so resvg falls
+  back to it for anything Atkinson lacks; no template changed, and no golden file did.
+- `widths.json` gains `emoji`: the emoji font's characters as runs (`font_widths.py`
+  writes it). `text_width` counts an emoji as one em; variation selectors, the joiner,
+  skin tones and flag tags as nothing; an emoji after a joiner as nothing (a family is
+  one picture); a flag's two letters as half each.
+- Tests: an emoji draws, and in color (the PNG read with the standard library); emoji
+  widths; a title with emoji still fits. The DC11 plan test's helper got its type and
+  import back (left behind in DC11's commit).
+- jj refuses new files over 1 MiB by default: the font was added with
+  `jj --config snapshot.max-new-file-size=1500000 file track <path>`, for that command
+  only. A future font update needs the same.
+- Twemoji's tooth and other white emoji are faint on the light blue blocks; that's the
+  emoji's own colour.

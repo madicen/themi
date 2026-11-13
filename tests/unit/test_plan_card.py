@@ -14,7 +14,7 @@ from themi.standard.progression import parse_plan
 TUESDAY = date(2026, 10, 20)
 
 
-def runs():
+def runs() -> PlanCardData:
     plan = parse_plan("1.3 miles, then 1.5, then up 0.25 a week up to 3 miles, on Tuesdays",
                       date(2026, 10, 6))  # fmt: skip
     return replace(plan_weeks(plan, date(2026, 10, 22)), title="Go for a run")
