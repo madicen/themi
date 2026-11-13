@@ -275,6 +275,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [ ] |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
+| F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [ ] |
+| F42g | Feedback: pictures of your tasks and your routines | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13697,6 +13699,10 @@ Cookies, Chocolate Chip Cookies for 2): ask which one they mean." The same refus
 four more times, through "Chocolate Chip Cookies", "The first one" and "Yes, show me a
 recipe card". `clear_match` needs the second match to have fewer name hits, and "for 2" has
 every word too. Reply 443's tool was refused, yet the reply was "Done." No card was sent.
+Bug #206 (2026-11-13, 12:32 pm, "the recipe cards aren't working either"): after #205 he
+sent "Chocolate Chip Cookies for 2", the longer name exactly. Replies 441-443 show
+`recipe_card {"name": "Chocolate Chip Cookies for 2"}` refused the same way each time.
+`find_recipe` sent both as buttons, and the reply was "Done." again with no card.
 
 Build:
 - Bug fix: start with the failing tests below.
@@ -13711,13 +13717,13 @@ Build:
 
 Tests: start with failing ones: the cookbook has "Chocolate Chip Cookies" and "Chocolate
 Chip Cookies for 2". `recipe_card {"name": "chocolate chip cookies"}` sends the first as a
-picture. "Chocolate chip cookies for 2" sends the second. "Chocolate chip" still asks which.
+picture. "Chocolate Chip Cookies for 2" (reply 441's exact argument) sends the second. "Chocolate chip" still asks which.
 A faked turn where `recipe_card` is declined and the model says "Done." doesn't reply
 "Done.". A turn with a real done action still can.
 Scenario: Michael asks for a recipe card by a name that's also the start of another
 recipe's name, and gets the card at once.
 
-Data: none needed. Mark #205 reviewed once live.
+Data: none needed. Mark #205 reviewed once live (#206 once F42c, F42f and F42g are all live).
 
 ### F42d · Idea (2026-11-11): the morning message lists your own day; everyone else's is behind a button
 Status: [ ]
@@ -13776,6 +13782,87 @@ says that's all. The next day starts fresh. A task done in between isn't offered
 Scenario: Michael taps Just one thing, doesn't like it, and taps Something else.
 
 Data: none needed. Mark #203 reviewed once live.
+
+### F42f · Feedback (2026-11-13): "Show me Erin's run" finds her step-up plan by name
+Status: [ ]
+Depends on: DC11, F42c
+Read first: `themi/standard/plan_card.py` (`show_step_plan`); `themi/core/groups.py` (the
+schedules group, which holds it); how other tools find a task by its words (`find_task`
+or the taskboard's lookup) and what the partner may see of the other's tasks. From Michael's
+bug #206 (2026-11-13, 12:32 pm, "Getting Erin's run summary graphic didn't work").
+
+What the Pi shows: reply 446. "Can you show me a picture of Erin's run summary?" was
+offered calendar, calls, devices and wall. The model called `more_tools` for schedules, then
+answered "Erin's run summary isn't available right now." without calling `show_step_plan`.
+Erin's task 8, "Go for a run", has a plan (1.3 then 1.5 miles, +0.25 a week from 27 Oct).
+`show_step_plan` takes only `task_id`, and Michael's context lists his own tasks, so the
+model had no number to pass.
+
+Build:
+- Bug fix: start with the failing test below.
+- `show_step_plan` takes `task` (their words: "run", "Erin's run", "push-ups") as well as
+  `task_id`. It looks through tasks with a plan: the asker's, then the partner's (tasks are
+  shared in this family; check what's already shown of the other's). One match → that one.
+  Several → it asks which, naming them. None → "There's no step-up plan for …; set_task_plan
+  makes one."
+- Its example phrases go into the schedules group's routing examples ("show me Erin's run
+  plan", "a picture of my run"), so the first turn offers it without `more_tools`.
+- A picture of someone else's plan is captioned with whose it is ("Erin's run plan").
+
+Tests: start with a failing one: reply 446's turn, faked. Michael asks for "Erin's run
+summary"; the model calls `show_step_plan {"task": "Erin's run"}`, and the picture of task 8
+is sent, captioned as Erin's. "my run" from Erin finds the same task. A task with no plan
+gets the set_task_plan line. Two planned tasks matching "run" ask which. Routing: "show me a
+picture of Erin's run plan" offers the schedules group.
+Scenario: Michael asks to see Erin's run plan as a picture and gets it.
+
+Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
+
+### F42g · Feedback (2026-11-13): pictures of your tasks and your routines
+Status: [ ]
+Depends on: DC1, DC4, DC9, R1a
+Read first: the Day Card plan (https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H), "One
+renderer, many pictures" and "Other uses" (tasks and routines aren't among them: this adds
+them); `themi_home/chore_card.py` (`show_chore_chart`, the model to copy);
+`themi/pictures` (templates, `write_svg`, `drawings.png`); `themi/standard/routines.py`
+(`today_items`, `ticked`, `show_routines`); the taskboard's open tasks for a person, as the
+morning task summary ("This morning: …") orders them. There's no task-listing tool today. From
+Michael's bug #206 (2026-11-13, 12:32 pm, "should be able to ask for tasks, routines, maybe
+everything and get a graphic").
+
+What the Pi shows: reply 448. "And tasks as a picture" was answered with
+`show_chore_chart` (reply 447's tool), so the chore chart came twice. There's no picture of
+tasks or routines; the model chose the nearest tool. The pictures there are: the day card
+(morning), the week, weather, chore chart, recipe card, step-up plan.
+
+Build:
+- `show_tasks_picture`: their open tasks (`open_for`) as a card, in the task summary's order: overdue first
+  (with "was due …"), then today, then the next few days, then undated (at most 12 rows, "and
+  N more"). Shared tasks are marked. No energy scores, no counts of misses.
+- `show_routines_picture`: today's routines (Morning, Afternoon, Evening) with each item and
+  a tick for done, the window under each name. For "tomorrow", tomorrow's (F40a's day words).
+- Both use the same renderer, theme setting and caption style as the chore chart. With no
+  drawings they send text instead (the task summary's lines; `show_routines`'s answer). Both say
+  "It's sent as it is: don't list it again."
+- "Everything": a request for "a picture of everything / my day" is the day card for today
+  (DC3), which already has events, weather and what's waiting; route it there.
+- Tool descriptions keep them apart: the chore chart is "the wall's chores for each person";
+  tasks is "your to-do list"; routines is "your morning, afternoon and evening routine".
+  Routing examples for each.
+- `themi picture tasks|routines` renders them locally, as the other pictures do. A golden SVG
+  for each (expected, new).
+
+Tests: Michael with an overdue task, one today and an undated one: `show_tasks_picture`
+sends one picture whose SVG has them in that order, "was due" on the overdue one. Routines
+with two of three Evening items ticked show two ticks. Tomorrow shows tomorrow's items. No
+drawings → text. Routing: "tasks as a picture" picks `show_tasks_picture`, not
+`show_chore_chart`; "a picture of my routines" picks `show_routines_picture`; "a picture of
+my day" picks the day card.
+Scenario: Michael asks for his chores, then his tasks, then his routines as pictures, and
+gets three different pictures.
+
+Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
+Setup: once built, add tasks and routines to the Day Card plan's "Other uses" as built.
 
 ## Conversation mode
 
