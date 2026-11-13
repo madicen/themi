@@ -80,6 +80,7 @@ class DaySummary:
         partner: bool = False,
         viewer: Member | None = None,
         tasks: bool = True,
+        scope: str = "all",
     ) -> list[str]:
         """What's on, one line each, in the order of the day: all-day events, then events and
         tasks with a time (on a day gone by, what was done too), then tasks for any time.
@@ -89,7 +90,8 @@ class DaySummary:
         tz = self._tz()
         start = datetime(day.year, day.month, day.day, tzinfo=tz)
         lines: list[tuple[tuple[int, datetime], str]] = []
-        for e, whose in self.events(member, day, partner=partner, viewer=viewer, tasks=tasks):
+        events = self.events(member, day, partner=partner, viewer=viewer, tasks=tasks, scope=scope)
+        for e, whose in events:
             text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
             lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
         for task in self.due(member, day) if tasks else []:
@@ -120,10 +122,13 @@ class DaySummary:
         partner: bool = False,
         viewer: Member | None = None,
         tasks: bool = True,
+        scope: str = "all",
     ) -> list[tuple[Entry, str]]:
         """The day's calendar events, each with whose it is when it isn't `member`'s own
         (" (Erin)", " (on the Madicen Family calendar)"); theirs first. `tasks=False`: not
-        the events Themi put there for tasks. The day card (DC3) draws from these."""
+        the events Themi put there for tasks. The day card (DC3) draws from these.
+        `scope` (F42d, idea #200): "all"; "mine", their own and the family calendar's
+        (calendars more than one person reads); "own", their own without the family's."""
         viewer = viewer or member
         start = datetime(day.year, day.month, day.day, tzinfo=self._tz())
         out: list[tuple[Entry, str]] = []
@@ -139,6 +144,11 @@ class DaySummary:
                 if not tasks and str(e.source or "").startswith("task"):
                     continue  # "task:12", "task-block:12": tasks by the side door
                 seen.add((e.calendar_id, e.event_id))
+                family = e.calendar_id in shared
+                if scope == "mine" and not (family or owner.id == member.id):
+                    continue
+                if scope == "own" and family:
+                    continue
                 whose = (
                     # F34d, reply 321: "(Madicen Family)" was taken for a place
                     f" (on the {shared[e.calendar_id]} calendar)"

@@ -273,7 +273,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [x] 2026-11-13 |
 | F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [x] 2026-11-13 |
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [x] 2026-11-13 |
-| F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
+| F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [x] 2026-11-13 |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [ ] |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [ ] |
@@ -13762,7 +13762,7 @@ otherwise the model's own words stay. New tests in `tests/scenarios/test_recipe_
 none changed, no golden file changed.
 
 ### F42d · Idea (2026-11-11): the morning message lists your own day; everyone else's is behind a button
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: MM1, MM2, F34f
 Read first: `themi/standard/morning.py` (`text`, `has_events`, `ORDER`, the tray buttons,
 `on_button`, `_edit`); `themi/standard/day_summary.py` (`items`, `partner=True`); the day
@@ -13795,6 +13795,19 @@ Scenario: Michael's morning message shows his day and the family calendar, and t
 brings Erin's.
 
 Data: none needed. Mark #200 reviewed once live.
+
+Notes: `DaySummary.events`/`items` take `scope`: "all" (as before), "mine" (their own and
+the family calendar's: calendars more than one person reads) and "own" (their own, without
+the family's). The morning text is "mine". `EVERYONE` ("Everyone's calendar") comes first in
+`ORDER` and shows when someone else has events of their own that day, as `items(other,
+viewer=member, scope="own")` gives them, so a partner whose details are "me" adds no button.
+A tap sends "Husband's day, Thu 22 Oct:" and their lines, then the message is edited without
+the button, as the others are. With only the partner's events, the text is "Nothing on your
+calendar today." (`NOTHING_YOURS_TEXT`), and `has_events` still counts all, so the message
+goes. The day card's `data` is "mine". Its `events` defaults to "all", so the week ahead
+(DC6) still shows everyone. That's narrower than the prompt, which only names the morning
+picture. New tests in `tests/scenarios/test_morning_own_calendar.py`; none changed, no golden
+file changed.
 
 ### F42e · Idea (2026-11-12): "Just one thing" offers a different one
 Status: [ ]
