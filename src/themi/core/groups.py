@@ -40,6 +40,7 @@ SCHEDULES = ToolGroup(
     tools=(
         "set_task_schedule",
         "set_task_plan",
+        "show_step_plan",  # DC11
         "set_task_importance",
         "set_check_in_reviews",
         "set_task_medicine",

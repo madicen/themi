@@ -150,7 +150,8 @@ class DrawingsModule(Module):
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences
-    tool_groups = (groups.CALENDAR,)  # show_week (DC6), show_weather (DC8)
+    # show_week (DC6), show_weather (DC8); show_step_plan (DC11)
+    tool_groups = (groups.CALENDAR, groups.SCHEDULES)
 
     def __init__(self, renderer: Renderer | None = None) -> None:
         self.renderer = renderer
@@ -171,5 +172,8 @@ class DrawingsModule(Module):
         ctx.dashboard_panel("dashboard/today.html", 10, values=drawings.today_panel)  # DC7
         ctx.tool(show_week)  # DC6
         ctx.tool(show_weather)  # DC8
+        from themi.standard.plan_card import show_step_plan
+
+        ctx.tool(show_step_plan)  # DC11
         ctx.command("/weather", drawings.weather_command, "The weather today and tomorrow")
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")

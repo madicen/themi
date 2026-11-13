@@ -401,7 +401,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC8 | Day card: weather on request | Day card | [x] 2026-11-13 |
 | DC9 | Day card: the chore chart | Day card | [x] 2026-11-13 |
 | DC10 | Day card: the recipe card | Day card | [x] 2026-11-13 |
-| DC11 | Day card: the step-up plan | Day card | [ ] |
+| DC11 | Day card: the step-up plan | Day card | [x] 2026-11-13 |
 
 ## Fixed technical choices
 
@@ -18674,9 +18674,20 @@ Notes:
   picture's route; `tests/golden/pictures/recipe.svg` is the fixture cookbook's pancakes.
 
 ### DC11 · Day card: the step-up plan
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC4, F9c
 Read first: the plan's "Other uses"; `themi.standard.progression`.
 - The weeks of a step-up plan (Erin's runs) as steps: "show my run plan". Shows the plan,
   never what was missed.
 Tests: golden SVGs, a scenario.
+
+Notes:
+- `themi.standard.plan_card`: bars for up to twelve weeks (three back, never before the
+  plan starts, this week filled and labelled, eight ahead), each with its amount and step
+  day; a dashed line where it stops going up; the plan read back under the title. Nothing
+  about what was done or missed is drawn.
+- The `show_step_plan` tool (task_id, as `set_task_plan` takes; the schedules group),
+  registered by the drawings module. Captioned "Your plan, week by week.": a caption
+  naming the task was taken for a task nudge by the message shield ("Up next: …"). Without
+  a picture, the plan is read back in words; a task with no plan is declined plainly.
+- Golden files: tools.json gains `show_step_plan`.

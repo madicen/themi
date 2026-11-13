@@ -483,6 +483,10 @@
     "group": "wall",
     "spec": "f8ff3c412b5a"
   },
+  "show_step_plan": {
+    "group": "schedules",
+    "spec": "b09704ef4350"
+  },
   "show_weather": {
     "group": "calendar",
     "spec": "ccb8424175bb"
