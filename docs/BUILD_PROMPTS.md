@@ -398,6 +398,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC5 | Day card: the morning picture | Day card | [ ] |
 | DC6 | Day card: the week ahead | Day card | [ ] |
 | DC7 | Day card: today on the website | Day card | [ ] |
+| DC8 | Day card: weather on request | Day card | [ ] |
+| DC9 | Day card: the chore chart | Day card | [ ] |
+| DC10 | Day card: the recipe card | Day card | [ ] |
+| DC11 | Day card: the step-up plan | Day card | [ ] |
 
 ## Fixed technical choices
 
@@ -18372,9 +18376,16 @@ code (no image model), sent with the morning message: events at their times, the
 on the same hours, a quiet sign of what's waiting. SVG from Jinja2 templates, made into a
 PNG by resvg, with bundled fonts (Atkinson Hyperlegible) and icons (Meteocons), all free.
 
-Waiting for Michael's decisions in the doc ("Decisions for Michael"). Until he picks, the
-doc's recommendations stand: one photo message with the text as caption (DC4); `dots` for
-what's waiting (DC3); Michael only at first (DC5); task blocks and travel on the card (DC3).
+Michael's decisions in the doc (2026-11-13):
+
+- One photo message with the text as its caption and the buttons under it; the picture,
+  then the text, when the text is over 1024 characters (DC4).
+- The waiting chips show `dots` by default, for both of them (DC3).
+- Live for everyone at once, no trial week: the picture is on for every member once the
+  module is on, and the module is in the family template (DC5).
+- Task blocks (quieter) and travel (a lead-in) are on the card (DC3).
+- After DC6 and DC7: weather on request, the chore chart, the recipe card and the step-up
+  plan (DC8 to DC11). The kitchen display and tutoring summaries wait for a request.
 
 ### DC1 · Day card: the picture renderer
 Status: [ ]
@@ -18444,7 +18455,8 @@ Depends on: DC3, DC4
 Read first: the plan's "Decisions for Michael"; `MorningMessage.morning`, `_refresh`,
 `_edit`.
 - The morning message's row carries `picture="day_card"` when the module and the
-  member's `PICTURE_MORNING` are on. `_edit` uses `edit_caption` for a photo message; a tap
+  member's `PICTURE_MORNING` are on (on by default, for everyone). The `pictures` module is
+  in the family template. `_edit` uses `edit_caption` for a photo message; a tap
   never changes the picture.
 - The settings page mentions the picture, and the weather (MM5's follow-up).
 Tests: `tests/scenarios/test_morning_picture.py`: on, off (text unchanged), quiet hours,
@@ -18464,3 +18476,36 @@ Depends on: DC3
 Read first: the plan's "Other uses".
 - The day card's SVG inline on the member's own dashboard, no PNG.
 Tests: a web test for the page, and that no one else can see it.
+
+### DC8 · Day card: weather on request
+Status: [ ]
+Depends on: DC4
+Read first: the plan's "Other uses".
+- Today and tomorrow as an hourly strip, from the day card's weather column: "what's the
+  weather" (a tool) and `/weather`. Statements only, as WX2. Without the weather module,
+  it says so; without pictures, the text lines.
+Tests: golden SVGs, a scenario.
+
+### DC9 · Day card: the chore chart
+Status: [ ]
+Depends on: DC4
+Read first: the plan's "Other uses"; `themi_home.chore_chart`.
+- C2d's chart as a picture in the family group, on request ("show the chore chart"):
+  each person's chores that are up (`chart_limit`), never what waits off the chart.
+Tests: golden SVGs; nothing off the chart is drawn.
+
+### DC10 · Day card: the recipe card
+Status: [ ]
+Depends on: DC4
+Read first: the plan's "Other uses"; `themi_home.cookbook`.
+- Ingredients and steps on one page (or more, when it doesn't fit): "send me the recipe"
+  and the cookbook page. Recipe text is escaped like event titles.
+Tests: golden SVGs, escaping.
+
+### DC11 · Day card: the step-up plan
+Status: [ ]
+Depends on: DC4, F9c
+Read first: the plan's "Other uses"; `themi.standard.progression`.
+- The weeks of a step-up plan (Erin's runs) as steps: "show my run plan". Shows the plan,
+  never what was missed.
+Tests: golden SVGs, a scenario.
