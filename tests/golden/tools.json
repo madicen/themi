@@ -459,6 +459,10 @@
     "group": "wall",
     "spec": "486c0b23728d"
   },
+  "show_day": {
+    "group": "calendar",
+    "spec": "e3716ee2f104"
+  },
   "show_grocery_list": {
     "group": "core",
     "spec": "d1da5f123c21"
@@ -483,9 +487,17 @@
     "group": "wall",
     "spec": "f8ff3c412b5a"
   },
+  "show_routines_picture": {
+    "group": "wall",
+    "spec": "c2724646fa14"
+  },
   "show_step_plan": {
     "group": "schedules",
     "spec": "c332c06e5b84"
+  },
+  "show_tasks_picture": {
+    "group": "wall",
+    "spec": "b2e254b27ccc"
   },
   "show_weather": {
     "group": "calendar",

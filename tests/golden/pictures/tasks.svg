@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="342" viewBox="0 0 540 342" font-family="Atkinson Hyperlegible">
+<rect width="540" height="342" fill="#FBFAF7"/>
+<text x="28" y="52" font-size="24" font-weight="700" fill="#1F2328">Michael&#39;s tasks</text>
+<text x="28" y="76" font-size="14" fill="#6B6F76">Wednesday 21 October</text>
+<text x="28" y="126" font-size="16" font-weight="700" fill="#1F2328">Overdue</text>
+<line x1="28" x2="512" y1="134" y2="134" stroke="#E6E3DC" stroke-width="1"/>
+<text x="28" y="156" font-size="15" fill="#1F2328">Vacuum maintenance</text>
+<text x="512" y="156" text-anchor="end" font-size="12" fill="#6B6F76">was due Fri 16 Oct</text>
+<text x="28" y="200" font-size="16" font-weight="700" fill="#1F2328">Today</text>
+<line x1="28" x2="512" y1="208" y2="208" stroke="#E6E3DC" stroke-width="1"/>
+<text x="28" y="230" font-size="15" fill="#1F2328">Bring bins in</text>
+<text x="512" y="230" text-anchor="end" font-size="12" fill="#6B6F76">shared</text>
+<text x="28" y="274" font-size="16" font-weight="700" fill="#1F2328">Any time</text>
+<line x1="28" x2="512" y1="282" y2="282" stroke="#E6E3DC" stroke-width="1"/>
+<text x="28" y="304" font-size="15" fill="#1F2328">Add air to the Prius tires</text>
+</svg>

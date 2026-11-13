@@ -276,7 +276,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [x] 2026-11-13 |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
-| F42g | Feedback: pictures of your tasks and your routines | Feedback | [ ] |
+| F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13888,7 +13888,7 @@ changed for `show_step_plan`'s spec (expected). New tests in
 `tests/scenarios/test_plan_by_name.py`.
 
 ### F42g · Feedback (2026-11-13): pictures of your tasks and your routines
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC1, DC4, DC9, R1a
 Read first: the Day Card plan (https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H), "One
 renderer, many pictures" and "Other uses" (tasks and routines aren't among them: this adds
@@ -13932,6 +13932,25 @@ gets three different pictures.
 
 Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
 Setup: once built, add tasks and routines to the Day Card plan's "Other uses" as built.
+
+Notes: `themi/standard/list_card.py` with one template, `list_card.svg`: a title, the date,
+and sections of rows, each row with a note on the right and, for routine items, a tick box.
+It shows at most 14 rows, then "and N more". `show_tasks_picture` uses `tasks_data`, with
+four sections: Overdue ("was due Tue 20 Oct"), Today (its time, or "shared"), Next few days
+(3) and Any time. `show_routines_picture` (day: today/tomorrow/date) uses `routines_data`:
+each routine with items that day, its window beside the name, and ticks only today. With
+no drawings, both send `list_text`. Deviation: there was no day card on request, which is
+why "Let's see the morning picture" got the weather in #205's chat. `show_day` (calendar
+group) sends today's day card, so "a picture of my day / everything" has its own tool. The
+two list tools sit in the wall group beside `show_routines` (or in core without Cozyla, as
+`show_routines` does). That group's words gain "picture|graphic", and the calendar group's
+gain "my day|morning picture". The drawings module registers all three. `themi picture
+tasks|routines --member X --out f.png` draws them; `make golden` includes
+`tests/unit/test_list_card.py`. Golden files: new `tasks.svg`, `routines.svg` and
+`routines_dark.svg`; `tools.json` gains the three tools (expected). New tests in
+`tests/unit/test_list_card.py` and `tests/scenarios/test_list_pictures.py`; none changed.
+Setup still to do: add tasks, routines and the day on request to the Day Card plan's "Other
+uses" (left for Michael; the plan doc is shared).
 
 ## Conversation mode
 
