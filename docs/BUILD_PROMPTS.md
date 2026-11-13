@@ -390,6 +390,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WX2 | Weather: what's noteworthy | Weather | [x] 2026-11-12 |
 | WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
+| WX4 | Weather: NWS forecast when Open-Meteo can't be reached | Weather | [ ] |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 | DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
 | DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
@@ -18311,6 +18312,45 @@ Notes:
   the Family page. Nothing else: no account, no key.
 - Follow-up, not done: the settings page still says "A good-morning message with today's
   calendar, and the rest when I want it"; it could mention the weather.
+
+### WX4 · Weather: NWS forecast when Open-Meteo can't be reached
+Status: [ ]
+Depends on: WX3, MM5
+Read first: the plan's "Edge cases and failure" (the row "Open-Meteo can't be reached, home
+in the US", added 2026-11-13) and "Why this pair"; `WeatherClient` (`_get`, `in_us`,
+`alerts`), `Weather.refresh` and the `weather_home` row; `WeatherModule.check`.
+Why: on 2026-11-13 `api.open-meteo.com` (one IPv4 address, no IPv6) was unreachable from
+home (and from a phone) for hours while status sites said it was up; the forecast and the
+morning line stopped. The connector's per-phase timeout is now 8 s so Test shows the reason.
+- `WeatherClient.nws_forecast(lat, lon, timezone) -> Forecast`: `points/{lat},{lon}` →
+  `properties.forecastGridData` → the raw grid. Unpack each ISO 8601 interval series
+  (`validTime` "2026-11-13T14:00:00+00:00/PT3H") into hours in the family's time zone:
+  `temperature` (°C → °F), `probabilityOfPrecipitation`, `quantitativePrecipitation`
+  (mm → in), `snowfallAmount` (mm → in), `windGust` (km/h → mph), `weather` (thunderstorms,
+  freezing rain, snow, rain → the nearest WMO code the rules read), and the daily
+  `maxTemperature`/`minTemperature`. The same `Forecast` shape as Open-Meteo's, so the rules
+  and the line don't change. Reuse the `points` answer the US check already makes where it
+  can (the grid URL can be kept on `weather_home`).
+- The grid has no yesterday: `Weather.refresh` fills yesterday's high and low from the
+  stored yesterday row; with no row, the rules that need yesterday don't fire.
+- The fallback, in `Weather.refresh`: when Open-Meteo raises `WeatherError` and home is in
+  the US (the `weather_home` row), fetch from NWS. NWS stays the source for 3 hours after an
+  Open-Meteo failure (kept with the forecast row, times from `themi.clock`), then Open-Meteo
+  is tried again. Outside the US, or NWS failing too: as before (the last good forecast
+  within 6 hours, else no line). Log once per outage which source is in use. The stored row
+  records its source.
+- `WeatherModule.check` (Test, Seattle): Open-Meteo first; when it fails, NWS, and the
+  answer says both: "Open-Meteo didn't answer (couldn't reach the weather service
+  (ConnectTimeout)); the National Weather Service did, so forecasts carry on in the US."
+  Keep the whole check inside the portal's 20 s Test wait (`TEST_WITHIN`).
+- Nothing the family reads changes: the line's wording is the same from either source.
+Tests: `tests/fakes/weather.py` gains canned `points` and gridpoint answers (a rainy
+afternoon, snow, a 3-hour interval, a thunderstorm); parsing and unit conversion; interval
+unpacking across midnight and a DST change; the fallback on an Open-Meteo 503 and on a
+timeout; the 3-hour stickiness (advance the clock); outside the US no NWS call; NWS failing
+too keeps the last good row; yesterday from the stored row; Test's two messages.
+Scenario: a rainy morning line while Open-Meteo is down (`tests/scenarios/test_morning_weather.py`).
+Golden files: none expected to change.
 
 ## Website chat
 
