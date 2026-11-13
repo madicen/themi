@@ -19,6 +19,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Slack (the work Themi in Slack DMs): Themi Slack Module Plan,
   https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB. Read it the same way. It is the design
   source for the SL prompts.
+- Weather (the weather module and the morning message's weather line): Themi Weather Module
+  Plan, https://claude.ai/artifact/VaszSg2tS76qK2aaLUqtMr. Read it the same way. It is the
+  design source for the WX prompts and MM5.
 
 ## "Implement the next prompt"
 
