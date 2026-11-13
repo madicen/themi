@@ -33,6 +33,7 @@
   "GET /recipes/kitchen",
   "GET /recipes/kitchen/state",
   "GET /recipes/{recipe_id}",
+  "GET /recipes/{recipe_id}/card.png",
   "GET /recovery",
   "GET /safeway",
   "GET /session",

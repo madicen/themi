@@ -391,6 +391,18 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
+| DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
+| DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
+| DC3 | Day card: the day card | Day card | [x] 2026-11-13 |
+| DC4 | Day card: pictures in the outbox | Day card | [x] 2026-11-13 |
+| DC5 | Day card: the morning picture | Day card | [x] 2026-11-13 |
+| DC6 | Day card: the week ahead | Day card | [x] 2026-11-13 |
+| DC7 | Day card: today on the website | Day card | [x] 2026-11-13 |
+| DC8 | Day card: weather on request | Day card | [x] 2026-11-13 |
+| DC9 | Day card: the chore chart | Day card | [x] 2026-11-13 |
+| DC10 | Day card: the recipe card | Day card | [x] 2026-11-13 |
+| DC11 | Day card: the step-up plan | Day card | [x] 2026-11-13 |
+| DC12 | Day card: emoji in pictures | Day card | [x] 2026-11-13 |
 
 ## Fixed technical choices
 
@@ -18356,3 +18368,358 @@ Notes (2026-11-12):
   tests should get an isolated working directory (follow-up).
 - Not done: pictures and voice from the site. Not checked in a real browser (no Chrome
   here); try `make fresh` and /chat.
+
+## Day card
+
+Design source: the [Themi Day Card Plan](https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H).
+Read it with the Claude Docs tools, like the other plans. A picture of the day, drawn by
+code (no image model), sent with the morning message: events at their times, the weather
+on the same hours, a quiet sign of what's waiting. SVG from Jinja2 templates, made into a
+PNG by resvg, with bundled fonts (Atkinson Hyperlegible) and icons (Meteocons), all free.
+
+Michael's decisions in the doc (2026-11-13):
+
+- One photo message with the text as its caption and the buttons under it; the picture,
+  then the text, when the text is over 1024 characters (DC4).
+- The waiting chips show `dots` by default, for both of them (DC3).
+- Live for everyone at once, no trial week: the picture is on for every member once the
+  module is on, and the module is in the family template (DC5).
+- Task blocks (quieter) and travel (a lead-in) are on the card (DC3).
+- After DC6 and DC7: weather on request, the chore chart, the recipe card and the step-up
+  plan (DC8 to DC11). The kitchen display and tutoring summaries wait for a request.
+
+### DC1 · Day card: the picture renderer
+Status: [x] 2026-11-13
+Depends on: MM5
+Read first: the plan's "How it's drawn" and "How it fits Themi".
+- `themi/pictures/`: `assets/` (fonts, Meteocons, their licence files), `svg.py` (a
+  Jinja2 environment with XML autoescape; templates in `pictures/templates/`), `render.py`
+  (`to_png(svg, width) -> bytes | None` with resvg through `resvg-py`, given only the
+  bundled fonts, in `asyncio.to_thread` with a 5 s timeout; any failure is None, logged
+  once a day).
+- `tools/dev/font_widths.py` (fontTools, dev only) writes `assets/widths.json`; a
+  `text_width(text, size, weight)` helper reads it.
+- The `pictures` module (kind `feature`, off until turned on), the renderer on
+  `keys.pictures`.
+- Check the `resvg-py` wheel installs in the arm64 image. If it doesn't, CairoSVG with
+  `libcairo2` in the Dockerfile, and say so in Notes.
+Tests: escaping (`<script>`, an `href` in a title, `&`, emoji), the same SVG gives the same
+bytes twice, a broken renderer gives None, `text_width` against known strings.
+Golden files: the new module.
+
+Notes:
+- Deviation from the plan, by necessity: a `pictures` module already exists (looking at
+  pictures people send), so the module is `drawings` (`themi.standard.drawings`,
+  `keys.drawings`, title "Drawings") and the package is `themi.drawing`. The plan's
+  `themi.pictures` and `keys.pictures` mean these.
+- `resvg-py` 0.5 has an abi3 manylinux aarch64 wheel, so the Pi's image needs no Rust and
+  no CairoSVG fallback. `themi.drawing.render.to_png` passes only the bundled fonts: an
+  unknown family (or a system font) draws nothing, so templates use `{{ font }}` or
+  `sans-serif`. Atkinson Hyperlegible has no emoji: they draw as nothing.
+- `write_svg(template, extra, **values)`: autoescaped, `StrictUndefined`, every printed
+  value cleaned of characters XML can't hold (`xml_safe`), numbers through `|n`. Globals:
+  `icon(name)` (a bundled icon as a data URI, so each icon keeps its own ids), `fit`,
+  `wrap`, `text_width`, `font`.
+- `text.fit` / `text.wrap` measure from `assets/widths.json` (`python -m
+  tools.dev.font_widths`; fontTools is a dev dependency only).
+- Icons: 17 of Meteocons' static "flat" set (`@meteocons/svg-static` 0.1.0, MIT), for the
+  WMO codes; the font's OFL and Meteocons' licence are beside them.
+- In the family template (Michael's decision: on for everyone) and `family_modules()`;
+  the golden key test needs it there. It has no jobs, tools or routes, so no golden file
+  changed.
+- Tests changed: `test_modules`' key count is 73; `test_package_data` checks
+  `drawing/assets` and `drawing/templates`. Fixed while here: `test_web_chat_live`'s
+  reaction test read the wall clock, so quiet hours held its card at night; it now freezes
+  the clock.
+- `test_anthropic_adapter::test_timeout_is_retryable` failed once under the full parallel
+  run and passed on three reruns: a timing-sensitive test, unrelated.
+
+### DC2 · Day card: the day's layout
+Status: [x] 2026-11-13
+Depends on: DC1
+Read first: the plan's "What the family sees".
+- `themi/pictures/layout.py`, pure: the window (morning time or first event, to 9 pm),
+  minutes to y, overlapping events packed into columns, all-day strip, titles shortened
+  with "…" to fit, a short event's title beside its block.
+Tests: window edges, events crossing them, two and three columns, all-day, a 10-minute
+event, 1 and 12 events; Hypothesis: no two blocks overlap, every block is in the frame.
+
+Notes:
+- `themi.drawing.layout`: `window(from_, spans)`, `Timeline(start, end, top, height)` with
+  `y()` and `ticks()` (every hour up to 8 hours, else every two; "noon", "9:30 am"),
+  `columns()`, `place(spans, timeline, left, width) -> [Placed]`, `all_day_rows()`.
+- The window grows past 9 pm (to the last event's end, on the hour, up to midnight) rather
+  than leaving an evening event off the picture; the plan says "to 9 pm", and the text
+  lists every event anyway, but a timeline that drops one reads as wrong.
+- `Placed.beside`: shorter than 22 px (about 20 minutes at a day's scale), so the card
+  writes the title beside it. Blocks are at least 6 px. `clipped_top` / `clipped_bottom`
+  for an event that crosses the window.
+
+### DC3 · Day card: the day card
+Status: [x] 2026-11-13
+Depends on: DC2, WX3
+Read first: the plan's "What the family sees" and "Testing".
+- `themi/standard/day_card.py`: `DayCard.data(member, day) -> DayCardData` from the
+  calendar (`DaySummary`), `Weather.latest` and `Weather.line`, travel's estimates, task
+  blocks and the tray counts, each through `services.maybe`.
+- The `day_card.svg` template (light and dark), WMO codes to Meteocons, the alert band,
+  the weather column, the waiting chips.
+- Member settings `PICTURE_MORNING`, `PICTURE_COUNTS` (`dots`, `numbers`, `hide`),
+  `PICTURE_THEME` (`light`, `dark`) on the settings page.
+- `themi picture day_card --member NAME --day YYYY-MM-DD --out FILE`; a "Show the morning
+  picture" button in the simulator.
+- Never energy, no red for overdue.
+Tests: golden SVGs in `tests/golden/pictures/` (busy day, empty day, rain with an alert,
+dark, each `PICTURE_COUNTS`), the clock frozen.
+
+Notes:
+- `themi.standard.day_card`: `DayCard` (on `keys.drawings`, as `drawings.day_card`) with
+  `data(member, day) -> DayCardData`, `svg()`, `png()` and `today()`; `card_svg(data,
+  counts, theme)` and `view()` are pure, for the golden files. The template is
+  `themi/drawing/templates/day_card.svg`, 540 x 675 units drawn at 1080 x 1350.
+- Settings are `DrawingsPreferences` (the drawings module's): `picture_morning` (on),
+  `picture_counts` (`dots`, `numbers`, `hide`), `picture_theme` (`light`, `dark`), in
+  the good-morning message's row of the settings page (only when the day summary is
+  on: `on_form` leaves them off the form otherwise, so saving doesn't untick them).
+- `DaySummary.events(member, day, ...)` gives the entries `items()` words; the card
+  takes the partner's shared events too (marked, in their colour), task blocks as
+  "held" (dashed), and leaves out a task's own copy ("task:").
+- Travel lead-ins: `TravelHeadsUps.rough_drive(member, entry)`, from places already
+  found (`geocodes`) and the distance alone: no lookup and no traffic, so drawing never
+  waits on the network. Only the person's own events, starting after their morning time.
+- `Weather.alert_in_force(start)`: the band is a warning for an NWS alert, a quiet note
+  for any other noteworthy line.
+- Waiting: tasks are today's due tasks (or the tasks tray, if more); email and other
+  are what's in those trays. The trays fill at the flush just before the morning message
+  goes, so the card drawn then (DC4/DC5) counts them; drawn earlier, they're empty.
+- Layout tweak: `LABEL_MIN` is 12 px (it was 22 in DC2's notes); one-line blocks put the
+  time and place after the title when there's room.
+- `themi picture day_card --member NAME [--day] --out FILE` (`.png` or `.svg`); the
+  control panel's Calendar section has "Show the morning picture" (sends it to their
+  chat). `make golden` writes the card's golden files too.
+- Tests changed for what this prompt added: `test_settings_form` lists the three
+  picture fields under DC3.
+
+### DC4 · Day card: pictures in the outbox
+Status: [x] 2026-11-13
+Depends on: DC1
+Read first: the plan's "The outbox carries the picture"; `Outbox._deliver_now`,
+`Pictures`, `TelegramChannel.send_photo` and `edit_text`.
+- Migration: `outbox.picture` (a registered picture's name or NULL);
+  `Outbox.pictures[name](member, row) -> bytes | None`, drawn at delivery.
+- `Pictures.send_photo` gains `buttons`; `edit_caption` (Telegram `edit_message_caption`);
+  the message log records a photo message.
+- A row with a picture: one photo message with the text as caption and the buttons, when
+  the channel can and the text fits (1024 characters on Telegram); otherwise the picture,
+  then the text with the buttons. One row, counted once. No picture (failed, or a channel
+  without pictures, like the website chat): the text alone.
+- Slack: the picture, then the text with its buttons.
+Tests: outbox and channel tests for each case above, fakes in `tests/fakes`.
+
+Notes:
+- Migration 0167: `outbox.picture` and `outbox.picture_sent`. `Outbox.send(...,
+  picture="day_card")`; `Outbox.pictures[name](member, row) -> bytes | None` is drawn in
+  `_deliver_now`, after the refresher, only for the member's own chat (a group message
+  stays words).
+- The channel says what it can do through `caption_limit(member)`: a number (Telegram:
+  1024) means one photo with the words as caption and the buttons under it; None
+  (Slack: a file carries no buttons) means the picture, then the words with the buttons;
+  0 (no `send_photo`: the website chat) means words only, and nothing is drawn.
+  `ChannelSet.caption_limit` asks the member's channel.
+- Any failure (drawing, upload) leaves the words to go as before; the row is still sent
+  and counted once.
+- Edits: `Outbox.edit` looks up whether the message went as a captioned picture
+  (`picture_sent`) and calls the channel's `edit_caption` (Telegram's
+  `editMessageCaption`); so `MorningMessage._edit` needs no change (the plan put that
+  in DC5).
+- `send_photo` gained `buttons` (Telegram's `reply_markup`, noted for taps like any
+  keyboard); Slack's takes it and ignores it.
+- Fakes: the fake Telegram API answers `editMessageCaption`, keeps a picture's
+  `reply_markup`, and `last_keyboard` looks at pictures too (`markup()` reads the JSON a
+  form upload carries).
+
+### DC5 · Day card: the morning picture
+Status: [x] 2026-11-13
+Depends on: DC3, DC4
+Read first: the plan's "Decisions for Michael"; `MorningMessage.morning`, `_refresh`,
+`_edit`.
+- The morning message's row carries `picture="day_card"` when the module and the
+  member's `PICTURE_MORNING` are on (on by default, for everyone). The `pictures` module is
+  in the family template. `_edit` uses `edit_caption` for a photo message; a tap
+  never changes the picture.
+- The settings page mentions the picture, and the weather (MM5's follow-up).
+Tests: `tests/scenarios/test_morning_picture.py`: on, off (text unchanged), quiet hours,
+the renderer failing (text alone), a tap editing the caption, Slack, the website chat.
+
+Notes:
+- `MorningMessage.picture(member)`: `"day_card"` when drawings are loaded and their
+  `picture_morning` is on (the default). The drawings module registers
+  `outbox.pictures["day_card"] = Drawings.morning_picture`, which draws today's card as
+  the message goes and checks `picture_morning` again (turned off while it waited: words).
+  The noon recap stays words.
+- `_edit` needed no change: DC4's `Outbox.edit` sends a caption edit for a message that
+  went as a picture.
+- The settings row now reads "A good-morning message with today's calendar (and the
+  weather, when it's worth knowing), and the rest when I want it" (MM5's follow-up); the
+  picture's own settings sit in the same row (DC3).
+- Slack and the website chat are covered by DC4's outbox tests (picture then words; words
+  alone) and a `ChannelSet.caption_limit` test here, rather than by full scenarios.
+- Harness (wiring this prompt moved): a picture's caption is a message in
+  `FakeTelegram.sent_texts` and `Scenario.advance`; `tap` finds buttons under pictures
+  and caption edits; `edits()` includes caption edits (as `text`); `pictures(name)` is
+  new. The morning message scenarios pass unchanged with the picture on.
+- Setup for Michael: nothing. Drawings are in the family template, so after the update
+  both of you get the picture; each can turn it off, or pick dots/numbers/nothing and
+  light/dark, on the Settings page. The weather column needs the weather module on (it
+  is, from WX1).
+
+### DC6 · Day card: the week ahead
+Status: [x] 2026-11-13
+Depends on: DC5
+Read first: the plan's "Other uses".
+- WX1's forecast to 7 days (daily fields only past day 2); a week layout and template;
+  "show my week" and `/week`, on request only.
+Tests: golden SVGs, a scenario.
+
+Notes:
+- WX1's call now asks for 7 forecast days (`FORECAST_DAYS`), hourly for all of them, and
+  the daily `weather_code` and `precipitation_probability_max`: `Day` gained `code` and
+  `chance` (0 in a forecast stored before). The fake weather serves yesterday and seven
+  days, and `day(..., code=)`. Test changed for wiring this prompt moved: the client test's
+  hour count (24 x 8) and `forecast_days` "7".
+- `themi.standard.week_card`: `WeekCard` (`drawings.week_card`) with `data`, `svg`, `png`
+  and `send` (the picture as a reply, captioned "Your week ahead."; the week in words
+  when it can't be drawn or the channel shows no pictures). A landscape card, 840 x 560
+  drawn at 1680 x 1120: seven columns on one hour axis (8 am to 9 pm, wider for an earlier
+  or later event), today's column shaded. `DayCard.events(..., travel=False)` is shared.
+- The `show_week` tool (in the calendar group, which gained "my week", "the week", "week
+  ahead" and an example) and `/week`. Golden files changed as this prompt says: tools.json
+  gains `show_week`, handlers.json gains `/week`.
+
+### DC7 · Day card: today on the website
+Status: [x] 2026-11-13
+Depends on: DC3
+Read first: the plan's "Other uses".
+- The day card's SVG inline on the member's own dashboard, no PNG.
+Tests: a web test for the page, and that no one else can see it.
+
+Notes:
+- A dashboard panel (`dashboard/today.html`, order 10: above "On your list") from
+  `Drawings.today_panel`: the day card's SVG inline, drawn for the signed-in member, in
+  their light or dark choice. `.today-card svg` in `themi.css` sizes it to the column
+  (at most 540 px). The icons are data URIs, which the site's policy allows.
+- Scenarios: `tests/scenarios/test_today_page.py` (the picture, a title's markup kept as
+  words; Husband's dashboard has no sign of Erin's private event).
+
+### DC8 · Day card: weather on request
+Status: [x] 2026-11-13
+Depends on: DC4
+Read first: the plan's "Other uses".
+- Today and tomorrow as an hourly strip, from the day card's weather column: "what's the
+  weather" (a tool) and `/weather`. Statements only, as WX2. Without the weather module,
+  it says so; without pictures, the text lines.
+Tests: golden SVGs, a scenario.
+
+Notes:
+- `themi.standard.weather_card`: `WeatherCard` (`drawings.weather_card`), landscape 840 x
+  470: a row each for today and tomorrow with the day's icon, high and low, the WX2/WX3
+  line (wrapped to two lines), and 7 am to 9 pm as a strip (temperature line, rain or
+  snow chance as bars, "now" on today's). `weather_text` is the same in words.
+- The `show_weather` tool and `/weather`. The tool is in the calendar group (no weather
+  group exists), which gained "weather", "forecast", "rain", "snow", "umbrella", an
+  example and "the weather" in its description. Golden files changed as expected:
+  `show_weather`, `/weather`, and `more_tools`' spec (it lists the groups' descriptions).
+- Without the weather module: "The weather isn't on here: an admin can turn it on on the
+  Modules page." With no fresh forecast: says it'll try again within the hour.
+- `tests/unit/test_architecture.py` flags any `.combine()` call (energy's), so the card
+  builds its datetimes directly rather than with `datetime.combine`.
+
+### DC9 · Day card: the chore chart
+Status: [x] 2026-11-13
+Depends on: DC4
+Read first: the plan's "Other uses"; `themi_home.chore_chart`.
+- C2d's chart as a picture in the family group, on request ("show the chore chart"):
+  each person's chores that are up (`chart_limit`), never what waits off the chart.
+Tests: golden SVGs; nothing off the chart is drawn.
+
+Notes:
+- `themi_home.chore_card`: a column per person of what's up (`ChartQueue.up_for`, plus
+  the important chores that always show, outlined in amber), each with "since Tue" when
+  it's late; seven cards a column, then "+N more". The `show_chore_chart` tool (the wall
+  group) is registered by the chore chart module; without drawings it goes in words.
+- Deviation from the plan: it goes to whoever asks, not to the family group. The outbox's
+  `send_photo` is for a person's own chat; a picture in the group would need group
+  pictures in the channel (a follow-up if wanted).
+- A pack's own picture templates live in `drawing_templates/` (package data, and checked
+  by `test_package_data`); `write_svg` takes them as an extra folder.
+- Golden files: tools.json gains `show_chore_chart`.
+
+### DC10 · Day card: the recipe card
+Status: [x] 2026-11-13
+Depends on: DC4
+Read first: the plan's "Other uses"; `themi_home.cookbook`.
+- Ingredients and steps on one page (or more, when it doesn't fit): "send me the recipe"
+  and the cookbook page. Recipe text is escaped like event titles.
+Tests: golden SVGs, escaping.
+
+Notes:
+- `themi_home.recipe_card`: name, section, ingredients (with their groups), numbered
+  steps, notes and source, as written. One tall picture (540 wide, 675 to 2400 high)
+  instead of pages: past that, it ends "The rest is in the cookbook." (a deviation from
+  "or more, when it doesn't fit": one picture is easier to keep and print).
+- The `recipe_card` tool (recipes group): one clear match is drawn; several are named back
+  for the model to ask; nothing is said plainly; a chart isn't drawn. If it can't be
+  drawn, the recipe goes as written (`Recipes.send`).
+- The recipe page links "a picture to keep" (`GET /recipes/{id}/card.png`, signed in).
+- Golden files changed as expected: tools.json gains `recipe_card`, routes.json the
+  picture's route; `tests/golden/pictures/recipe.svg` is the fixture cookbook's pancakes.
+
+### DC11 · Day card: the step-up plan
+Status: [x] 2026-11-13
+Depends on: DC4, F9c
+Read first: the plan's "Other uses"; `themi.standard.progression`.
+- The weeks of a step-up plan (Erin's runs) as steps: "show my run plan". Shows the plan,
+  never what was missed.
+Tests: golden SVGs, a scenario.
+
+Notes:
+- `themi.standard.plan_card`: bars for up to twelve weeks (three back, never before the
+  plan starts, this week filled and labelled, eight ahead), each with its amount and step
+  day; a dashed line where it stops going up; the plan read back under the title. Nothing
+  about what was done or missed is drawn.
+- The `show_step_plan` tool (task_id, as `set_task_plan` takes; the schedules group),
+  registered by the drawings module. Captioned "Your plan, week by week.": a caption
+  naming the task was taken for a task nudge by the message shield ("Up next: …"). Without
+  a picture, the plan is read back in words; a task with no plan is declined plainly.
+- Golden files: tools.json gains `show_step_plan`.
+
+### DC12 · Day card: emoji in pictures
+Status: [x] 2026-11-13
+Depends on: DC1
+From Michael (2026-11-13): the bundled font has no emoji, so an emoji in an event title or
+a recipe drew as nothing.
+- Bundle Twemoji Mozilla (Twitter's emoji as a COLR color font, 1.5 MB; the code Apache 2.0,
+  the art CC BY 4.0, credited in its licence file). resvg falls back to it for any
+  character Atkinson Hyperlegible doesn't have, so templates don't change.
+- The width table learns the emoji font's characters (one em each; joiners and variation
+  selectors none), so titles with emoji are fitted to their space.
+Tests: an emoji in a title draws (not blank), in color; emoji widths; the golden files
+don't change.
+
+Notes:
+- `assets/fonts/TwemojiMozilla.ttf` (twemoji-colr v0.7.0) with
+  `TwemojiMozilla-LICENSE.md` (Apache 2.0 for the font's code; the art CC BY 4.0, credited
+  to the Twemoji project). `render.FONT_FILES` takes every bundled .ttf, so resvg falls
+  back to it for anything Atkinson lacks; no template changed, and no golden file did.
+- `widths.json` gains `emoji`: the emoji font's characters as runs (`font_widths.py`
+  writes it). `text_width` counts an emoji as one em; variation selectors, the joiner,
+  skin tones and flag tags as nothing; an emoji after a joiner as nothing (a family is
+  one picture); a flag's two letters as half each.
+- Tests: an emoji draws, and in color (the PNG read with the standard library); emoji
+  widths; a title with emoji still fits. The DC11 plan test's helper got its type and
+  import back (left behind in DC11's commit).
+- jj refuses new files over 1 MiB by default: the font was added with
+  `jj --config snapshot.max-new-file-size=1500000 file track <path>`, for that command
+  only. A future font update needs the same.
+- Twemoji's tooth and other white emoji are faint on the light blue blocks; that's the
+  emoji's own colour.

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" font-family="{{ font }}">
+<rect width="{{ width }}" height="{{ height }}" fill="{{ c.bg }}"/>
+{% for t in title_lines %}
+<text x="{{ pad }}" y="{{ t.y|n }}" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ t.text }}</text>
+{% endfor %}
+{% if head.where %}
+<text x="{{ pad }}" y="{{ head.where_y|n }}" font-size="13" fill="{{ c.muted }}">{{ head.where }}</text>
+{% endif %}
+{% for item in items %}
+{% if item.kind == "heading" %}
+<line x1="{{ pad }}" x2="{{ pad + rule_w }}" y1="{{ (item.y - 4)|n }}" y2="{{ (item.y - 4)|n }}" stroke="{{ c.grid }}" stroke-width="1"/>
+{% for t in item.lines %}<text x="{{ pad }}" y="{{ (t.y + 2)|n }}" font-size="16" font-weight="700" fill="{{ c.ink }}">{{ t.text }}</text>{% endfor %}
+{% elif item.kind == "group" %}
+{% for t in item.lines %}<text x="{{ pad }}" y="{{ t.y|n }}" font-size="13.5" font-weight="700" fill="{{ c.muted }}">{{ t.text }}</text>{% endfor %}
+{% elif item.kind == "ingredient" %}
+<circle cx="{{ pad + 4 }}" cy="{{ (item.lines[0].y - 4.5)|n }}" r="2.5" fill="{{ c.event_edge }}"/>
+{% for t in item.lines %}<text x="{{ bullet_x }}" y="{{ t.y|n }}" font-size="13.5" fill="{{ c.ink }}">{{ t.text }}</text>{% endfor %}
+{% elif item.kind == "step" %}
+<text x="{{ pad }}" y="{{ item.lines[0].y|n }}" font-size="13.5" font-weight="700" fill="{{ c.event_edge }}">{{ item.number }}.</text>
+{% for t in item.lines %}<text x="{{ step_x }}" y="{{ t.y|n }}" font-size="13.5" fill="{{ c.ink }}">{{ t.text }}</text>{% endfor %}
+{% else %}
+{% for t in item.lines %}<text x="{{ pad }}" y="{{ t.y|n }}" font-size="12" fill="{{ c.muted }}">{{ t.text }}</text>{% endfor %}
+{% endif %}
+{% endfor %}
+{% if more %}
+<text x="{{ pad }}" y="{{ more_y|n }}" font-size="13" fill="{{ c.muted }}">{{ more }}</text>
+{% endif %}
+</svg>

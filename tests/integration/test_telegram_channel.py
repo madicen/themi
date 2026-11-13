@@ -453,3 +453,28 @@ async def test_more_than_two_buttons_go_on_rows(
         ["Grocery list", "Things to Buy"],
         ["Costco", "Not now"],
     ]
+
+
+async def test_a_picture_carries_buttons_and_its_caption_can_be_edited(
+    family: SeededFamily, channel: TelegramChannel, fake_telegram: FakeTelegram, recorder: Recorder
+) -> None:
+    """DC4: the morning message as a picture, its words the caption, its buttons under it;
+    a tap's edit changes the caption and buttons."""
+    assert channel.caption_limit(family.erin) == 1024
+    message_id = await channel.send_photo(
+        family.erin, b"\x89PNG", "Good morning, Erin.", kind="morning",
+        buttons=[Button("Email", "morning", {"action": "email"})],
+    )  # fmt: skip
+    keyboard = fake_telegram.last_keyboard(ERIN_TELEGRAM_ID)
+    assert [b["text"] for b in keyboard] == ["Email"]
+    fake_telegram.tap(ERIN_TELEGRAM_ID, keyboard[0]["callback_data"], message_id)
+    await channel.poll_once()
+    (event,) = recorder.events
+    assert event.button is not None and event.button.payload == {"action": "email"}
+
+    await channel.edit_caption(family.erin, message_id, "Good morning, Erin.", [])
+    (edit,) = fake_telegram.calls("editMessageCaption")
+    assert int(edit["message_id"]) == message_id
+    assert edit["caption"] == "Good morning, Erin."
+    logged = family.store.recent_messages(family.erin.id)[-1]
+    assert (logged.text, logged.kind) == ("[picture] Good morning, Erin.", "edit")

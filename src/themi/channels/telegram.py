@@ -87,6 +87,7 @@ OFFSET_KEY = "telegram.offset"
 PAIRING_FAILURE_LIMIT = 5
 PAIRING_WINDOW = timedelta(hours=1)
 TYPING_REFRESH_SECONDS = 4.5  # Telegram shows "typing" for about 5 s per action
+CAPTION_LIMIT = 1024  # DC4: the longest caption under a picture
 MAX_VOICE_BYTES = 20 * 1024 * 1024  # bots can't download larger files anyway
 MAX_PICTURE_BYTES = 5 * 1024 * 1024  # F34g: the largest photo size under this
 PICTURE_LOG = "[a picture]"
@@ -644,15 +645,50 @@ class TelegramChannel:
         )
 
     async def send_photo(
-        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+        self,
+        member: Member,
+        photo: bytes,
+        caption: str = "",
+        *,
+        kind: str = "photo",
+        buttons: Sequence[Button] = (),
     ) -> int:
-        """A picture with a caption, to the member's own chat (BD4b). Returns its id."""
+        """A picture with a caption (and buttons, DC4), to the member's own chat (BD4b).
+        Returns its id."""
+        group_id, markup = self._keyboard(member, buttons)
         sent = await self._with_flood_retry(
-            lambda: self.bot.send_photo(_chat_id(member), photo, caption=caption or None)
+            lambda: self.bot.send_photo(
+                _chat_id(member), photo, caption=caption or None, reply_markup=markup
+            )
         )
+        note_message(self.store.db, group_id, sent.message_id)
         self.store.log_message(member.id, "out", f"[picture] {caption}".strip(), kind,
                                sent.message_id)  # fmt: skip
         return sent.message_id
+
+    def caption_limit(self, member: Member) -> int:
+        """DC4: Telegram's longest caption."""
+        return CAPTION_LIMIT
+
+    async def edit_caption(
+        self,
+        member: Member,
+        message_id: int,
+        caption: str,
+        buttons: Sequence[Button] = (),
+        *,
+        anyone: bool = False,
+    ) -> None:
+        """Replace a picture's caption and buttons (DC4: the morning message's picture)."""
+        group_id, markup = self._keyboard(member, buttons, anyone=anyone)
+        await self._with_flood_retry(
+            lambda: self.bot.edit_message_caption(
+                chat_id=_chat_id(member), message_id=message_id, caption=caption,
+                reply_markup=markup,
+            )
+        )  # fmt: skip
+        note_message(self.store.db, group_id, message_id)
+        self.store.log_message(member.id, "out", f"[picture] {caption}", "edit", message_id)
 
     async def send_document(
         self, member: Member, data: bytes, filename: str, caption: str = "", *,

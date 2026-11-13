@@ -242,6 +242,15 @@ class Weather:
             return None
         return noteworthy(forecast, local, end, self.settings, self.latest_alerts())
 
+    def alert_in_force(self, start: datetime) -> bool:
+        """DC3: whether the line for the day from `start` is an NWS alert (the day card
+        shows it as a warning, not a note)."""
+        if self.latest() is None:
+            return False
+        local = start.astimezone(self.tz())
+        end = datetime(local.year, local.month, local.day, DAY_ENDS.hour, tzinfo=self.tz())
+        return local < end and _alert_line(self.latest_alerts(), local, end) is not None
+
 
 # ----- what's noteworthy (WX2) -------------------------------------------------------------
 

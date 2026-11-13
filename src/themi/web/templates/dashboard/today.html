@@ -1,0 +1,7 @@
+{# DC7: today's picture, as the morning message has it, drawn for the signed-in member. #}
+{% if today_card %}
+<section>
+  <h2>Today</h2>
+  <div class="today-card" role="img" aria-label="Today's events and weather">{{ today_card }}</div>
+</section>
+{% endif %}

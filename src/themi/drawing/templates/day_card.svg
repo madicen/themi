@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" font-family="{{ font }}">
+<rect width="{{ width }}" height="{{ height }}" fill="{{ c.bg }}"/>
+<text x="{{ pad }}" y="{{ header.date_y|n }}" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ header.date }}</text>
+<text x="{{ pad }}" y="{{ header.name_y|n }}" font-size="14" fill="{{ c.muted }}">{{ header.name }}</text>
+{% if top_right %}
+<image href="{{ icon(top_right.icon) }}" x="{{ (width - pad - 120)|n }}" y="22" width="60" height="60"/>
+<text x="{{ width - pad }}" y="{{ header.date_y|n }}" text-anchor="end" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ top_right.high }}</text>
+<text x="{{ width - pad }}" y="{{ header.name_y|n }}" text-anchor="end" font-size="14" fill="{{ c.muted }}">low {{ top_right.low }}</text>
+{% endif %}
+{% if band %}
+<rect x="{{ pad }}" y="{{ band.y|n }}" width="{{ width - 2 * pad }}" height="34" rx="8" fill="{{ band.fill }}" stroke="{{ band.edge }}" stroke-width="1.25"/>
+<text x="{{ pad + 14 }}" y="{{ (band.y + 22)|n }}" font-size="14" fill="{{ c.ink }}">{{ band.text }}</text>
+{% endif %}
+{% for row in strip %}
+<rect x="{{ strip_x|n }}" y="{{ row.y|n }}" width="{{ strip_w|n }}" height="22" rx="6" fill="{{ row.fill }}" stroke="{{ row.edge }}" stroke-width="1"/>
+<text x="{{ (strip_x + 8)|n }}" y="{{ (row.y + 15.5)|n }}" font-size="13" font-weight="700" fill="{{ c.ink }}">{{ row.title }}</text>
+{% if row.more %}
+<text x="{{ (strip_x + strip_w - 8)|n }}" y="{{ (row.y + 15.5)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ row.more }}</text>
+{% endif %}
+{% endfor %}
+{% for tick in ticks %}
+<line x1="{{ (timeline.x0 - 4)|n }}" x2="{{ timeline.x1|n }}" y1="{{ tick.y|n }}" y2="{{ tick.y|n }}" stroke="{{ c.grid }}" stroke-width="1"/>
+<text x="{{ pad }}" y="{{ (tick.y + 4)|n }}" font-size="11.5" fill="{{ c.muted }}">{{ tick.label }}</text>
+{% endfor %}
+{% if column %}
+<text x="{{ ((column.x0 + column.x1) / 2)|n }}" y="{{ column.head_y|n }}" text-anchor="middle" font-size="10.5" fill="{{ c.muted }}">{{ column.head }}</text>
+{% for bar in column.bars %}
+<rect x="{{ bar.x|n }}" y="{{ bar.y|n }}" width="{{ bar.width|n }}" height="{{ bar.height|n }}" rx="2" fill="{{ c.rain }}" fill-opacity="0.55"/>
+{% endfor %}
+{% if column.points %}
+<polyline points="{{ column.points }}" fill="none" stroke="{{ c.temp }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+{% endif %}
+{% for label in column.labels %}
+<text x="{{ label.x|n }}" y="{{ label.y|n }}" text-anchor="end" font-size="11" font-weight="700" fill="{{ c.temp }}">{{ label.text }}</text>
+{% endfor %}
+{% endif %}
+{% if empty %}
+<text x="{{ events_mid|n }}" y="{{ empty_y|n }}" text-anchor="middle" font-size="15" fill="{{ c.muted }}">Nothing on the calendar</text>
+{% endif %}
+{% for b in blocks %}
+<rect x="{{ b.x|n }}" y="{{ b.y|n }}" width="{{ b.width|n }}" height="{{ b.height|n }}" rx="{{ 4 if b.height < 14 else 7 }}" fill="{{ b.fill }}" stroke="{{ b.edge }}" stroke-width="1.25"{% if b.dashed %} stroke-dasharray="4 3"{% endif %}/>
+{% for t in b.lines %}
+<text x="{{ t.x|n }}" y="{{ t.y|n }}" font-size="{{ t.size|n }}"{% if t.bold %} font-weight="700"{% endif %} fill="{{ c.muted if t.muted else c.ink }}">{{ t.text }}</text>
+{% endfor %}
+{% endfor %}
+{% for chip in chips %}
+<rect x="{{ chip.x|n }}" y="{{ chips_y|n }}" width="{{ chip.width|n }}" height="28" rx="14" fill="none" stroke="{{ c.chip_edge }}" stroke-width="1.25"/>
+<text x="{{ (chip.x + chip.width / 2)|n }}" y="{{ (chips_y + 18.5)|n }}" text-anchor="middle" font-size="13" fill="{{ c.ink }}">{{ chip.text }}</text>
+{% endfor %}
+</svg>

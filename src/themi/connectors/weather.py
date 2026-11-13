@@ -39,7 +39,13 @@ HOURLY = (
     "temperature_2m",
     "wind_gusts_10m",
 )
-DAILY = ("temperature_2m_max", "temperature_2m_min")
+DAILY = (
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "weather_code",  # DC6: the week ahead's icon for each day
+    "precipitation_probability_max",
+)
+FORECAST_DAYS = 7  # DC6: today and the six after, for the week ahead (WX1 asked for 2)
 
 
 class WeatherError(Exception):
@@ -68,6 +74,8 @@ class Day:
     day: date
     high: float  # °F
     low: float  # °F
+    code: int = 0  # WMO, the day's (DC6); 0 in a forecast stored before it
+    chance: int = 0  # %, the day's highest chance of rain or snow (DC6)
 
 
 @dataclass(frozen=True)
@@ -141,7 +149,7 @@ class WeatherClient:
         self._transport = transport
 
     async def forecast(self, lat: float, lon: float, timezone: str) -> Forecast:
-        """Yesterday, today and tomorrow at this place, hours in `timezone`."""
+        """Yesterday, today and the six days after at this place, hours in `timezone`."""
         body = await self._get(
             f"{self.open_meteo_url}/v1/forecast",
             {
@@ -149,7 +157,7 @@ class WeatherClient:
                 "longitude": f"{lon:.4f}",
                 "timezone": timezone,
                 "past_days": "1",
-                "forecast_days": "2",
+                "forecast_days": str(FORECAST_DAYS),
                 "hourly": ",".join(HOURLY),
                 "daily": ",".join(DAILY),
                 "temperature_unit": "fahrenheit",
@@ -231,10 +239,23 @@ def _parse(body: Any, tz: ZoneInfo) -> Forecast:
                 gust=_number(hourly["wind_gusts_10m"], i),
             )
         )
+    codes = daily.get("weather_code") or []
+    chances = daily.get("precipitation_probability_max") or []
     days = [
-        Day(date.fromisoformat(d), float(high), float(low))
-        for d, high, low in zip(
-            daily["time"], daily["temperature_2m_max"], daily["temperature_2m_min"], strict=True
+        Day(
+            date.fromisoformat(d),
+            float(high),
+            float(low),
+            code=round(_number(codes, i)),
+            chance=round(_number(chances, i)),
+        )
+        for i, (d, high, low) in enumerate(
+            zip(
+                daily["time"],
+                daily["temperature_2m_max"],
+                daily["temperature_2m_min"],
+                strict=True,
+            )
         )
         if high is not None and low is not None
     ]

@@ -59,6 +59,7 @@ from themi.standard.checkin_reviews import CheckinReviewsModule
 from themi.standard.commands import CommandsModule
 from themi.standard.conversation_mode import ConversationModeModule
 from themi.standard.day_summary import DaySummaryModule
+from themi.standard.drawings import DrawingsModule
 from themi.standard.feedback import FeedbackModule
 from themi.standard.focus import FocusModule
 from themi.standard.follow_ups import FollowUpsModule
@@ -226,6 +227,7 @@ def family_modules(
         RemindersModule(),
         BusinessHoursModule(),  # F34k
         DaySummaryModule(),
+        DrawingsModule(),  # DC1
         FocusModule(),
         TakingModule(),
         GuidesModule(),

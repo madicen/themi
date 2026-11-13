@@ -22,6 +22,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Weather (the weather module and the morning message's weather line): Themi Weather Module
   Plan, https://claude.ai/artifact/VaszSg2tS76qK2aaLUqtMr. Read it the same way. It is the
   design source for the WX prompts and MM5.
+- Day card (the morning message's picture of the day, and other drawn pictures): Themi Day
+  Card Plan, https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H. Read it the same way. It is
+  the design source for the DC prompts.
 
 ## "Implement the next prompt"
 

@@ -41,7 +41,7 @@ from tests.fakes.scripted_provider import ScriptedProvider
 from tests.fakes.search import FakeSearch
 from tests.fakes.server_runner import FakeRunner
 from tests.fakes.spotify import FakeSpotify
-from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
+from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram, markup
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
@@ -271,16 +271,18 @@ class Scenario:
         buttons replace the message's own)."""
         chat = self.member(name).telegram_user_id
         for method, params in reversed(
-            self.telegram.calls_in_order("sendMessage", "editMessageText")
+            self.telegram.calls_in_order(
+                "sendMessage", "editMessageText", "sendPhoto", "editMessageCaption"
+            )
         ):
-            if int(params["chat_id"]) != chat or not params.get("reply_markup"):
+            if int(params["chat_id"]) != chat or not markup(params):
                 continue
-            for button in (b for row in params["reply_markup"]["inline_keyboard"] for b in row):
+            for button in (b for row in markup(params)["inline_keyboard"] for b in row):
                 if button["text"] == label:
                     token = button["callback_data"]
                     message_id = (
                         int(params["message_id"])
-                        if method == "editMessageText"
+                        if method.startswith("edit")
                         else self._message_id_for(params)
                     )
                     return await self._collect(
@@ -289,10 +291,11 @@ class Scenario:
         raise AssertionError(f"no button {label!r} was sent to {name}")
 
     def _message_id_for(self, params: dict) -> int:
+        text = params["text"] if "text" in params else f"[picture] {params['caption']}".strip()
         row = self.app.db.one(
             "SELECT telegram_message_id FROM message_log WHERE direction = 'out' AND text = ? "
             "ORDER BY id DESC LIMIT 1",
-            (params["text"],),
+            (text,),
         )
         assert row is not None
         return row["telegram_message_id"]
@@ -400,8 +403,14 @@ class Scenario:
         return await task.run()
 
     def edits(self, name: str) -> list[dict]:
+        """Edits to `name`'s messages, in order: words, or a picture's caption (DC5), as
+        `text`."""
         chat = self.member(name).telegram_user_id
-        return [p for p in self.telegram.calls("editMessageText") if int(p["chat_id"]) == chat]
+        return [
+            {**p, "text": p.get("text", p.get("caption", ""))}
+            for _, p in self.telegram.calls_in_order("editMessageText", "editMessageCaption")
+            if int(p["chat_id"]) == chat
+        ]
 
     def last_buttons(self, name: str) -> list[str]:
         chat = self.member(name).telegram_user_id
@@ -409,11 +418,21 @@ class Scenario:
         return [b["text"] for b in self.telegram.last_keyboard(chat)]
 
     async def advance(self, *, hours: float = 0, minutes: float = 0) -> list[str]:
-        """Let time pass and deliver whatever became due. Returns all texts sent meanwhile."""
-        before = len(self.telegram.calls("sendMessage"))
+        """Let time pass and deliver whatever became due. Returns all texts sent meanwhile
+        (a picture's caption among them: DC5's morning message)."""
+        before = len(self.telegram.calls_in_order("sendMessage", "sendPhoto"))
         clock.advance(timedelta(hours=hours, minutes=minutes))
         await self.app.outbox.flush()
-        return [p["text"] for p in self.telegram.calls("sendMessage")[before:]]
+        return [
+            str(p["text"] if method == "sendMessage" else p["caption"])
+            for method, p in self.telegram.calls_in_order("sendMessage", "sendPhoto")[before:]
+            if method == "sendMessage" or p.get("caption")
+        ]
+
+    def pictures(self, name: str) -> list[dict]:
+        """The pictures sent to `name` (DC5), each call's parameters."""
+        chat = self.member(name).telegram_user_id
+        return [p for p in self.telegram.calls("sendPhoto") if int(p["chat_id"]) == chat]
 
     # ----- looking ------------------------------------------------------------
 

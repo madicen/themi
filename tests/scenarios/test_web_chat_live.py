@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
+import pytest
 
 from tests.fixtures.family import SeededFamily
 from tests.fixtures.web import csrf_of, web_client
@@ -99,6 +100,9 @@ async def test_an_unchanged_log_is_204_until_something_changes(family: SeededFam
     assert "First, changed" in edited.text and '"chat-edited">edited<' in edited.text
 
 
+@pytest.mark.usefixtures(
+    "frozen_clock"
+)  # it read the wall clock: quiet hours held the card at night
 async def test_a_check_reaction_on_the_site_approves_the_card(family: SeededFamily) -> None:
     app = web_only(family)
     chat = app.services.get(WebChatChannel)

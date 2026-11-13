@@ -55,18 +55,19 @@ async def test_the_forecast_is_read_hour_by_hour_for_yesterday_today_and_tomorro
     fake.day(0, high=58, low=45)
     forecast = await fake.client().forecast(37.7, -122.4, "America/Los_Angeles")
     today = date(2026, 10, 21)
-    assert len(forecast.hours) == 72
+    assert len(forecast.hours) == 24 * 8  # DC6: yesterday, today and six days after
     two_pm = next(h for h in forecast.hours if h.at == datetime(2026, 10, 21, 14, tzinfo=TZ))
     assert (two_pm.chance, two_pm.rain, two_pm.code, two_pm.temp) == (80, 0.1, 61, 55)
     assert (
         next(h for h in forecast.hours if h.at == datetime(2026, 10, 21, 16, tzinfo=TZ)).chance == 0
     )
     assert forecast.day(today) is not None and forecast.day(today).high == 58  # type: ignore[union-attr]
+    assert (forecast.day(today).code, forecast.day(today).chance) == (61, 80)  # type: ignore[union-attr]
     assert forecast.day(today - timedelta(days=1)) is not None
     assert len(forecast.hours_on(today)) == 24
     params = fake.calls[0][1]
     assert params["latitude"] == "37.7000" and params["timezone"] == "America/Los_Angeles"
-    assert params["forecast_days"] == "2" and params["wind_speed_unit"] == "mph"
+    assert params["forecast_days"] == "7" and params["wind_speed_unit"] == "mph"  # DC6
 
 
 async def test_a_forecast_survives_being_stored() -> None:

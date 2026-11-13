@@ -40,6 +40,7 @@ SCHEDULES = ToolGroup(
     tools=(
         "set_task_schedule",
         "set_task_plan",
+        "show_step_plan",  # DC11
         "set_task_importance",
         "set_check_in_reviews",
         "set_task_medicine",
@@ -51,12 +52,13 @@ SCHEDULES = ToolGroup(
 
 CALENDAR = ToolGroup(
     name="calendar",
-    description="calendar events, day summaries, drive times, blocking time",
+    description="calendar events, day summaries, drive times, blocking time, the weather",
     words=(
         "calendar|appointment|meeting|event|today|tomorrow|tonight|yesterday|(?:morni"
         "ng|afternoon|evening)(?!s?\\s+routines?)|day look|what'?s on|monday|tuesday|w"
         "ednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|block|t"
-        "ime for|find (?:me )?time|summary"
+        "ime for|find (?:me )?time|summary|my week|the week|week ahead|weather|forecast|"
+        "rain|snow|umbrella"
     ),
     examples=(
         "What's on my calendar today?",
@@ -72,6 +74,8 @@ CALENDAR = ToolGroup(
         "Find me a free hour this week for the taxes",
         "Set aside Sunday afternoon for meal prep",
         "What's coming up next week?",
+        "Show me my week",
+        "What's the weather like?",
     ),
     tools=(
         "add_calendar_event",
@@ -83,6 +87,8 @@ CALENDAR = ToolGroup(
         "drive_time",
         "block_time_for_task",
         "find_time_for_task",
+        "show_week",  # DC6
+        "show_weather",  # DC8
     ),
     order=20,
 )
@@ -172,6 +178,7 @@ WALL = ToolGroup(
         "What's on the wall today?",
         "Move the vacuum water item to my chore chart",  # F32b: an item onto the chart
         "Can you move it to my chores?",
+        "Show me the chore chart",
     ),
     tools=(
         "put_task_on_wall_list",
@@ -186,6 +193,7 @@ WALL = ToolGroup(
         "add_routine_item",
         "remove_routine_item",
         "tick_routine_item",
+        "show_chore_chart",  # DC9
     ),
     order=60,
 )

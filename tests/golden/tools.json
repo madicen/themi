@@ -241,7 +241,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "f6b1c6e3e7e8"
+    "spec": "15d3a7443514"
   },
   "move_expense": {
     "group": "spending",
@@ -286,6 +286,10 @@
   "read_web_page": {
     "group": "web",
     "spec": "53565590807c"
+  },
+  "recipe_card": {
+    "group": "recipes",
+    "spec": "2a76e03e9eb1"
   },
   "recipe_from_link": {
     "group": "recipes",
@@ -451,6 +455,10 @@
     "group": "lists",
     "spec": "947b01c2f27c"
   },
+  "show_chore_chart": {
+    "group": "wall",
+    "spec": "486c0b23728d"
+  },
   "show_grocery_list": {
     "group": "core",
     "spec": "d1da5f123c21"
@@ -474,6 +482,18 @@
   "show_routines": {
     "group": "wall",
     "spec": "f8ff3c412b5a"
+  },
+  "show_step_plan": {
+    "group": "schedules",
+    "spec": "b09704ef4350"
+  },
+  "show_weather": {
+    "group": "calendar",
+    "spec": "ccb8424175bb"
+  },
+  "show_week": {
+    "group": "calendar",
+    "spec": "587b1600a30e"
   },
   "skip_round": {
     "group": "core",

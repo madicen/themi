@@ -43,6 +43,7 @@ class FakeWeather:
         self.days: dict[int, dict[str, float]] = {}
         self.alerts: list[dict[str, Any]] = []  # NWS alerts' properties
         self.in_us = True
+        self.forecast_days = 7  # what Themi asks for (the request's forecast_days)
         self.calls: list[tuple[str, dict[str, str]]] = []
         self._failures: Counter[str] = Counter()
         self.transport = httpx.MockTransport(self._handle)
@@ -55,11 +56,16 @@ class FakeWeather:
         for hour in range(start, end):
             self.hour(day, hour, **values)
 
-    def day(self, day: int, *, high: float | None = None, low: float | None = None) -> None:
+    def day(
+        self, day: int, *, high: float | None = None, low: float | None = None,
+        code: int | None = None,
+    ) -> None:  # fmt: skip
         if high is not None:
             self.days.setdefault(day, {})["high"] = high
         if low is not None:
             self.days.setdefault(day, {})["low"] = low
+        if code is not None:  # DC6: the day's own WMO code
+            self.days.setdefault(day, {})["code"] = code
 
     def alert(
         self,
@@ -119,6 +125,7 @@ class FakeWeather:
         if failed is not None:
             return failed
         assert params["temperature_unit"] == "fahrenheit" and params["past_days"] == "1"
+        self.forecast_days = int(params["forecast_days"])
         return _json(self._forecast(ZoneInfo(params["timezone"])))
 
     def _nws(self, request: httpx.Request, params: dict[str, str]) -> httpx.Response:
@@ -145,11 +152,13 @@ class FakeWeather:
             "time": [],
             "temperature_2m_max": [],
             "temperature_2m_min": [],
+            "weather_code": [],
+            "precipitation_probability_max": [],
         }
-        for offset in (-1, 0, 1):
+        for offset in range(-1, int(self.forecast_days)):
             day = today + timedelta(days=offset)
             start = datetime(day.year, day.month, day.day, tzinfo=tz)
-            temps = []
+            temps, codes, chances = [], [], []
             for hour in range(24):
                 values = {**FAIR, **self.hours.get((offset, hour), {})}
                 label = start + timedelta(hours=hour + 1)  # Open-Meteo labels the hour's end
@@ -157,10 +166,14 @@ class FakeWeather:
                 for name, field in FIELDS.items():
                     hourly[field].append(values[name])
                 temps.append(values["temp"])
+                codes.append(values["code"])
+                chances.append(values["chance"])
             set_days = self.days.get(offset, {})
             daily["time"].append(day.isoformat())
             daily["temperature_2m_max"].append(set_days.get("high", max(temps) + 5))
             daily["temperature_2m_min"].append(set_days.get("low", min(temps) - 10))
+            daily["weather_code"].append(set_days.get("code", max(codes)))
+            daily["precipitation_probability_max"].append(max(chances))
         return {"timezone": tz.key, "hourly": hourly, "daily": daily}
 
 

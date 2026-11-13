@@ -47,6 +47,13 @@ def build_parser() -> argparse.ArgumentParser:
         "login-link", help="print a one-time website sign-in link for a member (10 minutes)"
     )
     login.add_argument("name")
+    picture = commands.add_parser(
+        "picture", help="draw one of Themi's pictures to a file, to look at it (DC3)"
+    )
+    picture.add_argument("kind", choices=("day_card",), help="which picture")
+    picture.add_argument("--member", required=True, help="whose, by name")
+    picture.add_argument("--day", default="", help="YYYY-MM-DD (default: their today)")
+    picture.add_argument("--out", required=True, help="a .png or .svg file to write")
     feedback = commands.add_parser(
         "feedback", help="print new /bug and /idea reports from the chat, to paste into Claude"
     )
@@ -310,6 +317,40 @@ def _run() -> None:
 
         log.info("Starting again, with the Modules page's changes")
         reexec()
+
+
+def _picture(kind: str, name: str, day: str, out: str) -> int:
+    """`themi picture day_card --member Erin --out card.png`: a picture as it would be
+    sent, drawn from this Themi's own data, written to a file."""
+    import asyncio
+    from datetime import date
+
+    from themi.core import keys
+    from themi.settings import Settings
+
+    runtime = build_runtime(Settings.load())
+    app = runtime.app
+    drawings = app.services.maybe(keys.drawings)
+    if drawings is None:
+        print("Drawings is off: turn it on on the Modules page.", file=sys.stderr)
+        return 1
+    member = app.store.member_by_name(name)
+    if member is None:
+        print(f"There's no member called {name}.", file=sys.stderr)
+        return 1
+    card = drawings.day_card
+    when = date.fromisoformat(day) if day else card.today(member)
+    path = Path(out)
+    if path.suffix == ".svg":
+        path.write_text(card.svg(member, when))
+    else:
+        png = asyncio.run(card.png(member, when))
+        if png is None:
+            print("The picture couldn't be drawn; the log says why.", file=sys.stderr)
+            return 1
+        path.write_bytes(png)
+    print(f"Wrote {path} ({kind}, {member.name}, {when:%a %d %b})")
+    return 0
 
 
 def _login_link(name: str) -> str:
@@ -636,6 +677,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(config_report(Settings.load()))
         elif args.command == "login-link":
             print(_login_link(args.name))
+        elif args.command == "picture":
+            return _picture(args.kind, args.member, args.day, args.out)
         elif args.command == "feedback":
             return _feedback(args.all, args.done, args.wrong_tool, args.not_wrong, args.pictures)
         elif args.command == "backup":
