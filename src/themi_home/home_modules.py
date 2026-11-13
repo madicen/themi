@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import timedelta
 
-from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup
+from themi.modules import AccountNeed, Module, ModuleContext, ModuleSetup, as_job
 from themi.standard.tasks import TaskBoard
 from themi_home import home_groups
 from themi_home.connectors.catgenie import CatGenieAccount, CatGenieConfig, CatGenieWatcher
@@ -239,6 +239,7 @@ class ThinqModule(Module):
         ctx.provide(watcher)
         ctx.periodic("devices.thinq", timedelta(minutes=5), watcher.poll)
         ctx.periodic("devices.thinq_push", timedelta(minutes=1), watcher.listen)
+        ctx.on_shutdown("thinq.push", as_job(watcher.push.reset))
         laundry = ctx.provide(Laundry(s, ctx.get(TaskBoard), watcher))
         laundry.install()
         ctx.periodic("laundry.fresh", timedelta(minutes=15), laundry.check_fresh)
@@ -271,8 +272,10 @@ class RoborockModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
-        watcher = RoborockWatcher(s.store, RoborockAccount(s.store.db, s.store.cipher, self.login))
+        account = RoborockAccount(s.store.db, s.store.cipher, self.login)
+        watcher = RoborockWatcher(s.store, account)
         ctx.provide(watcher)
+        ctx.on_shutdown("roborock", account.close)  # its MQTT session ignores a plain cancel
         ctx.periodic("devices.vacuum", timedelta(minutes=1), watcher.poll)
         vacuum = ctx.provide(Vacuum(s, ctx.get(TaskBoard), watcher))
         vacuum.install()
@@ -303,8 +306,10 @@ class TuyaModule(Module):
 
     def install(self, ctx: ModuleContext) -> None:
         s = ctx.services
-        watcher = TuyaWatcher(s.store, TuyaAccount(s.store.db, s.store.cipher, self.config))
+        account = TuyaAccount(s.store.db, s.store.cipher, self.config)
+        watcher = TuyaWatcher(s.store, account)
         ctx.provide(watcher)
+        ctx.on_shutdown("tuya", account.close)
         ctx.periodic("devices.feeders", timedelta(minutes=10), watcher.poll)
         ctx.provide(Feeders(s, ctx.get(TaskBoard), watcher)).install()
         _row(ctx, "tuya", "accounts/tuya.html", 40)  # CR17a
@@ -336,6 +341,7 @@ class CatGenieModule(Module):
         account = CatGenieAccount(s.store.db, s.store.cipher, self.config)
         watcher = CatGenieWatcher(s.store, account)
         ctx.provide(watcher)
+        ctx.on_shutdown("catgenie", account.close)
         ctx.periodic("devices.litter_box", timedelta(minutes=10), watcher.poll)
         ctx.provide(LitterBox(s, ctx.get(TaskBoard), watcher)).install()
         _row(ctx, "catgenie", "accounts/catgenie.html", 50)  # CR17a

@@ -158,6 +158,11 @@ class ModuleContext:
 
     # ----- what a module adds ----------------------------------------------------------
 
+    def on_shutdown(self, name: str, close: Callable[[], Awaitable[object]]) -> None:
+        """`close` runs when Themi stops, before the database closes: for a connection the
+        module keeps open. One that hangs or fails is logged and left (`runtime.close_all`)."""
+        self.services.closers.append((name, close))
+
     def periodic(self, name: str, every: timedelta, run: Callable[[], Awaitable[object]]) -> None:
         if any(job.name == name for job in self.jobs):
             raise ModuleError(f"periodic job {name} is added twice (last by {self._who()})")

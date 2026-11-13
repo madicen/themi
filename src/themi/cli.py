@@ -289,8 +289,6 @@ def config_report(settings: Settings, env: dict[str, str] | None = None) -> str:
 
 
 def _run() -> None:
-    import asyncio
-
     from themi.logs import configure_logging
     from themi.settings import Settings, ensure_secret_key, read_dotenv
 
@@ -305,18 +303,19 @@ def _run() -> None:
         runtime.install_signal_handlers()
         await runtime.run()
 
-    from themi.runtime import PortInUse
+    from themi.runtime import PortInUse, reexec, run_to_end
 
     try:
-        asyncio.run(main())
+        stuck = run_to_end(main())
     except PortInUse as exc:
         log.error("%s", exc)
         raise SystemExit(1) from None
     if runtime.restart_requested:  # SP6: asked for on the Modules page
-        from themi.runtime import reexec
-
         log.info("Starting again, with the Modules page's changes")
-        reexec()
+        reexec()  # replaces the process, stuck tasks and threads with it
+    if stuck:  # their threads could hold up the interpreter's exit too
+        logging.shutdown()
+        os._exit(0)
 
 
 def _picture(kind: str, name: str, day: str, out: str) -> int:

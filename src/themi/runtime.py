@@ -15,8 +15,9 @@ import os
 import signal
 import socket
 import sys
+from collections.abc import Awaitable, Callable, Coroutine
 from datetime import timedelta
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import uvicorn
 
@@ -31,6 +32,8 @@ log = logging.getLogger(__name__)
 SCHEDULER_TICK = timedelta(seconds=15)
 SHUTDOWN_GRACE_SECONDS = 30
 RESTART_AFTER_SECONDS = 1.0
+CLOSE_TIMEOUT_SECONDS = 5.0  # each module's close, on the way out
+LEFTOVER_GRACE_SECONDS = 5.0  # tasks still running once Themi has stopped
 
 
 class PortInUse(Exception):
@@ -43,6 +46,68 @@ def reexec() -> NoReturn:
     container it's still PID 1 and Docker sees no exit). Called once Themi has stopped."""
     logging.shutdown()
     os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
+
+
+async def close_all(closers: list[tuple[str, Callable[[], Awaitable[object]]]]) -> None:
+    """What the modules keep open, closed in turn. One that fails or doesn't finish in
+    CLOSE_TIMEOUT_SECONDS is logged and left, so the rest still close."""
+    for name, close in closers:
+        try:
+            await asyncio.wait_for(close(), timeout=CLOSE_TIMEOUT_SECONDS)
+        except TimeoutError:
+            log.warning("%s didn't close in %ss; left open", name, CLOSE_TIMEOUT_SECONDS)
+        except Exception:
+            log.warning("%s didn't close cleanly", name, exc_info=True)
+
+
+def run_to_end(main: Coroutine[Any, Any, object]) -> list[str]:
+    """`asyncio.run(main)`, except that what's still running afterwards gets
+    LEFTOVER_GRACE_SECONDS to stop rather than forever. asyncio.run cancels leftover tasks
+    and waits for them, so one that ignores being cancelled (python-roborock's reconnect
+    loop, 13 Nov 2026) kept Themi from ever exiting or restarting. Returns the names of the
+    tasks left behind (logged too); what `main` raises is raised."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    stuck: list[str] = []
+    try:
+        loop.run_until_complete(main)
+    finally:
+        try:
+            stuck = _end_leftovers(loop)
+            loop.run_until_complete(
+                asyncio.wait_for(loop.shutdown_asyncgens(), LEFTOVER_GRACE_SECONDS)
+            )
+            loop.run_until_complete(
+                asyncio.wait_for(loop.shutdown_default_executor(), LEFTOVER_GRACE_SECONDS)
+            )
+        except Exception:
+            log.warning("Stopping the event loop didn't finish cleanly", exc_info=True)
+        finally:
+            asyncio.set_event_loop(None)
+            if not stuck:
+                loop.close()
+    return stuck
+
+
+def _end_leftovers(loop: asyncio.AbstractEventLoop) -> list[str]:
+    leftovers = [task for task in asyncio.all_tasks(loop) if not task.done()]
+    if not leftovers:
+        return []
+    for task in leftovers:
+        task.cancel()
+    loop.run_until_complete(asyncio.wait(leftovers, timeout=LEFTOVER_GRACE_SECONDS))
+    for task in leftovers:
+        if task.done() and not task.cancelled() and task.exception() is not None:
+            log.warning("%s failed while stopping", task.get_name(), exc_info=task.exception())
+    stuck = [task.get_name() for task in leftovers if not task.done()]
+    for task in leftovers:
+        if not task.done():
+            log.warning(
+                "%s (%s) didn't stop when cancelled; left behind",
+                task.get_name(),
+                getattr(task.get_coro(), "__qualname__", "?"),
+            )
+    return stuck
 
 
 class Runtime:
@@ -183,6 +248,7 @@ class Runtime:
                 await self.app.channel.stop()
             except Exception:
                 log.warning("Telegram client didn't close cleanly", exc_info=True)
+        await close_all(self.app.services.closers)
         await self.app.outbox.flush()  # anything that became due while stopping
         self.app.db.close()
         log.info("Stopped")

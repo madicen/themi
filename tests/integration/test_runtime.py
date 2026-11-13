@@ -197,3 +197,84 @@ async def test_a_restart_from_the_modules_page_stops_themi_to_start_again(
     scenario.app.services.restart()
     await asyncio.wait_for(task, timeout=10)
     assert runtime.restart_requested
+
+
+async def test_stopping_closes_what_the_modules_opened_before_the_database(
+    family: SeededFamily, fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A connection a module keeps open (the vacuum's MQTT session) is closed on the way
+    out. One that won't close is left after a few seconds, and the rest still close."""
+    from themi import runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "CLOSE_TIMEOUT_SECONDS", 0.05)
+    scenario = Scenario(family, fake_telegram)
+    closed: list[str] = []
+
+    async def hangs() -> None:
+        await asyncio.Event().wait()
+
+    async def fails() -> None:
+        raise ConnectionError("already gone")
+
+    async def closes() -> None:
+        scenario.app.db.scalar("SELECT 1")  # the database is still open for it
+        closed.append("vacuum")
+
+    scenario.app.services.closers += [("hangs", hangs), ("fails", fails), ("vacuum", closes)]
+    runtime = Runtime(scenario.app, host="127.0.0.1", port=0, telegram_enabled=False)
+    task = asyncio.create_task(runtime.run())
+    await wait_for(lambda: runtime.server.started)
+    runtime.stop()
+    await asyncio.wait_for(task, timeout=10)
+    assert closed == ["vacuum"]
+    with pytest.raises(sqlite3.ProgrammingError):
+        scenario.app.db.scalar("SELECT 1")
+
+
+def test_a_task_that_ignores_being_cancelled_cant_keep_themi_from_stopping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """13 Nov 2026: the Roborock library's reconnect loop swallowed the cancel at the end of
+    asyncio.run, so a restart from the Modules page stopped Themi and never started it
+    again. What's left over now gets a moment, is named in the log, and is left behind."""
+    from themi import runtime as runtime_module
+
+    monkeypatch.setattr(runtime_module, "LEFTOVER_GRACE_SECONDS", 0.05)
+    tidy_finished: list[bool] = []
+
+    async def stubborn() -> None:
+        while True:
+            try:
+                await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                continue  # as roborock's _run_reconnect_loop does
+
+    async def tidy() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            tidy_finished.append(True)
+            raise
+
+    left: list[asyncio.Task[None]] = []
+
+    async def main() -> None:
+        left.append(asyncio.create_task(stubborn(), name="roborock"))
+        left.append(asyncio.create_task(tidy(), name="tidy"))
+        await asyncio.sleep(0)
+
+    started = time.monotonic()
+    stuck = runtime_module.run_to_end(main())
+    assert time.monotonic() - started < 5
+    assert stuck == ["roborock"]
+    assert tidy_finished == [True]
+
+
+def test_run_to_end_passes_on_what_main_raises() -> None:
+    from themi import runtime as runtime_module
+
+    async def main() -> None:
+        raise PortInUse("Port 8080 is already in use")
+
+    with pytest.raises(PortInUse):
+        runtime_module.run_to_end(main())
