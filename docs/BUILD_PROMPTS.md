@@ -274,7 +274,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [x] 2026-11-13 |
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [x] 2026-11-13 |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [x] 2026-11-13 |
-| F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
+| F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [ ] |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -13810,7 +13810,7 @@ picture. New tests in `tests/scenarios/test_morning_own_calendar.py`; none chang
 file changed.
 
 ### F42e · Idea (2026-11-12): "Just one thing" offers a different one
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: MM4
 Read first: `themi/standard/morning.py` (`ONE`, `on_button`'s `focus.send(member, count=1)`);
 `themi/standard/focus.py` (`send`, how the one task is picked, its buttons). From Michael's
@@ -13831,6 +13831,14 @@ says that's all. The next day starts fresh. A task done in between isn't offered
 Scenario: Michael taps Just one thing, doesn't like it, and taps Something else.
 
 Data: none needed. Mark #203 reviewed once live.
+
+Notes: `Focus.send(count=1)` adds `ELSE_BUTTON` ("Something else") ahead of Spread them out
+and Leave them for now, which stay. The button's payload carries what was offered and the
+day, so no table is needed. `_something_else` edits the message to the next one in `pick`'s
+order (times 1) that wasn't offered and is still due, so one done in between is skipped.
+The last one shows "That's all of them for now." (`NO_MORE_TEXT`) and no button. A
+yesterday's button sends today's one afresh. New tests in
+`tests/scenarios/test_one_thing_else.py`; none changed, no golden file changed.
 
 ### F42f · Feedback (2026-11-13): "Show me Erin's run" finds her step-up plan by name
 Status: [ ]
