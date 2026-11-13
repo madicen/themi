@@ -397,7 +397,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC4 | Day card: pictures in the outbox | Day card | [x] 2026-11-13 |
 | DC5 | Day card: the morning picture | Day card | [x] 2026-11-13 |
 | DC6 | Day card: the week ahead | Day card | [x] 2026-11-13 |
-| DC7 | Day card: today on the website | Day card | [ ] |
+| DC7 | Day card: today on the website | Day card | [x] 2026-11-13 |
 | DC8 | Day card: weather on request | Day card | [ ] |
 | DC9 | Day card: the chore chart | Day card | [ ] |
 | DC10 | Day card: the recipe card | Day card | [ ] |
@@ -18596,11 +18596,19 @@ Notes:
   gains `show_week`, handlers.json gains `/week`.
 
 ### DC7 · Day card: today on the website
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC3
 Read first: the plan's "Other uses".
 - The day card's SVG inline on the member's own dashboard, no PNG.
 Tests: a web test for the page, and that no one else can see it.
+
+Notes:
+- A dashboard panel (`dashboard/today.html`, order 10: above "On your list") from
+  `Drawings.today_panel`: the day card's SVG inline, drawn for the signed-in member, in
+  their light or dark choice. `.today-card svg` in `themi.css` sizes it to the column
+  (at most 540 px). The icons are data URIs, which the site's policy allows.
+- Scenarios: `tests/scenarios/test_today_page.py` (the picture, a title's markup kept as
+  words; Husband's dashboard has no sign of Erin's private event).
 
 ### DC8 · Day card: weather on request
 Status: [ ]

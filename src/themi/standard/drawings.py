@@ -84,6 +84,15 @@ class Drawings:
             return None
         return await self.day_card.png(member, self.day_card.today(member))
 
+    def today_panel(self, member: Member) -> dict[str, Any]:
+        """DC7: today's card on their own dashboard, as SVG in the page (no PNG). Drawn
+        for the signed-in member only; the dashboard is theirs."""
+        from markupsafe import Markup
+
+        svg = self.day_card.svg(member, self.day_card.today(member))
+        # The template escaped every word from data; the SVG is Themi's own markup.
+        return {"today_card": Markup(svg)}
+
     async def week_command(self, member: Member, text: str) -> None:
         """`/week` (DC6)."""
         await self.week_card.send(member)
@@ -137,5 +146,6 @@ class DrawingsModule(Module):
         drawings = ctx.provide(Drawings(ctx.services, self.renderer))
         drawings.install()
         ctx.services.outbox.pictures[DAY_CARD] = drawings.morning_picture  # DC5
+        ctx.dashboard_panel("dashboard/today.html", 10, values=drawings.today_panel)  # DC7
         ctx.tool(show_week)  # DC6
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")

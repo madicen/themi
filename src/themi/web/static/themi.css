@@ -468,3 +468,6 @@ a.button.small { min-height: 36px; padding: .3rem .8rem; font-size: .9rem; }
 .welcome-step.done .welcome-mark { background: var(--good-bg); color: var(--good); border-color: transparent; }
 .welcome-step.done .row-title { color: var(--muted); }
 .welcome-done { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; margin-top: var(--space-5); }
+
+/* DC7: today's picture on the dashboard, as wide as the column allows */
+.today-card svg { display: block; width: 100%; max-width: 540px; height: auto; border-radius: 12px; }
