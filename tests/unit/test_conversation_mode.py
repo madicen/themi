@@ -70,7 +70,7 @@ def test_a_claim_that_something_was_done_is_dropped() -> None:
         "Sounds like a long day."
     )
     assert honest("Done! It's on the list.") != "Done! It's on the list."
-    assert honest("I've added it.") == "Got it."
+    assert honest("I've added it.") == "Mm, I hear you."  # F36a: claims nothing
     assert honest("That sounds hard.") == "That sounds hard."
 
 
@@ -145,3 +145,62 @@ def test_an_open_task_body_doubling_or_a_rule_goes_to_the_tools(text: str) -> No
 )
 def test_a_remark_about_a_task_is_still_chat(text: str) -> None:
     assert not is_request(text, ["Hardware"], ERIN_OPEN)
+
+
+# ----- F36a (ideas #185, #186): an add to a list and a correction to a draft rule --------
+
+LISTS = ["Things to Buy", "Hardware"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Things to research buy. VNS device",
+        "Things to research buy. Washable dog bed",
+        "things to maybe buy: a new kettle",
+        "Things to buy someday. a hammock",
+        "What are the things I need to research buy?",
+        "what do I need to buy?",
+        "anything to purchase this week?",
+        "what are the things to get?",
+    ],
+)
+def test_a_near_list_name_or_a_buying_question_goes_to_the_tools(text: str) -> None:
+    assert is_request(text, LISTS)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I'd love to buy a boat someday",  # CM1c's: no list named
+        "Things are rough. I'm tired",  # "things" alone isn't Things to Buy
+        "Buying a house is so stressful",
+        "that's too general",  # no draft open
+    ],
+)
+def test_no_list_named_and_no_draft_stays_chat(text: str) -> None:
+    assert not is_request(text, LISTS)
+
+
+ERIN_921 = (
+    "That rule is too general. Specifically for purchases that require research or are for "
+    '"someday", track which user added them and only prompt that user to research/purchase '
+    "those items, unless otherwise specified"
+)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [ERIN_921, "that's too broad", "not quite, only for groceries", "That's not what I meant"],
+)
+def test_a_correction_while_a_draft_rule_is_open_goes_to_the_tools(text: str) -> None:
+    assert is_request(text, LISTS, open_draft=True)
+    assert not is_request("that's too broad", LISTS)
+
+
+def test_a_reply_cut_to_nothing_doesnt_say_got_it() -> None:
+    assert honest("I've added it.", "Things to research buy. VNS device") == (
+        "I haven't put that anywhere yet. Want me to?"
+    )
+    assert honest("Done, it's on the list.", "long day") == "Mm, I hear you."
+    assert "Got it." not in (honest("I've added it.", "remember the vet is closed Mondays"),)

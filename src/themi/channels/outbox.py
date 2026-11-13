@@ -11,7 +11,8 @@ Priorities:
 
 A `deadline` means "by then at the latest": once it passes, the receptivity
 provider and daily limit stop holding the message back, but quiet hours
-still do. `expires` means "no use after then": a message still waiting at that
+still do. A leave heads-up (kind `travel`, F38b) isn't held by anything and isn't
+counted. `expires` means "no use after then": a message still waiting at that
 moment is dropped, never sent late (a day's summary, bug #57).
 
 A kind with a bundler (task nudges) may go as one message when several are
@@ -100,6 +101,14 @@ BODY_DOUBLE_KIND = "body_double"  # a session's own questions, at the times they
 # Answers to what they did or asked for, not Themi starting a conversation: no quiet hours,
 # busy times or daily limit, and not counted. A pause they asked for still holds them.
 ANSWER_KINDS = (PRAISE_KIND, SERVER_KIND, BODY_DOUBLE_KIND)
+# F38b (Michael, bug #191: "prompts to get to events should break through everything"): the
+# leave heads-up goes when it's queued. Not held by quiet hours, busy times, calendar busy
+# events, the daily limit, the receptivity check, the morning tray or a pause, and not
+# counted. It's a kind, not `urgent`, so it isn't counted as an alert either; switching
+# `leave_heads_up` off is how they stop it.
+TRAVEL_KIND = "travel"
+BREAKTHROUGH_KINDS = (TRAVEL_KIND,)
+UNCOUNTED_KINDS = (*ANSWER_KINDS, *BREAKTHROUGH_KINDS)
 _PRIORITY_ORDER = {Priority.REPLY: 0, Priority.URGENT: 1, Priority.NORMAL: 2, Priority.LOW: 3}
 
 
@@ -370,7 +379,7 @@ class Outbox:
             return False
         if Priority(row["priority"]) not in (Priority.NORMAL, Priority.LOW):
             return False
-        if row["kind"] in ANSWER_KINDS:
+        if row["kind"] in UNCOUNTED_KINDS:
             return False
         member = self.store.get_member(row["member_id"])
         tray = self.tray.tray_for(member, row, now)
@@ -676,8 +685,8 @@ class Outbox:
         *,
         gated: bool = True,
     ) -> datetime:
-        if priority in IMMEDIATE:
-            return now
+        if priority in IMMEDIATE or kind in BREAKTHROUGH_KINDS:
+            return now  # F38b: a leave heads-up held is a heads-up too late
         if kind in ANSWER_KINDS:
             # A warm word answers what they just did (Michael, 2026-10-30), and an update's
             # result what they asked for (bug #130).
@@ -746,7 +755,7 @@ class Outbox:
         return when
 
     def _gated(self, member: Member, kind: str, now: datetime, priority: Priority) -> bool:
-        if priority in IMMEDIATE:
+        if priority in IMMEDIATE or kind in BREAKTHROUGH_KINDS:
             return False
         gate = self.gates.get(kind)
         until = gate(member, now) if gate is not None else None
@@ -763,15 +772,16 @@ class Outbox:
     def sent_today(self, member_id: int, now: datetime | None = None) -> int:
         """Proactive messages already sent to the member since their day began (local
         midnight, or their rollover: F34j). A warm word for a tick on the wall (F19b) or an
-        update's result (F23a) is an answer to what they did: it doesn't count."""
+        update's result (F23a) is an answer to what they did, and a leave heads-up (F38b)
+        breaks through: neither counts."""
         moment = now or clock.now()
         member = self.store.get_member(member_id)
         midnight = member_day_start(member, member_day(member, moment, self._tz), self._tz)
         return self.store.db.scalar(  # a question to the family group counts for everyone
             "SELECT COUNT(*) FROM outbox WHERE (member_id = ? OR shared_buttons = 1) "
             "AND status = 'sent' AND priority IN ('urgent', 'normal', 'low') "
-            f"AND kind NOT IN ({', '.join('?' * len(ANSWER_KINDS))}) AND sent_at >= ?",
-            (member_id, *ANSWER_KINDS, to_utc_iso(midnight)),
+            f"AND kind NOT IN ({', '.join('?' * len(UNCOUNTED_KINDS))}) AND sent_at >= ?",
+            (member_id, *UNCOUNTED_KINDS, to_utc_iso(midnight)),
         )
 
     def _is_duplicate(self, member_id: int, key: str, now: datetime) -> bool:

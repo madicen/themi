@@ -51,7 +51,7 @@ for everyone; yours are only yours.</p>
         <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/tick" class="tick">
           <input type="hidden" name="csrf" value="{{ csrf }}">
           <input type="hidden" name="done" value="{{ 0 if item.done else 1 }}">
-          <button class="tick{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}"><span class="box" aria-hidden="true">{{ '✓' if item.done else '' }}</span>{{ item.name }}{% if nl.purpose and stores[nl.id].get(item.id) %} <span class="muted">· {{ stores[nl.id][item.id] }}</span>{% endif %}</button>
+          <button class="tick{% if item.done %} ticked{% endif %}" aria-pressed="{{ 'true' if item.done else 'false' }}"><span class="box" aria-hidden="true">{{ '✓' if item.done else '' }}</span>{{ item.name }}{% if nl.purpose and stores[nl.id].get(item.id) %} <span class="muted">· {{ stores[nl.id][item.id] }}</span>{% endif %}{% if nl.purpose and someday[nl.id].get(item.id) %} <span class="muted">· {{ someday[nl.id][item.id] }}</span>{% endif %}</button>
         </form>
         <details class="more">
           <summary aria-label="More for {{ item.name }}">⋯</summary>
@@ -61,6 +61,11 @@ for everyone; yours are only yours.</p>
               <input type="hidden" name="csrf" value="{{ csrf }}">
               <label>Usually from <input type="text" name="store" value="{{ stores[nl.id].get(item.id, '') }}" aria-label="Where {{ item.name }} usually comes from" maxlength="40"></label>
               <button class="small">Save</button>
+            </form>
+            <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/someday">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="on" value="{{ 0 if someday[nl.id].get(item.id) else 1 }}">
+              <button class="small" aria-pressed="{{ 'true' if someday[nl.id].get(item.id) else 'false' }}">{{ "Buy as usual" if someday[nl.id].get(item.id) else "For someday" }}</button>
             </form>
             {% endif %}
             <form method="post" action="/lists/{{ nl.id }}/items/{{ item.id }}/remove">

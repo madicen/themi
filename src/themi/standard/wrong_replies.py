@@ -1,10 +1,13 @@
 """Wrong actions: a 👎 on a reply marks it, and review labels it (P4).
 
 A 👎 on one of Themi's replies (a message sent while the model was answering,
-not a card or a nudge) marks that reply as the wrong thing. It's never asked
-for and never answered, and it changes nothing else: not phrasing, approvals
-or energy. A marked reply keeps its tools and model calls past the week's
-clean-up until it's labelled.
+not a nudge) marks that reply as the wrong thing. It's never asked for and never
+answered, and it changes nothing else: not phrasing or energy. A card the reply
+made counts too (F38c): its 👎 marks the reply, and approvals declines the card.
+Cards Themi made on its own (triage, nudges: no reply) mark nothing. A 👎 taken
+back, or replaced by another reaction, clears the mark unless it's labelled. A
+marked reply keeps its tools and model calls past the week's clean-up until it's
+labelled.
 
 Review happens at the command line (`themi feedback`): each marked reply with
 the person's message, what Themi said, the tools it ran and the groups it was
@@ -56,13 +59,14 @@ class ReviewError(ValueError):
 
 
 def reply_for_message(db: Database, member_id: int, telegram_message_id: int) -> int | None:
-    """The model reply that sent this message, if it was one (not a card or a nudge)."""
+    """The model reply that sent this message, card or chat (F38c), if one did. A nudge or a
+    card Themi made on its own has none."""
     row = db.one(
-        "SELECT reply_id, kind FROM outbox WHERE member_id = ? AND telegram_message_id = ? "
+        "SELECT reply_id FROM outbox WHERE member_id = ? AND telegram_message_id = ? "
         "AND status = 'sent' ORDER BY id DESC LIMIT 1",
         (member_id, telegram_message_id),
     )
-    if row is None or row["reply_id"] is None or row["kind"] in CARDS:
+    if row is None or row["reply_id"] is None:
         return None
     return int(row["reply_id"])
 
@@ -88,13 +92,21 @@ class WrongReplies:
 
     async def on_reaction(self, event: InboundEvent) -> None:
         assert event.reaction is not None
-        if WRONG not in event.reaction.added:
+        added, removed = event.reaction.added, event.reaction.removed
+        if WRONG not in added and WRONG not in removed:
             return
         reply_id = reply_for_message(self.db, event.member.id, event.reaction.message_id)
-        if reply_id is not None:
+        if reply_id is None:
+            return
+        if WRONG in added:
             self.db.execute(
                 "UPDATE replies SET marked_at = ? WHERE id = ? AND marked_at IS NULL",
                 (to_utc_iso(clock.now()), reply_id),
+            )
+        else:  # F38c: taken back (reply 316: 👎 replaced by 👍 two seconds later)
+            self.db.execute(
+                "UPDATE replies SET marked_at = NULL WHERE id = ? AND labelled_at IS NULL",
+                (reply_id,),
             )
 
 
@@ -137,6 +149,7 @@ class MarkedReply:
     groups_added: tuple[str, ...]
     label: Label | None
     right_tool: str | None
+    cards: tuple[tuple[str, str], ...] = ()  # F38c: each card it made, and how it ended
 
 
 class ReplyReview:
@@ -210,6 +223,11 @@ class ReplyReview:
         tools = self.db.query(
             "SELECT name FROM reply_tools WHERE reply_id = ? ORDER BY id", (reply_id,)
         )
+        cards = self.db.query(
+            f"SELECT COALESCE(sent_text, text) AS text, card_outcome FROM outbox "
+            f"WHERE reply_id = ? AND kind IN ({marks}) ORDER BY id",
+            (reply_id, *CARDS),
+        )
         return MarkedReply(
             id=reply_id,
             member=row["name"] or "someone",
@@ -221,6 +239,7 @@ class ReplyReview:
             groups_added=_names(row["groups_added"]) or (),
             label=row["label"],
             right_tool=row["right_tool"],
+            cards=tuple((c["text"], c["card_outcome"] or "") for c in cards),
         )
 
 
@@ -265,6 +284,10 @@ def report(replies: list[MarkedReply], timezone: str) -> str:
             f"> {reply.message}",
             "",
             *(f"Themi: {text}" for text in reply.said),
+            *(
+                f"Card: {text}" + (f" ({outcome})" if outcome else "")
+                for text, outcome in reply.cards
+            ),
             "",
             f"Tools run: {', '.join(reply.tools) or 'none'}. Groups offered: {groups}.",
         ]

@@ -521,3 +521,17 @@ async def test_commands_in_themis_words_are_written_the_slack_way(
     assert fake_slack.texts(MICHAEL) == [
         "Paused. Send /themi pause off to undo, or see https://themi.test/site."
     ]
+
+
+async def test_a_reaction_taken_back_comes_as_removed(
+    family: SeededFamily, fake_slack: FakeSlack
+) -> None:
+    """F38c: Slack's reaction_removed is a Reaction with `removed`, and `added` empty."""
+    channel, recorder = listening(family, fake_slack)
+    erin = on_slack(family, family.erin)
+    sent = await channel.send_text(erin, "Added olive oil.")
+    _, ts = channel.where(sent) or ("", "")
+    await channel.dispatch(fake_slack.react(MICHAEL, "-1", ts, removed=True))
+    [event] = recorder.events
+    assert event.reaction is not None
+    assert (event.reaction.added, event.reaction.removed) == ((), ("👎",))

@@ -21,7 +21,7 @@ from themi_google.email_audit import EmailAudit
 from themi_google.google_settings import GoogleSettings, TravelSettings
 from themi_google.google_tasks import GoogleTasksInbox
 from themi_google.google_tasks_list import GoogleTaskList
-from themi_google.travel import TravelHeadsUps, TravelPreferences
+from themi_google.travel import JOB_EVERY, TravelHeadsUps, TravelPreferences
 
 
 class EmailAuditModule(Module):
@@ -115,4 +115,4 @@ class TravelModule(Module):
         ctx.prompt(*TRAVEL_PROMPT_RULES)
         heads_ups = ctx.provide(TravelHeadsUps(ctx.services, self.client))
         heads_ups.install()
-        ctx.periodic("travel.heads_up", timedelta(minutes=5), heads_ups.heads_up)
+        ctx.periodic("travel.heads_up", JOB_EVERY, heads_ups.heads_up)

@@ -79,6 +79,17 @@ def name_key(text: str) -> str:
     return " ".join(re.sub(r"[^\w\s&'/-]", " ", text.lower()).split())
 
 
+# F38a (bug #190): what the calendar read stores for an event that shows Themi no title (a
+# work calendar that hides them). The one constant: busy.py writes it, `untitled` reads it.
+NO_TITLE = "(no title)"
+
+
+def untitled(title: str) -> bool:
+    """An event with no title: blank, or busy.py's placeholder. Two of these say nothing
+    about being one thing."""
+    return not title.strip() or name_key(title) == name_key(NO_TITLE)
+
+
 STOPWORDS = {"the", "a", "an", "my", "our", "to", "with", "for", "at", "on", "and", "of"}
 FILLER = STOPWORDS | {"appointment", "appt", "event", "next", "this", "her", "his", "their"}
 ENDINGS = ("ing", "ed", "es", "s")

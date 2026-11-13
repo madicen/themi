@@ -173,3 +173,65 @@ async def test_can_we_body_double_goes_to_the_tools(scenario: Scenario) -> None:
     scenario.primary.queue_text("Sure.")
     await scenario.say("Erin", "Can we body double the bird cage?")
     assert scenario.primary.requests[0].tools
+
+
+# ----- F36a (ideas #185, #186) ----------------------------------------------------------
+
+
+def things_to_buy(scenario: Scenario) -> list[tuple[str, str]]:
+    rows = scenario.app.db.query(
+        "SELECT i.name, m.name AS who FROM list_items i JOIN lists l ON l.id = i.list_id "
+        "LEFT JOIN members m ON m.id = i.added_by WHERE l.purpose = 'things_to_buy' "
+        "AND i.done = 0 ORDER BY i.id"
+    )
+    return [(r["name"], r["who"]) for r in rows]
+
+
+async def test_things_to_research_buy_goes_on_things_to_buy(scenario: Scenario) -> None:
+    """Sun 9:54 am: "Things to research buy. VNS device" got "Got it." and was on no list."""
+    await chat_on(scenario)
+    scenario.primary.queue_tool_call(
+        "add_to_things_to_buy", {"items": [{"name": "VNS device", "store": ""}]}
+    )
+    scenario.primary.queue_text("Added the VNS device to Things to Buy.")
+    await scenario.say("Erin", "Things to research buy. VNS device")
+    assert scenario.primary.requests[0].system != CHAT_SYSTEM  # the tool agent
+    assert things_to_buy(scenario) == [("VNS device", "Erin")]
+
+    scenario.primary.queue_text("On Things to Buy: the VNS device.")
+    await scenario.say("Erin", "What are the things I need to research buy?")
+    assert scenario.primary.requests[-1].system != CHAT_SYSTEM
+
+
+async def test_a_correction_to_her_draft_rule_rewords_it(scenario: Scenario) -> None:
+    """Sun 9:21 am: draft rule 29 kept its broader wording; the chat had no tools."""
+    erin = scenario.member("Erin")
+    first = await scenario.app.rulebook.propose(
+        erin, "Track who added items to Things to Buy and prompt only that person", "x",
+        scope="personal",
+    )  # fmt: skip
+    await chat_on(scenario)
+    scenario.primary.queue_tool_call(
+        "propose_rule",
+        {
+            "summary": "For research or someday buys, prompt only the person who added them",
+            "text": "Only for research or someday purchases: track who added them.",
+            "kind": "policy", "category": "", "rule_id": first.id, "applies_to": "personal",
+        },
+    )  # fmt: skip
+    scenario.primary.queue_text("Reworded it.")
+    await scenario.say(
+        "Erin",
+        "That rule is too general. Specifically for purchases that require research or are "
+        'for "someday", track which user added them and only prompt that user',
+    )
+    (draft,) = scenario.app.rulebook.drafts(erin)
+    assert draft.id == first.id and draft.summary.startswith("For research or someday buys")
+
+
+async def test_with_no_draft_too_general_stays_chat(scenario: Scenario) -> None:
+    await chat_on(scenario)
+    scenario.primary.queue_text("Fair enough.")
+    queue_nothing_picked_out(scenario)
+    await scenario.say("Erin", "that's too general")
+    assert scenario.primary.requests[0].system == CHAT_SYSTEM

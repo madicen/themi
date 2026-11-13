@@ -42,7 +42,7 @@ BODY: list[Callable[[], Module]] = [BodyDoubleModule]
 CASES: list[tuple[Callable[[], Module], type, list[Callable[[], Module]], set[str]]] = [
     (GroceriesModule, GroceryList, [], set()),
     (SafewayModule, SafewayCart, [GroceriesModule], {"safeway.expire"}),
-    (BuyingModule, ThingsToBuy, [ListsModule], set()),
+    (BuyingModule, ThingsToBuy, [ListsModule], {"buying.someday"}),  # F36b
     (SpendingModule, Spending, [], {"expenses.fill", "expenses.ask"}),  # EX2a, EX2b
     (PantryModule, Pantry, [GroceriesModule], {"pantry.predict"}),
     (MealsModule, Meals, [GroceriesModule, PantryModule], {"meals.nudges"}),  # 35a

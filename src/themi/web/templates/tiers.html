@@ -2,7 +2,7 @@
 {% from "_row.html" import row %}
 {% block title %}What Themi does alone · Themi{% endblock %}
 {% block content %}
-<h1>What Themi does on its own</h1>
+<h1>What Themi does {{ themi_words().on_own }}</h1>
 <p class="muted">Everything starts by asking first. Some kinds of action can become automatic;
 the rest always need a yes. Things that are your own, like your email, are automatic only
 for whoever turns them on. Shared things are the household's{% if not member.is_admin %},

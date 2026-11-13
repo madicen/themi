@@ -34,6 +34,7 @@ from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.calendar_view import CalendarPreferences
+from themi.core.wording import untitled
 from themi.localtime import to_utc_iso
 from themi.standard.lists import name_key
 from themi_google.connectors.gcal.busy import TASK_BLOCK
@@ -77,7 +78,10 @@ def appointment_like(title: str) -> bool:
 
 
 def alike(a: Found, b: Found) -> bool:
-    """Two events that could be one thing, by their titles."""
+    """Two events that could be one thing, by their titles. Never when either has no title
+    (F38a, bug #190): that covers the card, the auto-merge and the "guess" setting."""
+    if untitled(a.title) or untitled(b.title):
+        return False
     if name_key(a.title) == name_key(b.title):
         return True
     if title_matches(a.title, b.title) or title_matches(b.title, a.title):

@@ -270,19 +270,60 @@ class Lists:
                 found[item.id] = row["store"]
         return found
 
+    def someday(self, nl: NamedList) -> dict[int, int | None]:
+        """F36b: item id -> who added it, for its someday items (research ones included)."""
+        rows = self.db.query(
+            "SELECT id, added_by FROM list_items WHERE list_id = ? AND someday = 1", (nl.id,)
+        )
+        return {r["id"]: r["added_by"] for r in rows}
+
+    def set_someday(self, item: ListItem, on: bool) -> None:
+        self.db.execute("UPDATE list_items SET someday = ? WHERE id = ?", (int(on), item.id))
+
+    def rename_item(self, item: ListItem, name: str) -> None:
+        """A new name for an item, as they said it (F36b: a decision after research)."""
+        nl = self.db.one("SELECT * FROM lists WHERE id = ?", (item.list_id,))
+        limit = item_limit(self._load(nl)) if nl else 100
+        self.db.execute(
+            "UPDATE list_items SET name = ? WHERE id = ?",
+            (_clean(name, limit, "list item"), item.id),
+        )
+
     def describe(self, nl: NamedList) -> str:
-        """A list in a line; things to buy grouped by where they usually come from."""
+        """A list in a line; things to buy grouped by where they usually come from, and
+        someday items apart, with whose they are (F36b)."""
         if nl.purpose != THINGS_TO_BUY or not nl.open_items:
             return words(nl)
         stores = self.stores(nl)
+        later = self.someday(nl)
         groups: dict[str, list[str]] = {}
+        theirs: dict[int | None, list[str]] = {}
         for item in nl.open_items:
-            groups.setdefault(stores.get(item.id, "anywhere"), []).append(item.name)
+            if item.id in later:
+                theirs.setdefault(later[item.id], []).append(item.name)
+            else:
+                groups.setdefault(stores.get(item.id, "anywhere"), []).append(item.name)
         order = sorted(groups, key=lambda g: (g == "anywhere", g.casefold()))
-        text = f"{nl.name}: " + "; ".join(f"{g}: {and_list(groups[g])}" for g in order)
+        text = f"{nl.name}: " + (
+            "; ".join(f"{g}: {and_list(groups[g])}" for g in order) or "nothing but someday things"
+        )
         if nl.ticked:
             text += f" (ticked: {and_list([i.name for i in nl.ticked])})"
-        return text + "."
+        text += "."
+        for who, names in theirs.items():
+            whose = self.name_of(who)
+            text += (
+                f" Someday ({whose}'s): {and_list(names)}."
+                if whose
+                else (f" Someday: {and_list(names)}.")
+            )
+        return text
+
+    def name_of(self, member_id: int | None) -> str:
+        if member_id is None:
+            return ""
+        row = self.db.one("SELECT name FROM members WHERE id = ?", (member_id,))
+        return str(row["name"]) if row else ""
 
     def add(
         self, nl: NamedList, names: list[str], by: Member | None, parent_id: int | None = None

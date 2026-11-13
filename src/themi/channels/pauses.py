@@ -69,6 +69,7 @@ TOPICS: dict[str, frozenset[str]] = {
             "alignment",
             "expense",  # EX2b
             "expense_review",
+            "someday",  # F36b
         }
     ),
     EVERYTHING: frozenset(),  # every proactive message

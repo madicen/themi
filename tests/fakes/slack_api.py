@@ -199,10 +199,12 @@ class FakeSlack:
         }
         return self._envelope("interactive", payload)
 
-    def react(self, user: str, name: str, ts: str, *, item_user: str = BOT_USER) -> dict[str, Any]:
+    def react(
+        self, user: str, name: str, ts: str, *, item_user: str = BOT_USER, removed: bool = False
+    ) -> dict[str, Any]:
         return self.event(
             {
-                "type": "reaction_added",
+                "type": "reaction_removed" if removed else "reaction_added",
                 "user": user,
                 "reaction": name,
                 "item_user": item_user,

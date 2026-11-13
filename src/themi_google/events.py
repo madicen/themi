@@ -54,6 +54,7 @@ from themi.core.wording import (  # CR10b1: the matching helpers live there
     _same_word,
     name_key,
     title_matches,
+    untitled,
     words_in_common,
 )
 from themi.localtime import to_utc_iso
@@ -994,7 +995,11 @@ def same_booking(title: str, location: str, when: When, other: Found, tz: ZoneIn
     if when == other.when:
         return True
     day, other_day = when.starts.astimezone(tz).date(), other.when.starts.astimezone(tz).date()
-    if day == other_day and _same_title(title, other.title):
+    if (
+        day == other_day
+        and not (untitled(title) or untitled(other.title))  # F38a: no title, nothing to match
+        and _same_title(title, other.title)
+    ):
         return True
     if when.starts != other.when.starts or when.all_day != other.when.all_day:
         return False

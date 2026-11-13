@@ -33,7 +33,7 @@
   },
   "add_to_things_to_buy": {
     "group": "core",
-    "spec": "a2c91c4604b3"
+    "spec": "0be1bdfc9259"
   },
   "add_to_wall_routine": {
     "group": "wall",
@@ -419,6 +419,10 @@
     "group": "email",
     "spec": "ba497fbe6207"
   },
+  "set_someday": {
+    "group": "core",
+    "spec": "2565166b9421"
+  },
   "set_task_importance": {
     "group": "schedules",
     "spec": "faba579abf48"
@@ -434,6 +438,10 @@
   "set_task_schedule": {
     "group": "schedules",
     "spec": "ae223ff614a9"
+  },
+  "set_themi_pronouns": {
+    "group": "core",
+    "spec": "a0154230a93e"
   },
   "set_urgent_senders": {
     "group": "email",

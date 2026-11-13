@@ -597,12 +597,15 @@ class TelegramChannel:
         if member is None:
             return
         before = {_emoji(r) for r in reaction.old_reaction}
+        after = {_emoji(r) for r in reaction.new_reaction}
         added = tuple(e for r in reaction.new_reaction if (e := _emoji(r)) and e not in before)
-        if not added:
+        removed = tuple(e for r in reaction.old_reaction if (e := _emoji(r)) and e not in after)
+        if not added and not removed:
             return
-        self.store.log_message(
-            member.id, "in", f"[reacted {' '.join(added)}]", "reaction", reaction.message_id
-        )
+        if added:
+            self.store.log_message(
+                member.id, "in", f"[reacted {' '.join(added)}]", "reaction", reaction.message_id
+            )
         event = InboundEvent(
             "reaction",
             member,
@@ -610,7 +613,7 @@ class TelegramChannel:
             reaction.message_id,
             clock.now(),
             update_id,
-            reaction=Reaction(added, reaction.message_id),
+            reaction=Reaction(added, reaction.message_id, removed),
         )
         await self._dispatch(event)
 

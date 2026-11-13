@@ -38,7 +38,7 @@ from themi.accounts.passkeys import Passkeys
 from themi.accounts.preferences import Preferences
 from themi.accounts.store import MENU_BAR_MAX
 from themi.autonomy import Decision
-from themi.core import keys
+from themi.core import keys, pronouns
 from themi.modules import StartReport
 from themi.modules.web import GROUP_ORDER, MenuEntry
 from themi.standard import conversation_mode
@@ -182,6 +182,10 @@ def install_site(web: FastAPI, ctx: SiteContext) -> None:
         names,
     )
     kit.templates.env.globals["menu_bar"] = menu.bar
+    # F35a: Themi in the third person, as the family chose ("on her own", "she's back").
+    kit.templates.env.globals["themi_words"] = lambda: pronouns.pronouns(
+        pronouns.chosen(ctx.app.store)
+    )
     google = ctx.app.services.maybe(keys.google)
     # Linking POSTs to Themi, which redirects to Google; browsers check that redirect too.
     form_targets = _origin(google.oauth.config.auth_url) if google is not None else ""
@@ -451,6 +455,8 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
                 (name, TRACKING_LABELS[name], member.tracks(name)) for name in TRACKING_INPUTS
             ],
             "strengths": STRENGTH_LABELS,
+            "pronoun_choices": pronouns.CHOICES,  # F35a
+            "themi_pronouns": pronouns.chosen(app.store),
             "conversation_offered": conversation_mode.offered(app.services, member),
             "picked_out": (  # CM1b: what the sidecar picked out lately
                 app.services.maybe(keys.conversation).sidecar.recent(member, 10)
@@ -506,6 +512,9 @@ def core_routes(kit: Kit, menu: Menu) -> APIRouter:
             )
         for save in app.services.settings_savers:  # CR10a: the modules' own, not preferences
             save(member, form)
+        choice = str(form.get("themi_pronouns", ""))
+        if choice in pronouns.CHOICES:  # F35a: anyone in the family may change it
+            app.store.set_household_value(pronouns.PronounSettings.module, "themi_pronouns", choice)
         return kit.redirect("/settings", "Saved.")
 
     @router.post("/settings/busy")
@@ -776,6 +785,7 @@ CORE_SETTINGS = (
     (20, "settings/limit.html"),
     (60, "settings/calendars.html"),
     (80, "settings/phrasing.html"),
+    (85, "settings/themi.html"),  # F35a: Themi's pronouns, the family's one choice
     (90, "settings/gentle.html"),
     (100, "settings/tracking.html"),
 )

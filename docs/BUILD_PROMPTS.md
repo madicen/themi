@@ -253,15 +253,15 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F34mb | Idea: a recipe over two photos (an album, or the next page) | Feedback | [x] 2026-11-07 |
 | F34n | Idea: a calendar event from a photo | Feedback | [x] 2026-11-07 |
 | F34o | Idea: a bug report with a photo | Feedback | [x] 2026-11-07 |
-| F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [ ] |
-| F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [ ] |
-| F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [ ] |
+| F35a | Idea: Themi's pronouns, chosen by the family | Feedback | [x] 2026-11-12 |
+| F36a | Feedback: in conversation mode, an add to a list and a correction to a draft rule go to the tools | Feedback | [x] 2026-11-11 |
+| F36b | Idea: someday and research buys on Things to Buy, for the person who added them | Feedback | [x] 2026-11-11 |
 | F37a | Feedback: the dishwasher ticks the routine on the owner's day | Feedback | [x] 2026-11-09 |
 | F37b | Feedback: an email's booking already on the calendar under another name | Feedback | [x] 2026-11-09 |
 | F37c | Idea: "Not ever" on an email's card, and stopping a sender's offers | Feedback | [x] 2026-11-09 |
-| F38a | Feedback: events with no title are never twins | Feedback | [ ] |
-| F38b | Feedback: the leave heads-up breaks through everything | Feedback | [ ] |
-| F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [ ] |
+| F38a | Feedback: events with no title are never twins | Feedback | [x] 2026-11-11 |
+| F38b | Feedback: the leave heads-up breaks through everything | Feedback | [x] 2026-11-11 |
+| F38c | Feedback: a 👎 on a card marks the reply that made it; a 👎 taken back clears | Feedback | [x] 2026-11-11 |
 | F39a | Feedback: "Feed Juneau" dispenses from Juneau's feeder | Feedback | [x] |
 | F40a | Feedback: "What's my routine for tomorrow?" is answered for tomorrow | Feedback | [x] |
 | F40b | Feedback: a running washer or dryer shows when it will finish | Feedback | [x] |
@@ -12473,7 +12473,7 @@ Notes (2026-11-07):
   ~/shots`, then copy the folder off the Pi (scp).
 
 ### F35a · Idea (2026-11-07): Themi's pronouns, chosen by the family
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: 15, W4 (settings pages)
 Read first: prompts.py (the system prompt says who Themi is and "how it speaks");
 conversation_mode.py's system prompt; the plan's PDA phrasing rules. From Erin's idea #176
@@ -12506,8 +12506,26 @@ for a household that hasn't chosen.
 Scenario: Erin sets they/them on the website, and Michael's next relay from Themi uses it.
 Data: mark #176 reviewed once live.
 
+Notes (2026-11-12):
+- Built with the stand-in list (it/its, she/her, he/him, they/them, just the name), since
+  Erin's list hasn't come. Her list replaces `CHOICES` and `WORDS` in `themi.core.pronouns`.
+- One household setting (`PronounSettings`, module "themi", stored in
+  `household_settings`, no migration). Anyone in the family may change it, not only an
+  admin: say so if it should be admin-only.
+- There's no "/settings" chat command, so chat has `set_themi_pronouns` (core tool), which
+  says "Done. I'll go by she/her." itself and ends the turn. The website: My settings, a
+  "How Themi is spoken of" section after phrasing.
+- Both system prompts get one line for any choice but it/its (so the default's prompt, and
+  the golden file, are as before). Relays are the model's own words, so they follow it.
+- Fixed texts with Themi in the third person were few: the tiers page heading ("on its
+  own") and the update page ("when it's back") use the `themi_words()` template global.
+  Admin and setup texts (claim page, modules page, an autonomy error) still say "it".
+- Golden: tools.json gained `set_themi_pronouns`. test_settings_form lists the new field and
+  section.
+- Setup: restart `themi run`. Mark #176 reviewed once Erin has picked (or sent her list).
+
 ### F36a · Feedback (2026-11-08): in conversation mode, an add to a list and a correction to a draft rule go to the tools
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: CM1a, CM1b, F34a, L2a
 Read first: F34a's notes (`is_request` and what it already sends to the tool agent); CM1b's
 notes (`SIDECAR_TOOLS`); F34b's notes (`honest`). From Erin's ideas #185 (2026-11-08,
@@ -12573,8 +12591,22 @@ person it affects), since F36b builds what she asked for. Re-add the VNS device 
 washable dog bed once F36b is live, as hers and for research. Mark #185 and #186 reviewed
 once live (with F36b).
 
+Notes (2026-11-11):
+- `is_request`: a list prefix near a list's name (`near_list_name`: every word over two
+  letters, in order, others between); buying words ("buy", "purchase", "things to get") in
+  `HOUSEHOLD`; and, with `open_draft=True` (they have a draft rule), `CORRECTION` words.
+  The whole message goes to the tool agent, so "research"/"someday"/"later" reach F36b's
+  model as said (`SOMEDAY_WORDS` names them). "Things to Buy" counts as a list name before
+  the list exists (it's made on first use).
+- The sidecar has `add_to_list` and `add_to_things_to_buy` (staged as ever), with a prompt
+  line. Two sidecar eval cases added (batteries; "buy a boat someday" stays nothing).
+- `honest(reply, message)`: cut to nothing, it's "I haven't put that anywhere yet. Want me
+  to?" when the message looked like something to keep, else "Mm, I hear you.". Changed
+  test: the unit test that expected "Got it." now expects "Mm, I hear you.".
+- Setup: none (no migration). Data as above, once F36b is live.
+
 ### F36b · Idea (2026-11-08): someday and research buys on Things to Buy, for the person who added them
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: F36a, L2a, L2b
 Read first: L2a's and L2b's notes (Things to Buy, `item_homes`, `ThingsToBuy.from_store`);
 F30d's notes (looking things up online); the plan's PDA phrasing rules. From Erin's idea
@@ -12636,6 +12668,31 @@ gets a short list of options from the fake web search.
 
 Data: once live, set aside or retire Erin's rule 29 if it's still there, and re-add the VNS
 device and the washable dog bed as her someday items. Mark #185 reviewed once live.
+
+Notes (2026-11-11):
+- Built on the prompt's assumptions, still Erin's to confirm: one kind ("someday", research
+  included), a nudge a week at most. Changing either is a constant in `themi_home.buying`
+  (`SOMEDAY_EVERY`) or a second flag.
+- Migration 0166: `list_items.someday` and `someday_asked_at`. `add_to_things_to_buy` takes
+  `someday` per item, kept only when `SOMEDAY_SAID` is in their own message (not the one
+  before). A someday prefix ("someday: X", "research buy: X") counts as asking, so it goes
+  straight on.
+- `Lists.describe`: "Things to Buy: anywhere: batteries. Someday (Erin's): washable dog
+  bed." `from_store` (the Safeway cart) leaves out someday items not added by the cart's
+  person. `set_someday` (core group) makes one ordinary or someday, with a new name and
+  store. The Lists page shows "Someday (Erin's)" and a "For someday" / "Buy as usual"
+  toggle per Things to Buy item.
+- `buying.someday` job (hourly): for each person with a someday item of theirs a week old,
+  and no someday nudge in the last week, one `low` message (kind `someday`, expires in a
+  day) about the least recently asked one, with [Look into it now] (a reply button: the
+  agent searches with `search_web`), [Keep it for someday], [Not needed] (takes it off).
+  Skipped in burnout mode or while paused; `someday` is in burnout's held kinds too.
+- On the wall the item keeps its plain name (no tags there).
+- Golden files changed as the prompt says: the `buying.someday` job, the `someday` button,
+  the Lists route, `set_someday` and `add_to_things_to_buy`'s spec, and the prompt line.
+- Setup: restart `themi run` (migration 0166). Data: set aside or retire Erin's rule 29,
+  then re-add the VNS device and the washable dog bed as her someday items. Mark #185 and
+  #186 reviewed.
 
 ### F37a · Feedback (2026-11-09): the dishwasher ticks the routine on the owner's day
 Status: [x] 2026-11-09
@@ -12872,7 +12929,7 @@ Notes (2026-11-09):
 - Setup: restart `themi run` (migration 0157).
 
 ### F38a · Feedback (2026-11-09): events with no title are never twins
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: F34e
 Read first: `themi_google/calendar_twins.py` (`alike`, `pairs`, the same-title-and-times
 merge in `_one`); `themi_google/connectors/gcal/busy.py` (where an untitled event becomes
@@ -12913,8 +12970,17 @@ Scenario: Michael's work calendar has three untitled meetings overlapping on Mon
 Data: none needed (every untitled pair on the Pi is answered "apart" already). Mark #190
 reviewed once live.
 
+Notes (2026-11-11):
+- `untitled(title)` and the one constant `NO_TITLE` live in `themi.core.wording`, next to
+  `name_key` (busy.py imports `NO_TITLE`; core can't import the Google module, so the
+  constant moved rather than staying in busy.py).
+- `alike` is false when either side is untitled, so no card, no auto-merge, no guess.
+  `same_booking`'s "same title that day" skips untitled events; its same-times, place and
+  name tests still apply. `travel._event_key` uses `id:<event_id>` for an untitled event.
+- Setup: none (no migration). Mark #190 reviewed once deployed.
+
 ### F38b · Feedback (2026-11-09): the leave heads-up breaks through everything
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: K4, F18f
 Read first: `themi_google/travel.py` (the module docstring, `_consider`, `_send` and its
 `deadline=now`); `themi/channels/outbox.py` (`_earliest`, `ANSWER_KINDS`, `expires`,
@@ -12970,8 +13036,23 @@ At 11:28 he gets "…: leave around 11:43 am." and nothing comes after noon.
 
 Data: none needed. Mark #191 reviewed once live.
 
+Notes (2026-11-11):
+- The outbox has `TRAVEL_KIND` in `BREAKTHROUGH_KINDS`: `_earliest` returns now for it
+  (before quiet hours, busy times, calendar blocks, the limit, receptivity and pauses), the
+  gate and the morning tray skip it, and `sent_today` leaves it out (`UNCOUNTED_KINDS`). It
+  stays `normal` priority, so it isn't an alert.
+- `_send` sets `expires` at the event's start. A heads-up first seen after getting ready
+  should have started says "leave around 11:43 am, so start getting ready now".
+- Deviation: `SLACK` was 3 min with the job every 5 min, so a heads-up could come up to 2 min
+  late (the day-long test found it). `SLACK` is now `JOB_EVERY` (5 min), so one comes up to
+  5 min early, never late. Five existing travel tests moved their clock stops to match
+  (`SLACK`, and the new "start getting ready now" when the test jumped past it).
+- The plan has no K4 section; its outbox rule ("Urgent messages bypass both") now says the
+  leave heads-up does too.
+- Setup: restart `themi run`. Mark #191 reviewed once deployed.
+
 ### F38c · Feedback (2026-11-09): a 👎 on a card marks the reply that made it, and a 👎 taken back clears its mark
-Status: [ ]
+Status: [x] 2026-11-11
 Depends on: P4, S5, F32b
 Read first: `themi/standard/wrong_replies.py` (`reply_for_message`, `on_reaction`, why cards
 are left out); `themi/standard/reactions.py` (`CARDS`, the upsert); `ApprovalsUI.on_reaction`
@@ -13022,6 +13103,25 @@ Data: on the Pi, run `themi feedback --not-wrong 316` and mark replies 314 and 3
 `themi feedback --wrong-tool 314 <tool>` and `... 315 <tool>`, the tool F32b moves routine
 items with. Ask Michael before labelling. Those replies predate the fix, so their mark has to
 be set by hand first (an UPDATE of `marked_at`, with Michael's OK).
+
+Notes (2026-11-11):
+- `Reaction.removed` (old minus new). Telegram now hands on a removal-only update (it
+  dropped them before), logged nowhere and with `added` empty; Slack's `reaction_removed`
+  does the same. The agent doesn't count a removal as answering a nudge (`outcomes`) or as
+  a calibration signal.
+- `reply_for_message` includes cards. `WrongReplies.on_reaction` marks on a 👎 added, and
+  clears an unlabelled mark when a 👎 is removed or replaced.
+- Approvals reads 👎 as `Decision.DECLINE` (the card edits to "{summary}\nLeft as is."); on
+  F26b's shared card it's "no" for all of it.
+- Migration 0165: `outbox.card_outcome`, set to "declined by the 👎" or the action's status
+  when the card is edited. `themi feedback`'s report shows "Card: <text> (<outcome>)".
+- Changed tests: P4's `test_cards_and_nudges_arent_marked` became
+  `test_a_card_made_by_a_reply_is_marked_and_nudges_arent` (the prompt reverses it), and
+  `test_reactions_report_only_new_emoji` now expects the removal event.
+- Setup: restart `themi run` (migration 0165). Slack: add the `reaction_removed` bot event
+  to the app (the manifest has it). Data, with Michael's OK: `themi feedback --not-wrong 316`,
+  set `marked_at` on 314 and 315 by hand, then `--wrong-tool 314 <tool>` and `... 315 <tool>`
+  with F32b's routine-item tool.
 
 ### F39a · Feedback (2026-11-09): "Feed Juneau" dispenses from Juneau's feeder
 Status: [x] 2026-11-10
