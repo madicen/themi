@@ -270,7 +270,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
-| F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [ ] |
+| F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [x] 2026-11-13 |
 | F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [ ] |
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [ ] |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
@@ -13585,7 +13585,7 @@ day. The fake gets `leg(a, b, minutes)`. Golden `tools.json` changed for the two
 arguments (expected). New tests at the end of `test_travel.py`; none changed.
 
 ### F42a · Feedback (2026-11-11): an event that covers the whole day is an all-day event
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: CR18b, F38a, F38b
 Read first: `themi_google/connectors/gcal/busy.py` (`_when`, `_entry`, `blocks`, `entries`);
 `themi/channels/outbox.py` (`_earliest`, `free_from`, the F20c deadline fallback);
@@ -13633,6 +13633,16 @@ check still comes before quiet hours, and his morning message lists it as all da
 
 Data: none needed (the refresh fixes the stored rows). Mark #201 reviewed once live. #202:
 mark reviewed now (F38b is live).
+
+Notes: `busy._whole_days`: start and end both at local midnight (household timezone, the
+one `_entry` already gets), end on a later day. `_entry` sets `all_day` from it, so `busy`
+is 0, and everything downstream (morning text, day and week cards, travel, the model's
+calendar lines) already treats `all_day` events as all day. Travel skips them (`all_day`
+checks in `travel.py`). No migration: the next 15-minute read rewrites the Pi's three rows.
+New tests in `tests/scenarios/test_whole_day_events.py`; none changed, no golden file
+changed. Follow-up seen while here, not reported: Erin's two heads-ups for one 1 pm
+appointment (ND psych in person, and Return Patient Visit with Dr. Nguyen) are one visit on
+two calendars under different names; F37b only matches email bookings.
 
 ### F42b · Feedback (2026-11-12): in burnout mode, "not important enough" is heard, and time-sensitive mail waits
 Status: [ ]
