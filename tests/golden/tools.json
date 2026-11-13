@@ -287,6 +287,10 @@
     "group": "web",
     "spec": "53565590807c"
   },
+  "recipe_card": {
+    "group": "recipes",
+    "spec": "2a76e03e9eb1"
+  },
   "recipe_from_link": {
     "group": "recipes",
     "spec": "473463d87db1"

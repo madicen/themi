@@ -400,7 +400,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC7 | Day card: today on the website | Day card | [x] 2026-11-13 |
 | DC8 | Day card: weather on request | Day card | [x] 2026-11-13 |
 | DC9 | Day card: the chore chart | Day card | [x] 2026-11-13 |
-| DC10 | Day card: the recipe card | Day card | [ ] |
+| DC10 | Day card: the recipe card | Day card | [x] 2026-11-13 |
 | DC11 | Day card: the step-up plan | Day card | [ ] |
 
 ## Fixed technical choices
@@ -18654,12 +18654,24 @@ Notes:
 - Golden files: tools.json gains `show_chore_chart`.
 
 ### DC10 · Day card: the recipe card
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC4
 Read first: the plan's "Other uses"; `themi_home.cookbook`.
 - Ingredients and steps on one page (or more, when it doesn't fit): "send me the recipe"
   and the cookbook page. Recipe text is escaped like event titles.
 Tests: golden SVGs, escaping.
+
+Notes:
+- `themi_home.recipe_card`: name, section, ingredients (with their groups), numbered
+  steps, notes and source, as written. One tall picture (540 wide, 675 to 2400 high)
+  instead of pages: past that, it ends "The rest is in the cookbook." (a deviation from
+  "or more, when it doesn't fit": one picture is easier to keep and print).
+- The `recipe_card` tool (recipes group): one clear match is drawn; several are named back
+  for the model to ask; nothing is said plainly; a chart isn't drawn. If it can't be
+  drawn, the recipe goes as written (`Recipes.send`).
+- The recipe page links "a picture to keep" (`GET /recipes/{id}/card.png`, signed in).
+- Golden files changed as expected: tools.json gains `recipe_card`, routes.json the
+  picture's route; `tests/golden/pictures/recipe.svg` is the fixture cookbook's pancakes.
 
 ### DC11 · Day card: the step-up plan
 Status: [ ]

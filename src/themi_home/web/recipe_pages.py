@@ -20,6 +20,7 @@ from themi.web.kit import Kit
 from themi_google.connectors.gdocs import DocsError, doc_id_from
 from themi_google.connectors.google import DRIVE_FILE_SCOPE
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
+from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
 from themi_home.recipes import Recipe, Recipes, search
 
@@ -172,6 +173,18 @@ def routes(kit: Kit) -> APIRouter:
     @router.post("/recipes/kitchen/{session_id}/{action}")
     def kitchen_move(session_id: int, action: str) -> Response:
         return kit.redirect("/session")
+
+    @router.get("/recipes/{recipe_id}/card.png")
+    async def recipe_card_png(request: Request, recipe_id: int) -> Response:
+        """DC10: the recipe as a picture, to keep or print."""
+        session = kit.current(request)
+        recipe = book().get(recipe_id)
+        if recipe is None or recipe.removed or recipe.is_chart:
+            return kit.redirect("/recipes", "That recipe isn't in the cookbook any more.")
+        png = await card_png(app.services, session.member, recipe)
+        if png is None:
+            return kit.redirect(f"/recipes/{recipe_id}", "The picture couldn't be drawn.")
+        return Response(png, media_type="image/png")
 
     @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
     def recipe_page(request: Request, recipe_id: int, scale: str = Query("")) -> Response:

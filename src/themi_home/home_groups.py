@@ -29,6 +29,7 @@ RECIPES = ToolGroup(
         "What ingredients does the biryani need?",
         "I'd like to bake snickerdoodles, what's the recipe?",
         "Pull up a soup from the recipes",
+        "Send me a picture of the lasagna recipe to print",
     ),
     tools=(
         "find_recipe",
@@ -42,6 +43,7 @@ RECIPES = ToolGroup(
         "find_web_recipe",
         "save_recipe_to_cookbook",
         "cookbook_recipes_we_can_make",
+        "recipe_card",  # DC10
     ),
     order=40,
 )

@@ -155,6 +155,9 @@ class Recipes:
         self.services.recipe_buttons["show"] = self.on_show
         self.services.tools.register(find_recipe)
         self.services.tools.register(show_recipe)
+        from themi_home.recipe_card import recipe_card
+
+        self.services.tools.register(recipe_card)  # DC10
         self.services.open_item_sources.append(self.open_items)
 
     # ----- the cookbook doc -----------------------------------------------------------------

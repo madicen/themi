@@ -3,7 +3,7 @@
 {% block content %}
 <p><a href="/recipes">← Recipes</a></p>
 <h1>{{ recipe.name }}</h1>
-<p class="muted">{% if recipe.source == "web" %}From {{ recipe.source_text or "the web" }}{% else %}{{ recipe.section }}{% if recipe.subsection %} · {{ recipe.subsection }}{% endif %}{% endif %}{% if link %} · <a href="{{ link }}" rel="noopener">{% if recipe.source == "web" %}the page{% else %}in the doc{% endif %}</a>{% endif %}</p>
+<p class="muted">{% if recipe.source == "web" %}From {{ recipe.source_text or "the web" }}{% else %}{{ recipe.section }}{% if recipe.subsection %} · {{ recipe.subsection }}{% endif %}{% endif %}{% if link %} · <a href="{{ link }}" rel="noopener">{% if recipe.source == "web" %}the page{% else %}in the doc{% endif %}</a>{% endif %}{% if not recipe.is_chart %} · <a href="/recipes/{{ recipe.id }}/card.png" download="{{ recipe.name }}.png">a picture to keep</a>{% endif %}</p>
 
 {% if chart %}
 <div class="table-wrap"><table class="chart">
