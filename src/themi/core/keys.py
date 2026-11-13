@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from themi.standard.taking import Taking
     from themi.standard.task_parts import TaskParts
     from themi.standard.tasks import TaskBoard
+    from themi.standard.weather import Weather
     from themi.standard.web_search import WebSearch
     from themi_cozyla.cozyla_routines import CozylaRoutines
     from themi_cozyla.cozyla_todos import CozylaTodos
@@ -127,6 +128,7 @@ body_double: Key[BodyDouble] = Key("BodyDouble")
 music: Key[Music] = Key("Music")
 burnout: Key[Burnout] = Key("Burnout")
 web_search: Key[WebSearch] = Key("WebSearch")
+weather: Key[Weather] = Key("Weather")  # WX1
 business_hours: Key[BusinessHours] = Key("BusinessHours")
 guides: Key[Guides] = Key("Guides")
 recipes: Key[Recipes] = Key("Recipes")

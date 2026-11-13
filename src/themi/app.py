@@ -33,6 +33,7 @@ from themi.channels.pda import AIRewriter, PdaShield
 from themi.config import Template, load_template
 from themi.connectors.search import SearchBackend
 from themi.connectors.travel import TravelClient
+from themi.connectors.weather import WeatherSource
 from themi.core.agent import Agent
 from themi.core.approvals import ApprovalsUI
 from themi.core.prompts import CORE_RULES
@@ -73,6 +74,7 @@ from themi.standard.taking import TakingModule
 from themi.standard.task_parts import TaskPartsModule
 from themi.standard.tasks import TasksModule
 from themi.standard.telegram import TelegramModule
+from themi.standard.weather import WeatherModule
 from themi.standard.web_search import WebSearchModule
 from themi.standard.wrong_replies import WrongRepliesModule
 from themi.storage.db import Database
@@ -181,6 +183,7 @@ def family_modules(
     tuya: TuyaConfig | None = None,
     catgenie: CatGenieConfig | None = None,
     keep: KeepFactory | None = None,
+    weather: WeatherSource | None = None,
 ) -> list[Module]:
     """The family's modules, with each connector's only when it's set up. In install order
     (see the module docstring); CR5 turns this into the family template."""
@@ -259,6 +262,7 @@ def family_modules(
         WebSearchModule(search),  # F30d: says how to set it up without a key
         WebRecipesModule(recipe_pages),  # RC4a: recipes from links
         *([TravelModule(travel)] if travel else []),
+        *([WeatherModule(weather)] if weather else []),  # WX1: off unless it's turned on
         MaintenanceModule(),
         RoutinesModule(),
         HabitsModule(),
@@ -300,6 +304,7 @@ def build_app(
     tuya: TuyaConfig | None = None,
     catgenie: CatGenieConfig | None = None,
     keep: KeepFactory | None = None,
+    weather: WeatherSource | None = None,
     backup: BackupConfig | None = None,
     tool_routing: str = "groups",
     conversation_mode: str = "trial",
@@ -330,6 +335,7 @@ def build_app(
             tuya=tuya,
             catgenie=catgenie,
             keep=keep,
+            weather=weather,
         )
     # ----- the core -------------------------------------------------------------------
     store = AccountStore(db, cipher)

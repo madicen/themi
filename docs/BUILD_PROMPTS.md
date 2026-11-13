@@ -386,7 +386,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MM2 | Morning message: the morning tray | Morning message | [x] 2026-11-11 |
 | MM3 | Morning message: Today's tasks and Email | Morning message | [x] 2026-11-11 |
 | MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
-| WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [ ] |
+| WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [x] 2026-11-12 |
 | WX2 | Weather: what's noteworthy | Weather | [ ] |
 | WX3 | Weather: NWS alerts in the US | Weather | [ ] |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [ ] |
@@ -18190,7 +18190,7 @@ Read it with the Claude Docs tools, like the other plans. Michael's decisions in
 - The location is `family_home` (K4). One forecast and one line for the household.
 
 ### WX1 · Weather: the module, Open-Meteo and the stored forecast
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: MM4
 Read first: the plan's "The weather source", "The module" and "Edge cases and failure";
 `themi/connectors/travel.py` (the httpx client pattern); `WebSearchModule` (a connector
@@ -18210,6 +18210,23 @@ module with Test).
 Tests: `tests/fakes/weather.py` (an httpx mock transport with canned answers); parsing,
 refresh, pruning, staleness, failure keeping the last good row, no home address.
 Golden files: the new module and the `weather.refresh` job.
+
+Notes:
+- `themi.connectors.weather.WeatherClient` (a `WeatherSource`): one call with `past_days=1`
+  and `forecast_days=2`, always in °F, inches and mph (the rules are in those; °C changes
+  only the words). Yesterday's high and low come in the same answer, so the rules don't
+  need yesterday's stored row (it's still kept, as the plan says).
+- `Hour.at` is when the hour starts, in the family's time zone: Open-Meteo labels an
+  hour's sums with its end, so the parser moves them back an hour.
+- `themi.standard.weather`: `WeatherSettings` (units, alerts, the seven thresholds,
+  validated), `Weather` on `keys.weather` (`refresh`, `latest`, `ensure_today`),
+  `WeatherModule` (kind connector, needs "the home address" on /family, its guide
+  `setup/weather.md`). Track `weather`, migration 0001: `weather_forecasts`.
+- Test asks about a fixed place (Seattle), as travel's does: it runs without the database.
+- Not in the family template: turn it on from the Modules page (or `+weather` in
+  themi.toml). Needs the home address set on the Family page.
+- Tests changed for wiring this prompt added: the golden test's connector list gains
+  `fake_weather` (jobs.json gains `weather.refresh`), and `test_modules`' key count is 72.
 
 ### WX2 · Weather: what's noteworthy
 Status: [ ]

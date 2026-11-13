@@ -29,6 +29,7 @@ from tests.fakes.spotify import FakeSpotify
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
+from tests.fakes.weather import FakeWeather
 from themi.storage.secrets import Secret
 from themi_cozyla.connector import CozylaClient, CozylaConfig
 from themi_google.connectors.google import GoogleConfig
@@ -56,6 +57,7 @@ def connector_options(
     tuya: FakeTuya | None = None,
     catgenie: FakeCatGenie | None = None,
     keep: FakeKeep | None = None,
+    weather: FakeWeather | None = None,
     timezone: str = "America/Los_Angeles",
 ) -> dict[str, Any]:
     return {
@@ -71,6 +73,7 @@ def connector_options(
         "tuya": tuya.config() if tuya else None,
         "catgenie": catgenie.config() if catgenie else None,
         "keep": keep.connect if keep else None,
+        "weather": weather.client() if weather else None,  # WX1
     }
 
 
