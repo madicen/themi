@@ -392,7 +392,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 | DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
-| DC2 | Day card: the day's layout | Day card | [ ] |
+| DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
 | DC3 | Day card: the day card | Day card | [ ] |
 | DC4 | Day card: pictures in the outbox | Day card | [ ] |
 | DC5 | Day card: the morning picture | Day card | [ ] |
@@ -18434,7 +18434,7 @@ Notes:
   run and passed on three reruns: a timing-sensitive test, unrelated.
 
 ### DC2 · Day card: the day's layout
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC1
 Read first: the plan's "What the family sees".
 - `themi/pictures/layout.py`, pure: the window (morning time or first event, to 9 pm),
@@ -18442,6 +18442,17 @@ Read first: the plan's "What the family sees".
   with "…" to fit, a short event's title beside its block.
 Tests: window edges, events crossing them, two and three columns, all-day, a 10-minute
 event, 1 and 12 events; Hypothesis: no two blocks overlap, every block is in the frame.
+
+Notes:
+- `themi.drawing.layout`: `window(from_, spans)`, `Timeline(start, end, top, height)` with
+  `y()` and `ticks()` (every hour up to 8 hours, else every two; "noon", "9:30 am"),
+  `columns()`, `place(spans, timeline, left, width) -> [Placed]`, `all_day_rows()`.
+- The window grows past 9 pm (to the last event's end, on the hour, up to midnight) rather
+  than leaving an evening event off the picture; the plan says "to 9 pm", and the text
+  lists every event anyway, but a timeline that drops one reads as wrong.
+- `Placed.beside`: shorter than 22 px (about 20 minutes at a day's scale), so the card
+  writes the title beside it. Blocks are at least 6 px. `clipped_top` / `clipped_bottom`
+  for an event that crosses the window.
 
 ### DC3 · Day card: the day card
 Status: [ ]
