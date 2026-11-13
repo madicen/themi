@@ -305,7 +305,13 @@ class FakeTelegram:
             return [(c.method, c.params) for c in self.state.calls if c.method in methods]
 
     def sent_texts(self, chat_id: int) -> list[str]:
-        return [p["text"] for p in self.calls("sendMessage") if int(p["chat_id"]) == chat_id]
+        """What the chat was sent, in order: messages' words, and a picture's caption (DC5:
+        the morning message can be a picture with its words as the caption)."""
+        return [
+            str(p["text"] if method == "sendMessage" else p["caption"])
+            for method, p in self.calls_in_order("sendMessage", "sendPhoto")
+            if int(p["chat_id"]) == chat_id and (method == "sendMessage" or p.get("caption"))
+        ]
 
     def last_keyboard(self, chat_id: int) -> list[dict[str, Any]]:
         """The buttons last sent to the chat, under a message or a picture (DC4)."""
