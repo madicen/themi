@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -172,6 +172,113 @@ class Weather:
         if clock.now() - fetched > FRESH:
             return None
         return Forecast.from_json(json.loads(row["forecast"]))
+
+    def line(self, start: datetime) -> str | None:
+        """The weather line for the waking day from `start` (the morning message's time)
+        to 9 pm, or None: a fair day, or no forecast to go on."""
+        forecast = self.latest()
+        if forecast is None:
+            return None
+        local = start.astimezone(self.tz())
+        end = datetime(local.year, local.month, local.day, DAY_ENDS.hour, tzinfo=self.tz())
+        if local >= end:
+            return None
+        return noteworthy(forecast, local, end, self.settings)
+
+
+# ----- what's noteworthy (WX2) -------------------------------------------------------------
+
+DAY_ENDS = time(21)  # the waking day the rules look at ends at 9 pm
+FREEZING_F = 32.0
+ICE_CODES = frozenset({56, 57, 66, 67})  # freezing drizzle, freezing rain
+STORM_CODES = frozenset(range(95, 100))  # thunderstorms, with or without hail
+MOST_OF_THE_DAY = 0.75  # this share of the waking hours wet: "most of the day"
+
+
+def _clock(at: datetime) -> str:
+    if at.hour == 12:
+        return "noon"
+    hour = at.hour % 12 or 12
+    return f"{hour} {'am' if at.hour < 12 else 'pm'}"
+
+
+def _part(at: datetime) -> str:
+    if at.hour < 12:
+        return "this morning"
+    if at.hour < 17:
+        return "this afternoon"
+    return "this evening"
+
+
+def _degrees(f: float, units: str) -> str:
+    return f"{round((f - 32) * 5 / 9)}°C" if units == "C" else f"{round(f)}°F"
+
+
+def _snow(inches: float, units: str) -> str:
+    if units == "C":
+        return f"{max(1, round(inches * 2.54))} cm"
+    halves = max(1, round(inches * 2))
+    return f"{halves // 2} in" if halves % 2 == 0 else f"{halves / 2:g} in"
+
+
+def _speed(mph: float, units: str) -> str:
+    return f"{round(mph * 1.609)} km/h" if units == "C" else f"{round(mph)} mph"
+
+
+def noteworthy(
+    forecast: Forecast,
+    start: datetime,
+    end: datetime,
+    settings: WeatherSettings,
+) -> str | None:
+    """The one line for the waking day from `start` to `end`, or None on a fair day. The
+    first rule that holds gives it (the plan's table, ranks 2 to 9). Thresholds are in °F,
+    inches and mph; `settings.units` changes only the words. A statement of the weather,
+    never advice."""
+    hours = [h for h in forecast.hours if h.at + timedelta(hours=1) > start and h.at < end]
+    if not hours:
+        return None
+    day = start.date()
+    today, yesterday = forecast.day(day), forecast.day(day - timedelta(days=1))
+    units = settings.units
+
+    def when(first: datetime) -> str:
+        return _part(first) if first <= hours[0].at else f"from about {_clock(first)}"
+
+    ice = [h for h in hours if h.code in ICE_CODES]
+    if ice:
+        return f"Freezing rain likely {when(ice[0].at)}."
+    storms = [h for h in hours if h.code in STORM_CODES]
+    if storms:
+        return f"Thunderstorms likely {when(storms[0].at)}."
+    snowy = [h for h in hours if h.snow > 0]
+    snow = sum(h.snow for h in hours)
+    if snow >= settings.snow_in:
+        amount = _snow(snow, units)
+        if len(snowy) >= MOST_OF_THE_DAY * len(hours):
+            return f"Snow most of the day, around {amount}."
+        return f"Snow {when(snowy[0].at)}, around {amount}."
+    wet = [h for h in hours if h.chance >= settings.rain_chance]
+    if wet and sum(h.rain for h in hours) >= settings.rain_in:
+        high = f", high {_degrees(today.high, units)}" if today else ""
+        if len(wet) >= MOST_OF_THE_DAY * len(hours):
+            return f"Rain most of the day{high}."
+        return f"Rain likely {when(wet[0].at)}{high}."
+    if today and yesterday and today.low <= FREEZING_F < yesterday.low:
+        coldest = min(forecast.hours_on(day), key=lambda h: h.temp, default=None)
+        part = "this morning" if coldest and coldest.at.hour < 12 else "tonight"
+        return f"Below freezing {part}, low {_degrees(today.low, units)}."
+    if today and today.high >= settings.heat_f:
+        return f"Hot today, high {_degrees(today.high, units)}."
+    if today and today.low <= settings.cold_f:
+        return f"Bitter cold today, low {_degrees(today.low, units)}."
+    gusty = max(hours, key=lambda h: h.gust)
+    if gusty.gust >= settings.gust_mph:
+        return f"Gusty, up to {_speed(gusty.gust, units)} {_part(gusty.at)}."
+    if today and yesterday and abs(today.high - yesterday.high) >= settings.change_f:
+        word = "colder" if today.high < yesterday.high else "warmer"
+        return f"Much {word} than yesterday, high {_degrees(today.high, units)}."
+    return None
 
 
 class WeatherModule(Module):

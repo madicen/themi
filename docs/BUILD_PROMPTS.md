@@ -387,7 +387,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MM3 | Morning message: Today's tasks and Email | Morning message | [x] 2026-11-11 |
 | MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
 | WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [x] 2026-11-12 |
-| WX2 | Weather: what's noteworthy | Weather | [ ] |
+| WX2 | Weather: what's noteworthy | Weather | [x] 2026-11-12 |
 | WX3 | Weather: NWS alerts in the US | Weather | [ ] |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [ ] |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
@@ -18229,7 +18229,7 @@ Notes:
   `fake_weather` (jobs.json gains `weather.refresh`), and `test_modules`' key count is 72.
 
 ### WX2 · Weather: what's noteworthy
-Status: [ ]
+Status: [x] 2026-11-12
 Depends on: WX1
 Read first: the plan's "What counts as noteworthy" and "Decisions for Michael".
 - `noteworthy(forecast, alerts, yesterday, window) -> str | None`, pure, ranks 2 to 9 of
@@ -18241,6 +18241,16 @@ Read first: the plan's "What counts as noteworthy" and "Decisions for Michael".
   umbrella"). °C mode converts the text only.
 Tests: one per rule, a changed threshold setting, the ranking, window edges (rain that ended before the morning time),
 "already raining", "most of the day", the first-freeze rule, °C text, a fair day gives None.
+
+Notes:
+- `noteworthy(forecast, start, end, settings)`: yesterday comes from the forecast itself
+  (WX1's `past_days=1`), so there's no `yesterday` argument. WX3 adds `alerts`.
+- `Weather.line(start)`: the waking day from `start` (the morning message's time) to 9 pm
+  (`DAY_ENDS`); None with no fresh forecast or after 9 pm.
+- Wording: an hour already wet at the start says "this morning" (or afternoon/evening);
+  "most of the day" is 75% of the waking hours. Snow rounds to the half inch (whole cm),
+  noon is "noon". The first freeze says "this morning" when the day's coldest hour is
+  before noon, else "tonight".
 
 ### WX3 · Weather: NWS alerts in the US
 Status: [ ]

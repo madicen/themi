@@ -226,3 +226,31 @@ async def test_ensure_today_fetches_only_when_theres_no_usable_forecast(
     clock.advance(timedelta(hours=7))
     await weather.ensure_today()
     assert fake.count() == 2
+
+
+# ----- WX2: the line, from the stored forecast -------------------------------------------
+
+
+async def test_the_line_comes_from_the_stored_forecast(family: SeededFamily) -> None:
+    fake = FakeWeather()
+    fake.span(0, 14, 18, chance=80, rain=0.1)
+    fake.day(-1, high=58, low=48)
+    fake.day(0, high=58, low=48)
+    set_home(family)
+    _, weather = load(family, fake)
+    seven = MORNING.replace(hour=7)
+    assert weather.line(seven) is None  # nothing fetched yet
+    await weather.refresh()
+    assert weather.line(seven) == "Rain likely from about 2 pm, high 58°F."
+    assert weather.line(MORNING.replace(hour=21)) is None  # the waking day is over
+    clock.advance(timedelta(hours=7))
+    assert weather.line(seven) is None  # too old to go on
+
+
+async def test_the_line_uses_the_settings(family: SeededFamily) -> None:
+    fake = FakeWeather()
+    fake.span(0, 14, 18, chance=45, rain=0.1)
+    set_home(family)
+    _, weather = load(family, fake, WeatherSettings(rain_chance=40, units="C"))
+    await weather.refresh()
+    assert weather.line(MORNING.replace(hour=7)) == "Rain likely from about 2 pm, high 18°C."
