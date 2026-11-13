@@ -12,9 +12,11 @@ from tests.fakes.modules import module_context
 from tests.fakes.weather import FakeWeather
 from tests.fixtures.family import SeededFamily
 from themi import clock
+from themi.connectors import weather as weather_client
 from themi.connectors.weather import Forecast
 from themi.core import keys
 from themi.modules.base import ModuleSetup
+from themi.modules.portal import TEST_WITHIN
 from themi.modules.settings import SettingsProblem, read_settings
 from themi.standard.weather import Weather, WeatherModule, WeatherSettings
 from themi.storage.migrations import current_version
@@ -113,7 +115,7 @@ def test_settings_that_make_no_sense_are_refused(env: dict[str, str], problem: s
 
 def test_the_module_brings_its_own_track_and_an_hourly_refresh(family: SeededFamily) -> None:
     ctx, _ = load(family, FakeWeather())
-    assert current_version(family.db, "weather") == 2  # WX3: whether home is in the US
+    assert current_version(family.db, "weather") == 3  # WX4: NWS's grid and the source
     assert [(j.name, j.every) for j in ctx.jobs] == [("weather.refresh", timedelta(hours=1))]
 
 
@@ -129,9 +131,18 @@ async def test_test_fetches_one_forecast_and_says_what_went_wrong() -> None:
     module = WeatherModule(fake.client())
     assert await module.check() is None
     fake.fail("forecast", 503)
+    fake.fail("grid", 500)  # WX4: and NWS's stand-in
     assert await module.check() == (
-        "The weather service didn't answer: the weather service said 503"
+        "The weather service didn't answer: the weather service said 503. "
+        "The National Weather Service didn't either: the weather service said 500"
     )
+
+
+def test_a_stalled_service_gives_its_own_reason_before_test_gives_up() -> None:
+    """Bug 2026-11-13: Open-Meteo hung in the TLS handshake and Test said only "didn't
+    answer within 20 seconds". httpx's limit is per phase, so connecting and reading
+    together must finish inside Test's wait for the client's own reason to be shown."""
+    assert 2 * weather_client.TIMEOUT < TEST_WITHIN
 
 
 # ----- the stored forecast ---------------------------------------------------------------
@@ -193,6 +204,7 @@ async def test_a_failed_refresh_keeps_the_last_good_forecast_and_is_logged_once(
     await weather.refresh()
     good = weather.latest()
     fake.fail("forecast", 500, times=3)
+    fake.fail("grid", 500, times=3)  # WX4: NWS's stand-in too
     caplog.set_level(logging.INFO, logger="themi.standard.weather")
     for _ in range(3):
         clock.advance(timedelta(hours=1))

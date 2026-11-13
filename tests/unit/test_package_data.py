@@ -1,6 +1,8 @@
 """Every file the app reads at run time is in the installed package (bug 2026-11-07: the
 session page failed on the Pi because `web/static/*` left out `chameleon/` and `audio/`;
-tests run from the source tree, so nothing else noticed). CR17b: each pack's too."""
+tests run from the source tree, so nothing else noticed). CR17b: each pack's too. Bug
+2026-11-13: spending couldn't start on the Pi because `spending_schema/` was left out, so
+every `*_schema` folder is checked too."""
 
 from __future__ import annotations
 
@@ -12,7 +14,7 @@ import pytest
 ROOT = Path(__file__).parents[2]
 
 
-@pytest.mark.parametrize("package", ["themi", "themi_google", "themi_home"])
+@pytest.mark.parametrize("package", ["themi", "themi_google", "themi_home", "themi_cozyla"])
 def test_every_web_and_schema_file_is_package_data(package: str) -> None:
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     patterns = config["tool"]["setuptools"]["package-data"][package]
@@ -29,6 +31,13 @@ def test_every_web_and_schema_file_is_package_data(package: str) -> None:
             "drawing_templates",  # DC9: a pack's own pictures
         )  # DC1
         for p in (folder_of / folder).rglob("*")
+        if p.is_file() and "__pycache__" not in p.parts
+    }
+    needed |= {  # every migration track, wherever it lives
+        p
+        for folder in folder_of.rglob("*_schema")
+        if folder.is_dir()
+        for p in folder.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts
     }
     assert sorted(str(p.relative_to(folder_of)) for p in needed - covered) == []
