@@ -270,6 +270,11 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
+| F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [ ] |
+| F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [ ] |
+| F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [ ] |
+| F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
+| F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13576,6 +13581,201 @@ one up." and adds nothing. "With neither a time nor `before`, the tool asks": le
 tool description ("never make a time up") and `unread`; empty start and end still mean all
 day. The fake gets `leg(a, b, minutes)`. Golden `tools.json` changed for the two new
 arguments (expected). New tests at the end of `test_travel.py`; none changed.
+
+### F42a · Feedback (2026-11-11): an event that covers the whole day is an all-day event
+Status: [ ]
+Depends on: CR18b, F38a, F38b
+Read first: `themi_google/connectors/gcal/busy.py` (`_when`, `_entry`, `blocks`, `entries`);
+`themi/channels/outbox.py` (`_earliest`, `free_from`, the F20c deadline fallback);
+`themi/standard/day_summary.py` (`items`, how an event's time is written). From Michael's
+bug #201 (2026-11-11, 11:39 pm, "I'm not getting my evening routine notification"); the same
+event held #202's heads-ups (2026-11-12, 8:24 am, "the get ready for appointment messages are
+a day late").
+
+What the Pi shows: Michael's primary Google calendar has untitled events that run midnight
+to midnight Pacific as timed events (`dateTime`, not `date`): calendar_entries 131529 (Fri
+6 Nov), 131509 (Wed 11 Nov, Veterans Day) and 131510 (Thu 26 Nov, Thanksgiving), all
+"(no title)", `all_day` 0, `busy` 1. So Wed 11 Nov was one busy block from 00:00 to 24:00.
+His evening routine check (routine 6, window ends 20:30, deadline 20:45, expires 01:30) was
+made at 20:32 as outbox 1817. `_earliest` found no free moment before quiet hours (21:30),
+queued it "until 2026-11-12T08:00", and the 08:00 flush dropped it as too late. The
+`routine_day_checks` row for (6, 2026-11-11) was already written, so it never came back.
+Mon and Tue's checks (1694, 1758) went at 20:45 as usual. The morning message that day began
+"- 12-12 am …" for the same event. #202: on 0.7.12 the leave heads-ups for the drop-off and
+ND psych (1799, 1804) were held by the same block and went at 08:00 the next day. F38b (live
+since 0.8.0) no longer holds `travel` for busy times, so #202 is already fixed.
+
+Decided (Michael, 2026-11-13, bug #201): a timed event that covers a whole local day or more
+is an all-day event: not busy, and written as an all-day event.
+
+Build:
+- Bug fix: start with the failing test below.
+- In `_entry`: a timed event that starts at local midnight and ends at a later local
+  midnight, in the person's timezone, is stored with `all_day` 1 and `busy` 0, as an
+  all-day event (`date`) is now. Titled or not. A timed event that only spans midnight (an
+  overnight shift, 10 pm-6 am) is unchanged.
+- The next 15-minute refresh rewrites what's there, so no migration is needed. Check that
+  `calendar_busy` loses the block.
+- Everything that reads `all_day` (morning message, day and week cards, the model's calendar
+  context, travel, twins) then treats it as all-day. Check travel doesn't send a heads-up
+  for it, and the day card draws it in the all-day strip.
+
+Tests: start with a failing one: Michael's Wed 11 Nov with a "(no title)" timed event
+00:00-24:00 PST and an evening routine ending 20:30 with an item open. The check goes out
+at 20:30-20:45 that evening, not queued to the next morning. The event isn't in `blocks`;
+`entries` has it `all_day`. A midnight-to-midnight event spanning two days is all-day too.
+A 10 pm-6 am event is still busy. An event midnight to midnight UTC but not local isn't
+all-day. The morning message writes it as an all-day event, not "12-12 am".
+Scenario: a holiday on Michael's calendar as a timed whole-day event. His evening routine
+check still comes before quiet hours, and his morning message lists it as all day.
+
+Data: none needed (the refresh fixes the stored rows). Mark #201 reviewed once live. #202:
+mark reviewed now (F38b is live).
+
+### F42b · Feedback (2026-11-12): in burnout mode, "not important enough" is heard, and time-sensitive mail waits
+Status: [ ]
+Depends on: F22d, F16c, F41c
+Read first: `themi/channels/pauses.py` (`TOPICS["burnout"]`, F22d's comment);
+`themi/channels/outbox.py` (`_earliest`: `IMMEDIATE`, `held_until`); `themi/core/rules.py`
+(`propose_rule`, `ONE_EMAIL`, the bug #53 refusal); `themi_google/email_audit.py`
+(`set_sender_levels`); `burnout_task` and how burnout mode offers it. From Erin's bug #204
+(2026-11-12, 11:11 am) and her 👎 on reply 431.
+
+What the Pi shows: Erin's burnout pause (pause 34, until 2036) is on. Joyous Care's monthly
+check-in reminder came at 10:47 am as "An email that looks time-sensitive (family) …" (outbox
+1838, `normal`, kind `email`). Burnout doesn't hold `email` (F22d: alerts still come). She
+said: "That particular email is not important enough to warrant triggering a notification
+during burnout mode". Reply 431 called `propose_rule` ("Do not trigger notifications for that
+Stanford Health Care message during burnout mode", the wrong sender too). The tool refused
+with "That's about one email, not a rule: use keep_email (it keeps that email and offers to
+count its sender as urgent)", which is the opposite of what she asked. The model then called
+`burnout_task`, and the whole reply was "If you'd like one thing: Put the laundry away.
+Nothing at all is fine too." She wanted: "Got it, I won't notify you of that kind of email
+when you're in burnout mode. Go get some rest."
+
+Decided (Michael, 2026-11-13, bug #204): during burnout mode, normal-priority email alerts
+("time-sensitive") wait until it ends; urgent ones still come.
+
+Build:
+- Bug fix: start with the failing test below.
+- `TOPICS["burnout"]` holds `email` at `normal` and `low`. `urgent` email still goes, so
+  `_earliest`'s `IMMEDIATE` early return is untouched. Update F22d's comment.
+- `propose_rule`'s one-email refusal tells the two cases apart. "is urgent / important"
+  keeps today's keep_email hint. "not important / don't notify me / don't bother me" points
+  to `set_sender_levels` for the email they mean: the latest alert in this chat (Joyous
+  Care's here, not Stanford's), lowering its urgency. Its result has Themi's own line for
+  the reply: "Got it: I won't flag email from Joyous Care like that again." In burnout mode it
+  adds "Go get some rest." That line goes in `ctx.done` (F41c) so the model can't lose it.
+- `burnout_task` isn't the answer when they told Themi something: in a turn where another
+  tool ran (or was refused), its line is dropped. It's offered when they ask what to do.
+
+Tests: start with a failing one: reply 431's turn, faked. Erin is in burnout, and the last
+alert was Joyous Care's. The model calls `propose_rule` then `burnout_task`. The refusal
+names `set_sender_levels`, not keep_email, and, with the model then calling it, the reply is
+"Got it: I won't flag email from Joyous Care like that again. Go get some rest." with no
+laundry line. During burnout, a `normal` email alert is held until the pause ends and an
+`urgent` one goes at once. Out of burnout, both go as now. "The Schwab email is urgent"
+still gets the keep_email hint (bug #53).
+Scenario: Erin in burnout mode gets a time-sensitive email alert held, says another one
+isn't important, and hears it's done and to rest.
+
+Data: lower Joyous Care (care@joyous.team) for Erin once live, if she wants it. Mark #204
+reviewed once live, and label reply 431 `--wrong-tool 431 set_sender_levels`.
+
+### F42c · Feedback (2026-11-13): a recipe named exactly is the one, and "Done." isn't said when nothing was
+Status: [ ]
+Depends on: DC10, F41c
+Read first: `themi_home/recipe_card.py` (`recipe_card`); `themi_home/recipes.py` (`find`,
+`clear_match`, `Match`); `themi/core/agent.py` (`_honest`, `_not_again`, where "Done." is
+the fallback). From Michael's bug #205 (2026-11-13, 1:50 am, "no recipe card ever showed up
+and it couldn't tell which recipe I was referring to since one was a strict subset of the
+other").
+
+What the Pi shows: replies 440-443. "Show me a recipe card for chocolate chip cookies" →
+`recipe_card {"name": "Chocolate Chip Cookies"}` → "Several recipes match (Chocolate Chip
+Cookies, Chocolate Chip Cookies for 2): ask which one they mean." The same refusal came
+four more times, through "Chocolate Chip Cookies", "The first one" and "Yes, show me a
+recipe card". `clear_match` needs the second match to have fewer name hits, and "for 2" has
+every word too. Reply 443's tool was refused, yet the reply was "Done." No card was sent.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `clear_match`: a recipe whose name is exactly what they asked for (case, spacing and
+  punctuation aside) wins over longer names that contain it. Use it in `recipe_card`,
+  `find_recipe` and the cook screen's lookup (whatever calls `clear_match`).
+- Asking which one: the question's answers ("the first one", the exact name, "for 2") are
+  understood. The refusal lists the names numbered and says "if they answer with one of
+  these, call again with that name". The recent conversation is enough for the model.
+- A turn whose only tools were refused or declined can't end "Done." (or any "done" line)
+  from the model or the fallback. It ends with the refusal's own ask, or `TANGLED_TEXT`.
+
+Tests: start with failing ones: the cookbook has "Chocolate Chip Cookies" and "Chocolate
+Chip Cookies for 2". `recipe_card {"name": "chocolate chip cookies"}` sends the first as a
+picture. "Chocolate chip cookies for 2" sends the second. "Chocolate chip" still asks which.
+A faked turn where `recipe_card` is declined and the model says "Done." doesn't reply
+"Done.". A turn with a real done action still can.
+Scenario: Michael asks for a recipe card by a name that's also the start of another
+recipe's name, and gets the card at once.
+
+Data: none needed. Mark #205 reviewed once live.
+
+### F42d · Idea (2026-11-11): the morning message lists your own day; everyone else's is behind a button
+Status: [ ]
+Depends on: MM1, MM2, F34f
+Read first: `themi/standard/morning.py` (`text`, `has_events`, `ORDER`, the tray buttons,
+`on_button`, `_edit`); `themi/standard/day_summary.py` (`items`, `partner=True`); the day
+card's events (`day_card.py`), which draw the same list. From Michael's idea #200
+(2026-11-11, 9:09 pm, "there should be a way to limit the mornin message to just the
+person's calendar and move the other calendars behind a button").
+
+What the Pi shows: `text` lists `summary.items(member, day, partner=True, tasks=False)`, so
+each morning message has both people's calendars and the family one.
+
+Decided (Michael, 2026-11-13, idea #200): the message lists the person's own events and the
+family calendar's. The partner's calendar goes behind an "Everyone's calendar" button.
+
+Build:
+- `text`: own and family-calendar events only (F34f's copies stay merged with the original).
+  When the partner has events that day, an "Everyone's calendar" button joins the others,
+  first in the row. It isn't shown when they have none.
+- Tapping it sends the partner's events that day (as `items` writes them, the person named),
+  as a reply, and edits the message without the button as the others do (`_tap`, `_edit`).
+- A day with nothing of their own but the partner's: "Nothing on your calendar today." plus
+  the button. The message is still worth sending (`_worth_sending`, `has_events`).
+- The day card (morning picture) draws the same events as the text: own and family only.
+- Calendar details seen by the partner (settings) still decide what the button shows.
+
+Tests: Michael's day with his event, a family event and Erin's event. The text has his and
+the family one, not Erin's, plus "Everyone's calendar". Tapping it sends Erin's event and the
+button goes. With Erin having nothing, there's no button. With only Erin's event, the text says
+nothing on his calendar and offers the button. The day card's events match the text.
+Scenario: Michael's morning message shows his day and the family calendar, and the button
+brings Erin's.
+
+Data: none needed. Mark #200 reviewed once live.
+
+### F42e · Idea (2026-11-12): "Just one thing" offers a different one
+Status: [ ]
+Depends on: MM4
+Read first: `themi/standard/morning.py` (`ONE`, `on_button`'s `focus.send(member, count=1)`);
+`themi/standard/focus.py` (`send`, how the one task is picked, its buttons). From Michael's
+idea #203 (2026-11-12, 10:23 am, "add a button under the 'just one task' to get a different
+one").
+
+Build:
+- The one-task message (from "Just one thing" and `focus_now` with one) has a "Something
+  else" button with its other buttons. Tapping it edits that message to the next task in
+  focus's order. A task already offered isn't offered again that day; the button goes when
+  there's nothing left to offer ("That's all of them for now.").
+- What was offered is kept per person per day (no new table if focus already records picks).
+- Burnout's `burnout_task` line isn't changed (it's one gentle option, not a picker).
+
+Tests: three open tasks. "Just one thing" offers the first, with "Something else".
+Tapping it edits to the second, then the third, and the third has no "Something else" but
+says that's all. The next day starts fresh. A task done in between isn't offered.
+Scenario: Michael taps Just one thing, doesn't like it, and taps Something else.
+
+Data: none needed. Mark #203 reviewed once live.
 
 ## Conversation mode
 
