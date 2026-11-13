@@ -272,7 +272,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
 | F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [x] 2026-11-13 |
 | F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [x] 2026-11-13 |
-| F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [ ] |
+| F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [x] 2026-11-13 |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [ ] |
@@ -13709,7 +13709,7 @@ them apart, and triage sends no alert for a no-rush sender unless the verdict is
 New tests in `tests/scenarios/test_burnout_email.py`; none changed, no golden file changed.
 
 ### F42c · Feedback (2026-11-13): a recipe named exactly is the one, and "Done." isn't said when nothing was
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC10, F41c
 Read first: `themi_home/recipe_card.py` (`recipe_card`); `themi_home/recipes.py` (`find`,
 `clear_match`, `Match`); `themi/core/agent.py` (`_honest`, `_not_again`, where "Done." is
@@ -13748,6 +13748,18 @@ Scenario: Michael asks for a recipe card by a name that's also the start of anot
 recipe's name, and gets the card at once.
 
 Data: none needed. Mark #205 reviewed once live (#206 once F42c, F42f and F42g are all live).
+
+Notes: `Match.exact`: the recipe's whole name (`name_key`) is what they said. `search` sorts
+exact matches first, and `clear_match` takes a lone exact match. That covers `recipe_card`,
+`find_recipe`, the grocery `resolve` and `find_web_recipe`'s own-cookbook check; the cook
+screen starts from a recipe id, so it has no lookup to change. The wanted-word set alone
+couldn't do it: "for" is filler and "2" is too short, so "Chocolate Chip Cookies for 2" had
+the shorter recipe's exact word set (+5) and won. `recipe_card`'s "which one" refusal numbers
+the names and says to call again with the one they pick. Reply 443's "Done." came from F41c:
+the model said its last message again ("Chocolate Chip Cookies."), `_not_again` dropped it,
+and the fallback was "Done.". Now that fallback is "Done." only when a tool succeeded (`ok`);
+otherwise the model's own words stay. New tests in `tests/scenarios/test_recipe_exact_name.py`;
+none changed, no golden file changed.
 
 ### F42d · Idea (2026-11-11): the morning message lists your own day; everyone else's is behind a button
 Status: [ ]

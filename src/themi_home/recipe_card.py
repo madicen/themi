@@ -135,8 +135,12 @@ async def recipe_card(ctx: ToolContext, args: dict[str, Any]) -> str:
         raise ToolDeclined(f'Nothing in the cookbook matches "{name}". Say so plainly.')
     recipe = clear_match(matches) or (matches[0].recipe if len(matches) == 1 else None)
     if recipe is None:
-        names = ", ".join(m.recipe.name for m in matches[:4])
-        raise ToolDeclined(f"Several recipes match ({names}): ask which one they mean.")
+        names = ", ".join(f"{n}. {m.recipe.name}" for n, m in enumerate(matches[:4], 1))
+        raise ToolDeclined(  # F42c: their answer ("the first one", a name) is understood
+            f"Several recipes match ({names}): ask which one they mean. If they answer with "
+            "one of these (its number, 'the first one', or its name), call again with that "
+            "name, word for word."
+        )
     png = await card_png(ctx.services, ctx.member, recipe)
     if png is not None and await ctx.services.outbox.send_photo(
         ctx.member, png, recipe.name, kind="recipe_card"
