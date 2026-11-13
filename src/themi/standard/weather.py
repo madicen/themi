@@ -8,6 +8,9 @@ call. One forecast for the household: the same line for everyone.
   National Weather Service's warnings, watches and advisories too (WX3; `WEATHER_ALERTS`:
   `auto` asks NWS once per home address whether it's in the US). NWS failing alone leaves
   the forecast's own rules running.
+- WX4: in the US, when Open-Meteo can't be reached, NWS's gridpoint forecast stands in,
+  and stays the source for `NWS_FOR` before Open-Meteo is tried again. NWS has no
+  yesterday, so yesterday's high and low come from the forecasts kept.
 - A forecast older than `FRESH` isn't used. A refresh that fails keeps the last good one,
   and is logged once for the outage. Nothing about it ever reaches the family.
 - Off until it's turned on; without a home address it does nothing (the Modules page says
@@ -52,6 +55,11 @@ REFRESH_EVERY = timedelta(hours=1)
 FRESH = timedelta(hours=6)  # an older forecast isn't used
 ENSURE_TIMEOUT = 10.0  # seconds the morning message waits for a first forecast
 TEST_PLACE = (47.6062, -122.3321, "America/Los_Angeles")  # Test asks about Seattle
+NWS_FOR = timedelta(hours=3)  # WX4: after an Open-Meteo failure, NWS is the source this long
+TEST_OPEN_METEO_WITHIN = 10.0  # WX4: seconds Test gives Open-Meteo, leaving NWS the rest
+OPEN_METEO = "open-meteo"
+NWS = "nws"
+SOURCE_NAMES = {OPEN_METEO: "Open-Meteo", NWS: "the National Weather Service"}
 
 
 class WeatherSettings(ModuleSettings):
@@ -117,6 +125,7 @@ class Weather:
         self.db = services.store.db
         self._down = False  # a failure is logged once, until a refresh works again
         self._alerts_down = False
+        self._source = OPEN_METEO  # WX4: which service the last forecast came from
 
     def install(self) -> None:
         pass
@@ -140,7 +149,7 @@ class Weather:
             return False
         tz = self.tz()
         try:
-            forecast = await self.source.forecast(home[0], home[1], tz.key)
+            forecast, source = await self._forecast(home[0], home[1], tz)
         except WeatherError as exc:
             if not self._down:
                 log.warning("weather: the forecast didn't come: %s", exc)
@@ -149,18 +158,25 @@ class Weather:
         if self._down:
             log.info("weather: the forecast is back")
         self._down = False
+        if source != self._source:
+            log.info("weather: the forecast now comes from %s", SOURCE_NAMES[source])
+        self._source = source
         alerts = await self._alerts(*home)
         today = self.today()
+        if source == NWS:
+            forecast = self._with_kept_days(forecast, today)
         self.db.execute(
-            "INSERT INTO weather_forecasts (day, fetched_at, forecast, alerts) "
-            "VALUES (?, ?, ?, ?) "
+            "INSERT INTO weather_forecasts (day, fetched_at, forecast, alerts, source) "
+            "VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(day) DO UPDATE SET fetched_at = excluded.fetched_at, "
-            "forecast = excluded.forecast, alerts = excluded.alerts",
+            "forecast = excluded.forecast, alerts = excluded.alerts, "
+            "source = excluded.source",
             (
                 today.isoformat(),
                 to_utc_iso(clock.now()),
                 json.dumps(forecast.to_json()),
                 json.dumps([a.to_json() for a in alerts]),
+                source,
             ),
         )
         self.db.execute(
@@ -168,6 +184,73 @@ class Weather:
             ((today - timedelta(days=1)).isoformat(),),
         )
         return True
+
+    async def _forecast(self, lat: float, lon: float, tz: ZoneInfo) -> tuple[Forecast, str]:
+        """WX4: Open-Meteo's forecast, or NWS's when Open-Meteo can't be reached and home is
+        in the US. After an Open-Meteo failure NWS goes first for `NWS_FOR`; whichever goes
+        first, the other is tried when it fails. The last failure is what's raised."""
+        sticky = self._nws_until() is not None
+        order = (NWS, OPEN_METEO) if sticky else (OPEN_METEO, NWS)
+        failure: WeatherError | None = None
+        for source in order:
+            try:
+                if source == OPEN_METEO:
+                    return await self.source.forecast(lat, lon, tz.key), OPEN_METEO
+                grid = await self._grid(lat, lon)
+                if grid is None:
+                    continue  # outside the US: no stand-in
+                forecast = await self.source.nws_forecast(grid, tz.key)
+            except WeatherError as exc:
+                failure = exc
+                continue
+            if not sticky:
+                self._hold_nws()
+            return forecast, NWS
+        assert failure is not None  # Open-Meteo is always tried
+        raise failure
+
+    def _nws_until(self) -> datetime | None:
+        row = self.db.one("SELECT nws_until FROM weather_home WHERE id = 1")
+        if row is None or not row["nws_until"]:
+            return None
+        until = datetime.fromisoformat(row["nws_until"])
+        return until if clock.now() < until else None
+
+    def _hold_nws(self) -> None:
+        self.db.execute(
+            "UPDATE weather_home SET nws_until = ? WHERE id = 1",
+            (to_utc_iso(clock.now() + NWS_FOR),),
+        )
+
+    async def _grid(self, lat: float, lon: float) -> str | None:
+        """NWS's forecast grid for home, asked once per address; None outside the US."""
+        row = await self._home_row(lat, lon)
+        if not row["in_us"]:
+            return None
+        if row["grid_url"]:
+            return str(row["grid_url"])
+        grid = await self.source.nws_grid(lat, lon)  # a home asked about before WX4
+        if grid is None:
+            return None
+        self.db.execute("UPDATE weather_home SET grid_url = ? WHERE id = 1", (grid or None,))
+        return grid
+
+    def _with_kept_days(self, forecast: Forecast, today: date) -> Forecast:
+        """NWS's grid has no yesterday (and late in the day it may have dropped today's high):
+        those days come from the forecasts kept, the newest first."""
+        days = {d.day: d for d in forecast.days}
+        missing = [d for d in (today - timedelta(days=1), today) if d not in days]
+        if not missing:
+            return forecast
+        rows = self.db.query("SELECT forecast FROM weather_forecasts ORDER BY fetched_at DESC")
+        for row in rows:
+            kept = Forecast.from_json(json.loads(row["forecast"]))
+            for day in list(missing):
+                found = kept.day(day)
+                if found is not None:
+                    days[day] = found
+                    missing.remove(day)
+        return Forecast(forecast.hours, tuple(days[d] for d in sorted(days)))
 
     async def _alerts(self, lat: float, lon: float) -> list[Alert]:
         """NWS's alerts at home, when they're on (WX3); none when NWS doesn't answer."""
@@ -187,19 +270,26 @@ class Weather:
         return alerts
 
     async def _in_us(self, lat: float, lon: float) -> bool:
-        row = self.db.one("SELECT lat, lon, in_us FROM weather_home WHERE id = 1")
+        return bool((await self._home_row(lat, lon))["in_us"])
+
+    async def _home_row(self, lat: float, lon: float) -> dict[str, Any]:
+        """The `weather_home` row for this place: NWS's `points` is asked once per address
+        (a moved home is asked again), keeping whether it's in the US and its grid (WX4)."""
+        row = self.db.one("SELECT * FROM weather_home WHERE id = 1")
         if row is not None and (row["lat"], row["lon"]) == (lat, lon):
-            return bool(row["in_us"])
-        in_us = await self.source.in_us(lat, lon)
+            return row
+        grid = await self.source.nws_grid(lat, lon)
+        in_us = grid is not None
         self.db.execute(
-            "INSERT INTO weather_home (id, lat, lon, in_us) VALUES (1, ?, ?, ?) "
+            "INSERT INTO weather_home (id, lat, lon, in_us, grid_url, nws_until) "
+            "VALUES (1, ?, ?, ?, ?, NULL) "
             "ON CONFLICT(id) DO UPDATE SET lat = excluded.lat, lon = excluded.lon, "
-            "in_us = excluded.in_us",
-            (lat, lon, int(in_us)),
+            "in_us = excluded.in_us, grid_url = excluded.grid_url, nws_until = NULL",
+            (lat, lon, int(in_us), grid or None),
         )
         if not in_us:
             log.info("weather: home is outside the US, so there are no NWS warnings")
-        return in_us
+        return {"lat": lat, "lon": lon, "in_us": int(in_us), "grid_url": grid or None}
 
     async def ensure_today(self, timeout: float = ENSURE_TIMEOUT) -> None:
         """A refresh when there's no usable forecast (Themi just started), waiting at most
@@ -390,12 +480,30 @@ class WeatherModule(Module):
         return cls(WeatherClient(), setup.read(WeatherSettings))
 
     async def check(self) -> str | None:
+        """Test: Open-Meteo, and when it fails, NWS's stand-in (WX4); both inside the
+        portal's wait, so Open-Meteo gets `TEST_OPEN_METEO_WITHIN` of it."""
         lat, lon, tz = TEST_PLACE
         try:
-            await self.source.forecast(lat, lon, tz)
+            await asyncio.wait_for(self.source.forecast(lat, lon, tz), TEST_OPEN_METEO_WITHIN)
+            return None
+        except TimeoutError:
+            failed = f"no answer within {int(TEST_OPEN_METEO_WITHIN)} seconds"
         except WeatherError as exc:
-            return f"The weather service didn't answer: {exc}"
-        return None
+            failed = str(exc)
+        try:
+            grid = await self.source.nws_grid(lat, lon)
+            if grid is None:
+                raise WeatherError("NWS says the test place isn't in the US")
+            await self.source.nws_forecast(grid, tz)
+        except WeatherError as exc:
+            return (
+                f"The weather service didn't answer: {failed}. "
+                f"The National Weather Service didn't either: {exc}"
+            )
+        return (
+            f"Open-Meteo didn't answer ({failed}); the National Weather Service did, "
+            "so forecasts carry on in the US."
+        )
 
     def install(self, ctx: ModuleContext) -> None:
         weather = ctx.provide(Weather(ctx.services, self.source, self.weather_settings))

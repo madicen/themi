@@ -97,7 +97,20 @@ async def test_when_the_forecast_cant_be_had_the_message_goes_without_it(
 ) -> None:
     rain(weather)
     weather.fail("forecast", 503, times=10)
+    weather.fail("grid", 503, times=10)  # WX4: NWS's stand-in can't be had either
     await overnight(scenario, linked)
     sent = await scenario.advance(minutes=45)
     assert sent == [MORNING]  # no line, and no word about the weather
     assert "weather" not in " ".join(scenario.inbox("Erin")).lower()
+
+
+async def test_with_open_meteo_down_the_line_comes_from_nws(
+    scenario: Scenario, linked: FakeGcal, weather: FakeWeather
+) -> None:
+    """WX4: Open-Meteo unreachable (as on 2026-11-13); in the US, NWS's forecast stands in
+    and the line reads the same."""
+    rain(weather)
+    weather.hang("forecast", times=10)
+    await overnight(scenario, linked)
+    assert weather.count("grid") == 1
+    assert await scenario.advance(minutes=45) == [f"{MORNING}\n{RAIN}"]

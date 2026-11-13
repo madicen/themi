@@ -115,7 +115,7 @@ def test_settings_that_make_no_sense_are_refused(env: dict[str, str], problem: s
 
 def test_the_module_brings_its_own_track_and_an_hourly_refresh(family: SeededFamily) -> None:
     ctx, _ = load(family, FakeWeather())
-    assert current_version(family.db, "weather") == 2  # WX3: whether home is in the US
+    assert current_version(family.db, "weather") == 3  # WX4: NWS's grid and the source
     assert [(j.name, j.every) for j in ctx.jobs] == [("weather.refresh", timedelta(hours=1))]
 
 
@@ -131,8 +131,10 @@ async def test_test_fetches_one_forecast_and_says_what_went_wrong() -> None:
     module = WeatherModule(fake.client())
     assert await module.check() is None
     fake.fail("forecast", 503)
+    fake.fail("grid", 500)  # WX4: and NWS's stand-in
     assert await module.check() == (
-        "The weather service didn't answer: the weather service said 503"
+        "The weather service didn't answer: the weather service said 503. "
+        "The National Weather Service didn't either: the weather service said 500"
     )
 
 
@@ -202,6 +204,7 @@ async def test_a_failed_refresh_keeps_the_last_good_forecast_and_is_logged_once(
     await weather.refresh()
     good = weather.latest()
     fake.fail("forecast", 500, times=3)
+    fake.fail("grid", 500, times=3)  # WX4: NWS's stand-in too
     caplog.set_level(logging.INFO, logger="themi.standard.weather")
     for _ in range(3):
         clock.advance(timedelta(hours=1))
