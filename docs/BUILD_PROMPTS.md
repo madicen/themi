@@ -18173,8 +18173,16 @@ Notes:
 ## Weather
 
 Design source: the [Themi Weather Module Plan](https://claude.ai/artifact/VaszSg2tS76qK2aaLUqtMr).
-Read it with the Claude Docs tools, like the other plans. Its "Decisions for Michael" have
-defaults the prompts build to; check them before WX2.
+Read it with the Claude Docs tools, like the other plans. Michael's decisions in the doc
+(2026-11-12):
+
+- A freeze is noted only on the first freezing day after one that wasn't.
+- A weather line alone is reason enough to send the morning message.
+- NWS alerts `auto`: on when home is in the US.
+- Units are a module setting (`WEATHER_UNITS`), US units (°F, inches, mph) by default.
+- The thresholds (rain 60% and 0.05 in, snow 0.5 in, heat 95°F, cold 10°F, wind 40 mph,
+  change 15°F) are defaults, each configurable as a module setting.
+- The high goes only on rain and big-change lines.
 
 - Open-Meteo for the forecast (no key, free for personal home automation), NWS
   `api.weather.gov` for official alerts when home is in the US (no key). A generic
@@ -18189,7 +18197,10 @@ Read first: the plan's "The weather source", "The module" and "Edge cases and fa
 module with Test).
 - `themi/connectors/weather.py`: an Open-Meteo client behind a `WeatherSource` interface,
   one call (`forecast_days=2`, the family's time zone, the hourly and daily fields the plan
-  lists, in °F/in/mph or metric per `WEATHER_UNITS`).
+  lists, in °F/in/mph or metric per `WEATHER_UNITS`, default `F`).
+- Module settings for the thresholds, with the plan's defaults (`WEATHER_RAIN_CHANCE`,
+  `WEATHER_RAIN_IN`, `WEATHER_SNOW_IN`, `WEATHER_HEAT_F`, `WEATHER_COLD_F`,
+  `WEATHER_GUST_MPH`, `WEATHER_CHANGE_F`), validated (a chance is 1 to 100, amounts above 0).
 - `themi/standard/weather.py`: `WeatherModule` (kind `connector`, off until turned on;
   website line when there's no home address), the `Weather` service on `keys.weather`, the
   hourly `weather.refresh` job, `check()` for Test.
@@ -18205,12 +18216,13 @@ Status: [ ]
 Depends on: WX1
 Read first: the plan's "What counts as noteworthy" and "Decisions for Michael".
 - `noteworthy(forecast, alerts, yesterday, window) -> str | None`, pure, ranks 2 to 9 of
-  the plan's table (rank 1 is WX3's). The first rule that fires gives the one line.
+  the plan's table (rank 1 is WX3's), with thresholds from the module settings. The first
+  rule that fires gives the one line. The high goes only on rain and big-change lines.
 - `Weather.line(day, window)`: the stored forecast through the rules; None when there's no
   usable forecast.
 - Lines are statements, never advice ("Rain likely from about 2 pm", not "take an
   umbrella"). °C mode converts the text only.
-Tests: one per rule, the ranking, window edges (rain that ended before the morning time),
+Tests: one per rule, a changed threshold setting, the ranking, window edges (rain that ended before the morning time),
 "already raining", "most of the day", the first-freeze rule, °C text, a fair day gives None.
 
 ### WX3 · Weather: NWS alerts in the US
