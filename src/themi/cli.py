@@ -50,7 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     picture = commands.add_parser(
         "picture", help="draw one of Themi's pictures to a file, to look at it (DC3)"
     )
-    picture.add_argument("kind", choices=("day_card",), help="which picture")
+    picture.add_argument(
+        "kind", choices=("day_card", "tasks", "routines"), help="which picture (F42g: lists)"
+    )
     picture.add_argument("--member", required=True, help="whose, by name")
     picture.add_argument("--day", default="", help="YYYY-MM-DD (default: their today)")
     picture.add_argument("--out", required=True, help="a .png or .svg file to write")
@@ -340,6 +342,28 @@ def _picture(kind: str, name: str, day: str, out: str) -> int:
     card = drawings.day_card
     when = date.fromisoformat(day) if day else card.today(member)
     path = Path(out)
+    if kind in ("tasks", "routines"):  # F42g
+        from themi.standard import list_card
+
+        data = (
+            list_card.tasks_data(app.services, member)
+            if kind == "tasks"
+            else list_card.routines_data(app.services, member, when)
+        )
+        if data is None:
+            print(f"{member.name} has nothing on their {kind} to draw.", file=sys.stderr)
+            return 1
+        svg = list_card.list_svg(data)
+        if path.suffix == ".svg":
+            path.write_text(svg)
+        else:
+            drawn = asyncio.run(drawings.png(svg, list_card.PNG_WIDTH))
+            if drawn is None:
+                print("The picture couldn't be drawn; the log says why.", file=sys.stderr)
+                return 1
+            path.write_bytes(drawn)
+        print(f"Wrote {path} ({kind}, {member.name}, {data.day:%a %d %b})")
+        return 0
     if path.suffix == ".svg":
         path.write_text(card.svg(member, when))
     else:

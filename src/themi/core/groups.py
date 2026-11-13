@@ -21,6 +21,9 @@ SCHEDULES = ToolGroup(
         "|twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remi"
         "nd|(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|week"
         "ends|split|steps?\\b|parts?\\b|break (?:it |that )?(?:up|down)"
+        # F42f (bug #206): "Erin's run summary", "a picture of my run"
+        "|step.?up|(?:run|running|walk|push.?ups?)'?s?\\W+(?:plan|summary|progress|picture)"
+        "|picture of (?:\\w+'s |my |her |his )?(?:run|walk)"
     ),
     examples=(
         "Make this chore repeat every Monday",
@@ -32,6 +35,8 @@ SCHEDULES = ToolGroup(
         "This task matters more than the others",
         "Raise the importance of filing the taxes",
         "Increase my run by half a mile each week",
+        "Show me a picture of Erin's run plan",  # F42f
+        "Can I see my run summary?",
         "Start at ten push-ups and add two a week",
         "Check in with me about the garden every few days",
         "Make it repeat on the first of the month",
@@ -58,7 +63,7 @@ CALENDAR = ToolGroup(
         "ng|afternoon|evening)(?!s?\\s+routines?)|day look|what'?s on|monday|tuesday|w"
         "ednesday|thursday|friday|saturday|sunday|weekend|drive|leave|traffic|block|t"
         "ime for|find (?:me )?time|summary|my week|the week|week ahead|weather|forecast|"
-        "rain|snow|umbrella"
+        "rain|snow|umbrella|my day\\b|morning picture"  # F42g: show_day
     ),
     examples=(
         "What's on my calendar today?",
@@ -89,6 +94,7 @@ CALENDAR = ToolGroup(
         "find_time_for_task",
         "show_week",  # DC6
         "show_weather",  # DC8
+        "show_day",  # F42g
     ),
     order=20,
 )
@@ -162,7 +168,7 @@ LISTS = ToolGroup(
 WALL = ToolGroup(
     name="wall",
     description="the Cozyla wall: chore chart, routines, to-do lists",
-    words="wall|cozyla|chart|chore|routine",
+    words="wall|cozyla|chart|chore|routine|picture|graphic",  # F42g: tasks, routines
     examples=(
         "Put flossing in my night routine",
         "What's in my morning routine?",
@@ -179,6 +185,8 @@ WALL = ToolGroup(
         "Move the vacuum water item to my chore chart",  # F32b: an item onto the chart
         "Can you move it to my chores?",
         "Show me the chore chart",
+        "Show me my tasks as a picture",  # F42g
+        "My routines as a graphic",
     ),
     tools=(
         "put_task_on_wall_list",
@@ -194,6 +202,8 @@ WALL = ToolGroup(
         "remove_routine_item",
         "tick_routine_item",
         "show_chore_chart",  # DC9
+        "show_tasks_picture",  # F42g
+        "show_routines_picture",
     ),
     order=60,
 )

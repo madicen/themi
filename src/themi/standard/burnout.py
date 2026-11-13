@@ -320,6 +320,11 @@ async def burnout_task(ctx: ToolContext, args: dict[str, Any]) -> str:
     burnout = _burnout(ctx)
     if burnout.current(ctx.member) is None:
         raise ToolFailed("Burnout mode isn't on: use day_summary or focus_now instead.")
+    if any(name != "burnout_task" for name, _, _ in ctx.calls):
+        raise ToolDeclined(  # F42b (bug #204): they told Themi something; that's the answer
+            "They told you something this turn, so answer that, and don't offer a task. "
+            "This is only for when they ask for something to do."
+        )
     task = burnout.lightest(ctx.member)
     text = LIGHTEST_TEXT.format(title=task.title) if task is not None else NOTHING_TEXT
     ctx.replies.append(text)

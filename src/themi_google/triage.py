@@ -493,7 +493,14 @@ class EmailTriage:
             audit.sender_levels(account.id, row["from_address"]) if audit else (0, 0)
         )
         important = importance > 0
-        if verdict.category == "urgent":
+        quiet = (  # F42b (bug #204): no rush means no message, unless it's drop-everything
+            audit is not None
+            and not verdict.severe
+            and audit.no_rush(account.id, row["from_address"])
+        )
+        if verdict.category == "urgent" and quiet:
+            log.info("No alert for email %s: its sender can wait", row["id"])
+        elif verdict.category == "urgent":
             at_once = verdict.severe or urgency > 1
             await self.services.outbox.send(
                 member,

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="254" viewBox="0 0 540 254" font-family="Atkinson Hyperlegible">
+<rect width="540" height="254" fill="#FBFAF7"/>
+<text x="28" y="52" font-size="24" font-weight="700" fill="#1F2328">Erin&#39;s routines</text>
+<text x="28" y="76" font-size="14" fill="#6B6F76">Wednesday 21 October</text>
+<text x="28" y="126" font-size="16" font-weight="700" fill="#1F2328">Evening</text>
+<text x="512" y="126" text-anchor="end" font-size="12" fill="#6B6F76">5-8:30 pm</text>
+<line x1="28" x2="512" y1="134" y2="134" stroke="#E6E3DC" stroke-width="1"/>
+<rect x="28" y="142" width="16" height="16" rx="4" fill="#4A88C7" stroke="#4A88C7" stroke-width="1.5"/>
+<path d="M32 150 l3.5 3.5 l6 -7" fill="none" stroke="#FBFAF7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="56" y="156" font-size="15" fill="#6B6F76">Cycle dishwasher</text>
+<rect x="28" y="172" width="16" height="16" rx="4" fill="#4A88C7" stroke="#4A88C7" stroke-width="1.5"/>
+<path d="M32 180 l3.5 3.5 l6 -7" fill="none" stroke="#FBFAF7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="56" y="186" font-size="15" fill="#6B6F76">Take meds</text>
+<rect x="28" y="202" width="16" height="16" rx="4" fill="#FBFAF7" stroke="#4A88C7" stroke-width="1.5"/>
+<text x="56" y="216" font-size="15" fill="#1F2328">Cover the birdcage</text>
+</svg>

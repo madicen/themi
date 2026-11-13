@@ -19,7 +19,7 @@ async def a_run(scenario: Scenario) -> int:
 
 async def test_asking_sends_the_plan_as_a_picture(scenario: Scenario) -> None:
     task_id = await a_run(scenario)
-    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task_id})
+    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task_id, "task": ""})
     scenario.primary.queue_text("Here's how it goes.")
     replies = await scenario.say("Erin", "Show me my run plan")
     assert "Your plan, week by week." in replies
@@ -32,7 +32,7 @@ async def test_without_pictures_the_plan_is_read_back(scenario: Scenario) -> Non
 
     scenario.app.services.get(keys.drawings).renderer.convert = broken
     task_id = await a_run(scenario)
-    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task_id})
+    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task_id, "task": ""})
     scenario.primary.queue_text("There.")
     replies = await scenario.say("Erin", "Show me my run plan")
     assert any("1.3 miles from" in r for r in replies), replies
@@ -43,7 +43,7 @@ async def test_a_task_without_a_plan_isnt_drawn(scenario: Scenario) -> None:
     board = scenario.app.services.get(keys.taskboard)
     erin = scenario.member("Erin")
     task = await board.create(erin, "Water the plants", "physical", 1, assignee=erin, nudge=False)
-    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task.id})
+    scenario.primary.queue_tool_call("show_step_plan", {"task_id": task.id, "task": ""})
     scenario.primary.queue_text("That one has no plan.")
     assert await scenario.say("Erin", "Show the plan for watering") == ["That one has no plan."]
     assert scenario.pictures("Erin") == []

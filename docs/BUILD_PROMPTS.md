@@ -270,6 +270,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41b | Feedback: cooking started on the website stays on the screen | Feedback | [x] 2026-11-11 |
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
+| F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [x] 2026-11-13 |
+| F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [x] 2026-11-13 |
+| F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [x] 2026-11-13 |
+| F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [x] 2026-11-13 |
+| F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
+| F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
+| F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13576,6 +13583,374 @@ one up." and adds nothing. "With neither a time nor `before`, the tool asks": le
 tool description ("never make a time up") and `unread`; empty start and end still mean all
 day. The fake gets `leg(a, b, minutes)`. Golden `tools.json` changed for the two new
 arguments (expected). New tests at the end of `test_travel.py`; none changed.
+
+### F42a · Feedback (2026-11-11): an event that covers the whole day is an all-day event
+Status: [x] 2026-11-13
+Depends on: CR18b, F38a, F38b
+Read first: `themi_google/connectors/gcal/busy.py` (`_when`, `_entry`, `blocks`, `entries`);
+`themi/channels/outbox.py` (`_earliest`, `free_from`, the F20c deadline fallback);
+`themi/standard/day_summary.py` (`items`, how an event's time is written). From Michael's
+bug #201 (2026-11-11, 11:39 pm, "I'm not getting my evening routine notification"); the same
+event held #202's heads-ups (2026-11-12, 8:24 am, "the get ready for appointment messages are
+a day late").
+
+What the Pi shows: Michael's primary Google calendar has untitled events that run midnight
+to midnight Pacific as timed events (`dateTime`, not `date`): calendar_entries 131529 (Fri
+6 Nov), 131509 (Wed 11 Nov, Veterans Day) and 131510 (Thu 26 Nov, Thanksgiving), all
+"(no title)", `all_day` 0, `busy` 1. So Wed 11 Nov was one busy block from 00:00 to 24:00.
+His evening routine check (routine 6, window ends 20:30, deadline 20:45, expires 01:30) was
+made at 20:32 as outbox 1817. `_earliest` found no free moment before quiet hours (21:30),
+queued it "until 2026-11-12T08:00", and the 08:00 flush dropped it as too late. The
+`routine_day_checks` row for (6, 2026-11-11) was already written, so it never came back.
+Mon and Tue's checks (1694, 1758) went at 20:45 as usual. The morning message that day began
+"- 12-12 am …" for the same event. #202: on 0.7.12 the leave heads-ups for the drop-off and
+ND psych (1799, 1804) were held by the same block and went at 08:00 the next day. F38b (live
+since 0.8.0) no longer holds `travel` for busy times, so #202 is already fixed.
+
+Decided (Michael, 2026-11-13, bug #201): a timed event that covers a whole local day or more
+is an all-day event: not busy, and written as an all-day event.
+
+Build:
+- Bug fix: start with the failing test below.
+- In `_entry`: a timed event that starts at local midnight and ends at a later local
+  midnight, in the person's timezone, is stored with `all_day` 1 and `busy` 0, as an
+  all-day event (`date`) is now. Titled or not. A timed event that only spans midnight (an
+  overnight shift, 10 pm-6 am) is unchanged.
+- The next 15-minute refresh rewrites what's there, so no migration is needed. Check that
+  `calendar_busy` loses the block.
+- Everything that reads `all_day` (morning message, day and week cards, the model's calendar
+  context, travel, twins) then treats it as all-day. Check travel doesn't send a heads-up
+  for it, and the day card draws it in the all-day strip.
+
+Tests: start with a failing one: Michael's Wed 11 Nov with a "(no title)" timed event
+00:00-24:00 PST and an evening routine ending 20:30 with an item open. The check goes out
+at 20:30-20:45 that evening, not queued to the next morning. The event isn't in `blocks`;
+`entries` has it `all_day`. A midnight-to-midnight event spanning two days is all-day too.
+A 10 pm-6 am event is still busy. An event midnight to midnight UTC but not local isn't
+all-day. The morning message writes it as an all-day event, not "12-12 am".
+Scenario: a holiday on Michael's calendar as a timed whole-day event. His evening routine
+check still comes before quiet hours, and his morning message lists it as all day.
+
+Data: none needed (the refresh fixes the stored rows). Mark #201 reviewed once live. #202:
+mark reviewed now (F38b is live).
+
+Notes: `busy._whole_days`: start and end both at local midnight (household timezone, the
+one `_entry` already gets), end on a later day. `_entry` sets `all_day` from it, so `busy`
+is 0, and everything downstream (morning text, day and week cards, travel, the model's
+calendar lines) already treats `all_day` events as all day. Travel skips them (`all_day`
+checks in `travel.py`). No migration: the next 15-minute read rewrites the Pi's three rows.
+New tests in `tests/scenarios/test_whole_day_events.py`; none changed, no golden file
+changed. Follow-up seen while here, not reported: Erin's two heads-ups for one 1 pm
+appointment (ND psych in person, and Return Patient Visit with Dr. Nguyen) are one visit on
+two calendars under different names; F37b only matches email bookings.
+
+### F42b · Feedback (2026-11-12): in burnout mode, "not important enough" is heard, and time-sensitive mail waits
+Status: [x] 2026-11-13
+Depends on: F22d, F16c, F41c
+Read first: `themi/channels/pauses.py` (`TOPICS["burnout"]`, F22d's comment);
+`themi/channels/outbox.py` (`_earliest`: `IMMEDIATE`, `held_until`); `themi/core/rules.py`
+(`propose_rule`, `ONE_EMAIL`, the bug #53 refusal); `themi_google/email_audit.py`
+(`set_sender_levels`); `burnout_task` and how burnout mode offers it. From Erin's bug #204
+(2026-11-12, 11:11 am) and her 👎 on reply 431.
+
+What the Pi shows: Erin's burnout pause (pause 34, until 2036) is on. Joyous Care's monthly
+check-in reminder came at 10:47 am as "An email that looks time-sensitive (family) …" (outbox
+1838, `normal`, kind `email`). Burnout doesn't hold `email` (F22d: alerts still come). She
+said: "That particular email is not important enough to warrant triggering a notification
+during burnout mode". Reply 431 called `propose_rule` ("Do not trigger notifications for that
+Stanford Health Care message during burnout mode", the wrong sender too). The tool refused
+with "That's about one email, not a rule: use keep_email (it keeps that email and offers to
+count its sender as urgent)", which is the opposite of what she asked. The model then called
+`burnout_task`, and the whole reply was "If you'd like one thing: Put the laundry away.
+Nothing at all is fine too." She wanted: "Got it, I won't notify you of that kind of email
+when you're in burnout mode. Go get some rest."
+
+Decided (Michael, 2026-11-13, bug #204): during burnout mode, normal-priority email alerts
+("time-sensitive") wait until it ends; urgent ones still come.
+
+Build:
+- Bug fix: start with the failing test below.
+- `TOPICS["burnout"]` holds `email` at `normal` and `low`. `urgent` email still goes, so
+  `_earliest`'s `IMMEDIATE` early return is untouched. Update F22d's comment.
+- `propose_rule`'s one-email refusal tells the two cases apart. "is urgent / important"
+  keeps today's keep_email hint. "not important / don't notify me / don't bother me" points
+  to `set_sender_levels` for the email they mean: the latest alert in this chat (Joyous
+  Care's here, not Stanford's), lowering its urgency. Its result has Themi's own line for
+  the reply: "Got it: I won't flag email from Joyous Care like that again." In burnout mode it
+  adds "Go get some rest." That line goes in `ctx.done` (F41c) so the model can't lose it.
+- `burnout_task` isn't the answer when they told Themi something: in a turn where another
+  tool ran (or was refused), its line is dropped. It's offered when they ask what to do.
+
+Tests: start with a failing one: reply 431's turn, faked. Erin is in burnout, and the last
+alert was Joyous Care's. The model calls `propose_rule` then `burnout_task`. The refusal
+names `set_sender_levels`, not keep_email, and, with the model then calling it, the reply is
+"Got it: I won't flag email from Joyous Care like that again. Go get some rest." with no
+laundry line. During burnout, a `normal` email alert is held until the pause ends and an
+`urgent` one goes at once. Out of burnout, both go as now. "The Schwab email is urgent"
+still gets the keep_email hint (bug #53).
+Scenario: Erin in burnout mode gets a time-sensitive email alert held, says another one
+isn't important, and hears it's done and to rest.
+
+Data: lower Joyous Care (care@joyous.team) for Erin once live, if she wants it. Mark #204
+reviewed once live, and label reply 431 `--wrong-tool 431 set_sender_levels`.
+
+Notes: `TOPICS["burnout"]` holds `email`; urgent alerts are `urgent`, which `_earliest`
+sends before any pause is looked at, so they still come. `rules.NOT_WANTED` ("not important",
+"don't notify/bother", "stop flagging") with `ONE_EMAIL` → `_not_wanted`: points to
+`set_sender_levels` (no_rush, not) and quotes the latest email alert in this chat
+(`dedupe_key` `email-urgent:%`) inside `as_data`. Core reads only the outbox, so the
+layering holds. `set_sender_levels` at no_rush puts `NOT_FLAGGED_TEXT` in `ctx.done` (plus
+`BURNOUT_REST_TEXT` in burnout mode). Deviation: "Rest is all that's on now." rather than
+Erin's "Go get some rest.", which the PDA shield would reword as a command (burnout.py's
+STARTED_TEXTS note). `burnout_task` declines when any other tool ran this turn.
+Found and fixed here: "no rush" never stopped an alert. `sender_levels` gives 0 for both
+"no rush" and "never asked", and triage only checked for urgent. `EmailAudit.no_rush` tells
+them apart, and triage sends no alert for a no-rush sender unless the verdict is severe.
+New tests in `tests/scenarios/test_burnout_email.py`; none changed, no golden file changed.
+
+### F42c · Feedback (2026-11-13): a recipe named exactly is the one, and "Done." isn't said when nothing was
+Status: [x] 2026-11-13
+Depends on: DC10, F41c
+Read first: `themi_home/recipe_card.py` (`recipe_card`); `themi_home/recipes.py` (`find`,
+`clear_match`, `Match`); `themi/core/agent.py` (`_honest`, `_not_again`, where "Done." is
+the fallback). From Michael's bug #205 (2026-11-13, 1:50 am, "no recipe card ever showed up
+and it couldn't tell which recipe I was referring to since one was a strict subset of the
+other").
+
+What the Pi shows: replies 440-443. "Show me a recipe card for chocolate chip cookies" →
+`recipe_card {"name": "Chocolate Chip Cookies"}` → "Several recipes match (Chocolate Chip
+Cookies, Chocolate Chip Cookies for 2): ask which one they mean." The same refusal came
+four more times, through "Chocolate Chip Cookies", "The first one" and "Yes, show me a
+recipe card". `clear_match` needs the second match to have fewer name hits, and "for 2" has
+every word too. Reply 443's tool was refused, yet the reply was "Done." No card was sent.
+Bug #206 (2026-11-13, 12:32 pm, "the recipe cards aren't working either"): after #205 he
+sent "Chocolate Chip Cookies for 2", the longer name exactly. Replies 441-443 show
+`recipe_card {"name": "Chocolate Chip Cookies for 2"}` refused the same way each time.
+`find_recipe` sent both as buttons, and the reply was "Done." again with no card.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `clear_match`: a recipe whose name is exactly what they asked for (case, spacing and
+  punctuation aside) wins over longer names that contain it. Use it in `recipe_card`,
+  `find_recipe` and the cook screen's lookup (whatever calls `clear_match`).
+- Asking which one: the question's answers ("the first one", the exact name, "for 2") are
+  understood. The refusal lists the names numbered and says "if they answer with one of
+  these, call again with that name". The recent conversation is enough for the model.
+- A turn whose only tools were refused or declined can't end "Done." (or any "done" line)
+  from the model or the fallback. It ends with the refusal's own ask, or `TANGLED_TEXT`.
+
+Tests: start with failing ones: the cookbook has "Chocolate Chip Cookies" and "Chocolate
+Chip Cookies for 2". `recipe_card {"name": "chocolate chip cookies"}` sends the first as a
+picture. "Chocolate Chip Cookies for 2" (reply 441's exact argument) sends the second. "Chocolate chip" still asks which.
+A faked turn where `recipe_card` is declined and the model says "Done." doesn't reply
+"Done.". A turn with a real done action still can.
+Scenario: Michael asks for a recipe card by a name that's also the start of another
+recipe's name, and gets the card at once.
+
+Data: none needed. Mark #205 reviewed once live (#206 once F42c, F42f and F42g are all live).
+
+Notes: `Match.exact`: the recipe's whole name (`name_key`) is what they said. `search` sorts
+exact matches first, and `clear_match` takes a lone exact match. That covers `recipe_card`,
+`find_recipe`, the grocery `resolve` and `find_web_recipe`'s own-cookbook check; the cook
+screen starts from a recipe id, so it has no lookup to change. The wanted-word set alone
+couldn't do it: "for" is filler and "2" is too short, so "Chocolate Chip Cookies for 2" had
+the shorter recipe's exact word set (+5) and won. `recipe_card`'s "which one" refusal numbers
+the names and says to call again with the one they pick. Reply 443's "Done." came from F41c:
+the model said its last message again ("Chocolate Chip Cookies."), `_not_again` dropped it,
+and the fallback was "Done.". Now that fallback is "Done." only when a tool succeeded (`ok`);
+otherwise the model's own words stay. New tests in `tests/scenarios/test_recipe_exact_name.py`;
+none changed, no golden file changed.
+
+### F42d · Idea (2026-11-11): the morning message lists your own day; everyone else's is behind a button
+Status: [x] 2026-11-13
+Depends on: MM1, MM2, F34f
+Read first: `themi/standard/morning.py` (`text`, `has_events`, `ORDER`, the tray buttons,
+`on_button`, `_edit`); `themi/standard/day_summary.py` (`items`, `partner=True`); the day
+card's events (`day_card.py`), which draw the same list. From Michael's idea #200
+(2026-11-11, 9:09 pm, "there should be a way to limit the mornin message to just the
+person's calendar and move the other calendars behind a button").
+
+What the Pi shows: `text` lists `summary.items(member, day, partner=True, tasks=False)`, so
+each morning message has both people's calendars and the family one.
+
+Decided (Michael, 2026-11-13, idea #200): the message lists the person's own events and the
+family calendar's. The partner's calendar goes behind an "Everyone's calendar" button.
+
+Build:
+- `text`: own and family-calendar events only (F34f's copies stay merged with the original).
+  When the partner has events that day, an "Everyone's calendar" button joins the others,
+  first in the row. It isn't shown when they have none.
+- Tapping it sends the partner's events that day (as `items` writes them, the person named),
+  as a reply, and edits the message without the button as the others do (`_tap`, `_edit`).
+- A day with nothing of their own but the partner's: "Nothing on your calendar today." plus
+  the button. The message is still worth sending (`_worth_sending`, `has_events`).
+- The day card (morning picture) draws the same events as the text: own and family only.
+- Calendar details seen by the partner (settings) still decide what the button shows.
+
+Tests: Michael's day with his event, a family event and Erin's event. The text has his and
+the family one, not Erin's, plus "Everyone's calendar". Tapping it sends Erin's event and the
+button goes. With Erin having nothing, there's no button. With only Erin's event, the text says
+nothing on his calendar and offers the button. The day card's events match the text.
+Scenario: Michael's morning message shows his day and the family calendar, and the button
+brings Erin's.
+
+Data: none needed. Mark #200 reviewed once live.
+
+Notes: `DaySummary.events`/`items` take `scope`: "all" (as before), "mine" (their own and
+the family calendar's: calendars more than one person reads) and "own" (their own, without
+the family's). The morning text is "mine". `EVERYONE` ("Everyone's calendar") comes first in
+`ORDER` and shows when someone else has events of their own that day, as `items(other,
+viewer=member, scope="own")` gives them, so a partner whose details are "me" adds no button.
+A tap sends "Husband's day, Thu 22 Oct:" and their lines, then the message is edited without
+the button, as the others are. With only the partner's events, the text is "Nothing on your
+calendar today." (`NOTHING_YOURS_TEXT`), and `has_events` still counts all, so the message
+goes. The day card's `data` is "mine". Its `events` defaults to "all", so the week ahead
+(DC6) still shows everyone. That's narrower than the prompt, which only names the morning
+picture. New tests in `tests/scenarios/test_morning_own_calendar.py`; none changed, no golden
+file changed.
+
+### F42e · Idea (2026-11-12): "Just one thing" offers a different one
+Status: [x] 2026-11-13
+Depends on: MM4
+Read first: `themi/standard/morning.py` (`ONE`, `on_button`'s `focus.send(member, count=1)`);
+`themi/standard/focus.py` (`send`, how the one task is picked, its buttons). From Michael's
+idea #203 (2026-11-12, 10:23 am, "add a button under the 'just one task' to get a different
+one").
+
+Build:
+- The one-task message (from "Just one thing" and `focus_now` with one) has a "Something
+  else" button with its other buttons. Tapping it edits that message to the next task in
+  focus's order. A task already offered isn't offered again that day; the button goes when
+  there's nothing left to offer ("That's all of them for now.").
+- What was offered is kept per person per day (no new table if focus already records picks).
+- Burnout's `burnout_task` line isn't changed (it's one gentle option, not a picker).
+
+Tests: three open tasks. "Just one thing" offers the first, with "Something else".
+Tapping it edits to the second, then the third, and the third has no "Something else" but
+says that's all. The next day starts fresh. A task done in between isn't offered.
+Scenario: Michael taps Just one thing, doesn't like it, and taps Something else.
+
+Data: none needed. Mark #203 reviewed once live.
+
+Notes: `Focus.send(count=1)` adds `ELSE_BUTTON` ("Something else") ahead of Spread them out
+and Leave them for now, which stay. The button's payload carries what was offered and the
+day, so no table is needed. `_something_else` edits the message to the next one in `pick`'s
+order (times 1) that wasn't offered and is still due, so one done in between is skipped.
+The last one shows "That's all of them for now." (`NO_MORE_TEXT`) and no button. A
+yesterday's button sends today's one afresh. New tests in
+`tests/scenarios/test_one_thing_else.py`; none changed, no golden file changed.
+
+### F42f · Feedback (2026-11-13): "Show me Erin's run" finds her step-up plan by name
+Status: [x] 2026-11-13
+Depends on: DC11, F42c
+Read first: `themi/standard/plan_card.py` (`show_step_plan`); `themi/core/groups.py` (the
+schedules group, which holds it); how other tools find a task by its words (`find_task`
+or the taskboard's lookup) and what the partner may see of the other's tasks. From Michael's
+bug #206 (2026-11-13, 12:32 pm, "Getting Erin's run summary graphic didn't work").
+
+What the Pi shows: reply 446. "Can you show me a picture of Erin's run summary?" was
+offered calendar, calls, devices and wall. The model called `more_tools` for schedules, then
+answered "Erin's run summary isn't available right now." without calling `show_step_plan`.
+Erin's task 8, "Go for a run", has a plan (1.3 then 1.5 miles, +0.25 a week from 27 Oct).
+`show_step_plan` takes only `task_id`, and Michael's context lists his own tasks, so the
+model had no number to pass.
+
+Build:
+- Bug fix: start with the failing test below.
+- `show_step_plan` takes `task` (their words: "run", "Erin's run", "push-ups") as well as
+  `task_id`. It looks through tasks with a plan: the asker's, then the partner's (tasks are
+  shared in this family; check what's already shown of the other's). One match → that one.
+  Several → it asks which, naming them. None → "There's no step-up plan for …; set_task_plan
+  makes one."
+- Its example phrases go into the schedules group's routing examples ("show me Erin's run
+  plan", "a picture of my run"), so the first turn offers it without `more_tools`.
+- A picture of someone else's plan is captioned with whose it is ("Erin's run plan").
+
+Tests: start with a failing one: reply 446's turn, faked. Michael asks for "Erin's run
+summary"; the model calls `show_step_plan {"task": "Erin's run"}`, and the picture of task 8
+is sent, captioned as Erin's. "my run" from Erin finds the same task. A task with no plan
+gets the set_task_plan line. Two planned tasks matching "run" ask which. Routing: "show me a
+picture of Erin's run plan" offers the schedules group.
+Scenario: Michael asks to see Erin's run plan as a picture and gets it.
+
+Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
+
+Notes: `show_step_plan` takes `task` (their words) beside `task_id` (0 for none): every
+argument is required in strict mode. `_by_words` drops names, possessives and asking words
+(`NOT_THE_TASK`: plan, summary, picture...), then `title_matches` over open planned tasks.
+It looks at the person they name, else theirs first and then everyone else's. One match is
+drawn; several are listed to ask which; none says set_task_plan makes one. Someone else's
+plan is captioned "Erin's plan, week by week." (`THEIR_CAPTION`). The schedules group's
+words gain "step-up" and "run/walk/push-ups plan|summary|progress|picture", plus two
+examples, so the first turn offers it. Changed tests: the three `show_step_plan` calls in
+`test_plan_card.py` pass `"task": ""`, as the tool's arguments moved. Golden `tools.json`
+changed for `show_step_plan`'s spec (expected). New tests in
+`tests/scenarios/test_plan_by_name.py`.
+
+### F42g · Feedback (2026-11-13): pictures of your tasks and your routines
+Status: [x] 2026-11-13
+Depends on: DC1, DC4, DC9, R1a
+Read first: the Day Card plan (https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H), "One
+renderer, many pictures" and "Other uses" (tasks and routines aren't among them: this adds
+them); `themi_home/chore_card.py` (`show_chore_chart`, the model to copy);
+`themi/pictures` (templates, `write_svg`, `drawings.png`); `themi/standard/routines.py`
+(`today_items`, `ticked`, `show_routines`); the taskboard's open tasks for a person, as the
+morning task summary ("This morning: …") orders them. There's no task-listing tool today. From
+Michael's bug #206 (2026-11-13, 12:32 pm, "should be able to ask for tasks, routines, maybe
+everything and get a graphic").
+
+What the Pi shows: reply 448. "And tasks as a picture" was answered with
+`show_chore_chart` (reply 447's tool), so the chore chart came twice. There's no picture of
+tasks or routines; the model chose the nearest tool. The pictures there are: the day card
+(morning), the week, weather, chore chart, recipe card, step-up plan.
+
+Build:
+- `show_tasks_picture`: their open tasks (`open_for`) as a card, in the task summary's order: overdue first
+  (with "was due …"), then today, then the next few days, then undated (at most 12 rows, "and
+  N more"). Shared tasks are marked. No energy scores, no counts of misses.
+- `show_routines_picture`: today's routines (Morning, Afternoon, Evening) with each item and
+  a tick for done, the window under each name. For "tomorrow", tomorrow's (F40a's day words).
+- Both use the same renderer, theme setting and caption style as the chore chart. With no
+  drawings they send text instead (the task summary's lines; `show_routines`'s answer). Both say
+  "It's sent as it is: don't list it again."
+- "Everything": a request for "a picture of everything / my day" is the day card for today
+  (DC3), which already has events, weather and what's waiting; route it there.
+- Tool descriptions keep them apart: the chore chart is "the wall's chores for each person";
+  tasks is "your to-do list"; routines is "your morning, afternoon and evening routine".
+  Routing examples for each.
+- `themi picture tasks|routines` renders them locally, as the other pictures do. A golden SVG
+  for each (expected, new).
+
+Tests: Michael with an overdue task, one today and an undated one: `show_tasks_picture`
+sends one picture whose SVG has them in that order, "was due" on the overdue one. Routines
+with two of three Evening items ticked show two ticks. Tomorrow shows tomorrow's items. No
+drawings → text. Routing: "tasks as a picture" picks `show_tasks_picture`, not
+`show_chore_chart`; "a picture of my routines" picks `show_routines_picture`; "a picture of
+my day" picks the day card.
+Scenario: Michael asks for his chores, then his tasks, then his routines as pictures, and
+gets three different pictures.
+
+Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
+Setup: once built, add tasks and routines to the Day Card plan's "Other uses" as built.
+
+Notes: `themi/standard/list_card.py` with one template, `list_card.svg`: a title, the date,
+and sections of rows, each row with a note on the right and, for routine items, a tick box.
+It shows at most 14 rows, then "and N more". `show_tasks_picture` uses `tasks_data`, with
+four sections: Overdue ("was due Tue 20 Oct"), Today (its time, or "shared"), Next few days
+(3) and Any time. `show_routines_picture` (day: today/tomorrow/date) uses `routines_data`:
+each routine with items that day, its window beside the name, and ticks only today. With
+no drawings, both send `list_text`. Deviation: there was no day card on request, which is
+why "Let's see the morning picture" got the weather in #205's chat. `show_day` (calendar
+group) sends today's day card, so "a picture of my day / everything" has its own tool. The
+two list tools sit in the wall group beside `show_routines` (or in core without Cozyla, as
+`show_routines` does). That group's words gain "picture|graphic", and the calendar group's
+gain "my day|morning picture". The drawings module registers all three. `themi picture
+tasks|routines --member X --out f.png` draws them; `make golden` includes
+`tests/unit/test_list_card.py`. Golden files: new `tasks.svg`, `routines.svg` and
+`routines_dark.svg`; `tools.json` gains the three tools (expected). New tests in
+`tests/unit/test_list_card.py` and `tests/scenarios/test_list_pictures.py`; none changed.
+Setup still to do: add tasks, routines and the day on request to the Day Card plan's "Other
+uses" (left for Michael; the plan doc is shared).
 
 ## Conversation mode
 

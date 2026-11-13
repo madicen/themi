@@ -11,8 +11,9 @@ text there is. Cancelled events and invitations the person declined are left out
 
 - Busy blocks: timed events that aren't shown as free. Themi's blocks of time for
   a task (K5, `TASK_BLOCK`) aren't busy time, or they'd hold back that task's own
-  nudge. The blocks hold Themi's messages (like busy times) and feed the Shadow
-  Calendar.
+  nudge. A timed event from one local midnight to another (a holiday with times, F42a) is
+  an all-day event, not busy time. The blocks hold Themi's messages (like busy times) and
+  feed the Shadow Calendar.
 - Details: the next two days reach the model as data from outside, in a delimited
   block, only in conversations the owner's setting allows ("calendar_details":
   just them, or their partner too).
@@ -26,7 +27,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -62,6 +63,14 @@ def _when(value: dict[str, Any], tz: ZoneInfo) -> tuple[datetime, bool] | None:
     return None
 
 
+def _whole_days(begins: datetime, ends: datetime, tz: ZoneInfo) -> bool:
+    """F42a (bug #201): a timed event from one local midnight to a later one covers whole
+    days, as a holiday or a day off written with times does. It's an all-day event: not busy
+    time, and said as all day."""
+    first, last = begins.astimezone(tz), ends.astimezone(tz)
+    return first.time() == last.time() == time(0) and last.date() > first.date()
+
+
 def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
     """What's kept of an event, or None if it's not on the person's calendar any more."""
     if event.get("status") == "cancelled":
@@ -74,7 +83,7 @@ def _entry(event: dict[str, Any], tz: ZoneInfo) -> dict[str, Any] | None:
         return None
     location = " ".join(str(event.get("location") or "").split())[:MAX_TEXT]
     source = (event.get("extendedProperties") or {}).get("private", {}).get("themi")
-    all_day = begins[1]
+    all_day = begins[1] or _whole_days(begins[0], ends[0], tz)
     return {
         "event_id": str(event.get("id", "")),
         "title": " ".join(str(event.get("summary") or NO_TITLE).split())[:MAX_TEXT],

@@ -201,23 +201,30 @@ class DayCard:
             name=member.name,
             day=day,
             start=start,
-            events=tuple(self.events(member, day, start)),
+            events=tuple(self.events(member, day, start, scope="mine")),  # F42d
             weather=self._weather(start),
             waiting=self._waiting(member, day),
         )
 
     def events(
-        self, member: Member, day: date, start: datetime, *, travel: bool = True
+        self,
+        member: Member,
+        day: date,
+        start: datetime,
+        *,
+        travel: bool = True,
+        scope: str = "all",
     ) -> list[CardEvent]:
         """The day's events as the card draws them; `travel=False` without lead-ins (the
-        week ahead, DC6)."""
+        week ahead, DC6). The day card itself is `scope="mine"` (F42d, idea #200): their own
+        and the family calendar's, as the morning message's words are."""
         summary = self.services.maybe(keys.day_summary)
         if summary is None:
             return []
         travel_times = self.services.maybe(keys.travel) if travel else None
         tz = self._tz()
         out: list[CardEvent] = []
-        for i, (entry, whose) in enumerate(summary.events(member, day, partner=True)):
+        for i, (entry, whose) in enumerate(summary.events(member, day, partner=True, scope=scope)):
             source = str(entry.source or "")
             if source.startswith("task:"):
                 continue  # a task's own copy: a task, not a plan

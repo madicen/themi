@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" font-family="{{ font }}">
+<rect width="{{ width }}" height="{{ height }}" fill="{{ c.bg }}"/>
+<text x="{{ pad }}" y="52" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ title }}</text>
+<text x="{{ pad }}" y="76" font-size="14" fill="{{ c.muted }}">{{ date }}</text>
+{% for section in sections %}
+<text x="{{ pad }}" y="{{ (section.y + 22)|n }}" font-size="16" font-weight="700" fill="{{ c.ink }}">{{ section.heading }}</text>
+{% if section.note %}
+<text x="{{ (width - pad)|n }}" y="{{ (section.y + 22)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ section.note }}</text>
+{% endif %}
+<line x1="{{ pad }}" x2="{{ (width - pad)|n }}" y1="{{ (section.y + 30)|n }}" y2="{{ (section.y + 30)|n }}" stroke="{{ c.grid }}" stroke-width="1"/>
+{% for row in section.rows %}
+{% if row.box %}
+<rect x="{{ pad }}" y="{{ (row.y + 4)|n }}" width="16" height="16" rx="4" fill="{{ c.event_edge if row.done else c.bg }}" stroke="{{ c.event_edge }}" stroke-width="1.5"/>
+{% if row.done %}
+<path d="M{{ (pad + 4)|n }} {{ (row.y + 12)|n }} l3.5 3.5 l6 -7" fill="none" stroke="{{ c.bg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+{% endif %}
+<text x="{{ (pad + 28)|n }}" y="{{ (row.y + 18)|n }}" font-size="15" fill="{{ c.muted if row.done else c.ink }}">{{ row.text }}</text>
+{% else %}
+<text x="{{ pad }}" y="{{ (row.y + 18)|n }}" font-size="15" fill="{{ c.ink }}">{{ row.text }}</text>
+{% endif %}
+{% if row.note %}
+<text x="{{ (width - pad)|n }}" y="{{ (row.y + 18)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ row.note }}</text>
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% if more %}
+<text x="{{ pad }}" y="{{ more_y|n }}" font-size="13" fill="{{ c.muted }}">{{ more }}</text>
+{% endif %}
+</svg>

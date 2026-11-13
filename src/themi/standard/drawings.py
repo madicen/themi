@@ -150,7 +150,8 @@ class DrawingsModule(Module):
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences
-    # show_week (DC6), show_weather (DC8); show_step_plan (DC11)
+    # show_week (DC6), show_weather (DC8), show_day (F42g); show_step_plan (DC11); the
+    # tasks and routines pictures (F42g) are listed beside show_routines, in groups.py
     tool_groups = (groups.CALENDAR, groups.SCHEDULES)
 
     def __init__(self, renderer: Renderer | None = None) -> None:
@@ -175,5 +176,10 @@ class DrawingsModule(Module):
         from themi.standard.plan_card import show_step_plan
 
         ctx.tool(show_step_plan)  # DC11
+        from themi.standard.list_card import show_day, show_routines_picture, show_tasks_picture
+
+        ctx.tool(show_tasks_picture)  # F42g
+        ctx.tool(show_routines_picture)
+        ctx.tool(show_day)
         ctx.command("/weather", drawings.weather_command, "The weather today and tomorrow")
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")

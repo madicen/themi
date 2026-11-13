@@ -578,6 +578,7 @@ class Match:
     score: float
     name_hits: int  # wanted words in its name
     wanted: int  # how many words were wanted
+    exact: bool = False  # F42c: its name is what they said, word for word
 
 
 PICTURE_SOURCE = "your picture"  # F34m: where a recipe copied from a picture is from
@@ -672,8 +673,11 @@ def search(recipes: list[Recipe], text: str, *, section: str = "") -> list[Match
         if not name_hits and not body_hits:
             continue
         score = 3.0 * name_hits + body_hits + (5.0 if name == wanted else 0.0)
-        found.append(Match(recipe, score, name_hits, len(wanted)))
-    found.sort(key=lambda m: (-m.score, m.recipe.source != "doc", m.recipe.name))
+        exact = name_key(recipe.name) == name_key(text)
+        found.append(Match(recipe, score, name_hits, len(wanted), exact))
+    # F42c (bugs #205, #206): "Chocolate Chip Cookies for 2" said whole is that one, though
+    # "for" and "2" aren't wanted words, so the shorter name matched every word too.
+    found.sort(key=lambda m: (not m.exact, -m.score, m.recipe.source != "doc", m.recipe.name))
     if found:  # a stray word ("butter" in a sauce) isn't a match for "peanut butter bars"
         best = found[0].score
         found = [m for m in found if m.score * 3 >= best]
@@ -686,6 +690,8 @@ def clear_match(matches: list[Match]) -> Recipe | None:
     if not matches or matches[0].wanted == 0:
         return None
     top = matches[0]
+    if top.exact and not (len(matches) > 1 and matches[1].exact):
+        return top.recipe  # F42c: the name they said, word for word
     if top.name_hits < top.wanted:
         return None
     if len(matches) > 1 and matches[1].name_hits >= top.name_hits:

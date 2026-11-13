@@ -202,6 +202,16 @@ class EmailAudit:
         )
         return (row["urgency"] or 0, row["importance"] or 0) if row else (0, 0)
 
+    def no_rush(self, account_id: int, address: str) -> bool:
+        """They said this sender's mail can wait (no rush: no message, F42b). Not asked
+        isn't the same: `sender_levels` gives 0 for both."""
+        row = self.db.one(
+            "SELECT urgency FROM email_audit_items WHERE account_id = ? "
+            "AND address = ? AND email_id IS NULL AND answer IS NOT NULL",
+            (account_id, address.lower()),
+        )
+        return row is not None and not row["urgency"]
+
     def _open_task(self, audit: dict[str, Any] | None) -> Task | None:
         if audit is None:
             return None
@@ -466,6 +476,9 @@ LEVELS_TEXT = (
     "reordered in the inbox."
 )
 URGENCY_KEYS = ("no_rush", "time_sensitive", "urgent")
+NOT_FLAGGED_TEXT = "Got it: I won't flag email from {label} like that again."
+# Erin (#204) wrote "Go get some rest."; a command, so the PDA shield would reword it.
+BURNOUT_REST_TEXT = "Rest is all that's on now."
 IMPORTANCE_KEYS = ("not", "somewhat", "very")
 
 
@@ -501,6 +514,12 @@ async def set_sender_levels(ctx: ToolContext, args: dict[str, Any]) -> str:
     importance = IMPORTANCE_KEYS.index(args["importance"])
     label = row["from_name"] or row["from_address"]
     await audit.set_levels(account, row["from_address"], label, urgency, importance)
+    if urgency == 0:  # F42b (bug #204): Themi says it itself, so it can't be lost
+        line = NOT_FLAGGED_TEXT.format(label=label)
+        if ctx.services.maybe(keys.burnout) and ctx.services.get(keys.burnout).current(ctx.member):
+            line += f" {BURNOUT_REST_TEXT}"
+        ctx.done.append(line)
+        ctx.done_keys.append(label)
     return (
         f"Set: mail from {label} ({str(row['from_address']).lower()}) is "
         f"{URGENCY_WORDS[urgency]} and {IMPORTANCE_WORDS[importance]}, in {account.address}. "

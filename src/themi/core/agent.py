@@ -749,7 +749,13 @@ class Agent:
                         return _done_first(ctx.done, "")
                     reply = _honest(reply, waiting, ctx.outcomes)
                     reply = self._not_updated(reply, ctx)
-                    reply = _not_again(reply, ctx) or ("" if ctx.done else "Done.")
+                    reply = _not_again(reply, ctx) or (
+                        ""
+                        if ctx.done
+                        else "Done."
+                        if "ok" in ctx.outcomes
+                        else reply  # F42c (reply 443): nothing done is never "Done."
+                    )
                     return _done_first(ctx.done, reply)
                 if step > self.max_steps:
                     break

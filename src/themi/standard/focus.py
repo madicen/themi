@@ -78,6 +78,8 @@ STAY_TEXT = "Staying with today, as they can't move: {titles}."
 LEFT_TEXT = "The other {n} stay where they are; nothing's dropped."
 LEFT_ONE_TEXT = "The other one stays where it is; nothing's dropped."
 SPREAD_BUTTON = "Spread them out"
+ELSE_BUTTON = "Something else"  # F42e (idea #203): on the one-task message
+NO_MORE_TEXT = "That's all of them for now."
 LEAVE_BUTTON = "Leave them for now"
 LOOK_AHEAD = 14  # days the rest can be spread over
 HISTORY = timedelta(days=28)  # what usually gets done in a day, from these weeks
@@ -248,9 +250,11 @@ class Focus:
         else:
             few, rest = self.pick(member, among, times, count)
             text = self.text(member, few, rest)
+            if count == 1 and few and rest:
+                buttons.append(self._else_button(member, [t.id for t in few]))
             if few and rest:
                 which = {"list": among, "times": times}
-                buttons = [
+                buttons += [
                     Button(SPREAD_BUTTON, "focus", {"action": "spread", **which}),
                     Button(LEAVE_BUTTON, "focus", {"action": "leave", **which}),
                 ]
@@ -265,6 +269,9 @@ class Focus:
         member = self.services.store.get_member(event.member.id)
         payload = event.button.payload
         action, among = payload.get("action"), payload.get("list")
+        if action == "else":
+            await self._something_else(member, event.button.message_id, payload)
+            return
         if action == "focus":
             await self.send(member, among=among)  # the list it's on, not the whole day
             return
@@ -277,6 +284,34 @@ class Focus:
             text = self.text(member, few, rest, left if rest else "")
         if event.button.message_id is not None:
             await self.services.outbox.edit(member, event.button.message_id, text)
+
+    def _else_button(self, member: Member, offered: list[int]) -> Button:
+        today = self.summary.today(member)
+        return Button(
+            ELSE_BUTTON, "focus", {"action": "else", "offered": offered, "day": today.isoformat()}
+        )
+
+    async def _something_else(
+        self, member: Member, message_id: int | None, payload: dict[str, Any]
+    ) -> None:
+        """F42e: the next one in focus's order, in place of the one shown. One offered
+        already today isn't offered again; an older day's button starts today afresh."""
+        today = self.summary.today(member)
+        if payload.get("day") != today.isoformat() or message_id is None:
+            await self.send(member, count=1)
+            return
+        offered = [int(i) for i in payload.get("offered", [])]
+        ordered, _ = self.pick(member, None, 1, count=10_000)
+        left = [t for t in ordered if t.id not in offered]
+        if not left:
+            await self.services.outbox.edit(member, message_id, NO_MORE_TEXT)
+            return
+        chosen = left[0]
+        rest = [t for t in ordered if t.id != chosen.id]
+        more = bool(left[1:])
+        text = self.text(member, [chosen], rest, "" if more else NO_MORE_TEXT)
+        buttons = [self._else_button(member, [*offered, chosen.id])] if more else []
+        await self.services.outbox.edit(member, message_id, text, buttons)
 
     # ----- the rest, spread out (O1b) -----------------------------------------------------
 

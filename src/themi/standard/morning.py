@@ -12,6 +12,9 @@ and today's calendar events, a weather line only when the day's weather is worth
     [Today's tasks] [Email]
     [Everything else] [Just one thing]
 
+- The calendar is their own and the family calendar's (F42d, idea #200). When their
+  partner has events of their own that day, an [Everyone's calendar] button comes first
+  and sends them (as far as the partner shares details); the day card draws the same.
 - It's one proactive message and counts once toward the daily limit. Its time is its
   deadline, so the daily limit and good windows don't hold it (bug #57's rule); quiet hours
   and a pause still do. It's built again as it goes, so it's true when it's read.
@@ -65,13 +68,15 @@ RECAP_BUSY_AT = time(17)  # when a busy time covers noon
 KIND = "morning"
 RECAP_KIND = "morning_recap"
 TASKS, EMAIL, OTHER, ONE = "tasks", "email", "other", "one"
+EVERYONE = "everyone"  # F42d (idea #200): their partner's calendar, behind a button
 LABELS = {
+    EVERYONE: "Everyone's calendar",
     TASKS: "Today's tasks",
     EMAIL: "Email",
     OTHER: "Everything else",
     ONE: "Just one thing",
 }
-ORDER = (TASKS, EMAIL, OTHER, ONE)
+ORDER = (EVERYONE, TASKS, EMAIL, OTHER, ONE)
 
 TASK_KINDS = frozenset({"task", "task_summary"})
 EMAIL_KINDS = frozenset({"email", "email_audit"})
@@ -93,6 +98,8 @@ NEVER_TRAYED = frozenset(
 
 GREETINGS = ("Good morning, {name}.", "Morning, {name}.")
 NOTHING_ON_TEXT = "Nothing on the calendar today."
+NOTHING_YOURS_TEXT = "Nothing on your calendar today."  # F42d: only someone else's day
+THEIR_DAY_TEXT = "{name}'s day, {day:%a %d %b}:\n{lines}"
 RECAP_TEXT = "A few things from this morning are still here, whenever you want them."
 STALE_TEXT = "That one was from {day:%a %d %b}; here's today."
 NO_TASKS_TEXT = "Nothing due today."
@@ -205,11 +212,12 @@ class MorningMessage:
         """The greeting, then the day's calendar (MM1) and the weather when it's worth
         knowing (MM5), without the AI."""
         greeting = GREETINGS[day.toordinal() % len(GREETINGS)].format(name=member.name)
-        events = self.summary.items(member, day, partner=True, tasks=False)
+        events = self.summary.items(member, day, partner=True, tasks=False, scope="mine")
         weather = self.weather_line(member, day)
         tail = f"\n{weather}" if weather else ""
         if not events:
-            return f"{greeting} {NOTHING_ON_TEXT}{tail}"
+            nothing = NOTHING_YOURS_TEXT if self._theirs(member, day) else NOTHING_ON_TEXT
+            return f"{greeting} {nothing}{tail}"
         lines = "\n".join(f"- {e}" for e in events)
         return f"{greeting}\n{day:%a %d %b}:\n{lines}{tail}"
 
@@ -247,6 +255,7 @@ class MorningMessage:
         trays = {r["tray"] for r in self.outbox.trayed(member.id)}
         due = bool(self.summary.due(member, day))
         shown = {
+            EVERYONE: bool(self._theirs(member, day)),
             TASKS: due or TASKS in trays,
             EMAIL: EMAIL in trays,
             OTHER: OTHER in trays,
@@ -395,7 +404,9 @@ class MorningMessage:
             await self._edit(
                 member, event.button.message_id, self.offers(member, today, tapped), today
             )
-        if action == TASKS:
+        if action == EVERYONE:
+            await self._everyone(member, today)
+        elif action == TASKS:
             await self._tasks(member, today)
         elif action == EMAIL:
             if not await self.outbox.release(member, EMAIL):
@@ -409,6 +420,29 @@ class MorningMessage:
                 await self._tasks(member, today)
             else:
                 await focus.send(member, count=1)
+
+    def _theirs(self, member: Member, day: date) -> list[tuple[Member, list[str]]]:
+        """F42d: each other person's own events that day, as far as they share them (the
+        family calendar's are in the message already)."""
+        out = []
+        for other in self.services.store.list_members():
+            if other.id == member.id:
+                continue
+            lines = self.summary.items(other, day, viewer=member, tasks=False, scope="own")
+            if lines:
+                out.append((other, lines))
+        return out
+
+    async def _everyone(self, member: Member, day: date) -> None:
+        theirs = self._theirs(member, day)
+        if not theirs:
+            await self.outbox.send(member, NOTHING_ON_TEXT, priority=Priority.REPLY)
+            return
+        for other, lines in theirs:
+            text = THEIR_DAY_TEXT.format(
+                name=other.name, day=day, lines="\n".join(f"- {line}" for line in lines)
+            )
+            await self.outbox.send(member, text, priority=Priority.REPLY, kind=KIND)
 
     def _tap(self, member: Member, day: date, action: str) -> set[str]:
         tapped = self._tapped(self._record(member, day)) | {action}

@@ -45,10 +45,12 @@ TOPICS: dict[str, frozenset[str]] = {
     "body_double": frozenset(
         {"task", "task_summary", "habit", "routine", "review", "expense", "expense_review"}
     ),
-    # F22d: whatever asks something of them; replies, alerts, their own reminders, meals
-    # and travel heads-ups still come.
+    # F22d: whatever asks something of them; replies, urgent alerts, their own reminders,
+    # meals and travel heads-ups still come. F42b (Erin, bug #204): a time-sensitive email
+    # alert (`normal`) waits too; an urgent one is `urgent`, which no pause holds.
     "burnout": frozenset(
         {
+            "email",
             "task",
             "task_summary",
             "habit",
