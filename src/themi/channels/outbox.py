@@ -150,6 +150,9 @@ Bundler = Callable[["Member", list[dict[str, Any]]], Awaitable[bool]]
 # if they change too), or None if there's nothing left to say (F19a, bug #99: a list written
 # at 7:36 went at 9:15 as written).
 Refresher = Callable[["Member", dict[str, Any]], str | tuple[str, Sequence[Button]] | None]
+# DC4: a picture a message carries, drawn as it goes (after its refresher): the PNG, or None
+# to send the words alone.
+PictureMaker = Callable[["Member", dict[str, Any]], Awaitable[bytes | None]]
 
 
 class ReceptivityProvider(Protocol):
@@ -213,6 +216,7 @@ class Outbox:
         # Several of a kind waiting at once, sent as one (the morning list, bug #49).
         self.bundlers: dict[str, Bundler] = {}
         self.refreshers: dict[str, Refresher] = {}
+        self.pictures: dict[str, PictureMaker] = {}  # DC4: by name ("day_card")
         self.family_group = FamilyGroup(store.db)
         # MM2: holds the morning's proactive messages behind the morning message's buttons.
         self.tray: TrayHold | None = None
@@ -238,9 +242,12 @@ class Outbox:
         not_before: datetime | None = None,
         expires: datetime | None = None,
         to_group: bool = False,
+        picture: str | None = None,
     ) -> OutboxResult:
         """`not_before` holds a proactive message until then at the earliest (replies and
         urgent messages never wait); after that, the usual timing rules apply.
+        `picture`: a registered picture (`pictures`) drawn as it goes, sent with the words
+        as its caption where the channel allows (DC4); the words alone if it can't be.
         `to_group`: a question for the family, sent to the family group (for `member`, who
         owns it) when everyone is free, with buttons anyone may tap. Without a group linked
         it fails."""
@@ -275,7 +282,7 @@ class Outbox:
         outbox_id = self.store.db.execute(
             "INSERT INTO outbox (member_id, text, buttons, priority, kind, dedupe_key, "
             "send_after, deadline, created_at, link_preview, expires_at, reply_id, chat_id, "
-            "shared_buttons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "shared_buttons, picture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 member.id,
                 text,
@@ -291,6 +298,7 @@ class Outbox:
                 current_reply.get(),  # P4: sent while a reply was being written
                 chat_id,
                 int(to_group),
+                picture,
             ),
         )
         if when <= now and self._put_in_tray(self._row(outbox_id), now):
@@ -552,21 +560,27 @@ class Outbox:
         reader = self._group_reader(member) if chat_id is not None else member
         try:
             shielded = await self.shield.apply(row["text"], reader, buttons=buttons, kind=kind)
-            message_id = await self.sender.send_text(
-                member,
-                shielded.text,
-                shielded.buttons,
-                kind=row["kind"],
-                link_preview=bool(row["link_preview"]),
-                chat_id=chat_id,
-                anyone=bool(row["shared_buttons"]),
-            )
+            photo = await self._picture(member, row) if chat_id is None else None
+            message_id = None
+            if photo is not None:
+                message_id = await self._send_picture(member, row, photo, shielded)
+            as_caption = message_id is not None
+            if message_id is None:
+                message_id = await self.sender.send_text(
+                    member,
+                    shielded.text,
+                    shielded.buttons,
+                    kind=row["kind"],
+                    link_preview=bool(row["link_preview"]),
+                    chat_id=chat_id,
+                    anyone=bool(row["shared_buttons"]),
+                )
         except Exception as exc:
             return self._record_failure(row, exc)
         self.store.db.execute(
             "UPDATE outbox SET status = 'sent', sent_at = ?, sent_text = ?, "
-            "telegram_message_id = ?, attempts = attempts + 1 WHERE id = ?",
-            (to_utc_iso(clock.now()), shielded.text, message_id, row["id"]),
+            "telegram_message_id = ?, picture_sent = ?, attempts = attempts + 1 WHERE id = ?",
+            (to_utc_iso(clock.now()), shielded.text, message_id, int(as_caption), row["id"]),
         )
         for listener in self.sent_listeners:
             try:
@@ -579,6 +593,52 @@ class Outbox:
             except Exception:
                 log.exception("An outbox after-sent listener failed for message %s", row["id"])
         return OutboxResult("sent", row["id"], message_id)
+
+    async def _picture(self, member: Member, row: dict[str, Any]) -> bytes | None:
+        """The row's picture, drawn now; None when it has none, the channel shows no
+        pictures, or it can't be drawn (the words go alone)."""
+        draw = self.pictures.get(row.get("picture") or "")
+        if draw is None or not callable(getattr(self.sender, "send_photo", None)):
+            return None
+        limit: Any = getattr(self.sender, "caption_limit", None)
+        if limit is not None and limit(member) == 0:
+            return None  # this person's channel shows no pictures (the website chat)
+        # (caption_limit: the longest caption under a picture with buttons; None: pictures,
+        # but words and buttons go as their own message; 0: no pictures at all.)
+        try:
+            return await draw(member, row)
+        except Exception:
+            log.exception("The %s picture for member %s couldn't be drawn", row["picture"],
+                          member.id)  # fmt: skip
+            return None
+
+    async def _send_picture(
+        self, member: Member, row: dict[str, Any], photo: bytes, shielded: Any
+    ) -> int | None:
+        """The picture with the words as its caption and the buttons under it, when the
+        channel allows a caption that long: its message id. Otherwise the picture alone
+        goes first, and None (the words follow as a message, with the buttons)."""
+        limit: Any = getattr(self.sender, "caption_limit", None)
+        room: int | None = None if limit is None else limit(member)
+        send = self.sender.send_photo  # type: ignore[attr-defined]
+        try:
+            if room is not None and len(shielded.text) <= room:
+                return await send(member, photo, shielded.text, kind=row["kind"],
+                                  buttons=shielded.buttons)  # fmt: skip
+            await send(member, photo, "", kind=row["kind"])
+        except Exception:
+            log.exception("A picture for member %s couldn't be sent; the words go alone",
+                          member.id)  # fmt: skip
+        return None
+
+    def _is_picture(self, member: Member, message_id: int) -> bool:
+        return bool(
+            self.store.db.one(
+                "SELECT 1 FROM outbox WHERE member_id = ? AND telegram_message_id = ? "
+                "AND picture_sent = 1",
+                (member.id, message_id),
+            )
+        )
 
     async def edit(
         self,
@@ -602,6 +662,11 @@ class Outbox:
         reader = self._group_reader(member) if chat_id is not None else member
         try:
             shielded = await self.shield.apply(text, reader, buttons=buttons)
+            if chat_id is None and self._is_picture(member, message_id):  # DC4
+                await self.sender.edit_caption(  # type: ignore[attr-defined]
+                    member, message_id, shielded.text, shielded.buttons, anyone=anyone
+                )
+                return True
             await self.sender.edit_text(
                 member,
                 message_id,

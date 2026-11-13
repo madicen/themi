@@ -574,9 +574,17 @@ class SlackChannel:
         return re.sub(pattern, r"/themi \1", text)
 
     async def send_photo(
-        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+        self,
+        member: Member,
+        photo: bytes,
+        caption: str = "",
+        *,
+        kind: str = "photo",
+        buttons: Sequence[Button] = (),
     ) -> int:
-        """A picture with a caption in their DM (Slack's external upload). Its id."""
+        """A picture with a caption in their DM (Slack's external upload). Its id. A file
+        carries no buttons: Slack's `caption_limit` is None, so the outbox sends a message's
+        words and buttons after its picture (DC4) and never passes `buttons` here."""
         channel = await self._dm(member)
         name = "picture.png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "picture.jpg"
         place = await self.bot.call("files.getUploadURLExternal", filename=name,

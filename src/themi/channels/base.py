@@ -72,7 +72,13 @@ class Pictures(Protocol):
     """A channel that can send a picture (BD4b's step pictures)."""
 
     async def send_photo(
-        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+        self,
+        member: Member,
+        photo: bytes,
+        caption: str = "",
+        *,
+        kind: str = "photo",
+        buttons: Sequence[Button] = (),
     ) -> int: ...
 
 

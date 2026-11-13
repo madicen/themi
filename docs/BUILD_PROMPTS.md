@@ -394,7 +394,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
 | DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
 | DC3 | Day card: the day card | Day card | [x] 2026-11-13 |
-| DC4 | Day card: pictures in the outbox | Day card | [ ] |
+| DC4 | Day card: pictures in the outbox | Day card | [x] 2026-11-13 |
 | DC5 | Day card: the morning picture | Day card | [ ] |
 | DC6 | Day card: the week ahead | Day card | [ ] |
 | DC7 | Day card: today on the website | Day card | [ ] |
@@ -18500,7 +18500,7 @@ Notes:
   picture fields under DC3.
 
 ### DC4 · Day card: pictures in the outbox
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC1
 Read first: the plan's "The outbox carries the picture"; `Outbox._deliver_now`,
 `Pictures`, `TelegramChannel.send_photo` and `edit_text`.
@@ -18514,6 +18514,28 @@ Read first: the plan's "The outbox carries the picture"; `Outbox._deliver_now`,
   without pictures, like the website chat): the text alone.
 - Slack: the picture, then the text with its buttons.
 Tests: outbox and channel tests for each case above, fakes in `tests/fakes`.
+
+Notes:
+- Migration 0167: `outbox.picture` and `outbox.picture_sent`. `Outbox.send(...,
+  picture="day_card")`; `Outbox.pictures[name](member, row) -> bytes | None` is drawn in
+  `_deliver_now`, after the refresher, only for the member's own chat (a group message
+  stays words).
+- The channel says what it can do through `caption_limit(member)`: a number (Telegram:
+  1024) means one photo with the words as caption and the buttons under it; None
+  (Slack: a file carries no buttons) means the picture, then the words with the buttons;
+  0 (no `send_photo`: the website chat) means words only, and nothing is drawn.
+  `ChannelSet.caption_limit` asks the member's channel.
+- Any failure (drawing, upload) leaves the words to go as before; the row is still sent
+  and counted once.
+- Edits: `Outbox.edit` looks up whether the message went as a captioned picture
+  (`picture_sent`) and calls the channel's `edit_caption` (Telegram's
+  `editMessageCaption`); so `MorningMessage._edit` needs no change (the plan put that
+  in DC5).
+- `send_photo` gained `buttons` (Telegram's `reply_markup`, noted for taps like any
+  keyboard); Slack's takes it and ignores it.
+- Fakes: the fake Telegram API answers `editMessageCaption`, keeps a picture's
+  `reply_markup`, and `last_keyboard` looks at pictures too (`markup()` reads the JSON a
+  form upload carries).
 
 ### DC5 · Day card: the morning picture
 Status: [ ]

@@ -148,12 +148,44 @@ class ChannelSet:
             await channel.publish_commands(commands)
 
     async def send_photo(
-        self, member: Member, photo: bytes, caption: str = "", *, kind: str = "photo"
+        self,
+        member: Member,
+        photo: bytes,
+        caption: str = "",
+        *,
+        kind: str = "photo",
+        buttons: Sequence[Button] = (),
     ) -> int:
         send: Any = getattr(self.channel_for(member), "send_photo", None)
         if send is None:
             raise NotImplementedError("this channel can't send pictures")
+        if buttons:
+            return await send(member, photo, caption, kind=kind, buttons=buttons)
         return await send(member, photo, caption, kind=kind)
+
+    def caption_limit(self, member: Member) -> int | None:
+        """DC4: the longest caption the member's channel puts under a picture with its
+        buttons; None when the words and buttons go as their own message after it; 0 when
+        it shows no pictures."""
+        channel = self.channel_for(member)
+        if getattr(channel, "send_photo", None) is None:
+            return 0
+        limit: Any = getattr(channel, "caption_limit", None)
+        return None if limit is None else limit(member)
+
+    async def edit_caption(
+        self,
+        member: Member,
+        message_id: int,
+        caption: str,
+        buttons: Sequence[Button] = (),
+        *,
+        anyone: bool = False,
+    ) -> None:
+        edit: Any = getattr(self.channel_for(member), "edit_caption", None)
+        if edit is None:
+            raise NotImplementedError("this channel can't edit a picture's words")
+        await edit(member, message_id, caption, buttons, anyone=anyone)
 
     async def send_document(
         self, member: Member, data: bytes, filename: str, caption: str = "", *,

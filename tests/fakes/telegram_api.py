@@ -30,6 +30,12 @@ BOT_USER = {"id": 123456789, "is_bot": True, "first_name": "Themi", "username": 
 NAMES = {1001: "Erin", 1002: "Husband"}
 
 
+def markup(params: dict[str, Any]) -> dict[str, Any]:
+    """A call's buttons: JSON in a picture's form upload, an object otherwise (DC4)."""
+    found = params.get("reply_markup") or {}
+    return json.loads(found) if isinstance(found, str) else found
+
+
 @dataclass
 class ApiCall:
     method: str
@@ -302,9 +308,10 @@ class FakeTelegram:
         return [p["text"] for p in self.calls("sendMessage") if int(p["chat_id"]) == chat_id]
 
     def last_keyboard(self, chat_id: int) -> list[dict[str, Any]]:
-        for params in reversed(self.calls("sendMessage")):
-            if int(params["chat_id"]) == chat_id and params.get("reply_markup"):
-                return [b for row in params["reply_markup"]["inline_keyboard"] for b in row]
+        """The buttons last sent to the chat, under a message or a picture (DC4)."""
+        for params in reversed([p for _, p in self.calls_in_order("sendMessage", "sendPhoto")]):
+            if int(params["chat_id"]) == chat_id and markup(params):
+                return [b for row in markup(params)["inline_keyboard"] for b in row]
         raise AssertionError(f"no keyboard was sent to {chat_id}")
 
     # ----- the HTTP side ------------------------------------------------------
@@ -375,15 +382,18 @@ class FakeTelegram:
             if params.get("reply_markup"):
                 message["reply_markup"] = params["reply_markup"]
             return message
-        if method == "sendPhoto":
-            return {
-                "message_id": next(self._message_ids),
+        if method in ("sendPhoto", "editMessageCaption"):  # DC4: buttons and caption edits
+            photo: dict[str, Any] = {
+                "message_id": int(params.get("message_id") or next(self._message_ids)),
                 "date": next(self._dates),
                 "chat": self._chat(int(params["chat_id"]), "private"),
                 "from": BOT_USER,
                 "caption": params.get("caption", ""),
                 "photo": [{"file_id": "p1", "file_unique_id": "up1", "width": 1, "height": 1}],
             }
+            if markup(params):
+                photo["reply_markup"] = markup(params)
+            return photo
         if method == "sendDocument":  # EX3
             return {
                 "message_id": next(self._message_ids),
