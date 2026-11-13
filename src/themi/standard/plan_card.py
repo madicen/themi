@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from themi.core import keys
+from themi.core import keys, partner
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
+from themi.core.wording import name_key, title_matches
 from themi.drawing.svg import write_svg
 from themi.drawing.text import fit
 from themi.standard.day_card import THEMES
@@ -25,6 +26,12 @@ PNG_WIDTH = 1680
 PAD = 28
 BEFORE, AFTER = 3, 8  # weeks shown either side of this one
 CAPTION = "Your plan, week by week."
+THEIR_CAPTION = "{name}'s plan, week by week."  # F42f: someone else's
+# F42f (bug #206): words that say what they want, not which task ("Erin's run summary").
+NOT_THE_TASK = frozenset(
+    {"plan", "plans", "summary", "picture", "graphic", "chart", "show", "my", "me", "her",
+     "his", "their", "step", "up", "progress", "weekly", "week", "by"}
+)  # fmt: skip
 
 
 def _number(value: float) -> str:
@@ -107,12 +114,47 @@ def plan_svg(data: PlanCardData, theme: str = "light") -> str:
     return write_svg("plan_card.svg", **view(data, theme))
 
 
+def _by_words(ctx: ToolContext, board: Any, said: str) -> Any:
+    """F42f (bug #206): the planned task their words name, theirs first, then the person
+    they name or their partner's (tasks are shared in this family)."""
+    members = ctx.services.store.list_members()
+    whose = partner.named(said, ctx.member, members) or partner.named(
+        ctx.request_text, ctx.member, members
+    )
+    names = {name_key(m.name) for m in members if m.name}
+    words = " ".join(
+        w
+        for w in name_key(said).replace("'s", "").split()
+        if w not in NOT_THE_TASK and w not in names
+    )
+    if not words:
+        raise ToolFailed("Which task's plan? Ask them, or pass its number.")
+    people = [whose] if whose else [ctx.member, *(m for m in members if m.id != ctx.member.id)]
+    seen: set[int] = set()
+    found = []
+    for person in people:
+        for task in board.open_for(person):
+            if task.id in seen or task.progression is None:
+                continue
+            seen.add(task.id)
+            if title_matches(words, task.title):
+                found.append(task)
+    if not found:
+        raise ToolDeclined(f"There's no step-up plan for {words}. Say so; set_task_plan makes one.")
+    if len(found) > 1:
+        titles = "; ".join(f"{t.title} (task {t.id})" for t in found[:5])
+        raise ToolDeclined(f"More than one plan matches: {titles}. Ask them which one.")
+    return found[0]
+
+
 @tool(
     "show_step_plan",
     "Sends them a picture of a task's step-up plan (set with set_task_plan): its amount "
-    "week by week, this week marked. For 'show my run plan', 'how does my plan go up?'. "
-    "task_id is the task's number. It's sent as it is: don't repeat it.",
-    {"task_id": {"type": "integer"}},
+    "week by week, this week marked. For 'show my run plan', 'how does my plan go up?', "
+    "'a picture of Erin's run summary'. task_id is the task's number, or 0; task is their "
+    "words for it ('Erin's run', 'push-ups'), or empty. Their partner's plans are found too. "
+    "It's sent as it is: don't repeat it.",
+    {"task_id": {"type": "integer"}, "task": {"type": "string"}},
 )
 async def show_step_plan(ctx: ToolContext, args: dict[str, Any]) -> str:
     from themi.channels.outbox import Priority
@@ -120,10 +162,13 @@ async def show_step_plan(ctx: ToolContext, args: dict[str, Any]) -> str:
     board = ctx.services.maybe(keys.taskboard)
     if board is None:
         raise ToolFailed("Tasks aren't set up.")
-    try:
-        task = board.get(int(args["task_id"]))
-    except Exception as exc:
-        raise ToolFailed("There's no task with that number.") from exc
+    if int(args.get("task_id") or 0):
+        try:
+            task = board.get(int(args["task_id"]))
+        except Exception as exc:
+            raise ToolFailed("There's no task with that number.") from exc
+    else:
+        task = _by_words(ctx, board, str(args.get("task") or ""))
     if task.progression is None:
         raise ToolDeclined(f"{task.title} has no step-up plan. Say so; set_task_plan makes one.")
     data = plan_weeks(task.progression, board._today())
@@ -132,8 +177,15 @@ async def show_step_plan(ctx: ToolContext, args: dict[str, Any]) -> str:
     if drawings is not None:
         theme = ctx.services.store.preferences(ctx.member.id, DrawingsPreferences).picture_theme
         png = await drawings.png(plan_svg(data, theme), PNG_WIDTH)
+        owner = task.assignee
+        others = {m.id: m.name for m in ctx.services.store.list_members()}
+        caption = (
+            THEIR_CAPTION.format(name=others[owner])
+            if owner not in (None, ctx.member.id) and owner in others
+            else CAPTION
+        )
         if png is not None and await ctx.services.outbox.send_photo(
-            ctx.member, png, CAPTION, kind="plan"
+            ctx.member, png, caption, kind="plan"
         ):
             ctx.answered.append("show_step_plan")
             return "Sent the plan as a picture. Don't repeat it."

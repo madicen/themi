@@ -21,6 +21,9 @@ SCHEDULES = ToolGroup(
         "|twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remi"
         "nd|(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|week"
         "ends|split|steps?\\b|parts?\\b|break (?:it |that )?(?:up|down)"
+        # F42f (bug #206): "Erin's run summary", "a picture of my run"
+        "|step.?up|(?:run|running|walk|push.?ups?)'?s?\\W+(?:plan|summary|progress|picture)"
+        "|picture of (?:\\w+'s |my |her |his )?(?:run|walk)"
     ),
     examples=(
         "Make this chore repeat every Monday",
@@ -32,6 +35,8 @@ SCHEDULES = ToolGroup(
         "This task matters more than the others",
         "Raise the importance of filing the taxes",
         "Increase my run by half a mile each week",
+        "Show me a picture of Erin's run plan",  # F42f
+        "Can I see my run summary?",
         "Start at ten push-ups and add two a week",
         "Check in with me about the garden every few days",
         "Make it repeat on the first of the month",

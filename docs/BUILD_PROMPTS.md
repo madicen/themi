@@ -275,7 +275,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [x] 2026-11-13 |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [x] 2026-11-13 |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
-| F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [ ] |
+| F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -13841,7 +13841,7 @@ yesterday's button sends today's one afresh. New tests in
 `tests/scenarios/test_one_thing_else.py`; none changed, no golden file changed.
 
 ### F42f · Feedback (2026-11-13): "Show me Erin's run" finds her step-up plan by name
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC11, F42c
 Read first: `themi/standard/plan_card.py` (`show_step_plan`); `themi/core/groups.py` (the
 schedules group, which holds it); how other tools find a task by its words (`find_task`
@@ -13874,6 +13874,18 @@ picture of Erin's run plan" offers the schedules group.
 Scenario: Michael asks to see Erin's run plan as a picture and gets it.
 
 Data: none needed. Mark #206 reviewed once F42c, F42f and F42g are all live.
+
+Notes: `show_step_plan` takes `task` (their words) beside `task_id` (0 for none): every
+argument is required in strict mode. `_by_words` drops names, possessives and asking words
+(`NOT_THE_TASK`: plan, summary, picture...), then `title_matches` over open planned tasks.
+It looks at the person they name, else theirs first and then everyone else's. One match is
+drawn; several are listed to ask which; none says set_task_plan makes one. Someone else's
+plan is captioned "Erin's plan, week by week." (`THEIR_CAPTION`). The schedules group's
+words gain "step-up" and "run/walk/push-ups plan|summary|progress|picture", plus two
+examples, so the first turn offers it. Changed tests: the three `show_step_plan` calls in
+`test_plan_card.py` pass `"task": ""`, as the tool's arguments moved. Golden `tools.json`
+changed for `show_step_plan`'s spec (expected). New tests in
+`tests/scenarios/test_plan_by_name.py`.
 
 ### F42g · Feedback (2026-11-13): pictures of your tasks and your routines
 Status: [ ]
