@@ -41,6 +41,7 @@ modules = [
     "reminders",
     "business_hours",
     "day_summary",
+    "drawings",  # DC1: pictures drawn from Themi's own data (on for everyone, DC5)
     "focus",
     "taking",
     "guides",

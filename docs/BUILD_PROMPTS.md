@@ -391,7 +391,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
 | MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
-| DC1 | Day card: the picture renderer | Day card | [ ] |
+| DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
 | DC2 | Day card: the day's layout | Day card | [ ] |
 | DC3 | Day card: the day card | Day card | [ ] |
 | DC4 | Day card: pictures in the outbox | Day card | [ ] |
@@ -18388,7 +18388,7 @@ Michael's decisions in the doc (2026-11-13):
   plan (DC8 to DC11). The kitchen display and tutoring summaries wait for a request.
 
 ### DC1 · Day card: the picture renderer
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: MM5
 Read first: the plan's "How it's drawn" and "How it fits Themi".
 - `themi/pictures/`: `assets/` (fonts, Meteocons, their licence files), `svg.py` (a
@@ -18405,6 +18405,33 @@ Read first: the plan's "How it's drawn" and "How it fits Themi".
 Tests: escaping (`<script>`, an `href` in a title, `&`, emoji), the same SVG gives the same
 bytes twice, a broken renderer gives None, `text_width` against known strings.
 Golden files: the new module.
+
+Notes:
+- Deviation from the plan, by necessity: a `pictures` module already exists (looking at
+  pictures people send), so the module is `drawings` (`themi.standard.drawings`,
+  `keys.drawings`, title "Drawings") and the package is `themi.drawing`. The plan's
+  `themi.pictures` and `keys.pictures` mean these.
+- `resvg-py` 0.5 has an abi3 manylinux aarch64 wheel, so the Pi's image needs no Rust and
+  no CairoSVG fallback. `themi.drawing.render.to_png` passes only the bundled fonts: an
+  unknown family (or a system font) draws nothing, so templates use `{{ font }}` or
+  `sans-serif`. Atkinson Hyperlegible has no emoji: they draw as nothing.
+- `write_svg(template, extra, **values)`: autoescaped, `StrictUndefined`, every printed
+  value cleaned of characters XML can't hold (`xml_safe`), numbers through `|n`. Globals:
+  `icon(name)` (a bundled icon as a data URI, so each icon keeps its own ids), `fit`,
+  `wrap`, `text_width`, `font`.
+- `text.fit` / `text.wrap` measure from `assets/widths.json` (`python -m
+  tools.dev.font_widths`; fontTools is a dev dependency only).
+- Icons: 17 of Meteocons' static "flat" set (`@meteocons/svg-static` 0.1.0, MIT), for the
+  WMO codes; the font's OFL and Meteocons' licence are beside them.
+- In the family template (Michael's decision: on for everyone) and `family_modules()`;
+  the golden key test needs it there. It has no jobs, tools or routes, so no golden file
+  changed.
+- Tests changed: `test_modules`' key count is 73; `test_package_data` checks
+  `drawing/assets` and `drawing/templates`. Fixed while here: `test_web_chat_live`'s
+  reaction test read the wall clock, so quiet hours held its card at night; it now freezes
+  the clock.
+- `test_anthropic_adapter::test_timeout_is_retryable` failed once under the full parallel
+  run and passed on three reruns: a timing-sensitive test, unrelated.
 
 ### DC2 · Day card: the day's layout
 Status: [ ]

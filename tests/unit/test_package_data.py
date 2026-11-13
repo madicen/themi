@@ -20,7 +20,13 @@ def test_every_web_and_schema_file_is_package_data(package: str) -> None:
     covered = {p for pattern in patterns for p in folder_of.glob(pattern) if p.is_file()}
     needed = {
         p
-        for folder in ("web/static", "web/templates", "storage/schema")
+        for folder in (
+            "web/static",
+            "web/templates",
+            "storage/schema",
+            "drawing/assets",
+            "drawing/templates",
+        )  # DC1
         for p in (folder_of / folder).rglob("*")
         if p.is_file() and "__pycache__" not in p.parts
     }

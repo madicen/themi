@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from themi.standard.business_hours import BusinessHours
     from themi.standard.conversation_mode import ConversationMode
     from themi.standard.day_summary import DaySummary
+    from themi.standard.drawings import Drawings
     from themi.standard.feedback import FeedbackChat
     from themi.standard.focus import Focus
     from themi.standard.follow_ups import FollowUps
@@ -129,6 +130,7 @@ music: Key[Music] = Key("Music")
 burnout: Key[Burnout] = Key("Burnout")
 web_search: Key[WebSearch] = Key("WebSearch")
 weather: Key[Weather] = Key("Weather")  # WX1
+drawings: Key[Drawings] = Key("Drawings")  # DC1
 business_hours: Key[BusinessHours] = Key("BusinessHours")
 guides: Key[Guides] = Key("Guides")
 recipes: Key[Recipes] = Key("Recipes")
