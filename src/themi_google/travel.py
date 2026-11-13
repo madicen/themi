@@ -236,6 +236,27 @@ class TravelHeadsUps:
             dedupe_key=f"travel-{member.id}-{self._event_key(entry)}-{to_utc_iso(entry.starts_at)}",
         )
 
+    def rough_drive(self, member: Member, entry: Entry) -> int | None:
+        """DC3: about how many minutes' drive an event is from home, from places already
+        found on the map and the distance alone (no lookup, no traffic), for the day card's
+        "leave around" lead-in. None for an event at home, by video, too far, or at a place
+        not found yet."""
+        if entry.all_day or entry.video or not entry.location:
+            return None
+        found = self.home()
+        address = self.address_for(member, entry.location)
+        if found is None or not address:
+            return None
+        row = self.db.one(
+            "SELECT lat, lon, found FROM geocodes WHERE query_key = ?", (name_key(address),)
+        )
+        if row is None or not row["found"]:
+            return None
+        home, place = found[1], Place(row["lat"], row["lon"])
+        if distance_km(home, place) < AT_HOME_KM or self._too_far(address, home, place):
+            return None
+        return estimate(home, place).minutes
+
     # ----- on request (K4b) ------------------------------------------------------------------
 
     def next_event(self, viewer: Member, words: str) -> tuple[Member, Entry] | None:

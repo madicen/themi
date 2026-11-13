@@ -430,6 +430,19 @@ def _calendar_state(fakes: DevFakes) -> list[str]:
     return lines
 
 
+async def _morning_picture(fakes: DevFakes, v: Values) -> str:
+    assert fakes.app is not None
+    drawings = fakes.app.services.maybe(keys.drawings)
+    if drawings is None:
+        raise ControlError("Drawings is off in this setup.")
+    member = _member(fakes, v["person"])
+    png = await drawings.day_card.png(member, drawings.day_card.today(member))
+    if png is None:
+        raise ControlError("The picture couldn't be drawn; Themi's log says why.")
+    await fakes.app.outbox.send_photo(member, png, "This morning's picture")
+    return f"Sent {member.name} today's picture."
+
+
 CALENDAR_CHECK = ("calendar.busy",)
 CALENDAR = Section(
     "calendar",
@@ -469,6 +482,14 @@ CALENDAR = Section(
             (_person(), Field("title", "Event")),
             _cancel_event,
             CALENDAR_CHECK,
+        ),
+        Action(
+            "picture",
+            "Show the morning picture",
+            (_person(),),
+            _morning_picture,
+            (),
+            "Today's day card (DC3), sent to their chat as a picture, to look at the layout.",
         ),
     ),
     _calendar_state,

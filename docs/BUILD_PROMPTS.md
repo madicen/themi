@@ -393,7 +393,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 | DC1 | Day card: the picture renderer | Day card | [x] 2026-11-13 |
 | DC2 | Day card: the day's layout | Day card | [x] 2026-11-13 |
-| DC3 | Day card: the day card | Day card | [ ] |
+| DC3 | Day card: the day card | Day card | [x] 2026-11-13 |
 | DC4 | Day card: pictures in the outbox | Day card | [ ] |
 | DC5 | Day card: the morning picture | Day card | [ ] |
 | DC6 | Day card: the week ahead | Day card | [ ] |
@@ -18455,7 +18455,7 @@ Notes:
   for an event that crosses the window.
 
 ### DC3 · Day card: the day card
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC2, WX3
 Read first: the plan's "What the family sees" and "Testing".
 - `themi/standard/day_card.py`: `DayCard.data(member, day) -> DayCardData` from the
@@ -18470,6 +18470,34 @@ Read first: the plan's "What the family sees" and "Testing".
 - Never energy, no red for overdue.
 Tests: golden SVGs in `tests/golden/pictures/` (busy day, empty day, rain with an alert,
 dark, each `PICTURE_COUNTS`), the clock frozen.
+
+Notes:
+- `themi.standard.day_card`: `DayCard` (on `keys.drawings`, as `drawings.day_card`) with
+  `data(member, day) -> DayCardData`, `svg()`, `png()` and `today()`; `card_svg(data,
+  counts, theme)` and `view()` are pure, for the golden files. The template is
+  `themi/drawing/templates/day_card.svg`, 540 x 675 units drawn at 1080 x 1350.
+- Settings are `DrawingsPreferences` (the drawings module's): `picture_morning` (on),
+  `picture_counts` (`dots`, `numbers`, `hide`), `picture_theme` (`light`, `dark`), in
+  the good-morning message's row of the settings page (only when the day summary is
+  on: `on_form` leaves them off the form otherwise, so saving doesn't untick them).
+- `DaySummary.events(member, day, ...)` gives the entries `items()` words; the card
+  takes the partner's shared events too (marked, in their colour), task blocks as
+  "held" (dashed), and leaves out a task's own copy ("task:").
+- Travel lead-ins: `TravelHeadsUps.rough_drive(member, entry)`, from places already
+  found (`geocodes`) and the distance alone: no lookup and no traffic, so drawing never
+  waits on the network. Only the person's own events, starting after their morning time.
+- `Weather.alert_in_force(start)`: the band is a warning for an NWS alert, a quiet note
+  for any other noteworthy line.
+- Waiting: tasks are today's due tasks (or the tasks tray, if more); email and other
+  are what's in those trays. The trays fill at the flush just before the morning message
+  goes, so the card drawn then (DC4/DC5) counts them; drawn earlier, they're empty.
+- Layout tweak: `LABEL_MIN` is 12 px (it was 22 in DC2's notes); one-line blocks put the
+  time and place after the title when there's room.
+- `themi picture day_card --member NAME [--day] --out FILE` (`.png` or `.svg`); the
+  control panel's Calendar section has "Show the morning picture" (sends it to their
+  chat). `make golden` writes the card's golden files too.
+- Tests changed for what this prompt added: `test_settings_form` lists the three
+  picture fields under DC3.
 
 ### DC4 · Day card: pictures in the outbox
 Status: [ ]

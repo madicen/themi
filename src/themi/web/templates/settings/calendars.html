@@ -4,6 +4,21 @@
   {% call(part) row("Good-morning message", meta=("Each morning at " ~ (summary.morning_summary | clock)) if summary.morning_summary else "Off", id="day-summary") %}{% if part == "body" %}
     <label>A good-morning message with today's calendar, and the rest when I want it, at <input type="time" name="morning_summary" value="{{ summary.morning_summary.strftime('%H:%M') if summary.morning_summary else '' }}"> <span class="muted">(blank: none)</span></label>
     <label class="check"><input type="checkbox" name="morning_summary_empty" {% if summary.morning_summary_empty %}checked{% endif %}> Send it on days with nothing on and nothing waiting, too</label>
+    {% if prefs.drawings %}{% set pictures = prefs.drawings %}
+    <label class="check"><input type="checkbox" name="picture_morning" {% if pictures.picture_morning %}checked{% endif %}> With a picture of the day: events at their times, and the weather beside them</label>
+    <label>On the picture, what's waiting shows as
+      <select name="picture_counts">
+        <option value="dots" {% if pictures.picture_counts == "dots" %}selected{% endif %}>A few dots</option>
+        <option value="numbers" {% if pictures.picture_counts == "numbers" %}selected{% endif %}>Numbers</option>
+        <option value="hide" {% if pictures.picture_counts == "hide" %}selected{% endif %}>Nothing</option>
+      </select>
+    </label>
+    <label>The picture is
+      <select name="picture_theme">
+        <option value="light" {% if pictures.picture_theme == "light" %}selected{% endif %}>Light</option>
+        <option value="dark" {% if pictures.picture_theme == "dark" %}selected{% endif %}>Dark</option>
+      </select>
+    </label>{% endif %}
   {% endif %}{% endcall %}
 {% endif %}
 {% if prefs.calendar or prefs.travel %}

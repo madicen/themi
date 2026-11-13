@@ -29,7 +29,7 @@ from themi.accounts.preferences import Preferences
 from themi.accounts.store import parse_hhmm
 from themi.channels.outbox import Priority
 from themi.core import groups, keys
-from themi.core.calendar_view import CalendarPreferences, event_line
+from themi.core.calendar_view import CalendarPreferences, Entry, event_line
 from themi.core.partner import named
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolFailed, tool
@@ -86,32 +86,12 @@ class DaySummary:
         `viewer`: who it's for, when not `member` (their partner): `member`'s events only if
         they share them. `tasks=False` (the morning message, MM1): the calendar alone, and
         not the events Themi put there for tasks (a task's copy, a block of time for it)."""
-        viewer = viewer or member
         tz = self._tz()
         start = datetime(day.year, day.month, day.day, tzinfo=tz)
         lines: list[tuple[tuple[int, datetime], str]] = []
-        reader = self.services.maybe(keys.calendars)
-        if reader is not None:
-            shared, seen = self._shared_calendars(), set()
-            owners = [m for m in reader.visible_to(viewer) if m.id == member.id or partner]
-            for owner in sorted(owners, key=lambda m: m.id != member.id):  # theirs first
-                for e in reader.entries(owner, start, start + timedelta(days=1)):
-                    if e.event_id and (e.calendar_id, e.event_id) in seen:
-                        continue  # one calendar both read (bug #43)
-                    if not tasks and str(e.source or "").startswith("task"):
-                        continue  # "task:12", "task-block:12": tasks by the side door
-
-                    seen.add((e.calendar_id, e.event_id))
-                    whose = (
-                        # F34d, reply 321: "(Madicen Family)" was taken for a place
-                        f" (on the {shared[e.calendar_id]} calendar)"
-                        if e.calendar_id in shared
-                        else ""
-                        if owner.id == member.id
-                        else f" ({owner.name})"
-                    )
-                    text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
-                    lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
+        for e, whose in self.events(member, day, partner=partner, viewer=viewer, tasks=tasks):
+            text = event_line(e, tz).split(", ", 1)[1] + whose  # the day's the heading
+            lines.append(((0 if e.all_day else 1, max(e.starts_at, start)), text))
         for task in self.due(member, day) if tasks else []:
             at = self.board.time_of(task)
             when = (
@@ -131,6 +111,44 @@ class DaySummary:
                 text = f"{_clock(at.time())}: {done.task.title} (done{by})"
                 lines.append(((1, at), text))
         return [text for _, text in sorted(lines, key=lambda line: line[0])]
+
+    def events(
+        self,
+        member: Member,
+        day: date,
+        *,
+        partner: bool = False,
+        viewer: Member | None = None,
+        tasks: bool = True,
+    ) -> list[tuple[Entry, str]]:
+        """The day's calendar events, each with whose it is when it isn't `member`'s own
+        (" (Erin)", " (on the Madicen Family calendar)"); theirs first. `tasks=False`: not
+        the events Themi put there for tasks. The day card (DC3) draws from these."""
+        viewer = viewer or member
+        start = datetime(day.year, day.month, day.day, tzinfo=self._tz())
+        out: list[tuple[Entry, str]] = []
+        reader = self.services.maybe(keys.calendars)
+        if reader is None:
+            return out
+        shared, seen = self._shared_calendars(), set()
+        owners = [m for m in reader.visible_to(viewer) if m.id == member.id or partner]
+        for owner in sorted(owners, key=lambda m: m.id != member.id):  # theirs first
+            for e in reader.entries(owner, start, start + timedelta(days=1)):
+                if e.event_id and (e.calendar_id, e.event_id) in seen:
+                    continue  # one calendar both read (bug #43)
+                if not tasks and str(e.source or "").startswith("task"):
+                    continue  # "task:12", "task-block:12": tasks by the side door
+                seen.add((e.calendar_id, e.event_id))
+                whose = (
+                    # F34d, reply 321: "(Madicen Family)" was taken for a place
+                    f" (on the {shared[e.calendar_id]} calendar)"
+                    if e.calendar_id in shared
+                    else ""
+                    if owner.id == member.id
+                    else f" ({owner.name})"
+                )
+                out.append((e, whose))
+        return out
 
     def _shared_calendars(self) -> dict[str, str]:
         """Calendars more than one person reads ("Madicen Family"), by id: their events are

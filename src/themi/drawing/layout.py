@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 
 DAY_ENDS = time(21)  # the waking day's end, as the weather line's (WX2)
-LABEL_MIN = 22.0  # px: a block shorter than this has its title beside it
+LABEL_MIN = 12.0  # px: a block shorter than this has its title beside it
 BLOCK_MIN = 6.0  # px: the shortest block drawn (a 5-minute event is still seen)
 GAP = 4.0  # px between columns
 ALL_DAY_ROWS = 2

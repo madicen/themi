@@ -29,6 +29,7 @@ ADDED = {
     "cooking_theme": "CK7", "cooking_units": "CK7", "cooking_voice": "CK8",
     "expense_ask_after_hours": "EX2b", "expense_review_day": "EX2b",
     "expense_review_time": "EX2b",
+    "picture_counts": "DC3", "picture_morning": "DC3", "picture_theme": "DC3",
     "themi_pronouns": "F35a",
 }  # fmt: skip
 
