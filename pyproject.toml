@@ -130,6 +130,7 @@ travel = "themi_google.connector_modules:TravelModule"
 tuya = "themi_home.home_modules:TuyaModule"
 urgent_senders = "themi_google.google_modules:UrgentSendersModule"
 voice_notes = "themi.standard.capabilities:VoiceNotesModule"
+weather = "themi.standard.weather:WeatherModule"
 web_chat = "themi.standard.web_chat:WebChatModule"
 web_recipes = "themi_home.web_recipes:WebRecipesModule"
 web_search = "themi.standard.web_search:WebSearchModule"
@@ -174,6 +175,7 @@ themi = [
     "standard/web_chat_schema/*.sql",  # CR20b: the web chat's own track
     "standard/task_parts_schema/*.sql",  # F26c: task parts' own track
     "standard/slack_schema/*.sql",  # SL1: Slack's message ids
+    "standard/weather_schema/*.sql",  # WX1: the stored forecast
     "standard/slack_manifest.yaml",  # SL1: the Slack app, as its guide shows it
     "templates/*.toml",
     "web/templates/*.html",

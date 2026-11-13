@@ -386,7 +386,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | MM2 | Morning message: the morning tray | Morning message | [x] 2026-11-11 |
 | MM3 | Morning message: Today's tasks and Email | Morning message | [x] 2026-11-11 |
 | MM4 | Morning message: Everything else, Just one thing, the noon recap, settings | Morning message | [x] 2026-11-11 |
-| MM5 | Morning message: a weather line when it's noteworthy | Morning message | [ ] deferred |
+| WX1 | Weather: the module, Open-Meteo and the stored forecast | Weather | [x] 2026-11-12 |
+| WX2 | Weather: what's noteworthy | Weather | [x] 2026-11-12 |
+| WX3 | Weather: NWS alerts in the US | Weather | [x] 2026-11-12 |
+| MM5 | Morning message: a weather line when it's noteworthy | Weather | [x] 2026-11-12 |
 | WC1 | Website chat: live, typing, reactions, replies, edits | Website chat | [x] 2026-11-12 |
 
 ## Fixed technical choices
@@ -18166,11 +18169,136 @@ Notes:
   morning text, bug #57's scenario (`test_on_time`), and the website's settings wording.
 - Turned on for Michael and Erin: nothing to do, their `morning_summary` times carry over.
 
-### MM5 · Morning message: a weather line when it's noteworthy
-Status: [ ] deferred (Michael, 2026-11-11: after MM4, needs a weather source)
+
+## Weather
+
+Design source: the [Themi Weather Module Plan](https://claude.ai/artifact/VaszSg2tS76qK2aaLUqtMr).
+Read it with the Claude Docs tools, like the other plans. Michael's decisions in the doc
+(2026-11-12):
+
+- A freeze is noted only on the first freezing day after one that wasn't.
+- A weather line alone is reason enough to send the morning message.
+- NWS alerts `auto`: on when home is in the US.
+- Units are a module setting (`WEATHER_UNITS`), US units (°F, inches, mph) by default.
+- The thresholds (rain 60% and 0.05 in, snow 0.5 in, heat 95°F, cold 10°F, wind 40 mph,
+  change 15°F) are defaults, each configurable as a module setting.
+- The high goes only on rain and big-change lines.
+
+- Open-Meteo for the forecast (no key, free for personal home automation), NWS
+  `api.weather.gov` for official alerts when home is in the US (no key). A generic
+  User-Agent, as the travel connector sends Nominatim; no family contact details.
+- The location is `family_home` (K4). One forecast and one line for the household.
+
+### WX1 · Weather: the module, Open-Meteo and the stored forecast
+Status: [x] 2026-11-12
 Depends on: MM4
-- One line under the calendar only when the day's weather is noteworthy (rain, freezing).
-  Needs a weather connector first; nothing on fair days.
+Read first: the plan's "The weather source", "The module" and "Edge cases and failure";
+`themi/connectors/travel.py` (the httpx client pattern); `WebSearchModule` (a connector
+module with Test).
+- `themi/connectors/weather.py`: an Open-Meteo client behind a `WeatherSource` interface,
+  one call (`forecast_days=2`, the family's time zone, the hourly and daily fields the plan
+  lists, in °F/in/mph or metric per `WEATHER_UNITS`, default `F`).
+- Module settings for the thresholds, with the plan's defaults (`WEATHER_RAIN_CHANCE`,
+  `WEATHER_RAIN_IN`, `WEATHER_SNOW_IN`, `WEATHER_HEAT_F`, `WEATHER_COLD_F`,
+  `WEATHER_GUST_MPH`, `WEATHER_CHANGE_F`), validated (a chance is 1 to 100, amounts above 0).
+- `themi/standard/weather.py`: `WeatherModule` (kind `connector`, off until turned on;
+  website line when there's no home address), the `Weather` service on `keys.weather`, the
+  hourly `weather.refresh` job, `check()` for Test.
+- Its own migration track: `weather_forecasts` (`day`, `fetched_at`, `forecast`, `alerts`).
+  Keep yesterday's row, prune older ones. A forecast older than 6 hours isn't used.
+- `Weather.ensure_today(timeout=10s)`: a refresh when today's row is missing (used by MM5).
+Tests: `tests/fakes/weather.py` (an httpx mock transport with canned answers); parsing,
+refresh, pruning, staleness, failure keeping the last good row, no home address.
+Golden files: the new module and the `weather.refresh` job.
+
+Notes:
+- `themi.connectors.weather.WeatherClient` (a `WeatherSource`): one call with `past_days=1`
+  and `forecast_days=2`, always in °F, inches and mph (the rules are in those; °C changes
+  only the words). Yesterday's high and low come in the same answer, so the rules don't
+  need yesterday's stored row (it's still kept, as the plan says).
+- `Hour.at` is when the hour starts, in the family's time zone: Open-Meteo labels an
+  hour's sums with its end, so the parser moves them back an hour.
+- `themi.standard.weather`: `WeatherSettings` (units, alerts, the seven thresholds,
+  validated), `Weather` on `keys.weather` (`refresh`, `latest`, `ensure_today`),
+  `WeatherModule` (kind connector, needs "the home address" on /family, its guide
+  `setup/weather.md`). Track `weather`, migration 0001: `weather_forecasts`.
+- Test asks about a fixed place (Seattle), as travel's does: it runs without the database.
+- Not in the family template: turn it on from the Modules page (or `+weather` in
+  themi.toml). Needs the home address set on the Family page.
+- Tests changed for wiring this prompt added: the golden test's connector list gains
+  `fake_weather` (jobs.json gains `weather.refresh`), and `test_modules`' key count is 72.
+
+### WX2 · Weather: what's noteworthy
+Status: [x] 2026-11-12
+Depends on: WX1
+Read first: the plan's "What counts as noteworthy" and "Decisions for Michael".
+- `noteworthy(forecast, alerts, yesterday, window) -> str | None`, pure, ranks 2 to 9 of
+  the plan's table (rank 1 is WX3's), with thresholds from the module settings. The first
+  rule that fires gives the one line. The high goes only on rain and big-change lines.
+- `Weather.line(day, window)`: the stored forecast through the rules; None when there's no
+  usable forecast.
+- Lines are statements, never advice ("Rain likely from about 2 pm", not "take an
+  umbrella"). °C mode converts the text only.
+Tests: one per rule, a changed threshold setting, the ranking, window edges (rain that ended before the morning time),
+"already raining", "most of the day", the first-freeze rule, °C text, a fair day gives None.
+
+Notes:
+- `noteworthy(forecast, start, end, settings)`: yesterday comes from the forecast itself
+  (WX1's `past_days=1`), so there's no `yesterday` argument. WX3 adds `alerts`.
+- `Weather.line(start)`: the waking day from `start` (the morning message's time) to 9 pm
+  (`DAY_ENDS`); None with no fresh forecast or after 9 pm.
+- Wording: an hour already wet at the start says "this morning" (or afternoon/evening);
+  "most of the day" is 75% of the waking hours. Snow rounds to the half inch (whole cm),
+  noon is "noon". The first freeze says "this morning" when the day's coldest hour is
+  before noon, else "tonight".
+
+### WX3 · Weather: NWS alerts in the US
+Status: [x] 2026-11-12
+Depends on: WX2
+Read first: the plan's rank 1 rule and its edge cases.
+- `alerts/active?point=lat,lon` each refresh when alerts are on. `auto`: one `points`
+  lookup per home address; a 404 means outside the US, and alerts stay off for it.
+- Rank 1: an active Warning, Watch or Advisory overlapping the window (not a Special
+  Weather Statement): "Winter Storm Warning from 6 pm." NWS failing alone leaves the
+  Open-Meteo rules running.
+Tests: on the fake transport: a warning, an advisory outside the window, a statement
+skipped, outside the US, NWS down.
+
+Notes:
+- `WeatherClient.in_us` and `alerts` (`Accept: application/geo+json`). Kept: `status`
+  Actual, not a Cancel, an event ending in Warning, Watch or Advisory; it runs from
+  `onset` (else `effective`) to `ends` (else `expires`).
+- Migration 0002 on the `weather` track: `weather_home` (the place asked about, and
+  whether it's in the US). A failed `points` call is tried again next refresh.
+- The line: the gravest alert in force during the waking day (warning, then watch, then
+  advisory, then the earliest): "Winter Storm Warning from 6 pm." or, when it's already in
+  force, "Heat Advisory in effect today." NWS failing gives no alerts (logged once).
+- Tests changed for wiring this prompt moved: WX1's track version (now 2) and the moved
+  home test (the last call is now the alerts call).
+
+### MM5 · Morning message: a weather line when it's noteworthy
+Status: [x] 2026-11-12
+Depends on: WX2 (WX3 adds alerts to the line when it's done)
+Read first: the plan's "The line in the morning message"; `MorningMessage.text`,
+`_refresh` and `morning`.
+- One line under the calendar, above the buttons, only when `Weather.line` gives one;
+  through `services.maybe(keys.weather)`, so nothing changes without the module.
+- The refresher rebuilds it, so a held message carries the latest forecast.
+- The morning job calls `ensure_today` first when today's row is missing.
+- A weather line alone is reason enough to send the message (the plan's Decision 2).
+Tests: scenarios for a rainy morning, a fair morning (text unchanged), a nothing-on morning
+with rain, quiet hours updating the line, the fetch failed, the module off.
+
+Notes:
+- `MorningMessage.weather_line(member, day)`: `Weather.line` from their morning time (not
+  from when it's sent), so a message held by quiet hours keeps the whole morning in view.
+  `_worth_sending` is the one test, for the morning job and the refresher alike.
+- The module off is the morning message scenarios as they were (no `fake_weather`); they
+  pass unchanged. Scenarios: `tests/scenarios/test_morning_weather.py`.
+- Setup for Michael: turn Weather on on the Modules page, with the home address set on
+  the Family page. Nothing else: no account, no key.
+- Follow-up, not done: the settings page still says "A good-morning message with today's
+  calendar, and the rest when I want it"; it could mention the weather.
 
 ## Website chat
 

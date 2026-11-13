@@ -58,5 +58,6 @@
   "tasks.resurface": 900,
   "tasks.schedules": 3600,
   "travel.heads_up": 300,
-  "vacuum.wall": 60
+  "vacuum.wall": 60,
+  "weather.refresh": 3600
 }

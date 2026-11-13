@@ -39,6 +39,7 @@ CONNECTORS = (
     "fake_ourgroceries",
     "fake_cozyla",
     "fake_travel",
+    "fake_weather",  # WX1
     "fake_search",
     "fake_home_connect",
     "fake_spotify",

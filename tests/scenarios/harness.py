@@ -45,6 +45,7 @@ from tests.fakes.telegram_api import BOT_TOKEN, FakeTelegram
 from tests.fakes.thinq import FakeThinq
 from tests.fakes.travel import FakeTravel
 from tests.fakes.tuya import FakeTuya
+from tests.fakes.weather import FakeWeather
 from tests.fakes.wiring import connector_options, wall_list
 from tests.fixtures.family import SeededFamily
 from themi import clock
@@ -111,6 +112,7 @@ class Scenario:
         search: FakeSearch | None = None,
         gdocs: FakeGdocs | None = None,
         gsheets: FakeGsheets | None = None,
+        weather: FakeWeather | None = None,
         real_models: bool = False,
         provider_factory: ProviderFactory | None = None,
         tool_routing: str = "groups",
@@ -165,6 +167,7 @@ class Scenario:
                 tuya=tuya,
                 catgenie=catgenie,
                 keep=keep,
+                weather=weather,
                 timezone=family.family.timezone,
             ),
         )
@@ -470,6 +473,7 @@ async def scenario(
         search=optional("fake_search"),
         gdocs=optional("fake_gdocs"),
         gsheets=optional("fake_gsheets"),
+        weather=optional("fake_weather"),
     )
     await s.start()
     yield s
