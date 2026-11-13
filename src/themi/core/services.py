@@ -166,6 +166,8 @@ class Services(Registry):
     settings: Any = None  # SP5: the app's themi.settings.Settings, when it was run from them
     # SP6: stop Themi cleanly and start it again (the runtime's); None when nothing runs it
     restart: Callable[[], None] | None = None
+    # What modules keep open (an MQTT session, a client), closed when Themi stops: (name, close)
+    closers: list[tuple[str, Callable[[], Awaitable[object]]]] = field(default_factory=list)
     environment: dict[str, str] = field(default_factory=dict, repr=False)
     cooking_end_listeners: list[Callable[[Any, str], None]] = field(default_factory=list)
 

@@ -432,3 +432,14 @@ async def test_with_the_rule_on_a_chore_made_by_hand_is_done_without_asking(
     assert board.get(own.id).status == "done"
     robots = [t for t in tasks(scenario) if t[0] == "Empty the vacuum's dirty water"]
     assert [t[1] for t in robots] == ["cancelled"]  # its own task, sorted before anyone was asked
+
+
+async def test_stopping_themi_closes_the_vacuum_session(
+    scenario: Scenario, robot: FakeRoborock
+) -> None:
+    """Left open, the library's MQTT session kept a restart from ever finishing (13 Nov)."""
+    from themi.runtime import close_all
+
+    assert robot.sessions and not robot.sessions[-1].closed
+    await close_all(scenario.app.services.closers)
+    assert robot.sessions[-1].closed
