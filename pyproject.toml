@@ -161,6 +161,8 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "meals_schema/*.sql",  # 35a: the meal log
     "cooking_schema/*.sql",  # CK1: the cooking companion
     "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
+    "spending_schema/*.sql",  # EX1a: expense sheets (left out until 2026-11-13)
+    "expense_sync_schema/*.sql",
     "web/templates/*.html",
     "web/templates/*/*.html",
     "web/static/*",
