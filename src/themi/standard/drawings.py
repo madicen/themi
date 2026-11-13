@@ -67,12 +67,14 @@ class Drawings:
 
     def __init__(self, services: Services, renderer: Renderer | None = None) -> None:
         from themi.standard.day_card import DayCard  # it reads this module's preferences
+        from themi.standard.weather_card import WeatherCard
         from themi.standard.week_card import WeekCard
 
         self.services = services
         self.renderer = renderer or Renderer()
         self.day_card = DayCard(services)  # DC3
         self.week_card = WeekCard(services, self.day_card)  # DC6
+        self.weather_card = WeatherCard(services)  # DC8
 
     def install(self) -> None:
         pass
@@ -92,6 +94,10 @@ class Drawings:
         svg = self.day_card.svg(member, self.day_card.today(member))
         # The template escaped every word from data; the SVG is Themi's own markup.
         return {"today_card": Markup(svg)}
+
+    async def weather_command(self, member: Member, text: str) -> None:
+        """`/weather` (DC8)."""
+        await self.weather_card.send(member)
 
     async def week_command(self, member: Member, text: str) -> None:
         """`/week` (DC6)."""
@@ -120,6 +126,22 @@ async def show_week(ctx: ToolContext, args: dict[str, Any]) -> str:
     return "Sent their week as a picture." if pictured else "Sent their week, in words."
 
 
+@tool(
+    "show_weather",
+    "Sends them the weather for today and tomorrow, as a picture: hour by hour, with "
+    "anything worth knowing (rain, a storm warning). For 'what's the weather?', 'will it "
+    "rain tomorrow?'. It's sent as it is: don't repeat it, and never give advice about it.",
+    {},
+)
+async def show_weather(ctx: ToolContext, args: dict[str, Any]) -> str:
+    drawings = ctx.services.maybe(keys.drawings)
+    if drawings is None:
+        raise ToolFailed("Pictures aren't set up.")
+    pictured = await drawings.weather_card.send(ctx.member)
+    ctx.answered.append("show_weather")
+    return "Sent the weather as a picture." if pictured else "Sent the weather, in words."
+
+
 class DrawingsModule(Module):
     """DC1: pictures drawn from Themi's own data, as SVG and PNG."""
 
@@ -128,7 +150,7 @@ class DrawingsModule(Module):
     summary = "A picture of the day with the morning message, drawn from the calendar and weather."
     cost = "Free, no account"
     preferences = DrawingsPreferences
-    tool_groups = (groups.CALENDAR,)  # show_week (DC6)
+    tool_groups = (groups.CALENDAR,)  # show_week (DC6), show_weather (DC8)
 
     def __init__(self, renderer: Renderer | None = None) -> None:
         self.renderer = renderer
@@ -148,4 +170,6 @@ class DrawingsModule(Module):
         ctx.services.outbox.pictures[DAY_CARD] = drawings.morning_picture  # DC5
         ctx.dashboard_panel("dashboard/today.html", 10, values=drawings.today_panel)  # DC7
         ctx.tool(show_week)  # DC6
+        ctx.tool(show_weather)  # DC8
+        ctx.command("/weather", drawings.weather_command, "The weather today and tomorrow")
         ctx.command("/week", drawings.week_command, "Your week ahead, as a picture")

@@ -122,4 +122,4 @@ dev-invite:
 
 # CR1: write the golden files again (tests/golden); say why in the commit.
 golden:
-	THEMI_WRITE_GOLDEN=1 $(PYTEST) tests/scenarios/test_golden.py tests/unit/test_day_card.py tests/unit/test_week_card.py -q
+	THEMI_WRITE_GOLDEN=1 $(PYTEST) tests/scenarios/test_golden.py tests/unit/test_day_card.py tests/unit/test_week_card.py tests/unit/test_weather_card.py -q

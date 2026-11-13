@@ -46,6 +46,7 @@
     "rules",
     "familygroup",
     "break",
+    "weather",
     "week",
     "burnout",
     "bodydouble",
@@ -72,6 +73,7 @@
     "/rules",
     "/site",
     "/tracking",
+    "/weather",
     "/week"
   ],
   "event_commands": [

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="470" viewBox="0 0 840 470" font-family="Atkinson Hyperlegible">
+<rect width="840" height="470" fill="#FBFAF7"/>
+<text x="24" y="44" font-size="22" font-weight="700" fill="#1F2328">The weather</text>
+<text x="816" y="44" text-anchor="end" font-size="12" fill="#6B6F76">°F · chance of rain or snow</text>
+<rect x="24" y="76" width="792" height="180" rx="12" fill="none" stroke="#E6E3DC" stroke-width="1.25"/>
+<text x="40" y="106" font-size="18" font-weight="700" fill="#1F2328">Today</text>
+<text x="40" y="126" font-size="12" fill="#6B6F76">Wed 21 Oct</text>
+<image href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgaWQ9InJhaW4iIGNsaXAtcGF0aD0idXJsKCNjbGlwMF8yMDQ1XzM5NTg3KSI+CjxnIGlkPSJTa3kiPgo8ZyBpZD0iQ2xvdWRzIj4KPGcgaWQ9IkNsb3VkIj4KPHBhdGggaWQ9IkNsb3VkXzIiIGQ9Ik05MC4zODg2IDYzLjA4NTZDOTIuNjgzOCA1My44ODE5IDg3Ljc0MDggNDQuMTM1NyA3OS4wMDg1IDQwLjQ4MjJDNzAuMjY1MyAzNi44MjQyIDU5LjgyNzcgNDAuMTM3NSA1NC44MzcyIDQ4LjIxMTVDNTAuNTM2MyA0NS42MjUgNDQuOTc1MiA0NS43NzgxIDQwLjgyMzkgNDguNTk5MUMzNi42ODMyIDUxLjQxMjggMzQuNDk5NiA1Ni41MTQzIDM1LjM0OTkgNjEuNDUzOUMyOC4zOTI2IDYyLjc2ODUgMjMuMzkzNCA2OS4zMzkzIDI0LjA2MTQgNzYuNDA3NkMyNC43Mjk3IDgzLjQ3NzYgMzAuODcxOCA4OS4wMDE4IDM3Ljk1MzQgODlDNTUuNjA2NiA4OSA3My4zMDYgODkgOTAuOTc2NyA4OUM5OC4wNDQ2IDg5IDEwNCA4My4xMTg5IDEwNCA3Ni4wMjgxQzEwNCA2OC43MDE1IDk3LjY3NzUgNjIuNzY3NCA5MC4zODg2IDYzLjA4NTZaIiBmaWxsPSIjRTZFRkZDIi8+CjwvZz4KPC9nPgo8L2c+CjxnIGlkPSJQcmVjaXBpdGF0aW9uIj4KPGcgaWQ9IlJhaW5kcm9wcyI+CjxwYXRoIGlkPSJSYWluZHJvcCAxIiBkPSJNNTIgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAyIiBkPSJNNjQgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDApIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAzIiBkPSJNNzYgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjwvZz4KPC9nPgo8L2c+CjxkZWZzPgo8Y2xpcFBhdGggaWQ9ImNsaXAwXzIwNDVfMzk1ODciPgo8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0id2hpdGUiLz4KPC9jbGlwUGF0aD4KPC9kZWZzPgo8L3N2Zz4=" x="34" y="134" width="56" height="56"/>
+<text x="100" y="162" font-size="22" font-weight="700" fill="#1F2328">58°</text>
+<text x="100" y="180" font-size="12" fill="#6B6F76">low 46°</text>
+<text x="40" y="212" font-size="13" fill="#1F2328">Rain likely from about 2 pm,</text>
+<text x="40" y="229" font-size="13" fill="#1F2328">high 58°F.</text>
+<line x1="214" x2="214" y1="110" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<text x="214" y="246" text-anchor="middle" font-size="10.5" fill="#6B6F76">7 am</text>
+<line x1="338.71" x2="338.71" y1="110" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<text x="338.71" y="246" text-anchor="middle" font-size="10.5" fill="#6B6F76">10 am</text>
+<line x1="463.43" x2="463.43" y1="110" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<text x="463.43" y="246" text-anchor="middle" font-size="10.5" fill="#6B6F76">1 pm</text>
+<line x1="588.14" x2="588.14" y1="110" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<text x="588.14" y="246" text-anchor="middle" font-size="10.5" fill="#6B6F76">4 pm</text>
+<line x1="712.86" x2="712.86" y1="110" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<text x="712.86" y="246" text-anchor="middle" font-size="10.5" fill="#6B6F76">7 pm</text>
+<line x1="214" x2="796" y1="230" y2="230" stroke="#E6E3DC" stroke-width="1"/>
+<rect x="506" y="134" width="39.57" height="96" rx="2" fill="#3FA796" fill-opacity="0.45"/>
+<rect x="547.57" y="134" width="39.57" height="96" rx="2" fill="#3FA796" fill-opacity="0.45"/>
+<rect x="589.14" y="134" width="39.57" height="96" rx="2" fill="#3FA796" fill-opacity="0.45"/>
+<rect x="630.71" y="134" width="39.57" height="96" rx="2" fill="#3FA796" fill-opacity="0.45"/>
+<polyline points="234.8,216.0 276.4,202.9 317.9,189.7 359.5,176.6 401.1,163.4 442.6,150.3 484.2,137.1 525.8,124.0 567.4,137.1 608.9,150.3 650.5,163.4 692.1,176.6 733.6,189.7 775.2,202.9" fill="none" stroke="#D9653B" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="234.79" y="208" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">48°</text>
+<text x="359.5" y="168.57" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">52°</text>
+<text x="484.21" y="129.14" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">56°</text>
+<text x="608.93" y="142.29" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">55°</text>
+<text x="733.64" y="181.71" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">50°</text>
+<line x1="311" x2="311" y1="106" y2="230" stroke="#1F2328" stroke-width="1.5" stroke-dasharray="3 3"/>
+<text x="311" y="102" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1F2328">now</text>
+<rect x="24" y="276" width="792" height="180" rx="12" fill="none" stroke="#E6E3DC" stroke-width="1.25"/>
+<text x="40" y="306" font-size="18" font-weight="700" fill="#1F2328">Tomorrow</text>
+<text x="40" y="326" font-size="12" fill="#6B6F76">Thu 22 Oct</text>
+<image href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgaWQ9InBhcnRseS1jbG91ZHktZGF5IiBjbGlwLXBhdGg9InVybCgjY2xpcDBfMjA0NV8zOTU2NykiPgo8ZyBpZD0iU2t5Ij4KPGcgaWQ9Ik1hc2sgZ3JvdXAiPgo8bWFzayBpZD0ibWFzazBfMjA0NV8zOTU2NyIgc3R5bGU9Im1hc2stdHlwZTphbHBoYSIgbWFza1VuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iMCIgeT0iMCIgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiPgo8ZyBpZD0iQ2xvdWQgTWFzayI+CjxwYXRoIGlkPSJTdWJ0cmFjdCIgZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xMjggMEgwVjEyOEgxMjhWMFpNMzcuOTUxOSA5M0g5MC45NzUyQzEwMC4yMjcgOTMgMTA3Ljk5OCA4NS4zNTMgMTA3Ljk5OCA3Ni4wMjgxQzEwNy45OTggNjguMDIxNyAxMDIuMzA1IDYxLjM1MDEgOTQuOTI0OCA1OS41NTEyQzk1LjM2MTkgNDkuOTAwNSA4OS42NzQ0IDQwLjYwOTMgODAuNTUwOSAzNi43OTIyQzcxLjEwNzEgMzIuODQxMSA2MC4wNjY0IDM1LjYxMTkgNTMuNTMwNSA0My4yMzg0QzQ4LjU3MDIgNDEuNTk1NiA0Mi45ODE1IDQyLjI5NTcgMzguNTc0MSA0NS4yOTA3QzM0LjE0NTkgNDguMjk5OCAzMS40MzA1IDUzLjI4MDkgMzEuMTg0NiA1OC41Mzc5QzI0LjA2MzMgNjEuNDYzIDE5LjMyNzggNjguODUwNiAyMC4wNzc2IDc2Ljc4MzlDMjAuOTQyIDg1LjkyOTUgMjguODI4NSA5My4wMDE4IDM3Ljk1MTkgOTNaIiBmaWxsPSJibGFjayIvPgo8L2c+CjwvbWFzaz4KPGcgbWFzaz0idXJsKCNtYXNrMF8yMDQ1XzM5NTY3KSI+CjxnIGlkPSJTdW4iPgo8Y2lyY2xlIGlkPSJDb3JlIiBjeD0iMzkiIGN5PSI1MSIgcj0iOSIgZmlsbD0iI0Y4QUYxOCIvPgo8ZyBpZD0iUmF5cyI+CjxwYXRoIGQ9Ik0zNy42ODc1IDMxLjMxMjVDMzcuNjg3NSAzMC41ODc2IDM4LjI3NTEgMzAgMzkgMzBDMzkuNzI0OSAzMCA0MC4zMTI1IDMwLjU4NzYgNDAuMzEyNSAzMS4zMTI1VjM3LjQzNzVDNDAuMzEyNSAzOC4xNjI0IDM5LjcyNDkgMzguNzUgMzkgMzguNzVDMzguMjc1MSAzOC43NSAzNy42ODc1IDM4LjE2MjQgMzcuNjg3NSAzNy40Mzc1VjMxLjMxMjVaIiBmaWxsPSIjRjhBRjE4Ii8+CjxwYXRoIGQ9Ik01MS45OTMxIDM2LjE1MDhDNTIuNTA1NiAzNS42MzgyIDUzLjMzNjcgMzUuNjM4MiA1My44NDkyIDM2LjE1MDhDNTQuMzYxOCAzNi42NjMzIDU0LjM2MTggMzcuNDk0MyA1My44NDkyIDM4LjAwNjlMNDkuNTE4MiA0Mi4zMzc5QzQ5LjAwNTYgNDIuODUwNSA0OC4xNzQ2IDQyLjg1MDUgNDcuNjYyMSA0Mi4zMzc5QzQ3LjE0OTUgNDEuODI1NCA0Ny4xNDk1IDQwLjk5NDQgNDcuNjYyMSA0MC40ODE4TDUxLjk5MzEgMzYuMTUwOFoiIGZpbGw9IiNGOEFGMTgiLz4KPHBhdGggZD0iTTU4LjY4NzUgNDkuNjg3NUM1OS40MTI0IDQ5LjY4NzUgNjAgNTAuMjc1MSA2MCA1MUM2MCA1MS43MjQ5IDU5LjQxMjQgNTIuMzEyNSA1OC42ODc1IDUyLjMxMjVINTIuNTYyNUM1MS44Mzc2IDUyLjMxMjUgNTEuMjUgNTEuNzI0OSA1MS4yNSA1MUM1MS4yNSA1MC4yNzUxIDUxLjgzNzYgNDkuNjg3NSA1Mi41NjI1IDQ5LjY4NzVINTguNjg3NVoiIGZpbGw9IiNGOEFGMTgiLz4KPHBhdGggZD0iTTUzLjg0OTIgNjMuOTkzMUM1NC4zNjE4IDY0LjUwNTcgNTQuMzYxOCA2NS4zMzY3IDUzLjg0OTIgNjUuODQ5MkM1My4zMzY3IDY2LjM2MTggNTIuNTA1NiA2Ni4zNjE4IDUxLjk5MzEgNjUuODQ5Mkw0Ny42NjIxIDYxLjUxODJDNDcuMTQ5NSA2MS4wMDU3IDQ3LjE0OTUgNjAuMTc0NiA0Ny42NjIxIDU5LjY2MjFDNDguMTc0NiA1OS4xNDk1IDQ5LjAwNTcgNTkuMTQ5NSA0OS41MTgyIDU5LjY2MjFMNTMuODQ5MiA2My45OTMxWiIgZmlsbD0iI0Y4QUYxOCIvPgo8cGF0aCBkPSJNMzcuNjg3NSA2NC41NjI1QzM3LjY4NzUgNjMuODM3NiAzOC4yNzUxIDYzLjI1IDM5IDYzLjI1QzM5LjcyNDkgNjMuMjUgNDAuMzEyNSA2My44Mzc2IDQwLjMxMjUgNjQuNTYyNVY3MC42ODc1QzQwLjMxMjUgNzEuNDEyNCAzOS43MjQ5IDcyIDM5IDcyQzM4LjI3NTEgNzIgMzcuNjg3NSA3MS40MTI0IDM3LjY4NzUgNzAuNjg3NVY2NC41NjI1WiIgZmlsbD0iI0Y4QUYxOCIvPgo8cGF0aCBkPSJNMjguNDgxOCA1OS42NjIxQzI4Ljk5NDMgNTkuMTQ5NSAyOS44MjU0IDU5LjE0OTUgMzAuMzM3OSA1OS42NjIxQzMwLjg1MDUgNjAuMTc0NiAzMC44NTA1IDYxLjAwNTYgMzAuMzM3OSA2MS41MTgyTDI2LjAwNjkgNjUuODQ5MkMyNS40OTQzIDY2LjM2MTggMjQuNjYzMyA2Ni4zNjE4IDI0LjE1MDggNjUuODQ5MkMyMy42MzgyIDY1LjMzNjcgMjMuNjM4MiA2NC41MDU2IDI0LjE1MDggNjMuOTkzMUwyOC40ODE4IDU5LjY2MjFaIiBmaWxsPSIjRjhBRjE4Ii8+CjxwYXRoIGQ9Ik0yNS40Mzc1IDQ5LjY4NzVDMjYuMTYyNCA0OS42ODc1IDI2Ljc1IDUwLjI3NTEgMjYuNzUgNTFDMjYuNzUgNTEuNzI0OSAyNi4xNjI0IDUyLjMxMjUgMjUuNDM3NSA1Mi4zMTI1SDE5LjMxMjVDMTguNTg3NiA1Mi4zMTI1IDE4IDUxLjcyNDkgMTggNTFDMTggNTAuMjc1MSAxOC41ODc2IDQ5LjY4NzUgMTkuMzEyNSA0OS42ODc1SDI1LjQzNzVaIiBmaWxsPSIjRjhBRjE4Ii8+CjxwYXRoIGQ9Ik0zMC4zMzc5IDQwLjQ4MThDMzAuODUwNSA0MC45OTQ0IDMwLjg1MDUgNDEuODI1NCAzMC4zMzc5IDQyLjMzNzlDMjkuODI1NCA0Mi44NTA1IDI4Ljk5NDQgNDIuODUwNSAyOC40ODE4IDQyLjMzNzlMMjQuMTUwOCAzOC4wMDY5QzIzLjYzODIgMzcuNDk0NCAyMy42MzgyIDM2LjY2MzMgMjQuMTUwOCAzNi4xNTA4QzI0LjY2MzMgMzUuNjM4MiAyNS40OTQ0IDM1LjYzODIgMjYuMDA2OSAzNi4xNTA4TDMwLjMzNzkgNDAuNDgxOFoiIGZpbGw9IiNGOEFGMTgiLz4KPC9nPgo8L2c+CjwvZz4KPC9nPgo8ZyBpZD0iQ2xvdWRzIj4KPGcgaWQ9IkNsb3VkIj4KPHBhdGggaWQ9IkNsb3VkXzIiIGQ9Ik05MC4zODg2IDYzLjA4NTZDOTIuNjgzOCA1My44ODE5IDg3Ljc0MDggNDQuMTM1NyA3OS4wMDg1IDQwLjQ4MjJDNzAuMjY1MyAzNi44MjQyIDU5LjgyNzcgNDAuMTM3NSA1NC44MzcyIDQ4LjIxMTVDNTAuNTM2MyA0NS42MjUgNDQuOTc1MiA0NS43NzgxIDQwLjgyMzkgNDguNTk5MUMzNi42ODMyIDUxLjQxMjggMzQuNDk5NiA1Ni41MTQzIDM1LjM0OTkgNjEuNDUzOUMyOC4zOTI2IDYyLjc2ODUgMjMuMzkzNCA2OS4zMzkzIDI0LjA2MTQgNzYuNDA3NkMyNC43Mjk3IDgzLjQ3NzYgMzAuODcxOCA4OS4wMDE4IDM3Ljk1MzQgODlDNTUuNjA2NiA4OSA3My4zMDYgODkgOTAuOTc2NyA4OUM5OC4wNDQ2IDg5IDEwNCA4My4xMTg5IDEwNCA3Ni4wMjgxQzEwNCA2OC43MDE1IDk3LjY3NzUgNjIuNzY3NCA5MC4zODg2IDYzLjA4NTZaIiBmaWxsPSIjRTZFRkZDIi8+CjwvZz4KPC9nPgo8L2c+CjwvZz4KPGRlZnM+CjxjbGlwUGF0aCBpZD0iY2xpcDBfMjA0NV8zOTU2NyI+CjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiBmaWxsPSJ3aGl0ZSIvPgo8L2NsaXBQYXRoPgo8L2RlZnM+Cjwvc3ZnPg==" x="34" y="334" width="56" height="56"/>
+<text x="100" y="362" font-size="22" font-weight="700" fill="#1F2328">61°</text>
+<text x="100" y="380" font-size="12" fill="#6B6F76">low 47°</text>
+<line x1="214" x2="214" y1="310" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<text x="214" y="446" text-anchor="middle" font-size="10.5" fill="#6B6F76">7 am</text>
+<line x1="338.71" x2="338.71" y1="310" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<text x="338.71" y="446" text-anchor="middle" font-size="10.5" fill="#6B6F76">10 am</text>
+<line x1="463.43" x2="463.43" y1="310" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<text x="463.43" y="446" text-anchor="middle" font-size="10.5" fill="#6B6F76">1 pm</text>
+<line x1="588.14" x2="588.14" y1="310" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<text x="588.14" y="446" text-anchor="middle" font-size="10.5" fill="#6B6F76">4 pm</text>
+<line x1="712.86" x2="712.86" y1="310" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<text x="712.86" y="446" text-anchor="middle" font-size="10.5" fill="#6B6F76">7 pm</text>
+<line x1="214" x2="796" y1="430" y2="430" stroke="#E6E3DC" stroke-width="1"/>
+<polyline points="234.8,416.0 276.4,402.9 317.9,389.7 359.5,376.6 401.1,363.4 442.6,350.3 484.2,337.1 525.8,324.0 567.4,337.1 608.9,350.3 650.5,363.4 692.1,376.6 733.6,389.7 775.2,402.9" fill="none" stroke="#D9653B" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="234.79" y="408" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">48°</text>
+<text x="359.5" y="368.57" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">52°</text>
+<text x="484.21" y="329.14" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">56°</text>
+<text x="608.93" y="342.29" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">55°</text>
+<text x="733.64" y="381.71" text-anchor="middle" font-size="11" font-weight="700" fill="#D9653B">50°</text>
+</svg>

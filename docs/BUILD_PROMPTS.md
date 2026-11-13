@@ -398,7 +398,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC5 | Day card: the morning picture | Day card | [x] 2026-11-13 |
 | DC6 | Day card: the week ahead | Day card | [x] 2026-11-13 |
 | DC7 | Day card: today on the website | Day card | [x] 2026-11-13 |
-| DC8 | Day card: weather on request | Day card | [ ] |
+| DC8 | Day card: weather on request | Day card | [x] 2026-11-13 |
 | DC9 | Day card: the chore chart | Day card | [ ] |
 | DC10 | Day card: the recipe card | Day card | [ ] |
 | DC11 | Day card: the step-up plan | Day card | [ ] |
@@ -18611,13 +18611,27 @@ Notes:
   words; Husband's dashboard has no sign of Erin's private event).
 
 ### DC8 · Day card: weather on request
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC4
 Read first: the plan's "Other uses".
 - Today and tomorrow as an hourly strip, from the day card's weather column: "what's the
   weather" (a tool) and `/weather`. Statements only, as WX2. Without the weather module,
   it says so; without pictures, the text lines.
 Tests: golden SVGs, a scenario.
+
+Notes:
+- `themi.standard.weather_card`: `WeatherCard` (`drawings.weather_card`), landscape 840 x
+  470: a row each for today and tomorrow with the day's icon, high and low, the WX2/WX3
+  line (wrapped to two lines), and 7 am to 9 pm as a strip (temperature line, rain or
+  snow chance as bars, "now" on today's). `weather_text` is the same in words.
+- The `show_weather` tool and `/weather`. The tool is in the calendar group (no weather
+  group exists), which gained "weather", "forecast", "rain", "snow", "umbrella", an
+  example and "the weather" in its description. Golden files changed as expected:
+  `show_weather`, `/weather`, and `more_tools`' spec (it lists the groups' descriptions).
+- Without the weather module: "The weather isn't on here: an admin can turn it on on the
+  Modules page." With no fresh forecast: says it'll try again within the hour.
+- `tests/unit/test_architecture.py` flags any `.combine()` call (energy's), so the card
+  builds its datetimes directly rather than with `datetime.combine`.
 
 ### DC9 · Day card: the chore chart
 Status: [ ]

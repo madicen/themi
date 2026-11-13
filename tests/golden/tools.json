@@ -241,7 +241,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "f6b1c6e3e7e8"
+    "spec": "15d3a7443514"
   },
   "move_expense": {
     "group": "spending",
@@ -474,6 +474,10 @@
   "show_routines": {
     "group": "wall",
     "spec": "f8ff3c412b5a"
+  },
+  "show_weather": {
+    "group": "calendar",
+    "spec": "ccb8424175bb"
   },
   "show_week": {
     "group": "calendar",
