@@ -165,6 +165,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "web/templates/*/*.html",
     "web/static/*",
     "web/static/*/*",
+    "drawing_templates/*.svg",  # DC9: its pictures' templates
 ]
 themi_google = ["web/templates/*.html", "web/templates/*/*.html", "setup/*.md"]
 themi_cozyla = [

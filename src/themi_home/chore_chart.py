@@ -551,6 +551,9 @@ class ChoreChartModule(Module):
         ctx.settings_section("settings/chart.html", 50)
         queue = ChartQueue(ctx.services, ctx.get(TaskBoard))
         queue.install()
+        from themi_home.chore_card import show_chore_chart
+
+        ctx.tool(show_chore_chart)  # DC9: the chart as a picture
         ctx.dashboard_panel(
             "dashboard/chore_chart.html", 25, values=lambda member: {"chart": queue.up_for(member)}
         )

@@ -399,7 +399,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC6 | Day card: the week ahead | Day card | [x] 2026-11-13 |
 | DC7 | Day card: today on the website | Day card | [x] 2026-11-13 |
 | DC8 | Day card: weather on request | Day card | [x] 2026-11-13 |
-| DC9 | Day card: the chore chart | Day card | [ ] |
+| DC9 | Day card: the chore chart | Day card | [x] 2026-11-13 |
 | DC10 | Day card: the recipe card | Day card | [ ] |
 | DC11 | Day card: the step-up plan | Day card | [ ] |
 
@@ -18634,12 +18634,24 @@ Notes:
   builds its datetimes directly rather than with `datetime.combine`.
 
 ### DC9 · Day card: the chore chart
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: DC4
 Read first: the plan's "Other uses"; `themi_home.chore_chart`.
 - C2d's chart as a picture in the family group, on request ("show the chore chart"):
   each person's chores that are up (`chart_limit`), never what waits off the chart.
 Tests: golden SVGs; nothing off the chart is drawn.
+
+Notes:
+- `themi_home.chore_card`: a column per person of what's up (`ChartQueue.up_for`, plus
+  the important chores that always show, outlined in amber), each with "since Tue" when
+  it's late; seven cards a column, then "+N more". The `show_chore_chart` tool (the wall
+  group) is registered by the chore chart module; without drawings it goes in words.
+- Deviation from the plan: it goes to whoever asks, not to the family group. The outbox's
+  `send_photo` is for a person's own chat; a picture in the group would need group
+  pictures in the channel (a follow-up if wanted).
+- A pack's own picture templates live in `drawing_templates/` (package data, and checked
+  by `test_package_data`); `write_svg` takes them as an extra folder.
+- Golden files: tools.json gains `show_chore_chart`.
 
 ### DC10 · Day card: the recipe card
 Status: [ ]

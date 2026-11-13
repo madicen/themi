@@ -451,6 +451,10 @@
     "group": "lists",
     "spec": "947b01c2f27c"
   },
+  "show_chore_chart": {
+    "group": "wall",
+    "spec": "486c0b23728d"
+  },
   "show_grocery_list": {
     "group": "core",
     "spec": "d1da5f123c21"

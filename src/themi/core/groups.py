@@ -177,6 +177,7 @@ WALL = ToolGroup(
         "What's on the wall today?",
         "Move the vacuum water item to my chore chart",  # F32b: an item onto the chart
         "Can you move it to my chores?",
+        "Show me the chore chart",
     ),
     tools=(
         "put_task_on_wall_list",
@@ -191,6 +192,7 @@ WALL = ToolGroup(
         "add_routine_item",
         "remove_routine_item",
         "tick_routine_item",
+        "show_chore_chart",  # DC9
     ),
     order=60,
 )

@@ -26,6 +26,7 @@ def test_every_web_and_schema_file_is_package_data(package: str) -> None:
             "storage/schema",
             "drawing/assets",
             "drawing/templates",
+            "drawing_templates",  # DC9: a pack's own pictures
         )  # DC1
         for p in (folder_of / folder).rglob("*")
         if p.is_file() and "__pycache__" not in p.parts

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" font-family="{{ font }}">
+<rect width="{{ width }}" height="{{ height }}" fill="{{ c.bg }}"/>
+<text x="{{ pad }}" y="52" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ title }}</text>
+<text x="{{ pad }}" y="76" font-size="14" fill="{{ c.muted }}">{{ date }}</text>
+{% for col in columns %}
+<text x="{{ col.x|n }}" y="102" font-size="16" font-weight="700" fill="{{ c.ink }}">{{ col.name }}</text>
+{% for card in col.cards %}
+<rect x="{{ col.x|n }}" y="{{ card.y|n }}" width="{{ col.width|n }}" height="{{ card.height|n }}" rx="10" fill="{{ c.event }}" stroke="{{ c.alert_edge if card.important else c.event_edge }}" stroke-width="{{ 2 if card.important else 1.25 }}"/>
+{% for line in card.lines %}
+<text x="{{ (col.x + 14)|n }}" y="{{ (card.y + 28 + loop.index0 * 18)|n }}" font-size="14" font-weight="700" fill="{{ c.ink }}">{{ line }}</text>
+{% endfor %}
+{% if card.when %}
+<text x="{{ (col.x + 14)|n }}" y="{{ (card.y + card.height - 12)|n }}" font-size="12" fill="{{ c.muted }}">{{ card.when }}</text>
+{% endif %}
+{% endfor %}
+{% if col.more %}
+<text x="{{ (col.x + 4)|n }}" y="{{ col.more_y|n }}" font-size="13" fill="{{ c.muted }}">{{ col.more }}</text>
+{% endif %}
+{% if col.empty %}
+<text x="{{ (col.x + 4)|n }}" y="134" font-size="14" fill="{{ c.muted }}">Nothing up</text>
+{% endif %}
+{% endfor %}
+</svg>
