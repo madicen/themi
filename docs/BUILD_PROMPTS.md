@@ -271,7 +271,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F41c | Feedback: what Themi did on its own is always in the reply | Feedback | [x] 2026-11-11 |
 | F41d | Feedback: a stop on the way: drives from where they'll be, not home | Feedback | [x] 2026-11-11 |
 | F42a | Feedback: an event that covers the whole day is an all-day event | Feedback | [x] 2026-11-13 |
-| F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [ ] |
+| F42b | Feedback: in burnout mode, "not important enough" is heard, and time-sensitive mail waits | Feedback | [x] 2026-11-13 |
 | F42c | Feedback: a recipe named exactly is the one; no "Done." when nothing was | Feedback | [ ] |
 | F42d | Idea: the morning message lists your own day; everyone else's behind a button | Feedback | [ ] |
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [ ] |
@@ -13645,7 +13645,7 @@ appointment (ND psych in person, and Return Patient Visit with Dr. Nguyen) are o
 two calendars under different names; F37b only matches email bookings.
 
 ### F42b · Feedback (2026-11-12): in burnout mode, "not important enough" is heard, and time-sensitive mail waits
-Status: [ ]
+Status: [x] 2026-11-13
 Depends on: F22d, F16c, F41c
 Read first: `themi/channels/pauses.py` (`TOPICS["burnout"]`, F22d's comment);
 `themi/channels/outbox.py` (`_earliest`: `IMMEDIATE`, `held_until`); `themi/core/rules.py`
@@ -13693,6 +13693,20 @@ isn't important, and hears it's done and to rest.
 
 Data: lower Joyous Care (care@joyous.team) for Erin once live, if she wants it. Mark #204
 reviewed once live, and label reply 431 `--wrong-tool 431 set_sender_levels`.
+
+Notes: `TOPICS["burnout"]` holds `email`; urgent alerts are `urgent`, which `_earliest`
+sends before any pause is looked at, so they still come. `rules.NOT_WANTED` ("not important",
+"don't notify/bother", "stop flagging") with `ONE_EMAIL` → `_not_wanted`: points to
+`set_sender_levels` (no_rush, not) and quotes the latest email alert in this chat
+(`dedupe_key` `email-urgent:%`) inside `as_data`. Core reads only the outbox, so the
+layering holds. `set_sender_levels` at no_rush puts `NOT_FLAGGED_TEXT` in `ctx.done` (plus
+`BURNOUT_REST_TEXT` in burnout mode). Deviation: "Rest is all that's on now." rather than
+Erin's "Go get some rest.", which the PDA shield would reword as a command (burnout.py's
+STARTED_TEXTS note). `burnout_task` declines when any other tool ran this turn.
+Found and fixed here: "no rush" never stopped an alert. `sender_levels` gives 0 for both
+"no rush" and "never asked", and triage only checked for urgent. `EmailAudit.no_rush` tells
+them apart, and triage sends no alert for a no-rush sender unless the verdict is severe.
+New tests in `tests/scenarios/test_burnout_email.py`; none changed, no golden file changed.
 
 ### F42c · Feedback (2026-11-13): a recipe named exactly is the one, and "Done." isn't said when nothing was
 Status: [ ]

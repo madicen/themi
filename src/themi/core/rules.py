@@ -33,6 +33,7 @@ from themi.accounts.store import Actor, SystemActor
 from themi.autonomy import Autonomy, CappedCategory
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
+from themi.core.prompts import as_data
 from themi.core.services import AwaitingItem, Decision, Services
 from themi.core.tools import Tool, ToolContext, ToolFailed, tool
 from themi.localtime import to_utc_iso
@@ -450,6 +451,12 @@ GENERAL = re.compile(r"\b(?:always|every|all|any|whenever|from now on)\b")
 URGENT_MAIL = re.compile(  # about senders: "Schwab emails are urgent", "mail from X is urgent"
     r"\b(?:e-?mails?|mail) from\b.*\burgent\b|\b\w+ e-?mails (?:are|count as) (?:always )?urgent\b"
 )
+# F42b (bug #204): "that email is not important enough to notify me" lowers its sender.
+NOT_WANTED = re.compile(
+    r"\bnot (?:\w+ )?(?:important|urgent|worth)\b|\bdon'?t (?:need to )?(?:notify|bother|ping"
+    r"|alert|tell|flag)\b|\bstop (?:notifying|bothering|alerting|flagging|telling)\b"
+    r"|\bno need to (?:notify|alert|tell|flag)\b|\bnot (?:bother|notify|alert) me\b"
+)
 REMINDER = re.compile(r"\bremind (?:me|us|him|her|them|\w+) (?:about|to|of|that)\b")
 # T2: "any time you assign Erin the kitchen, first send Michael a task to declutter it"
 # F21b (bug #116): a policy can't skip a yes; only a grant on a whole category can.
@@ -465,6 +472,27 @@ CHORE_ORDER = re.compile(
     r"|\bbefore (?:you |she |he |they )?(?:assign|give)",
     re.DOTALL,
 )
+
+
+def _not_wanted(ctx: ToolContext) -> str:
+    """F42b (bug #204): one email they don't want flagged is its sender's level, not a
+    rule. The latest email alert in this chat is most likely the one they mean."""
+    latest = ctx.services.store.db.one(
+        "SELECT text FROM outbox WHERE member_id = ? AND kind = 'email' "
+        "AND dedupe_key LIKE 'email-urgent:%' ORDER BY id DESC LIMIT 1",
+        (ctx.member.id,),
+    )
+    which = (
+        " The latest email alert in this chat, most likely the one they mean:\n"
+        + as_data("latest email alert", str(latest["text"]))
+        if latest
+        else ""
+    )
+    return (
+        "That's about one email they don't want flagged, not a rule: use set_sender_levels "
+        "for its sender, urgency no_rush (no message), importance not, unless they said "
+        "otherwise; more_tools brings the email group if that tool isn't there." + which
+    )
 
 
 @tool(
@@ -515,6 +543,8 @@ async def propose_rule(ctx: ToolContext, args: dict[str, Any]) -> str:
     rulebook = ctx.services.rulebook
     assert rulebook is not None
     said = ctx.request_text.lower()
+    if ONE_EMAIL.search(said) and not GENERAL.search(said) and NOT_WANTED.search(said):
+        raise ToolFailed(_not_wanted(ctx))
     if ONE_EMAIL.search(said) and not GENERAL.search(said):
         raise ToolFailed(  # bug #53: "the Schwab email is urgent" isn't a rule
             "That's about one email, not a rule: use keep_email (it keeps that email and "
