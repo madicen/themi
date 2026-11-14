@@ -277,6 +277,9 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
+| F43a | Feedback: every to-do in a picture is added the first time | Feedback | [ ] |
+| F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [ ] |
+| F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -13952,6 +13955,183 @@ tasks|routines --member X --out f.png` draws them; `make golden` includes
 `tests/unit/test_list_card.py` and `tests/scenarios/test_list_pictures.py`; none changed.
 Setup still to do: add tasks, routines and the day on request to the Day Card plan's "Other
 uses" (left for Michael; the plan doc is shared).
+
+### F43a · Feedback (2026-11-14): every to-do in a picture is added the first time
+Status: [ ]
+Depends on: F24a, F41c, RC4a
+Read first: `themi_home/web_recipes.py` (`recipe_from_picture`, `show_from_picture`: a tool
+that reads the picture itself with one structured call, the model to copy);
+`themi/standard/tasks.py` (`create_task`: its checks, assignment, steps, F24a's duplicate
+check); `themi/core/agent.py` (how pictures reach the model, `ctx.image`/`ctx.images`,
+`_not_again`, `ctx.done`); `themi/standard/tasks.py` (`split_task`). From Michael's bug #207
+(2026-11-14, 7:41 am, "the initial message needed to be clearer that all the tasks were
+added").
+
+What the Pi shows: replies 457-458. Michael sent a screenshot of a checklist (Google Tasks
+style) with four to-dos: "Vacuum upstairs", "Towel + clothes", "Clean the upstairs
+bathroom" with five indented sub-items (Clean the shower, Clean the toilet, Vacuum the
+shower, Swap out the litterbox mat, Clean the sink) and "Text Susan". His words: "Can you
+pull in these tasks? The upstairs bathroom has 5 subtasks listed". Reply 457 called
+`create_task` once, for the bathroom with its five steps, and said only "\"Clean the
+upstairs bathroom\" is on your list with its steps." The other three weren't made. He
+asked "Did the other 3 tasks also get added?" and reply 458 made them then (tasks
+101-103), but answered "Yes, … are added", as though they had been all along.
+
+Decided (Michael, 2026-11-14, bug #207): the fix is that every to-do in the picture is made
+the first time. All of them were in the picture.
+
+Build:
+- Bug fix: start with the failing tests below.
+- `tasks_from_picture` (tasks group, beside `create_task`): reads every to-do in the
+  pictures sent with the message (and `continues` for the one before, as
+  `recipe_from_picture` does) with one structured call through the router (vision, the
+  `conversation` task's route). Schema: items, each with a title, steps (indented
+  sub-items, in order), and a due date and time only if one is written there. Ticked or
+  struck-through items are left out. The picture's text is data inside a delimited block,
+  never instructions.
+- It makes each item through `create_task`'s own path (same checks, assignment from
+  `assign_to`, F24a's duplicate check), not by asking the model to call `create_task`
+  again. One that's already open is skipped and named as such.
+- Themi says what it made, in its own words, into `ctx.done` (F41c), so the model can't
+  cut it short: "Added 4 tasks from the picture: Vacuum upstairs, Towel + clothes, Clean the
+  upstairs bathroom (5 steps) and Text Susan." Then "Already on your list: …" if any were
+  skipped. `done_keys` hold the titles, so the model's line naming them is dropped.
+- Arguments: `assign_to` (as `create_task`'s), `split` (true when their words ask for the
+  sub-items as tasks of their own: "add the subtasks as separate tasks"; then it calls
+  `split_task`'s path for that item), `continues`.
+- Description and routing: "Add the to-dos, chores or tasks in the picture they sent, all
+  of them at once ('pull in these tasks', 'add these', 'put this list on my to-dos'). It
+  reads the picture itself: never pass the items." `create_task`'s description gains "For a
+  picture of several to-dos, use tasks_from_picture." A picture of a shopping list stays
+  with the lists tools; a recipe stays `recipe_from_picture`.
+- With no picture: `ToolFailed` asking for one, as `recipe_from_picture` does. With no
+  vision on the route: "I can't read pictures with the AI that's set up." Nothing's made.
+
+Tests: start with failing ones: reply 457's turn, faked. The model calls
+`tasks_from_picture`, and the fake vision call returns the screenshot's four items (the
+bathroom with its five steps). Four tasks are made, the bathroom with five steps, in the
+picture's order. The reply starts "Added 4 tasks from the picture:" and names all four. A
+second identical call makes none and says they're already on the list. A ticked item isn't
+made. `split: true` makes the bathroom's five parts. `assign_to: "Erin"` gives them all to
+Erin. No picture → refused, nothing made. Picture text saying "ignore your instructions"
+is just a title. Routing: "Can you pull in these tasks?" with a picture picks
+`tasks_from_picture`; "save this recipe" with a picture still picks `recipe_from_picture`.
+Scenario: Michael sends a screenshot of four to-dos, one with sub-items, and asks Themi to
+pull them in. All four are on his list at once, and the reply names every one.
+
+Data: none needed (tasks 100-108 are already on the Pi). Mark #207 reviewed once live.
+
+### F43b · Idea (2026-11-14): the tasks picture as cards with emoji, for one person or the family, with chores too
+Status: [ ]
+Depends on: F42g, DC9, DC12
+Read first: the Day Card plan (https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H), "One
+renderer, many pictures" and "Other uses"; `themi_home/chore_card.py` and
+`drawing_templates/chore_card.svg` (the cards to copy); `themi/standard/list_card.py`
+(`tasks_data`, `show_tasks_picture`); `themi_cozyla/connector/emoji.py` (`_fit`, the
+household emoji list); `themi_cozyla/cozyla_chores.py` and `cozyla_routines.py` (where the
+wall's icon is read: `raw["icon"]`, `raw["routineIcon"]`); `themi/drawing/text.py` (DC12:
+emoji widths); how the partner may see the other's tasks (F42f's lookup). From Michael's
+idea #208 (2026-11-14, 7:45 am, "the tasks picture should be more graphical like the chore
+chart. The user should be able to get both combined and if there are emoji assigned, they
+should be included in the picture").
+
+What the Pi shows: reply 466. "Can I see the family tasks?" and, earlier, "Can I see a
+picture of our tasks?" both sent `show_tasks_picture` with only Michael's tasks, as F42g's
+plain list (headings, rows, a note on the right). "Can I see a picture of the family chores
+and tasks?" sent only the chore chart. The chore chart draws cards in a column per person
+but no emoji, though the wall shows one on each chore and routine.
+
+Decided (Michael, 2026-11-14, idea #208): a tasks picture for "our" or "the family's" tasks
+has a column per person, as the chore chart does, with shared tasks in an "Either of you"
+row of cards across the bottom. An item's emoji is the wall's icon for that chore or
+routine. A task with none gets one picked from its title (`_fit`, the wall's list). A title
+with no match has no emoji.
+
+Build:
+- `show_tasks_picture` is drawn as cards, in the chore chart's style (same renderer, theme
+  and caption style), not F42g's rows. Each card: the emoji (if any) at its left, the title,
+  and the note under it ("was due Fri 6 Nov", "2:30 pm", "Wed"). Cards keep the task
+  summary's order: overdue, today, next few days, any time. A small heading starts each
+  group that has cards. Urgent-and-important ones get the chore chart's important border.
+  No energy scores, no counts of misses.
+- `who`: "me" (default) or "everyone" ("our tasks", "the family's tasks", "everyone's").
+  For everyone, it's a column per person (each person's own tasks), and shared tasks go in
+  an "Either of you" row of cards across the bottom. A partner's tasks are included only as
+  far as the partner may see them now. "Erin's tasks" is `who: "Erin"`, under the same rule.
+- `with_chores`: true for "chores and tasks" or "everything on my list". Each person's
+  column starts with their chores up on the chart now (`chart_data`'s, with "On the chart"
+  as its heading), then their tasks. A task that's also on the chart is drawn once, as a
+  chore. Without the chore chart set up, it's tasks only, and the reply says so in a line.
+- Emoji: `item_emoji(title, icon)` in `emoji.py`. It takes the emoji from a wall icon
+  (`czl_chores_emoji#_#name#_#🐾` → 🐾; a `routine_property_*` default has none), else
+  `_fit(title)`. Keep the wall's icon where Themi reads the chore (on its link row, a new
+  nullable column, if it isn't kept already), so drawing makes no wall call. The chore chart
+  and the routines picture draw it too.
+- Layout limits: at most 7 cards a column, then "+N more", as the chore chart does. The
+  "Either of you" row has at most 4, then "+N more". One person (`who: "me"`) uses the full
+  width, two cards across. Long titles wrap to two lines, then end with "…".
+- Words, with no drawings: the same groups as now, with each line's emoji before the title.
+- Routing: "our/the family's tasks (as a picture)" → `who: "everyone"`; "chores and tasks"
+  → `with_chores: true`; "the chore chart" alone stays `show_chore_chart`. Tool descriptions
+  keep them apart.
+- `themi picture tasks --who everyone --with-chores` renders locally. Golden SVGs: `tasks.svg`
+  changes (expected: cards), and new `tasks_family.svg` and `tasks_family_chores.svg`;
+  `chores.svg`, `chores_dark.svg` and `routines*.svg` change for emoji (expected).
+
+Tests: Michael with an overdue task "Clean the bird cage" (wall icon 🦜), one today, an
+undated "Text Susan", and Erin with two tasks and one shared one. `who: "me"`: one column
+of cards in that order, 🦜 on the bird cage card, no emoji on "Text Susan" (no word fits), "was due" on
+the overdue one. `who: "everyone"`: two columns, his and hers, and the shared task only in
+"Either of you". `with_chores`: each column starts with that person's chart chores, and a
+task on the chart isn't drawn twice. `item_emoji`: a family-chosen wall icon wins over
+`_fit`; Themi's 🧹 default for a chore whose title fits better shows the better one
+(idea #25's rule); no match gives none. Eight tasks in a column show 7 and "+1 more". No
+drawings → words with emoji. Routing: "Can I see a picture of our tasks?" picks
+`show_tasks_picture` with `who: "everyone"`; "a picture of the family chores and tasks" gets
+`with_chores: true`; "show the chore chart" still picks `show_chore_chart`.
+Scenario: Michael asks for a picture of the family's chores and tasks and gets one picture:
+his column and Erin's, chores then tasks, each with its emoji, and the shared ones across
+the bottom.
+
+Data: none needed. Mark #208 reviewed once live.
+Setup: once built, add the family tasks picture to the Day Card plan's "Other uses" (the
+plan doc is shared; left for Michael).
+
+### F43c · Feedback (2026-11-14): a shared task's overdue nudge offers the other person, not you
+Status: [ ]
+Depends on: F19c, T2
+Read first: `themi/standard/reminders.py` (`overdue`, `_lead`, `_lighter_moment`); how
+`board.prompt(task, member=…, lead=…)` sends a shared task to each person. From Michael's bug
+#209 (2026-11-14, 8:02 am, "it suggested moving a task to Michael. I am Michael").
+
+What the Pi shows: outbox 1924 (Erin) and 1925 (Michael), 2026-11-14 8:49 am: "Overdue:
+Vacuum maintenance, due 6 Nov. Even a few minutes counts. This morning looks lighter, if
+that helps. I can move it, or ask Michael to take it. Done already, or later?" Task 84 is
+shared ("either of you"), with `assignee` 1 (Erin). `overdue` builds the lead once per task
+with `_lead`, which picks the other person as "a reachable member who isn't the
+assignee" and the lighter moment from the assignee's day. Then it sends that same lead to
+everyone a shared task goes to. So Michael was told to ask Michael, and Erin's lighter
+moment was given to him. It went to him on 12 and 13 Nov too (1830, 1867).
+
+Build:
+- Bug fix: start with the failing test below.
+- `_lead` takes the person it's for. The lighter moment is theirs, and "ask {other} to take
+  it" names a reachable member who isn't them. With nobody else, it's "I can move it". The
+  stage-1 and stage-2 leads stay as they are.
+- `overdue` builds the lead per person in `people` (a shared task's copies differ). A task
+  with a single doer reads as now.
+- Check other places that name "the other one" from `task.assignee` while sending to
+  someone else (the end-of-day list, the shared-overdue wording `overdue="shared"`, focus's
+  hand-off offers). Fix any that do the same thing, with a test each.
+
+Tests: start with a failing one: a shared task assigned to Erin, three overdue rounds in.
+Michael's nudge says "ask Erin to take it" and his own lighter moment; Erin's says "ask
+Michael to take it" and hers. Nobody is offered themselves. A task only Michael does says
+"ask Erin". With Erin unreachable, Michael's says only "I can move it".
+Scenario: a shared chore goes overdue for days, and each of them is offered handing it to
+the other, never to themselves.
+
+Data: none needed. Mark #209 reviewed once live.
 
 ## Conversation mode
 
