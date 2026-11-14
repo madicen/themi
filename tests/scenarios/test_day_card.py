@@ -56,7 +56,9 @@ async def test_the_card_draws_and_says_so_in_words(
     await overnight(scenario, linked)
     erin = scenario.member("Erin")
     svg = card(scenario).svg(erin, THU)
-    assert "Thursday 22 October" in svg and "Dentist" in svg and "Call the vet" in svg
+    assert (
+        ">Thursday<" in svg and ">22 October<" in svg and "Dentist" in svg and "Call the vet" in svg
+    )
     png = await card(scenario).png(erin, THU)
     assert png is not None and png[:4] == b"\x89PNG"
 

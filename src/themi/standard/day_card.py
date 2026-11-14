@@ -1,19 +1,22 @@
-"""The day card: a picture of someone's day (DC3; the plan's "What the family sees").
+"""The day card: a picture of someone's day (DC3, laid out for a glance in DC13; the plan's
+"What the family sees").
 
-Today's events as blocks at their times, the weather down the same hours, and a quiet
-sign of what's waiting behind the morning message's buttons. Drawn from Themi's own data
-by `themi.drawing`; sent with the morning message (DC5) and shown on the website (DC7).
+Today's events at their times, the weather, and a quiet sign of what's waiting behind the
+morning message's buttons. Drawn from Themi's own data by `themi.drawing`; sent with the
+morning message (DC5) and shown on the website (DC7).
 
+- A weather panel: the day's icon, the high, the low and the noteworthy line (WX2); amber
+  for an NWS alert (WX3). Never advice, never energy.
 - Events are the morning message's (their own and their partner's shared ones), plus the
-  blocks Themi holds for tasks ("task-block:"), drawn quieter. A task's own copy
-  ("task:") isn't drawn: it's a task, not a plan for the day.
-- An event with a place gets a thin lead-in before it, "Leave around 1:20", from the rough
-  drive time (places already found, no lookup, no traffic: a picture never waits on the
-  network).
-- The weather column is the hourly forecast: temperature as a line, the chance of rain or
-  snow as bars. A noteworthy line (WX2) goes in a band at the top; an NWS alert (WX3) as a
-  warning. Never advice, never energy.
-- What's waiting is dots by default (`picture_counts`), never red, never "overdue".
+  blocks Themi holds for tasks ("task-block:"), drawn dashed. A task's own copy ("task:")
+  isn't drawn: it's a task, not a plan for the day. Each is a bar in a thin lane, with its
+  label to the right on a leader line, so titles get the card's width.
+- An event with a place gets a lead line before its bar and "leave 1:20" in its label,
+  from the rough drive time (places already found, no lookup, no traffic: a picture never
+  waits on the network).
+- Rain or snow likely (40%+) is a strip beside the hours.
+- What's waiting is three-dot meters by default (`picture_counts`), never red, never
+  "overdue", never words like "High".
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from zoneinfo import ZoneInfo
 from themi import clock
 from themi.accounts import Member
 from themi.core import keys
-from themi.drawing.layout import Span, Timeline, all_day_rows, place, window
+from themi.drawing.layout import BLOCK_MIN, Span, Timeline, all_day_rows, columns, window
 from themi.drawing.svg import write_svg
 from themi.drawing.text import fit, text_width
 from themi.standard.day_summary import DaySummaryPreferences
@@ -100,6 +103,12 @@ THEMES: dict[str, dict[str, str]] = {
         "temp": "#D9653B",
         "rain": "#3FA796",
         "chip_edge": "#C9CDD3",
+        "panel": "#FFFFFF",
+        "track": "#ECEAE4",
+        "wet": "#4A88C7",
+        "meter_tasks": "#3F8F6B",
+        "meter_email": "#C07A4E",
+        "meter_other": "#8569BF",
     },
     "dark": {
         "bg": "#16181C",
@@ -119,6 +128,12 @@ THEMES: dict[str, dict[str, str]] = {
         "temp": "#F08A5D",
         "rain": "#4FC1AE",
         "chip_edge": "#3A4049",
+        "panel": "#1F2227",
+        "track": "#2A2E35",
+        "wet": "#5AA0E6",
+        "meter_tasks": "#5DB48C",
+        "meter_email": "#E09A6E",
+        "meter_other": "#A68BE0",
     },
 }
 
@@ -343,236 +358,251 @@ def day_icon(hours: Sequence[CardHour], start: datetime, end: datetime) -> str:
     return ICONS.get(code, "overcast")
 
 
-def chip_words(label: str, count: int, counts: str, one: str, many: str) -> str:
-    if counts == "numbers":
-        return f"{count} {one if count == 1 else many}"
-    dots = 1 if count <= 1 else 2 if count <= 3 else 3
-    return f"{label} {'•' * dots}"
+def meter_dots(count: int) -> int:
+    """How many of a meter's three dots are filled: none, one, two (up to 3), three."""
+    return 0 if count <= 0 else 1 if count <= 1 else 2 if count <= 3 else 3
+
+
+def meter_words(label: str, count: int, counts: str) -> str:
+    """The words under a meter: the tray's name, and its count only for `numbers`."""
+    return f"{label} {count}" if counts == "numbers" else label
+
+
+LANE_W, LANE_GAP = 12.0, 6.0
+LABEL_TWO, LABEL_ONE = 34.0, 18.0  # a label's height, in two lines or one
+LABEL_GAP_TWO, LABEL_GAP_ONE = 4.0, 2.0
+PLATE_H = 64.0
+WET = 40  # % chance of rain or snow drawn beside the hours
 
 
 def view(data: DayCardData, counts: str = "dots", theme: str = "light") -> dict[str, Any]:
-    """Every position and word on the card, for the template."""
+    """Every position and word on the card, for the template (DC13's layout)."""
     colors = THEMES[theme]
     tz = data.start.tzinfo
     timed = [e for e in data.events if not e.all_day]
+    travel = [e for e in timed if e.kind == "travel"]
+    timed = [e for e in timed if e.kind != "travel"]
     all_day = [e for e in data.events if e.all_day]
     spans = [Span(e.key, e.start, e.end) for e in timed]
-    w_start, w_end = window(data.start, spans)
+    w_start, w_end = window(data.start, spans + [Span(t.key, t.start, t.end) for t in travel])
 
-    y = 52.0
     header = {
-        "date": f"{data.day:%A} {data.day.day} {data.day:%B}",
-        "date_y": y,
-        "name": f"{data.name}\u2019s day",
-        "name_y": y + 24,
+        "name": f"{data.name.upper()}\u2019S DAY",
+        "weekday": f"{data.day:%A}",
+        "date": f"{data.day.day} {data.day:%B}",
     }
+    y = 92.0
     weather = data.weather
-    top_right: dict[str, Any] | None = None
+    panel: dict[str, Any] | None = None
     if weather is not None and weather.high is not None and weather.low is not None:
-        top_right = {
+        line_words = weather.line or ""
+        panel = {
+            "y": y,
+            "height": 100.0 if line_words else 66.0,
+            "fill": colors["alert"] if weather.alert else colors["note"],
+            "edge": colors["alert_edge"] if weather.alert else "",
             "icon": day_icon(weather.hours, w_start, w_end),
             "high": degrees(weather.high, weather.units),
             "low": degrees(weather.low, weather.units),
+            "line": fit(line_words, 14, WIDTH - 2 * PAD - 32, bold=weather.alert),
+            "alert": weather.alert,
         }
-    y += 46
-    band = None
-    if weather is not None and weather.line:
-        band = {
-            "y": y,
-            "text": fit(weather.line, 14, WIDTH - 2 * PAD - 28),
-            "fill": colors["alert"] if weather.alert else colors["note"],
-            "edge": colors["alert_edge"] if weather.alert else colors["note_edge"],
-        }
-        y += 34 + 10
+        y += panel["height"] + 16
+
+    cols = columns(spans)
+    lane_count = max((n for _, n in cols.values()), default=1)
+    calendar = {"head_y": y + 18, "summary": _summary(timed, cols)}
+    y += 32
 
     strip = []
     shown, more = all_day_rows([e.key for e in all_day])
     for key in shown:
         e = next(a for a in all_day if a.key == key)
-        last = key == shown[-1] and more
-        suffix = f"  +{more} more" if last else ""
-        width = WIDTH - 2 * PAD - 56 - 16 - text_width(suffix, 12)
+        suffix = f"  +{more} more" if key == shown[-1] and more else ""
+        room = WIDTH - 2 * PAD - 24 - text_width("All day  ", 12.5, True) - text_width(suffix, 12)
         strip.append(
             {
                 "y": y,
-                "title": fit(e.title, 13, width, bold=True),
+                "title": fit(e.title, 12.5, room),
                 "more": suffix.strip(),
                 "fill": colors["partner" if e.kind == "partner" else "event"],
-                "edge": colors["partner_edge" if e.kind == "partner" else "event_edge"],
             }
         )
-        y += 26
-    if strip:
-        y += 6
+        y += 30
 
-    footer_h = 0 if counts == "hide" or not _any_waiting(data.waiting) else 44
-    top = y + 22
-    bottom = HEIGHT - PAD - footer_h
+    waiting = counts != "hide" and _any_waiting(data.waiting)
+    top = y + 14
+    bottom = HEIGHT - PAD - (PLATE_H + 18 if waiting else 0) - 8
     line = Timeline(w_start, w_end, top=top, height=bottom - top)
-    events_x, weather_x = PAD + 52, WIDTH - PAD - 58
-    events_w = (weather_x - 10 if weather else WIDTH - PAD) - events_x
+    lanes_x0 = PAD + 58
+    lanes = [lanes_x0 + i * (LANE_W + LANE_GAP) for i in range(lane_count)]
+    lanes_x1 = lanes[-1] + LANE_W
+    elbow = lanes_x1 + 12
+    labels_x = elbow + 16
 
-    ticks = [{"y": t.y, "label": t.label} for t in line.ticks()]
-    by_key = {e.key: e for e in timed}
-    blocks = [_block(p, by_key[p.key], colors) for p in place(spans, line, events_x, events_w)]
+    bars, wanted = [], []
+    for e in sorted(timed, key=lambda e: (e.start, e.key)):
+        x = lanes[cols[e.key][0]]
+        y0 = max(line.y(e.start), top)
+        y1 = min(line.y(e.end), bottom)
+        height = max(y1 - y0, BLOCK_MIN)
+        color = colors[
+            {"event": "event_edge", "partner": "partner_edge", "held": "held_edge"}[e.kind]
+        ]
+        detail = span_words(e.start, e.end) + (f" · {e.place}" if e.place else "")
+        lead = None
+        leave = next((t for t in travel if t.end == e.start), None)
+        if leave is not None:
+            lead_y = max(line.y(leave.start), top)
+            lead = {"y": lead_y, "height": max(y0 - lead_y - 2, 0)}
+            detail += f" · leave {clock_words(leave.start)}"
+        if e.kind == "held":
+            detail = span_words(e.start, e.end) + " · time for it"
+        bars.append(
+            {"x": x, "y": y0, "height": height, "color": color, "held": e.kind == "held",
+             "lead": lead}
+        )  # fmt: skip
+        wanted.append((y0 + height / 2, x + LANE_W, color, e, detail))
 
-    column = None
-    if weather is not None and weather.hours:
-        column = _weather_column(weather, line, weather_x, WIDTH - PAD, colors)
+    two = len(wanted) * (LABEL_TWO + LABEL_GAP_TWO) <= bottom - top + 12
+    tops = spread([w[0] for w in wanted], two, top - 6, bottom + 6)
+    text_w = WIDTH - PAD - labels_x
+    labels = []
+    for (anchor, bar_right, color, e, detail), label_y in zip(wanted, tops, strict=True):
+        quiet = e.kind == "held"
+        mid = label_y + 9
+        if two:
+            title = fit(e.title, 14, text_w, bold=not quiet)
+            beside = ""
+            under = fit(detail, 11.5, text_w)
+        else:
+            title = fit(e.title, 14, text_w * 0.62, bold=not quiet)
+            beside = fit(span_words(e.start, e.end), 11.5,
+                         text_w - text_width(title, 14, not quiet) - 8)  # fmt: skip
+            under = ""
+        points = [(bar_right, anchor), (elbow, anchor), (elbow, mid), (labels_x - 6, mid)]
+        labels.append(
+            {
+                "y": label_y,
+                "title": title,
+                "beside": beside,
+                "beside_x": labels_x + text_width(title, 14, not quiet) + 8,
+                "detail": under,
+                "quiet": quiet,
+                "color": color,
+                "leader": " ".join(f"{px:.1f},{py:.1f}" for px, py in points),
+            }
+        )
 
-    chips = []
-    if footer_h:
-        x = PAD
-        for label, count, one, many in (
-            ("Tasks", data.waiting.tasks, "task", "tasks"),
-            ("Email", data.waiting.email, "email", "emails"),
-            ("Everything else", data.waiting.other, "other thing", "other things"),
+    wet: list[dict[str, float]] = []
+    wet_icon = None
+    if weather is not None:
+        hours = [h for h in weather.hours if w_start <= h.at < w_end and h.chance >= WET]
+        runs: list[list[CardHour]] = []
+        for h in hours:  # hours in a row are one strip, as likely as its likeliest hour
+            if runs and runs[-1][-1].at + timedelta(hours=1) == h.at:
+                runs[-1].append(h)
+            else:
+                runs.append([h])
+        for run in runs:
+            y0, y1 = line.y(run[0].at), line.y(run[-1].at + timedelta(hours=1))
+            chance = max(h.chance for h in run)
+            wet.append({"y": y0, "height": y1 - y0, "opacity": 0.35 + 0.65 * chance / 100})
+        if hours:
+            snowy = hours[0].code in (71, 73, 75, 77, 85, 86)
+            wet_icon = {"y": line.y(hours[0].at), "icon": "snow" if snowy else "rain"}
+
+    plate = None
+    if waiting:
+        plate_y = HEIGHT - PAD - PLATE_H
+        col_w = (WIDTH - 2 * PAD - 32) / 3
+        meters = []
+        for i, (label, count, key) in enumerate(
+            (
+                ("Tasks", data.waiting.tasks, "tasks"),
+                ("Email", data.waiting.email, "email"),
+                ("Everything else", data.waiting.other, "other"),
+            )
         ):
-            if count <= 0:
-                continue
-            words = chip_words(label, count, counts, one, many)
-            width = text_width(words, 13) + 28
-            chips.append({"x": x, "width": width, "text": words})
-            x += width + 10
+            x = PAD + 16 + i * col_w
+            lit = meter_dots(count)
+            meters.append(
+                {
+                    "x": x,
+                    "words": meter_words(label, count, counts),
+                    "dots": [
+                        {"x": x + 6.5 + k * 19, "fill": colors[f"meter_{key}"] if k < lit
+                         else colors["track"]}
+                        for k in range(3)
+                    ],
+                }
+            )  # fmt: skip
+        plate = {"y": plate_y, "height": PLATE_H, "meters": meters}
+
     return {
         "width": WIDTH,
         "height": HEIGHT,
         "pad": PAD,
         "c": colors,
         "header": header,
-        "top_right": top_right,
-        "band": band,
+        "panel": panel,
+        "calendar": calendar,
         "strip": strip,
-        "strip_x": PAD + 52,
-        "strip_w": WIDTH - 2 * PAD - 52,
-        "timeline": {"top": top, "bottom": bottom, "x0": events_x, "x1": WIDTH - PAD},
-        "ticks": ticks,
-        "blocks": blocks,
+        "timeline": {"top": top, "bottom": bottom},
+        "ticks": [{"y": t.y, "label": t.label} for t in line.ticks()],
+        "lanes": lanes,
+        "lane_w": LANE_W,
+        "lane_top": top - 6,
+        "lane_height": bottom - top + 12,
+        "bars": bars,
+        "labels": labels,
+        "labels_x": labels_x,
+        "two_lines": two,
+        "wet": wet,
+        "wet_icon": wet_icon,
         "empty": not timed,
         "empty_y": (top + bottom) / 2,
-        "events_mid": events_x + events_w / 2,
-        "column": column,
-        "chips": chips,
-        "chips_y": HEIGHT - PAD - 30,
+        "plate": plate,
         "tz": str(tz),
     }
 
 
+def spread(anchors: Sequence[float], two: bool, top: float, bottom: float) -> list[float]:
+    """Each label's top: as near its event as it can be, never overlapping the one before,
+    and all of them between `top` and `bottom`. `anchors` in order, top to bottom."""
+    height, gap = (LABEL_TWO, LABEL_GAP_TWO) if two else (LABEL_ONE, LABEL_GAP_ONE)
+    lift = height / 2 if two else 9
+    tops: list[float] = []
+    for anchor in anchors:
+        least = tops[-1] + height + gap if tops else top
+        tops.append(max(anchor - lift, least))
+    if len(anchors) * (height + gap) - gap > bottom - top:  # more than fit: evenly
+        step = (bottom - top - height) / max(len(anchors) - 1, 1)
+        return [top + i * step for i in range(len(anchors))]
+    limit = bottom - height
+    for i in range(len(tops) - 1, -1, -1):
+        tops[i] = min(tops[i], limit)
+        limit = tops[i] - height - gap
+    return tops
+
+
+def _summary(timed: Sequence[CardEvent], cols: dict[str, tuple[int, int]]) -> str:
+    """ "6 events · 1 held for a task · 1 overlap": counted, never graded."""
+    if not timed:
+        return ""
+    held = sum(1 for e in timed if e.kind == "held")
+    events = len(timed) - held
+    overlaps = sum(1 for e in timed if cols[e.key][0] > 0)
+    words = [f"{events} event{'' if events == 1 else 's'}"]
+    if held:
+        words.append(f"{held} held for {'a task' if held == 1 else 'tasks'}")
+    if overlaps:
+        words.append(f"{overlaps} overlap{'' if overlaps == 1 else 's'}")
+    return " · ".join(words)
+
+
 def _any_waiting(waiting: Waiting) -> bool:
     return waiting.tasks > 0 or waiting.email > 0 or waiting.other > 0
-
-
-def _block(p: Any, e: CardEvent, colors: dict[str, str]) -> dict[str, Any]:
-    fill = {
-        "event": colors["event"],
-        "partner": colors["partner"],
-        "held": "none",
-        "travel": colors["travel"],
-    }[e.kind]
-    edge = {
-        "event": colors["event_edge"],
-        "partner": colors["partner_edge"],
-        "held": colors["held_edge"],
-        "travel": colors["event_edge"],
-    }[e.kind]
-    quiet = e.kind in ("held", "travel")
-    block: dict[str, Any] = {
-        "x": p.x,
-        "y": p.y,
-        "width": p.width,
-        "height": p.height,
-        "fill": fill,
-        "edge": edge,
-        "dashed": quiet,
-        "lines": [],
-    }
-    inner = p.width - 16
-    h = p.height
-    if p.beside:  # a sliver: a marker, with the title beside it
-        block["width"] = min(p.width, 8.0)
-        size = 11.0
-        block["lines"].append(
-            {
-                "x": p.x + 14,
-                "y": p.y + h / 2 + size / 3,
-                "size": size,
-                "bold": False,
-                "muted": quiet,
-                "text": fit(e.title, size, p.width - 14),
-            }
-        )
-        return block
-    if h >= 38:
-        detail = span_words(e.start, e.end) + (f" · {e.place}" if e.place else "")
-        block["lines"] = [
-            {"x": p.x + 8, "y": p.y + 18, "size": 13.5, "bold": not quiet, "muted": quiet,
-             "text": fit(e.title, 13.5, inner, bold=not quiet)},
-            {"x": p.x + 8, "y": p.y + 34, "size": 11.5, "bold": False, "muted": True,
-             "text": fit(detail, 11.5, inner)},
-        ]  # fmt: skip
-    else:
-        size = 13.0 if h >= 20 else 11.0
-        title = fit(e.title, size, inner, bold=not quiet)
-        y = p.y + h / 2 + size / 3
-        block["lines"] = [
-            {"x": p.x + 8, "y": y, "size": size, "bold": not quiet, "muted": quiet,
-             "text": title},
-        ]  # fmt: skip
-        after = p.x + 8 + text_width(title, size, not quiet) + 8
-        room = p.x + p.width - 8 - after
-        if e.kind != "travel" and title == " ".join(e.title.split()) and room > 40:
-            detail = span_words(e.start, e.end) + (f" \u00b7 {e.place}" if e.place else "")
-            words = fit(detail, 11.5, room)
-            if words:
-                block["lines"].append(
-                    {"x": after, "y": y, "size": 11.5, "bold": False, "muted": True,
-                     "text": words}
-                )  # fmt: skip
-    return block
-
-
-def _weather_column(
-    weather: CardWeather, line: Timeline, x0: float, x1: float, colors: dict[str, str]
-) -> dict[str, Any]:
-    hours = [h for h in weather.hours if line.start <= h.at < line.end]
-    bars = []
-    for h in hours:
-        if h.chance < 20:
-            continue
-        y0, y1 = line.y(h.at), line.y(h.at + timedelta(hours=1))
-        bars.append(
-            {"x": x0, "y": y0 + 1, "width": (x1 - x0) * h.chance / 100, "height": y1 - y0 - 2}
-        )
-    points: list[tuple[float, float]] = []
-    labels = []
-    if hours:
-        temps = [h.temp for h in hours]
-        lo, hi = min(temps), max(temps)
-        spread = max(hi - lo, 8.0)  # a flat day stays near the middle
-
-        def x(t: float) -> float:
-            return x0 + 14 + (t - (lo + hi - spread) / 2) / spread * (x1 - x0 - 28)
-
-        points = [(x(h.temp), line.y(h.at + timedelta(minutes=30))) for h in hours]
-        warm = max(hours, key=lambda h: (h.temp, -h.at.timestamp()))
-        cold = min(hours, key=lambda h: (h.temp, h.at.timestamp()))
-        for h in (cold, warm) if warm is not cold else (warm,):
-            labels.append(
-                {
-                    "x": max(x(h.temp) - 6, x0 + 24),  # left of the line, anchored at its end
-                    "y": line.y(h.at + timedelta(minutes=30)) - 7,
-                    "text": degrees(h.temp, weather.units),
-                }
-            )
-    return {
-        "x0": x0,
-        "x1": x1,
-        "head_y": line.top - 8,
-        "head": f"°{weather.units} · rain",
-        "bars": bars,
-        "points": " ".join(f"{px:.1f},{py:.1f}" for px, py in points),
-        "labels": labels,
-    }
 
 
 def card_svg(data: DayCardData, counts: str = "dots", theme: str = "light") -> str:
