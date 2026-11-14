@@ -14,10 +14,11 @@
 {% if row.done %}
 <path d="M{{ (pad + 4)|n }} {{ (row.y + 12)|n }} l3.5 3.5 l6 -7" fill="none" stroke="{{ c.bg }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 {% endif %}
-<text x="{{ (pad + 28)|n }}" y="{{ (row.y + 18)|n }}" font-size="15" fill="{{ c.muted if row.done else c.ink }}">{{ row.text }}</text>
-{% else %}
-<text x="{{ pad }}" y="{{ (row.y + 18)|n }}" font-size="15" fill="{{ c.ink }}">{{ row.text }}</text>
 {% endif %}
+{% if row.emoji %}
+<text x="{{ row.emoji_x|n }}" y="{{ (row.y + 18)|n }}" font-size="16">{{ row.emoji }}</text>
+{% endif %}
+<text x="{{ row.text_x|n }}" y="{{ (row.y + 18)|n }}" font-size="15" fill="{{ c.muted if row.done else c.ink }}">{{ row.text }}</text>
 {% if row.note %}
 <text x="{{ (width - pad)|n }}" y="{{ (row.y + 18)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ row.note }}</text>
 {% endif %}

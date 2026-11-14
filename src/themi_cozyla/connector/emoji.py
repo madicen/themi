@@ -2,53 +2,16 @@
 
 The wall shows chores and routines with a named emoji: `czl_chores_emoji#_#paw_prints#_#🐾`
 for a chore, `czl_routine_emoji#_#pill#_#💊` for a routine (Unicode's short name, snake
-case). Themi picks one from the words of the title, from a household list below (the
-first that fits, so more specific ones come first), with no model call. It only ever
-replaces Themi's own plain defaults or no icon at all: an icon the family chose stays.
+case). Themi picks one from the words of the title, from the household list in
+`themi.drawing.emoji` (the first that fits, so more specific ones come first), with no
+model call. It only ever replaces Themi's own plain defaults or no icon at all: an icon
+the family chose stays.
 """
 
 from __future__ import annotations
 
-import re
-
-CHORE_ICON = "czl_chores_emoji#_#broom#_#🧹"  # Themi's default for a chore
-ROUTINE_ICON = "routine_property_bed"  # and for a routine
-
-# (words in the title, Unicode short name, emoji): the first that fits wins.
-EMOJI: tuple[tuple[frozenset[str], str, str], ...] = tuple(
-    (frozenset(words.split()), name, emoji)
-    for words, name, emoji in (
-        ("bird birds parrot cage", "parrot", "🦜"),
-        ("cat cats litter kitty", "cat", "🐈"),
-        ("dog dogs puppy", "dog", "🐕"),
-        ("feeder feeders", "bowl_with_spoon", "🥣"),
-        ("pill pills meds medicine medication vitamin vitamins dose", "pill", "💊"),
-        ("bin bins trash garbage recycling rubbish compost", "wastebasket", "🗑️"),
-        ("dishes dish dishwasher", "fork_and_knife_with_plate", "🍽️"),
-        ("laundry washer dryer clothes fold folding", "basket", "🧺"),
-        ("sheets bed beds pillow pillows", "bed", "🛏️"),
-        ("bathroom toilet shower bath tub", "toilet", "🚽"),
-        ("plant plants garden weeds lawn mow", "potted_plant", "🪴"),
-        ("water", "droplet", "💧"),
-        ("run running jog jogging", "person_running", "🏃"),
-        ("exercise workout gym yoga stretch stretching", "person_lifting_weights", "🏋️"),
-        ("tea coffee", "hot_beverage", "☕"),
-        ("cook cooking dinner lunch breakfast meal bake baking", "cooking", "🍳"),
-        ("grocery groceries shopping", "shopping_cart", "🛒"),
-        ("car drive gas", "automobile", "🚗"),
-        ("call phone", "telephone_receiver", "📞"),
-        ("mail email letter package", "envelope", "✉️"),
-        ("bill bills pay rent bank money tax taxes", "dollar_banknote", "💵"),
-        ("teeth floss", "tooth", "🦷"),
-        ("read reading book books library", "books", "📚"),
-        ("clean cleaning vacuum sweep mop tidy dust", "broom", "🧹"),
-    )
-)
-
-
-def _fit(title: str) -> tuple[str, str] | None:
-    words = set(re.findall(r"[a-z]+", title.lower()))
-    return next(((name, emoji) for keys, name, emoji in EMOJI if keys & words), None)
+from themi.drawing.emoji import CHORE_ICON, ROUTINE_ICON
+from themi.drawing.emoji import fit as _fit
 
 
 def chore_icon(title: str) -> str:

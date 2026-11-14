@@ -278,7 +278,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
 | F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
-| F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [ ] |
+| F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [x] 2026-11-14 |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -14038,7 +14038,7 @@ group count 15 → 16 (the new group). Golden: `tools.json` gains the tool, and
 `tests/scenarios/test_tasks_from_picture.py`.
 
 ### F43b · Idea (2026-11-14): the tasks picture as cards with emoji, for one person or the family, with chores too
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: F42g, DC9, DC12
 Read first: the Day Card plan (https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H), "One
 renderer, many pictures" and "Other uses"; `themi_home/chore_card.py` and
@@ -14112,6 +14112,33 @@ the bottom.
 Data: none needed. Mark #208 reviewed once live.
 Setup: once built, add the family tasks picture to the Day Card plan's "Other uses" (the
 plan doc is shared; left for Michael).
+
+Notes: the cards are drawn by `themi/standard/task_card.py` and `drawing/templates/task_card.svg`.
+`show_tasks_picture` takes `who` ("me", "everyone"/"our"/"family", or a name; an unknown
+name is refused, naming the family) and `with_chores`. The caption is "Your tasks." for
+your own, else the title ("Everyone's tasks."). One person gets one lane, two cards across,
+at most 14 cards. Everyone gets a lane each, at most 7 cards per lane, with tasks either of
+them can do (`shared` or `either`) in an "Either of you" row: two across, at most 4.
+"With chores" uses the new `ChartQueue.chart_for(member, today)`; `chart_data` uses it now
+too. Without a chart it's tasks only, and the tool result says so.
+Emoji: the household list moved to `themi/drawing/emoji.py`, so standard code doesn't
+import the Cozyla pack; `connector/emoji.py` imports it from there. `item_emoji(title,
+icon)`: a family-chosen wall icon wins, else the title's fit, else Themi's 🧹 default
+(chores only), else none. Wall icons: `cozyla_chores.icon` (migration 0003) is kept on each
+sync (`_keep_icons`). `TaskBoard.icon_sources`/`icon_of` reach it without naming the wall.
+The chore chart and the routines picture draw emoji too. Deviation: routine items get only
+the title's fit, because the wall keeps an icon per routine, not per item. A macro in the
+SVG template printed escaped markup (`finalize` makes it a plain string), so the cards are
+one flat list.
+CLI: `themi picture tasks --who everyone --with-chores`. Removed: `list_card.tasks_data`.
+Changed tests: `test_list_pictures.py` reads `task_cards`'s lanes and passes the tool's new
+arguments (`MINE`), and `test_list_card.py` no longer writes `tasks.svg`, which is now the
+card picture's. Golden files: `tasks.svg` changed (expected: cards). New: `tasks_family`,
+`tasks_family_chores`, `tasks_family_dark`, `chores_emoji` and `routines_emoji`.
+`chores.svg` and `routines*.svg` are unchanged (their data has no emoji). `tools.json`
+changed for `show_tasks_picture`. New tests: `tests/unit/test_task_card.py`,
+`tests/scenarios/test_family_tasks_picture.py`, and one at the end of
+`tests/integration/test_cozyla_chores.py`.
 
 ### F43c · Feedback (2026-11-14): a shared task's overdue nudge offers the other person, not you
 Status: [x] 2026-11-14

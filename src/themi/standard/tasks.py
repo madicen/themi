@@ -306,6 +306,9 @@ class TaskBoard:
         # CR21b: where a task shows on a mirror, for the model ("Shows on the chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.display_notes: list[Callable[[Task], str | None]] = []
+        # F43b: a mirror's icon for a task, when a mirror keeps one (a chore chart's). Pictures
+        # show its emoji (`themi.drawing.emoji.item_emoji`).
+        self.icon_sources: list[Callable[[Task], str | None]] = []
         # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
         self.holds: list[Callable[[Task, Member], bool]] = [self._waits]
         # Called each time a task is done (a repeating one, each round): (task, by whom,
@@ -385,6 +388,10 @@ class TaskBoard:
     def shown(self, column: str = "id") -> str:
         """SQL for "AND ..." in a query of open tasks: leaves out the ones set aside."""
         return not_set_aside(self.set_aside, column)
+
+    def icon_of(self, task: Task) -> str:
+        """A mirror's icon for this task, or "" (F43b)."""
+        return next((icon for source in self.icon_sources if (icon := source(task))), "")
 
     def open_for(self, member: Member) -> list[Task]:
         rows = self.db.query(  # shared (escalated to both) chores come first, for everyone

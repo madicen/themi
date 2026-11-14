@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="675" viewBox="0 0 540 675" font-family="Atkinson Hyperlegible">
+<rect width="540" height="675" fill="#FBFAF7"/>
+<text x="28" y="52" font-size="24" font-weight="700" fill="#1F2328">The chore chart</text>
+<text x="28" y="76" font-size="14" fill="#6B6F76">Wednesday 21 October</text>
+<text x="28" y="102" font-size="16" font-weight="700" fill="#1F2328">Erin</text>
+<rect x="28" y="112" width="234" height="56" rx="10" fill="#DCEBFA" stroke="#4A88C7" stroke-width="1.25"/>
+<text x="40" y="141" font-size="18">🐈</text>
+<text x="66" y="140" font-size="14" font-weight="700" fill="#1F2328">Feed the cats</text>
+<text x="66" y="156" font-size="12" fill="#6B6F76">since Tue</text>
+<rect x="28" y="178" width="234" height="40" rx="10" fill="#DCEBFA" stroke="#4A88C7" stroke-width="1.25"/>
+<text x="42" y="206" font-size="14" font-weight="700" fill="#1F2328">Dishes</text>
+<text x="278" y="102" font-size="16" font-weight="700" fill="#1F2328">Husband</text>
+<rect x="278" y="112" width="234" height="40" rx="10" fill="#DCEBFA" stroke="#D99A2B" stroke-width="2"/>
+<text x="290" y="141" font-size="18">🗑️</text>
+<text x="316" y="140" font-size="14" font-weight="700" fill="#1F2328">Bring bins in</text>
+</svg>

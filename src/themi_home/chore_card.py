@@ -17,6 +17,7 @@ from themi.accounts import Member
 from themi.channels.outbox import Priority
 from themi.core import keys
 from themi.core.tools import ToolContext, ToolFailed, tool
+from themi.drawing.emoji import item_emoji
 from themi.drawing.svg import write_svg
 from themi.drawing.text import wrap
 from themi.standard.day_card import THEMES
@@ -39,6 +40,7 @@ class Chore:
     title: str
     when: str = ""  # "since Tue"
     important: bool = False
+    emoji: str = ""  # F43b: the wall's, else one that fits the title
 
 
 @dataclass(frozen=True)
@@ -54,28 +56,16 @@ class ChartCardData:
 
 
 def chart_data(queue: ChartQueue, members: list[Member], today: date) -> ChartCardData:
-    from themi_home.chore_chart import is_routine
-
     columns = []
     for member in members:
-        up = list(queue.up_for(member))
-        seen = {t.id for t in up}
-        for task in queue.board.open_for(member):  # the important ones always show (C2d)
-            if (
-                task.id not in seen
-                and task.importance == "high"
-                and queue.on_chart(task)
-                and not is_routine(task)
-                and (task.due_on or today) <= today
-            ):
-                up.append(task)
         chores = tuple(
             Chore(
                 t.title,
                 f"since {t.due_on:%a}" if t.due_on and t.due_on < today else "",
                 t.importance == "high",
+                item_emoji(t.title, queue.board.icon_of(t)),  # F43b
             )
-            for t in sorted(up, key=lambda t: (t.due_on or today, t.title))
+            for t in queue.chart_for(member, today)
         )
         columns.append(Column(member.name, chores))
     return ChartCardData(today, tuple(columns))
@@ -85,7 +75,10 @@ def chart_text(data: ChartCardData) -> str:
     lines = []
     for column in data.columns:
         if column.chores:
-            items = "; ".join(c.title + (f" ({c.when})" if c.when else "") for c in column.chores)
+            items = "; ".join(
+                (f"{c.emoji} " if c.emoji else "") + c.title + (f" ({c.when})" if c.when else "")
+                for c in column.chores
+            )
             lines.append(f"- {column.name}: {items}")
     return "On the chore chart:\n" + "\n".join(lines) if lines else EMPTY_TEXT
 
@@ -101,11 +94,12 @@ def view(data: ChartCardData, theme: str = "light") -> dict[str, Any]:
         y = 112.0
         cards = []
         for chore in column.chores[:MOST]:
-            lines = wrap(chore.title, 14, width - 28, 2, bold=True)
+            inset = 38 if chore.emoji else 14  # F43b: the emoji goes first
+            lines = wrap(chore.title, 14, width - inset - 12, 2, bold=True)
             height = 22 + 18 * len(lines) + (16 if chore.when else 0)
             cards.append(
                 {"y": y, "height": height, "lines": lines, "when": chore.when,
-                 "important": chore.important}
+                 "important": chore.important, "emoji": chore.emoji, "inset": inset}
             )  # fmt: skip
             y += height + 10
         more = len(column.chores) - MOST

@@ -10,8 +10,10 @@ from tests.scenarios.harness import Scenario
 from tests.scenarios.test_focus import task
 from tests.scenarios.test_routines import add, routines
 from themi.core import keys
-from themi.standard.list_card import routines_data, tasks_data
+from themi.standard.list_card import routines_data
+from themi.standard.task_card import task_cards
 
+MINE = {"who": "me", "with_chores": False}  # F43b: the tool's arguments
 TUE = date(2026, 10, 20)
 WED = date(2026, 10, 21)
 
@@ -33,9 +35,10 @@ async def test_tasks_overdue_first_then_today_then_any_time(scenario: Scenario) 
     await task(scenario, "Erin", "Water the plants", due=None)
     await task(scenario, "Erin", "Call the vet", due=WED)
     await task(scenario, "Erin", "Return the books", due=TUE)
-    data = tasks_data(scenario.app.services, scenario.member("Erin"))
+    data = task_cards(scenario.app.services, scenario.member("Erin"))  # F43b: cards now
     assert data is not None
-    assert [(s.heading, [(r.text, r.note) for r in s.rows]) for s in data.sections] == [
+    (lane,) = data.lanes
+    assert [(g.heading, [(c.title, c.note) for c in g.cards]) for g in lane.groups] == [
         ("Overdue", [("Return the books", "was due Tue 20 Oct")]),
         ("Today", [("Call the vet", "")]),
         ("Any time", [("Water the plants", "")]),
@@ -44,7 +47,9 @@ async def test_tasks_overdue_first_then_today_then_any_time(scenario: Scenario) 
 
 async def test_asking_for_tasks_as_a_picture_sends_that(scenario: Scenario) -> None:
     await task(scenario, "Erin", "Call the vet", due=WED)
-    offered = await ask(scenario, "Erin", "Show me my tasks as a picture", "show_tasks_picture", {})
+    offered = await ask(
+        scenario, "Erin", "Show me my tasks as a picture", "show_tasks_picture", MINE
+    )
     assert "show_tasks_picture" in offered
     assert captions(scenario, "Erin") == ["Your tasks."]
 
@@ -80,7 +85,7 @@ async def test_without_pictures_its_words(scenario: Scenario) -> None:
 
     scenario.app.services.get(keys.drawings).renderer.convert = broken
     await task(scenario, "Erin", "Call the vet", due=WED)
-    await ask(scenario, "Erin", "My tasks as a picture", "show_tasks_picture", {})
+    await ask(scenario, "Erin", "My tasks as a picture", "show_tasks_picture", MINE)
     assert any(t.startswith("Erin's tasks, Wed 21 Oct:") for t in scenario.inbox("Erin"))
     assert scenario.pictures("Erin") == []
 
@@ -100,6 +105,6 @@ async def test_tasks_then_routines_after_the_chores_are_their_own_pictures(
         ("show_tasks_picture", "And tasks as a picture"),
         ("show_routines_picture", "And my routines as a picture"),
     ]:
-        args = {"day": "today"} if "routines" in tool else {}
+        args = {"day": "today"} if "routines" in tool else MINE
         assert tool in await ask(scenario, "Husband", said, tool, args), (tool, said)
     assert captions(scenario, "Husband") == ["Your tasks.", "Your routines."]
