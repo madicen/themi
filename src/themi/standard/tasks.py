@@ -28,6 +28,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import groups, keys, naming
+from themi.core.capabilities import PICTURES
 from themi.core.prompts import OpenItem
 from themi.core.services import Services
 from themi.core.tools import Done as DoneLine
@@ -1952,7 +1953,8 @@ CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|t
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
     "when it just needs doing ('can someone...'); then Themi works out who has room for it. "
     "A small thing at a set time where a nudge is all they want ('remind me to drink green "
-    "tea at 2') is add_reminder, not a task.",
+    "tea at 2') is add_reminder, not a task. For a picture of several to-dos, use "
+    "tasks_from_picture.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},
@@ -2790,8 +2792,9 @@ class TasksModule(Module):
     name = "tasks"
     title = "Tasks and chores"
     summary = "The task board: tasks, chores, schedules and check-ins."
-    tool_groups = (groups.SCHEDULES,)
+    tool_groups = (groups.SCHEDULES, groups.TASK_PICTURES)
     preferences = TasksPreferences
+    optional = ("pictures",)  # F43a: the to-dos in a picture, when pictures are looked at
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry
@@ -2819,5 +2822,9 @@ class TasksModule(Module):
             TaskBoard(ctx.services, Matcher(ctx.services.store, ctx.get(EnergyModel)))
         )
         board.install()
+        if PICTURES in ctx.services.capabilities:
+            from themi.standard.task_pictures import tasks_from_picture
+
+            ctx.tool(tasks_from_picture)  # F43a
         ctx.periodic("tasks.resurface", timedelta(minutes=15), board.resurface)
         ctx.periodic("tasks.schedules", timedelta(hours=1), board.check_schedules)

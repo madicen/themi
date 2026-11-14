@@ -97,7 +97,7 @@
   },
   "create_task": {
     "group": "core",
-    "spec": "bffdac639aca"
+    "spec": "2f9e31e23d0b"
   },
   "day_summary": {
     "group": "calendar",
@@ -241,7 +241,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "15d3a7443514"
+    "spec": "305b7f76bf0d"
   },
   "move_expense": {
     "group": "spending",
@@ -554,6 +554,10 @@
   "switch_body_double_mode": {
     "group": "body_double",
     "spec": "e1c0a319520c"
+  },
+  "tasks_from_picture": {
+    "group": "task_pictures",
+    "spec": "76e6e2057d23"
   },
   "tasks_i_could_take": {
     "group": "core",

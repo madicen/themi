@@ -317,7 +317,7 @@ def twins_text(names: Iterable[str]) -> str:
 # F34l: a picture turn gets the groups a picture usually starts (a list's items, an event, a
 # recipe), whatever its words; guides and bug reports are core already. Not every group:
 # that would double the prompt (about 28k characters to 56k), and `more_tools` is there.
-PICTURE_GROUPS = frozenset({"lists", "calendar", "recipes"})
+PICTURE_GROUPS = frozenset({"lists", "calendar", "recipes", "task_pictures"})  # F43a
 PICTURE_LOG = "[a picture]"  # how the message log keeps one (themi.channels.telegram)
 YES_TO_IT = re.compile(
     r"^(?:yes|yep|yeah|yup|ok|okay|sure|please|go ahead|do it|sounds good|"

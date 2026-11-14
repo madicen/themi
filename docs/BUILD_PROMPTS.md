@@ -277,7 +277,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42e | Idea: "Just one thing" offers a different one | Feedback | [x] 2026-11-13 |
 | F42f | Feedback: "Show me Erin's run" finds her step-up plan by name | Feedback | [x] 2026-11-13 |
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
-| F43a | Feedback: every to-do in a picture is added the first time | Feedback | [ ] |
+| F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [ ] |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -13957,7 +13957,7 @@ Setup still to do: add tasks, routines and the day on request to the Day Card pl
 uses" (left for Michael; the plan doc is shared).
 
 ### F43a · Feedback (2026-11-14): every to-do in a picture is added the first time
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: F24a, F41c, RC4a
 Read first: `themi_home/web_recipes.py` (`recipe_from_picture`, `show_from_picture`: a tool
 that reads the picture itself with one structured call, the model to copy);
@@ -14020,6 +14020,22 @@ Scenario: Michael sends a screenshot of four to-dos, one with sub-items, and ask
 pull them in. All four are on his list at once, and the reply names every one.
 
 Data: none needed (tasks 100-108 are already on the Pi). Mark #207 reviewed once live.
+
+Notes: `themi/standard/task_pictures.py`. `tasks_from_picture` reads the pictures with one
+structured call (the `conversation` route, `READ_SYSTEM` says the picture is data) and runs
+each item through `create_task.handler`, so its checks, assignment and duplicate check all
+apply. Its line goes into `ctx.done`, and the titles into `done_keys`, so the model's own
+line naming them is dropped (F41c's `_not_again`). Lines: "Added 4 tasks from the picture:
+A, B, C (5 steps) and D." ("for Erin" / "for both of you" when not theirs), then "Already on
+the list: …". `split` uses `TaskParts.split` with every step. Deviation: the tool has its own
+group, `task_pictures` (in `PICTURE_GROUPS`, so every picture turn offers it; its words catch
+a follow-up like "pull these in"), rather than sitting in the core set, so ordinary turns
+don't carry it. It's registered only with the pictures capability (`TasksModule.optional`).
+The group needed 10 router examples and two routing cases (`routing_cases.json`), and its
+description avoids "chores" for the work template. Changed tests: `test_group_registry`'s
+group count 15 → 16 (the new group). Golden: `tools.json` gains the tool, and
+`create_task`'s spec changes (its description points to the new tool). New tests in
+`tests/scenarios/test_tasks_from_picture.py`.
 
 ### F43b · Idea (2026-11-14): the tasks picture as cards with emoji, for one person or the family, with chores too
 Status: [ ]
