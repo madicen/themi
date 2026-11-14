@@ -204,7 +204,6 @@ class Reminders:
             if self._nudged_today(row, today):
                 continue  # a chore's own "overdue after N days" nudge went today
             stage = row["overdue_reminders"] + 1
-            lead = self._lead(task, stage, today)
             people: list[Member | None] = (
                 [m for m in self.store.list_members() if m.reachable]
                 if task.shared
@@ -217,7 +216,8 @@ class Reminders:
             ]
             if not people:
                 continue  # waiting its turn for the chart (C2d): raised once it comes up
-            for person in people:
+            for person in people:  # F43c (#209): each copy is written for its reader
+                lead = self._lead(task, stage, today, person or self._doer(task))
                 await self.board.prompt(task, member=person, lead=lead)
             self.db.execute(
                 "UPDATE tasks SET overdue_reminders = ?, overdue_reminded_on = ? WHERE id = ?",
@@ -246,7 +246,10 @@ class Reminders:
         stamp = row["overdue_notified_at"]
         return bool(stamp) and datetime.fromisoformat(stamp).astimezone(self._tz()).date() == today
 
-    def _lead(self, task: Task, stage: int, today: date) -> str:
+    def _lead(self, task: Task, stage: int, today: date, reader: Member | None = None) -> str:
+        """The nudge's opening for `reader` (whoever gets this copy; the doer by default).
+        F43c (bug #209): a shared task's copies differ, so nobody is offered to themselves
+        and the lighter moment is the reader's own."""
         assert task.due_on is not None
         lead = f"Overdue: {task.title}, due {_day_words(task.due_on, today)}"
         if stage == 1:
@@ -255,11 +258,15 @@ class Reminders:
         lead += f". The smallest version: {smallest}" if smallest else ". Even a few minutes counts"
         if stage == 2:
             return lead
-        member = self.store.get_member(task.assignee) if task.assignee else None
+        member = reader or self._doer(task)
         if member is not None:
             lead += f". {self._lighter_moment(member)}"
         other = next(
-            (m.name for m in self.store.list_members() if m.reachable and m.id != task.assignee),
+            (
+                m.name
+                for m in self.store.list_members()
+                if m.reachable and m.id != (member.id if member else task.assignee)
+            ),
             None,
         )
         offer = f"I can move it, or ask {other} to take it" if other else "I can move it"

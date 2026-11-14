@@ -279,7 +279,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F42g | Feedback: pictures of your tasks and your routines | Feedback | [x] 2026-11-13 |
 | F43a | Feedback: every to-do in a picture is added the first time | Feedback | [x] 2026-11-14 |
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [ ] |
-| F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [ ] |
+| F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -14114,7 +14114,7 @@ Setup: once built, add the family tasks picture to the Day Card plan's "Other us
 plan doc is shared; left for Michael).
 
 ### F43c · Feedback (2026-11-14): a shared task's overdue nudge offers the other person, not you
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: F19c, T2
 Read first: `themi/standard/reminders.py` (`overdue`, `_lead`, `_lighter_moment`); how
 `board.prompt(task, member=…, lead=…)` sends a shared task to each person. From Michael's bug
@@ -14148,6 +14148,13 @@ Scenario: a shared chore goes overdue for days, and each of them is offered hand
 the other, never to themselves.
 
 Data: none needed. Mark #209 reviewed once live.
+
+Notes: `Reminders._lead` takes the reader (default: the doer). The lighter moment is theirs,
+and "ask {other}" is a reachable member who isn't them. `overdue` builds the lead inside the
+per-person loop. The other places checked name nobody: `SHARED_OVERDUE_TEXT` is "Overdue for
+both of you", the end-of-day list has no names, and `taking.py`'s offer names the asker's
+partner. So nothing else changed. New tests at the end of
+`tests/scenarios/test_reminders.py`; none changed, no golden file changed.
 
 ## Conversation mode
 

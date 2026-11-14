@@ -13,6 +13,7 @@ from tests.scenarios.harness import Scenario
 from themi import clock
 from themi.ai.types import ToolResult
 from themi.core import keys
+from themi.standard.reminders import Reminders
 from themi.standard.repeat import parse
 from themi.standard.tasks import Task, TaskBoard
 
@@ -251,3 +252,57 @@ async def test_a_task_for_another_day_doesnt_keep_saying_today(scenario: Scenari
     result = last_result(scenario)
     assert "due Thu 22 Oct" in result
     assert 'says "today"' in result and "update_task" in result
+
+
+# ----- F43c (bug #209): a shared task's nudge offers the other person, not you ------------
+
+
+def unreachable(scenario: Scenario, name: str) -> None:
+    """No channel Themi can write to them on (CR20b's `reachable`)."""
+    scenario.app.db.execute(
+        "DELETE FROM member_identities WHERE member_id = ?", (scenario.member(name).id,)
+    )
+
+
+def texts_to(scenario: Scenario, name: str, start: str) -> list[str]:
+    """Messages (sent or waiting) to `name` that begin with `start`."""
+    rows = scenario.app.db.query(
+        "SELECT text FROM outbox WHERE member_id = ? ORDER BY id", (scenario.member(name).id,)
+    )
+    return [r["text"] for r in rows if r["text"].startswith(start)]
+
+
+async def test_a_shared_tasks_nudge_never_offers_you_to_yourself(scenario: Scenario) -> None:
+    """Task 84 on the Pi: shared, its assignee Erin; Michael was told to ask Michael."""
+    made = await task(scenario, "Vacuum maintenance", WED)
+    await board(scenario).make_either(made.id)
+    for days in (1, 3, 5):  # the third round says who could take it
+        await at(scenario, WED + timedelta(days=days), 10)
+    his = texts_to(scenario, "Husband", "Overdue: Vacuum maintenance")[-1]
+    hers = texts_to(scenario, "Erin", "Overdue: Vacuum maintenance")[-1]
+    assert "I can move it, or ask Erin to take it." in his
+    assert "ask Husband" not in his
+    assert "I can move it, or ask Husband to take it." in hers
+    assert "ask Erin" not in hers
+
+
+async def test_each_gets_their_own_lighter_moment(scenario: Scenario) -> None:
+    made = await task(scenario, "Vacuum maintenance", WED)
+    await board(scenario).make_either(made.id)
+    reminders = scenario.app.services.get(Reminders)
+    husband, erin = scenario.member("Husband"), scenario.member("Erin")
+    task_now = board(scenario).get(made.id)
+    today = WED + timedelta(days=5)
+    assert reminders._lead(task_now, 3, today, husband) != reminders._lead(task_now, 3, today, erin)
+    assert reminders._lighter_moment(husband) in reminders._lead(task_now, 3, today, husband)
+
+
+async def test_with_the_other_unreachable_its_only_move_it(scenario: Scenario) -> None:
+    made = await task(scenario, "Vacuum maintenance", WED)
+    await board(scenario).make_either(made.id)
+    unreachable(scenario, "Erin")
+    for days in (1, 3, 5):
+        await at(scenario, WED + timedelta(days=days), 10)
+    his = texts_to(scenario, "Husband", "Overdue: Vacuum maintenance")[-1]
+    assert "I can move it." in his
+    assert "to take it" not in his
