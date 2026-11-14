@@ -170,3 +170,28 @@ async def test_a_cookbook_recipe_is_changed_in_the_doc(
         if isinstance(b, ToolResult)
     ][-1]
     assert "in the cookbook already" in result and "#heading=h." in result
+
+
+async def test_saved_with_the_grams_themi_knows(scenario: Scenario, ready: FakeGdocs) -> None:
+    """GW7 (Michael): the doc gets the grams from the weights guide; a line that gives its
+    own weight keeps it, once."""
+    from tests.fixtures.weights_guide import WEIGHTS_GUIDE
+
+    guides = scenario.app.services.maybe(keys.guides)
+    assert guides is not None
+    guides.save(scenario.member("Erin"), "Weights of Common Ingredients", WEIGHTS_GUIDE,
+                personal=False)  # fmt: skip
+    fake = FakeRecipeSite()
+    fake.page(URL, recipe_page({**BROWNIES, "recipeIngredient": [
+        "1 cup flour", "½ cup cocoa", "1 cup sugar (190g)"]}))  # fmt: skip
+    scenario.app.services.maybe(keys.web_recipes).reader = fake.reader()  # type: ignore[union-attr]
+    await show(scenario)
+    await scenario.tap("Erin", "Save to cookbook")
+    preview = scenario.inbox("Erin")[-2]
+    assert "> 1 cup (120 g) flour" in preview.splitlines()
+    await scenario.tap("Erin", "Go ahead")
+    assert entry_in_doc(ready)[2:5] == [
+        ("1 cup (120 g) flour", "NORMAL_TEXT"),
+        ("½ cup cocoa", "NORMAL_TEXT"),  # no weight known: as written
+        ("1 cup (190 g) sugar", "NORMAL_TEXT"),  # its own, not the guide's 200 g
+    ]

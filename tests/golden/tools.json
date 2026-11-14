@@ -91,6 +91,10 @@
     "group": "recipes",
     "spec": "174d70331869"
   },
+  "correct_gram_weight": {
+    "group": "recipes",
+    "spec": "b4f506f42b64"
+  },
   "create_list": {
     "group": "lists",
     "spec": "4dad5761a278"
@@ -170,6 +174,10 @@
   "forget_expected_email": {
     "group": "email",
     "spec": "5b536c86fb40"
+  },
+  "forget_gram_weight": {
+    "group": "recipes",
+    "spec": "32df344c3e8f"
   },
   "forward_email": {
     "group": "email",
@@ -346,6 +354,10 @@
   "resume_messages": {
     "group": "settings",
     "spec": "755a6c1965a4"
+  },
+  "same_ingredient": {
+    "group": "recipes",
+    "spec": "f1e7c57f56a1"
   },
   "save_guide": {
     "group": "core",
@@ -571,6 +583,10 @@
     "group": "wall",
     "spec": "62be20cc8d2d"
   },
+  "undo_gram_weight": {
+    "group": "recipes",
+    "spec": "0765c57fab5a"
+  },
   "unskip_email_sender": {
     "group": "calendar",
     "spec": "5c6440373bab"
@@ -586,5 +602,9 @@
   "verify_expense": {
     "group": "spending",
     "spec": "7ac8fb3712ef"
+  },
+  "weighed_gram_weight": {
+    "group": "recipes",
+    "spec": "15562ecdd39a"
   }
 }
