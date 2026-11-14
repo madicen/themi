@@ -29,7 +29,7 @@ async def test_the_dashboard_shows_todays_picture(
     assert "<h2>Today</h2>" in page
     card = page[page.index('<div class="today-card"') :]
     card = card[: card.index("</svg>")]
-    assert "<svg" in card and "Thursday 22 October" in card
+    assert "<svg" in card and ">Thursday<" in card and ">22 October<" in card
     assert "Dentist &lt;3&gt;" in card  # words from the calendar stay words
     assert "<script" not in card
 

@@ -1,14 +1,17 @@
-"""DC3: the day card, drawn from its data. Golden SVGs in `tests/golden/pictures/` (`make
+"""DC3 and DC13: the day card, drawn from its data. Golden SVGs in `tests/golden/pictures/` (`make
 golden`, or THEMI_WRITE_GOLDEN=1, writes them again)."""
 
 from __future__ import annotations
 
+import itertools
 import os
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from themi.drawing.render import to_png
 from themi.standard.day_card import (
@@ -18,10 +21,12 @@ from themi.standard.day_card import (
     DayCardData,
     Waiting,
     card_svg,
-    chip_words,
     day_icon,
     degrees,
+    meter_dots,
+    meter_words,
     span_words,
+    spread,
     view,
 )
 
@@ -117,21 +122,36 @@ def test_the_card_matches_its_golden_file(
 
 def test_every_event_and_the_weather_are_on_the_busy_card() -> None:
     svg = card_svg(BUSY)
-    for words in ("Wednesday 21 October", "Erin\u2019s day", "Standup", "Dentist",
-                  "2\u20133 pm · Smile Dental", "Leave around 1:20", "School holiday",
+    for words in ("Wednesday", "21 October", "ERIN\u2019S DAY", "Standup", "Dentist",
+                  "2\u20133 pm · Smile Dental · leave 1:20", "School holiday",
                   "Call with Sam (Erin)", "Pills", "Rain likely from about 2 pm",
-                  "58°", "low 46°"):  # fmt: skip
+                  "58°", "low 46°", "Your calendar"):  # fmt: skip
         assert words in svg, words
     assert "Dinner with the Parks at their place downtown on Elm Street" not in svg
     assert "Dinner with the Parks" in svg  # shortened to fit, with an ellipsis
     assert "…" in svg
 
 
+def test_the_calendar_heading_counts_events_holds_and_overlaps() -> None:
+    assert view(BUSY)["calendar"]["summary"] == "6 events · 1 held for a task · 1 overlap"
+    assert view(STORM)["calendar"]["summary"] == "1 event"
+    assert view(EMPTY)["calendar"]["summary"] == ""
+
+
+def test_travel_is_a_lead_in_on_its_event_not_a_block_of_its_own() -> None:
+    shown = view(BUSY)
+    assert len(shown["bars"]) == 7  # eight timed entries, less the travel
+    assert sum(1 for b in shown["bars"] if b["lead"]) == 1
+    assert "Leave around" not in card_svg(BUSY)
+
+
 def test_no_energy_and_no_red_for_what_waits() -> None:
     svg = card_svg(BUSY, "numbers")
     assert "energy" not in svg.lower()
     assert "overdue" not in svg.lower()
-    assert "4 tasks" in svg and "1 email" in svg and "2 other things" in svg
+    assert "Tasks 4" in svg and "Email 1" in svg and "Everything else 2" in svg
+    for words in ("High", "Medium", "Low"):
+        assert f">{words}<" not in card_svg(BUSY)
     for color in ("#FF0000", "#F00", "red"):
         assert f'"{color}"' not in svg
 
@@ -139,38 +159,79 @@ def test_no_energy_and_no_red_for_what_waits() -> None:
 def test_hidden_counts_leave_no_footer() -> None:
     plain = view(BUSY, "dots")
     hidden = view(BUSY, "hide")
-    assert plain["chips"] and not hidden["chips"]
+    assert plain["plate"] and not hidden["plate"]
     assert hidden["timeline"]["bottom"] > plain["timeline"]["bottom"]  # more room for the day
 
 
 def test_an_empty_day_says_so_and_keeps_the_weather() -> None:
     svg = card_svg(EMPTY)
     assert "Nothing on the calendar" in svg
-    assert "<polyline" in svg
-    assert view(EMPTY)["chips"] == []
+    assert view(EMPTY)["panel"]["high"] == "58°"
+    assert view(EMPTY)["plate"] is None  # nothing waiting: no meters
 
 
-def test_an_alert_is_a_warning_band_and_a_note_is_quiet() -> None:
-    assert view(STORM)["band"]["fill"] == "#FFF1D6"
-    assert view(BUSY)["band"]["fill"] == "#EEF0F3"
-    assert view(EMPTY)["band"] is None
+def test_an_alert_is_an_amber_panel_and_a_note_is_quiet() -> None:
+    assert view(STORM)["panel"]["fill"] == "#FFF1D6"
+    assert view(STORM)["panel"]["alert"]
+    assert view(BUSY)["panel"]["fill"] == "#EEF0F3"
+    assert view(EMPTY)["panel"]["line"] == ""
 
 
-def test_without_the_weather_module_the_events_take_the_width() -> None:
+def test_rain_and_snow_sit_beside_their_hours() -> None:
+    busy = view(BUSY)
+    assert len(busy["wet"]) == 1 and busy["wet_icon"]["icon"] == "rain"
+    assert view(STORM)["wet_icon"]["icon"] == "snow"
+    assert view(EMPTY)["wet"] == [] and view(EMPTY)["wet_icon"] is None
+
+
+def test_without_the_weather_module_there_is_no_panel_or_rain() -> None:
     plain = DayCardData("Erin", date(2026, 10, 21), at(7), BUSY.events)
     shown = view(plain)
-    assert shown["column"] is None and shown["top_right"] is None and shown["band"] is None
-    assert max(b["x"] + b["width"] for b in shown["blocks"]) > 480
+    assert shown["panel"] is None and shown["wet"] == []
+    assert len(shown["labels"]) == 7
 
 
-def test_long_titles_stay_inside_their_blocks() -> None:
+def test_long_titles_stay_on_the_card() -> None:
     from themi.drawing.text import text_width
 
-    for block in view(BUSY)["blocks"]:
-        for line in block["lines"]:
-            width = text_width(line["text"], line["size"], line["bold"])
-            right = block["x"] + 8 + width if not line["x"] > block["x"] + 10 else line["x"] + width
-            assert right <= 540 - 28 + 1, line["text"]
+    shown = view(BUSY)
+    for label in shown["labels"]:
+        assert shown["labels_x"] + text_width(label["title"], 14, True) <= 540 - 28 + 1
+        assert shown["labels_x"] + text_width(label["detail"], 11.5) <= 540 - 28 + 1
+
+
+def test_a_crowded_day_has_one_line_labels_with_their_times() -> None:
+    crowded = DayCardData(
+        "Michael",
+        date(2026, 10, 21),
+        at(7),
+        tuple(CardEvent(str(i), f"Thing {i}", at(7 + i), at(7.5 + i)) for i in range(13)),
+        BUSY.weather,
+        Waiting(tasks=2),
+    )
+    shown = view(crowded)
+    assert not shown["two_lines"]
+    assert shown["labels"][0]["beside"] == "7\u20137:30 am"
+    assert view(BUSY)["two_lines"]
+
+
+def test_overlapping_events_take_side_by_side_lanes() -> None:
+    shown = view(BUSY)
+    assert len(shown["lanes"]) == 2
+    second = [b for b in shown["bars"] if b["x"] == shown["lanes"][1]]
+    assert len(second) == 1 and second[0]["color"] == "#8569BF"  # Sam's call, beside soccer
+
+
+@given(st.lists(st.floats(min_value=150, max_value=600), min_size=1, max_size=30))
+def test_labels_never_overlap_and_stay_on_the_timeline(anchors: list[float]) -> None:
+    anchors.sort()
+    for two in (True, False):
+        tops = spread(anchors, two, 140.0, 600.0)
+        height = 34.0 if two else 18.0
+        assert all(t >= 140.0 - 0.01 and t + height <= 600.0 + 0.01 for t in tops)
+        fits = len(anchors) * (height + (4 if two else 2)) - (4 if two else 2) <= 460
+        if fits:
+            assert all(b - a >= height - 0.01 for a, b in itertools.pairwise(tops))
 
 
 # ----- the small parts --------------------------------------------------------------------
@@ -200,8 +261,7 @@ def test_the_days_icon_is_the_gravest_weather_that_lasts() -> None:
     assert day_icon(storm, at(7), at(21)) == "thunderstorms-rain"
 
 
-def test_waiting_chips_in_dots_or_numbers() -> None:
-    assert chip_words("Tasks", 1, "dots", "task", "tasks") == "Tasks •"
-    assert chip_words("Tasks", 3, "dots", "task", "tasks") == "Tasks ••"
-    assert chip_words("Tasks", 9, "dots", "task", "tasks") == "Tasks •••"
-    assert chip_words("Email", 1, "numbers", "email", "emails") == "1 email"
+def test_waiting_meters_in_dots_or_numbers() -> None:
+    assert [meter_dots(n) for n in (0, 1, 2, 3, 4, 9)] == [0, 1, 2, 2, 3, 3]
+    assert meter_words("Tasks", 9, "dots") == "Tasks"
+    assert meter_words("Email", 1, "numbers") == "Email 1"

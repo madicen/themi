@@ -1,63 +1,71 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="540" height="675" viewBox="0 0 540 675" font-family="Atkinson Hyperlegible">
 <rect width="540" height="675" fill="#16181C"/>
-<text x="28" y="52" font-size="24" font-weight="700" fill="#ECEDEE">Wednesday 21 October</text>
-<text x="28" y="76" font-size="14" fill="#9BA1A6">Erin’s day</text>
-<image href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgaWQ9InJhaW4iIGNsaXAtcGF0aD0idXJsKCNjbGlwMF8yMDQ1XzM5NTg3KSI+CjxnIGlkPSJTa3kiPgo8ZyBpZD0iQ2xvdWRzIj4KPGcgaWQ9IkNsb3VkIj4KPHBhdGggaWQ9IkNsb3VkXzIiIGQ9Ik05MC4zODg2IDYzLjA4NTZDOTIuNjgzOCA1My44ODE5IDg3Ljc0MDggNDQuMTM1NyA3OS4wMDg1IDQwLjQ4MjJDNzAuMjY1MyAzNi44MjQyIDU5LjgyNzcgNDAuMTM3NSA1NC44MzcyIDQ4LjIxMTVDNTAuNTM2MyA0NS42MjUgNDQuOTc1MiA0NS43NzgxIDQwLjgyMzkgNDguNTk5MUMzNi42ODMyIDUxLjQxMjggMzQuNDk5NiA1Ni41MTQzIDM1LjM0OTkgNjEuNDUzOUMyOC4zOTI2IDYyLjc2ODUgMjMuMzkzNCA2OS4zMzkzIDI0LjA2MTQgNzYuNDA3NkMyNC43Mjk3IDgzLjQ3NzYgMzAuODcxOCA4OS4wMDE4IDM3Ljk1MzQgODlDNTUuNjA2NiA4OSA3My4zMDYgODkgOTAuOTc2NyA4OUM5OC4wNDQ2IDg5IDEwNCA4My4xMTg5IDEwNCA3Ni4wMjgxQzEwNCA2OC43MDE1IDk3LjY3NzUgNjIuNzY3NCA5MC4zODg2IDYzLjA4NTZaIiBmaWxsPSIjRTZFRkZDIi8+CjwvZz4KPC9nPgo8L2c+CjxnIGlkPSJQcmVjaXBpdGF0aW9uIj4KPGcgaWQ9IlJhaW5kcm9wcyI+CjxwYXRoIGlkPSJSYWluZHJvcCAxIiBkPSJNNTIgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAyIiBkPSJNNjQgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDApIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAzIiBkPSJNNzYgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjwvZz4KPC9nPgo8L2c+CjxkZWZzPgo8Y2xpcFBhdGggaWQ9ImNsaXAwXzIwNDVfMzk1ODciPgo8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0id2hpdGUiLz4KPC9jbGlwUGF0aD4KPC9kZWZzPgo8L3N2Zz4=" x="392" y="22" width="60" height="60"/>
-<text x="512" y="52" text-anchor="end" font-size="24" font-weight="700" fill="#ECEDEE">58°</text>
-<text x="512" y="76" text-anchor="end" font-size="14" fill="#9BA1A6">low 46°</text>
-<rect x="28" y="98" width="484" height="34" rx="8" fill="#23272E" stroke="#3A4049" stroke-width="1.25"/>
-<text x="42" y="120" font-size="14" fill="#ECEDEE">Rain likely from about 2 pm, high 58°F.</text>
-<rect x="80" y="142" width="432" height="22" rx="6" fill="#1D3550" stroke="#5AA0E6" stroke-width="1"/>
-<text x="88" y="157.5" font-size="13" font-weight="700" fill="#ECEDEE">School holiday</text>
-<line x1="76" x2="512" y1="196" y2="196" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="200" font-size="11.5" fill="#9BA1A6">7 am</text>
-<line x1="76" x2="512" y1="254.14" y2="254.14" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="258.14" font-size="11.5" fill="#9BA1A6">9 am</text>
-<line x1="76" x2="512" y1="312.29" y2="312.29" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="316.29" font-size="11.5" fill="#9BA1A6">11 am</text>
-<line x1="76" x2="512" y1="370.43" y2="370.43" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="374.43" font-size="11.5" fill="#9BA1A6">1 pm</text>
-<line x1="76" x2="512" y1="428.57" y2="428.57" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="432.57" font-size="11.5" fill="#9BA1A6">3 pm</text>
-<line x1="76" x2="512" y1="486.71" y2="486.71" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="490.71" font-size="11.5" fill="#9BA1A6">5 pm</text>
-<line x1="76" x2="512" y1="544.86" y2="544.86" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="548.86" font-size="11.5" fill="#9BA1A6">7 pm</text>
-<line x1="76" x2="512" y1="603" y2="603" stroke="#2A2E35" stroke-width="1"/>
-<text x="28" y="607" font-size="11.5" fill="#9BA1A6">9 pm</text>
-<text x="483" y="188" text-anchor="middle" font-size="10.5" fill="#9BA1A6">°F · rain</text>
-<rect x="454" y="400.5" width="46.4" height="27.07" rx="2" fill="#4FC1AE" fill-opacity="0.55"/>
-<rect x="454" y="429.57" width="46.4" height="27.07" rx="2" fill="#4FC1AE" fill-opacity="0.55"/>
-<rect x="454" y="458.64" width="46.4" height="27.07" rx="2" fill="#4FC1AE" fill-opacity="0.55"/>
-<rect x="454" y="487.71" width="46.4" height="27.07" rx="2" fill="#4FC1AE" fill-opacity="0.55"/>
-<polyline points="468.0,210.5 472.3,239.6 476.6,268.7 480.9,297.8 485.1,326.8 489.4,355.9 493.7,385.0 498.0,414.0 493.7,443.1 489.4,472.2 485.1,501.2 480.9,530.3 476.6,559.4 472.3,588.5" fill="none" stroke="#F08A5D" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<text x="478" y="203.54" text-anchor="end" font-size="11" font-weight="700" fill="#F08A5D">48°</text>
-<text x="492" y="407.04" text-anchor="end" font-size="11" font-weight="700" fill="#F08A5D">58°</text>
-<rect x="80" y="254.14" width="364" height="14.54" rx="7" fill="#1D3550" stroke="#5AA0E6" stroke-width="1.25"/>
-<text x="88" y="265.08" font-size="11" font-weight="700" fill="#ECEDEE">Standup</text>
-<text x="138.74" y="265.08" font-size="11.5" fill="#9BA1A6">9–9:30 am</text>
-<rect x="80" y="297.75" width="364" height="43.61" rx="7" fill="none" stroke="#6F767E" stroke-width="1.25" stroke-dasharray="4 3"/>
-<text x="88" y="315.75" font-size="13.5" fill="#9BA1A6">Call the vet</text>
-<text x="88" y="331.75" font-size="11.5" fill="#9BA1A6">10:30 am–noon</text>
-<rect x="80" y="380.12" width="364" height="19.38" rx="7" fill="#1A2633" stroke="#5AA0E6" stroke-width="1.25" stroke-dasharray="4 3"/>
-<text x="88" y="393.48" font-size="11" fill="#9BA1A6">Leave around 1:20</text>
-<rect x="80" y="399.5" width="364" height="29.07" rx="7" fill="#1D3550" stroke="#5AA0E6" stroke-width="1.25"/>
-<text x="88" y="418.37" font-size="13" font-weight="700" fill="#ECEDEE">Dentist</text>
-<text x="140.6" y="418.37" font-size="11.5" fill="#9BA1A6">2–3 pm · Smile Dental</text>
-<rect x="80" y="443.11" width="180" height="29.07" rx="7" fill="#1D3550" stroke="#5AA0E6" stroke-width="1.25"/>
-<text x="88" y="461.98" font-size="13" font-weight="700" fill="#ECEDEE">Soccer pickup</text>
-<text x="182.5" y="461.98" font-size="11.5" fill="#9BA1A6">3:30–4:30…</text>
-<rect x="264" y="457.64" width="180" height="29.07" rx="7" fill="#2F2645" stroke="#A68BE0" stroke-width="1.25"/>
-<text x="272" y="476.51" font-size="13" font-weight="700" fill="#ECEDEE">Call with Sam (Erin)</text>
-<rect x="80" y="501.25" width="8" height="6" rx="4" fill="#1D3550" stroke="#5AA0E6" stroke-width="1.25"/>
-<text x="94" y="507.92" font-size="11" fill="#ECEDEE">Pills</text>
-<rect x="80" y="515.79" width="364" height="43.61" rx="7" fill="#1D3550" stroke="#5AA0E6" stroke-width="1.25"/>
-<text x="88" y="533.79" font-size="13.5" font-weight="700" fill="#ECEDEE">Dinner with the Parks at their place downtown on…</text>
-<text x="88" y="549.79" font-size="11.5" fill="#9BA1A6">6–7:30 pm · The Parks&#39; house</text>
-<rect x="28" y="617" width="81.43" height="28" rx="14" fill="none" stroke="#3A4049" stroke-width="1.25"/>
-<text x="68.72" y="635.5" text-anchor="middle" font-size="13" fill="#ECEDEE">Tasks •••</text>
-<rect x="119.43" y="617" width="69.2" height="28" rx="14" fill="none" stroke="#3A4049" stroke-width="1.25"/>
-<text x="154.03" y="635.5" text-anchor="middle" font-size="13" fill="#ECEDEE">Email •</text>
-<rect x="198.63" y="617" width="129.32" height="28" rx="14" fill="none" stroke="#3A4049" stroke-width="1.25"/>
-<text x="263.29" y="635.5" text-anchor="middle" font-size="13" fill="#ECEDEE">Everything else ••</text>
+<text x="28" y="40" font-size="11" letter-spacing="1.6" font-weight="700" fill="#9BA1A6">ERIN’S DAY</text>
+<text x="28" y="72" font-size="30" font-weight="700" fill="#ECEDEE">Wednesday</text>
+<text x="512" y="72" text-anchor="end" font-size="15" fill="#9BA1A6">21 October</text>
+<rect x="28" y="92" width="484" height="100" rx="16" fill="#23272E"/>
+<image href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgaWQ9InJhaW4iIGNsaXAtcGF0aD0idXJsKCNjbGlwMF8yMDQ1XzM5NTg3KSI+CjxnIGlkPSJTa3kiPgo8ZyBpZD0iQ2xvdWRzIj4KPGcgaWQ9IkNsb3VkIj4KPHBhdGggaWQ9IkNsb3VkXzIiIGQ9Ik05MC4zODg2IDYzLjA4NTZDOTIuNjgzOCA1My44ODE5IDg3Ljc0MDggNDQuMTM1NyA3OS4wMDg1IDQwLjQ4MjJDNzAuMjY1MyAzNi44MjQyIDU5LjgyNzcgNDAuMTM3NSA1NC44MzcyIDQ4LjIxMTVDNTAuNTM2MyA0NS42MjUgNDQuOTc1MiA0NS43NzgxIDQwLjgyMzkgNDguNTk5MUMzNi42ODMyIDUxLjQxMjggMzQuNDk5NiA1Ni41MTQzIDM1LjM0OTkgNjEuNDUzOUMyOC4zOTI2IDYyLjc2ODUgMjMuMzkzNCA2OS4zMzkzIDI0LjA2MTQgNzYuNDA3NkMyNC43Mjk3IDgzLjQ3NzYgMzAuODcxOCA4OS4wMDE4IDM3Ljk1MzQgODlDNTUuNjA2NiA4OSA3My4zMDYgODkgOTAuOTc2NyA4OUM5OC4wNDQ2IDg5IDEwNCA4My4xMTg5IDEwNCA3Ni4wMjgxQzEwNCA2OC43MDE1IDk3LjY3NzUgNjIuNzY3NCA5MC4zODg2IDYzLjA4NTZaIiBmaWxsPSIjRTZFRkZDIi8+CjwvZz4KPC9nPgo8L2c+CjxnIGlkPSJQcmVjaXBpdGF0aW9uIj4KPGcgaWQ9IlJhaW5kcm9wcyI+CjxwYXRoIGlkPSJSYWluZHJvcCAxIiBkPSJNNTIgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAyIiBkPSJNNjQgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDApIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAzIiBkPSJNNzYgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjwvZz4KPC9nPgo8L2c+CjxkZWZzPgo8Y2xpcFBhdGggaWQ9ImNsaXAwXzIwNDVfMzk1ODciPgo8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0id2hpdGUiLz4KPC9jbGlwUGF0aD4KPC9kZWZzPgo8L3N2Zz4=" x="34" y="94" width="64" height="64"/>
+<text x="104" y="140" font-size="36" font-weight="700" fill="#ECEDEE">58°</text>
+<text x="496" y="122" text-anchor="end" font-size="12.5" fill="#9BA1A6">high today</text>
+<text x="496" y="140" text-anchor="end" font-size="12.5" fill="#9BA1A6">low 46°</text>
+<line x1="44" x2="496" y1="158" y2="158" stroke="#3A4049" stroke-opacity="0.6" stroke-width="1"/>
+<text x="44" y="180" font-size="14" fill="#ECEDEE">Rain likely from about 2 pm, high 58°F.</text>
+<text x="28" y="226" font-size="18" font-weight="700" fill="#ECEDEE">Your calendar</text>
+<text x="512" y="226" text-anchor="end" font-size="12" fill="#9BA1A6">6 events · 1 held for a task · 1 overlap</text>
+<rect x="28" y="240" width="484" height="24" rx="12" fill="#1D3550"/>
+<text x="40" y="256" font-size="12.5" fill="#ECEDEE"><tspan font-weight="700">All day</tspan>  School holiday</text>
+<rect x="70" y="420.5" width="5" height="78" fill="#5AA0E6" fill-opacity="0.87"/>
+<image href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMTI4IDEyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGcgaWQ9InJhaW4iIGNsaXAtcGF0aD0idXJsKCNjbGlwMF8yMDQ1XzM5NTg3KSI+CjxnIGlkPSJTa3kiPgo8ZyBpZD0iQ2xvdWRzIj4KPGcgaWQ9IkNsb3VkIj4KPHBhdGggaWQ9IkNsb3VkXzIiIGQ9Ik05MC4zODg2IDYzLjA4NTZDOTIuNjgzOCA1My44ODE5IDg3Ljc0MDggNDQuMTM1NyA3OS4wMDg1IDQwLjQ4MjJDNzAuMjY1MyAzNi44MjQyIDU5LjgyNzcgNDAuMTM3NSA1NC44MzcyIDQ4LjIxMTVDNTAuNTM2MyA0NS42MjUgNDQuOTc1MiA0NS43NzgxIDQwLjgyMzkgNDguNTk5MUMzNi42ODMyIDUxLjQxMjggMzQuNDk5NiA1Ni41MTQzIDM1LjM0OTkgNjEuNDUzOUMyOC4zOTI2IDYyLjc2ODUgMjMuMzkzNCA2OS4zMzkzIDI0LjA2MTQgNzYuNDA3NkMyNC43Mjk3IDgzLjQ3NzYgMzAuODcxOCA4OS4wMDE4IDM3Ljk1MzQgODlDNTUuNjA2NiA4OSA3My4zMDYgODkgOTAuOTc2NyA4OUM5OC4wNDQ2IDg5IDEwNCA4My4xMTg5IDEwNCA3Ni4wMjgxQzEwNCA2OC43MDE1IDk3LjY3NzUgNjIuNzY3NCA5MC4zODg2IDYzLjA4NTZaIiBmaWxsPSIjRTZFRkZDIi8+CjwvZz4KPC9nPgo8L2c+CjxnIGlkPSJQcmVjaXBpdGF0aW9uIj4KPGcgaWQ9IlJhaW5kcm9wcyI+CjxwYXRoIGlkPSJSYWluZHJvcCAxIiBkPSJNNTIgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAyIiBkPSJNNjQgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDApIi8+CjxwYXRoIGlkPSJSYWluZHJvcCAzIiBkPSJNNzYgODNWOTUiIHN0cm9rZT0iIzBBNUFENCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKDAsIDgpIi8+CjwvZz4KPC9nPgo8L2c+CjxkZWZzPgo8Y2xpcFBhdGggaWQ9ImNsaXAwXzIwNDVfMzk1ODciPgo8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0id2hpdGUiLz4KPC9jbGlwUGF0aD4KPC9kZWZzPgo8L3N2Zz4=" x="60" y="395.5" width="26" height="26"/>
+<text x="28" y="288" font-size="11" fill="#9BA1A6">7 am</text>
+<text x="28" y="327" font-size="11" fill="#9BA1A6">9 am</text>
+<text x="28" y="366" font-size="11" fill="#9BA1A6">11 am</text>
+<text x="28" y="405" font-size="11" fill="#9BA1A6">1 pm</text>
+<text x="28" y="444" font-size="11" fill="#9BA1A6">3 pm</text>
+<text x="28" y="483" font-size="11" fill="#9BA1A6">5 pm</text>
+<text x="28" y="522" font-size="11" fill="#9BA1A6">7 pm</text>
+<text x="28" y="561" font-size="11" fill="#9BA1A6">9 pm</text>
+<rect x="86" y="278" width="12" height="285" rx="6" fill="#2A2E35"/>
+<rect x="104" y="278" width="12" height="285" rx="6" fill="#2A2E35"/>
+<rect x="86" y="323" width="12" height="9.75" rx="3" fill="#5AA0E6"/>
+<rect x="86.6" y="352.25" width="10.8" height="29.25" rx="3" fill="#16181C" stroke="#6F767E" stroke-width="1.25" stroke-dasharray="3 2"/>
+<rect x="91" y="407.5" width="2" height="11" fill="#5AA0E6" fill-opacity="0.6"/>
+<rect x="86" y="420.5" width="12" height="19.5" rx="3" fill="#5AA0E6"/>
+<rect x="86" y="449.75" width="12" height="19.5" rx="3" fill="#5AA0E6"/>
+<rect x="104" y="459.5" width="12" height="19.5" rx="3" fill="#A68BE0"/>
+<rect x="86" y="488.75" width="12" height="6" rx="3" fill="#5AA0E6"/>
+<rect x="86" y="498.5" width="12" height="29.25" rx="3" fill="#5AA0E6"/>
+<polyline points="98.0,327.9 128.0,327.9 128.0,310.0 138.0,310.0" fill="none" stroke="#5AA0E6" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="314" font-size="14" font-weight="700" fill="#ECEDEE">Standup</text>
+<text x="144" y="330" font-size="11.5" fill="#9BA1A6">9–9:30 am</text>
+<polyline points="98.0,366.9 128.0,366.9 128.0,348.0 138.0,348.0" fill="none" stroke="#6F767E" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="352" font-size="14" fill="#9BA1A6">Call the vet</text>
+<text x="144" y="368" font-size="11.5" fill="#9BA1A6">10:30 am–noon · time for it</text>
+<polyline points="98.0,430.2 128.0,430.2 128.0,386.0 138.0,386.0" fill="none" stroke="#5AA0E6" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="390" font-size="14" font-weight="700" fill="#ECEDEE">Dentist</text>
+<text x="144" y="406" font-size="11.5" fill="#9BA1A6">2–3 pm · Smile Dental · leave 1:20</text>
+<polyline points="98.0,459.5 128.0,459.5 128.0,424.0 138.0,424.0" fill="none" stroke="#5AA0E6" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="428" font-size="14" font-weight="700" fill="#ECEDEE">Soccer pickup</text>
+<text x="144" y="444" font-size="11.5" fill="#9BA1A6">3:30–4:30 pm</text>
+<polyline points="116.0,469.2 128.0,469.2 128.0,462.0 138.0,462.0" fill="none" stroke="#A68BE0" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="466" font-size="14" font-weight="700" fill="#ECEDEE">Call with Sam (Erin)</text>
+<text x="144" y="482" font-size="11.5" fill="#9BA1A6">4–5 pm</text>
+<polyline points="98.0,491.8 128.0,491.8 128.0,500.0 138.0,500.0" fill="none" stroke="#5AA0E6" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="504" font-size="14" font-weight="700" fill="#ECEDEE">Pills</text>
+<text x="144" y="520" font-size="11.5" fill="#9BA1A6">5:30–5:40 pm</text>
+<polyline points="98.0,513.1 128.0,513.1 128.0,538.0 138.0,538.0" fill="none" stroke="#5AA0E6" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="144" y="542" font-size="14" font-weight="700" fill="#ECEDEE">Dinner with the Parks at their place downtown on…</text>
+<text x="144" y="558" font-size="11.5" fill="#9BA1A6">6–7:30 pm · The Parks&#39; house</text>
+<rect x="28" y="583" width="484" height="64" rx="16" fill="#1F2227"/>
+<circle cx="50.5" cy="607" r="6.5" fill="#5DB48C"/>
+<circle cx="69.5" cy="607" r="6.5" fill="#5DB48C"/>
+<circle cx="88.5" cy="607" r="6.5" fill="#5DB48C"/>
+<text x="44" y="633" font-size="13" fill="#ECEDEE">Tasks</text>
+<circle cx="201.17" cy="607" r="6.5" fill="#E09A6E"/>
+<circle cx="220.17" cy="607" r="6.5" fill="#2A2E35"/>
+<circle cx="239.17" cy="607" r="6.5" fill="#2A2E35"/>
+<text x="194.67" y="633" font-size="13" fill="#ECEDEE">Email</text>
+<circle cx="351.83" cy="607" r="6.5" fill="#A68BE0"/>
+<circle cx="370.83" cy="607" r="6.5" fill="#A68BE0"/>
+<circle cx="389.83" cy="607" r="6.5" fill="#2A2E35"/>
+<text x="345.33" y="633" font-size="13" fill="#ECEDEE">Everything else</text>
 </svg>

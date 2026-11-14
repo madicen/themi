@@ -1,50 +1,70 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}" font-family="{{ font }}">
 <rect width="{{ width }}" height="{{ height }}" fill="{{ c.bg }}"/>
-<text x="{{ pad }}" y="{{ header.date_y|n }}" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ header.date }}</text>
-<text x="{{ pad }}" y="{{ header.name_y|n }}" font-size="14" fill="{{ c.muted }}">{{ header.name }}</text>
-{% if top_right %}
-<image href="{{ icon(top_right.icon) }}" x="{{ (width - pad - 120)|n }}" y="22" width="60" height="60"/>
-<text x="{{ width - pad }}" y="{{ header.date_y|n }}" text-anchor="end" font-size="24" font-weight="700" fill="{{ c.ink }}">{{ top_right.high }}</text>
-<text x="{{ width - pad }}" y="{{ header.name_y|n }}" text-anchor="end" font-size="14" fill="{{ c.muted }}">low {{ top_right.low }}</text>
+<text x="{{ pad }}" y="40" font-size="11" letter-spacing="1.6" font-weight="700" fill="{{ c.muted }}">{{ header.name }}</text>
+<text x="{{ pad }}" y="72" font-size="30" font-weight="700" fill="{{ c.ink }}">{{ header.weekday }}</text>
+<text x="{{ width - pad }}" y="72" text-anchor="end" font-size="15" fill="{{ c.muted }}">{{ header.date }}</text>
+{% if panel %}
+<rect x="{{ pad }}" y="{{ panel.y|n }}" width="{{ width - 2 * pad }}" height="{{ panel.height|n }}" rx="16" fill="{{ panel.fill }}"{% if panel.edge %} stroke="{{ panel.edge }}" stroke-width="1.5"{% endif %}/>
+<image href="{{ icon(panel.icon) }}" x="{{ pad + 6 }}" y="{{ (panel.y + 2)|n }}" width="64" height="64"/>
+<text x="{{ pad + 76 }}" y="{{ (panel.y + 48)|n }}" font-size="36" font-weight="700" fill="{{ c.ink }}">{{ panel.high }}</text>
+<text x="{{ width - pad - 16 }}" y="{{ (panel.y + 30)|n }}" text-anchor="end" font-size="12.5" fill="{{ c.muted }}">high today</text>
+<text x="{{ width - pad - 16 }}" y="{{ (panel.y + 48)|n }}" text-anchor="end" font-size="12.5" fill="{{ c.muted }}">low {{ panel.low }}</text>
+{% if panel.line %}
+<line x1="{{ pad + 16 }}" x2="{{ width - pad - 16 }}" y1="{{ (panel.y + 66)|n }}" y2="{{ (panel.y + 66)|n }}" stroke="{{ panel.edge or c.note_edge }}" stroke-opacity="0.6" stroke-width="1"/>
+<text x="{{ pad + 16 }}" y="{{ (panel.y + 88)|n }}" font-size="14"{% if panel.alert %} font-weight="700"{% endif %} fill="{{ c.ink }}">{{ panel.line }}</text>
 {% endif %}
-{% if band %}
-<rect x="{{ pad }}" y="{{ band.y|n }}" width="{{ width - 2 * pad }}" height="34" rx="8" fill="{{ band.fill }}" stroke="{{ band.edge }}" stroke-width="1.25"/>
-<text x="{{ pad + 14 }}" y="{{ (band.y + 22)|n }}" font-size="14" fill="{{ c.ink }}">{{ band.text }}</text>
 {% endif %}
+<text x="{{ pad }}" y="{{ calendar.head_y|n }}" font-size="18" font-weight="700" fill="{{ c.ink }}">Your calendar</text>
+<text x="{{ width - pad }}" y="{{ calendar.head_y|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ calendar.summary }}</text>
 {% for row in strip %}
-<rect x="{{ strip_x|n }}" y="{{ row.y|n }}" width="{{ strip_w|n }}" height="22" rx="6" fill="{{ row.fill }}" stroke="{{ row.edge }}" stroke-width="1"/>
-<text x="{{ (strip_x + 8)|n }}" y="{{ (row.y + 15.5)|n }}" font-size="13" font-weight="700" fill="{{ c.ink }}">{{ row.title }}</text>
+<rect x="{{ pad }}" y="{{ row.y|n }}" width="{{ width - 2 * pad }}" height="24" rx="12" fill="{{ row.fill }}"/>
+<text x="{{ pad + 12 }}" y="{{ (row.y + 16)|n }}" font-size="12.5" fill="{{ c.ink }}"><tspan font-weight="700">All day</tspan>  {{ row.title }}</text>
 {% if row.more %}
-<text x="{{ (strip_x + strip_w - 8)|n }}" y="{{ (row.y + 15.5)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ row.more }}</text>
+<text x="{{ width - pad - 12 }}" y="{{ (row.y + 16)|n }}" text-anchor="end" font-size="12" fill="{{ c.muted }}">{{ row.more }}</text>
 {% endif %}
 {% endfor %}
+{% for w in wet %}
+<rect x="{{ pad + 42 }}" y="{{ w.y|n }}" width="5" height="{{ w.height|n }}" fill="{{ c.wet }}" fill-opacity="{{ w.opacity|n }}"/>
+{% endfor %}
+{% if wet_icon %}
+<image href="{{ icon(wet_icon.icon) }}" x="{{ pad + 32 }}" y="{{ (wet_icon.y - 25)|n }}" width="26" height="26"/>
+{% endif %}
 {% for tick in ticks %}
-<line x1="{{ (timeline.x0 - 4)|n }}" x2="{{ timeline.x1|n }}" y1="{{ tick.y|n }}" y2="{{ tick.y|n }}" stroke="{{ c.grid }}" stroke-width="1"/>
-<text x="{{ pad }}" y="{{ (tick.y + 4)|n }}" font-size="11.5" fill="{{ c.muted }}">{{ tick.label }}</text>
+<text x="{{ pad }}" y="{{ (tick.y + 4)|n }}" font-size="11" fill="{{ c.muted }}">{{ tick.label }}</text>
 {% endfor %}
-{% if column %}
-<text x="{{ ((column.x0 + column.x1) / 2)|n }}" y="{{ column.head_y|n }}" text-anchor="middle" font-size="10.5" fill="{{ c.muted }}">{{ column.head }}</text>
-{% for bar in column.bars %}
-<rect x="{{ bar.x|n }}" y="{{ bar.y|n }}" width="{{ bar.width|n }}" height="{{ bar.height|n }}" rx="2" fill="{{ c.rain }}" fill-opacity="0.55"/>
+{% for x in lanes %}
+<rect x="{{ x|n }}" y="{{ lane_top|n }}" width="{{ lane_w|n }}" height="{{ lane_height|n }}" rx="{{ (lane_w / 2)|n }}" fill="{{ c.track }}"/>
 {% endfor %}
-{% if column.points %}
-<polyline points="{{ column.points }}" fill="none" stroke="{{ c.temp }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-{% endif %}
-{% for label in column.labels %}
-<text x="{{ label.x|n }}" y="{{ label.y|n }}" text-anchor="end" font-size="11" font-weight="700" fill="{{ c.temp }}">{{ label.text }}</text>
-{% endfor %}
-{% endif %}
 {% if empty %}
-<text x="{{ events_mid|n }}" y="{{ empty_y|n }}" text-anchor="middle" font-size="15" fill="{{ c.muted }}">Nothing on the calendar</text>
+<text x="{{ labels_x|n }}" y="{{ empty_y|n }}" font-size="15" fill="{{ c.muted }}">Nothing on the calendar</text>
 {% endif %}
-{% for b in blocks %}
-<rect x="{{ b.x|n }}" y="{{ b.y|n }}" width="{{ b.width|n }}" height="{{ b.height|n }}" rx="{{ 4 if b.height < 14 else 7 }}" fill="{{ b.fill }}" stroke="{{ b.edge }}" stroke-width="1.25"{% if b.dashed %} stroke-dasharray="4 3"{% endif %}/>
-{% for t in b.lines %}
-<text x="{{ t.x|n }}" y="{{ t.y|n }}" font-size="{{ t.size|n }}"{% if t.bold %} font-weight="700"{% endif %} fill="{{ c.muted if t.muted else c.ink }}">{{ t.text }}</text>
+{% for b in bars %}
+{% if b.lead %}
+<rect x="{{ (b.x + lane_w / 2 - 1)|n }}" y="{{ b.lead.y|n }}" width="2" height="{{ b.lead.height|n }}" fill="{{ b.color }}" fill-opacity="0.6"/>
+{% endif %}
+{% if b.held %}
+<rect x="{{ (b.x + 0.6)|n }}" y="{{ b.y|n }}" width="{{ (lane_w - 1.2)|n }}" height="{{ b.height|n }}" rx="3" fill="{{ c.bg }}" stroke="{{ b.color }}" stroke-width="1.25" stroke-dasharray="3 2"/>
+{% else %}
+<rect x="{{ b.x|n }}" y="{{ b.y|n }}" width="{{ lane_w|n }}" height="{{ b.height|n }}" rx="3" fill="{{ b.color }}"/>
+{% endif %}
 {% endfor %}
+{% for l in labels %}
+<polyline points="{{ l.leader }}" fill="none" stroke="{{ l.color }}" stroke-width="1.25" stroke-linejoin="round"/>
+<text x="{{ labels_x|n }}" y="{{ (l.y + 13)|n }}" font-size="14"{% if not l.quiet %} font-weight="700"{% endif %} fill="{{ c.muted if l.quiet else c.ink }}">{{ l.title }}</text>
+{% if l.beside %}
+<text x="{{ l.beside_x|n }}" y="{{ (l.y + 13)|n }}" font-size="11.5" fill="{{ c.muted }}">{{ l.beside }}</text>
+{% endif %}
+{% if l.detail %}
+<text x="{{ labels_x|n }}" y="{{ (l.y + 29)|n }}" font-size="11.5" fill="{{ c.muted }}">{{ l.detail }}</text>
+{% endif %}
 {% endfor %}
-{% for chip in chips %}
-<rect x="{{ chip.x|n }}" y="{{ chips_y|n }}" width="{{ chip.width|n }}" height="28" rx="14" fill="none" stroke="{{ c.chip_edge }}" stroke-width="1.25"/>
-<text x="{{ (chip.x + chip.width / 2)|n }}" y="{{ (chips_y + 18.5)|n }}" text-anchor="middle" font-size="13" fill="{{ c.ink }}">{{ chip.text }}</text>
+{% if plate %}
+<rect x="{{ pad }}" y="{{ plate.y|n }}" width="{{ width - 2 * pad }}" height="{{ plate.height|n }}" rx="16" fill="{{ c.panel }}"/>
+{% for m in plate.meters %}
+{% for d in m.dots %}
+<circle cx="{{ d.x|n }}" cy="{{ (plate.y + 24)|n }}" r="6.5" fill="{{ d.fill }}"/>
 {% endfor %}
+<text x="{{ m.x|n }}" y="{{ (plate.y + 50)|n }}" font-size="13" fill="{{ c.ink }}">{{ m.words }}</text>
+{% endfor %}
+{% endif %}
 </svg>

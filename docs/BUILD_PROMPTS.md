@@ -411,6 +411,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC10 | Day card: the recipe card | Day card | [x] 2026-11-13 |
 | DC11 | Day card: the step-up plan | Day card | [x] 2026-11-13 |
 | DC12 | Day card: emoji in pictures | Day card | [x] 2026-11-13 |
+| DC13 | Day card: the glanceable layout | Day card | [x] 2026-11-13 |
 
 ## Fixed technical choices
 
@@ -19162,3 +19163,48 @@ Notes:
   only. A future font update needs the same.
 - Twemoji's tooth and other white emoji are faint on the light blue blocks; that's the
   emoji's own colour.
+
+### DC13 · Day card: the glanceable layout
+Status: [x] 2026-11-13
+Depends on: DC3, DC12
+From Michael (2026-11-13): a phone mock-up of the day; take what makes the card readable at
+a glance on one phone screen. Read first: the plan's "What the family sees" (revised for
+DC13).
+- Header: a small letter-spaced name line, the weekday large, the date on the right.
+- One weather panel in place of the corner and the band: the day's icon, the high large,
+  the low, the weather line under a rule; amber with a bold line for an alert.
+- "Your calendar" heading with a count: events, task holds, overlaps.
+- Events as bars in thin lanes (one lane per overlap column, across the whole day), labels
+  to the right joined by leader lines; labels pushed apart and kept on the timeline; two
+  lines (title; time and place) when they fit, else one (title, then time). Travel is a
+  lead line before its event and "leave 1:20" in its label. Task holds dashed, muted.
+- All-day events as a pill row. Rain or snow (40%+) as a strip beside the hours with an
+  icon where it starts; the hourly temperature line goes.
+- What's waiting: a bottom panel with three three-dot meters (Tasks, Email, Everything
+  else); `numbers` puts the count after the label; `hide` leaves the panel off. No
+  "High / Medium" words.
+- Still 540 x 675 (4:5). New colour keys in `THEMES` (light and dark); existing keys
+  unchanged, so other pictures don't change.
+Tests: the day card's golden files change (busy, dark, numbers, hidden, empty, storm);
+labels never overlap and stay on the timeline (Hypothesis); a crowded day uses one-line
+labels; travel in its event's label; no energy, no red; other pictures' goldens unchanged.
+
+Notes:
+- The plan's "What the family sees" was rewritten for this layout (2026-11-13), with a
+  note under the mock-up; the mock-up drawing itself still shows the first layout.
+- Michael's choices: the meters stay at the bottom beside their buttons, and no words
+  ("High") under the dots.
+- Colours: the card keeps the family's picture palette (blue events, purple for the
+  partner), not the green of the prototype, so it matches the week, weather and other
+  pictures. New `THEMES` keys `panel`, `track`, `wet`, `meter_tasks`, `meter_email`,
+  `meter_other`; no existing key changed, and no other picture's golden file did.
+- The big number is the day's high ("high today"), not the temperature at the morning
+  time, which could disagree with the high and low.
+- `view()` keys changed (`panel`, `calendar`, `bars`, `labels`, `wet`, `plate` replace
+  `top_right`, `band`, `blocks`, `column`, `chips`); `chip_words` is now `meter_dots` and
+  `meter_words`. Labels are placed by `spread()`; past about 15 events even one-line
+  labels don't fit, and they're spaced evenly (they may touch). With nothing waiting, the
+  meters panel is left off, as the chips were.
+- Tests changed for what the prompt moved: the DC3 unit tests check the same things
+  through the new view keys; two scenarios (`test_day_card`, `test_today_page`) looked for
+  "Thursday 22 October" as one string, now the weekday and the date apart.
