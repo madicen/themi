@@ -39,7 +39,7 @@
     <label>Amounts
       <select name="cooking_units">
         <option value="written" {% if c.cooking_units == "written" %}selected{% endif %}>As written</option>
-        <option value="grams" {% if c.cooking_units == "grams" %}selected{% endif %}>With grams (where the recipe gives them)</option>
+        <option value="grams" {% if c.cooking_units == "grams" %}selected{% endif %}>With grams</option>
       </select>
     </label>
     <label>Timer chime volume <input type="range" name="cooking_chime_volume" min="0" max="100" value="{{ c.cooking_chime_volume }}"></label>

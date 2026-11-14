@@ -13,7 +13,8 @@ Photos and PDFs of a guide are F29hb: there's no way yet to read an image.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -52,6 +53,17 @@ class Guide:
         return self.owner_id is not None
 
 
+@dataclass(frozen=True)
+class GuideNotes:
+    """GW1: what another module says about a guide's lines, for the Guides page: a short
+    note beside some lines ("found online, 2 sources"), and lines it couldn't use."""
+
+    title: str
+    notes: list[tuple[str, str]] = field(default_factory=list)  # (line, note)
+    unusable_title: str = ""
+    unusable: list[str] = field(default_factory=list)
+
+
 def _guide(row: dict[str, Any]) -> Guide:
     return Guide(
         row["id"], row["name"], row["body"], row["owner_id"],
@@ -63,6 +75,8 @@ class Guides:
     def __init__(self, services: Services) -> None:
         self.services = services
         self.db = services.store.db
+        # GW1: modules that say something about a guide's lines on the Guides page
+        self.annotators: list[Callable[[Guide], GuideNotes | None]] = []
 
     def install(self) -> None:
         self.services.provide(keys.guides, self)
@@ -79,6 +93,79 @@ class Guides:
 
     def get(self, member: Member, guide_id: int) -> Guide | None:
         return next((g for g in self.visible(member) if g.id == guide_id), None)
+
+    def household(self) -> list[Guide]:
+        """The household's guides (not anyone's own), by name."""
+        rows = self.db.query("SELECT * FROM guides WHERE owner_id IS NULL ORDER BY name")
+        return [_guide(r) for r in rows]
+
+    def by_id(self, guide_id: int) -> Guide | None:
+        row = self.db.one("SELECT * FROM guides WHERE id = ?", (guide_id,))
+        return _guide(row) if row else None
+
+    def add_household(self, member: Member | None, name: str, text: str) -> Guide:
+        """GW1: a new household guide another module starts (the weights guide)."""
+        now = to_utc_iso(clock.now())
+        guide_id = self.db.execute(
+            "INSERT INTO guides (name, body, owner_id, created_by, created_at, updated_at) "
+            "VALUES (?, ?, NULL, ?, ?, ?)",
+            (name[:MAX_NAME], text.strip()[:MAX_TEXT], member.id if member else None, now, now),
+        )
+        found = self.by_id(guide_id)
+        assert found is not None
+        return found
+
+    def append_line(self, guide_id: int, line: str) -> bool:
+        """GW1: one line added at the end of a guide's text. False when the guide is gone or
+        the line would take it past its length."""
+        guide = self.by_id(guide_id)
+        line = " ".join(line.split())
+        if guide is None or not line:
+            return False
+        text = f"{guide.text.rstrip()}\n{line}"
+        if len(text) > MAX_TEXT:
+            return False
+        self._set_text(guide_id, text)
+        return True
+
+    def replace_line(self, guide_id: int, old: str, new: str | None) -> bool:
+        """GW1: the first line that is `old` (spacing aside) becomes `new`; None removes it.
+        False when no line is `old`."""
+        guide = self.by_id(guide_id)
+        if guide is None:
+            return False
+        lines = guide.text.splitlines()
+        wanted = " ".join(old.split())
+        for n, line in enumerate(lines):
+            if " ".join(line.split()) == wanted:
+                if new is None:
+                    del lines[n]
+                else:
+                    lines[n] = " ".join(new.split())
+                text = "\n".join(lines)
+                if len(text) > MAX_TEXT:
+                    return False
+                self._set_text(guide_id, text)
+                return True
+        return False
+
+    def _set_text(self, guide_id: int, text: str) -> None:
+        self.db.execute(
+            "UPDATE guides SET body = ?, updated_at = ? WHERE id = ?",
+            (text, to_utc_iso(clock.now()), guide_id),
+        )
+
+    def notes(self, guide: Guide) -> list[GuideNotes]:
+        """GW1: what modules say about this guide's lines, for its page."""
+        found = []
+        for annotate in self.annotators:
+            try:
+                notes = annotate(guide)
+            except Exception:  # a module's notes never break the page
+                continue
+            if notes is not None:
+                found.append(notes)
+        return found
 
     def save(self, member: Member, name: str, text: str, *, personal: bool) -> Guide:
         """Add a guide, or replace the text of the one with that name they can see."""

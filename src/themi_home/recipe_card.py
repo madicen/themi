@@ -11,6 +11,7 @@ website links its picture (`/recipes/<id>/card.png`).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -42,7 +43,7 @@ class Item:
     number: int = 0
 
 
-def items(recipe: Recipe) -> list[Item]:
+def items(recipe: Recipe, show: Callable[[str], str] | None = None) -> list[Item]:
     width = WIDTH - 2 * PAD
     out = [Item("heading", ("Ingredients",))]
     group = ""
@@ -50,7 +51,8 @@ def items(recipe: Recipe) -> list[Item]:
         if line.group and line.group != group:
             out.append(Item("group", tuple(wrap(line.group, 13.5, width, 2, bold=True))))
             group = line.group
-        out.append(Item("ingredient", tuple(wrap(line.text, 13.5, width - 16, 3))))
+        text = show(line.text) if show is not None else line.text  # GW2: "With grams"
+        out.append(Item("ingredient", tuple(wrap(text, 13.5, width - 16, 3))))
     out.append(Item("heading", ("Steps",)))
     step_group = ""
     for n, step in enumerate(recipe.steps, start=1):
@@ -65,7 +67,9 @@ def items(recipe: Recipe) -> list[Item]:
     return out
 
 
-def view(recipe: Recipe, theme: str = "light") -> dict[str, Any]:
+def view(
+    recipe: Recipe, theme: str = "light", show: Callable[[str], str] | None = None
+) -> dict[str, Any]:
     colors = THEMES[theme]
     width = WIDTH - 2 * PAD
     title = wrap(recipe.name, 24, width, 3, bold=True)
@@ -75,7 +79,7 @@ def view(recipe: Recipe, theme: str = "light") -> dict[str, Any]:
     y += 22
     placed = []
     cut = False
-    for item in items(recipe):
+    for item in items(recipe, show):
         gap = 18.0 if item.kind == "heading" else 6.0
         height = gap + LINE * len(item.lines)
         if y + height > MAX_HEIGHT - 70:
@@ -103,8 +107,8 @@ def view(recipe: Recipe, theme: str = "light") -> dict[str, Any]:
     }
 
 
-def card_svg(recipe: Recipe, theme: str = "light") -> str:
-    return write_svg("recipe_card.svg", [TEMPLATES], **view(recipe, theme))
+def card_svg(recipe: Recipe, theme: str = "light", show: Callable[[str], str] | None = None) -> str:
+    return write_svg("recipe_card.svg", [TEMPLATES], **view(recipe, theme, show))
 
 
 async def card_png(services: Any, member: Member, recipe: Recipe) -> bytes | None:
@@ -112,7 +116,9 @@ async def card_png(services: Any, member: Member, recipe: Recipe) -> bytes | Non
     if drawings is None:
         return None
     theme = services.store.preferences(member.id, DrawingsPreferences).picture_theme
-    svg = card_svg(recipe, theme)
+    from themi_home.gram_weights import viewer_lines
+
+    svg = card_svg(recipe, theme, viewer_lines(services, member.id))
     return await drawings.png(svg, PNG_WIDTH)
 
 

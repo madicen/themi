@@ -14,7 +14,7 @@ RECIPES = ToolGroup(
         "le (?:it|the)|half (?:a )?batch|(?:makes|serves) (?:about )?\\d|walk (?:me|us"
         ") through|let'?s make|step by step|cooking|https?://\\S*(?:recipe|food|kitche"
         "n|cook|bak|eat|vegan)|what (?:can|could) (?:i|we) make|with what (?:we|i) ha"
-        "ve"
+        "ve|\\bgrams?\\b|\\bweigh(?:s|ed|t|ts)?\\b|\\d\\s?g\\b"  # GW4, GW5: weights in grams
     ),
     examples=(
         "Can you pull up the alfredo sauce recipe?",
@@ -34,6 +34,11 @@ RECIPES = ToolGroup(
     tools=(
         "find_recipe",
         "show_recipe",
+        "weighed_gram_weight",  # GW4
+        "correct_gram_weight",  # GW5
+        "undo_gram_weight",
+        "same_ingredient",
+        "forget_gram_weight",
         "add_recipe_to_grocery_list",
         "set_recipe_yield",
         "start_cooking",
