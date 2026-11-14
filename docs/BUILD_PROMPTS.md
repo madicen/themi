@@ -418,13 +418,13 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | DC11 | Day card: the step-up plan | Day card | [x] 2026-11-13 |
 | DC12 | Day card: emoji in pictures | Day card | [x] 2026-11-13 |
 | DC13 | Day card: the glanceable layout | Day card | [x] 2026-11-13 |
-| GW1 | Gram weights: the weight book | Gram weights | [ ] |
-| GW2 | Gram weights: grams on display | Gram weights | [ ] |
-| GW3 | Gram weights: looking weights up online | Gram weights | [ ] |
-| GW4 | Gram weights: weighing tasks | Gram weights | [ ] |
-| GW5 | Gram weights: corrections from chat | Gram weights | [ ] |
-| GW6 | Gram weights: checking the family's guide | Gram weights | [ ] |
-| GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [ ] |
+| GW1 | Gram weights: the weight book | Gram weights | [x] 2026-11-14 |
+| GW2 | Gram weights: grams on display | Gram weights | [x] 2026-11-14 |
+| GW3 | Gram weights: looking weights up online | Gram weights | [x] 2026-11-14 |
+| GW4 | Gram weights: weighing tasks | Gram weights | [x] 2026-11-14 |
+| GW5 | Gram weights: corrections from chat | Gram weights | [x] 2026-11-14 |
+| GW6 | Gram weights: checking the family's guide | Gram weights | [x] 2026-11-14 |
+| GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [x] 2026-11-14 |
 
 ## Fixed technical choices
 
@@ -19470,7 +19470,7 @@ guide has 12 lines, one of them wrong ("1 Tbsp Water: 5g"). Module `gram_weights
 `themi_home/gram_weights.py`.
 
 ### GW1 · Gram weights: the weight book
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: RC2b, F29ha
 Read first: the plan's "The guide: what Themi reads and writes"; `themi/standard/guides.py`;
 `themi_home/quantities.py`.
@@ -19501,8 +19501,29 @@ flour`; Tbsp sugar is its own 12 g, not 200 / 16; a cup from a Tbsp entry by mil
 aliases; an edited guide is read again; a dropped line drops its meta row. Golden files:
 the new module.
 
+Notes:
+- GW1 to GW3 were built together and landed in the same commits (the code is one file,
+  `themi_home/gram_weights.py`).
+- `WeightBook` (`read`, `find`, `grams`, `has`, `resolve`, `line_for`), `parse_line`,
+  `read_amount`, `key`, `guide_line`. A key is the name's words, stemmed and sorted, minus
+  `DROPPED` ("fresh", "organic", "unsalted", ...). Matching is equal keys or an alias, so
+  "flour" never matches "almond flour".
+- Counted things that are the ingredient ("2 eggs", "3 cloves garlic") join the name as a
+  count ("clove garlic", each), so the guide can say "1 clove garlic 5g".
+- Track `gram_weights`, migration 0001: `gram_weights_meta`, `gram_aliases`,
+  `gram_weights_seen` (GW2), `gram_weights_queue` (GW3), and the trust category
+  `gram_weight_save` (family, tier 2: done, then said).
+- Guides (core) gained `household`, `by_id`, `add_household`, `append_line`,
+  `replace_line`, and `annotators` with `GuideNotes`: how a home module puts notes under a
+  guide on the Guides page without the core importing it. The page shows each added
+  weight's source and "Lines Themi can't use for grams".
+- The weights guide is the first household guide with "weight" or "gram" in its name; the
+  first write starts "Weights of Common Ingredients" when there's none.
+- Registered as an entry point (`gram_weights`) and in the family template after
+  `cooking`. A checkout needs `pip install -e .` again for the entry point.
+
 ### GW2 · Gram weights: grams on display
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW1, CK2
 Read first: the plan's "What the family sees" and "How a line gets its grams"; CK2's notes
 (`with_grams`, `shown`, `cooking_units`).
@@ -19521,8 +19542,27 @@ Tests: scaled lines, ranges, "1 Tbsp + 1 tsp", counts, "to taste", under 1 g, a 
 weight kept, ounces; the recipe page and picture in grams. Scenario: cook screen with
 grams. Golden file: a recipe picture in grams.
 
+Notes:
+- `weigh(line, book) -> Weighed` (`line`, `grams`, `missing`, `unit`); `rounded`,
+  `plausible`, `stated`. Grams go beside the amount ("1 Cup (120 g) flour"), as CK2's
+  `with_grams` already did, so the cook card's amount column carries them; a bare count
+  puts them after its name ("2 large eggs (100 g), beaten"). The plan's examples write
+  "1 Tbsp sugar (12 g)"; the existing placement was kept.
+- `cooking_links.shown(line, units, weights, member_id)`; `gram_weights.viewer_lines(services,
+  member_id)` for the recipe page and the recipe picture (`card_svg(recipe, theme, show)`).
+  The preference's words are now just "With grams".
+- Stated weights: `GramWeights.learn` adds a recipe's own weight for an ingredient the
+  guide lacks, per 1 unit ("1½ Cups (180 g)" goes in as "1 Cup ...: 120g"), through
+  `stage` (`gram_weights.save`). The periodic job `gram_weights.look_up` (10 minutes)
+  reads each recipe once per digest of its lines (`gram_weights_seen`), as the first admin.
+- The Cooking Companion Plan's Units bullet has a line pointing to the gram plan.
+- Golden files: `jobs.json` (`gram_weights.look_up`), `handlers.json`
+  (`gram_weights.save`), and the new `pictures/recipe_grams.svg` (`make golden` writes it).
+- The family's wrong water line shows: "1 cup water" is 80 g from "1 Tbsp Water 5g" until
+  it's corrected (GW5) or asked about (GW6).
+
 ### GW3 · Gram weights: looking weights up online
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW1, F30d
 Read first: the plan's "Web lookup"; `themi/standard/web_search.py` (`spend`, the backend);
 `web_recipes.py` (the on-the-page check).
@@ -19546,8 +19586,24 @@ Tests: the fake backend's cases (two agree, one source, disagree, off the page, 
 figure out of bounds, a page with instructions in it); the cap shared with `spend`; no
 model. Eval: 15 ingredients' extraction (not run here).
 
+Notes:
+- The search results' own text (Tavily's content, Firecrawl's description) is what's
+  read; pages aren't fetched one by one, so a lookup costs one search from the family's
+  50 a day (counted as a `search` in `web_lookups` through `WebSearch.spend`).
+- `checked` (quote in its result, the number in the quote, plausible, convertible to the
+  unit asked about) and `agreed` (the largest group within 10%, at least two sources,
+  their middle). One source: `wanted` with `agrees = 1`; disagreeing: `wanted`, 0.
+- Queue `gram_weights_queue`: cookbook recipes' misses when the job reads them; any
+  recipe's misses when someone sees it "With grams" (`shown`, with their id). At most 5
+  lookups a recipe a run; the cap stops the run and the rest wait. A `wanted` weight isn't
+  looked up again for 30 days. No backend, no member or no model: straight to `wanted`.
+- The "Found grams for ..." line goes to the person in the queue row (the viewer, or the
+  first admin for a cookbook recipe), LOW priority.
+- Eval: `tests/evals/test_gram_weight_evals.py`, 15 ingredients (3 with no right
+  answer), passes at 13. Not run here (no eval backend).
+
 ### GW4 · Gram weights: weighing tasks
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW3, 20
 Read first: the plan's "Tasks for weights no one could find"; `Tasks.create`.
 - `wanted` ingredients become tasks only for recipes someone cooked, saved to the
@@ -19561,8 +19617,25 @@ Read first: the plan's "Tasks for weights no one could find"; `Tasks.create`.
 Tests: only cooked, saved or planned; the cap of 3; a reply saves and closes; a filled
 weight cancels. Scenario: weigh teff flour.
 
+Notes:
+- There's no meal plan with recipes in Themi (meals log what was eaten; nothing plans a
+  recipe for a day), so "cooked, saved or planned" is cooked (a `cooking_sessions` row)
+  or saved (a cookbook recipe, `source = 'doc'`), and no task gets a due date. When a
+  meal plan exists, `_needed` and the due date are where it goes.
+- Migration 0002: `gram_weights_meta.task_id`. `_make_tasks` runs at the end of
+  `gram_weights.look_up`: a `wanted` key that a cooked or cookbook recipe needs gets one
+  task ever (a task done without a weight isn't made again); at most 3 open. Requester
+  is the first admin; the matcher picks who weighs it.
+- Task words: "Weigh 1 cup of <name> when you're next cooking" (volume: always a cup) or
+  "Weigh one <name>" (a count), with the plan's steps.
+- `weighed_gram_weight` (recipes group) saves per 1 unit (source `weighed`, `requested`)
+  and the executor completes the task; any other save of that weight cancels it; a line
+  added on the Guides page cancels it on the next run and drops the `wanted` row.
+- The recipes group's words gain `\bgrams?\b`, `weigh...` and `<digits> g`, so "it was
+  92 grams" reaches these tools. Golden: `tools.json`.
+
 ### GW5 · Gram weights: corrections from chat
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW1
 Read first: the plan's "Corrections from chat".
 - Tools on the recipes group: `correct_gram_weight(ingredient, amount, unit, grams)`
@@ -19576,8 +19649,26 @@ Read first: the plan's "Corrections from chat".
 Tests: the water fix (5 to 15 g) and undo; 150 g asked about; an alias; forget. Scenario:
 "a tablespoon of water is 15 g, not 5".
 
+Notes:
+- `GramWeights.correct` rewrites only the matching number on a line that holds two
+  (`regrammed`: "1mL Water / 1 Tbsp Water: ... 1g / 15g"), the whole line when it holds
+  one, or adds a line. The executor takes `old` (the line it replaces), `undo` and a
+  `None` line (forget). Corrections, undos and forgets are staged as `requested`.
+- The reply is sent by the tool as a card with [Undo] (button kind `gram_weight`):
+  "Changed: 1 Tbsp water is 15 g now. That was in your guide as 5 g. Say undo to put it
+  back." A weight Themi added says "(was 98 g)". Undo is for 24 hours, by button or
+  `undo_gram_weight`; it deletes the meta row, so the line reads as the family's again
+  (the source before the correction isn't kept).
+- The plausibility question offers ÷10 or ×10 when that's plausible: "150 g for 1 Tbsp
+  seems a lot. Did you mean 15?" [15 g] [150 g]; a tap applies it.
+- `forget_gram_weight` takes a one-weight line out and marks the key `forgotten`: not
+  looked up, not learned from a recipe, until someone gives a weight. A line holding two
+  weights is refused with "change that line on the Guides page".
+- Replies to a recipe line: the model reads the replied-to line and names the
+  ingredient (the tool's description says so); no extra buttons to pick a line.
+
 ### GW6 · Gram weights: checking the family's guide
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW3, GW5
 Read first: the plan's "What exists today".
 - Once, and after each edit of the weights guide: a family line outside the bounds, or
@@ -19586,10 +19677,28 @@ Read first: the plan's "What exists today".
   isn't asked again for that line's text.
 Tests: the Pi's water line asked about once; Keep remembered; a fine line not asked.
 
+Notes:
+- Its own hourly job, `gram_weights.check`, not part of `look_up`: each run makes at most
+  3 web checks (one search each, from the family's 50 a day). Migration 0003:
+  `gram_weights_checked` (line, part on the line, `fine` / `asked` / `kept`), so each
+  wording is checked once and an edited line is checked again.
+- The Pi's water line is within the plausibility bounds (5 g a Tbsp is 0.34 g/ml): the
+  web check is what catches it ("Your guide says 1 Tbsp water is 5 g; it's usually
+  about 15 g. Change it?" [Change] [Keep]). A line outside the bounds is asked about with
+  no search ("... which can't be right (maybe 3 g?)").
+- Asked of the guide's author (`created_by`), else the first admin, as a LOW line.
+  [Change] is GW5's correction; [Keep] marks it `kept`.
+
 ### GW7 · Gram weights: grams in a recipe saved to the cookbook
-Status: [ ]
+Status: [x] 2026-11-14
 Depends on: GW2, RC5
 Read first: the plan's "Goal"; RC5's notes (`cookbook_save.py`).
 - A web recipe saved to the cookbook is written with its known grams in each line ("1 cup
   almond flour (96 g)"), as `grams_for` gives them; a line with no known weight as written.
 Tests: the saved doc's lines carry grams; a line with its own weight isn't doubled.
+
+Notes:
+- `CookbookSave.entry` runs each ingredient line through `weigh` with the weights book,
+  whatever the saver's units preference: the preview and the doc both show
+  "1 cup (120 g) flour". A line's own weight is moved beside its amount once ("1 cup
+  (190 g) sugar"), not replaced by the guide's.
