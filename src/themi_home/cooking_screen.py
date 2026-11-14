@@ -24,6 +24,7 @@ from themi_home.body_double_scene import CHEER_FOR, pick_cooking_state
 from themi_home.cooking_links import MORE, shown
 from themi_home.cooking_timers import PRESETS
 from themi_home.cooking_wrap import WRAP_TAPS
+from themi_home.gram_weights import GramWeights
 from themi_home.quantities import AMOUNT, BRACKET, LEADING_WORDS, NeedsYield, fraction, scale_for
 
 if TYPE_CHECKING:
@@ -253,11 +254,12 @@ def amounts(
     """CK2: the lines this step uses, at the session's scale, and every line for the
     drawer, grouped as the recipe groups them. Used lines are marked."""
     units = cooking.preferences(viewer.id).cooking_units
+    weights = cooking.services.maybe(GramWeights)  # GW2: grams from the weights guide
     scaled = cooking.lines(session, recipe)
     links = cooking.links.links(recipe, cooking.groceries.known(recipe))
 
     def line(n: int) -> dict[str, Any]:
-        text = shown(scaled[n], units)
+        text = shown(scaled[n], units, weights, viewer.id)
         name, amount = name_and_amount(text)
         return {"n": n, "line": text, "name": name, "amount": amount, "used": n in session.used}
 

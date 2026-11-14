@@ -10,6 +10,20 @@
 {% call(part) row(guide.name, chips=[("Just for you", "info")] if guide.personal else [], id="guide-" ~ guide.id) %}
 {% if part == "body" %}
   <pre class="guide">{{ guide.text }}</pre>
+  {% for n in notes.get(guide.id, []) %}
+  {% if n.notes %}
+  <p class="muted">{{ n.title }}</p>
+  <ul class="guide-notes">
+    {% for line, note in n.notes %}<li>{{ line }} <span class="chip info">{{ note }}</span></li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% if n.unusable %}
+  <p class="muted">{{ n.unusable_title }}</p>
+  <ul class="guide-notes">
+    {% for line in n.unusable %}<li>{{ line }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% endfor %}
   <div class="danger-zone">
     <form method="post" action="/guides/{{ guide.id }}/delete">
       <input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete</button>

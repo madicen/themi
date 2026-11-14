@@ -23,9 +23,9 @@ def routes(kit: Kit) -> APIRouter:
     @router.get("/guides", response_class=HTMLResponse)
     def guides_page(request: Request) -> HTMLResponse:
         session = kit.current(request)
-        return kit.with_flash(
-            request, "guides.html", session, guides=guides().visible(session.member)
-        )
+        shown = guides().visible(session.member)
+        notes = {g.id: guides().notes(g) for g in shown}  # GW1: sources of gram weights
+        return kit.with_flash(request, "guides.html", session, guides=shown, notes=notes)
 
     @router.post("/guides")
     async def add_guide(request: Request) -> Response:

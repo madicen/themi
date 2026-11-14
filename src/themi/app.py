@@ -120,6 +120,7 @@ from themi_home.cookbook_save import CookbookSaveModule
 from themi_home.cooking import CookingModule
 from themi_home.cooking_timers import CookingTimersModule
 from themi_home.expense_sync import ExpenseSyncModule
+from themi_home.gram_weights import GramWeightsModule
 from themi_home.groceries import GroceriesModule
 from themi_home.home_modules import (
     CatGenieModule,
@@ -237,6 +238,7 @@ def family_modules(
         RecipeGroceriesModule(),  # RC2a
         RecipeIdeasModule(),  # RC7
         CookingModule(),  # RC3a
+        GramWeightsModule(),  # GW1: recipes' amounts in grams
         BurnoutModule(),
         ConversationModeModule(),
         CheckinReviewsModule(),

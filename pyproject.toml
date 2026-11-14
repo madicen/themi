@@ -90,6 +90,7 @@ gemini = "themi.standard.ai_providers:GeminiModule"
 gmail = "themi_google.google_modules:GmailModule"
 google = "themi_google.google_modules:GoogleModule"
 google_tasks = "themi_google.connector_modules:GoogleTasksModule"
+gram_weights = "themi_home.gram_weights:GramWeightsModule"
 groceries = "themi_home.groceries:GroceriesModule"
 guided_steps = "themi_home.body_double_guided:GuidedStepsModule"
 guides = "themi.standard.guides:GuidesModule"
@@ -160,6 +161,7 @@ themi_home = [  # CR17b: its own pages' templates and static files
     "chore_chart_schema/*.sql",  # CR21a: the chore chart's own track
     "meals_schema/*.sql",  # 35a: the meal log
     "cooking_schema/*.sql",  # CK1: the cooking companion
+    "gram_weights_schema/*.sql",  # GW1: where each gram weight came from
     "takeout_schema/*.sql",  # 35a: takeout favourites and rescues
     "spending_schema/*.sql",  # EX1a: expense sheets (left out until 2026-11-13)
     "expense_sync_schema/*.sql",

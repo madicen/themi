@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from themi import clock
@@ -33,6 +34,7 @@ from themi.modules import Module, ModuleContext
 from themi_google.connectors.gdocs import DocsConflict, DocsError
 from themi_home import cookbook as book
 from themi_home import home_groups
+from themi_home.cookbook import Line
 from themi_home.recipes import PICTURE_SOURCE, Recipe, Recipes
 
 if TYPE_CHECKING:
@@ -95,8 +97,19 @@ class CookbookSave:
         if not recipe.url and site == PICTURE_SOURCE:
             source = "a photo"  # F34m: "your picture" is only theirs to read
         return book.entry_text(
-            recipe.name, list(recipe.ingredients), list(recipe.steps), list(recipe.notes), source
+            recipe.name, self._with_grams(recipe), list(recipe.steps), list(recipe.notes), source
         )
+
+    def _with_grams(self, recipe: Recipe) -> list[Line]:
+        """GW7 (Michael): a web recipe goes into the cookbook with the grams Themi knows for
+        its lines ("1 cup almond flour (96 g)"); a line with no known weight as written."""
+        from themi_home.gram_weights import GramWeights, weigh
+
+        weights = self.services.maybe(GramWeights)
+        if weights is None:
+            return list(recipe.ingredients)
+        known = weights.book()
+        return [replace(i, text=weigh(i.text, known).line) for i in recipe.ingredients]
 
     def preview(self, recipe: Recipe, section: str) -> str:
         lines = [f"Here's how it would go in the cookbook, under {section}:"]

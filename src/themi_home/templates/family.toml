@@ -51,6 +51,7 @@ modules = [
     "recipe_groceries",
     "recipe_ideas",
     "cooking",
+    "gram_weights",  # GW1: recipes' amounts in grams
     "burnout",
     "conversation_mode",
     "checkin_reviews",

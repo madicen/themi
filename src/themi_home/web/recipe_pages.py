@@ -19,6 +19,7 @@ from themi.core import keys
 from themi.web.kit import Kit
 from themi_google.connectors.gdocs import DocsError, doc_id_from
 from themi_google.connectors.google import DRIVE_FILE_SCOPE
+from themi_home.gram_weights import viewer_lines
 from themi_home.quantities import NeedsYield, describe, scale_for, scale_line
 from themi_home.recipe_card import card_png
 from themi_home.recipe_groceries import BAKING_TEXT, SCALED_TEXT, is_baking
@@ -193,7 +194,8 @@ def routes(kit: Kit) -> APIRouter:
         if recipe is None or recipe.removed:
             return kit.redirect("/recipes", "That recipe isn't in the cookbook any more.")
         factor, problem = scaled(recipe, scale)
-        lines = [scale_line(i.text, factor).line for i in recipe.ingredients]
+        show = viewer_lines(app.services, session.member.id)  # GW2: "With grams"
+        lines = [show(scale_line(i.text, factor).line) for i in recipe.ingredients]
         groups = [i.group for i in recipe.ingredients]
         return kit.with_flash(
             request,

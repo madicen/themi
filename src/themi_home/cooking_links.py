@@ -36,6 +36,7 @@ from themi_home.recipes import Recipe, stem
 
 if TYPE_CHECKING:
     from themi.core.services import Services
+    from themi_home.gram_weights import GramWeights
     from themi_home.recipe_groceries import Ingredient
 
 log = logging.getLogger(__name__)
@@ -224,5 +225,11 @@ def with_grams(line: str) -> str:
     return f"{line[:head_end]} {weight}{rest}"
 
 
-def shown(line: str, units: str) -> str:
-    return with_grams(line) if units == "grams" else line
+def shown(
+    line: str, units: str, weights: GramWeights | None = None, member_id: int | None = None
+) -> str:
+    """A line in the viewer's units. GW2: "With grams" converts from the weights guide
+    when the gram_weights module is on; without it, only weights the line gives."""
+    if units != "grams":
+        return line
+    return weights.shown(line, units, member_id) if weights is not None else with_grams(line)
