@@ -25,6 +25,9 @@ PDA-sensitive phrasing, trust-tiered automation, Gmail triage, pantry and device
 - Day card (the morning message's picture of the day, and other drawn pictures): Themi Day
   Card Plan, https://claude.ai/artifact/3az7MeCeCDfy7AcEkMSJ2H. Read it the same way. It is
   the design source for the DC prompts.
+- Gram weights (recipes' amounts in grams, the weights guide): Themi Gram Conversion Plan,
+  https://claude.ai/artifact/4Vu3tyvfmARjojgvocuqZz. Read it the same way. It is the design
+  source for the GW prompts.
 
 ## "Implement the next prompt"
 
