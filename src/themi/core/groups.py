@@ -55,6 +55,32 @@ SCHEDULES = ToolGroup(
 )
 
 
+# F43a (bug #207): the to-dos in a picture, all added at once. Every picture turn offers it
+# (PICTURE_GROUPS), so the words only matter for a follow-up after the picture.
+TASK_PICTURES = ToolGroup(
+    name="task_pictures",
+    description="adding the to-dos in a picture they sent",
+    words=(
+        "(?:these|those|this list of) (?:tasks|to.?dos|chores)\\b"
+        "|pull (?:these|those|them|this|it) in"
+    ),
+    examples=(
+        "Can you add these to-dos from my screenshot?",
+        "Pull these tasks in for me",
+        "Put this list of to-dos on my list",
+        "Add everything in this photo as tasks",
+        "These are the jobs for this weekend, add them",
+        "Make tasks out of this checklist",
+        "Here's my to-do app, copy it over",
+        "Bring those tasks over from the picture",
+        "Add the items in this note to my tasks, with their sub-items",
+        "Take this list and make each one a task for my partner",
+    ),
+    tools=("tasks_from_picture",),
+    order=15,
+)
+
+
 CALENDAR = ToolGroup(
     name="calendar",
     description="calendar events, day summaries, drive times, blocking time, the weather",

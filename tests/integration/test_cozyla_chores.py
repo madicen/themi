@@ -355,3 +355,21 @@ async def test_a_course_done_in_themi_isnt_brought_in_again(
     assert open_chores(scenario) == {}
     linked = scenario.app.db.scalar("SELECT COUNT(*) FROM cozyla_chores")
     assert linked == 0  # let go once it's over
+
+
+async def test_the_walls_icon_is_kept_for_pictures(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    """F43b (idea #208): a chore's icon as the wall has it, so pictures show its emoji."""
+    from themi.drawing.emoji import item_emoji
+
+    fake_cozyla.add_chore(
+        "Clean kitchen", ["m-erin"], days="Wednesday", icon="czl_chores_emoji#_#sparkles#_#✨"
+    )
+    await sync(scenario)
+    kitchen = open_chores(scenario)["Clean kitchen"]
+    assert board(scenario).icon_of(kitchen) == "czl_chores_emoji#_#sparkles#_#✨"
+    assert item_emoji(kitchen.title, board(scenario).icon_of(kitchen)) == "✨"
+    fake_cozyla.chore_named("Clean kitchen")["icon"] = "czl_chores_emoji#_#bucket#_#🪣"
+    await sync(scenario)
+    assert item_emoji(kitchen.title, board(scenario).icon_of(kitchen)) == "🪣"

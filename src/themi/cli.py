@@ -56,6 +56,10 @@ def build_parser() -> argparse.ArgumentParser:
     picture.add_argument("--member", required=True, help="whose, by name")
     picture.add_argument("--day", default="", help="YYYY-MM-DD (default: their today)")
     picture.add_argument("--out", required=True, help="a .png or .svg file to write")
+    picture.add_argument("--who", default="me", help="tasks: me, everyone or a name (F43b)")
+    picture.add_argument(
+        "--with-chores", action="store_true", help="tasks: their chart's chores first (F43b)"
+    )
     feedback = commands.add_parser(
         "feedback", help="print new /bug and /idea reports from the chat, to paste into Claude"
     )
@@ -320,7 +324,9 @@ def _run() -> None:
         os._exit(0)
 
 
-def _picture(kind: str, name: str, day: str, out: str) -> int:
+def _picture(
+    kind: str, name: str, day: str, out: str, who: str = "me", with_chores: bool = False
+) -> int:
     """`themi picture day_card --member Erin --out card.png`: a picture as it would be
     sent, drawn from this Themi's own data, written to a file."""
     import asyncio
@@ -343,17 +349,17 @@ def _picture(kind: str, name: str, day: str, out: str) -> int:
     when = date.fromisoformat(day) if day else card.today(member)
     path = Path(out)
     if kind in ("tasks", "routines"):  # F42g
-        from themi.standard import list_card
+        from themi.standard import list_card, task_card
 
-        data = (
-            list_card.tasks_data(app.services, member)
-            if kind == "tasks"
-            else list_card.routines_data(app.services, member, when)
-        )
+        if kind == "tasks":  # F43b: cards
+            cards = task_card.task_cards(app.services, member, who, with_chores)
+            data, svg = cards, task_card.cards_svg(cards) if cards else ""
+        else:
+            routines = list_card.routines_data(app.services, member, when)
+            data, svg = routines, list_card.list_svg(routines) if routines else ""
         if data is None:
             print(f"{member.name} has nothing on their {kind} to draw.", file=sys.stderr)
             return 1
-        svg = list_card.list_svg(data)
         if path.suffix == ".svg":
             path.write_text(svg)
         else:
@@ -701,7 +707,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "login-link":
             print(_login_link(args.name))
         elif args.command == "picture":
-            return _picture(args.kind, args.member, args.day, args.out)
+            return _picture(args.kind, args.member, args.day, args.out, args.who, args.with_chores)
         elif args.command == "feedback":
             return _feedback(args.all, args.done, args.wrong_tool, args.not_wrong, args.pictures)
         elif args.command == "backup":

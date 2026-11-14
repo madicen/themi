@@ -36,10 +36,9 @@ ROUTINES = ListCardData(
 
 
 def test_the_cards_match_their_golden_files() -> None:
-    golden("tasks", list_svg(TASKS))
     golden("routines", list_svg(ROUTINES))
     golden("routines_dark", list_svg(ROUTINES, "dark"))
-    assert to_png(list_svg(TASKS), 1080)[:4] == b"\x89PNG"
+    assert to_png(list_svg(TASKS), 1080)[:4] == b"\x89PNG"  # tasks.svg is F43b's cards now
 
 
 def test_a_long_list_is_counted_not_crammed() -> None:

@@ -28,6 +28,7 @@ from themi.autonomy import ExecutionContext
 from themi.channels.events import Button, InboundEvent
 from themi.channels.outbox import Outbox, Priority
 from themi.core import groups, keys, naming
+from themi.core.capabilities import PICTURES
 from themi.core.prompts import OpenItem
 from themi.core.services import Services
 from themi.core.tools import Done as DoneLine
@@ -305,6 +306,9 @@ class TaskBoard:
         # CR21b: where a task shows on a mirror, for the model ("Shows on the chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.display_notes: list[Callable[[Task], str | None]] = []
+        # F43b: a mirror's icon for a task, when a mirror keeps one (a chore chart's). Pictures
+        # show its emoji (`themi.drawing.emoji.item_emoji`).
+        self.icon_sources: list[Callable[[Task], str | None]] = []
         # Chores waiting their turn for someone's chart (C2d): no nudges to them meanwhile.
         self.holds: list[Callable[[Task, Member], bool]] = [self._waits]
         # Called each time a task is done (a repeating one, each round): (task, by whom,
@@ -384,6 +388,10 @@ class TaskBoard:
     def shown(self, column: str = "id") -> str:
         """SQL for "AND ..." in a query of open tasks: leaves out the ones set aside."""
         return not_set_aside(self.set_aside, column)
+
+    def icon_of(self, task: Task) -> str:
+        """A mirror's icon for this task, or "" (F43b)."""
+        return next((icon for source in self.icon_sources if (icon := source(task))), "")
 
     def open_for(self, member: Member) -> list[Task]:
         rows = self.db.query(  # shared (escalated to both) chores come first, for everyone
@@ -1952,7 +1960,8 @@ CALLED_A_RULE = re.compile(r"\b(?:new|house(?:hold)?) rule\b|\bmake (?:it|that|t
     "('one of us', 'either of us': on both lists, whoever does it closes it), or 'anyone' "
     "when it just needs doing ('can someone...'); then Themi works out who has room for it. "
     "A small thing at a set time where a nudge is all they want ('remind me to drink green "
-    "tea at 2') is add_reminder, not a task.",
+    "tea at 2') is add_reminder, not a task. For a picture of several to-dos, use "
+    "tasks_from_picture.",
     {
         "title": {"type": "string", "description": "What needs doing, e.g. 'Call the vet'."},
         "kind": {"type": "string", "enum": TASK_KINDS},
@@ -2790,8 +2799,9 @@ class TasksModule(Module):
     name = "tasks"
     title = "Tasks and chores"
     summary = "The task board: tasks, chores, schedules and check-ins."
-    tool_groups = (groups.SCHEDULES,)
+    tool_groups = (groups.SCHEDULES, groups.TASK_PICTURES)
     preferences = TasksPreferences
+    optional = ("pictures",)  # F43a: the to-dos in a picture, when pictures are looked at
 
     def install(self, ctx: ModuleContext) -> None:
         from themi.modules.web import MenuEntry
@@ -2819,5 +2829,9 @@ class TasksModule(Module):
             TaskBoard(ctx.services, Matcher(ctx.services.store, ctx.get(EnergyModel)))
         )
         board.install()
+        if PICTURES in ctx.services.capabilities:
+            from themi.standard.task_pictures import tasks_from_picture
+
+            ctx.tool(tasks_from_picture)  # F43a
         ctx.periodic("tasks.resurface", timedelta(minutes=15), board.resurface)
         ctx.periodic("tasks.schedules", timedelta(hours=1), board.check_schedules)

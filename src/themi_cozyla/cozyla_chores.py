@@ -93,6 +93,7 @@ class CozylaChores:
 
     def install(self) -> None:
         self.board.display_notes.append(self.where)
+        self.board.icon_sources.append(self.icon_of)  # F43b
 
     def where(self, task: Task) -> str | None:
         """The day a task shows on the chart, for the model; None if it isn't for the chart."""
@@ -136,6 +137,7 @@ class CozylaChores:
         by_uid = {c.uid: c for c in chores}
         try:
             await self._bring_in(chores)
+            self._keep_icons(by_uid)
             await self._ticks_from_wall(by_uid)
             await self._ticks_to_wall(by_uid)
             await self._bring_up()
@@ -188,6 +190,22 @@ class CozylaChores:
             self._link(task.id, chore.uid)
             linked.add(chore.uid)
             log.info("Brought in Cozyla chore %s as task %s", chore.uid, task.id)
+
+    def _keep_icons(self, by_uid: dict[str, Chore]) -> None:
+        """F43b: each linked chore's icon as the wall has it, for pictures (`icon_of`)."""
+        for link in self.db.query("SELECT task_id, chore_uid, icon FROM cozyla_chores"):
+            chore = by_uid.get(link["chore_uid"])
+            icon = str(chore.raw.get("icon") or "") if chore is not None else ""
+            if chore is not None and icon != (link["icon"] or ""):
+                self.db.execute(
+                    "UPDATE cozyla_chores SET icon = ? WHERE task_id = ?",
+                    (icon or None, link["task_id"]),
+                )
+
+    def icon_of(self, task: Task) -> str | None:
+        """The wall's icon for this task's chore, as last read (F43b)."""
+        row = self.db.one("SELECT icon FROM cozyla_chores WHERE task_id = ?", (task.id,))
+        return row["icon"] if row and row["icon"] else None
 
     async def _ticks_from_wall(self, by_uid: dict[str, Chore]) -> None:
         """A tick on the wall for an open round's day closes the round, as whoever ticked."""

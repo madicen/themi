@@ -194,6 +194,23 @@ class ChartQueue:
             if self.on_chart(t) and not is_routine(t) and (t.due_on or today) <= today
         ]
 
+    def chart_for(self, member: Member, today: date) -> list[Task]:
+        """Their chores up on the chart now, as the wall shows them (C2d: up to their limit,
+        plus the important ones that always show), oldest first. The chore chart picture's
+        column, and F43b's "On the chart"."""
+        up = list(self.up_for(member))
+        seen = {t.id for t in up}
+        for task in self.board.open_for(member):  # the important ones always show (C2d)
+            if (
+                task.id not in seen
+                and task.importance == "high"
+                and self.on_chart(task)
+                and not is_routine(task)
+                and (task.due_on or today) <= today
+            ):
+                up.append(task)
+        return sorted(up, key=lambda t: (t.due_on or today, t.title))
+
     def held(self, task: Task, member: Member) -> bool:
         """Waiting its turn: this person has a limit, it counts, and it isn't up."""
         limit = self.prefs(member).chart_limit

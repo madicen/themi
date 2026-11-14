@@ -971,6 +971,23 @@
    "tools": [
     "pause_music"
    ]
+  },
+  {
+   "id": "picture-tasks-follow-up",
+   "kind": "follow-up",
+   "message": "Can you pull those in as tasks?",
+   "before": "[a picture] my list for the week",
+   "tools": [
+    "tasks_from_picture"
+   ]
+  },
+  {
+   "id": "picture-tasks-plain",
+   "kind": "plain",
+   "message": "Add these to-dos for me",
+   "tools": [
+    "tasks_from_picture"
+   ]
   }
  ]
 }
