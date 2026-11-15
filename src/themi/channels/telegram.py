@@ -56,6 +56,7 @@ from telegram.request import HTTPXRequest
 
 from themi import clock
 from themi.accounts import AccountStore, InviteError, Member
+from themi.ai.types import PDF
 from themi.channels.buttons import (  # SL3: shared with Slack; the names stay importable here
     ALREADY_HANDLED_TEXT,
     NOT_YOURS_TEXT,
@@ -505,7 +506,8 @@ class TelegramChannel:
 
     async def _download_picture(self, message: Message) -> Picture | None:
         """F34g: a photo (its largest size under the limit) or an image sent as a file,
-        downloaded to memory only."""
+        downloaded to memory only. F29hb: a PDF sent as a file comes the same way (a guide
+        from a PDF), under the same limit."""
         if message.photo:
             sizes = [
                 p for p in message.photo if not p.file_size or p.file_size <= MAX_PICTURE_BYTES
@@ -515,7 +517,7 @@ class TelegramChannel:
                 return None
             best = max(sizes, key=lambda p: p.width * p.height)
             file_id, mime_type = best.file_id, "image/jpeg"  # Telegram's photos are JPEGs
-        elif message.document and (message.document.mime_type or "").startswith("image/"):
+        elif message.document and _picture_like(message.document.mime_type or ""):
             document = message.document
             if document.file_size and document.file_size > MAX_PICTURE_BYTES:
                 log.info("Skipping a %d-byte image (too large)", document.file_size)
@@ -853,3 +855,8 @@ def _albums(updates: Sequence[Update]) -> list[list[Update]]:
                 continue
         groups.append([update])
     return groups
+
+
+def _picture_like(mime_type: str) -> bool:
+    """An image sent as a file (F34g), or a PDF (F29hb)."""
+    return mime_type.startswith("image/") or mime_type == PDF

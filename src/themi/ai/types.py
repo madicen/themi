@@ -32,9 +32,13 @@ class TextBlock:
     text: str
 
 
+PDF = "application/pdf"
+
+
 @dataclass(frozen=True)
 class ImageBlock:
-    """A picture someone sent (F34g): the bytes go to the model, never to disk."""
+    """A picture someone sent (F34g): the bytes go to the model, never to disk. F29hb: or a
+    PDF (`mime_type` `PDF`), which only a backend with `Capabilities.pdfs` is sent."""
 
     data: bytes = field(repr=False)
     mime_type: str
@@ -83,6 +87,11 @@ class Message:
     @property
     def images(self) -> tuple[ImageBlock, ...]:
         return tuple(b for b in self.content if isinstance(b, ImageBlock))
+
+    @property
+    def pdfs(self) -> bool:
+        """F29hb: whether a PDF goes with it."""
+        return any(b.mime_type == PDF for b in self.images)
 
     @property
     def tool_calls(self) -> tuple[ToolCall, ...]:

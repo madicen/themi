@@ -25,7 +25,24 @@ def routes(kit: Kit) -> APIRouter:
         session = kit.current(request)
         shown = guides().visible(session.member)
         notes = {g.id: guides().notes(g) for g in shown}  # GW1: sources of gram weights
-        return kit.with_flash(request, "guides.html", session, guides=shown, notes=notes)
+        originals = {g.id: guides().originals(g.id) for g in shown}  # F29hb
+        return kit.with_flash(
+            request, "guides.html", session, guides=shown, notes=notes, originals=originals
+        )
+
+    @router.get("/guides/{guide_id}/original/{n}")
+    def guide_original(request: Request, guide_id: int, n: int) -> Response:
+        """F29hb: the photo or PDF a guide was read from, decrypted only for this answer."""
+        session = kit.current(request)
+        found = guides().original(session.member, guide_id, n)
+        if found is None:
+            return Response(status_code=404)
+        mime_type, data = found
+        return Response(
+            data,
+            media_type=mime_type,
+            headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )
 
     @router.post("/guides")
     async def add_guide(request: Request) -> Response:

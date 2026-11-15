@@ -76,7 +76,7 @@ class ScriptedProvider:
     name: str = "scripted"
     model: str = "scripted-1"
     capabilities: Capabilities = field(
-        default_factory=lambda: Capabilities(audio=True, images=True)
+        default_factory=lambda: Capabilities(audio=True, images=True, pdfs=True)
     )
     requests: list[RecordedRequest] = field(default_factory=list)
     embed_with: Callable[[str], Sequence[float]] | None = None

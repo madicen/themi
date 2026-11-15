@@ -68,6 +68,19 @@ mode with nobody watching.
 
 ## Running the tests
 
+While writing or fixing code, run the fewest tests that answer the question, and the
+full suite once at the end:
+
+1. A new or failing test: run just it, in one process (no `-n`, about 3s), e.g.
+   `.venv/bin/python -m pytest tests/unit/test_x.py::test_name -q` or `-k name`.
+   Repeat until it fails for the right reason, then until it passes.
+2. Then what the change touched: `make test-changed`.
+3. After a failure in a bigger run, rerun only the failures, by the ids on its `FAILED`
+   lines (`pytest id1 id2 -q`), not the whole suite. Not `--lf`: `.pytest_cache` is
+   shared with other sessions and keeps stale failures, so it reruns far more.
+4. Last, once: `make lint` and `make test-all`. If that turns something up, go back to 1
+   for it, then `make test-changed`, and finish with one more `make test-all`.
+
 - `make test-all` takes about 4 minutes on 4 cores when nothing else is running. Two full
   runs at once (another session, a background run left going) take far longer each, so
   don't start one while another is running.

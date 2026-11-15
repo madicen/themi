@@ -83,7 +83,9 @@ class ModelBank:
     def __getitem__(self, model: str) -> ScriptedProvider:
         if model not in self.providers:
             self.providers[model] = ScriptedProvider(
-                name="scripted", model=model, capabilities=Capabilities(audio=True, images=True)
+                name="scripted",
+                model=model,
+                capabilities=Capabilities(audio=True, images=True, pdfs=True),
             )
         return self.providers[model]
 
@@ -251,6 +253,17 @@ class Scenario:
         return await self._collect(
             name,
             lambda chat: self.telegram.send_photo(chat, data, caption=caption, media_group=album),
+        )
+
+    async def document(
+        self, name: str, data: bytes, mime_type: str = "application/pdf", caption: str = ""
+    ) -> list[str]:
+        """F29hb: a file sent in chat (a PDF; F34g's image sent as a file)."""
+        return await self._collect(
+            name,
+            lambda chat: self.telegram.send_image_file(
+                chat, data, mime_type=mime_type, caption=caption
+            ),
         )
 
     async def album(

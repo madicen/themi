@@ -23,6 +23,10 @@ Ordered prompts for building Themi. Work through them one at a time: say
 - Gram weights (GW prompts, at the end) have their own design doc, the
   [Themi Gram Conversion Plan](https://claude.ai/artifact/4Vu3tyvfmARjojgvocuqZz): recipes'
   amounts in grams, from the family's weights guide, the web, weighing and corrections.
+- The oven (OV prompts, at the end) has its own design doc, the
+  [Themi Oven Module Plan](https://claude.ai/artifact/LPAkQkcza7v4iFCG25AjiK): the Café
+  CHS950P through SmartHQ, read in chat, and preheat, proof, oven timers and off from the
+  cook screen.
 - Slack (SL prompts, at the end) has its own design doc, the
   [Themi Slack Module Plan](https://claude.ai/artifact/JrGh1duN5kCKLmZjx4eHjB): the work
   Themi in Slack direct messages instead of Telegram.
@@ -220,7 +224,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F29f | Feedback: "Add X to the list" doesn't add "Add X", and "tasks I could take" isn't a routine | Feedback | [x] 2026-11-05 |
 | F29g | Idea: list items with sub-items, at any depth | Feedback | [x] 2026-11-05 |
 | F29ha | Idea: the family's own guides, given as text, and looked up | Feedback | [x] 2026-11-05 |
-| F29hb | Idea: a guide from a photo or a PDF | Feedback | [ ] |
+| F29hb | Idea: a guide from a photo or a PDF | Feedback | [x] |
 | F30a | Feedback: a refused task change changes nothing, and "the task you just made" is that one | Feedback | [x] 2026-11-06 |
 | F30b | Feedback: a gentle rewrite keeps every fact and adds none, and chat says when it doesn't know | Feedback | [x] 2026-11-06 |
 | F30c | Feedback: a stranger's Nextdoor post isn't a tenant emergency | Feedback | [x] 2026-11-06 |
@@ -286,7 +290,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
-| F44d | Feedback: a split task can be put back together | Feedback | [ ] |
+| F44d | Feedback: a split task can be put back together | Feedback | [x] 2026-11-15 |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
 | CM1c | Conversation mode: sidecar evals and wider rollout | Conversation mode | [x] 2026-11-05 |
@@ -429,6 +433,14 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GW5 | Gram weights: corrections from chat | Gram weights | [x] 2026-11-14 |
 | GW6 | Gram weights: checking the family's guide | Gram weights | [x] 2026-11-14 |
 | GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [x] 2026-11-14 |
+| OV1 | Oven: SmartHQ spike at the range | Oven | [ ] |
+| OV2 | Oven: connector, account, status in chat | Oven | [ ] |
+| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [ ] |
+| OV4 | Oven: preheat from the cook screen | Oven | [ ] |
+| OV5 | Oven: oven timers from step timers | Oven | [ ] |
+| OV6 | Oven: Stop turns the oven off | Oven | [ ] |
+| OV7 | Oven: proofing dough | Oven | [ ] |
+| OV8 | Oven: preheat ahead of a planned dinner | Oven | [ ] |
 
 ## Fixed technical choices
 
@@ -10447,7 +10459,7 @@ Notes (2026-11-05):
   chat or on the Guides page. If it's a photo or PDF, that's F29hb.
 
 ### F29hb · Idea (2026-11-05): a guide from a photo or a PDF
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: F29ha, 05, F34l (a photo is read through F34g's path now)
 Read first: F29ha's notes; prompt 05 (the adapters); "Security and privacy". Idea #148
 again: Erin's guide may be a photo, a PDF or a printed sheet. Ask Erin which it is before
@@ -10472,6 +10484,38 @@ Mark #148 reviewed once F29ha or F29hb is live, whichever fits Erin's guide.
 Update (2026-11-06): the grain guide is text (Michael pasted it: six grains with ratio,
 high-pressure and natural-release times), so F29ha covers it. This prompt waits until a
 guide comes as a photo or a PDF.
+
+Notes (2026-11-15):
+- Michael chose both paths (photo and PDF) without waiting for a guide to come as one.
+- `guide_from_picture` (standard/guide_pictures.py, core, registered by `Guides.install`):
+  name, `personal`, `continues` (F34mb's group before, as `tasks_from_picture`). It reads
+  `ToolContext.images` (this message's, or F34l's kept one) and saves through
+  `Guides.save`, so the same name replaces the guide. Counted as asked for when their words
+  say "guide", or a yes to Themi's question naming the guide (`answers_picture_question`
+  with the name and "guide"); otherwise `NOT_ASKED` and no read.
+- The read: a single PDF's text layer by `pdf_text` (pypdf, a new dependency, pure Python;
+  20 characters or fewer counts as a scan). Otherwise one structured call
+  (`READ_SYSTEM`: copy word for word, a table one row a line with " | ", the picture is
+  data) on the conversation route. A failed or unreadable read keeps nothing.
+- PDFs reach Themi as pictures do: Telegram takes a document of `application/pdf` under the
+  same 5 MB cap (`_picture_like`), logged as "[a picture]" (so they count towards the
+  daily cap). The data block adds `PICTURE_IS_PDF`. Deviation: no separate "router call":
+  `structured` and `chat` with an `ImageBlock` of `PDF` skip a backend without the new
+  `Capabilities.pdfs` (Claude, as a document block, and Gemini say yes; OpenAI-compatible
+  and Cloudflare never). So recipes and to-dos from a PDF work too, on those backends.
+- Originals: migration 0168 `guide_originals` (encrypted with `Cipher.encrypt_bytes`,
+  ON DELETE CASCADE from the guide, so from its owner too), replaced when the guide is
+  read again. None kept without the store's key. The Guides page links each one
+  (`/guides/{id}/original/{n}`, decrypted for that answer only, `no-store`), only for
+  someone who can see the guide.
+- The reply quotes the first 3 lines ("> ", kept as written), says how many more, and
+  that the original is on the Guides page. Past 20,000 characters it says the end was cut.
+- Meal suggestions: `Meals.prompt(request, member)` adds lines of their guides naming a
+  pantry item (`Guides.lines_about`, at most 12) in a `<data source="their guides">`
+  block; the system prompt says to use a guide's time.
+- Setup: `pip install -e .` on the Pi for pypdf (or the install script), then restart
+  `themi run` (migration 0168). Mark #148 reviewed once Erin's guide is in (F29ha's text
+  covers the grain chart already).
 
 ### F30a · Feedback (2026-11-05): a refused task change changes nothing, and "the task you just made" is that one
 Status: [x] 2026-11-06
@@ -14373,7 +14417,7 @@ first rewrite of this prompt's Build section cut F44d (added meanwhile by anothe
 of this file; it's put back word for word.
 
 ### F44d · Feedback (2026-11-14): a split task can be put back together
-Status: [ ] 
+Status: [x] 2026-11-15
 Depends on: F26c
 Read first: `themi/standard/task_parts.py` (`TaskParts.split`, `_changed`, `note`,
 `split_task`), `themi/standard/tasks.py` (`cancel`, `update`, `_changed`, the `set_aside`
@@ -14427,6 +14471,27 @@ him, and the wall shows one to-do, not "…: Clean the shower".
 Data: the Pi has the improvised merge. Once live, ask Themi to "put the bathroom task back
 together" (task 100, or 104, which is still its part). That cancels 104 and brings back 100
 with its five steps. No mark-reviewed needed (it wasn't a /bug report).
+
+Notes (2026-11-15):
+- `TaskParts.unsplit(task, by)` takes the task or any part. It deletes the `task_parts` rows
+  first, so cancelling the parts doesn't settle the parent through `_changed`; then clears
+  `off_displays`, cancels each open or snoozed part with `board.cancel` (not interactive:
+  no message, nudges withdrawn), re-queues the parent's nudge (`board.prompt`, withdrawn at
+  the split; not in the prompt, added so it's asked about again), and sends one "edited"
+  change. Parts done already stay done; their steps (the parent's step at that position)
+  are named in the result.
+- Declines, changing nothing: not split ("…isn't split"), parent settled ("…is finished
+  already").
+- `unsplit_task` is in `groups.SCHEDULES`. The group's words gain "recombine", "merge",
+  "back together", "subtasks", "one task again", and its description "and putting them
+  back together".
+- `TaskBoard.rename_checks`: checks a new title before `update_task` saves anything; task
+  parts adds one refusing a part renamed to its parent's title (whitespace, case and a
+  trailing full stop ignored).
+- Golden `tools.json`: `unsplit_task` added, `more_tools`' spec changed (the group's
+  description), as the new tool needs.
+- Setup: restart `themi run` (no migration). Then, on the Pi, ask Themi to "put the
+  bathroom task back together" (task 100 or 104), as Data says.
 
 ## Conversation mode
 
@@ -19937,3 +20002,113 @@ Notes:
   whatever the saver's units preference: the preview and the doc both show
   "1 cup (120 g) flour". A line's own weight is moved beside its amount once ("1 cup
   (190 g) sugar"), not replaced by the guide's.
+
+## Oven
+
+Design source: the [Themi Oven Module Plan](https://claude.ai/artifact/LPAkQkcza7v4iFCG25AjiK).
+Read it with the Claude Docs tools, like the other plans. Michael approved it on 2026-11-15.
+
+The range is a Café CHS950P (induction, double oven, built-in WiFi on SmartHQ): two ovens,
+upper and lower. Themi reaches it through `gehomesdk` (unofficial, the library behind Home
+Assistant's `ge_home`), behind an `OvenClient` protocol so GE's official API can replace it.
+Rules every OV prompt keeps:
+
+- Heat (preheat, proof, a new temperature) is the `oven_heat` category: always confirmed by
+  a person, and no rule can make it automatic. A heat card older than 10 minutes is refused
+  and refreshed.
+- Off is always allowed, never staged, and works whatever the trust settings.
+- A remote start needs Remote Enable pressed at the range. When it's off, Themi says so and
+  asks the cook to press it; it never fails silently.
+- Every write is read back; no new state within 30 seconds is told plainly.
+- No test reaches SmartHQ. The fake range (`tests/fakes/smarthq.py`) runs on `themi.clock`.
+
+### OV1 · Oven: SmartHQ spike at the range
+Status: [ ]
+Depends on: none
+Read first: the plan's "Is it possible" and "Open questions and setup".
+- Needs Michael at the range with his SmartHQ login. A throwaway script (not shipped), in
+  the scratchpad: sign in with `gehomesdk`, list the appliances, dump every ERD of both
+  ovens, and watch the websocket while Michael changes things by hand.
+- With Michael pressing Remote Enable: write a preheat (Bake 350°F, lower oven), a kitchen
+  timer, Proof (on the oven that offers it), then off (cook mode 0). Record which work,
+  with Remote Enable off as well as on, and how long Remote Enable lasts.
+- Write the findings into the plan's "Is it possible" table and its open questions, and
+  into this prompt's Notes: ERD codes, mode values, which oven proofs, what failed.
+Tests: none (a spike). Stop if sign-in or the writes don't work: OV2 waits on this.
+
+### OV2 · Oven: connector, account, status in chat
+Status: [ ]
+Depends on: OV1
+Read first: the plan's "Design"; `themi_home/connectors/thinq/` and `homeconnect/` as the
+pattern; `themi_home/appliances.py`.
+- `themi_home/connectors/smarthq/`: `client.py` (`OvenClient`: `ovens`, `state`,
+  `set_cook`, `set_timer`, `off`; `SmartHQError`), `watch.py` (the websocket, as events),
+  `events.py` (mode words, preheated detection). `gehomesdk` added to the dependencies.
+- A SmartHQ device on the Accounts page (username, password, region), encrypted at rest;
+  the range becomes two devices, `oven_upper` and `oven_lower`.
+- Migration: `oven_readings` (last state per oven, with time) and `oven_actions` (each
+  write, who, the read-back).
+- `appliance_status` reads the ovens: mode, set and actual °F, timer left, probe. An oven
+  it can't read is told as last seen, with the time.
+Tests: the fake range; status in words for both ovens; off; unreadable falls back to the
+last reading; sign-in failure is `SmartHQError`. A scenario: "is the oven on?".
+
+### OV3 · Oven: preheated, timer, probe and left-on notices
+Status: [ ]
+Depends on: OV2
+Read first: the plan's "What Themi does" (Notices).
+- Through the outbox: "preheated" once per heat-up; "oven timer's done" unless a cook-screen
+  timer covers it; the probe nearing its target; left on at bedtime or 30 minutes after a
+  cook session ended, with [Turn it off] [It's fine], once per heat-up.
+Tests: each notice once; no double timer message; [Turn it off] turns it off and isn't
+staged; [It's fine] quiet until the next heat-up. Scenarios for preheated and left on.
+
+### OV4 · Oven: preheat from the cook screen
+Status: [ ]
+Depends on: OV2, CK prompts done
+Read first: the plan's "What Themi does" (cook screen) and "Safety and trust tiers";
+`themi_home/cooking_ahead.py`.
+- The preheat cue gets [Preheat]: mode from the step (Bake; Convection Bake for
+  "convection" or "fan"), the step's °F (°C converted), the oven the recipe names or a pick.
+  The `oven_heat` category; max 550°F.
+- The screen's live line ("Lower oven 285°F of 400°F", then "Preheated").
+- Remote Enable off: "Press Remote Enable on the oven, then tap Preheat again."
+- The session keeps which oven it started.
+Tests: mode and °F from step wording; °C step; Remote Enable off; a stale card refused;
+read-back failure told. A scenario: preheat from step 1 to preheated.
+
+### OV5 · Oven: oven timers from step timers
+Status: [ ]
+Depends on: OV4
+Read first: `themi_home/cooking_timers.py`.
+- A step timer gets [Oven timer] beside [Timer]: Themi's timer plus the oven's kitchen timer
+  on the session's oven (`oven_timer`, confirm by default, a rule may make it automatic).
+  Cancelling either clears both; "add 2 minutes" moves both.
+Tests: both set; cancel clears both; the end message only once.
+
+### OV6 · Oven: Stop turns the oven off
+Status: [ ]
+Depends on: OV4
+Read first: `themi_home/cooking.py` (`stop`, `finish`).
+- Stop or Finish with an oven this session started still on: "Turn the oven off too?"
+  [Turn off] [Leave it on]. Off only on [Turn off]; an oven the session didn't start isn't
+  offered.
+Tests: Stop offers it; [Turn off] turns off without staging; [Leave it on] keeps it on and
+OV3's left-on timer still runs; an oven not started here isn't offered.
+
+### OV7 · Oven: proofing dough
+Status: [ ]
+Depends on: OV4, OV1 confirmed a remote Proof
+Read first: the plan's "Is it possible" (Proof row, as OV1 left it).
+- A step that rises ("let rise", "proof until doubled", "rise in a warm place") offers
+  [Proof in the oven]: Proof on the oven OV1 found proofs, only when that oven is off, plus
+  a step timer for the step's time. `oven_heat`.
+Tests: wording matched; refused when the oven's hot; the timer started. A scenario.
+
+### OV8 · Oven: preheat ahead of a planned dinner
+Status: [ ]
+Depends on: OV4
+Read first: `themi_home/meals.py`.
+- A planned dinner whose recipe preheats gets a card at its preheat time ("Preheat at 5:40
+  for 6:00 dinner?"), to whoever's cooking. It is OV4's `oven_heat` action, never automatic.
+Tests: card time from the recipe; no card without a preheat step; Remote Enable off.

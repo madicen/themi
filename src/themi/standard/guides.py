@@ -7,7 +7,8 @@ unless it's marked as just for the person who added it. `look_up_guide` finds th
 that answers a question and hands it to the model as data, never instructions, so the
 answer can say where it came from ("From your Instant Pot guide: ...").
 
-Photos and PDFs of a guide are F29hb: there's no way yet to read an image.
+F29hb: a photo or a PDF of a guide is read into its text by `guide_from_picture`
+(guide_pictures.py), with what they sent kept beside it, encrypted (`originals`).
 """
 
 from __future__ import annotations
@@ -79,8 +80,11 @@ class Guides:
         self.annotators: list[Callable[[Guide], GuideNotes | None]] = []
 
     def install(self) -> None:
+        from themi.standard.guide_pictures import guide_from_picture
+
         self.services.provide(keys.guides, self)
         self.services.tools.register(save_guide)
+        self.services.tools.register(guide_from_picture)  # F29hb
         self.services.tools.register(look_up_guide)
         self.services.open_item_sources.append(self.open_items)
 
@@ -190,6 +194,27 @@ class Guides:
         assert found is not None
         return found
 
+    def originals(self, guide_id: int) -> list[tuple[int, str]]:
+        """F29hb: what a guide was read from (ids and mime types), in the order sent."""
+        rows = self.db.query(
+            "SELECT id, mime_type FROM guide_originals WHERE guide_id = ? ORDER BY id",
+            (guide_id,),
+        )
+        return [(r["id"], r["mime_type"]) for r in rows]
+
+    def original(self, member: Member, guide_id: int, n: int) -> tuple[str, bytes] | None:
+        """F29hb: the `n`th thing (from 1) a guide they can see was read from, decrypted for
+        the Guides page; None when there's no such one, or no key to open it."""
+        cipher = self.services.store.cipher
+        if cipher is None or self.get(member, guide_id) is None or n < 1:
+            return None
+        row = self.db.one(
+            "SELECT mime_type, data FROM guide_originals WHERE guide_id = ? ORDER BY id "
+            "LIMIT 1 OFFSET ?",
+            (guide_id, n - 1),
+        )
+        return (row["mime_type"], cipher.decrypt_bytes(row["data"])) if row else None
+
     def delete(self, member: Member, guide_id: int) -> bool:
         return bool(
             self.db.update(
@@ -212,6 +237,20 @@ class Guides:
             return None
         guide = best[1]
         return guide, self._part(guide, wanted)
+
+    def lines_about(self, member: Member, names: list[str], most: int = 12) -> list[str]:
+        """F29hb: lines of their guides naming one of `names` (pantry items, for meal
+        ideas), each as "<guide>: <line>", at most `most`."""
+        wanted = {w for n in names for w in name_key(n).split() if w not in FILLER and len(w) > 2}
+        found: list[str] = []
+        for guide in self.visible(member):
+            for line in guide.text.splitlines():
+                words = set(name_key(line).split())
+                if any(w in words or w.rstrip("s") in words for w in wanted):
+                    found.append(f"{guide.name}: {' '.join(line.split())}")
+                    if len(found) >= most:
+                        return found
+        return found
 
     @staticmethod
     def _part(guide: Guide, wanted: list[str]) -> str:

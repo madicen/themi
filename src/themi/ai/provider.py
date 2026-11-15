@@ -39,6 +39,7 @@ class Capabilities:
     structured: bool = True
     audio: bool = False
     images: bool = False  # F34g: pictures in a user message
+    pdfs: bool = False  # F29hb: a PDF sent beside them (an ImageBlock of application/pdf)
 
 
 @runtime_checkable

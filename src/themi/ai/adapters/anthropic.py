@@ -34,6 +34,7 @@ from themi.ai.errors import (
 )
 from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Capabilities
 from themi.ai.types import (
+    PDF,
     Block,
     CallKind,
     ChatResponse,
@@ -70,7 +71,7 @@ _STOP_REASONS = {
 
 class AnthropicProvider:
     name = "anthropic"
-    capabilities = Capabilities(tools=True, structured=True, audio=False, images=True)
+    capabilities = Capabilities(tools=True, structured=True, audio=False, images=True, pdfs=True)
 
     def __init__(
         self,
@@ -230,6 +231,11 @@ def _block_param(block: Block) -> dict[str, Any]:
         return {"type": "text", "text": block.text}
     if isinstance(block, ImageBlock):  # F34g
         data = base64.b64encode(block.data).decode("ascii")
+        if block.mime_type == PDF:  # F29hb: a PDF goes as a document block
+            return {
+                "type": "document",
+                "source": {"type": "base64", "media_type": PDF, "data": data},
+            }
         return {
             "type": "image",
             "source": {"type": "base64", "media_type": block.mime_type, "data": data},

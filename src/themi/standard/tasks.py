@@ -306,6 +306,9 @@ class TaskBoard:
         # CR21b: where a task shows on a mirror, for the model ("Shows on the chore chart
         # on Sunday 1 Nov."), so it answers with the day rather than guessing.
         self.display_notes: list[Callable[[Task], str | None]] = []
+        # F44d: checks on a new title before update_task saves anything; each raises
+        # ToolFailed to refuse (a part renamed to its parent's title).
+        self.rename_checks: list[Callable[[Task, str], None]] = []
         # F43b: a mirror's icon for a task, when a mirror keeps one (a chore chart's). Pictures
         # show its emoji (`themi.drawing.emoji.item_emoji`).
         self.icon_sources: list[Callable[[Task], str | None]] = []
@@ -2194,6 +2197,9 @@ async def update_task(ctx: ToolContext, args: dict[str, Any]) -> str:
                 f"Task {task.id} ({task.title}) is closed. To do something new, create a task."
             )
         _not_the_recent_one(ctx, board, task, title)
+        if title:
+            for check in board.rename_checks:
+                check(task, title)
         _numbers_where_found(
             ctx, [title, *(steps or [])], " ".join([task.title, *task.steps]), "Not changed"
         )

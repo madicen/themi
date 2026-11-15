@@ -18,6 +18,7 @@
   "GET /expenses/{sheet_id}.csv",
   "GET /family",
   "GET /guides",
+  "GET /guides/{guide_id}/original/{n}",
   "GET /health",
   "GET /knowledge",
   "GET /lists",

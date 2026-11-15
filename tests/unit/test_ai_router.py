@@ -18,7 +18,7 @@ from themi.ai import (
 from themi.ai.adapters import AdapterConfig
 from themi.ai.router import AIRouter, AllProvidersFailed, Deferred
 from themi.ai.settings import AISettingsStore, AITask, RouteEntry
-from themi.ai.types import CallKind
+from themi.ai.types import PDF, CallKind
 from themi.storage.secrets import Cipher, Secret, generate_key
 
 ERIN_CLAUDE = "sk-ant-erin-0000000000000000000000"
@@ -464,3 +464,40 @@ async def test_a_structured_call_with_a_picture_skips_backends_that_cant_see_one
     assert seeing.requests[-1].images == (picture,)
     blind.queue_structured({"name": "Words"})
     assert (await client.structured("s", "p", {"type": "object"})).data == {"name": "Words"}
+
+
+async def test_a_pdf_skips_backends_that_see_pictures_but_cant_read_pdfs(
+    family: SeededFamily, ai: AISettingsStore, factory: Factory, router: AIRouter
+) -> None:
+    """F29hb: a scanned PDF guide goes to a backend that reads PDFs, for a read or a chat;
+    a photo still goes to the first that sees pictures."""
+    two_step_chain(family, ai)
+    pictures_only = factory.provider(
+        ERIN_CLAUDE, capabilities=Capabilities(images=True, pdfs=False)
+    )
+    reader = factory.provider(ERIN_GEMINI, capabilities=Capabilities(images=True, pdfs=True))
+    scan = ImageBlock(b"%PDF-1.4 a scan", PDF)
+    client = router.client_for(family.erin.id, AITask.CONVERSATION)
+    reader.queue_structured({"text": "Quinoa: 1 min"})
+    result = await client.structured("s", "copy it", {"type": "object"}, images=[scan])
+    assert result.data == {"text": "Quinoa: 1 min"} and pictures_only.requests == []
+    reader.queue_text("A grain chart.")
+    message = Message("user", (TextBlock("what's this?"), scan))
+    assert (await client.chat("s", [message])).text == "A grain chart."
+    assert pictures_only.requests == []
+    pictures_only.queue_structured({"text": "photo"})
+    photo = ImageBlock(b"jpeg", "image/jpeg")
+    result = await client.structured("s", "copy it", {"type": "object"}, images=[photo])
+    assert result.data == {"text": "photo"}
+
+
+def test_claude_is_sent_a_pdf_as_a_document_block() -> None:
+    """F29hb: the Messages API takes a PDF as a document, not an image."""
+    from themi.ai.adapters.anthropic import _block_param
+
+    block = _block_param(ImageBlock(b"%PDF", PDF))
+    assert block == {
+        "type": "document",
+        "source": {"type": "base64", "media_type": PDF, "data": "JVBERg=="},
+    }
+    assert _block_param(ImageBlock(b"jpeg", "image/jpeg"))["type"] == "image"

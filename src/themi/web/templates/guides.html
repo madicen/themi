@@ -10,6 +10,9 @@
 {% call(part) row(guide.name, chips=[("Just for you", "info")] if guide.personal else [], id="guide-" ~ guide.id) %}
 {% if part == "body" %}
   <pre class="guide">{{ guide.text }}</pre>
+  {% if originals.get(guide.id) %}
+  <p class="muted">Read from {% for id, mime in originals[guide.id] %}{% if not loop.first %}, {% endif %}<a href="/guides/{{ guide.id }}/original/{{ loop.index }}" target="_blank" rel="noopener">{{ "your PDF" if mime == "application/pdf" else "your picture" }}{% if originals[guide.id]|length > 1 %} {{ loop.index }}{% endif %}</a>{% endfor %}. Worth a look if a line seems off.</p>
+  {% endif %}
   {% for n in notes.get(guide.id, []) %}
   {% if n.notes %}
   <p class="muted">{{ n.title }}</p>

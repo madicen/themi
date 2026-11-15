@@ -15,6 +15,8 @@ each part keeps the task's.
 - When the last part is settled, the parent is checked off on its own: done if any part
   was done, taken off the list if every part was.
 - A repeating chore's steps aren't split (its schedule is its own): refused, saying so.
+- `unsplit_task` puts it back together (F44d): the open parts are taken off quietly, and
+  the parent is back on the lists and displays with its own title and steps.
 """
 
 from __future__ import annotations
@@ -69,6 +71,7 @@ class TaskParts:
         self.board.change_listeners.append(self._changed)
         self.board.display_notes.append(self.note)
         self.board.set_aside.append(SPLIT)  # the parts stand in for it
+        self.board.rename_checks.append(self._not_the_parents_title)
 
     # ----- reading ------------------------------------------------------------------
 
@@ -174,6 +177,54 @@ class TaskParts:
             return None
         return self.store.get_member(parent.assignee)
 
+    # ----- putting back together (F44d) ---------------------------------------------
+
+    async def unsplit(self, task: Task, by: Member) -> tuple[Task, list[str]]:
+        """The reverse of `split`, given the task or any of its parts: its open parts are
+        cancelled quietly, the split is forgotten, and the task is back on the lists and
+        displays with its own title and steps. Returns it and the steps done already.
+        ToolDeclined says why it can't be."""
+        parent = self.parent_of(task.id) or task
+        parts = self.parts(parent.id)
+        if not parts:
+            raise ToolDeclined(f"{parent.title} isn't split. Nothing was changed.")
+        if parent.status not in ("open", "snoozed"):
+            raise ToolDeclined(f"{parent.title} is finished already. Nothing was changed.")
+        positions = {
+            r["task_id"]: r["position"]
+            for r in self.db.query(
+                "SELECT task_id, position FROM task_parts WHERE parent_id = ?", (parent.id,)
+            )
+        }
+        # The split goes first, so a part's cancelling doesn't settle the parent (`_changed`).
+        self.db.execute("DELETE FROM task_parts WHERE parent_id = ?", (parent.id,))
+        self.db.execute("UPDATE tasks SET off_displays = 0 WHERE id = ?", (parent.id,))
+        done = []
+        for part in parts:
+            if part.status in ("open", "snoozed"):
+                await self.board.cancel(part.id, by)  # quietly: no "Taken off the list"
+            elif part.status == "done":
+                done.append(self._step_of(parent, part, positions.get(part.id)))
+        back = self.board.get(parent.id)
+        await self.board.prompt(back)  # its nudge was withdrawn at the split
+        await self.board._changed(back, "edited", True)
+        return back, done
+
+    def _step_of(self, parent: Task, part: Task, position: int | None) -> str:
+        if position is not None and 1 <= position <= len(parent.steps):
+            return parent.steps[position - 1]
+        return part.title.removeprefix(f"{parent.title}: ")
+
+    def _not_the_parents_title(self, task: Task, title: str) -> None:
+        """Michael's improvised merge (2026-11-14): a part renamed to its parent's title
+        isn't the task again; `unsplit_task` is."""
+        parent = self.parent_of(task.id)
+        if parent is not None and _same(title, parent.title):
+            raise ToolFailed(
+                f"That's a part of {parent.title}; use unsplit_task to make it one task "
+                "again. Nothing was changed."
+            )
+
     # ----- settling -----------------------------------------------------------------
 
     async def _changed(self, task: Task, change: TaskChange, interactive: bool) -> None:
@@ -198,6 +249,10 @@ class TaskParts:
         if task.assignee is not None:
             return self.store.get_member(task.assignee)
         return next(m for m in self.store.list_members() if m.is_admin)
+
+
+def _same(a: str, b: str) -> bool:
+    return " ".join(a.split()).rstrip(".").casefold() == " ".join(b.split()).rstrip(".").casefold()
 
 
 def _parts_of(args: dict[str, Any]) -> list[Part]:
@@ -254,6 +309,36 @@ async def split_task(ctx: ToolContext, args: dict[str, Any]) -> str:
         f"Split {task.title} into {len(made)} parts, each a task of its own:\n"
         + "\n".join(lines)
         + "\nIt's checked off when the last part is done. Say who has which part, briefly."
+        + "\nThey can be put back together with unsplit_task."
+    )
+
+
+@tool(
+    "unsplit_task",
+    "Put a split task back together, as one task with its steps again ('put it back "
+    "together', 'recombine them', 'merge the parts back', 'make them one task again', 'as "
+    "steps again'). task_id: the task or any of its parts. Its open parts are taken off; "
+    "parts done already stay done.",
+    {"task_id": {"type": "integer"}},
+)
+async def unsplit_task(ctx: ToolContext, args: dict[str, Any]) -> str:
+    parts = ctx.services.maybe(keys.task_parts)
+    assert parts is not None
+    try:
+        task = parts.board.get(int(args["task_id"]))
+    except NotFound as exc:
+        raise ToolFailed("There's no task with that number.") from exc
+    back, done = await parts.unsplit(task, ctx.member)
+    ctx.tasks.append(back.id)
+    steps = "; ".join(back.steps) if back.steps else "none"
+    done_words = (
+        f" {'; '.join(done)} {'was' if len(done) == 1 else 'were'} done already (the step stays)."
+        if done
+        else ""
+    )
+    return (
+        f"Task {back.id} is one task again: {back.title}. Steps: {steps}.{done_words}\n"
+        "Say it's one task again, in one line."
     )
 
 
@@ -270,3 +355,4 @@ class TaskPartsModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         ctx.provide(TaskParts(ctx.get(TaskBoard))).install()
         ctx.tool(split_task)
+        ctx.tool(unsplit_task)

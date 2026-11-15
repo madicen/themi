@@ -187,6 +187,10 @@
     "group": "maintenance",
     "spec": "998dce8da9fe"
   },
+  "guide_from_picture": {
+    "group": "core",
+    "spec": "78125cb1b69b"
+  },
   "inbox_setup": {
     "group": "email",
     "spec": "6f2bc486592f"
@@ -249,7 +253,7 @@
   },
   "more_tools": {
     "group": "core",
-    "spec": "305b7f76bf0d"
+    "spec": "e8855ad1e2bd"
   },
   "move_expense": {
     "group": "spending",
@@ -590,6 +594,10 @@
   "unskip_email_sender": {
     "group": "calendar",
     "spec": "5c6440373bab"
+  },
+  "unsplit_task": {
+    "group": "schedules",
+    "spec": "a66345adb0fd"
   },
   "update_pantry": {
     "group": "pantry",

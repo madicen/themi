@@ -15,12 +15,17 @@ from themi.core.tools import ToolGroup
 
 SCHEDULES = ToolGroup(
     name="schedules",
-    description="repeating chores, plans, importance, check-in reviews, splitting tasks",
+    description=(
+        "repeating chores, plans, importance, check-in reviews, splitting tasks and putting "
+        "them back together"
+    ),
     words=(
         "every|each|daily|weekly|monthly|repeat|schedule|plan|miles|km|minutes|weeks?"
         "|twice|once a|important|urgent|priority|check.?in|sunset|routine|always|remi"
         "nd|(?:mon|tues|wednes|thurs|fri|satur|sun)days|evenings|mornings|nights|week"
         "ends|split|steps?\\b|parts?\\b|break (?:it |that )?(?:up|down)"
+        # F44d: "recombine them", "merge the parts back", "as subtasks", "one task again"
+        "|recombine|merge|back together|subtasks?|one task again"
         # F42f (bug #206): "Erin's run summary", "a picture of my run"
         "|step.?up|(?:run|running|walk|push.?ups?)'?s?\\W+(?:plan|summary|progress|picture)"
         "|picture of (?:\\w+'s |my |her |his )?(?:run|walk)"
@@ -50,6 +55,7 @@ SCHEDULES = ToolGroup(
         "set_check_in_reviews",
         "set_task_medicine",
         "split_task",
+        "unsplit_task",
     ),
     order=10,
 )
