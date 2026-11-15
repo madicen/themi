@@ -29,7 +29,8 @@
 {% elif state.step %}
   <div class="cook-step-top">
     <p class="cook-count" data-field="step">{{ state.step.words }}{% if state.step.group %} ({{ state.step.group }}){% endif %}</p>
-    {% if state.offers %}<div class="cook-offers">
+    {% if state.offers or state.proof %}<div class="cook-offers">
+    {% if state.proof %}{{ act(state, csrf, "oven_proof", state.proof.label, {"minutes": state.proof.minutes, "at": state.proof.at}, cls="cook-chip") }}{% endif %}
     {% for o in state.offers %}{{ act(state, csrf, "timer", o.label, {"minutes": o.minutes, "step": o.step}, cls="cook-chip") }}{% if o.oven %}{{ act(state, csrf, "oven_timer", "Oven timer", {"minutes": o.minutes, "step": o.step}, cls="cook-chip", aria="Oven timer too, " ~ o.label) }}{% endif %}{% endfor %}
     </div>{% endif %}
   </div>

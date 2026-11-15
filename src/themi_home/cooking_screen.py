@@ -217,6 +217,8 @@ def draw(cooking: Cooking, session: Session, recipe: Recipe, viewer: Member) -> 
             out["strip"]["oven"], out["strip"]["at"] = heat, cooking_oven.drawn_at()
     out["oven_line"] = cooking_oven.oven_line(cooking, session)
     out["oven_off"] = cooking_oven.off_question(cooking, session)  # OV6
+    proofing = cooking_oven.proof_offer(cooking, session, recipe)  # OV7
+    out["proof"] = {**proofing, "at": cooking_oven.drawn_at()} if proofing else None
     if cooking_oven.has_timer(cooking):  # OV5: a step's timer can be the oven's too
         out["offers"] = [{**o, "oven": True} for o in out["offers"]]
     out["timers"] = timers(cooking, session)
@@ -474,6 +476,15 @@ async def act(
         return Tapped(True, cooking_wrap.swap_question(items[n].item, recipe))
     if action == "scale":
         return await rescale(cooking, session, recipe, form)
+    if action == "oven_proof":  # OV7: [Proof in the oven] on a rising step
+        from themi_home import cooking_oven
+
+        proofed = await cooking_oven.proof(cooking, member, session, recipe, form)
+        if proofed is None:
+            return Tapped(False)
+        if proofed.ok:
+            await cooking.show(session)
+        return Tapped(proofed.ok, proofed.words)
     if action in OVEN_OFF_TAPS:  # OV6: the ending's "Turn the oven off too?"
         from themi_home import cooking_oven
 

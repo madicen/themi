@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 from themi import clock
 from themi.core import keys
 from themi.localtime import to_utc_iso
-from themi_home.connectors.smarthq import LOWER, UPPER
+from themi_home.connectors.smarthq import LOWER, UPPER, SmartHQError
 from themi_home.connectors.smarthq import events as ov
 from themi_home.cooking import PREHEAT
 
@@ -209,6 +209,63 @@ async def answer_off(cooking: Cooking, member: Member, session: Session, off: bo
         if found is not None:
             said.append((await oven.off(member, found)).words)
     return " ".join(said)
+
+
+def proof_offer(cooking: Cooking, session: Session, recipe: Recipe) -> dict[str, Any] | None:
+    """OV7: the step they're on rises: [Proof in the oven], with its time when it says one.
+    None without the upper oven, or with it on."""
+    oven = control(cooking)
+    if oven is None or session.phase != "cook" or session.ended_at is not None:
+        return None
+    upper = oven.oven(UPPER)
+    if upper is None:
+        return None
+    text = _part_text(recipe, session.step)
+    if not RISE.search(text):
+        return None
+    last = oven.watcher.last(upper)
+    if last is not None and last.on:
+        return None
+    from themi_home.cooking_timers import durations
+
+    found = next((d for d in durations(text) if not d.reminder), None)
+    return {"label": "Proof in the oven", "minutes": found.minutes if found else 0}
+
+
+async def proof(
+    cooking: Cooking, member: Member, session: Session, recipe: Recipe, form: dict[str, Any]
+) -> Said | None:
+    """OV7: Proof (85°F) on the upper oven, only when it's off, and a timer for the step."""
+    oven = control(cooking)
+    upper = oven.oven(UPPER) if oven is not None else None
+    if oven is None or upper is None:
+        return None
+    from themi_home.oven import Said as Told
+
+    try:
+        now = await oven.watcher.read(upper)
+    except SmartHQError:
+        now = None  # heat() below says what's wrong
+    if now is not None and now.on:
+        return Told(False, f"The upper oven is on ({ov.state_words(now)}), so it can't proof now.")
+    said = await oven.heat(
+        member, upper, ov.PROOF, ov.PROOF_F, offered_at=_when(form.get("at")),
+        session_id=session.id,
+    )  # fmt: skip
+    minutes = 0.0
+    try:
+        minutes = float(str(form.get("minutes") or 0))
+    except ValueError:
+        minutes = 0.0
+    if said.ok and minutes > 0 and cooking.timers is not None:
+        from themi_home.cooking_screen import _step_label
+
+        step = _step_label(session, recipe)
+        cooking.timers.start(cooking._owner(session), session, recipe, step, minutes)
+        from themi_home.cooking_timers import _short
+
+        return Told(True, f"{said.words} And a {_short(minutes)} timer for the rise.")
+    return said
 
 
 def has_timer(cooking: Cooking) -> bool:
