@@ -434,8 +434,8 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | GW6 | Gram weights: checking the family's guide | Gram weights | [x] 2026-11-14 |
 | GW7 | Gram weights: grams in a recipe saved to the cookbook | Gram weights | [x] 2026-11-14 |
 | OV1 | Oven: SmartHQ spike at the range | Oven | [x] 2026-11-15 |
-| OV2 | Oven: connector, account, status in chat | Oven | [ ] |
-| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [ ] |
+| OV2 | Oven: connector, account, status in chat | Oven | [x] 2026-11-15 |
+| OV3 | Oven: preheated, timer, probe and left-on notices | Oven | [~] |
 | OV4 | Oven: preheat from the cook screen | Oven | [ ] |
 | OV5 | Oven: oven timers from step timers | Oven | [ ] |
 | OV6 | Oven: Stop turns the oven off | Oven | [ ] |
@@ -20070,7 +20070,7 @@ Notes:
   dump has the serial number). OV2 can make its fake range from these notes.
 
 ### OV2 · Oven: connector, account, status in chat
-Status: [ ]
+Status: [x] 2026-11-15
 Depends on: OV1
 Read first: the plan's "Design"; `themi_home/connectors/thinq/` and `homeconnect/` as the
 pattern; `themi_home/appliances.py`.
@@ -20087,6 +20087,34 @@ pattern; `themi_home/appliances.py`.
   it can't read is told as last seen, with the time.
 Tests: the fake range; status in words for both ovens; off; unreadable falls back to the
 last reading; sign-in failure is `SmartHQError`. A scenario: "is the oven on?".
+
+Notes:
+- Deviation: the ovens aren't rows in `devices`. Its provider CHECK can only change by
+  rebuilding the table, and a dozen tables cascade from it. The module (`smarthq`) has its
+  own track (`themi_home/smarthq_schema`): `smarthq_account`, `ovens` (one row per cavity),
+  `oven_readings`, `oven_actions`. `appliance_status` and the Home panel ask the watcher
+  for the ovens directly; the tool's `appliance` enum gained `oven`.
+- `themi_home/connectors/smarthq/`: `client.py` (`SmartHQLogin`, `SmartHQSession`,
+  `SmartHQAccount`, errors), `events.py` (Themi's own decode and encode of the raw ERDs:
+  `read`, `cook_value`, `OFF_VALUE`, `timer_value`, `state_words`, `OFFERS`, `PROOF_F`),
+  `watch.py` (`OvenWatcher`: link, `ovens`, `read`, `last`, `poll`, `heat`, `set_timer`,
+  `off`, `can_heat`), `library.py` (gehomesdk; optional extra `themi[smarthq]`, pinned
+  `gehomesdk==2026.8.0`). The session speaks raw hex both ways, so the fake holds OV1's
+  bytes (`tests/fixtures/smarthq/range_off.json`).
+- Sign-in keeps the password (encrypted, Michael's call) and the rotating refresh token
+  (encrypted; the newest kept after every read). The library connects with the token and
+  an empty password, so a refused token fails as `SignInLost` instead of starting an
+  emailed-code sign-in nobody can answer. The Accounts row (`accounts/smarthq.html`,
+  `/family/smarthq/sign-in`, `/code`, `/unlink`) handles the emailed code.
+- Writes wait for `CURRENT_STATE` (heat: on in that mode; off: off; timer: the minutes),
+  up to 30 s in 2 s steps through `SmartHQLogin.settle`, which the fake turns into
+  `clock.advance`. No write is refused for Remote Enable except heat.
+- `devices.oven` polls every 30 s. "oven" and "preheat" route to the devices group.
+- `make dev` has the fake range linked, and an Oven section on the control panel (Remote
+  Enable, start by hand, skip to preheated, off at the range, the probe).
+- Setup Michael must do: on the Pi, `pip install -e '.[smarthq]'` (or the extra in the
+  deploy), restart, then sign in on Accounts → Oven with the SmartHQ email and password
+  and the emailed code.
 
 ### OV3 · Oven: preheated, timer, probe and left-on notices
 Status: [ ]
