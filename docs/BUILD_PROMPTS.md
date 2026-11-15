@@ -284,7 +284,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F43b | Idea: the tasks picture as cards with emoji, for one person or the family, with chores too | Feedback | [x] 2026-11-14 |
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
 | F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
-| F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [ ] |
+| F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
 | F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [ ] |
 | F44d | Feedback: a split task can be put back together | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
@@ -14258,7 +14258,7 @@ Nov the Pi's pace is 55 a day. The chat's "set the web lookups limit to 100" sti
 rule proposal; the cap line now names the Modules page.
 
 ### F44b · Feedback (2026-11-14): weigh a Tbsp of a spice, not a cup
-Status: [ ] 
+Status: [x] 2026-11-14
 Depends on: GW4
 Read first: `themi_home/gram_weights.py` (`weighing`, `_wanted_unit`, `_make_tasks`), the
 plan's GW4 section. From Michael's bug #210 (2026-11-14, 6:13 pm, "asking for a measurement
@@ -14290,6 +14290,17 @@ you're next cooking", and "it was 7 g" puts it in the guide.
 
 Data: none needed (tasks 111 and the other two are updated by the next run). Mark #210
 reviewed once live.
+
+Notes: `_wanted_unit` collects every recipe line missing that ingredient. "each" for a
+count. A cup when a line is in cups or litres, or in ml at 60 or more (`CUP_FROM_ML`).
+Otherwise a tablespoon. A pinch has no weight, so it never asks. `one_of` makes a count
+singular (an `ONE_OF` table for leaves, loaves, halves and molasses; -ies, -oes, and a
+trailing s except -ss, -us and -is). `_make_tasks` rewords an open weighing task whose title
+differs (`_reword_task`, `board.update`). A nudge already queued takes the new name (F20c),
+and no message is sent. On the Pi this renames task 111 and the miso task to a tablespoon,
+and the garlic one to "Weigh one garlic clove", at the next run after the update. New tests
+at the end of `tests/scenarios/test_gram_tasks.py`. None changed, and no golden file
+changed.
 
 ### F44c · Feedback (2026-11-14): gram weights work when a recipe or the guide changes, not every 10 minutes
 Status: [ ] 

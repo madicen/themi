@@ -152,6 +152,10 @@ NOW_WITH_GRAMS = " {recipes} now show grams for it."
 UNDO_FOR = timedelta(hours=24)
 BUTTON_KIND = "gram_weight"
 UNIT_SAID = {"cup": "cup", "tbsp": "Tbsp", "tsp": "tsp", "ml": "ml", "l": "l", "each": ""}
+# F44b (bug #210): a cup of nutmeg is a lot to weigh. A volume this big or more (or any
+# cups) is weighed by the cup; spoonfuls by the tablespoon.
+CUP_FROM_ML = 60.0
+ONE_OF = {"leaves": "leaf", "loaves": "loaf", "halves": "half", "molasses": "molasses"}
 # GW6: checking the family's own lines
 CHECKS_PER_RUN = 3  # web checks each run, so the family's lookups aren't spent at once
 OFF_BY = 0.25
@@ -616,11 +620,33 @@ def amount_said(amount: float, unit: str, name: str) -> str:
     return " ".join(f"{fraction(amount)} {words} {name}".split())
 
 
+def one_of(name: str) -> str:
+    """F44b: one of a counted thing, as a recipe names several: 'garlic cloves' -> 'garlic
+    clove', 'bay leaves' -> 'bay leaf', 'cherry tomatoes' -> 'cherry tomato'."""
+    words = name.split()
+    if not words:
+        return name
+    last = words[-1]
+    lower = last.lower()
+    if lower in ONE_OF:
+        single = ONE_OF[lower]
+    elif lower.endswith("ies") and len(lower) > 4:
+        single = last[:-3] + "y"
+    elif lower.endswith("oes"):
+        single = last[:-2]
+    elif lower.endswith("s") and not lower.endswith(("ss", "us", "is")):
+        single = last[:-1]
+    else:
+        single = last
+    return " ".join([*words[:-1], single])
+
+
 def weighing(name: str, unit: str) -> tuple[str, list[str]]:
     """A weighing task's title and steps, as an offer (it's low and has no due date)."""
     if unit == "each":
-        return (f"Weigh one {name}", [f"Put one {name} on the kitchen scale",
-                                      "Tell me the grams"])  # fmt: skip
+        one = one_of(name)
+        return (f"Weigh one {one}", [f"Put one {one} on the kitchen scale",
+                                     "Tell me the grams"])  # fmt: skip
     measure = TASK_UNIT_WORDS.get(unit, unit)
     return (
         f"Weigh 1 {measure} of {name} when you're next cooking",
@@ -960,7 +986,9 @@ class GramWeights:
                     await self._settle_task(int(row["task_id"]), member, done=False)
                 self.db.execute("DELETE FROM gram_weights_meta WHERE key = ?", (row["key"],))
                 continue
-            open_count += self._open_task(row["task_id"])
+            if self._open_task(row["task_id"]):
+                open_count += 1
+                await self._reword_task(board, member, int(row["task_id"]), row)
         needed = self._needed()
         for row in rows:
             if open_count >= OPEN_TASKS:
@@ -976,16 +1004,37 @@ class GramWeights:
             )
             open_count += 1
 
+    async def _reword_task(
+        self, board: TaskBoard, member: Member, task_id: int, row: dict[str, Any]
+    ) -> None:
+        """F44b: an open weighing task made with another measure or wording (a cup of
+        nutmeg) says what it would now, in place: no new task, no message."""
+        title, steps = weighing(row["name"], self._wanted_unit(row["key"]))
+        now = self.db.scalar("SELECT title FROM tasks WHERE id = ?", (task_id,))
+        if now != title:
+            await board.update(task_id, member, title=title, steps=steps)
+
     def _wanted_unit(self, k: str) -> str:
-        """The unit to weigh: a cup for what's measured by volume, one for a count."""
+        """The unit to weigh: one for a count; for a volume, a cup when a recipe measures it
+        in cups (or 60 ml or more), otherwise a tablespoon (F44b: spoonfuls of a spice)."""
         rows = self.db.query("SELECT ingredients FROM recipes WHERE removed_at IS NULL")
         book = self.book()
+        seen = big = False
         for row in rows:
             for item in json.loads(row["ingredients"]):
-                found = weigh(str(item.get("text") or ""), book)
-                if found.missing and key(found.missing) == k:
-                    return "each" if found.unit == "each" else "cup"
-        return "cup"
+                text = str(item.get("text") or "")
+                found = weigh(text, book)
+                if not found.missing or key(found.missing) != k:
+                    continue
+                if found.unit == "each":
+                    return "each"
+                seen = True
+                if found.unit in ("cup", "l"):
+                    big = True
+                elif found.unit == "ml":
+                    amount = read_amount(text)
+                    big = big or amount is None or amount.low >= CUP_FROM_ML
+        return "tbsp" if seen and not big else "cup"
 
     def recipes_with(self, name: str) -> list[str]:
         """The recipes (not removed) with a line this ingredient's weight now weighs."""
