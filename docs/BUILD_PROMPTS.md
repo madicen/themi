@@ -298,7 +298,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | BD1b | Body double: Guided Step-Through in chat | Body double | [x] 2026-11-06 |
 | BD2 | Body double: choosing the mode, and learning from sessions | Body double | [x] 2026-11-06 |
 | BD3a | Body double: the session page and the Telegram Mini App | Body double | [x] 2026-11-06 |
-| BD3b | Body double: Themi the chameleon | Body double | [~] |
+| BD3b | Body double: Themi the chameleon | Body double | [x] |
 | BD4a | AI layer: image generation | Body double | [x] 2026-11-06 |
 | BD4b | Body double: a picture for each step | Body double | [x] 2026-11-06 |
 | BD5a | Body double: built-in music | Body double | [x] 2026-11-06 |
@@ -15018,7 +15018,7 @@ Notes (2026-11-06):
   is covered.
 
 ### BD3b · Body double: Themi the chameleon
-Status: [~] built 2026-11-06; waiting for Michael and Erin to look at the scenes on their phones
+Status: [x] 2026-11-15 (built 2026-11-06)
 Depends on: BD3a
 Read first: this section's intro (the modes' scenes, original art only).
 - `themi/web/static/chameleon/`: one SVG character, original, drawn as named parts (body,
@@ -15067,6 +15067,8 @@ Notes (2026-11-06):
 - Checked by eye at 360px, light and dark, every state, with headless Chrome. Still to do:
   Michael and Erin look at it on their phones (then this is [x]).
 - Setup: restart `themi run` (migration 0129).
+- Done (2026-11-15): Michael confirmed the scenes come through on the phones. The AI step
+  pictures (BD4) look rough, a separate matter from these hand-drawn scenes.
 
 ### BD4a · AI layer: image generation
 Status: [x] 2026-11-06
