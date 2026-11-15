@@ -32,7 +32,7 @@ from themi.accounts import Member
 from themi.ai.errors import RefusalError
 from themi.ai.router import AllProvidersFailed
 from themi.ai.settings import AITask
-from themi.ai.types import ImageBlock, Message, TextBlock
+from themi.ai.types import PDF, ImageBlock, Message, TextBlock
 from themi.channels.events import InboundEvent, Picture
 from themi.channels.family_group import group_replies
 from themi.channels.outbox import Priority
@@ -305,6 +305,8 @@ PICTURES_TOGETHER = (
     " These {count} pictures were sent together, in order, the last one most recently: they "
     "may be parts of one thing (the pages of one recipe), so name them as one when they are."
 )
+# F29hb: a PDF sent as a file comes the same way as a picture.
+PICTURE_IS_PDF = " It's a PDF document they sent as a file, not a photo."
 PICTURE_COMMANDS = frozenset({"/bug", "/idea"})  # a caption that's a command (F34o)
 
 
@@ -928,6 +930,8 @@ def _with_picture(
     opening = PICTURE_OPEN.format(name=member.name, when=when)
     if len(pictures) > 1:
         opening += PICTURES_TOGETHER.format(count=len(pictures))
+    if any(p.mime_type == PDF for p in pictures):
+        opening += PICTURE_IS_PDF
     images = tuple(ImageBlock(p.data, p.mime_type) for p in pictures)
     return Message(
         "user",

@@ -52,6 +52,7 @@ from themi.ai.provider import DEFAULT_MAX_TOKENS, IMAGE_SIZE, Provider
 from themi.ai.retry import DEFAULT_POLICY, OnRetry, RetryPolicy, Sleep, call_with_retry
 from themi.ai.settings import AISettingsStore, AITask, ResolvedEntry
 from themi.ai.types import (
+    PDF,
     CallKind,
     ChatResponse,
     Embeddings,
@@ -390,10 +391,13 @@ class TaskClient:
         on_retry: OnRetry | None = None,
     ) -> ChatResponse:
         pictures = any(m.images for m in messages)
+        pdfs = any(m.pdfs for m in messages)
 
         async def operation(provider: Provider) -> ChatResponse:
             if pictures and not provider.capabilities.images:  # F34g: the next backend may
                 raise CapabilityError(f"{provider.name} can't see pictures")
+            if pdfs and not provider.capabilities.pdfs:  # F29hb
+                raise CapabilityError(f"{provider.name} can't read PDFs")
             if tools and not provider.capabilities.tools:
                 if not provider.capabilities.structured:
                     raise CapabilityError(f"{provider.name} supports neither tools nor JSON")
@@ -448,6 +452,8 @@ class TaskClient:
                 )
             if not provider.capabilities.images:
                 raise CapabilityError(f"{provider.name} can't see pictures")
+            if any(i.mime_type == PDF for i in images) and not provider.capabilities.pdfs:
+                raise CapabilityError(f"{provider.name} can't read PDFs")  # F29hb
             return await provider.structured(
                 system, prompt, schema, max_tokens=max_tokens, kind=kind, images=images
             )

@@ -79,7 +79,9 @@ class GeminiProvider:
         client: genai.Client | None = None,
     ) -> None:
         self.model = model
-        self.capabilities = Capabilities(tools=True, structured=True, audio=audio, images=True)
+        self.capabilities = Capabilities(
+            tools=True, structured=True, audio=audio, images=True, pdfs=True
+        )
         self._ids = itertools.count(1)
         self._client = client or genai.Client(
             api_key=api_key.reveal(),
