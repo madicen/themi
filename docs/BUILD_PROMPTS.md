@@ -285,7 +285,7 @@ Ordered prompts for building Themi. Work through them one at a time: say
 | F43c | Feedback: a shared task's overdue nudge offers the other person, not you | Feedback | [x] 2026-11-14 |
 | F44a | Idea: the web lookups a day, paced from the search plan, with a setting | Feedback | [x] 2026-11-14 |
 | F44b | Feedback: weigh a Tbsp of a spice, not a cup | Feedback | [x] 2026-11-14 |
-| F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [ ] |
+| F44c | Feedback: gram weights work when a recipe or the guide changes, not every 10 minutes | Feedback | [x] 2026-11-14 |
 | F44d | Feedback: a split task can be put back together | Feedback | [ ] |
 | CM1a | Conversation mode: the setting and the chat branch | Conversation mode | [x] 2026-11-05 |
 | CM1b | Conversation mode: the sidecar | Conversation mode | [x] 2026-11-05 |
@@ -14303,7 +14303,7 @@ at the end of `tests/scenarios/test_gram_tasks.py`. None changed, and no golden 
 changed.
 
 ### F44c · Feedback (2026-11-14): gram weights work when a recipe or the guide changes, not every 10 minutes
-Status: [ ] 
+Status: [x] 2026-11-14
 Depends on: GW2, GW3, GW4, GW6, F44a
 Read first: `themi_home/gram_weights.py` (`GramWeightsModule.install`, `look_up`,
 `_look_up_queue`, `_make_tasks`, `check_guide`), `themi_home/recipes.py` (`sync`),
@@ -14323,34 +14323,54 @@ and "salt for every cup of water": the Gemini free tier refused the call. In
 again for 30 days.
 
 Build:
-- Bug fix first: an ingredient whose results couldn't be read (the model call failed) stays
-  in the queue for the next run. Its search still counts. Only "read, and no two sources
+- Bug fix first: a lookup whose model call was deferred for a reason that isn't setup (the
+  free tier's 429, a malformed answer: `Deferred` with `needs_setup` false) leaves the
+  ingredient in the queue. The run stops, and the queue waits for tomorrow. With no model
+  at all (`needs_setup`), it's `wanted` as now (GW3's test). Only "read, and no two sources
   agree" makes it `wanted`.
-- Recipes tell the others when they change: `Recipes.on_changed` (a list of async callbacks
-  given the changed recipe ids), called by `sync` when it added or changed recipes, and by a
-  kept web recipe. Gram weights subscribes and runs `look_up` for those recipes only: learn,
-  queue, look up, tasks.
-- The guide tells it too: `Guides.on_saved`, called after a household guide is saved.
-  Gram weights runs GW6's check and `_make_tasks` when it's the weights guide (an edit can
-  settle a weighing task).
-- The two periodic jobs become one daily job, `gram_weights.daily`. It's the safety net: the
-  hash sweep for anything missed, what's left in the queue (F44a's half of the day's
-  lookups), the tasks, and GW6's check. It also runs once at start, as jobs do. Nothing runs
-  every 10 minutes.
-- A failed callback is logged and left to the daily job; it never breaks the recipe sync or
-  the guide save.
+- The jobs work only when there's something to do. `look_up` reads a cheap state first: the
+  recipes' count and latest `updated_at`, the recipes cooked, and the weights guide's
+  `updated_at`. With that unchanged since its last run and nothing in the queue it may look
+  up today, it returns before reading any recipe. Then `_needed` and `_wanted_unit` aren't
+  run 144 times a day.
+- A run that stops at the background half of the day (F44a) or on a deferred model call
+  leaves the rest of the queue for the next local day. It doesn't try again every 15 minutes.
+- `check_guide` (GW6) runs only when the weights guide changed since its last full pass, or
+  when lines were left unchecked (three a run).
+- `gram_weights.look_up` runs every 15 minutes, like `recipes.sync`, which finds a changed
+  Doc. The first run after a start does the whole pass, as now.
 
-Tests: start with the failing one: a lookup whose model call fails leaves the ingredient
-queued, with no weighing task. A new recipe from `sync` is weighed at once, and nothing
-else is re-read. A sync with no change calls nobody. A saved weights guide runs the check;
-another guide doesn't. The daily job picks up a recipe whose callback failed. Only
-`gram_weights.daily` is registered (no 10-minute job).
-Scenario: Erin adds a recipe to the cookbook Doc, and its weights are looked up within the
-sync. A day with no changes makes no lookups and no model calls.
+(Changed from the first draft of this prompt, 2026-11-14: change hooks on recipes and guides
+crossed module lines, and `Guides.save` is synchronous. A gate on a cheap state does the same
+with no new wiring.)
 
-Data: none needed. Oat flour and "salt for every cup of water" are `wanted` on the Pi from
-the failed reads. A one-off in migration 0004 puts `wanted` rows with no links and no task
-back in the queue.
+Tests: start with the failing one: a lookup whose model calls are rate-limited leaves the
+ingredient queued, with no weighing task, and the next run that day doesn't search again;
+the next day it does. A second run with nothing changed reads no recipe and calls neither
+model nor search. A new recipe (or a changed one, or one first cooked) is weighed at the
+next run. An edited weights guide runs the check again; a run with nothing new doesn't.
+Scenario: Erin adds a recipe to the cookbook Doc and its weights are looked up at the next
+run. A day with no changes makes no lookups and no model calls.
+
+Data: on the Pi, oat flour and "salt for every cup of water" became `wanted` from deferred
+reads. They're looked up again after GW3's 30 days, or by an edit of their recipes; no
+one-off. The queue holds 289 ingredients from the backfill: at half of about 55 lookups a
+day, about 11 days.
+
+Notes: `GramWeights._state()` covers the recipes (count, latest `updated_at`, ingredients'
+total length, removed), the recipes cooked, the gram-weights records and how many of their
+tasks are open (so a weighing task done frees its slot, GW4's test), and the weights guide's
+text hash. `look_up` returns at once when that state is the same as after its last run and
+`_queue_ready()` is false (nothing queued, or the queue waits for tomorrow). The state is kept
+in memory, so the first run after a start does the full pass. `_read` raises `ReadLater` for
+an AI error with `needs_setup` false (the router's `Deferred` of a busy chain, read by
+attribute so `themi_home` needn't import the router). The queue then waits for the next local
+day (`_queue_waits`), as it does at F44a's background half. GW6 kept marking a deferred read
+"fine"; now it stops instead, and `check_guide` skips a guide whose text was checked in full.
+`gram_weights.look_up` runs every 15 minutes (golden `jobs.json`: 600 to 900, which this
+prompt asks for). `gram_weights.check` stays hourly, gated. No test changed. Mid-session, the
+first rewrite of this prompt's Build section cut F44d (added meanwhile by another session) out
+of this file; it's put back word for word.
 
 ### F44d · Feedback (2026-11-14): a split task can be put back together
 Status: [ ] 

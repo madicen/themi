@@ -28,7 +28,7 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -42,7 +42,7 @@ from themi.connectors.search import SearchError, SearchResult
 from themi.core import keys
 from themi.core.prompts import as_data
 from themi.core.tools import ToolContext, ToolDeclined, ToolFailed, tool
-from themi.localtime import to_utc_iso
+from themi.localtime import start_of_local_day, to_utc_iso
 from themi.modules import Module, ModuleContext
 from themi.standard.guides import Guide, GuideNotes, Guides
 from themi_home import home_groups
@@ -658,6 +658,10 @@ def weighing(name: str, unit: str) -> tuple[str, list[str]]:
     )
 
 
+class ReadLater(Exception):
+    """F44c: the model was busy (rate-limited, a malformed answer): read it another day."""
+
+
 class GramWeights:
     """The weight book behind "With grams", and where each weight came from."""
 
@@ -665,6 +669,10 @@ class GramWeights:
         self.services = services
         self.db = services.store.db
         self._cached: tuple[str, WeightBook] | None = None
+        # F44c: what the last run saw, so a run with nothing new does nothing
+        self._looked_at: tuple[object, ...] | None = None
+        self._checked_guide: str | None = None  # the guide's text after a full GW6 pass
+        self._queue_waits: date | None = None  # the queue waits for the day after this
 
     def install(self) -> None:
         self.services.autonomy.executors.register(SAVE_EXECUTOR)(self._save)
@@ -869,6 +877,7 @@ class GramWeights:
             try:
                 web.spend(member.id, "search", background=True)  # F44a: half the day
             except ToolFailed:
+                self._queue_waits = self._today()  # F44c: not again every run today
                 break  # today's lookups are used up: the rest wait for tomorrow
             per_recipe[row["recipe_id"]] = per_recipe.get(row["recipe_id"], 0) + 1
             try:
@@ -876,7 +885,11 @@ class GramWeights:
             except SearchError:
                 log.info("A weight lookup for %s didn't work; next time", name)
                 break
-            found = await self._read(member, name, unit, results)
+            try:
+                found = await self._read(member, name, unit, results)
+            except ReadLater:
+                self._queue_waits = self._today()  # F44c: kept, for tomorrow
+                break
             self._unqueue(row["key"])
             if found is None:
                 self._wanted(name, 0)
@@ -914,6 +927,8 @@ class GramWeights:
             )  # fmt: skip
         except AIError as exc:
             log.info("Weights for %s not read (%s)", name, type(exc).__name__)
+            if getattr(exc, "needs_setup", True) is False:
+                raise ReadLater from exc  # F44c: a busy model, not a missing one
             return None
         kept = [checked(i, results, unit) for i in response.data.get("weights") or []]
         return [f for f in kept if f is not None]
@@ -1200,8 +1215,9 @@ class GramWeights:
     async def check_guide(self) -> None:
         """Each family line, once for each wording: a weight that can't be right, or more
         than 25% off what two web sources agree on, is asked about, never changed."""
-        from themi.core.tools import ToolFailed
-
+        text = self._guide_text()
+        if text is not None and text == self._checked_guide:
+            return  # F44c: checked in full, and not edited since
         member = self._guide_owner()
         if member is None:
             return
@@ -1209,7 +1225,19 @@ class GramWeights:
         backend = web.backend if web is not None else None
         if web is not None and backend is not None:
             await web.refresh()  # F44a: today's pace
+        if await self._check_lines(member, web, backend):
+            self._checked_guide = text
+
+    def _guide_text(self) -> str | None:
+        guide = self.guide()
+        if guide is None:
+            return None
+        return self.db.scalar("SELECT body FROM guides WHERE id = ?", (guide.id,))
+
+    async def _check_lines(self, member: Member, web: Any, backend: Any) -> bool:
+        """GW6's pass; True when every line was checked (F44c: nothing left for a turn)."""
         searched = 0
+        left = False
         for entry in self.book().entries:
             if self.meta(entry.key) is not None:
                 continue  # Themi's own: checked when it was found
@@ -1226,19 +1254,25 @@ class GramWeights:
                                                 was=entry.grams, hint=hint)  # fmt: skip
                 await self._ask_about(member, entry, part, text, offers[0] if offers else None)
                 continue
-            if web is None or backend is None or searched >= CHECKS_PER_RUN:
-                continue  # checked when there's a search, and a turn
+            if web is None or backend is None:
+                continue  # checked when there's a search
+            if searched >= CHECKS_PER_RUN:
+                left = True  # the next run's turn
+                continue
             try:
                 web.spend(member.id, "search", background=True)  # F44a
             except ToolFailed:
-                return
+                return False
             searched += 1
             try:
                 results = (await backend.search(query_for(entry.name.lower(), entry.unit),
                                                 RESULTS))[:RESULTS]  # fmt: skip
             except SearchError:
-                return
-            found = await self._read(member, entry.name.lower(), entry.unit, results)
+                return False
+            try:
+                found = await self._read(member, entry.name.lower(), entry.unit, results)
+            except ReadLater:
+                return False  # F44c: not marked fine; another run reads it
             settled = agreed(found or [])
             if settled is None:
                 self._mark(entry.line, part, "fine")  # nothing to say it's wrong
@@ -1251,6 +1285,7 @@ class GramWeights:
             text = CHECK_TEXT.format(said=amount_said(entry.amount, entry.unit, entry.name.lower()),
                                      was=entry.grams, usual=shown)  # fmt: skip
             await self._ask_about(member, entry, part, text, shown)
+        return not left
 
     async def _ask_about(
         self, member: Member, entry: Entry, part: int, text: str, usual: float | None
@@ -1372,9 +1407,39 @@ class GramWeights:
         row = self.db.one("SELECT id FROM members WHERE role = 'admin' ORDER BY id LIMIT 1")
         return self.services.store.get_member(row["id"]) if row else None
 
+    def _today(self) -> date:
+        family = self.services.store.get_family()
+        return start_of_local_day(clock.now(), family.timezone if family else "UTC").date()
+
+    def _state(self) -> tuple[object, ...]:
+        """F44c: a cheap look at what the job reads: the recipes, the ones cooked, the
+        weights wanted and their tasks, and the weights guide. The same as last run, with
+        no queue to work, is nothing to do."""
+        recipes = self.db.one(
+            "SELECT COUNT(*) AS n, MAX(updated_at) AS at, TOTAL(LENGTH(ingredients)) AS size, "
+            "SUM(removed_at IS NOT NULL) AS gone FROM recipes"
+        )
+        cooked = self.db.scalar("SELECT COUNT(DISTINCT recipe_id) FROM cooking_sessions")
+        wanted = self.db.one(  # a weight wanted, or a weighing task done (a slot opens)
+            "SELECT COUNT(*) AS n, TOTAL(m.rowid) AS ids, "
+            "SUM(t.status IN ('open', 'snoozed')) AS open FROM gram_weights_meta m "
+            "LEFT JOIN tasks t ON t.id = m.task_id"
+        )
+        text = self._guide_text()
+        guide = hashlib.sha256(text.encode()).hexdigest() if text else ""
+        seen = tuple(recipes[k] for k in ("n", "at", "size", "gone")) if recipes else ()
+        asked = tuple(wanted[k] for k in ("n", "ids", "open")) if wanted else ()
+        return (seen, cooked, asked, guide)
+
+    def _queue_ready(self) -> bool:
+        return self._queue_waits != self._today() and bool(self.queued())
+
     async def look_up(self) -> None:
         """The periodic job: each recipe new or changed since it was last read gives the
-        guide the weights it states (GW2)."""
+        guide the weights it states (GW2). F44c: with nothing changed since the last run and
+        no lookups it may make today, it does nothing."""
+        if self._looked_at == self._state() and not self._queue_ready():
+            return
         member = self.first_admin()
         if member is None:
             return
@@ -1405,8 +1470,10 @@ class GramWeights:
                 "seen_at = excluded.seen_at",
                 (row["id"], digest, to_utc_iso(clock.now())),
             )
-        await self._look_up_queue()
+        if self._queue_ready():
+            await self._look_up_queue()
         await self._make_tasks()
+        self._looked_at = self._state()  # after its own guide edits
 
     def ensure_guide(self, member: Member | None) -> Guide:
         """The weights guide, started when there isn't one yet."""
@@ -1574,5 +1641,6 @@ class GramWeightsModule(Module):
     def install(self, ctx: ModuleContext) -> None:
         weights = ctx.provide(GramWeights(ctx.services))
         weights.install()
-        ctx.periodic("gram_weights.look_up", timedelta(minutes=10), weights.look_up)
+        # F44c: every 15 minutes like recipes.sync, doing nothing when nothing changed
+        ctx.periodic("gram_weights.look_up", timedelta(minutes=15), weights.look_up)
         ctx.periodic("gram_weights.check", timedelta(hours=1), weights.check_guide)  # GW6

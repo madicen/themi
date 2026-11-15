@@ -33,7 +33,7 @@
   "google.forget_states": 86400,
   "google_tasks.inbox": 60,
   "gram_weights.check": 3600,
-  "gram_weights.look_up": 600,
+  "gram_weights.look_up": 900,
   "groceries.keep": 120,
   "groceries.mirror": 60,
   "habits.offer": 21600,
