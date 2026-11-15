@@ -167,3 +167,159 @@ async def test_the_website_shows_where_each_part_stands(scenario: Scenario) -> N
         page = (await site.get("/tasks")).text
     assert "Part 2 of 3 of Split Merlin&#39;s cat box; 1 of 3 parts done" in page
     assert "Split Merlin&#39;s cat box: Wash the tray" in page
+
+
+# ----- F44d: a split task put back together ------------------------------------------
+
+BATHROOM = [
+    "Clean the shower",
+    "Clean the toilet",
+    "Clean the sink",
+    "Mop the floor",
+    "Empty the bin",
+]
+
+
+async def bathroom(scenario: Scenario) -> Task:
+    him = scenario.member("Husband")
+    return await board(scenario).create(
+        him, "Clean the upstairs bathroom", "physical", 5, assignee=him, steps=BATHROOM
+    )
+
+
+async def unsplit(scenario: Scenario, name: str, said: str, task_id: int) -> str:
+    scenario.primary.queue_tool_call("unsplit_task", {"task_id": task_id})
+    scenario.primary.queue_text("It's one task again.")
+    await scenario.say(name, said)
+    return tool_result(scenario)
+
+
+def part_rows(scenario: Scenario) -> int:
+    return scenario.app.db.scalar("SELECT COUNT(*) FROM task_parts")
+
+
+async def test_unsplit_puts_the_task_back_on_the_lists(
+    scenario: Scenario, fake_cozyla: FakeCozyla
+) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [])
+    made = parts(scenario).parts(task.id)
+    await scenario.run_periodic("cozyla.sync")
+    assert part_title(task.title, BATHROOM[0]) in fake_cozyla.titles(scenario.cozyla_list)
+
+    said = await unsplit(
+        scenario, "Husband", "Can you recombine the bathroom tasks as subtasks?", task.id
+    )
+    assert "one task again" in said
+    back = board(scenario).get(task.id)
+    assert back.status == "open" and not back.off_displays
+    assert back.steps == tuple(BATHROOM) and back.title == "Clean the upstairs bathroom"
+    assert all(board(scenario).get(p.id).status == "cancelled" for p in made)
+    assert part_rows(scenario) == 0
+    him = scenario.member("Husband")
+    assert titles(board(scenario).open_for(him)) == [task.title]
+    assert parts(scenario).note(back) is None
+
+    # The wall shows one to-do again, not the parts.
+    await scenario.run_periodic("cozyla.sync")
+    on_wall = fake_cozyla.titles(scenario.cozyla_list)
+    assert task.title in on_wall
+    assert not {part_title(task.title, s) for s in BATHROOM} & set(on_wall)
+
+
+async def test_unsplit_given_a_part_unsplits_its_parent(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [])
+    first = parts(scenario).parts(task.id)[0]
+    await unsplit(scenario, "Husband", "put the bathroom back together", first.id)
+    assert board(scenario).get(task.id).status == "open"
+    assert board(scenario).get(first.id).status == "cancelled"
+    assert part_rows(scenario) == 0
+
+
+async def test_a_done_part_is_named_and_its_step_kept(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [])
+    made = parts(scenario).parts(task.id)
+    await board(scenario).complete(made[0].id, scenario.member("Husband"))
+    said = await unsplit(scenario, "Husband", "merge the parts back", task.id)
+    assert "Clean the shower" in said and "done already" in said
+    back = board(scenario).get(task.id)
+    assert back.status == "open" and back.steps == tuple(BATHROOM)
+    assert board(scenario).get(made[0].id).status == "done"  # what's done stays done
+    assert [board(scenario).get(p.id).status for p in made[1:]] == ["cancelled"] * 4
+
+
+async def test_unsplit_declines_a_task_that_isnt_split(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    said = await unsplit(scenario, "Husband", "make it one task again", task.id)
+    assert "isn't split. Nothing was changed." in said
+    assert board(scenario).get(task.id).steps == tuple(BATHROOM)
+
+
+async def test_unsplit_declines_when_every_part_is_settled(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [])
+    made = parts(scenario).parts(task.id)
+    for p in made:
+        await board(scenario).complete(p.id, scenario.member("Husband"))
+    assert board(scenario).get(task.id).status == "done"
+    said = await unsplit(scenario, "Husband", "put it back together", task.id)
+    assert "finished already. Nothing was changed." in said
+    assert part_rows(scenario) == len(made)
+
+
+async def test_the_cancelled_parts_send_no_messages(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [part(2, "partner")])
+    made = parts(scenario).parts(task.id)
+    erin_before = len(scenario.inbox("Erin"))
+    scenario.primary.queue_tool_call("unsplit_task", {"task_id": task.id})
+    scenario.primary.queue_text("It's one task again.")
+    replies = await scenario.say("Husband", "recombine the bathroom tasks")
+    assert replies == ["It's one task again."]
+    assert not any("Taken off the list" in t for t in scenario.inbox("Husband"))
+    assert len(scenario.inbox("Erin")) == erin_before
+    queued = scenario.app.db.query(
+        "SELECT dedupe_key FROM outbox WHERE status = 'queued' AND dedupe_key LIKE 'task-%'"
+    )
+    assert not any(row["dedupe_key"].startswith(f"task-{p.id}-") for row in queued for p in made)
+
+
+async def test_split_says_it_can_be_put_back_together(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    said = await split(scenario, "Husband", "split the bathroom up", task, [])
+    assert said.rstrip().endswith("They can be put back together with unsplit_task.")
+
+
+async def test_renaming_a_part_to_its_parents_title_is_refused(scenario: Scenario) -> None:
+    task = await bathroom(scenario)
+    await split(scenario, "Husband", "split the bathroom up", task, [])
+    first = parts(scenario).parts(task.id)[0]
+    scenario.primary.queue_tool_call(
+        "update_task",
+        {
+            "task_id": first.id,
+            "title": "Clean the upstairs bathroom",
+            "steps": BATHROOM,
+            "clear_steps": False,
+            "assign_to": "",
+        },
+    )
+    scenario.primary.queue_text("Done.")
+    await scenario.say("Husband", "Can you recombine the Clean the upstairs bathroom tasks?")
+    said = tool_result(scenario)
+    assert "use unsplit_task to make it one task again. Nothing was changed." in said
+    assert board(scenario).get(first.id).title == part_title(task.title, BATHROOM[0])
+
+
+async def test_recombine_words_bring_the_schedules_tools(scenario: Scenario) -> None:
+    tools = scenario.app.services.tools
+    for said in (
+        "Can you recombine the Clean the upstairs bathroom tasks as subtasks?",
+        "merge them back",
+        "put the bathroom task back together",
+        "make it one task again",
+    ):
+        assert "schedules" in tools.choose_groups([said]), said
+    assert tools.group_of("unsplit_task") == "schedules"
