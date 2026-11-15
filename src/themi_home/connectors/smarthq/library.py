@@ -52,7 +52,7 @@ class LibraryLogin:
         self._pending: dict[str, tuple[Any, Any]] = {}  # email -> (aiohttp session, login)
 
     async def sign_in(self, email: str, password: str, region: str) -> SignIn:
-        import aiohttp
+        import aiohttp  # type: ignore[import-not-found]  # comes with gehomesdk
         from gehomesdk.clients.smart_hq_login import (  # type: ignore[import-not-found]
             GeSmartHqLogin,
         )
@@ -111,7 +111,7 @@ class LibrarySession:
         self._ready = asyncio.Event()
 
     async def start(self) -> None:
-        import aiohttp
+        import aiohttp  # type: ignore[import-not-found]  # comes with gehomesdk
         from gehomesdk import (  # type: ignore[import-not-found]
             EVENT_APPLIANCE_INITIAL_UPDATE,
             GeWebsocketClient,
